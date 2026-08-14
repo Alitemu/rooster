@@ -99,9 +99,6 @@ test.describe('Roster Publication Workflow - E2E', () => {
     const plannerUrl = `${getBaseUrl()}/planner/period/${testData.period.id}`;
     await page.goto(plannerUrl);
 
-    // Get initial staff count
-    const expectedNotifications = testData.users.length;
-
     // Open publication dialog
     const publishButton = page.locator('button:has-text("Publish")').first();
     if (await publishButton.isVisible({ timeout: 3000 }).catch(() => false)) {

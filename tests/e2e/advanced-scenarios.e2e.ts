@@ -173,7 +173,8 @@ test.describe('Notification System - E2E', () => {
 
     // Check unread count before marking read
     const unreadBadge = page.locator('[data-testid="unread-count"]');
-    const unreadCountBefore = await unreadBadge.textContent().catch(() => '0');
+    const unreadCountBeforeText = await unreadBadge.textContent().catch(() => null);
+    const unreadCountBefore = unreadCountBeforeText ?? '0';
 
     // Mark a notification as read
     const readButton = page.locator('button:has-text("Mark as read")').first();
@@ -184,7 +185,8 @@ test.describe('Notification System - E2E', () => {
       await page.reload();
 
       // Unread count should decrease
-      const unreadCountAfter = await unreadBadge.textContent().catch(() => '0');
+      const unreadCountAfterText = await unreadBadge.textContent().catch(() => null);
+      const unreadCountAfter = unreadCountAfterText ?? '0';
 
       if (unreadCountBefore !== '0') {
         expect(parseInt(unreadCountAfter)).toBeLessThan(parseInt(unreadCountBefore));
@@ -211,7 +213,7 @@ test.describe('Error Handling - E2E', () => {
     await page.goto(`${getPersonalLinkUrl('invalid-token')}`);
 
     // Should show error or redirect
-    const errorMsg = page.locator('text=not found|invalid|unauthorized', { ignoreCase: true });
+    const errorMsg = page.locator('text=not found|invalid|unauthorized');
     if (await errorMsg.isVisible({ timeout: 3000 }).catch(() => false)) {
       expect(errorMsg).toBeVisible();
     }
@@ -223,7 +225,7 @@ test.describe('Error Handling - E2E', () => {
     await page.goto(invalidPeriodUrl);
 
     // Should show error message
-    const errorMsg = page.locator('text=Period not found|not found', { ignoreCase: true });
+    const errorMsg = page.locator('text=Period not found|not found');
     if (await errorMsg.isVisible({ timeout: 3000 }).catch(() => false)) {
       expect(errorMsg).toBeVisible();
     }
@@ -313,7 +315,7 @@ test.describe('Mobile Responsiveness - E2E', () => {
 
     // Check that content is visible (no horizontal scroll)
     const body = page.locator('body');
-    const width = await body.evaluate(el => el.offsetWidth);
+    const width = await body.evaluate((el: any) => el.offsetWidth);
     expect(width).toBeLessThanOrEqual(375);
 
     // Main content should be visible

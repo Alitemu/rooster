@@ -82,7 +82,7 @@ export async function testSwapRequestWorkflow() {
       VALUES (?, ?, ?, datetime('now'), ?, ?, ?, ?)
     `).run(swapId, periodId, 'PENDING', requester, respondent, slot1, slot2);
 
-    const swap = db.prepare('SELECT * FROM dienstrooster_swap_request WHERE id = ?').get(swapId);
+    const swap = db.prepare('SELECT * FROM dienstrooster_swap_request WHERE id = ?').get(swapId) as any;
     if (swap && swap.status === 'PENDING') {
       addResult('Create Swap Request', 'Swap Workflow', 'PASS', 'Swap request created with PENDING status');
     } else {

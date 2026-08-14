@@ -16,10 +16,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell',
-      },
+      use: { ...devices['Desktop Chrome'] },
     },
   ],
 });
