@@ -1,0 +1,2001 @@
+{
+  "version": "5",
+  "dialect": "sqlite",
+  "id": "664404c3-e493-4f67-8615-aa8a18242a6e",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "tables": {
+    "dienstrooster_absence": {
+      "name": "dienstrooster_absence",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "van_datum": {
+          "name": "van_datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "tot_datum": {
+          "name": "tot_datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "soort": {
+          "name": "soort",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "notitie": {
+          "name": "notitie",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "aangemaakt_door": {
+          "name": "aangemaakt_door",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dienstrooster_absence_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_absence_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_absence",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_absence_aangemaakt_door_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_absence_aangemaakt_door_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_absence",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "aangemaakt_door"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_assignment": {
+      "name": "dienstrooster_assignment",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "schedule_version_id": {
+          "name": "schedule_version_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slot_id": {
+          "name": "slot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bron": {
+          "name": "bron",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "row_version": {
+          "name": "row_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "assignment_uniq": {
+          "name": "assignment_uniq",
+          "columns": [
+            "schedule_version_id",
+            "slot_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_assignment_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_assignment_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_assignment",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_assignment_slot_id_dienstrooster_shift_slot_id_fk": {
+          "name": "dienstrooster_assignment_slot_id_dienstrooster_shift_slot_id_fk",
+          "tableFrom": "dienstrooster_assignment",
+          "tableTo": "dienstrooster_shift_slot",
+          "columnsFrom": [
+            "slot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_audit_log": {
+      "name": "dienstrooster_audit_log",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entiteit": {
+          "name": "entiteit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "entiteit_id": {
+          "name": "entiteit_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actie": {
+          "name": "actie",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "oud_json": {
+          "name": "oud_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "nieuw_json": {
+          "name": "nieuw_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "tijdstip": {
+          "name": "tijdstip",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "audit_actor_idx": {
+          "name": "audit_actor_idx",
+          "columns": [
+            "actor_id"
+          ],
+          "isUnique": false
+        },
+        "audit_entiteit_idx": {
+          "name": "audit_entiteit_idx",
+          "columns": [
+            "entiteit",
+            "entiteit_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_audit_log_actor_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_audit_log_actor_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_audit_log",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "actor_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_availability": {
+      "name": "dienstrooster_availability",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "slot_id": {
+          "name": "slot_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "blocking_level": {
+          "name": "blocking_level",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bron_pattern_id": {
+          "name": "bron_pattern_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "availability_uniq": {
+          "name": "availability_uniq",
+          "columns": [
+            "person_id",
+            "slot_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_availability_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_availability_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_availability",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_availability_slot_id_dienstrooster_shift_slot_id_fk": {
+          "name": "dienstrooster_availability_slot_id_dienstrooster_shift_slot_id_fk",
+          "tableFrom": "dienstrooster_availability",
+          "tableTo": "dienstrooster_shift_slot",
+          "columnsFrom": [
+            "slot_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_availability_bron_pattern_id_dienstrooster_parttime_pattern_id_fk": {
+          "name": "dienstrooster_availability_bron_pattern_id_dienstrooster_parttime_pattern_id_fk",
+          "tableFrom": "dienstrooster_availability",
+          "tableTo": "dienstrooster_parttime_pattern",
+          "columnsFrom": [
+            "bron_pattern_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_holiday_history": {
+      "name": "dienstrooster_holiday_history",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "feestdag_groep": {
+          "name": "feestdag_groep",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "jaar": {
+          "name": "jaar",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bron": {
+          "name": "bron",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "holiday_history_uniq": {
+          "name": "holiday_history_uniq",
+          "columns": [
+            "person_id",
+            "feestdag_groep",
+            "jaar"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_holiday_history_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_holiday_history_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_holiday_history",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_import_run": {
+      "name": "dienstrooster_import_run",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "soort": {
+          "name": "soort",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bestandsnaam": {
+          "name": "bestandsnaam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aantal_regels": {
+          "name": "aantal_regels",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aantal_fouten": {
+          "name": "aantal_fouten",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "uitgevoerd_door": {
+          "name": "uitgevoerd_door",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "uitgevoerd_op": {
+          "name": "uitgevoerd_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "resultaat_json": {
+          "name": "resultaat_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dienstrooster_import_run_uitgevoerd_door_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_import_run_uitgevoerd_door_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_import_run",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "uitgevoerd_door"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_ledger_entry": {
+      "name": "dienstrooster_ledger_entry",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pool_id": {
+          "name": "pool_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "teller": {
+          "name": "teller",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "geldt_voor_periode_id": {
+          "name": "geldt_voor_periode_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "datum": {
+          "name": "datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "delta": {
+          "name": "delta",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reden": {
+          "name": "reden",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "categorie": {
+          "name": "categorie",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aangemaakt_door": {
+          "name": "aangemaakt_door",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "ledger_person_period_idx": {
+          "name": "ledger_person_period_idx",
+          "columns": [
+            "person_id",
+            "geldt_voor_periode_id"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_ledger_entry_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_ledger_entry_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_ledger_entry",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_ledger_entry_pool_id_dienstrooster_pool_id_fk": {
+          "name": "dienstrooster_ledger_entry_pool_id_dienstrooster_pool_id_fk",
+          "tableFrom": "dienstrooster_ledger_entry",
+          "tableTo": "dienstrooster_pool",
+          "columnsFrom": [
+            "pool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_ledger_entry_geldt_voor_periode_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_ledger_entry_geldt_voor_periode_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_ledger_entry",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "geldt_voor_periode_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_ledger_entry_aangemaakt_door_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_ledger_entry_aangemaakt_door_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_ledger_entry",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "aangemaakt_door"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_notification_log": {
+      "name": "dienstrooster_notification_log",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "opgesteld_op": {
+          "name": "opgesteld_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "gemaild_op": {
+          "name": "gemaild_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "geexporteerd_op": {
+          "name": "geexporteerd_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "afgevinkt_op": {
+          "name": "afgevinkt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "resultaat": {
+          "name": "resultaat",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "foutmelding": {
+          "name": "foutmelding",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dienstrooster_notification_log_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_notification_log_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_notification_log",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_notification_log_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_notification_log_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_notification_log",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_notification_template": {
+      "name": "dienstrooster_notification_template",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "sleutel": {
+          "name": "sleutel",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "onderwerp": {
+          "name": "onderwerp",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "body_md": {
+          "name": "body_md",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "dienstrooster_notification_template_sleutel_unique": {
+          "name": "dienstrooster_notification_template_sleutel_unique",
+          "columns": [
+            "sleutel"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_parttime_pattern": {
+      "name": "dienstrooster_parttime_pattern",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "weekdag": {
+          "name": "weekdag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "frequentie": {
+          "name": "frequentie",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "geldig_vanaf": {
+          "name": "geldig_vanaf",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "geldig_tot": {
+          "name": "geldig_tot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aangemaakt_door": {
+          "name": "aangemaakt_door",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "parttime_pattern_uniq": {
+          "name": "parttime_pattern_uniq",
+          "columns": [
+            "person_id",
+            "weekdag",
+            "geldig_vanaf",
+            "geldig_tot"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_parttime_pattern_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_parttime_pattern_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_parttime_pattern",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_parttime_pattern_aangemaakt_door_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_parttime_pattern_aangemaakt_door_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_parttime_pattern",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "aangemaakt_door"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_period_excluded_day": {
+      "name": "dienstrooster_period_excluded_day",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "datum": {
+          "name": "datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "reden": {
+          "name": "reden",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bron_period_id": {
+          "name": "bron_period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "period_excluded_day_uniq": {
+          "name": "period_excluded_day_uniq",
+          "columns": [
+            "period_id",
+            "datum"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_period_excluded_day_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_period_excluded_day_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_period_excluded_day",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_period_excluded_day_bron_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_period_excluded_day_bron_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_period_excluded_day",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "bron_period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_person": {
+      "name": "dienstrooster_person",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "codenaam": {
+          "name": "codenaam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "rol": {
+          "name": "rol",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actief": {
+          "name": "actief",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "wachtwoord_hash": {
+          "name": "wachtwoord_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "totp_secret": {
+          "name": "totp_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "dienstrooster_person_codenaam_unique": {
+          "name": "dienstrooster_person_codenaam_unique",
+          "columns": [
+            "codenaam"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_person_access_link": {
+      "name": "dienstrooster_person_access_link",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "geldt_voor_periode_id": {
+          "name": "geldt_voor_periode_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ingetrokken_op": {
+          "name": "ingetrokken_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "laatst_gebruikt_op": {
+          "name": "laatst_gebruikt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "dienstrooster_person_access_link_token_hash_unique": {
+          "name": "dienstrooster_person_access_link_token_hash_unique",
+          "columns": [
+            "token_hash"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_person_access_link_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_person_access_link_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_person_access_link",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_person_access_link_geldt_voor_periode_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_person_access_link_geldt_voor_periode_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_person_access_link",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "geldt_voor_periode_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_pool": {
+      "name": "dienstrooster_pool",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "naam": {
+          "name": "naam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'ACHTERWACHT'"
+        },
+        "ruleset_id": {
+          "name": "ruleset_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "verdeelmodus": {
+          "name": "verdeelmodus",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'GELIJK'"
+        },
+        "actief": {
+          "name": "actief",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dienstrooster_pool_ruleset_id_dienstrooster_ruleset_id_fk": {
+          "name": "dienstrooster_pool_ruleset_id_dienstrooster_ruleset_id_fk",
+          "tableFrom": "dienstrooster_pool",
+          "tableTo": "dienstrooster_ruleset",
+          "columnsFrom": [
+            "ruleset_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_pool_membership": {
+      "name": "dienstrooster_pool_membership",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pool_id": {
+          "name": "pool_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deelnamefactor": {
+          "name": "deelnamefactor",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "geldig_vanaf": {
+          "name": "geldig_vanaf",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "geldig_tot": {
+          "name": "geldig_tot",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "pool_membership_uniq": {
+          "name": "pool_membership_uniq",
+          "columns": [
+            "person_id",
+            "pool_id",
+            "geldig_vanaf",
+            "geldig_tot"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_pool_membership_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_pool_membership_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_pool_membership",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_pool_membership_pool_id_dienstrooster_pool_id_fk": {
+          "name": "dienstrooster_pool_membership_pool_id_dienstrooster_pool_id_fk",
+          "tableFrom": "dienstrooster_pool_membership",
+          "tableTo": "dienstrooster_pool",
+          "columnsFrom": [
+            "pool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_prior_assignment": {
+      "name": "dienstrooster_prior_assignment",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "datum": {
+          "name": "datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "iso_jaar": {
+          "name": "iso_jaar",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "iso_week": {
+          "name": "iso_week",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "teller": {
+          "name": "teller",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bron": {
+          "name": "bron",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "bron_period_id": {
+          "name": "bron_period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "aangemaakt_door": {
+          "name": "aangemaakt_door",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "prior_assignment_uniq": {
+          "name": "prior_assignment_uniq",
+          "columns": [
+            "period_id",
+            "datum"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_prior_assignment_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_prior_assignment_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_prior_assignment",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_prior_assignment_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_prior_assignment_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_prior_assignment",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_prior_assignment_bron_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_prior_assignment_bron_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_prior_assignment",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "bron_period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_prior_assignment_aangemaakt_door_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_prior_assignment_aangemaakt_door_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_prior_assignment",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "aangemaakt_door"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_reminder_schedule": {
+      "name": "dienstrooster_reminder_schedule",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "dagen_voor_deadline": {
+          "name": "dagen_voor_deadline",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "actief": {
+          "name": "actief",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dienstrooster_reminder_schedule_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_reminder_schedule_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_reminder_schedule",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_ruleset": {
+      "name": "dienstrooster_ruleset",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "naam": {
+          "name": "naam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "config_json": {
+          "name": "config_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "versie": {
+          "name": "versie",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_schedule_period": {
+      "name": "dienstrooster_schedule_period",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pool_id": {
+          "name": "pool_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "naam": {
+          "name": "naam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "start_datum": {
+          "name": "start_datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "eind_datum": {
+          "name": "eind_datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "deadline": {
+          "name": "deadline",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": "'CONCEPT'"
+        },
+        "bevroren_ruleset_json": {
+          "name": "bevroren_ruleset_json",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "overloop_bevestigd_op": {
+          "name": "overloop_bevestigd_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "row_version": {
+          "name": "row_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dienstrooster_schedule_period_pool_id_dienstrooster_pool_id_fk": {
+          "name": "dienstrooster_schedule_period_pool_id_dienstrooster_pool_id_fk",
+          "tableFrom": "dienstrooster_schedule_period",
+          "tableTo": "dienstrooster_pool",
+          "columnsFrom": [
+            "pool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_shift_slot": {
+      "name": "dienstrooster_shift_slot",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "period_id": {
+          "name": "period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "shift_type_id": {
+          "name": "shift_type_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "datum": {
+          "name": "datum",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "iso_jaar": {
+          "name": "iso_jaar",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "iso_week": {
+          "name": "iso_week",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "weekend_id": {
+          "name": "weekend_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "is_feestdag": {
+          "name": "is_feestdag",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": false
+        },
+        "feestdag_naam": {
+          "name": "feestdag_naam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "feestdag_groep": {
+          "name": "feestdag_groep",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "benodigd_aantal_personen": {
+          "name": "benodigd_aantal_personen",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "shift_block_id": {
+          "name": "shift_block_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "slot_period_idx": {
+          "name": "slot_period_idx",
+          "columns": [
+            "period_id"
+          ],
+          "isUnique": false
+        },
+        "slot_datum_idx": {
+          "name": "slot_datum_idx",
+          "columns": [
+            "datum"
+          ],
+          "isUnique": false
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_shift_slot_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_shift_slot_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_shift_slot",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_shift_slot_shift_type_id_dienstrooster_shift_type_id_fk": {
+          "name": "dienstrooster_shift_slot_shift_type_id_dienstrooster_shift_type_id_fk",
+          "tableFrom": "dienstrooster_shift_slot",
+          "tableTo": "dienstrooster_shift_type",
+          "columnsFrom": [
+            "shift_type_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_shift_type": {
+      "name": "dienstrooster_shift_type",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "pool_id": {
+          "name": "pool_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "naam": {
+          "name": "naam",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "teller": {
+          "name": "teller",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "start_tijd": {
+          "name": "start_tijd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "eind_tijd": {
+          "name": "eind_tijd",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "dienstrooster_shift_type_pool_id_dienstrooster_pool_id_fk": {
+          "name": "dienstrooster_shift_type_pool_id_dienstrooster_pool_id_fk",
+          "tableFrom": "dienstrooster_shift_type",
+          "tableTo": "dienstrooster_pool",
+          "columnsFrom": [
+            "pool_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    },
+    "dienstrooster_submission": {
+      "name": "dienstrooster_submission",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "person_id": {
+          "name": "person_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "schedule_period_id": {
+          "name": "schedule_period_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "ingediend_op": {
+          "name": "ingediend_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "row_version": {
+          "name": "row_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 1
+        },
+        "aangemaakt_op": {
+          "name": "aangemaakt_op",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        }
+      },
+      "indexes": {
+        "submission_uniq": {
+          "name": "submission_uniq",
+          "columns": [
+            "person_id",
+            "schedule_period_id"
+          ],
+          "isUnique": true
+        }
+      },
+      "foreignKeys": {
+        "dienstrooster_submission_person_id_dienstrooster_person_id_fk": {
+          "name": "dienstrooster_submission_person_id_dienstrooster_person_id_fk",
+          "tableFrom": "dienstrooster_submission",
+          "tableTo": "dienstrooster_person",
+          "columnsFrom": [
+            "person_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "dienstrooster_submission_schedule_period_id_dienstrooster_schedule_period_id_fk": {
+          "name": "dienstrooster_submission_schedule_period_id_dienstrooster_schedule_period_id_fk",
+          "tableFrom": "dienstrooster_submission",
+          "tableTo": "dienstrooster_schedule_period",
+          "columnsFrom": [
+            "schedule_period_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {}
+    }
+  },
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  }
+}
