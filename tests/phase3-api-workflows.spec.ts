@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, afterAll } from 'vitest';
 import { db } from '@/db/client';
-import { setupPhase3Tables, cleanupPhase3TestData } from '@/lib/phase3-db-setup';
+import { setupPhase3Tables, cleanupPhase3TestData, cleanupPhase3WorkflowData } from '@/lib/phase3-db-setup';
 import { v4 as uuid } from 'uuid';
 
 /**
@@ -21,7 +21,8 @@ describe('Phase 3 API Workflows', () => {
     db.prepare('PRAGMA foreign_keys = OFF').run();
     setupPhase3Tables();
 
-    // Setup test data
+    // Setup test data with unique identifiers
+    const timestamp = Date.now();
     const periodId = uuid();
     const personIds = [uuid(), uuid(), uuid()];
     const slotIds = [uuid(), uuid(), uuid()];
@@ -36,7 +37,7 @@ describe('Phase 3 API Workflows', () => {
       db.prepare(`
         INSERT INTO dienstrooster_person (id, codenaam, rol, wachtwoord_hash, aangemaakt_op)
         VALUES (?, ?, 'DEELNEMER', 'hash', datetime('now'))
-      `).run(id, `Person-${i + 1}`);
+      `).run(id, `TestWF-${timestamp}-P${i + 1}`);
     });
 
     slotIds.forEach((id, i) => {
@@ -52,7 +53,13 @@ describe('Phase 3 API Workflows', () => {
 
   afterEach(() => {
     if (testData?.periodId) {
-      cleanupPhase3TestData(testData.periodId);
+      cleanupPhase3WorkflowData(testData.periodId);
+    }
+  });
+
+  afterAll(() => {
+    if (testData?.periodId) {
+      cleanupPhase3TestData(testData.periodId, testData.personIds);
     }
   });
 
@@ -66,7 +73,7 @@ describe('Phase 3 API Workflows', () => {
       const now = new Date().toISOString();
 
       // Step 1: Create assignments for both people
-      const req Assignment1 = uuid();
+      const requesterAssignment1 = uuid();
       const respondentAssignment = uuid();
 
       db.prepare(`
@@ -132,7 +139,7 @@ describe('Phase 3 API Workflows', () => {
         'RUIL_GOEDGEKEURD',
         'Ruilverzoek goedgekeurd',
         'Je ruilverzoek is goedgekeurd',
-        false
+        0
       );
 
       // Step 6: Create audit log entry
@@ -215,7 +222,7 @@ describe('Phase 3 API Workflows', () => {
         'RUILVERZOEK',
         'Ruilverzoek afgewezen',
         `Je ruilverzoek is afgewezen. Reden: ${rejectionReason}`,
-        false
+        0
       );
 
       // Verify rejection
@@ -272,7 +279,7 @@ describe('Phase 3 API Workflows', () => {
           'PUBLICATIE_BERICHT',
           'Rooster gepubliceerd',
           'Je rooster is nu beschikbaar',
-          false
+          0
         );
       });
 
@@ -310,6 +317,12 @@ describe('Phase 3 API Workflows', () => {
       const publisherId = testData.personIds[0];
       const now = new Date().toISOString();
 
+      // Get initial status (should be GEGENEREERD from afterEach cleanup)
+      const initialPeriod = db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(
+        testData.periodId
+      ) as any;
+      expect(initialPeriod.status).toBe('GEGENEREERD');
+
       // Mark as published
       db.prepare(`
         UPDATE dienstrooster_schedule_period
@@ -317,18 +330,17 @@ describe('Phase 3 API Workflows', () => {
         WHERE id = ?
       `).run('GEPUBLICEERD', now, publisherId, testData.periodId);
 
-      // Try to publish again - should fail
+      // Try to publish again - should fail because status is not GEGENEREERD
       const period = db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(
         testData.periodId
       ) as any;
 
-      if (period.status !== 'GEGENEREERD') {
-        throw new Error(`Cannot publish period in ${period.status} status`);
-      }
-
+      // Verify that publication guard would fail
       expect(() => {
-        throw new Error(`Cannot publish period in ${period.status} status`);
-      }).toThrow();
+        if (period.status !== 'GEGENEREERD') {
+          throw new Error(`Cannot publish period in ${period.status} status`);
+        }
+      }).toThrow('Cannot publish period in GEPUBLICEERD status');
     });
   });
 
@@ -351,7 +363,7 @@ describe('Phase 3 API Workflows', () => {
           i === 0 ? 'RUILVERZOEK' : i === 1 ? 'RUIL_GOEDGEKEURD' : 'PUBLICATIE_BERICHT',
           `Subject ${i}`,
           `Content ${i}`,
-          false
+          0
         );
         notifIds.push(notifId);
       }

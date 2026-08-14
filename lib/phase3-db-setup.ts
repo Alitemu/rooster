@@ -154,22 +154,58 @@ export function verifyPhase3Schema(): {
 /**
  * Clean up test Phase 3 data (for test isolation)
  */
-export function cleanupPhase3TestData(periodId?: string) {
+export function cleanupPhase3TestData(periodId?: string, personIds?: string[]) {
   try {
     if (periodId) {
-      // Clean specific period's Phase 3 data
+      // Clean specific period's Phase 3 data and related test records
       db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(periodId);
       db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(periodId);
       db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(periodId);
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId);
+      db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
+      db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
     } else {
       // Clean all Phase 3 data
       db.prepare('DELETE FROM dienstrooster_swap_request').run();
       db.prepare('DELETE FROM dienstrooster_notification').run();
       db.prepare('DELETE FROM dienstrooster_assignment_edit').run();
     }
+
+    // Clean test person records if provided
+    if (personIds && personIds.length > 0) {
+      for (const personId of personIds) {
+        db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(personId);
+      }
+    }
+
     return { success: true };
   } catch (error) {
     console.error('Cleanup error:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+/**
+ * Clean up Phase 3 workflow data only (keep period/slots/people intact)
+ * Used for test isolation when multiple tests share common setup
+ */
+export function cleanupPhase3WorkflowData(periodId: string) {
+  try {
+    db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(periodId);
+    db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(periodId);
+    db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(periodId);
+    db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId);
+
+    // Reset period status to GEGENEREERD for next test
+    db.prepare(
+      `UPDATE dienstrooster_schedule_period
+       SET status = 'GEGENEREERD', gepubliceerd_op = NULL, gepubliceerd_door_person_id = NULL
+       WHERE id = ?`
+    ).run(periodId);
+
+    return { success: true };
+  } catch (error) {
+    console.error('Workflow cleanup error:', error);
     return { success: false, error: String(error) };
   }
 }
