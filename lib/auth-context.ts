@@ -57,8 +57,8 @@ export function requirePlannerAccess(auth: AuthContext | null): boolean {
  *
  * TODO: Implement proper authorization checks
  */
-export function requirePersonAccess(auth: AuthContext | null, personId: string): boolean {
+export function requirePersonAccess(auth: AuthContext | null, _personId: string): boolean {
   if (!auth) return false;
-  // TODO: Check if auth.userId matches personId or if user is admin
+  // TODO: Check if auth.userId matches _personId or if user is admin
   return true;
 }
