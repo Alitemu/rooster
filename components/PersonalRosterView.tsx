@@ -7,10 +7,13 @@
  * Shows balance in human-readable words.
  * Highlights soft-blocked days (prefer-not) that were assigned.
  * Mobile-responsive calendar view.
+ * Includes shift swap request functionality.
  */
 
 import { useState, useEffect } from 'react';
 import { parseISO } from '@/lib/holidays';
+import { SwapRequestDialog } from './SwapRequestDialog';
+import { SwapManagementPanel } from './SwapManagementPanel';
 
 interface AssignedShift {
   datum: string;
@@ -33,6 +36,8 @@ interface SoftBlockViolation {
 }
 
 interface Props {
+  personId: string;
+  periodId: string;
   assignedShifts: AssignedShift[];
   balances: BalanceDisplay[];
   softBlockViolations?: SoftBlockViolation[];
@@ -40,12 +45,16 @@ interface Props {
 }
 
 export function PersonalRosterView({
+  personId,
+  periodId,
   assignedShifts,
   balances,
   softBlockViolations = [],
   holidayHistory = [],
 }: Props) {
   const [weekView, setWeekView] = useState<Map<string, string[]>>(new Map());
+  const [swapDialogOpen, setSwapDialogOpen] = useState(false);
+  const [showSwapManagement, setShowSwapManagement] = useState(false);
 
   // Group shifts by ISO week
   useEffect(() => {
@@ -193,6 +202,45 @@ export function PersonalRosterView({
         </div>
       )}
 
+      {/* Shift Swap Management */}
+      <div className="card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-lg">Shift Swaps</h3>
+            <p className="text-sm text-neutral-600 mt-1">
+              Request to swap shifts with colleagues
+            </p>
+          </div>
+          <button
+            onClick={() => setSwapDialogOpen(true)}
+            className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            + Request Swap
+          </button>
+        </div>
+
+        {/* Show/Hide swap requests */}
+        {showSwapManagement && (
+          <div className="mt-4 pt-4 border-t">
+            <button
+              onClick={() => setShowSwapManagement(false)}
+              className="text-sm text-neutral-600 hover:text-neutral-900 mb-3"
+            >
+              Hide Swap Requests
+            </button>
+            <SwapManagementPanel personId={personId} periodId={periodId} />
+          </div>
+        )}
+        {!showSwapManagement && (
+          <button
+            onClick={() => setShowSwapManagement(true)}
+            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+          >
+            View Swap Requests
+          </button>
+        )}
+      </div>
+
       {/* Help text */}
       <div className="bg-neutral-50 p-4 rounded text-sm text-neutral-600 space-y-2">
         <p>
@@ -203,6 +251,18 @@ export function PersonalRosterView({
           Questions about your roster? Contact your scheduler or visit the help section.
         </p>
       </div>
+
+      {/* Swap Request Dialog */}
+      <SwapRequestDialog
+        personId={personId}
+        periodId={periodId}
+        isOpen={swapDialogOpen}
+        onClose={() => setSwapDialogOpen(false)}
+        onSuccess={() => {
+          setSwapDialogOpen(false);
+          setShowSwapManagement(true);
+        }}
+      />
     </div>
   );
 }
