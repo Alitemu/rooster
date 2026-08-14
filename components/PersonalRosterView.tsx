@@ -55,6 +55,7 @@ export function PersonalRosterView({
   const [weekView, setWeekView] = useState<Map<string, string[]>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [showSwapManagement, setShowSwapManagement] = useState(false);
+  const [swapSuccessMessage, setSwapSuccessMessage] = useState(false);
 
   // Group shifts by ISO week
   useEffect(() => {
@@ -219,6 +220,12 @@ export function PersonalRosterView({
           </button>
         </div>
 
+        {swapSuccessMessage && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+            Swap request created
+          </div>
+        )}
+
         {/* Show/Hide swap requests */}
         {showSwapManagement && (
           <div className="mt-4 pt-4 border-t">
@@ -261,6 +268,8 @@ export function PersonalRosterView({
         onSuccess={() => {
           setSwapDialogOpen(false);
           setShowSwapManagement(true);
+          setSwapSuccessMessage(true);
+          setTimeout(() => setSwapSuccessMessage(false), 5000);
         }}
       />
     </div>

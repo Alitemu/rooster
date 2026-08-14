@@ -208,12 +208,13 @@ export async function POST(
       assignmentCount++;
     }
 
-    // Update period status to GENERATED
+    // Update period status to GEGENEREERD (matches the PeriodStatus enum -
+    // publish and manual-assign both gate on this exact value)
     db.prepare(
       `UPDATE dienstrooster_schedule_period
        SET status = ?, row_version = row_version + 1
        WHERE id = ?`
-    ).run('GENERATED', periodId);
+    ).run('GEGENEREERD', periodId);
 
     // Log audit entry
     db.prepare(
@@ -228,7 +229,7 @@ export async function POST(
       'GENERATE_ROSTER',
       JSON.stringify({ status: period.status }),
       JSON.stringify({
-        status: 'GENERATED',
+        status: 'GEGENEREERD',
         assignments_created: assignmentCount,
         cost: solverOutput.diagnostics.total_cost,
       }),

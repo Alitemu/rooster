@@ -72,8 +72,8 @@ export async function POST(
       swapRequest.aanvrager_person_id,
       swapRequest.periode_id,
       'RUILVERZOEK',
-      'Ruilverzoek afgewezen',
-      reason ? `Je ruilverzoek is afgewezen. Reden: ${reason}` : 'Je ruilverzoek is afgewezen.',
+      'Swap request rejected',
+      reason ? `Your swap request was rejected. Reason: ${reason}` : 'Your swap request was rejected.',
       false,
       now
     );

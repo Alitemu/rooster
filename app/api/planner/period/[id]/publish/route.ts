@@ -74,8 +74,8 @@ export async function POST(
         p.person_id,
         periodId,
         'PUBLICATIE_BERICHT',
-        'Rooster is gepubliceerd',
-        `Je rooster voor periode ${period.naam} is nu beschikbaar. Log in om je diensten in te zien.`,
+        'Roster published',
+        `Your roster for ${period.naam} is now available. Open your link to see your shifts.`,
         false,
         now
       );

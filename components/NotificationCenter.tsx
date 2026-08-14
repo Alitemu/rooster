@@ -25,6 +25,7 @@ interface Props {
 
 export function NotificationCenter({ personId, periodId }: Props) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState('');
@@ -46,6 +47,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
 
         const data = await res.json();
         setNotifications(data.data.notifications);
+        setUnreadCount(data.data.unread_count);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load notifications');
       } finally {
@@ -68,6 +70,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
             n.id === notifId ? { ...n, gelezen: true } : n
           )
         );
+        setUnreadCount((count) => Math.max(0, count - 1));
       }
     } catch (err) {
       console.error('Failed to mark notification as read:', err);
@@ -110,7 +113,12 @@ export function NotificationCenter({ personId, periodId }: Props) {
     <div className="space-y-4">
       {/* Filters */}
       <div className="card p-4 bg-neutral-50 flex gap-4 items-center flex-wrap">
+        <span className="text-sm font-medium text-neutral-700">
+          Unread: <span data-testid="unread-count">{unreadCount}</span>
+        </span>
+
         <select
+          name="notification-type"
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
           className="px-3 py-2 border rounded text-sm"
@@ -145,6 +153,8 @@ export function NotificationCenter({ personId, periodId }: Props) {
         {notifications.map((notif) => (
           <div
             key={notif.id}
+            data-testid="notification-item"
+            data-type={notif.type}
             className={`card p-4 border-l-4 ${
               notif.gelezen
                 ? 'border-neutral-200 bg-neutral-50'
@@ -162,7 +172,10 @@ export function NotificationCenter({ personId, periodId }: Props) {
                     {typeNames[notif.type] || notif.type}
                   </span>
                   {!notif.gelezen && (
-                    <span className="inline-block w-2 h-2 rounded-full bg-blue-600 mt-1" />
+                    <span
+                      data-unread="true"
+                      className="inline-block w-2 h-2 rounded-full bg-blue-600 mt-1"
+                    />
                   )}
                 </div>
                 <h3 className="font-semibold text-neutral-900">{notif.onderwerp}</h3>
@@ -177,7 +190,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
                   onClick={() => handleMarkRead(notif.id)}
                   className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
-                  Mark read
+                  Mark as read
                 </button>
               )}
             </div>

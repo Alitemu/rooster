@@ -17,6 +17,7 @@ interface Period {
   eind_datum: string;
   deadline: string;
   status: string;
+  gepubliceerd_op?: string | null;
 }
 
 export default function PlannerPeriodPage() {
@@ -70,8 +71,8 @@ export default function PlannerPeriodPage() {
     CONCEPT: { bg: 'bg-neutral-100', text: 'text-neutral-800' },
     OPEN: { bg: 'bg-blue-100', text: 'text-blue-800' },
     GESLOTEN: { bg: 'bg-amber-100', text: 'text-amber-800' },
-    GENERATED: { bg: 'bg-green-100', text: 'text-green-800' },
-    PUBLISHED: { bg: 'bg-emerald-100', text: 'text-emerald-800' },
+    GEGENEREERD: { bg: 'bg-green-100', text: 'text-green-800' },
+    GEPUBLICEERD: { bg: 'bg-emerald-100', text: 'text-emerald-800' },
   };
 
   const statusColor = statusColors[period.status] || statusColors.CONCEPT;
@@ -96,8 +97,17 @@ export default function PlannerPeriodPage() {
               {period.status === 'CONCEPT' && '⚙️ Concept'}
               {period.status === 'OPEN' && '📖 Open'}
               {period.status === 'GESLOTEN' && '🔒 Closed'}
-              {period.status === 'GENERATED' && '🤖 Generated'}
-              {period.status === 'PUBLISHED' && '✅ Published'}
+              {period.status === 'GEGENEREERD' && '🤖 Generated'}
+              {period.status === 'GEPUBLICEERD' && (
+                <>
+                  ✅ Published
+                  {period.gepubliceerd_op && (
+                    <span className="ml-2 font-normal text-sm">
+                      · Published on {new Date(period.gepubliceerd_op).toLocaleString()}
+                    </span>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

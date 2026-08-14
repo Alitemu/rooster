@@ -160,8 +160,8 @@ export async function POST(
       respondentAssignment.person_id,
       period_id,
       'RUILVERZOEK',
-      'Nieuwe ruilverzoek',
-      `Iemand heeft een ruilverzoek ingediend. Bekijk je meldingen voor details.`,
+      'New swap request',
+      'Someone has requested a shift swap with you. Check your notifications for details.',
       false,
       now
     );

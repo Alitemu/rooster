@@ -286,12 +286,12 @@ export function PlannerDashboard({ periodId }: Props) {
           <div className="flex gap-3 flex-wrap">
             <button
               onClick={() => setRosterDialogOpen(true)}
-              disabled={dashboard.status === 'GENERATED' || dashboard.status === 'PUBLISHED'}
+              disabled={dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD'}
               className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
             >
               🚀 Generate Roster with Solver
             </button>
-            {dashboard.status === 'GENERATED' && (
+            {dashboard.status === 'GEGENEREERD' && (
               <button
                 onClick={() => setPublicationDialogOpen(true)}
                 className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
@@ -320,7 +320,7 @@ export function PlannerDashboard({ periodId }: Props) {
       </div>
 
       {/* Assignments */}
-      {(dashboard.status === 'GENERATED' || dashboard.status === 'PUBLISHED') && (
+      {(dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD') && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-lg">Assignments</h3>

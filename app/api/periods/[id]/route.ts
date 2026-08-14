@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { getAuthContextFromRequest } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -20,6 +20,7 @@ interface PeriodDetail {
   status: string;
   bevroren_ruleset_json: string | null;
   overloop_bevestigd_op: string | null;
+  gepubliceerd_op: string | null;
   row_version: number;
 }
 
@@ -33,8 +34,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
+    // Both staff and any authenticated person need this: the person page
+    // reads their own current period's name/dates/status through it.
     const auth = getAuthContextFromRequest(req);
-    if (!requirePlannerAccess(auth)) {
+    if (!auth) {
       return unauthorizedResponse();
     }
 
@@ -63,6 +66,7 @@ export async function GET(
         status,
         bevroren_ruleset_json,
         overloop_bevestigd_op,
+        gepubliceerd_op,
         row_version
       FROM dienstrooster_schedule_period
       WHERE id = ?

@@ -34,6 +34,9 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState('PENDING');
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const loadSwaps = async () => {
@@ -59,6 +62,11 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
     loadSwaps();
   }, [personId, periodId, filterStatus]);
 
+  const showSuccess = (message: string) => {
+    setSuccessMessage(message);
+    setTimeout(() => setSuccessMessage(null), 5000);
+  };
+
   const handleApprove = async (swapId: string) => {
     try {
       const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/approve`, {
@@ -67,8 +75,8 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
 
       if (!res.ok) throw new Error('Failed to approve swap');
 
-      // Reload swaps
       setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
+      showSuccess('Swap approved');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to approve swap');
     }
@@ -85,6 +93,9 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
       if (!res.ok) throw new Error('Failed to reject swap');
 
       setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
+      setRejectingId(null);
+      setRejectionReason('');
+      showSuccess('Swap rejected');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reject swap');
     }
@@ -128,9 +139,16 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
 
   return (
     <div className="space-y-4">
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+          {successMessage}
+        </div>
+      )}
+
       {/* Filter */}
       <div className="card p-4 bg-neutral-50">
         <select
+          name="status-filter"
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value)}
           className="px-3 py-2 border rounded text-sm"
@@ -157,7 +175,11 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
           const isPending = swap.status === 'PENDING';
 
           return (
-            <div key={swap.id} className="card p-4 border-l-4 border-blue-600">
+            <div
+              key={swap.id}
+              data-status={swap.status}
+              className="card p-4 border-l-4 border-blue-600"
+            >
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
@@ -169,9 +191,9 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                         You requested
                       </span>
                     )}
-                    {isRespondent && (
+                    {isRespondent && isPending && (
                       <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
-                        Waiting for your response
+                        Pending Approval
                       </span>
                     )}
                   </div>
@@ -205,7 +227,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                 </div>
 
                 {/* Actions */}
-                {isPending && isRespondent && (
+                {isPending && isRespondent && rejectingId !== swap.id && (
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleApprove(swap.id)}
@@ -214,7 +236,10 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                       Approve
                     </button>
                     <button
-                      onClick={() => handleReject(swap.id)}
+                      onClick={() => {
+                        setRejectingId(swap.id);
+                        setRejectionReason('');
+                      }}
                       className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
                     >
                       Reject
@@ -222,6 +247,35 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                   </div>
                 )}
               </div>
+
+              {isPending && isRespondent && rejectingId === swap.id && (
+                <div className="mt-3 pt-3 border-t space-y-2">
+                  <label className="block text-xs font-medium text-neutral-700">
+                    Reason (optional)
+                  </label>
+                  <textarea
+                    name="rejection-reason"
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    rows={2}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleReject(swap.id, rejectionReason)}
+                      className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+                    >
+                      Reject
+                    </button>
+                    <button
+                      onClick={() => setRejectingId(null)}
+                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}

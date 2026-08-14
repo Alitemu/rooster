@@ -102,8 +102,8 @@ export async function POST(
       swapRequest.aanvrager_person_id,
       swapRequest.periode_id,
       'RUIL_GOEDGEKEURD',
-      'Ruilverzoek goedgekeurd',
-      'Je ruilverzoek is goedgekeurd. De diensten zijn uitgewisseld.',
+      'Swap request approved',
+      'Your swap request was approved. The shifts have been exchanged.',
       false,
       now
     );

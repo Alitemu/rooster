@@ -134,6 +134,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   Shift you offer
                 </label>
                 <select
+                  name="offered-slot"
                   value={offeredSlotId}
                   onChange={(e) => setOfferedSlotId(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -153,6 +154,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   Shift you want (from another person)
                 </label>
                 <select
+                  name="requested-slot"
                   value={requestedSlotId}
                   onChange={(e) => setRequestedSlotId(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -191,6 +193,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   Optional notes
                 </label>
                 <textarea
+                  name="notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Why do you need this swap? (optional)"
