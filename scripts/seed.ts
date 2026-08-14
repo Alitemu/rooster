@@ -39,6 +39,7 @@ async function createTables() {
       id TEXT PRIMARY KEY,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       token_hash TEXT NOT NULL UNIQUE,
+      geldt_voor_periode_id TEXT REFERENCES dienstrooster_schedule_period(id),
       aangemaakt_op TEXT NOT NULL,
       ingetrokken_op TEXT,
       laatst_gebruikt_op TEXT
@@ -156,6 +157,28 @@ async function createTables() {
 
     CREATE INDEX IF NOT EXISTS audit_actor_idx ON dienstrooster_audit_log(actor_id);
     CREATE INDEX IF NOT EXISTS audit_entiteit_idx ON dienstrooster_audit_log(entiteit, entiteit_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_parttime_pattern (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      weekdag TEXT NOT NULL CHECK(weekdag IN ('MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO')),
+      frequentie TEXT NOT NULL CHECK(frequentie IN ('ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN')),
+      geldig_vanaf TEXT NOT NULL,
+      geldig_tot TEXT NOT NULL,
+      aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_absence (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      van_datum TEXT NOT NULL,
+      tot_datum TEXT NOT NULL,
+      soort TEXT NOT NULL,
+      notitie TEXT,
+      aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      aangemaakt_op TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_availability (
       id TEXT PRIMARY KEY,
