@@ -157,29 +157,54 @@ async def solve_roster(request: SolverInput):
     logger.info(f"  Window weeks: {request.rules.window_weeks}")
 
     try:
-        # PLACEHOLDER: Return empty assignments
-        # Steps 2-5 of Phase 2 will implement actual CP-SAT solver
-        assignments = []
+        from solver import RosterSolver
 
-        elapsed = time.time() - start_time
+        # Build blocked and soft slot sets
+        blocked_slots = set()
+        soft_slots = {}
 
-        diagnostics = SolverDiagnostics(
-            total_slots=len(request.slots),
-            total_assignments=len(assignments),
-            total_cost=0.0,
-            time_seconds=elapsed,
-            solver_status="FEASIBLE",
-            violations={}
+        for person_id, preferences in request.person_preferences.items():
+            for pref in preferences:
+                if pref.blocking_level == "ABSOLUUT":
+                    blocked_slots.add((person_id, pref.slot_id))
+                elif pref.blocking_level == "LIEVER_NIET":
+                    soft_slots[(person_id, pref.slot_id)] = 1.0
+
+        # Build band ranges
+        band_ranges = {
+            'AVOND': request.rules.band_avond,
+            'WEEKEND': request.rules.band_weekend,
+            'FEESTDAG': request.rules.band_feestdag,
+        }
+
+        # Run solver
+        solver = RosterSolver(time_limit_seconds=30)
+        result = solver.generate_roster(
+            period_id=request.period_id,
+            people=request.people,
+            slots=[s.dict() for s in request.slots],
+            blocked_slots=blocked_slots,
+            soft_slots=soft_slots,
+            band_ranges=band_ranges,
+            balances=request.balances,
+            window_weeks=request.rules.window_weeks
         )
 
+        if not result['success']:
+            logger.warning(f"Solver did not find optimal solution: {result['diagnostics']}")
+
+        assignments = [Assignment(**a) for a in result['assignments']]
+        diagnostics = SolverDiagnostics(**result['diagnostics'])
+
+        elapsed = time.time() - start_time
         logger.info(f"Solve completed: {len(assignments)} assignments in {elapsed:.2f}s")
 
         return SolverOutput(
-            success=True,
+            success=result['success'],
             period_id=request.period_id,
             assignments=assignments,
             diagnostics=diagnostics,
-            message="Solver infrastructure ready (constraint implementation in progress)"
+            message=f"Generated {len(assignments)} assignments in {elapsed:.2f}s"
         )
 
     except Exception as e:
