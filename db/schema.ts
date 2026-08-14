@@ -149,6 +149,8 @@ export const schedulePeriod = sqliteTable(
     }).default('CONCEPT').notNull(),
     bevroren_ruleset_json: text('bevroren_ruleset_json'), // Frozen at OPEN status
     overloop_bevestigd_op: text('overloop_bevestigd_op'), // When prior assignments are confirmed
+    gepubliceerd_op: text('gepubliceerd_op'), // Phase 3: when roster was published
+    gepubliceerd_door_person_id: text('gepubliceerd_door_person_id').references(() => person.id), // Phase 3: who published
     row_version: integer('row_version').default(1).notNull(), // Optimistic locking
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   }
@@ -455,5 +457,76 @@ export const assignment = sqliteTable(
   },
   (table) => ({
     uniq: uniqueIndex('assignment_uniq').on(table.schedule_version_id, table.slot_id),
+  })
+);
+
+// ============================================================================
+// PHASE 3: SWAPS, NOTIFICATIONS, ASSIGNMENT EDITS
+// ============================================================================
+
+export const swapRequest = sqliteTable(
+  'dienstrooster_swap_request',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    periode_id: text('periode_id').notNull().references(() => schedulePeriod.id),
+    aanvrager_person_id: text('aanvrager_person_id').notNull().references(() => person.id),
+    aangeboden_slot_id: text('aangeboden_slot_id').notNull().references(() => shiftSlot.id),
+    gevraagde_slot_id: text('gevraagde_slot_id').notNull().references(() => shiftSlot.id),
+    respondent_person_id: text('respondent_person_id').notNull().references(() => person.id),
+    status: text('status', {
+      enum: ['PENDING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN'],
+    }).notNull().default('PENDING'),
+    aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+    beantwoord_op: text('beantwoord_op'), // When approved/rejected
+    afgehandeld_door_person_id: text('afgehandeld_door_person_id').references(() => person.id),
+    opmerkingen: text('opmerkingen'), // Notes from requester/responder
+    row_version: integer('row_version').default(1).notNull(),
+  },
+  (table) => ({
+    idx: index('swap_request_periode_idx').on(table.periode_id),
+    idx2: index('swap_request_status_idx').on(table.status),
+  })
+);
+
+export const notification = sqliteTable(
+  'dienstrooster_notification',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    person_id: text('person_id').notNull().references(() => person.id),
+    periode_id: text('periode_id').references(() => schedulePeriod.id), // NULL for non-period notifications
+    type: text('type', {
+      enum: ['ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'PUBLICATIE_BERICHT'],
+    }).notNull(),
+    onderwerp: text('onderwerp').notNull(),
+    inhoud: text('inhoud').notNull(), // Markdown format
+    gelezen: integer('gelezen', { mode: 'boolean' }).default(false).notNull(),
+    gesloten_op: text('gesloten_op'), // When dismissed
+    aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    idx: index('notification_person_idx').on(table.person_id),
+    idx2: index('notification_type_idx').on(table.type),
+  })
+);
+
+export const assignmentEdit = sqliteTable(
+  'dienstrooster_assignment_edit',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    toewijzing_id: text('toewijzing_id').notNull().references(() => assignment.id),
+    periode_id: text('periode_id').notNull().references(() => schedulePeriod.id),
+    person_id: text('person_id').notNull().references(() => person.id), // Person being assigned
+    slot_id: text('slot_id').notNull().references(() => shiftSlot.id),
+    edit_type: text('edit_type', {
+      enum: ['HANDMATIG_TOEWIJZEN', 'HANDMATIG_VERWIJDEREN', 'RUIL', 'OVERRIDE'],
+    }).notNull(),
+    oorspronkelijke_person_id: text('oorspronkelijke_person_id').references(() => person.id), // If swap
+    reden: text('reden'), // Reason for edit
+    bewerkt_door_person_id: text('bewerkt_door_person_id').notNull().references(() => person.id),
+    row_version: integer('row_version').default(1).notNull(),
+    aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    idx: index('assignment_edit_periode_idx').on(table.periode_id),
   })
 );
