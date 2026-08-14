@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function GET(
   request: NextRequest,
@@ -16,6 +18,12 @@ export async function GET(
 ) {
   try {
     const personId = params.id;
+
+    const auth = getAuthContextFromRequest(request);
+    if (!requirePersonAccess(auth, personId)) {
+      return forbiddenResponse();
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const periodId = searchParams.get('period_id');
     const status = searchParams.get('status');
@@ -57,11 +65,7 @@ export async function GET(
       data: { swap_requests: swapRequests },
     });
   } catch (error) {
-    console.error('Swap requests listing error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('swap-requests-list', error);
   }
 }
 
@@ -71,6 +75,12 @@ export async function POST(
 ) {
   try {
     const personId = params.id;
+
+    const auth = getAuthContextFromRequest(request);
+    if (!requirePersonAccess(auth, personId)) {
+      return forbiddenResponse();
+    }
+
     const body = await request.json();
     const { period_id, offered_slot_id, requested_slot_id, notes } = body;
     const now = dateToISO(new Date());
@@ -164,10 +174,6 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('Swap request creation error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('swap-request-create', error);
   }
 }

@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function POST(
   request: NextRequest,
@@ -15,6 +17,12 @@ export async function POST(
 ) {
   try {
     const personId = params.id;
+
+    const auth = getAuthContextFromRequest(request);
+    if (!requirePersonAccess(auth, personId)) {
+      return forbiddenResponse();
+    }
+
     const swapId = params['swap-id'];
     const body = await request.json();
     const { reason } = body;
@@ -95,10 +103,6 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('Swap rejection error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('swap-reject', error);
   }
 }

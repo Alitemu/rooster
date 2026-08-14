@@ -6,7 +6,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import type { ApiSuccessResponse } from '@/types';
 
 interface Pool {
   id: string;
@@ -15,8 +17,13 @@ interface Pool {
   member_count: number;
 }
 
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     const poolsStmt = db.prepare(`
       SELECT
         p.id,
@@ -38,16 +45,6 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'FETCH_ERROR',
-        message: `Failed to fetch pools: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('planner-pools-list', error);
   }
 }

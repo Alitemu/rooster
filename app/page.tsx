@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function Home() {
   return (
     <div className="container-main">
@@ -30,9 +32,9 @@ export default function Home() {
               <button className="w-full btn-primary">
                 Met link inloggen
               </button>
-              <button className="w-full btn-secondary">
+              <Link href="/planner/login" className="w-full btn-secondary block text-center">
                 Met wachtwoord inloggen
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -56,7 +58,7 @@ export default function Home() {
           <p className="text-neutral-600 text-sm mb-4">
             Beheer periodes, genereer roosters en publiceer diensten.
           </p>
-          <button className="btn-primary">Naar beheer</button>
+          <Link href="/planner/login" className="btn-primary inline-block">Naar beheer</Link>
         </div>
       </div>
     </div>

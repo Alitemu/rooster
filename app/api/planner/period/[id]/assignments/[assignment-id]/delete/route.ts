@@ -8,16 +8,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
-import { getAuthContextFromRequest } from '@/lib/auth-context';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string; 'assignment-id': string } }
 ) {
   try {
-    // Extract auth context (TODO: implement real auth)
     const auth = getAuthContextFromRequest(request);
-    const actorId = auth?.userId || 'system';
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+    const actorId = auth!.userId;
 
     const periodId = params.id;
     const assignmentId = params['assignment-id'];
@@ -102,10 +105,6 @@ export async function DELETE(
       },
     });
   } catch (error) {
-    console.error('Assignment deletion error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('assignment-delete', error);
   }
 }

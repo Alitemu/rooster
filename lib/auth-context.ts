@@ -1,11 +1,14 @@
 /**
  * Auth Context Helper
  *
- * Provides utilities for extracting authenticated user from requests.
- * Currently a placeholder - to be implemented with proper session/JWT handling.
+ * Extracts the authenticated identity from the signed session cookie
+ * (see lib/session.ts). There are two kinds of session:
+ * - person: issued when a personal access link token is verified
+ * - staff: issued when an ADMIN/PLANNER logs in with password(+TOTP)
  */
 
 import { NextRequest } from 'next/server';
+import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/session';
 
 export interface AuthContext {
   userId: string;
@@ -14,51 +17,43 @@ export interface AuthContext {
 }
 
 /**
- * Extract auth context from request
- *
- * TODO: Implement with:
- * - Session cookie parsing
- * - JWT token validation
- * - Role-based access control
- *
- * For now, returns a placeholder context for development.
+ * Extract and verify the auth context from the request's session cookie.
+ * Returns null if there is no session, or it's missing/tampered/expired.
  */
 export function getAuthContextFromRequest(request: NextRequest): AuthContext | null {
-  // TODO: Implement actual auth extraction
-  // Steps:
-  // 1. Check for session cookie or Authorization header
-  // 2. Validate token/session
-  // 3. Return authenticated user context
-  // 4. Return null if authentication fails
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const session = verifySessionToken(token);
 
-  // Placeholder for development
-  const fakeUserId = request.headers.get('x-user-id') || 'system';
-  const fakeRole = (request.headers.get('x-user-role') || 'PLANNER') as 'ADMIN' | 'PLANNER' | 'DEELNEMER';
+  if (!session) return null;
+
+  if (session.kind === 'staff') {
+    return {
+      userId: session.personId,
+      role: session.role,
+      timestamp: new Date().toISOString(),
+    };
+  }
 
   return {
-    userId: fakeUserId,
-    role: fakeRole,
+    userId: session.personId,
+    role: 'DEELNEMER',
     timestamp: new Date().toISOString(),
   };
 }
 
 /**
- * Verify planner/admin access
- *
- * TODO: Implement proper role-based access control
+ * True if the authenticated identity is an ADMIN or PLANNER.
  */
 export function requirePlannerAccess(auth: AuthContext | null): boolean {
   if (!auth) return false;
-  return ['ADMIN', 'PLANNER'].includes(auth.role);
+  return auth.role === 'ADMIN' || auth.role === 'PLANNER';
 }
 
 /**
- * Verify person-specific access
- *
- * TODO: Implement proper authorization checks
+ * True if the authenticated identity is the given person, or staff acting on their behalf.
  */
-export function requirePersonAccess(auth: AuthContext | null, _personId: string): boolean {
+export function requirePersonAccess(auth: AuthContext | null, personId: string): boolean {
   if (!auth) return false;
-  // TODO: Check if auth.userId matches _personId or if user is admin
-  return true;
+  if (auth.role === 'ADMIN' || auth.role === 'PLANNER') return true;
+  return auth.userId === personId;
 }

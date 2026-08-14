@@ -9,16 +9,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
-import { getAuthContextFromRequest } from '@/lib/auth-context';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Extract auth context (TODO: implement real auth)
     const auth = getAuthContextFromRequest(request);
-    const actorId = auth?.userId || 'system';
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+    const actorId = auth!.userId;
 
     const periodId = params.id;
     const now = dateToISO(new Date());
@@ -71,17 +74,18 @@ export async function POST(
       );
     }
 
-    // Build person IDs list for SQL IN clause
-    const personIds = people.map((p) => `'${p.replace(/'/g, "''")}'`).join(',');
-    const slotIds = slots.map((s) => `'${s.id.replace(/'/g, "''")}'`).join(',');
+    // Build parameterized placeholders for SQL IN clauses
+    const personPlaceholders = people.map(() => '?').join(',');
+    const slotPlaceholders = slots.map(() => '?').join(',');
+    const slotIdList = slots.map((s) => s.id);
 
     // Fetch preferences
     const preferences = db
       .prepare(
         `SELECT * FROM dienstrooster_availability
-         WHERE person_id IN (${personIds}) AND slot_id IN (${slotIds})`
+         WHERE person_id IN (${personPlaceholders}) AND slot_id IN (${slotPlaceholders})`
       )
-      .all() as any[];
+      .all(...people, ...slotIdList) as any[];
 
     // Build person preferences map
     const personPreferences: Record<string, Array<{ slot_id: string; blocking_level: string }>> = {};
@@ -100,10 +104,10 @@ export async function POST(
       .prepare(
         `SELECT person_id, teller, SUM(delta) as total
          FROM dienstrooster_ledger_entry
-         WHERE geldt_voor_periode_id = ? AND person_id IN (${personIds})
+         WHERE geldt_voor_periode_id = ? AND person_id IN (${personPlaceholders})
          GROUP BY person_id, teller`
       )
-      .all(periodId) as any[];
+      .all(periodId, ...people) as any[];
 
     const balances: Record<string, Record<string, number>> = {};
     for (const person of people) {
@@ -242,10 +246,6 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('Roster generation error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('generate-roster', error);
   }
 }

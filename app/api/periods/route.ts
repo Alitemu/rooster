@@ -7,7 +7,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import type { ApiSuccessResponse } from '@/types';
 
 interface PeriodSummary {
   id: string;
@@ -24,8 +26,13 @@ interface PeriodSummary {
  *
  * Returns array of periods with essential details
  */
-export async function GET(_req: NextRequest): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     // Query all periods ordered by start date descending
     const stmt = db.prepare(`
       SELECT
@@ -58,16 +65,6 @@ export async function GET(_req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'PERIOD_LIST_ERROR',
-        message: `Failed to list periods: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('periods-list', error);
   }
 }

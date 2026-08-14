@@ -6,6 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CreatePeriodRequest {
@@ -28,6 +30,11 @@ interface CreatePeriodResponse {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     const body: CreatePeriodRequest = await req.json();
 
     if (!body.naam || !body.pool_id || !body.start_datum || !body.eind_datum || !body.deadline) {
@@ -106,16 +113,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'CREATE_ERROR',
-        message: `Failed to create period: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('planner-create-period', error);
   }
 }

@@ -6,7 +6,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import type { ApiSuccessResponse } from '@/types';
 
 interface PersonProgress {
   person_id: string;
@@ -23,6 +25,11 @@ export async function GET(
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(_req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     const periodId = params.id;
 
     const progressStmt = db.prepare(`
@@ -64,16 +71,6 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'FETCH_ERROR',
-        message: `Failed to fetch progress: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('planner-progress', error);
   }
 }

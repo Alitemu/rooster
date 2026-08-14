@@ -7,14 +7,21 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string; 'period-id': string } }
 ) {
   try {
     const personId = params.id;
     const periodId = params['period-id'];
+
+    const auth = getAuthContextFromRequest(request);
+    if (!requirePersonAccess(auth, personId)) {
+      return forbiddenResponse();
+    }
 
     // Verify person exists
     const person = db
@@ -120,10 +127,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Roster viewing error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('roster-view', error);
   }
 }

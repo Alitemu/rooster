@@ -7,6 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateAbsenceRequest {
@@ -25,6 +27,12 @@ export async function PATCH(
 ): Promise<NextResponse> {
   try {
     const { id, absenceId } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
+
     const body = (await req.json()) as UpdateAbsenceRequest;
 
     // Verify person exists
@@ -86,17 +94,7 @@ export async function PATCH(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'ABSENCE_UPDATE_ERROR',
-        message: `Failed to update absence: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('absence-update', error);
   }
 }
 
@@ -104,11 +102,16 @@ export async function PATCH(
  * DELETE /api/person/[id]/absences/[absenceId] - Delete absence
  */
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string; absenceId: string } }
 ): Promise<NextResponse> {
   try {
     const { id, absenceId } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
 
     // Verify person exists
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);
@@ -143,16 +146,6 @@ export async function DELETE(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'ABSENCE_DELETE_ERROR',
-        message: `Failed to delete absence: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('absence-delete', error);
   }
 }

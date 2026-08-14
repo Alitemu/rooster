@@ -8,6 +8,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PreferenceEntry {
@@ -31,11 +33,16 @@ interface GetPreferencesResponse {
  * Returns all availability entries (blocking preferences) for this person in period
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string; periodId?: string } }
 ): Promise<NextResponse> {
   try {
     const { id, periodId } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
 
     if (!periodId) {
       const response: ApiErrorResponse = {
@@ -97,17 +104,7 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'PREFERENCES_GET_ERROR',
-        message: `Failed to get preferences: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('preferences-get', error);
   }
 }
 
@@ -122,6 +119,11 @@ export async function PATCH(
 ): Promise<NextResponse> {
   try {
     const { id, slotId } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
 
     if (!slotId) {
       const response: ApiErrorResponse = {
@@ -200,16 +202,6 @@ export async function PATCH(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'PREFERENCE_UPDATE_ERROR',
-        message: `Failed to update preference: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('preference-update', error);
   }
 }

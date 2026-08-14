@@ -12,6 +12,8 @@ import {
   calculatePriorAssignmentWeeks,
   calculatePriorAssignmentRange,
 } from '@/lib/priorAssignmentDerive';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PriorAssignment {
@@ -36,10 +38,15 @@ interface ListResponse {
  * Returns all prior assignments for this period's lookback window
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     const { id } = params;
 
     // Fetch period
@@ -126,17 +133,7 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'PRIOR_ASSIGNMENTS_LIST_ERROR',
-        message: `Failed to list prior assignments: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('prior-assignments-list', error);
   }
 }
 
@@ -150,6 +147,11 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     const { id } = params;
     const body = await req.json() as any;
 
@@ -225,16 +227,6 @@ export async function PATCH(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'PRIOR_ASSIGNMENTS_UPDATE_ERROR',
-        message: `Failed to update prior assignment: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('prior-assignments-update', error);
   }
 }

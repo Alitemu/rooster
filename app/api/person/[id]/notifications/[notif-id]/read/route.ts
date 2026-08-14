@@ -6,13 +6,21 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string; 'notif-id': string } }
 ) {
   try {
     const personId = params.id;
+
+    const auth = getAuthContextFromRequest(request);
+    if (!requirePersonAccess(auth, personId)) {
+      return forbiddenResponse();
+    }
+
     const notifId = params['notif-id'];
 
     // Verify notification belongs to person
@@ -37,10 +45,6 @@ export async function POST(
       data: { notification_id: notifId },
     });
   } catch (error) {
-    console.error('Mark read error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('notification-mark-read', error);
   }
 }

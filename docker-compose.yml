@@ -23,9 +23,11 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      NODE_ENV: development
+      NODE_ENV: production
       DATABASE_URL: "file:/data/rooster.db"
       SOLVER_URL: "http://solver:8000"
+      SESSION_SECRET: "${SESSION_SECRET:?Set SESSION_SECRET in your .env file, e.g. via: openssl rand -hex 32}"
+      BASE_URL: "${BASE_URL:-https://localhost:443}"
     volumes:
       - ./:/app
       - /app/node_modules

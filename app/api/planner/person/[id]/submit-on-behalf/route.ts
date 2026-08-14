@@ -6,11 +6,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SubmitRequest {
   period_id: string;
-  submitted_by_person_id: string; // Planner who is submitting
   reason?: string;
 }
 
@@ -19,15 +20,21 @@ export async function POST(
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+    const submittedByPersonId = auth!.userId;
+
     const personId = params.id;
     const body: SubmitRequest = await req.json();
 
-    if (!body.period_id || !body.submitted_by_person_id) {
+    if (!body.period_id) {
       const response: ApiErrorResponse = {
         success: false,
         error: {
           code: 'MISSING_FIELDS',
-          message: 'Missing required fields: period_id, submitted_by_person_id',
+          message: 'Missing required field: period_id',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -108,7 +115,7 @@ export async function POST(
       submitted_at: now,
     });
 
-    auditStmt.run(crypto.randomUUID(), body.submitted_by_person_id, 'submission', personId, 'CREATE', details, now);
+    auditStmt.run(crypto.randomUUID(), submittedByPersonId, 'submission', personId, 'CREATE', details, now);
 
     const response: ApiSuccessResponse<{ success: true; submitted_at: string }> = {
       success: true,
@@ -120,16 +127,6 @@ export async function POST(
 
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'SUBMIT_ERROR',
-        message: `Failed to submit on behalf: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('submit-on-behalf', error);
   }
 }

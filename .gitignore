@@ -3,8 +3,9 @@ node_modules/
 .pnp
 .pnp.js
 
-# Testing
-coverage/
+# Testing (anchored to repo root - a bare "coverage/" would also match
+# app/api/**/preferences/coverage/, a real API route directory)
+/coverage/
 .nyc_output/
 
 # Production

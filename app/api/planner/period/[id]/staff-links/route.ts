@@ -1,19 +1,24 @@
 /**
  * Staff Access Links Management Route
  *
- * GET /api/planner/period/[id]/staff-links - List all access links for period
+ * GET /api/planner/period/[id]/staff-links - List access link metadata for period
  * POST /api/planner/period/[id]/staff-links - Create new access link for person
+ *
+ * The plaintext token is never stored (only its hash) and is therefore only
+ * ever returned once, at creation time, from POST. GET intentionally never
+ * exposes it.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { hashToken } from '@/lib/auth';
+import { generateAccessToken, hashToken } from '@/lib/auth';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
-interface StaffLink {
+interface StaffLinkMeta {
   person_id: string;
   codenaam: string;
-  token: string;
   token_created_at: string;
   last_used_at: string | null;
   revoked_at: string | null;
@@ -24,17 +29,21 @@ interface CreateLinkRequest {
 }
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     const periodId = params.id;
 
     const linksStmt = db.prepare(`
       SELECT
         pal.person_id,
         p.codenaam,
-        pal.token,
         pal.aangemaakt_op as token_created_at,
         pal.laatst_gebruikt_op as last_used_at,
         pal.ingetrokken_op as revoked_at
@@ -44,26 +53,16 @@ export async function GET(
       ORDER BY p.codenaam ASC
     `);
 
-    const links = linksStmt.all(periodId) as StaffLink[];
+    const links = linksStmt.all(periodId) as StaffLinkMeta[];
 
-    const response: ApiSuccessResponse<StaffLink[]> = {
+    const response: ApiSuccessResponse<StaffLinkMeta[]> = {
       success: true,
       data: links,
     };
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'FETCH_ERROR',
-        message: `Failed to fetch access links: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('staff-links-list', error);
   }
 }
 
@@ -72,6 +71,11 @@ export async function POST(
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
     const periodId = params.id;
     const body: CreateLinkRequest = await req.json();
 
@@ -103,7 +107,7 @@ export async function POST(
 
     // Check if link already exists
     const existingStmt = db.prepare(
-      'SELECT id FROM dienstrooster_person_access_link WHERE person_id = ? AND geldt_voor_periode_id = ?'
+      'SELECT id FROM dienstrooster_person_access_link WHERE person_id = ? AND geldt_voor_periode_id = ? AND ingetrokken_op IS NULL'
     );
     const existing = existingStmt.get(body.person_id, periodId);
 
@@ -119,7 +123,7 @@ export async function POST(
     }
 
     // Generate token
-    const token = crypto.randomUUID();
+    const token = generateAccessToken();
     const tokenHash = hashToken(token);
 
     // Create access link
@@ -144,16 +148,6 @@ export async function POST(
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'CREATE_ERROR',
-        message: `Failed to create access link: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('staff-links-create', error);
   }
 }

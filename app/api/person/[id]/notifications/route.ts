@@ -7,6 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +16,12 @@ export async function GET(
 ) {
   try {
     const personId = params.id;
+
+    const auth = getAuthContextFromRequest(request);
+    if (!requirePersonAccess(auth, personId)) {
+      return forbiddenResponse();
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const periodId = searchParams.get('period_id');
     const type = searchParams.get('type');
@@ -74,10 +82,6 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Notifications listing error:', error);
-    return NextResponse.json(
-      { success: false, error: String(error) },
-      { status: 500 }
-    );
+    return internalErrorResponse('notifications-list', error);
   }
 }

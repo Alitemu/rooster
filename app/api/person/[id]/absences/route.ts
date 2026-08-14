@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface Absence {
@@ -30,11 +32,16 @@ interface CreateAbsenceRequest {
  * GET /api/person/[id]/absences - List all absences
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
     const { id } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
 
     // Verify person exists
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);
@@ -68,17 +75,7 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'ABSENCES_LIST_ERROR',
-        message: `Failed to list absences: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('absences-list', error);
   }
 }
 
@@ -91,6 +88,12 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { id } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
+
     const body = (await req.json()) as CreateAbsenceRequest;
 
     const { van_datum, tot_datum, soort, notitie } = body;
@@ -164,16 +167,6 @@ export async function POST(
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'ABSENCE_CREATE_ERROR',
-        message: `Failed to create absence: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('absence-create', error);
   }
 }

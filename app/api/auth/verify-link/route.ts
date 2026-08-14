@@ -7,6 +7,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
+import { setSessionCookie, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
+import { internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface VerifyLinkResponse {
@@ -106,7 +108,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     updateStmt.run(new Date().toISOString(), tokenHash);
 
-    const response: ApiSuccessResponse<VerifyLinkResponse> = {
+    const responseBody: ApiSuccessResponse<VerifyLinkResponse> = {
       success: true,
       data: {
         person_id: link.person_id,
@@ -115,18 +117,15 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       },
     };
 
-    return NextResponse.json(response);
+    const response = NextResponse.json(responseBody);
+    setSessionCookie(
+      response,
+      { kind: 'person', personId: link.person_id },
+      PERSON_SESSION_MAX_AGE_SECONDS
+    );
+
+    return response;
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'VERIFY_ERROR',
-        message: `Failed to verify link: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('verify-link', error);
   }
 }

@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
+import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ParttimePattern {
@@ -30,11 +32,16 @@ interface CreatePatternRequest {
  * GET /api/person/[id]/parttime-patterns - List all part-time patterns
  */
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
     const { id } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
 
     // Verify person exists
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);
@@ -68,17 +75,7 @@ export async function GET(
 
     return NextResponse.json(response);
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'PARTTIME_PATTERNS_LIST_ERROR',
-        message: `Failed to list patterns: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('parttime-patterns-list', error);
   }
 }
 
@@ -93,6 +90,12 @@ export async function POST(
 ): Promise<NextResponse> {
   try {
     const { id } = params;
+
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePersonAccess(auth, id)) {
+      return forbiddenResponse();
+    }
+
     const body = (await req.json()) as CreatePatternRequest;
 
     const { weekdag, frequentie, geldig_vanaf, geldig_tot } = body;
@@ -178,16 +181,6 @@ export async function POST(
 
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
-    const errMsg = error instanceof Error ? error.message : 'Unknown error';
-
-    const response: ApiErrorResponse = {
-      success: false,
-      error: {
-        code: 'PARTTIME_CREATE_ERROR',
-        message: `Failed to create pattern: ${errMsg}`,
-      },
-    };
-
-    return NextResponse.json(response, { status: 500 });
+    return internalErrorResponse('parttime-pattern-create', error);
   }
 }
