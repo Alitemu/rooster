@@ -1,50 +1,215 @@
 """
-Dienstrooster Solver Service (Phase 0 Placeholder)
+Dienstrooster Solver Service
 
-Phase 0 only includes health check endpoint.
-Full solver implementation comes in Phase 2.
+FastAPI service using Google OR-Tools CP-SAT solver for fair roster generation.
+Phase 1: Infrastructure and data models
+Phase 2: Constraint implementation and solver execution
 """
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 import logging
+import time
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from typing import Optional
+from datetime import datetime
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
     title="Dienstrooster Solver",
-    description="Shift scheduling solver using CP-SAT",
-    version="0.1.0"
+    description="CP-SAT Solver for fair shift roster generation",
+    version="1.0.0"
 )
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins in development
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/health")
+# ============================================================================
+# Pydantic Models
+# ============================================================================
+
+class HealthResponse(BaseModel):
+    status: str = "ok"
+    service: str = "solver"
+    version: str = "1.0.0"
+    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class Slot(BaseModel):
+    id: str
+    datum: str  # YYYY-MM-DD
+    iso_jaar: int
+    iso_week: int
+    shift_type_id: str
+    shift_type_name: str  # AVOND, WEEKEND, FEESTDAG
+    benodigd_aantal_personen: int = 1
+    is_feestdag: bool = False
+    feestdag_groep: Optional[str] = None
+
+
+class PersonPreference(BaseModel):
+    slot_id: str
+    blocking_level: str  # ABSOLUUT or LIEVER_NIET
+
+
+class RuleSet(BaseModel):
+    window_weeks: int = 2
+    band_avond: list[int] = [7, 8]
+    band_weekend: list[int] = [7, 8]
+    band_feestdag: list[int] = [7, 8]
+    distribution_mode: str = "GELIJK"
+
+
+class SolverInput(BaseModel):
+    period_id: str
+    slots: list[Slot]
+    person_preferences: dict[str, list[PersonPreference]]
+    people: list[str]
+    rules: RuleSet
+    balances: dict[str, dict[str, int]]
+    active_people: int
+
+
+class Assignment(BaseModel):
+    person_id: str
+    slot_id: str
+    source: str = "SOLVER"
+
+
+class SolverDiagnostics(BaseModel):
+    total_slots: int
+    total_assignments: int
+    total_cost: float
+    time_seconds: float
+    solver_status: str
+    violations: dict[str, int]
+
+
+class SolverOutput(BaseModel):
+    success: bool
+    period_id: str
+    assignments: list[Assignment]
+    diagnostics: SolverDiagnostics
+    message: str = "Roster generated successfully"
+
+
+# ============================================================================
+# Endpoints
+# ============================================================================
+
+@app.get("/health", response_model=HealthResponse)
 async def health():
-    """Health check endpoint for Docker"""
-    return {"status": "ok", "service": "solver"}
+    """Health check endpoint for orchestration"""
+    logger.debug("Health check requested")
+    return HealthResponse()
 
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """Root endpoint - service information"""
     return {
         "service": "Dienstrooster Solver",
-        "version": "0.1.0",
-        "status": "Phase 0 - Placeholder",
-        "message": "Full solver implementation in Phase 2"
+        "version": "1.0.0",
+        "status": "ready",
+        "endpoints": {
+            "health": "/health",
+            "solve": "/solve (POST)"
+        }
     }
+
+
+@app.post("/solve", response_model=SolverOutput)
+async def solve_roster(request: SolverInput):
+    """
+    Generate roster assignments using CP-SAT solver.
+
+    Receives:
+    - period_id: Period identifier
+    - slots: List of shift slots to fill
+    - person_preferences: Blocking/soft preferences per person
+    - people: List of person IDs
+    - rules: Window weeks, band ranges, distribution mode
+    - balances: Current balance per person per counter
+    - active_people: Number of active pool members
+
+    Returns:
+    - assignments: List of person-slot pairings
+    - diagnostics: Cost breakdown, violations, solver status
+    """
+    start_time = time.time()
+    logger.info(f"Solve request for period {request.period_id}")
+    logger.info(f"  Slots: {len(request.slots)}")
+    logger.info(f"  People: {len(request.people)}")
+    logger.info(f"  Window weeks: {request.rules.window_weeks}")
+
+    try:
+        # PLACEHOLDER: Return empty assignments
+        # Steps 2-5 of Phase 2 will implement actual CP-SAT solver
+        assignments = []
+
+        elapsed = time.time() - start_time
+
+        diagnostics = SolverDiagnostics(
+            total_slots=len(request.slots),
+            total_assignments=len(assignments),
+            total_cost=0.0,
+            time_seconds=elapsed,
+            solver_status="FEASIBLE",
+            violations={}
+        )
+
+        logger.info(f"Solve completed: {len(assignments)} assignments in {elapsed:.2f}s")
+
+        return SolverOutput(
+            success=True,
+            period_id=request.period_id,
+            assignments=assignments,
+            diagnostics=diagnostics,
+            message="Solver infrastructure ready (constraint implementation in progress)"
+        )
+
+    except Exception as e:
+        logger.error(f"Solver error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Solver error: {str(e)}"
+        )
+
+
+# ============================================================================
+# Startup/Shutdown
+# ============================================================================
+
+@app.on_event("startup")
+async def startup_event():
+    logger.info("=" * 60)
+    logger.info("Dienstrooster Solver Service Starting")
+    logger.info("=" * 60)
+    logger.info("Version: 1.0.0")
+    logger.info("Status: Infrastructure ready, solver implementation in progress")
+    logger.info("Endpoints:")
+    logger.info("  - GET  /health       (health check)")
+    logger.info("  - POST /solve        (generate roster)")
+    logger.info("=" * 60)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Dienstrooster Solver Service shutting down")
 
 
 if __name__ == "__main__":
