@@ -7,7 +7,7 @@
  * Convention: Dates stored as ISO-8601 strings (YYYY-MM-DD)
  */
 
-import { getISOWeek, getWeekRange, getHolidaysInRange, getHolidayInfo, addDays, dateToISO, parseISO } from './holidays';
+import { getISOWeek, getHolidaysInRange, dateToISO, parseISO } from './holidays';
 import type { HolidayGroup } from './holidays';
 
 export interface GeneratedSlot {
@@ -71,7 +71,7 @@ function isWeekend(date: string): boolean {
  * - ISO week boundary correctly handled (e.g., Dec 31 might be Week 52 or Week 1 of next year)
  */
 export function generateSlotsForPeriod(input: SlotGenerationInput): GeneratedSlot[] {
-  const { startDate, endDate, shiftTypes } = input;
+  const { startDate, endDate } = input;
 
   // Get all holidays in range (we'll filter per counter type later)
   const holidaysInRange = getHolidaysInRange(startDate, endDate);

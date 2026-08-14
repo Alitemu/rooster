@@ -30,7 +30,7 @@ interface CreatePatternRequest {
  * GET /api/person/[id]/parttime-patterns - List all part-time patterns
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {

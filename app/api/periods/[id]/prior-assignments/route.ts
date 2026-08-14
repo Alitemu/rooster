@@ -11,7 +11,6 @@ import { db } from '@/db/client';
 import {
   calculatePriorAssignmentWeeks,
   calculatePriorAssignmentRange,
-  generateSkeletonPriorAssignments,
 } from '@/lib/priorAssignmentDerive';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -37,7 +36,7 @@ interface ListResponse {
  * Returns all prior assignments for this period's lookback window
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {

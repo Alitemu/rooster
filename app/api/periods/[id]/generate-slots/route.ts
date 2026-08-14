@@ -7,7 +7,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { generateSlotsForPeriod, validateSlots, countWeeksInSlots } from '@/lib/slotGeneration';
-import { getHolidaysForYear } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SlotGenerationResponse {
@@ -27,7 +26,7 @@ interface SlotGenerationResponse {
  * Only generates - does not write to database.
  */
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {

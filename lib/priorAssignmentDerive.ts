@@ -8,7 +8,7 @@
  * Convention: Dates stored as ISO-8601 strings (YYYY-MM-DD)
  */
 
-import { dateToISO, parseISO, addDays, getWeeksInYear, getISOWeek } from './holidays';
+import { dateToISO, parseISO, getISOWeek } from './holidays';
 
 export interface PriorAssignmentInput {
   previousPeriodEndDate: string; // ISO date, should be Sunday-rounded

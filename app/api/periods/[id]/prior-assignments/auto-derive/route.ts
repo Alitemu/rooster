@@ -26,7 +26,7 @@ interface AutoDeriveResult {
  * Only processes the last windowWeeks-1 weeks of the prior period.
  */
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {

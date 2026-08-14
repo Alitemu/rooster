@@ -120,7 +120,6 @@ export function checkCapacity(
  */
 export function getCapacityInterpretation(windowWeeks: number, slots: number, people: number): string {
   const distinctRequired = 7 * windowWeeks;
-  const weeksFromCapacity = Math.floor((people * Math.floor(slots / people)) / 7);
 
   const lines = [
     `With a window of ${windowWeeks} weeks:`,
@@ -164,7 +163,6 @@ export function getMaxWindowWeeksForParticipants(participants: number): number {
  */
 export function periodsToCatchUp(
   currentBalance: number,
-  fairShareMin: number,
   fairShareMax: number
 ): number | null {
   if (currentBalance >= 0) {

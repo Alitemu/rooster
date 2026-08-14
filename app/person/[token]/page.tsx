@@ -49,14 +49,14 @@ export default function PersonalLinkPage() {
   const [personId, setPersonId] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period | null>(null);
   const [patterns, setPatterns] = useState<ParttimePattern[]>([]);
-  const [blockedDays, setBlockedDays] = useState<BlockedDaysSummary>({
+  const [blockedDays] = useState<BlockedDaysSummary>({
     AVOND: 0,
     WEEKEND: 0,
     FEESTDAG: 0,
     total: 0,
   });
   const [parttimeConfirmed, setParttimeConfirmed] = useState(false);
-  const [preferencesChanged, setPreferencesChanged] = useState(false);
+  const [_preferencesChanged, setPreferencesChanged] = useState(false);
 
   // Verify token and load person data
   useEffect(() => {
@@ -98,9 +98,6 @@ export default function PersonalLinkPage() {
     verifyToken();
   }, [token]);
 
-  const handleBlockedDaysChange = (counts: BlockedDaysSummary) => {
-    setBlockedDays(counts);
-  };
 
   const handleSubmitSuccess = () => {
     setCurrentStep('submitted');
@@ -202,7 +199,6 @@ export default function PersonalLinkPage() {
       {currentStep === 'parttime' && (
         <div className="space-y-4">
           <PartTimeCheckStep
-            personId={personId}
             patterns={patterns}
             onConfirm={setParttimeConfirmed}
           />

@@ -1,4 +1,3 @@
-import { sql } from 'drizzle-orm';
 import {
   sqliteTable,
   text,
@@ -6,7 +5,6 @@ import {
   real,
   uniqueIndex,
   index,
-  primaryKey,
 } from 'drizzle-orm/sqlite-core';
 
 // ============================================================================
@@ -411,8 +409,8 @@ export const availability = sqliteTable(
     person_id: text('person_id').notNull().references(() => person.id),
     slot_id: text('slot_id').notNull().references(() => shiftSlot.id),
     blocking_level: text('blocking_level', {
-      enum: ['ABSOLUUT', 'LIEVER_NIET', null],
-    }).default(null), // null = neutral
+      enum: ['ABSOLUUT', 'LIEVER_NIET'],
+    }), // null = neutral (default is NULL in SQLite)
     source: text('source', {
       enum: ['MANUAL', 'PARTTIME', 'ABSENCE'],
     }).notNull(), // How the blocking was created

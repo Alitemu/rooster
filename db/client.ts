@@ -26,7 +26,7 @@ if (!path.isAbsolute(filePath)) {
 }
 
 // Initialize database
-const db = new Database(filePath);
+const db: Database.Database = new Database(filePath);
 
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');

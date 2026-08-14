@@ -15,17 +15,9 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { dateToISO, parseISO, addDays, getISOWeek } from '@/lib/holidays';
+import { dateToISO, parseISO, getISOWeek } from '@/lib/holidays';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | null;
-
-interface Slot {
-  slot_id: string;
-  datum: string;
-  iso_week: number;
-  teller: string;
-  blocking_level: BlockLevel;
-}
 
 interface DayPreference {
   datum: string;
@@ -116,7 +108,7 @@ export function PreferencesCalendar({
 
   // Debounced save
   const savePreference = useCallback(
-    async (datum: string, teller: string, level: BlockLevel) => {
+    async (_datum: string, teller: string, level: BlockLevel) => {
       setIsSaving(true);
       try {
         // Find slot_id for this date and counter
@@ -220,7 +212,7 @@ export function PreferencesCalendar({
     <div className="w-full overflow-x-auto">
       <div className="calendar-grid p-4 space-y-6 min-w-full">
         {weeks.map((week, weekIdx) => {
-          const [isoYear, isoWeek] = getISOWeek(parseISO(week[0]));
+          const [_isoYear, isoWeek] = getISOWeek(parseISO(week[0]));
           const weekLabel = `Week ${isoWeek}`;
 
           return (
@@ -237,7 +229,6 @@ export function PreferencesCalendar({
                 {week.map((datum, dayIdx) => {
                   const dayPref = preferences.get(datum);
                   const dayName = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'][dayIdx];
-                  const isWeekend = dayIdx === 5 || dayIdx === 6;
                   const isSaturday = dayIdx === 5;
                   const cov = coverage.get(datum);
 

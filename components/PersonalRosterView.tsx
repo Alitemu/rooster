@@ -10,7 +10,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { parseISO, dateToISO, getISOWeek } from '@/lib/holidays';
+import { parseISO } from '@/lib/holidays';
 
 interface AssignedShift {
   datum: string;
@@ -33,8 +33,6 @@ interface SoftBlockViolation {
 }
 
 interface Props {
-  personId: string;
-  periodId: string;
   assignedShifts: AssignedShift[];
   balances: BalanceDisplay[];
   softBlockViolations?: SoftBlockViolation[];
@@ -42,8 +40,6 @@ interface Props {
 }
 
 export function PersonalRosterView({
-  personId,
-  periodId,
   assignedShifts,
   balances,
   softBlockViolations = [],

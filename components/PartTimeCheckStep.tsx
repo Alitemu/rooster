@@ -27,12 +27,11 @@ interface GeneratedDay {
 }
 
 interface Props {
-  personId: string;
   patterns: ParttimePattern[];
   onConfirm?: (confirmed: boolean) => void;
 }
 
-export function PartTimeCheckStep({ personId, patterns, onConfirm }: Props) {
+export function PartTimeCheckStep({ patterns, onConfirm }: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);

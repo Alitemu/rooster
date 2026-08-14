@@ -1,5 +1,4 @@
 import type { Config } from 'drizzle-kit';
-import path from 'path';
 
 const dbUrl = process.env.DATABASE_URL || 'file:./rooster.db';
 

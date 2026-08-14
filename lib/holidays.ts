@@ -245,8 +245,6 @@ export function countWeeksBetween(isoYear1: number, isoWeek1: number, isoYear2: 
  */
 export function getWeeksInYear(year: number): number {
   // December 31 is in week 53 if it's a Thursday or later
-  // (or equivalently, if January 1 is a Thursday or earlier)
-  const jan1 = new Date(year, 0, 1);
   const dec31 = new Date(year, 11, 31);
 
   const [, dec31Week] = getISOWeek(dec31);

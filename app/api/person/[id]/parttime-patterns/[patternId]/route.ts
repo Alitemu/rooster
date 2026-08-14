@@ -104,7 +104,7 @@ export async function PATCH(
  * DELETE /api/person/[id]/parttime-patterns/[patternId] - Delete pattern
  */
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string; patternId: string } }
 ): Promise<NextResponse> {
   try {

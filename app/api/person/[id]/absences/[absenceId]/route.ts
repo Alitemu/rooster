@@ -104,7 +104,7 @@ export async function PATCH(
  * DELETE /api/person/[id]/absences/[absenceId] - Delete absence
  */
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string; absenceId: string } }
 ): Promise<NextResponse> {
   try {

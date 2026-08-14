@@ -31,7 +31,7 @@ interface GetPreferencesResponse {
  * Returns all availability entries (blocking preferences) for this person in period
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string; periodId?: string } }
 ): Promise<NextResponse> {
   try {

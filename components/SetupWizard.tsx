@@ -68,7 +68,7 @@ export function SetupWizard({ period, onComplete }: Props) {
     factors: {},
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error] = useState<string | null>(null);
 
   const steps: { id: Step; label: string; title: string }[] = [
     { id: 'period', label: '1. Period', title: 'Period & Deadline' },

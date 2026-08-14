@@ -10,7 +10,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
 import { hashPassword, hashToken } from '../lib/auth';
-import { parseISO, getISOWeek } from '../lib/holidays';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
