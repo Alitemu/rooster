@@ -46,6 +46,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       SELECT
         pal.person_id,
         pal.ingetrokken_op,
+        pal.geldt_voor_periode_id,
         p.codenaam
       FROM dienstrooster_person_access_link pal
       JOIN dienstrooster_person p ON p.id = pal.person_id
@@ -77,16 +78,27 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 401 });
     }
 
-    // Find current open period for this person's pool
-    const periodStmt = db.prepare(`
-      SELECT sp.id, sp.pool_id
-      FROM dienstrooster_schedule_period sp
-      WHERE sp.status IN ('OPEN', 'GESLOTEN')
-      ORDER BY sp.start_datum DESC
-      LIMIT 1
-    `);
-
-    const period = periodStmt.get() as any;
+    // A link created for a specific period (the normal case) always resolves
+    // to that period, whatever its status - the person needs to reach their
+    // preferences UI before publication and their roster after. Only a
+    // general link with no period (geldt_voor_periode_id IS NULL) falls back
+    // to auto-detecting the current enrollment period.
+    let period: any;
+    if (link.geldt_voor_periode_id) {
+      period = db
+        .prepare(`SELECT id, pool_id FROM dienstrooster_schedule_period WHERE id = ?`)
+        .get(link.geldt_voor_periode_id);
+    } else {
+      period = db
+        .prepare(
+          `SELECT id, pool_id
+           FROM dienstrooster_schedule_period
+           WHERE status IN ('OPEN', 'GESLOTEN')
+           ORDER BY start_datum DESC
+           LIMIT 1`
+        )
+        .get();
+    }
 
     if (!period) {
       const response: ApiErrorResponse = {

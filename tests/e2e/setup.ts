@@ -6,6 +6,8 @@
 
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
+import type { Page } from '@playwright/test';
+import { generateAccessToken, hashToken } from '@/lib/auth';
 
 interface TestUser {
   id: string;
@@ -21,20 +23,29 @@ interface TestData {
 }
 
 /**
- * Create test users and return authentication tokens
+ * Create test users and return working personal access link tokens.
+ * When periodId is given, each link is scoped to that period (matching how
+ * real invitation links are created) so /api/auth/verify-link resolves it
+ * directly instead of falling back to auto-detecting an OPEN period.
  */
-export function createTestUsers(count: number = 5): TestUser[] {
+export function createTestUsers(count: number = 5, periodId?: string): TestUser[] {
   const users: TestUser[] = [];
 
   for (let i = 0; i < count; i++) {
     const id = uuid();
     const codenaam = `E2ETest-${Date.now()}-${i}`;
-    const token = uuid(); // In real setup, would generate proper token
+    const token = generateAccessToken();
 
     db.prepare(`
       INSERT INTO dienstrooster_person (id, codenaam, rol, wachtwoord_hash, aangemaakt_op)
       VALUES (?, ?, 'DEELNEMER', 'hash', datetime('now'))
     `).run(id, codenaam);
+
+    db.prepare(`
+      INSERT INTO dienstrooster_person_access_link
+        (id, person_id, geldt_voor_periode_id, token_hash, aangemaakt_op)
+      VALUES (?, ?, ?, ?, datetime('now'))
+    `).run(uuid(), id, periodId ?? null, hashToken(token));
 
     users.push({ id, codenaam, token });
   }
@@ -64,7 +75,7 @@ export function createTestPeriod(): TestData {
     '2027-01-04', '2027-01-10', '2026-12-31T23:59:59Z');
 
   // Create test users
-  const users = createTestUsers(5);
+  const users = createTestUsers(5, periodId);
 
   // Get shift type IDs
   const shiftTypes = db.prepare(`SELECT id, teller FROM dienstrooster_shift_type`).all() as Array<{ id: string; teller: string }>;
@@ -119,6 +130,27 @@ export function getBaseUrl(): string {
 }
 
 /**
+ * Log in as the seeded PLANNER account (see scripts/seed.ts) so the page's
+ * browser context carries a valid staff session cookie. Planner pages are
+ * protected by middleware.ts and their data comes from routes gated by
+ * requirePlannerAccess, so tests that visit /planner/* must call this first.
+ */
+export async function loginAsPlanner(page: Page): Promise<void> {
+  const res = await page.request.post(`${getBaseUrl()}/api/auth/staff-login`, {
+    data: {
+      codenaam: process.env.E2E_PLANNER_CODENAAM || 'PLANNER',
+      password: process.env.E2E_PLANNER_PASSWORD || 'Planner@12345',
+    },
+  });
+
+  if (!res.ok()) {
+    throw new Error(
+      `E2E staff login failed (${res.status()}): run npm run seed, or set E2E_PLANNER_CODENAAM/E2E_PLANNER_PASSWORD`
+    );
+  }
+}
+
+/**
  * Get personal link URL for a user
  */
 export function getPersonalLinkUrl(token: string): string {
@@ -135,10 +167,14 @@ export function cleanupTestData(periodId: string, userIds: string[]): void {
   db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
-  db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
 
-  // Delete test users
+  // Delete test users (access links first - both person_id and
+  // geldt_voor_periode_id are foreign keys, so this must happen before the
+  // schedule_period delete below)
   for (const userId of userIds) {
+    db.prepare('DELETE FROM dienstrooster_person_access_link WHERE person_id = ?').run(userId);
     db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(userId);
   }
+
+  db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
 }

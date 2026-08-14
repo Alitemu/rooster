@@ -218,6 +218,55 @@ async function createTables() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS assignment_uniq
       ON dienstrooster_assignment(schedule_version_id, slot_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_swap_request (
+      id TEXT PRIMARY KEY,
+      periode_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      aanvrager_person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      aangeboden_slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
+      gevraagde_slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
+      respondent_person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN')),
+      aangemaakt_op TEXT NOT NULL,
+      beantwoord_op TEXT,
+      afgehandeld_door_person_id TEXT REFERENCES dienstrooster_person(id),
+      opmerkingen TEXT,
+      row_version INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE INDEX IF NOT EXISTS swap_request_periode_idx ON dienstrooster_swap_request(periode_id);
+    CREATE INDEX IF NOT EXISTS swap_request_status_idx ON dienstrooster_swap_request(status);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_notification (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      periode_id TEXT REFERENCES dienstrooster_schedule_period(id),
+      type TEXT NOT NULL CHECK(type IN ('ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'PUBLICATIE_BERICHT')),
+      onderwerp TEXT NOT NULL,
+      inhoud TEXT NOT NULL,
+      gelezen INTEGER NOT NULL DEFAULT 0,
+      gesloten_op TEXT,
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS notification_person_idx ON dienstrooster_notification(person_id);
+    CREATE INDEX IF NOT EXISTS notification_type_idx ON dienstrooster_notification(type);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_assignment_edit (
+      id TEXT PRIMARY KEY,
+      toewijzing_id TEXT NOT NULL REFERENCES dienstrooster_assignment(id),
+      periode_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
+      edit_type TEXT NOT NULL CHECK(edit_type IN ('HANDMATIG_TOEWIJZEN', 'HANDMATIG_VERWIJDEREN', 'RUIL', 'OVERRIDE')),
+      oorspronkelijke_person_id TEXT REFERENCES dienstrooster_person(id),
+      reden TEXT,
+      bewerkt_door_person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      row_version INTEGER NOT NULL DEFAULT 1,
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS assignment_edit_periode_idx ON dienstrooster_assignment_edit(periode_id);
   `);
 }
 

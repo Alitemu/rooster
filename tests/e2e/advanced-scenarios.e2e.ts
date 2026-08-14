@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getPersonalLinkUrl, cleanupTestData } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl } from './setup';
 
 /**
  * Phase 3 Advanced Scenarios E2E Tests
@@ -220,8 +220,10 @@ test.describe('Error Handling - E2E', () => {
   });
 
   test('Invalid period shows error on planner dashboard', async ({ page }) => {
+    await loginAsPlanner(page);
+
     // Try to access non-existent period
-    const invalidPeriodUrl = `http://localhost:3000/planner/period/invalid-id`;
+    const invalidPeriodUrl = `${getBaseUrl()}/planner/period/invalid-id`;
     await page.goto(invalidPeriodUrl);
 
     // Should show error message

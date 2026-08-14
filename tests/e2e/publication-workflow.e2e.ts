@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getBaseUrl, cleanupTestData } from './setup';
+import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner } from './setup';
 
 /**
  * Phase 3 Publication Workflow E2E Tests
@@ -17,6 +17,10 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
   test.afterAll(() => {
     cleanupTestData(testData.period.id, testData.users.map(u => u.id));
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await loginAsPlanner(page);
   });
 
   test('Planner can see publication button for generated periods', async ({ page }) => {
