@@ -16,6 +16,8 @@
 import { useState, useEffect } from 'react';
 import { ExportDialog } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
+import { AssignmentGrid } from './AssignmentGrid';
+import { RosterPublicationDialog } from './RosterPublicationDialog';
 
 interface PersonProgress {
   person_id: string;
@@ -61,6 +63,8 @@ export function PlannerDashboard({ periodId }: Props) {
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
+  const [publicationDialogOpen, setPublicationDialogOpen] = useState(false);
+  const [showAssignments, setShowAssignments] = useState(false);
 
   const loadData = async () => {
     try {
@@ -279,13 +283,23 @@ export function PlannerDashboard({ periodId }: Props) {
       <div className="card p-6">
         <h3 className="font-bold text-lg mb-4">Roster Generation</h3>
         <div className="mb-6">
-          <button
-            onClick={() => setRosterDialogOpen(true)}
-            disabled={dashboard.status === 'GENERATED' || dashboard.status === 'PUBLISHED'}
-            className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
-          >
-            🚀 Generate Roster with Solver
-          </button>
+          <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={() => setRosterDialogOpen(true)}
+              disabled={dashboard.status === 'GENERATED' || dashboard.status === 'PUBLISHED'}
+              className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
+            >
+              🚀 Generate Roster with Solver
+            </button>
+            {dashboard.status === 'GENERATED' && (
+              <button
+                onClick={() => setPublicationDialogOpen(true)}
+                className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+              >
+                ✅ Publish Roster
+              </button>
+            )}
+          </div>
           <p className="text-xs text-neutral-500 mt-2">
             Status: <span className="font-semibold">{dashboard.status}</span>
           </p>
@@ -305,6 +319,22 @@ export function PlannerDashboard({ periodId }: Props) {
         </div>
       </div>
 
+      {/* Assignments */}
+      {(dashboard.status === 'GENERATED' || dashboard.status === 'PUBLISHED') && (
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-lg">Assignments</h3>
+            <button
+              onClick={() => setShowAssignments(!showAssignments)}
+              className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            >
+              {showAssignments ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {showAssignments && <AssignmentGrid periodId={periodId} />}
+        </div>
+      )}
+
       {/* Roster Generation Dialog */}
       <RosterGenerationDialog
         periodId={periodId}
@@ -312,6 +342,18 @@ export function PlannerDashboard({ periodId }: Props) {
         onClose={() => setRosterDialogOpen(false)}
         onSuccess={() => {
           setRosterDialogOpen(false);
+          // Reload dashboard data
+          loadData();
+        }}
+      />
+
+      {/* Publication Dialog */}
+      <RosterPublicationDialog
+        periodId={periodId}
+        isOpen={publicationDialogOpen}
+        onClose={() => setPublicationDialogOpen(false)}
+        onSuccess={() => {
+          setPublicationDialogOpen(false);
           // Reload dashboard data
           loadData();
         }}
