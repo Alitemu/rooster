@@ -1,0 +1,165 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom utilities for Dienstrooster */
+
+@layer components {
+  .container-main {
+    @apply max-w-7xl mx-auto px-4 py-8;
+  }
+
+  .card {
+    @apply bg-white rounded-lg shadow-sm border border-neutral-200;
+  }
+
+  .card-padding {
+    @apply p-6;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-md font-medium transition-colors;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800;
+  }
+
+  .btn-secondary {
+    @apply btn bg-neutral-200 text-neutral-900 hover:bg-neutral-300 active:bg-neutral-400;
+  }
+
+  .btn-danger {
+    @apply btn bg-error-600 text-white hover:bg-error-700 active:bg-error-800;
+  }
+
+  .btn-ghost {
+    @apply btn text-primary-600 hover:bg-primary-50 active:bg-primary-100;
+  }
+
+  .input-base {
+    @apply px-3 py-2 border border-neutral-300 rounded-md bg-white text-neutral-900;
+  }
+
+  .input-base:focus {
+    @apply outline-none border-primary-500 ring-1 ring-primary-500;
+  }
+
+  .input-base:disabled {
+    @apply bg-neutral-100 text-neutral-400 cursor-not-allowed;
+  }
+
+  .label-base {
+    @apply block text-sm font-medium text-neutral-900 mb-2;
+  }
+
+  .form-group {
+    @apply mb-4;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .container-main {
+    @apply px-3 py-4;
+  }
+}
+
+/* Calendar grid utilities */
+.calendar-grid {
+  @apply grid grid-cols-7 gap-1;
+}
+
+.calendar-cell {
+  @apply aspect-square flex items-center justify-center rounded-md border;
+}
+
+.calendar-cell-neutral {
+  @apply bg-white border-neutral-200 text-neutral-900;
+}
+
+.calendar-cell-prefer-not {
+  @apply bg-warning-50 border-warning-300 text-warning-900;
+}
+
+.calendar-cell-blocked {
+  @apply bg-error-50 border-error-300 text-error-900;
+}
+
+.calendar-cell-parttime {
+  @apply bg-primary-50 border-primary-300 text-primary-900 pattern-stripes;
+}
+
+@supports (background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0, 0, 0, 0.05) 10px, rgba(0, 0, 0, 0.05) 20px)) {
+  .calendar-cell-parttime {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(0, 0, 0, 0.05) 10px,
+      rgba(0, 0, 0, 0.05) 20px
+    );
+  }
+}
+
+/* Holiday styling */
+.holiday-slot {
+  @apply bg-purple-100 border-purple-300 text-purple-900 font-semibold;
+}
+
+/* Week number styling */
+.week-number {
+  @apply text-xs font-semibold text-neutral-500 block mb-1;
+}
+
+/* Coverage indicator */
+.coverage-bar {
+  @apply h-2 rounded-full bg-neutral-200 overflow-hidden;
+}
+
+.coverage-bar-fill {
+  @apply h-full transition-all duration-200;
+}
+
+.coverage-critical {
+  @apply bg-error-600;
+}
+
+.coverage-warning {
+  @apply bg-warning-500;
+}
+
+.coverage-good {
+  @apply bg-success-600;
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    @apply hidden;
+  }
+
+  .print-only {
+    @apply block;
+  }
+
+  body {
+    @apply bg-white;
+  }
+
+  .card {
+    @apply break-inside-avoid page-break-inside-avoid;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    @apply !transition-none !animate-none;
+  }
+}
+
+/* Dark mode support (future) */
+@media (prefers-color-scheme: dark) {
+  /* Will add dark theme later if needed */
+}

@@ -1,0 +1,23 @@
+{
+  # Use internal certificate infrastructure
+  pki {
+    ca internal {
+      name "Dienstrooster Internal"
+    }
+  }
+}
+
+https://localhost {
+  tls internal {
+    on_demand
+  }
+  reverse_proxy web:3000 {
+    header_uri /health /health
+  }
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "SAMEORIGIN"
+    X-XSS-Protection "1; mode=block"
+  }
+}
