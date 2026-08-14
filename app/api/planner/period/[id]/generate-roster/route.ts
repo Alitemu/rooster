@@ -1,24 +1,12 @@
 /**
  * POST /api/planner/period/[id]/generate-roster
  *
- * Initiates roster generation using the CP-SAT solver.
- * Fetches preferences and rules, sends to solver service, stores assignments.
+ * Initiates roster generation using CP-SAT solver.
+ * Fetches constraints, calls solver service, stores assignments.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import {
-  auditLog,
-  assignment,
-  schedulePeriod,
-  shiftSlot,
-  poolMembership,
-  availability,
-  ledgerEntry,
-  ruleset,
-} from '@/db/schema';
-import { eq, and, inArray } from 'drizzle-orm';
-import { sql } from 'drizzle-orm';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 
@@ -32,10 +20,8 @@ export async function POST(
 
     // Fetch period
     const period = db
-      .select()
-      .from(schedulePeriod)
-      .where(eq(schedulePeriod.id, periodId))
-      .get();
+      .prepare('SELECT * FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(periodId) as any;
 
     if (!period) {
       return NextResponse.json(
@@ -51,49 +37,46 @@ export async function POST(
       );
     }
 
-    // Fetch slots for period
+    // Fetch slots
     const slots = db
-      .select()
-      .from(shiftSlot)
-      .where(eq(shiftSlot.period_id, periodId))
-      .all();
+      .prepare('SELECT * FROM dienstrooster_shift_slot WHERE period_id = ?')
+      .all(periodId) as any[];
 
     if (slots.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No slots found for period. Generate slots first.' },
+        { success: false, error: 'No slots found. Generate slots first.' },
         { status: 400 }
       );
     }
 
-    // Fetch pool membership to get active people
+    // Fetch pool members (active people)
     const poolMembers = db
-      .select()
-      .from(poolMembership)
-      .where(
-        and(
-          eq(poolMembership.pool_id, period.pool_id),
-          eq(poolMembership.geldig_vanaf, period.start_datum),
-          eq(poolMembership.geldig_tot, period.eind_datum)
-        )
+      .prepare(
+        `SELECT person_id FROM dienstrooster_pool_membership
+         WHERE pool_id = ? AND geldig_vanaf = ? AND geldig_tot = ?`
       )
-      .all();
+      .all(period.pool_id, period.start_datum, period.eind_datum) as any[];
 
     const people = poolMembers.map((m) => m.person_id);
 
-    // Fetch preferences (availability entries)
+    if (people.length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No active pool members' },
+        { status: 400 }
+      );
+    }
+
+    // Build person IDs list for SQL IN clause
+    const personIds = people.map((p) => `'${p.replace(/'/g, "''")}'`).join(',');
+    const slotIds = slots.map((s) => `'${s.id.replace(/'/g, "''")}'`).join(',');
+
+    // Fetch preferences
     const preferences = db
-      .select()
-      .from(availability)
-      .where(
-        and(
-          inArray(availability.person_id, people),
-          inArray(
-            availability.slot_id,
-            slots.map((s) => s.id)
-          )
-        )
+      .prepare(
+        `SELECT * FROM dienstrooster_availability
+         WHERE person_id IN (${personIds}) AND slot_id IN (${slotIds})`
       )
-      .all();
+      .all() as any[];
 
     // Build person preferences map
     const personPreferences: Record<string, Array<{ slot_id: string; blocking_level: string }>> = {};
@@ -109,28 +92,17 @@ export async function POST(
 
     // Fetch balances (ledger sum per person per counter)
     const ledgerEntries = db
-      .select({
-        person_id: ledgerEntry.person_id,
-        teller: ledgerEntry.teller,
-        total: sql<number>`sum(${ledgerEntry.delta})`,
-      })
-      .from(ledgerEntry)
-      .where(
-        and(
-          eq(ledgerEntry.geldt_voor_periode_id, periodId),
-          inArray(ledgerEntry.person_id, people)
-        )
+      .prepare(
+        `SELECT person_id, teller, SUM(delta) as total
+         FROM dienstrooster_ledger_entry
+         WHERE geldt_voor_periode_id = ? AND person_id IN (${personIds})
+         GROUP BY person_id, teller`
       )
-      .groupBy(ledgerEntry.person_id, ledgerEntry.teller)
-      .all();
+      .all(periodId) as any[];
 
     const balances: Record<string, Record<string, number>> = {};
     for (const person of people) {
-      balances[person] = {
-        AVOND: 0,
-        WEEKEND: 0,
-        FEESTDAG: 0,
-      };
+      balances[person] = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 };
     }
 
     for (const entry of ledgerEntries) {
@@ -142,10 +114,8 @@ export async function POST(
 
     // Fetch ruleset
     const rulesetData = db
-      .select()
-      .from(ruleset)
-      .where(eq(ruleset.id, period.ruleset_id))
-      .get();
+      .prepare('SELECT * FROM dienstrooster_ruleset WHERE id = ?')
+      .get(period.ruleset_id) as any;
 
     if (!rulesetData) {
       return NextResponse.json(
@@ -165,10 +135,10 @@ export async function POST(
         iso_jaar: s.iso_jaar,
         iso_week: s.iso_week,
         shift_type_id: s.shift_type_id,
-        shift_type_name: s.shift_type_id, // Will be looked up
-        benodigd_aantal_personen: s.benodigd_aantal_personen,
-        is_feestdag: s.is_feestdag,
-        feestdag_groep: s.feestdag_groep,
+        shift_type_name: s.shift_type_id,
+        benodigd_aantal_personen: s.benodigd_aantal_personen || 1,
+        is_feestdag: s.is_feestdag || false,
+        feestdag_groep: s.feestdag_groep || null,
       })),
       person_preferences: personPreferences,
       people,
@@ -208,53 +178,53 @@ export async function POST(
       );
     }
 
-    // Store assignments in database
+    // Store assignments using raw SQL
     let assignmentCount = 0;
+    const insertStmt = db.prepare(
+      `INSERT INTO dienstrooster_assignment
+       (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
 
-    for (const assignment of solverOutput.assignments) {
-      const assignmentId = uuid();
-
-      db.insert(assignment)
-        .values({
-          id: assignmentId,
-          schedule_version_id: periodId,
-          person_id: assignment.person_id,
-          slot_id: assignment.slot_id,
-          bron: 'SOLVER',
-          row_version: 1,
-          aangemaakt_op: now,
-        })
-        .run();
-
+    for (const assign of solverOutput.assignments) {
+      insertStmt.run(
+        uuid(),
+        periodId,
+        assign.person_id,
+        assign.slot_id,
+        'SOLVER',
+        1,
+        now
+      );
       assignmentCount++;
     }
 
     // Update period status to GENERATED
-    db.update(schedulePeriod)
-      .set({
-        status: 'GENERATED',
-        row_version: (period.row_version || 1) + 1,
-      })
-      .where(eq(schedulePeriod.id, periodId))
-      .run();
+    db.prepare(
+      `UPDATE dienstrooster_schedule_period
+       SET status = ?, row_version = row_version + 1
+       WHERE id = ?`
+    ).run('GENERATED', periodId);
 
     // Log audit entry
-    db.insert(auditLog)
-      .values({
-        id: uuid(),
-        actor_id: 'system', // TODO: get actual user ID
-        entiteit: 'schedule_period',
-        entiteit_id: periodId,
-        actie: 'GENERATE_ROSTER',
-        oud_json: JSON.stringify({ status: period.status }),
-        nieuw_json: JSON.stringify({
-          status: 'GENERATED',
-          assignments_created: assignmentCount,
-          cost: solverOutput.diagnostics.total_cost,
-        }),
-        tijdstip: now,
-      })
-      .run();
+    db.prepare(
+      `INSERT INTO dienstrooster_audit_log
+       (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      uuid(),
+      'system',
+      'schedule_period',
+      periodId,
+      'GENERATE_ROSTER',
+      JSON.stringify({ status: period.status }),
+      JSON.stringify({
+        status: 'GENERATED',
+        assignments_created: assignmentCount,
+        cost: solverOutput.diagnostics.total_cost,
+      }),
+      now
+    );
 
     return NextResponse.json({
       success: true,
