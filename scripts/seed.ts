@@ -157,6 +157,45 @@ async function createTables() {
 
     CREATE INDEX IF NOT EXISTS audit_actor_idx ON dienstrooster_audit_log(actor_id);
     CREATE INDEX IF NOT EXISTS audit_entiteit_idx ON dienstrooster_audit_log(entiteit, entiteit_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_availability (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
+      blocking_level TEXT CHECK(blocking_level IN ('ABSOLUUT', 'LIEVER_NIET', NULL)),
+      source TEXT NOT NULL CHECK(source IN ('MANUAL', 'PARTTIME', 'ABSENCE')),
+      bron_pattern_id TEXT REFERENCES dienstrooster_parttime_pattern(id),
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS availability_uniq
+      ON dienstrooster_availability(person_id, slot_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_submission (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      schedule_period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      status TEXT NOT NULL CHECK(status IN ('NIET_BEGONNEN', 'BEZIG', 'BEVESTIGD')),
+      ingediend_op TEXT,
+      row_version INTEGER NOT NULL DEFAULT 1,
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS submission_uniq
+      ON dienstrooster_submission(person_id, schedule_period_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_assignment (
+      id TEXT PRIMARY KEY,
+      schedule_version_id TEXT NOT NULL,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
+      bron TEXT NOT NULL CHECK(bron IN ('SOLVER', 'MANUAL', 'OVERRIDE')),
+      row_version INTEGER NOT NULL DEFAULT 1,
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS assignment_uniq
+      ON dienstrooster_assignment(schedule_version_id, slot_id);
   `);
 }
 
@@ -335,13 +374,104 @@ async function seed() {
       `).run(uuid(), staffId, group, year, 'IMPORT');
     }
 
+    // 11. Create part-time patterns for some staff (first 10)
+    console.log('Creating part-time patterns...');
+    const weekdays = ['MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO'];
+    const frequencies = ['ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN'];
+
+    for (let i = 0; i < 10; i++) {
+      const staffId = staffIds[i];
+      const weekday = weekdays[i % weekdays.length];
+      const frequentie = frequencies[i % frequencies.length];
+
+      db.prepare(`
+        INSERT INTO dienstrooster_parttime_pattern
+        (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        uuid(),
+        staffId,
+        weekday,
+        frequentie,
+        '2027-01-04',
+        '2027-09-06',
+        staffId,
+        now
+      );
+    }
+
+    // 12. Create absences for some staff
+    console.log('Creating absences...');
+    for (let i = 5; i < 15; i++) {
+      const staffId = staffIds[i];
+      const startDate = new Date('2027-06-15');
+      startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 60));
+      const endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 3 + Math.floor(Math.random() * 7));
+
+      db.prepare(`
+        INSERT INTO dienstrooster_absence
+        (id, person_id, van_datum, tot_datum, soort, aangemaakt_door, aangemaakt_op)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        uuid(),
+        staffId,
+        startDate.toISOString().split('T')[0],
+        endDate.toISOString().split('T')[0],
+        'VAKANTIE',
+        staffId,
+        now
+      );
+    }
+
+    // 13. Create submissions with mixed statuses
+    console.log('Creating submissions...');
+    for (let i = 0; i < 30; i++) {
+      const staffId = staffIds[i];
+      const status = i < 10 ? 'BEVESTIGD' : i < 20 ? 'BEZIG' : 'NIET_BEGONNEN';
+      const submissionId = uuid();
+      const submissionTime = status === 'BEVESTIGD' ? now : null;
+
+      db.prepare(`
+        INSERT INTO dienstrooster_submission
+        (id, person_id, schedule_period_id, status, ingediend_op, aangemaakt_op)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        submissionId,
+        staffId,
+        periodId,
+        status,
+        submissionTime,
+        now
+      );
+    }
+
+    // 14. Update access links to reference the period
+    console.log('Updating access links with period reference...');
+    // Get all access links and update them
+    const linkStmt = db.prepare('SELECT id FROM dienstrooster_person_access_link LIMIT 30');
+    const links = linkStmt.all() as any[];
+
+    for (const link of links) {
+      db.prepare(`
+        UPDATE dienstrooster_person_access_link
+        SET geldt_voor_periode_id = ?
+        WHERE id = ?
+      `).run(periodId, link.id);
+    }
+
     console.log('\n✅ Seed completed successfully!');
     console.log(`\nUsers created:`);
     console.log(`  - Admin: ADMIN / Admin@12345`);
     console.log(`  - Planner: PLANNER / Planner@12345`);
-    console.log(`  - Staff: Persoon-01 through Persoon-30 (personal links)`);
+    console.log(`  - Staff: Persoon-01 through Persoon-30 (personal access links)`);
     console.log(`\nPool: Achterwacht (30 members)`);
     console.log(`Period: 2027-1 (2027-01-04 to 2027-09-06)`);
+    console.log(`\nPhase 1 Data:`);
+    console.log(`  - Part-time patterns: 10 staff members`);
+    console.log(`  - Absences: 10 vacation periods`);
+    console.log(`  - Submissions: 10 confirmed, 10 in progress, 10 not started`);
+    console.log(`  - Holiday history: 15 assignments`);
     console.log(`\nDatabase: ${dbPath}`);
 
   } catch (error) {

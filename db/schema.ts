@@ -34,6 +34,7 @@ export const personAccessLink = sqliteTable(
     id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
     person_id: text('person_id').notNull().references(() => person.id),
     token_hash: text('token_hash').notNull().unique(),
+    geldt_voor_periode_id: text('geldt_voor_periode_id').references(() => schedulePeriod.id), // NULL = general admin link
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
     ingetrokken_op: text('ingetrokken_op'),
     laatst_gebruikt_op: text('laatst_gebruikt_op'),
@@ -397,4 +398,64 @@ export const importRun = sqliteTable(
     uitgevoerd_op: text('uitgevoerd_op').notNull().$defaultFn(() => new Date().toISOString()),
     resultaat_json: text('resultaat_json'), // { errors: [], imported: [], skipped: [] }
   }
+);
+
+// ============================================================================
+// PREFERENCES & BLOCKING (PHASE 1)
+// ============================================================================
+
+export const availability = sqliteTable(
+  'dienstrooster_availability',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    person_id: text('person_id').notNull().references(() => person.id),
+    slot_id: text('slot_id').notNull().references(() => shiftSlot.id),
+    blocking_level: text('blocking_level', {
+      enum: ['ABSOLUUT', 'LIEVER_NIET', null],
+    }).default(null), // null = neutral
+    source: text('source', {
+      enum: ['MANUAL', 'PARTTIME', 'ABSENCE'],
+    }).notNull(), // How the blocking was created
+    bron_pattern_id: text('bron_pattern_id').references(() => parttimePattern.id), // If source=PARTTIME
+    aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    uniq: uniqueIndex('availability_uniq').on(table.person_id, table.slot_id),
+  })
+);
+
+export const submission = sqliteTable(
+  'dienstrooster_submission',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    person_id: text('person_id').notNull().references(() => person.id),
+    schedule_period_id: text('schedule_period_id').notNull().references(() => schedulePeriod.id),
+    status: text('status', {
+      enum: ['NIET_BEGONNEN', 'BEZIG', 'BEVESTIGD'],
+    }).notNull(),
+    ingediend_op: text('ingediend_op'), // Timestamp when confirmed
+    row_version: integer('row_version').default(1).notNull(), // Optimistic locking
+    aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    uniq: uniqueIndex('submission_uniq').on(table.person_id, table.schedule_period_id),
+  })
+);
+
+export const assignment = sqliteTable(
+  'dienstrooster_assignment',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    schedule_version_id: text('schedule_version_id').notNull(), // Link to generated schedule version
+    person_id: text('person_id').notNull().references(() => person.id),
+    slot_id: text('slot_id').notNull().references(() => shiftSlot.id),
+    bron: text('bron', {
+      enum: ['SOLVER', 'MANUAL', 'OVERRIDE'],
+    }).notNull(),
+    row_version: integer('row_version').default(1).notNull(),
+    aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    uniq: uniqueIndex('assignment_uniq').on(table.schedule_version_id, table.slot_id),
+  })
 );

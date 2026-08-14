@@ -97,17 +97,18 @@ export async function POST(
     // Log the action in audit log
     const auditStmt = db.prepare(`
       INSERT INTO dienstrooster_audit_log
-        (id, action, actor_person_id, subject_person_id, details, timestamp)
-      VALUES (?, ?, ?, ?, ?, ?)
+        (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
     const details = JSON.stringify({
+      person_id: personId,
       period_id: body.period_id,
       reason: body.reason || 'Submitted on behalf by planner',
       submitted_at: now,
     });
 
-    auditStmt.run(crypto.randomUUID(), 'SUBMIT_ON_BEHALF', body.submitted_by_person_id, personId, details, now);
+    auditStmt.run(crypto.randomUUID(), body.submitted_by_person_id, 'submission', personId, 'CREATE', details, now);
 
     const response: ApiSuccessResponse<{ success: true; submitted_at: string }> = {
       success: true,
