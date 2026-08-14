@@ -49,28 +49,40 @@ export function createTestPeriod(): TestData {
   const periodId = uuid();
   const timestamp = Date.now();
 
+  // Get existing pool ID from database
+  const pool = db.prepare(`SELECT id FROM dienstrooster_pool LIMIT 1`).get() as any;
+  if (!pool) {
+    throw new Error('No pool found in database. Run npm run seed first.');
+  }
+
   // Create period
   db.prepare(`
     INSERT INTO dienstrooster_schedule_period (
       id, pool_id, naam, status, start_datum, eind_datum, deadline, aangemaakt_op
     ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `).run(periodId, 'pool-default', `E2E-Period-${timestamp}`, 'GEPUBLICEERD',
+  `).run(periodId, pool.id, `E2E-Period-${timestamp}`, 'GEPUBLICEERD',
     '2027-01-04', '2027-01-10', '2026-12-31T23:59:59Z');
 
   // Create test users
   const users = createTestUsers(5);
+
+  // Get shift type IDs
+  const shiftTypes = db.prepare(`SELECT id, teller FROM dienstrooster_shift_type`).all() as Array<{ id: string; teller: string }>;
+  const eveningShiftType = shiftTypes.find(s => s.teller === 'AVOND') || shiftTypes[0];
+  const weekendShiftType = shiftTypes.find(s => s.teller === 'WEEKEND') || shiftTypes[1];
 
   // Create slots
   const slots: Array<{ id: string; datum: string; type: string }> = [];
   for (let i = 0; i < 7; i++) {
     const slotId = uuid();
     const datum = `2027-01-${String(4 + i).padStart(2, '0')}`;
+    const shiftTypeId = i % 3 === 0 ? weekendShiftType.id : eveningShiftType.id;
 
     db.prepare(`
       INSERT INTO dienstrooster_shift_slot (
         id, period_id, datum, iso_jaar, iso_week, shift_type_id
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(slotId, periodId, datum, 2027, 1, i % 3 === 0 ? 'WEEKEND' : 'AVOND');
+    `).run(slotId, periodId, datum, 2027, 1, shiftTypeId);
 
     slots.push({ id: slotId, datum, type: i % 3 === 0 ? 'WEEKEND' : 'AVOND' });
   }
