@@ -10,10 +10,12 @@
  * - Part-time patterns status
  * - Submit on behalf button
  * - Export/reminder options
+ * - Generate roster button
  */
 
 import { useState, useEffect } from 'react';
 import { ExportDialog } from './ExportDialog';
+import { RosterGenerationDialog } from './RosterGenerationDialog';
 
 interface PersonProgress {
   person_id: string;
@@ -58,29 +60,30 @@ export function PlannerDashboard({ periodId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
+
+  const loadData = async () => {
+    try {
+      const [dashRes, progRes] = await Promise.all([
+        fetch(`/api/planner/period/${periodId}/dashboard`),
+        fetch(`/api/planner/period/${periodId}/progress`),
+      ]);
+
+      if (!dashRes.ok || !progRes.ok) throw new Error('Failed to load dashboard');
+
+      const dashData = await dashRes.json();
+      const progData = await progRes.json();
+
+      setDashboard(dashData.data);
+      setProgress(progData.data);
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const [dashRes, progRes] = await Promise.all([
-          fetch(`/api/planner/period/${periodId}/dashboard`),
-          fetch(`/api/planner/period/${periodId}/progress`),
-        ]);
-
-        if (!dashRes.ok || !progRes.ok) throw new Error('Failed to load dashboard');
-
-        const dashData = await dashRes.json();
-        const progData = await progRes.json();
-
-        setDashboard(dashData.data);
-        setProgress(progData.data);
-        setLoading(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-        setLoading(false);
-      }
-    };
-
     loadData();
   }, [periodId]);
 
@@ -272,8 +275,22 @@ export function PlannerDashboard({ periodId }: Props) {
         </div>
       </div>
 
-      {/* Export & Reminders */}
+      {/* Roster Generation & Export */}
       <div className="card p-6">
+        <h3 className="font-bold text-lg mb-4">Roster Generation</h3>
+        <div className="mb-6">
+          <button
+            onClick={() => setRosterDialogOpen(true)}
+            disabled={dashboard.status === 'GENERATED' || dashboard.status === 'PUBLISHED'}
+            className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
+          >
+            🚀 Generate Roster with Solver
+          </button>
+          <p className="text-xs text-neutral-500 mt-2">
+            Status: <span className="font-semibold">{dashboard.status}</span>
+          </p>
+        </div>
+
         <h3 className="font-bold text-lg mb-4">Export & Communications</h3>
         <div className="flex gap-3 flex-wrap">
           <button
@@ -287,6 +304,18 @@ export function PlannerDashboard({ periodId }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Roster Generation Dialog */}
+      <RosterGenerationDialog
+        periodId={periodId}
+        isOpen={rosterDialogOpen}
+        onClose={() => setRosterDialogOpen(false)}
+        onSuccess={() => {
+          setRosterDialogOpen(false);
+          // Reload dashboard data
+          loadData();
+        }}
+      />
 
       {/* Export Dialog */}
       <ExportDialog
