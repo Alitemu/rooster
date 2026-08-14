@@ -27,7 +27,7 @@ interface PeriodDetail {
  * Returns full period information including frozen ruleset and confirmation status
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {

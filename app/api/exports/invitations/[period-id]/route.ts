@@ -14,7 +14,7 @@ interface StaffLink {
 }
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { 'period-id': string } }
 ): Promise<NextResponse> {
   try {
@@ -63,7 +63,7 @@ export async function GET(
     const csvContent = csvLines.join('\n');
 
     // Return as CSV file
-    return new Response(csvContent, {
+    return new NextResponse(csvContent, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="invitations_${period.naam.replace(/ /g, '_')}.csv"`,

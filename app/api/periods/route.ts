@@ -24,7 +24,7 @@ interface PeriodSummary {
  *
  * Returns array of periods with essential details
  */
-export async function GET(req: NextRequest): Promise<NextResponse> {
+export async function GET(_req: NextRequest): Promise<NextResponse> {
   try {
     // Query all periods ordered by start date descending
     const stmt = db.prepare(`

@@ -22,7 +22,7 @@
   }
 
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 active:bg-primary-800;
+    @apply btn bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800;
   }
 
   .btn-secondary {
@@ -30,11 +30,11 @@
   }
 
   .btn-danger {
-    @apply btn bg-error-600 text-white hover:bg-error-700 active:bg-error-800;
+    @apply btn bg-red-600 text-white hover:bg-red-700 active:bg-red-800;
   }
 
   .btn-ghost {
-    @apply btn text-primary-600 hover:bg-primary-50 active:bg-primary-100;
+    @apply btn text-blue-600 hover:bg-blue-50 active:bg-blue-100;
   }
 
   .input-base {
@@ -42,7 +42,7 @@
   }
 
   .input-base:focus {
-    @apply outline-none border-primary-500 ring-1 ring-primary-500;
+    @apply outline-none border-blue-500 ring-1 ring-blue-500;
   }
 
   .input-base:disabled {
@@ -79,15 +79,15 @@
 }
 
 .calendar-cell-prefer-not {
-  @apply bg-warning-50 border-warning-300 text-warning-900;
+  @apply bg-amber-50 border-amber-300 text-amber-900;
 }
 
 .calendar-cell-blocked {
-  @apply bg-error-50 border-error-300 text-error-900;
+  @apply bg-red-50 border-red-300 text-red-900;
 }
 
 .calendar-cell-parttime {
-  @apply bg-primary-50 border-primary-300 text-primary-900 pattern-stripes;
+  @apply bg-blue-50 border-blue-300 text-blue-900;
 }
 
 @supports (background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0, 0, 0, 0.05) 10px, rgba(0, 0, 0, 0.05) 20px)) {
@@ -122,15 +122,15 @@
 }
 
 .coverage-critical {
-  @apply bg-error-600;
+  @apply bg-red-600;
 }
 
 .coverage-warning {
-  @apply bg-warning-500;
+  @apply bg-amber-500;
 }
 
 .coverage-good {
-  @apply bg-success-600;
+  @apply bg-green-600;
 }
 
 /* Print styles */
@@ -148,7 +148,7 @@
   }
 
   .card {
-    @apply break-inside-avoid page-break-inside-avoid;
+    break-inside: avoid;
   }
 }
 

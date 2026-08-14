@@ -18,7 +18,7 @@ interface ReminderTemplate {
 }
 
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { 'period-id': string } }
 ): Promise<NextResponse> {
   try {

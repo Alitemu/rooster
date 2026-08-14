@@ -33,7 +33,7 @@ interface CapacityCheckResult {
  * and which is more restrictive
  */
 export async function GET(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: { id: string } }
 ): Promise<NextResponse> {
   try {
@@ -113,11 +113,11 @@ export async function GET(
 
     // Determine which constraint is more restrictive
     let isConstraining: 'distinct_people' | 'total_capacity' | 'both' | 'none' = 'none';
-    if (!result.distinctPeople.satisfied && !result.totalCapacity.satisfied) {
+    if (!result.distinctPeople.passed && !result.totalCapacity.passed) {
       isConstraining = 'both';
-    } else if (!result.distinctPeople.satisfied) {
+    } else if (!result.distinctPeople.passed) {
       isConstraining = 'distinct_people';
-    } else if (!result.totalCapacity.satisfied) {
+    } else if (!result.totalCapacity.passed) {
       isConstraining = 'total_capacity';
     }
 
@@ -125,18 +125,18 @@ export async function GET(
       success: true,
       data: {
         period_id: id,
-        valid: result.valid,
+        valid: result.overallPassed,
         total_capacity: {
-          satisfied: result.totalCapacity.satisfied,
+          satisfied: result.totalCapacity.passed,
           pool_capacity: result.totalCapacity.poolCapacity,
           required_slots: requiredSlots,
         },
         distinct_people: {
-          satisfied: result.distinctPeople.satisfied,
+          satisfied: result.distinctPeople.passed,
           required_people: result.distinctPeople.required,
           active_participants: activeParticipants,
         },
-        message: getCapacityInterpretation(result),
+        message: getCapacityInterpretation(windowWeeks, requiredSlots, activeParticipants),
         is_constraining: isConstraining,
       },
     };

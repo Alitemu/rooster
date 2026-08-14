@@ -113,14 +113,16 @@ export interface HolidayHistory {
 
 // API Response Types
 export interface ApiErrorResponse {
-  error: string;
-  details?: Record<string, string>;
-  status: number;
+  success: false;
+  error: {
+    code: string;
+    message: string;
+  };
 }
 
 export interface ApiSuccessResponse<T> {
+  success: true;
   data: T;
-  status: number;
 }
 
 // UI State Types

@@ -15,7 +15,7 @@ interface Pool {
   member_count: number;
 }
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
+export async function GET(_req: NextRequest): Promise<NextResponse> {
   try {
     const poolsStmt = db.prepare(`
       SELECT
