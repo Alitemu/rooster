@@ -8,12 +8,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
+import { getAuthContextFromRequest } from '@/lib/auth-context';
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string; 'assignment-id': string } }
 ) {
   try {
+    // Extract auth context (TODO: implement real auth)
+    const auth = getAuthContextFromRequest(request);
+    const actorId = auth?.userId || 'system';
+
     const periodId = params.id;
     const assignmentId = params['assignment-id'];
     const body = await request.json();
@@ -65,7 +70,7 @@ export async function DELETE(
       assignment.slot_id,
       'HANDMATIG_VERWIJDEREN',
       reason || null,
-      'system', // TODO: Get from auth
+      actorId,
       now,
       1
     );
@@ -80,7 +85,7 @@ export async function DELETE(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       uuid(),
-      'system',
+      actorId,
       'assignment',
       assignmentId,
       'DELETE',

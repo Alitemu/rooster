@@ -9,12 +9,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
+import { getAuthContextFromRequest } from '@/lib/auth-context';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
+    // Extract auth context (TODO: implement real auth)
+    const auth = getAuthContextFromRequest(request);
+    const actorId = auth?.userId || 'system';
+
     const periodId = params.id;
     const body = await request.json();
     const { person_id, slot_id, reason } = body;
@@ -123,7 +128,7 @@ export async function POST(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       uuid(),
-      'system',
+      actorId,
       'assignment',
       assignmentId,
       'MANUAL_ASSIGN',

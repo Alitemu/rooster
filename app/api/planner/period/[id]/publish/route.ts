@@ -9,23 +9,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
+import { getAuthContextFromRequest } from '@/lib/auth-context';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const periodId = params.id;
-    const body = await request.json();
-    const { published_by_person_id } = body;
-    const now = dateToISO(new Date());
+    // Extract auth context (TODO: implement real auth)
+    const auth = getAuthContextFromRequest(request);
+    const publishedByPersonId = auth?.userId || 'system';
 
-    if (!published_by_person_id) {
-      return NextResponse.json(
-        { success: false, error: 'Missing published_by_person_id' },
-        { status: 400 }
-      );
-    }
+    const periodId = params.id;
+    const now = dateToISO(new Date());
 
     // Verify period exists
     const period = db
@@ -61,7 +57,7 @@ export async function POST(
       `UPDATE dienstrooster_schedule_period
        SET status = ?, gepubliceerd_op = ?, gepubliceerd_door_person_id = ?, row_version = row_version + 1
        WHERE id = ?`
-    ).run('GEPUBLICEERD', now, published_by_person_id, periodId);
+    ).run('GEPUBLICEERD', now, publishedByPersonId, periodId);
 
     // Create notifications for each person
     for (const p of people) {
@@ -90,7 +86,7 @@ export async function POST(
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     ).run(
       uuid(),
-      published_by_person_id,
+      publishedByPersonId,
       'schedule_period',
       periodId,
       'PUBLISH',
