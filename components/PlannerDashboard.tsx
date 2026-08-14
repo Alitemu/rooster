@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { ExportDialog } from './ExportDialog';
 
 interface PersonProgress {
   person_id: string;
@@ -56,6 +57,7 @@ export function PlannerDashboard({ periodId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -274,17 +276,25 @@ export function PlannerDashboard({ periodId }: Props) {
       <div className="card p-6">
         <h3 className="font-bold text-lg mb-4">Export & Communications</h3>
         <div className="flex gap-3 flex-wrap">
-          <button className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors">
-            📧 Send Reminders
-          </button>
-          <button className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors">
-            📊 Export Invitations
+          <button
+            onClick={() => setExportDialogOpen(true)}
+            className="px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+          >
+            📧 Invitations & Reminders
           </button>
           <button className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors">
             📋 Download Status Report
           </button>
         </div>
       </div>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        periodId={periodId}
+        periodName={dashboard.period_name}
+        isOpen={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+      />
     </div>
   );
 }
