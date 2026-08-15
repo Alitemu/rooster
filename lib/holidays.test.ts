@@ -22,10 +22,10 @@ describe('holidays.ts', () => {
       const easterDay = holidays2024.find(h => h.name === 'Eerste Paasdag');
       expect(easterDay?.date).toBe('2024-03-31');
 
-      // Easter 2027: April 4
+      // Easter 2027: March 28
       const holidays2027 = getHolidaysForYear(2027);
       const easterDay2027 = holidays2027.find(h => h.name === 'Eerste Paasdag');
-      expect(easterDay2027?.date).toBe('2027-04-04');
+      expect(easterDay2027?.date).toBe('2027-03-28');
 
       // Easter 2034: April 9
       const holidays2034 = getHolidaysForYear(2034);
@@ -51,14 +51,14 @@ describe('holidays.ts', () => {
     });
 
     it('should include all holidays for a year', () => {
-      const holidays = getHolidaysForYear(2024);
+      const holidays = getHolidaysForYear(2025);
       const names = holidays.map(h => h.name);
 
       expect(names).toContain('Nieuwjaarsdag');
       expect(names).toContain('Eerste Paasdag');
       expect(names).toContain('Tweede Paasdag');
       expect(names).toContain('Koningsdag');
-      expect(names).toContain('Bevrijdingsdag'); // 2024 is divisible by 5
+      expect(names).toContain('Bevrijdingsdag'); // 2025 is divisible by 5
       expect(names).toContain('Hemelvaartsdag');
       expect(names).toContain('Eerste Pinksterdag');
       expect(names).toContain('Tweede Pinksterdag');
@@ -83,10 +83,10 @@ describe('holidays.ts', () => {
       expect(koningsdag2023?.date).toBe('2023-04-27');
 
       // Need to find a year where April 27 is Sunday
-      // 2009: April 27 is Sunday → should be April 26
-      const holidays2009 = getHolidaysForYear(2009);
-      const koningsdag2009 = holidays2009.find(h => h.name === 'Koningsdag');
-      expect(koningsdag2009?.date).toBe('2009-04-26');
+      // 2025: April 27 is Sunday → should be April 26
+      const holidays2025 = getHolidaysForYear(2025);
+      const koningsdag2025 = holidays2025.find(h => h.name === 'Koningsdag');
+      expect(koningsdag2025?.date).toBe('2025-04-26');
     });
   });
 
@@ -126,10 +126,13 @@ describe('holidays.ts', () => {
     it('should count weeks in year correctly', () => {
       // Most years have 52 weeks
       const weeks2024 = getWeeksInYear(2024);
-      expect(weeks2024).toBe(53); // 2024 has 53 weeks
+      expect(weeks2024).toBe(52); // 2024 has 52 weeks (Jan 1 is a Monday)
 
       const weeks2025 = getWeeksInYear(2025);
       expect(weeks2025).toBe(52); // 2025 has 52 weeks
+
+      const weeks2026 = getWeeksInYear(2026);
+      expect(weeks2026).toBe(53); // 2026 has 53 weeks (Jan 1 is a Thursday)
     });
   });
 
@@ -213,8 +216,9 @@ describe('holidays.ts', () => {
       expect(year).toBe(2027);
       expect(week).toBe(52);
 
-      // 2028-01-02 is a Monday and should be in 2028-W01
-      const date2 = new Date(2028, 0, 2);
+      // 2028-01-03 is a Monday and should be in 2028-W01
+      // (2028-01-01 is a Saturday, so Jan 1-2 still belong to 2027's last week)
+      const date2 = new Date(2028, 0, 3);
       const [year2, week2] = getISOWeek(date2);
       expect(year2).toBe(2028);
       expect(week2).toBe(1);
@@ -230,16 +234,18 @@ describe('holidays.ts', () => {
     });
 
     it('should handle 53-week years correctly', () => {
-      // Check if 2024 has 53 weeks
-      const weeksIn2024 = getWeeksInYear(2024);
-      // 2024 has 53 weeks
-      expect(weeksIn2024).toBe(53);
+      // 2026 has 53 weeks (Jan 1, 2026 is a Thursday)
+      const weeksIn2026 = getWeeksInYear(2026);
+      expect(weeksIn2026).toBe(53);
 
-      // Last few days of 2024
+      // Dec 31, 2024 rolls over into 2025's week 1, since Dec 31 2024
+      // is a Tuesday and the Thursday of its week (Jan 2, 2025) falls
+      // in 2025 - this is exactly why getWeeksInYear uses Dec 28, not
+      // Dec 31, to compute the true last week of a year.
       const dec31_2024 = new Date(2024, 11, 31);
       const [year, week] = getISOWeek(dec31_2024);
-      // Dec 31, 2024 should be in 2025's week 1
-      // Actually need to verify what ISO says for this date
+      expect(year).toBe(2025);
+      expect(week).toBe(1);
     });
   });
 });

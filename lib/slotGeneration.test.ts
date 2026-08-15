@@ -16,10 +16,10 @@ import { dateToISO, parseISO, addDays, getISOWeek } from './holidays';
 
 describe('Slot Generation', () => {
   describe('generateSlotsForPeriod', () => {
-    it('generates 245 slots for a 35-week period (2027-01-04 to 2027-09-04)', () => {
+    it('generates 245 slots for a 35-week period (2027-01-04 to 2027-09-05)', () => {
       const slots = generateSlotsForPeriod({
         startDate: '2027-01-04',
-        endDate: '2027-09-04',
+        endDate: '2027-09-05',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
@@ -29,7 +29,7 @@ describe('Slot Generation', () => {
     it('generates exactly 7 slots per ISO week', () => {
       const slots = generateSlotsForPeriod({
         startDate: '2027-01-04',
-        endDate: '2027-09-04',
+        endDate: '2027-09-05',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
@@ -65,7 +65,7 @@ describe('Slot Generation', () => {
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
-      // 2027-01-02 is Saturday, 2027-01-03 is Sunday (ISO week 52 of 2026)
+      // 2027-01-02 is Saturday, 2027-01-03 is Sunday (ISO week 53 of 2026)
       const sat = slots.find((s) => s.datum === '2027-01-02');
       const sun = slots.find((s) => s.datum === '2027-01-03');
 
@@ -76,8 +76,10 @@ describe('Slot Generation', () => {
       expect(sat!.weekend_id).toBeTruthy();
       expect(sun!.weekend_id).toBeTruthy();
 
-      // Should match
-      expect(sat!.weekend_id).toBe(sun!.weekend_id);
+      // Same week, so the "YYYY-Wkk" prefix should match (the -SAT/-SUN
+      // suffix is expected to differ - that's what makes each day distinct)
+      const prefix = (id: string) => id.replace(/-(SAT|SUN)$/, '');
+      expect(prefix(sat!.weekend_id)).toBe(prefix(sun!.weekend_id));
 
       // Saturday ID should end with SAT, Sunday with SUN
       expect(sat!.weekend_id).toMatch(/SAT$/);
@@ -98,15 +100,15 @@ describe('Slot Generation', () => {
     });
 
     it('marks all Pasen dates (Eerste + Tweede Paasdag 2027)', () => {
-      // Easter 2027 is April 11 (Eerste Paasdag), April 12 (Tweede Paasdag)
+      // Easter 2027 is March 28 (Eerste Paasdag), March 29 (Tweede Paasdag)
       const slots = generateSlotsForPeriod({
-        startDate: '2027-04-01',
-        endDate: '2027-04-30',
+        startDate: '2027-03-01',
+        endDate: '2027-03-31',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
-      const eerste = slots.find((s) => s.datum === '2027-04-11');
-      const tweede = slots.find((s) => s.datum === '2027-04-12');
+      const eerste = slots.find((s) => s.datum === '2027-03-28');
+      const tweede = slots.find((s) => s.datum === '2027-03-29');
 
       expect(eerste).toBeDefined();
       expect(tweede).toBeDefined();
@@ -167,28 +169,28 @@ describe('Slot Generation', () => {
     });
 
     it('marks Hemelvaartsdag (Easter + 39 days)', () => {
-      // Easter 2027 is April 11, so Hemelvaartsdag is May 20
+      // Easter 2027 is March 28, so Hemelvaartsdag is May 6
       const slots = generateSlotsForPeriod({
         startDate: '2027-05-01',
         endDate: '2027-05-31',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
-      const hemelvaart = slots.find((s) => s.datum === '2027-05-20');
+      const hemelvaart = slots.find((s) => s.datum === '2027-05-06');
       expect(hemelvaart).toBeDefined();
       expect(hemelvaart!.is_feestdag).toBe(true);
       expect(hemelvaart!.feestdag_groep).toBe('HEMELVAART');
     });
 
     it('marks Pinksteren (Easter + 49 days)', () => {
-      // Easter 2027 is April 11, so Pinksteren is May 30
+      // Easter 2027 is March 28, so Eerste Pinksterdag is May 16
       const slots = generateSlotsForPeriod({
         startDate: '2027-05-01',
         endDate: '2027-05-31',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
-      const pinksteren = slots.find((s) => s.datum === '2027-05-30');
+      const pinksteren = slots.find((s) => s.datum === '2027-05-16');
       expect(pinksteren).toBeDefined();
       expect(pinksteren!.is_feestdag).toBe(true);
       expect(pinksteren!.feestdag_groep).toBe('PINKSTEREN');
@@ -254,7 +256,7 @@ describe('Slot Generation', () => {
     it('accepts valid 35-week slot set', () => {
       const slots = generateSlotsForPeriod({
         startDate: '2027-01-04',
-        endDate: '2027-09-04',
+        endDate: '2027-09-05',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
@@ -286,7 +288,7 @@ describe('Slot Generation', () => {
     it('counts 35 weeks for 35-week period', () => {
       const slots = generateSlotsForPeriod({
         startDate: '2027-01-04',
-        endDate: '2027-09-04',
+        endDate: '2027-09-05',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
@@ -318,19 +320,19 @@ describe('Slot Generation', () => {
 
       // 2027 should have:
       // NIEUWJAAR: 1 (Jan 1)
-      // PASEN: 2 (Apr 11, 12)
+      // PASEN: 2 (Mar 28, 29)
       // KONINGSDAG: 1 (Apr 27)
       // BEVRIJDINGSDAG: 0 (only every 5 years)
-      // HEMELVAART: 1 (May 20)
-      // PINKSTEREN: 1 (May 30)
+      // HEMELVAART: 1 (May 6)
+      // PINKSTEREN: 2 (Eerste + Tweede Pinksterdag, May 16, 17)
       // KERST: 2 (Dec 25, 26)
-      // Total: 8
+      // Total: 9
 
       expect(counts['NIEUWJAAR']).toBe(1);
       expect(counts['PASEN']).toBe(2);
       expect(counts['KONINGSDAG']).toBe(1);
       expect(counts['HEMELVAART']).toBe(1);
-      expect(counts['PINKSTEREN']).toBe(1);
+      expect(counts['PINKSTEREN']).toBe(2);
       expect(counts['KERST']).toBe(2);
 
       // 2027 is not divisible by 5, so no BEVRIJDINGSDAG
@@ -354,12 +356,13 @@ describe('Slot Generation', () => {
   describe('weekend_id format', () => {
     it('formats weekend_id as YYYY-WkkD (kk zero-padded)', () => {
       const slots = generateSlotsForPeriod({
-        startDate: '2027-01-02',
+        startDate: '2027-01-04',
         endDate: '2027-01-10',
         shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
       });
 
-      const sat = slots.find((s) => s.datum === '2027-01-02');
+      // 2027-01-09 (Saturday) is firmly in ISO week 1 of 2027
+      const sat = slots.find((s) => s.datum === '2027-01-09');
       expect(sat!.weekend_id).toMatch(/^2027-W\d{2}-(SAT|SUN)$/);
     });
 

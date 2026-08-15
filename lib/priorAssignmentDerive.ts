@@ -121,8 +121,10 @@ export function doRangesOverlap(
   const r2Start = parseISO(range2Start);
   const r2End = parseISO(range2End);
 
-  // Allow 1-day overlap (adjacent weeks)
-  return r1End >= r2Start && r2End >= r1Start;
+  // Widen each range's end by one day so directly-adjacent ranges (no gap,
+  // no shared day) count as touching, not just ranges that share a day
+  const oneDay = 24 * 60 * 60 * 1000;
+  return r1End.getTime() + oneDay >= r2Start.getTime() && r2End.getTime() + oneDay >= r1Start.getTime();
 }
 
 /**

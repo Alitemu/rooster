@@ -283,11 +283,11 @@ describe('Phase 1: Holiday Calculations', () => {
   });
 
   it('should handle year-boundary ISO weeks', () => {
-    const dec31 = new Date(2026, 11, 31); // Dec 31, 2026
+    const dec31 = new Date(2026, 11, 31); // Dec 31, 2026 (a Thursday)
     const [year, week] = getISOWeek(dec31);
 
     expect(year).toBe(2026);
-    expect(week).toBe(52);
+    expect(week).toBe(53); // 2026 has 53 ISO weeks (Jan 1, 2026 is a Thursday)
   });
 
   it('should get weeks in year', () => {
@@ -295,7 +295,7 @@ describe('Phase 1: Holiday Calculations', () => {
     expect(weeks2027).toBe(52);
 
     const weeks2026 = getWeeksInYear(2026);
-    expect(weeks2026).toBe(52);
+    expect(weeks2026).toBe(53);
   });
 });
 

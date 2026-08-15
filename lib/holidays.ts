@@ -138,19 +138,18 @@ export function getHolidaysForYear(year: number, liberationEvery5Years: boolean 
  * Returns [isoYear, isoWeek]
  */
 export function getISOWeek(date: Date): [number, number] {
-  // Make a copy of the date to avoid mutation
-  const d = new Date(date);
+  // Strip time-of-day, working in local dates (avoid mutating the input)
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-  // Set to Thursday of the same week to get the correct ISO year
-  d.setDate(d.getDate() - d.getDay() + (d.getDay() === 0 ? -3 : 4));
+  // Move to the Thursday of this ISO week - the ISO year and week number
+  // are both defined relative to that Thursday
+  const dayNum = d.getDay() || 7; // Monday = 1 .. Sunday = 7
+  d.setDate(d.getDate() + 4 - dayNum);
 
-  const year = d.getFullYear();
-  const start = new Date(year, 0, 4);
-  start.setDate(start.getDate() - start.getDay() + 1);
+  const yearStart = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
 
-  const week = Math.ceil(((date.getTime() - start.getTime()) / 86400000 + start.getDay()) / 7);
-
-  return [year, week];
+  return [d.getFullYear(), week];
 }
 
 /**
@@ -244,11 +243,13 @@ export function countWeeksBetween(isoYear1: number, isoWeek1: number, isoYear2: 
  * Most years have 52 weeks, some have 53
  */
 export function getWeeksInYear(year: number): number {
-  // December 31 is in week 53 if it's a Thursday or later
-  const dec31 = new Date(year, 11, 31);
+  // December 28 always falls in the last ISO week of its year (per the
+  // ISO-8601 definition), unlike December 31 which can roll into week 1
+  // of the following year.
+  const dec28 = new Date(year, 11, 28);
 
-  const [, dec31Week] = getISOWeek(dec31);
-  return dec31Week;
+  const [, dec28Week] = getISOWeek(dec28);
+  return dec28Week;
 }
 
 /**
