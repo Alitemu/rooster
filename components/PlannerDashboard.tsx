@@ -18,6 +18,7 @@ import { ExportDialog } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
 import { AssignmentGrid } from './AssignmentGrid';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
+import { WeekCoverageChart } from './WeekCoverageChart';
 
 interface PersonProgress {
   person_id: string;
@@ -185,6 +186,9 @@ export function PlannerDashboard({ periodId }: Props) {
           {submissionProgress}% confirmed ({stats.confirmed} of {totalSubmissions})
         </p>
       </div>
+
+      {/* Week Coverage */}
+      <WeekCoverageChart periodId={periodId} />
 
       {/* Large Imbalances */}
       {dashboard.large_imbalances.length > 0 && (

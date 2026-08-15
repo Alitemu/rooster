@@ -25,6 +25,7 @@ import {
   parseISO,
   getWeeksInYear,
 } from '../lib/holidays';
+import { getWeekCoverageStatus } from '../lib/weekCoverage';
 
 describe('Phase 1: Slot Generation', () => {
   it('should generate multiple slots for a multi-week period', () => {
@@ -359,23 +360,14 @@ describe('Phase 1: Coverage Indicator', () => {
 
 describe('Phase 1: Week Coverage Status', () => {
   it('should assign red status for low availability', () => {
-    const available = 7;
-    const status = available <= 7 ? 'red' : available <= 10 ? 'orange' : 'green';
-
-    expect(status).toBe('red');
+    expect(getWeekCoverageStatus(7)).toBe('red');
   });
 
   it('should assign orange status for medium availability', () => {
-    const available = 9;
-    const status = available <= 7 ? 'red' : available <= 10 ? 'orange' : 'green';
-
-    expect(status).toBe('orange');
+    expect(getWeekCoverageStatus(9)).toBe('orange');
   });
 
   it('should assign green status for high availability', () => {
-    const available = 15;
-    const status = available <= 7 ? 'red' : available <= 10 ? 'orange' : 'green';
-
-    expect(status).toBe('green');
+    expect(getWeekCoverageStatus(15)).toBe('green');
   });
 });

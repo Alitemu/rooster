@@ -13,9 +13,16 @@
  * 7. Confirm and open period
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'holidays' | 'confirm';
+
+interface CapacityCheckResult {
+  valid: boolean;
+  total_capacity: { satisfied: boolean; pool_capacity: number; required_slots: number };
+  distinct_people: { satisfied: boolean; required_people: number; active_participants: number };
+  message: string;
+}
 
 interface PeriodData {
   naam: string;
@@ -86,6 +93,31 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openResult, setOpenResult] = useState<string | null>(null);
+  const [capacityCheck, setCapacityCheck] = useState<CapacityCheckResult | null>(null);
+  const [capacityLoading, setCapacityLoading] = useState(false);
+
+  useEffect(() => {
+    if (currentStep !== 'window' || !period?.id) return;
+
+    const loadCapacity = async () => {
+      setCapacityLoading(true);
+      try {
+        const params = new URLSearchParams({ window_weeks: String(windowConfig.windowWeeks) });
+        if (periodData.start_datum) params.set('start_datum', periodData.start_datum);
+        if (periodData.eind_datum) params.set('eind_datum', periodData.eind_datum);
+
+        const res = await fetch(`/api/periods/${period.id}/capacity?${params.toString()}`);
+        const data = await res.json();
+        setCapacityCheck(data.success ? data.data : null);
+      } catch {
+        setCapacityCheck(null);
+      } finally {
+        setCapacityLoading(false);
+      }
+    };
+
+    loadCapacity();
+  }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id]);
 
   const loadStaff = async () => {
     if (!periodData.pool_id) return;
@@ -418,16 +450,35 @@ export function SetupWizard({ period, onComplete }: Props) {
               </p>
             </div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm">
-              <p className="font-medium text-blue-900 mb-2">Capacity Check</p>
-              <p className="text-blue-800">
-                With window of {windowConfig.windowWeeks} weeks and {staffMembers.length} staff:
-              </p>
-              <ul className="text-blue-800 text-xs mt-1 space-y-1 ml-4">
-                <li>• Maximum {Math.floor(35 / windowConfig.windowWeeks)} shifts per person</li>
-                <li>• Total capacity: {staffMembers.length * Math.floor(35 / windowConfig.windowWeeks)}</li>
-                <li>• Required: {staffMembers.length >= 10 ? '✓ OK' : '✗ Below minimum'}</li>
-              </ul>
+            <div
+              className={`border rounded p-3 text-sm ${
+                capacityLoading
+                  ? 'bg-neutral-50 border-neutral-200'
+                  : capacityCheck?.valid
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-red-50 border-red-200'
+              }`}
+            >
+              <p className="font-medium mb-2">Capacity Check</p>
+              {capacityLoading || !capacityCheck ? (
+                <p className="text-neutral-600">Checking capacity...</p>
+              ) : (
+                <>
+                  <p className="whitespace-pre-line">{capacityCheck.message}</p>
+                  <ul className="text-xs mt-2 space-y-1 ml-4">
+                    <li>
+                      • Distinct people: {capacityCheck.distinct_people.active_participants} of{' '}
+                      {capacityCheck.distinct_people.required_people} required{' '}
+                      {capacityCheck.distinct_people.satisfied ? '✓' : '✗'}
+                    </li>
+                    <li>
+                      • Total capacity: {capacityCheck.total_capacity.pool_capacity} shifts available for{' '}
+                      {capacityCheck.total_capacity.required_slots} needed{' '}
+                      {capacityCheck.total_capacity.satisfied ? '✓' : '✗'}
+                    </li>
+                  </ul>
+                </>
+              )}
             </div>
 
             <div>

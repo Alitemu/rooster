@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { persistSlotsForPeriod } from '@/lib/slotPersistence';
+import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
@@ -110,6 +111,10 @@ export async function POST(
            bevroren_ruleset_json = ?, status = 'OPEN', row_version = row_version + 1
        WHERE id = ?`
     ).run(naam, start_datum, eind_datum, deadline, JSON.stringify(ruleset), id);
+
+    // Backfill part-time blocking now that the period is OPEN and pool
+    // members can see it
+    syncAvailabilityForPeriod(id);
 
     const response: ApiSuccessResponse<OpenPeriodResponse> = {
       success: true,

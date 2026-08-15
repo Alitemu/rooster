@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { persistSlotsForPeriod } from '@/lib/slotPersistence';
+import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -65,6 +66,11 @@ export async function POST(
       };
       return NextResponse.json(response, { status: 400 });
     }
+
+    // Backfill part-time blocking for existing patterns (no-op unless the
+    // period is already OPEN, since availability only applies to slots
+    // staff can actually see and block against)
+    syncAvailabilityForPeriod(id);
 
     const response: ApiSuccessResponse<SlotGenerationResponse> = {
       success: true,

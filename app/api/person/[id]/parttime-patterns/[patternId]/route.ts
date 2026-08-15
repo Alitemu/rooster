@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { syncAvailabilityForPattern, removePatternAvailability } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePatternRequest {
@@ -85,11 +86,16 @@ export async function PATCH(
       WHERE id = ? AND person_id = ?
     `);
 
-    updateStmt.run(...values);
+    const updateAndSync = db.transaction(() => {
+      updateStmt.run(...values);
+      return syncAvailabilityForPattern(patternId);
+    });
 
-    const response: ApiSuccessResponse<{ updated: boolean }> = {
+    const syncResult = updateAndSync();
+
+    const response: ApiSuccessResponse<{ updated: boolean; availability_generated: number }> = {
       success: true,
-      data: { updated: true },
+      data: { updated: true, availability_generated: syncResult.inserted },
     };
 
     return NextResponse.json(response);
@@ -123,13 +129,20 @@ export async function DELETE(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Delete pattern
+    // Remove generated availability rows first - bron_pattern_id has no
+    // ON DELETE clause and foreign_keys=ON, so deleting the pattern first
+    // would throw a constraint error.
     const deleteStmt = db.prepare(`
       DELETE FROM dienstrooster_parttime_pattern
       WHERE id = ? AND person_id = ?
     `);
 
-    const result = deleteStmt.run(patternId, id);
+    const deletePatternAndAvailability = db.transaction(() => {
+      removePatternAvailability(patternId);
+      return deleteStmt.run(patternId, id);
+    });
+
+    const result = deletePatternAndAvailability();
 
     if (result.changes === 0) {
       const response: ApiErrorResponse = {

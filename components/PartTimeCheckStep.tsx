@@ -22,80 +22,40 @@ interface ParttimePattern {
 interface GeneratedDay {
   datum: string;
   weekdag: string;
-  frequentie: string;
+  pattern_id: string;
   is_year_boundary: boolean;
 }
 
 interface Props {
+  personId: string;
+  periodId: string;
   patterns: ParttimePattern[];
   onConfirm?: (confirmed: boolean) => void;
 }
 
-export function PartTimeCheckStep({ patterns, onConfirm }: Props) {
+export function PartTimeCheckStep({ personId, periodId, patterns, onConfirm }: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Generate part-time days from patterns
   useEffect(() => {
-    const generateDays = async () => {
-      const days: GeneratedDay[] = [];
-
-      const weekdayMap: Record<string, number> = {
-        'MA': 1, 'DI': 2, 'WO': 3, 'DO': 4, 'VR': 5, 'ZA': 6, 'ZO': 0
-      };
-
-      for (const pattern of patterns) {
-        const startDate = parseISO(pattern.geldig_vanaf);
-        const endDate = parseISO(pattern.geldig_tot);
-        const targetWeekday = weekdayMap[pattern.weekdag];
-
-        let currentDate = new Date(startDate);
-
-        while (currentDate <= endDate) {
-          const dayOfWeek = currentDate.getDay();
-
-          if (dayOfWeek === targetWeekday) {
-            const datum = currentDate.toISOString().split('T')[0];
-            const month = currentDate.getMonth();
-            const date = currentDate.getDate();
-
-            // Check if near year boundary (Dec/Jan)
-            const isYearBoundary = month === 11 || month === 0;
-
-            // Check frequency
-            const weekNum = Math.ceil((date + new Date(currentDate.getFullYear(), 0, 1).getDay()) / 7);
-            const isEvenWeek = weekNum % 2 === 0;
-
-            let include = false;
-            if (pattern.frequentie === 'ELKE_WEEK') {
-              include = true;
-            } else if (pattern.frequentie === 'EVEN_WEKEN' && isEvenWeek) {
-              include = true;
-            } else if (pattern.frequentie === 'ONEVEN_WEKEN' && !isEvenWeek) {
-              include = true;
-            }
-
-            if (include) {
-              days.push({
-                datum,
-                weekdag: pattern.weekdag,
-                frequentie: pattern.frequentie,
-                is_year_boundary: isYearBoundary,
-              });
-            }
-          }
-
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
+    const loadGeneratedDays = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/person/${personId}/parttime-patterns/generated-days?period_id=${periodId}`
+        );
+        const data = await res.json();
+        setGeneratedDays(data.data?.generated_days || []);
+      } catch {
+        setGeneratedDays([]);
+      } finally {
+        setLoading(false);
       }
-
-      setGeneratedDays(days.sort((a, b) => a.datum.localeCompare(b.datum)));
-      setLoading(false);
     };
 
-    generateDays();
-  }, [patterns]);
+    loadGeneratedDays();
+  }, [personId, periodId, patterns]);
 
   useEffect(() => {
     onConfirm?.(confirmed);
@@ -109,7 +69,11 @@ export function PartTimeCheckStep({ patterns, onConfirm }: Props) {
     return (
       <div className="card p-6">
         <h3 className="font-bold text-lg mb-2">Part-time Days</h3>
-        <p className="text-neutral-600">No part-time patterns configured</p>
+        <p className="text-neutral-600">
+          {patterns.length === 0
+            ? 'No part-time patterns configured'
+            : 'No part-time days fall within this period'}
+        </p>
       </div>
     );
   }
@@ -154,7 +118,7 @@ export function PartTimeCheckStep({ patterns, onConfirm }: Props) {
               >
                 <span className="font-mono">{day.datum}</span>
                 <span className="text-neutral-600">{label}</span>
-                <span className="text-xs text-neutral-500">{day.frequentie}</span>
+                <span className="text-xs text-neutral-500">{day.weekdag}</span>
               </div>
             );
           })}

@@ -89,6 +89,19 @@ export async function GET(
       }
     }
 
+    // The setup wizard checks capacity live against values the planner is
+    // still editing, before the ruleset is frozen and the dates are saved -
+    // let it override what's currently stored.
+    const windowWeeksOverride = req.nextUrl.searchParams.get('window_weeks');
+    if (windowWeeksOverride) {
+      const parsed = parseInt(windowWeeksOverride, 10);
+      if (!isNaN(parsed) && parsed > 0) windowWeeks = parsed;
+    }
+    const startDatumOverride = req.nextUrl.searchParams.get('start_datum');
+    const eindDatumOverride = req.nextUrl.searchParams.get('eind_datum');
+    if (startDatumOverride) period.start_datum = startDatumOverride;
+    if (eindDatumOverride) period.eind_datum = eindDatumOverride;
+
     // Count active pool members
     const membersStmt = db.prepare(`
       SELECT COUNT(DISTINCT pm.person_id) as count

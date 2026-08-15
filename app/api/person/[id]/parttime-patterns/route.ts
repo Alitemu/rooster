@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { syncAvailabilityForPattern } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ParttimePattern {
@@ -147,7 +148,7 @@ export async function POST(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Insert pattern
+    // Insert pattern and generate its availability blocks atomically
     const insertStmt = db.prepare(`
       INSERT INTO dienstrooster_parttime_pattern
       (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
@@ -155,16 +156,22 @@ export async function POST(
     `);
 
     const patternId = crypto.randomUUID();
-    insertStmt.run(
-      patternId,
-      id,
-      weekdag,
-      frequentie,
-      geldig_vanaf,
-      geldig_tot,
-      id, // Created by self
-      new Date().toISOString()
-    );
+
+    const createAndSync = db.transaction(() => {
+      insertStmt.run(
+        patternId,
+        id,
+        weekdag,
+        frequentie,
+        geldig_vanaf,
+        geldig_tot,
+        id, // Created by self
+        new Date().toISOString()
+      );
+      return syncAvailabilityForPattern(patternId);
+    });
+
+    const syncResult = createAndSync();
 
     const createdPattern: ParttimePattern = {
       id: patternId,
@@ -174,9 +181,9 @@ export async function POST(
       geldig_tot,
     };
 
-    const response: ApiSuccessResponse<ParttimePattern> = {
+    const response: ApiSuccessResponse<ParttimePattern & { availability_generated: number }> = {
       success: true,
-      data: createdPattern,
+      data: { ...createdPattern, availability_generated: syncResult.inserted },
     };
 
     return NextResponse.json(response, { status: 201 });

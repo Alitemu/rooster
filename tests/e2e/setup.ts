@@ -168,11 +168,12 @@ export function cleanupTestData(periodId: string, userIds: string[]): void {
   db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
 
-  // Delete test users (access links first - both person_id and
-  // geldt_voor_periode_id are foreign keys, so this must happen before the
-  // schedule_period delete below)
+  // Delete test users (access links and audit log entries first - approving
+  // or rejecting a swap writes an audit_log row with actor_id = the acting
+  // user, which would otherwise block the person delete below)
   for (const userId of userIds) {
     db.prepare('DELETE FROM dienstrooster_person_access_link WHERE person_id = ?').run(userId);
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(userId);
     db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(userId);
   }
 

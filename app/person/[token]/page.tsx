@@ -60,6 +60,22 @@ interface BlockedDaysSummary {
   total: number;
 }
 
+interface SoftBlockViolation {
+  datum: string;
+  teller: string;
+  date_str: string;
+}
+
+const HOLIDAY_GROUP_NAMES: Record<string, string> = {
+  NIEUWJAAR: 'New Year',
+  PASEN: 'Easter',
+  KONINGSDAG: "King's Day",
+  BEVRIJDINGSDAG: 'Liberation Day',
+  HEMELVAART: 'Ascension Day',
+  PINKSTEREN: 'Pentecost',
+  KERST: 'Christmas',
+};
+
 export default function PersonalLinkPage() {
   const params = useParams();
   const token = params.token as string;
@@ -71,12 +87,14 @@ export default function PersonalLinkPage() {
   const [period, setPeriod] = useState<Period | null>(null);
   const [patterns, setPatterns] = useState<ParttimePattern[]>([]);
   const [rosterData, setRosterData] = useState<RosterData | null>(null);
-  const [blockedDays] = useState<BlockedDaysSummary>({
+  const [blockedDays, setBlockedDays] = useState<BlockedDaysSummary>({
     AVOND: 0,
     WEEKEND: 0,
     FEESTDAG: 0,
     total: 0,
   });
+  const [softBlockViolations, setSoftBlockViolations] = useState<SoftBlockViolation[]>([]);
+  const [holidayHistory, setHolidayHistory] = useState<Array<{ feestdag: string; année: number }>>([]);
   const [parttimeConfirmed, setParttimeConfirmed] = useState(false);
   const [_preferencesChanged, setPreferencesChanged] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -106,11 +124,43 @@ export default function PersonalLinkPage() {
 
         // If period is published, load roster; otherwise load patterns
         if (periodInfo.status === 'GEPUBLICEERD') {
-          const rosterRes = await fetch(`/api/person/${person_id}/roster/${period_id}`);
+          const [rosterRes, preferencesRes, holidayRes] = await Promise.all([
+            fetch(`/api/person/${person_id}/roster/${period_id}`),
+            fetch(`/api/person/${person_id}/preferences/${period_id}`),
+            fetch(`/api/person/${person_id}/holiday-history`),
+          ]);
+
           if (rosterRes.ok) {
             const rosterInfo = await rosterRes.json();
             setRosterData(rosterInfo.data);
             setCurrentStep('roster');
+
+            if (preferencesRes.ok) {
+              const preferencesInfo = await preferencesRes.json();
+              const lieverNietSlotIds = new Set(
+                preferencesInfo.data.preferences
+                  .filter((p: { blocking_level: string | null }) => p.blocking_level === 'LIEVER_NIET')
+                  .map((p: { slot_id: string }) => p.slot_id)
+              );
+              const violations: SoftBlockViolation[] = rosterInfo.data.assignments
+                .filter((a: { slot_id: string }) => lieverNietSlotIds.has(a.slot_id))
+                .map((a: { datum: string; teller: string }) => ({
+                  datum: a.datum,
+                  teller: a.teller,
+                  date_str: new Date(a.datum).toLocaleDateString(),
+                }));
+              setSoftBlockViolations(violations);
+            }
+          }
+
+          if (holidayRes.ok) {
+            const holidayInfo = await holidayRes.json();
+            setHolidayHistory(
+              holidayInfo.data.history.map((h: { feestdag_groep: string; jaar: number }) => ({
+                feestdag: HOLIDAY_GROUP_NAMES[h.feestdag_groep] || h.feestdag_groep,
+                année: h.jaar,
+              }))
+            );
           }
         } else {
           // Fetch part-time patterns for preference entry
@@ -132,6 +182,34 @@ export default function PersonalLinkPage() {
     verifyToken();
   }, [token]);
 
+  // Recompute the blocked-days summary from the real preferences whenever
+  // the confirmation step is reached, so it reflects whatever was just set
+  // in the calendar step.
+  useEffect(() => {
+    if (currentStep !== 'confirmation' || !personId || !period) return;
+
+    const loadBlockedDays = async () => {
+      try {
+        const res = await fetch(`/api/person/${personId}/preferences/${period.id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const summary: BlockedDaysSummary = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0, total: 0 };
+        for (const pref of data.data.preferences as Array<{ teller: string; blocking_level: string | null }>) {
+          if (pref.blocking_level !== 'ABSOLUUT') continue;
+          if (pref.teller in summary) {
+            summary[pref.teller as 'AVOND' | 'WEEKEND' | 'FEESTDAG']++;
+            summary.total++;
+          }
+        }
+        setBlockedDays(summary);
+      } catch {
+        // Leave the previous summary in place on failure
+      }
+    };
+
+    loadBlockedDays();
+  }, [currentStep, personId, period]);
 
   const handleSubmitSuccess = () => {
     setCurrentStep('submitted');
@@ -270,8 +348,8 @@ export default function PersonalLinkPage() {
               message: `${rosterData.summary.by_shift_type['FEESTDAG'] || 0} holiday shifts assigned`,
             },
           ]}
-          softBlockViolations={[]}
-          holidayHistory={[]}
+          softBlockViolations={softBlockViolations}
+          holidayHistory={holidayHistory}
         />
       )}
 
@@ -297,6 +375,8 @@ export default function PersonalLinkPage() {
       {period.status !== 'GEPUBLICEERD' && currentStep === 'parttime' && (
         <div className="space-y-4">
           <PartTimeCheckStep
+            personId={personId}
+            periodId={period.id}
             patterns={patterns}
             onConfirm={setParttimeConfirmed}
           />
