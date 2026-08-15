@@ -16,12 +16,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy solver code
 COPY . .
 
+# python:3.11-slim has no non-root user by default
+RUN useradd --system --create-home --uid 1000 appuser \
+    && chown -R appuser:appuser /app
+
 # Expose port
 EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
   CMD python -c "import requests; requests.get('http://localhost:8000/health')"
+
+USER appuser
 
 # Start solver
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
