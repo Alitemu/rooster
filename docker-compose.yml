@@ -42,7 +42,12 @@ services:
       dockerfile: Dockerfile
     environment:
       LOG_LEVEL: INFO
-    ports:
+    # `expose`, not `ports`: a bare `ports: - "8000"` publishes the port to
+    # the host on a random ephemeral port, which would put this service -
+    # which has no authentication of any kind - on the host's interface.
+    # The web container reaches it as solver:8000 over the internal bridge
+    # network either way; only caddy should be host-published.
+    expose:
       - "8000"
     networks:
       - internal
