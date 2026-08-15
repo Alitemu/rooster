@@ -76,14 +76,26 @@ export async function POST(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Verify period exists
-    const periodStmt = db.prepare(`SELECT id FROM dienstrooster_schedule_period WHERE id = ?`);
-    if (!periodStmt.get(period_id)) {
+    // Verify period exists and still accepts submissions
+    const periodStmt = db.prepare(`SELECT id, status FROM dienstrooster_schedule_period WHERE id = ?`);
+    const period = periodStmt.get(period_id) as { id: string; status: string } | undefined;
+    if (!period) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'PERIOD_NOT_FOUND', message: `Period ${period_id} not found` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    if (period.status !== 'OPEN') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'PERIOD_NOT_OPEN',
+          message: `Preferences are read-only once the period is ${period.status}`,
+        },
+      };
+      return NextResponse.json(response, { status: 403 });
     }
 
     // Create or update submission record

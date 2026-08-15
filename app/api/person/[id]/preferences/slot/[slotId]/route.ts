@@ -35,14 +35,31 @@ export async function PATCH(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Verify slot exists
-    const slotStmt = db.prepare(`SELECT id FROM dienstrooster_shift_slot WHERE id = ?`);
-    if (!slotStmt.get(slotId)) {
+    // Verify slot exists and its period still accepts preference changes
+    const slotStmt = db.prepare(
+      `SELECT s.id, sp.status as period_status
+       FROM dienstrooster_shift_slot s
+       JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
+       WHERE s.id = ?`
+    );
+    const slot = slotStmt.get(slotId) as { id: string; period_status: string } | undefined;
+    if (!slot) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'SLOT_NOT_FOUND', message: `Slot ${slotId} not found` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    if (slot.period_status !== 'OPEN') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'PERIOD_NOT_OPEN',
+          message: `Preferences are read-only once the period is ${slot.period_status}`,
+        },
+      };
+      return NextResponse.json(response, { status: 403 });
     }
 
     if (level === null) {

@@ -16,6 +16,8 @@ interface ReminderTemplate {
   email: string | null;
   personal_link: string;
   deadline: string;
+  subject: string;
+  body: string;
   mailto_link: string;
 }
 
@@ -31,6 +33,8 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
   const [reminders, setReminders] = useState<ReminderTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editedSubject, setEditedSubject] = useState('');
+  const [editedBody, setEditedBody] = useState('');
 
   useEffect(() => {
     if (exportType === 'reminders') {
@@ -46,11 +50,26 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
 
       const data = await res.json();
       setReminders(data.data);
+      if (data.data.length > 0) {
+        setEditedSubject(data.data[0].subject);
+        setEditedBody(data.data[0].body);
+      }
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load reminders');
       setLoading(false);
     }
+  };
+
+  // The template body has the first person's own link baked in - swap it
+  // for each recipient's own link so editing the surrounding text doesn't
+  // break their personal link.
+  const mailtoFor = (reminder: ReminderTemplate): string => {
+    const templateLink = reminders[0]?.personal_link;
+    const body = templateLink
+      ? editedBody.split(templateLink).join(reminder.personal_link)
+      : editedBody;
+    return `mailto:?subject=${encodeURIComponent(editedSubject)}&body=${encodeURIComponent(body)}`;
   };
 
   const downloadInvitations = async () => {
@@ -150,6 +169,26 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
               </div>
             ) : (
               <>
+                <div className="mb-4 space-y-2">
+                  <label className="block text-xs font-semibold text-neutral-700">Subject</label>
+                  <input
+                    type="text"
+                    value={editedSubject}
+                    onChange={(e) => setEditedSubject(e.target.value)}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                  />
+                  <label className="block text-xs font-semibold text-neutral-700">Message</label>
+                  <textarea
+                    value={editedBody}
+                    onChange={(e) => setEditedBody(e.target.value)}
+                    rows={8}
+                    className="w-full px-3 py-2 border rounded text-sm font-mono"
+                  />
+                  <p className="text-xs text-neutral-500 italic">
+                    Edits apply to every reminder below - each person's own personal link is kept intact.
+                  </p>
+                </div>
+
                 <p className="text-sm text-neutral-600 mb-4">
                   Click on a staff member to open their reminder email in your default email client.
                 </p>
@@ -158,7 +197,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                   {reminders.map((reminder) => (
                     <a
                       key={reminder.person_id}
-                      href={reminder.mailto_link}
+                      href={mailtoFor(reminder)}
                       className="block p-3 border rounded hover:bg-blue-50 transition-colors"
                     >
                       <p className="font-medium text-neutral-900">{reminder.codenaam}</p>

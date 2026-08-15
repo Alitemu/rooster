@@ -45,7 +45,7 @@ export async function POST(
       SELECT COUNT(*) as count
       FROM dienstrooster_availability
       WHERE person_id = ?
-      AND slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE schedule_period_id = ?)
+      AND slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)
       AND blocking_level IS NOT NULL
     `);
 

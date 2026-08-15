@@ -38,11 +38,34 @@ export async function POST(
       );
     }
 
-    if (!['CONCEPT', 'OPEN'].includes(period.status)) {
+    if (!['CONCEPT', 'OPEN', 'GESLOTEN'].includes(period.status)) {
       return NextResponse.json(
         { success: false, error: `Cannot generate roster for period in ${period.status} status` },
         { status: 400 }
       );
+    }
+
+    // Only require overloop confirmation when there's actually a previous
+    // published period to carry over from - a pool's first-ever period has
+    // nothing to confirm.
+    if (!period.overloop_bevestigd_op) {
+      const hasPreviousPeriod = db
+        .prepare(
+          `SELECT id FROM dienstrooster_schedule_period
+           WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
+           LIMIT 1`
+        )
+        .get(period.pool_id, period.start_datum);
+
+      if (hasPreviousPeriod) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Prior assignments must be confirmed before generating the roster',
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Fetch slots (joined to shift_type for the teller - the solver

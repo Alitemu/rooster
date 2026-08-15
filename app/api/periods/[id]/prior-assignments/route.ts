@@ -12,6 +12,7 @@ import {
   calculatePriorAssignmentWeeks,
   calculatePriorAssignmentRange,
 } from '@/lib/priorAssignmentDerive';
+import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -51,7 +52,7 @@ export async function GET(
 
     // Fetch period
     const periodStmt = db.prepare(`
-      SELECT start_datum, eind_datum, bevroren_ruleset_json
+      SELECT pool_id, start_datum, eind_datum, bevroren_ruleset_json
       FROM dienstrooster_schedule_period
       WHERE id = ?
     `);
@@ -64,6 +65,20 @@ export async function GET(
       };
       return NextResponse.json(response, { status: 404 });
     }
+
+    // The lookback window is relative to the previous published period's
+    // end date, not this period's own - matches auto-derive's anchor.
+    const prevPeriodStmt = db.prepare(`
+      SELECT eind_datum
+      FROM dienstrooster_schedule_period
+      WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
+      ORDER BY eind_datum DESC
+      LIMIT 1
+    `);
+    const prevPeriod = prevPeriodStmt.get(period.pool_id, period.start_datum) as
+      | { eind_datum: string }
+      | undefined;
+    const lookbackAnchor = prevPeriod?.eind_datum || period.start_datum;
 
     // Parse windowWeeks from frozen ruleset
     let windowWeeks = 7;
@@ -112,12 +127,13 @@ export async function GET(
     // Calculate date range
     const weeksToLookBack = calculatePriorAssignmentWeeks(windowWeeks);
     const [startDate, endDate] = calculatePriorAssignmentRange(
-      period.eind_datum,
+      lookbackAnchor,
       weeksToLookBack
     );
 
-    // Determine completeness
-    const expectedCount = weeksToLookBack * 7 * 3; // 7 days × 3 counters
+    // Determine completeness - a pool's first-ever period has no previous
+    // period to carry over from, so there's nothing to fill in.
+    const expectedCount = prevPeriod ? weeksToLookBack * 7 * 3 : 0; // 7 days × 3 counters
     const status = assignments.length >= expectedCount ? 'complete' : 'partial';
 
     const response: ApiSuccessResponse<ListResponse> = {
@@ -206,9 +222,7 @@ export async function PATCH(
         VALUES (?, ?, ?, ?, ?, ?, 'HANDMATIG', NULL)
       `);
 
-      // Get ISO week
-      const dateObj = new Date(datum);
-      const week = Math.ceil((dateObj.getDay() + 1) / 7); // Simplified
+      const [, week] = getISOWeek(parseISO(datum));
 
       insertStmt.run(
         crypto.randomUUID(),

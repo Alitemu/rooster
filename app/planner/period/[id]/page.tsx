@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
+import { ExportDialog } from '@/components/ExportDialog';
 
 interface Period {
   id: string;
@@ -27,22 +28,40 @@ export default function PlannerPeriodPage() {
   const [period, setPeriod] = useState<Period | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+
+  const loadPeriod = async () => {
+    try {
+      const res = await fetch(`/api/periods/${periodId}`);
+      if (!res.ok) throw new Error('Failed to load period');
+
+      const data = await res.json();
+      setPeriod(data.data);
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load period');
+      setLoading(false);
+    }
+  };
+
+  const handleClosePeriod = async () => {
+    setClosing(true);
+    setCloseError(null);
+    try {
+      const res = await fetch(`/api/periods/${periodId}/close`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Failed to close period');
+      await loadPeriod();
+    } catch (err) {
+      setCloseError(err instanceof Error ? err.message : 'Failed to close period');
+    } finally {
+      setClosing(false);
+    }
+  };
 
   useEffect(() => {
-    const loadPeriod = async () => {
-      try {
-        const res = await fetch(`/api/periods/${periodId}`);
-        if (!res.ok) throw new Error('Failed to load period');
-
-        const data = await res.json();
-        setPeriod(data.data);
-        setLoading(false);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load period');
-        setLoading(false);
-      }
-    };
-
     loadPeriod();
   }, [periodId]);
 
@@ -127,15 +146,41 @@ export default function PlannerPeriodPage() {
       )}
 
       {period.status === 'OPEN' && (
-        <div className="flex gap-3">
-          <button className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors">
-            📧 Send Deadline Reminder
-          </button>
-          <button className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors">
-            🔒 Close Period
-          </button>
+        <div className="space-y-2">
+          <div className="flex gap-3">
+            <button
+              onClick={() => setReminderDialogOpen(true)}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            >
+              📧 Send Deadline Reminder
+            </button>
+            <button
+              onClick={handleClosePeriod}
+              disabled={closing}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
+            >
+              {closing ? 'Closing...' : '🔒 Close Period'}
+            </button>
+          </div>
+          {closeError && <p className="text-sm text-red-600">{closeError}</p>}
         </div>
       )}
+
+      {period.status !== 'CONCEPT' && (
+        <a
+          href={`/planner/period/${periodId}/prior-assignments`}
+          className="inline-block px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+        >
+          🔁 Prior Assignments
+        </a>
+      )}
+
+      <ExportDialog
+        periodId={periodId}
+        periodName={period.naam}
+        isOpen={reminderDialogOpen}
+        onClose={() => setReminderDialogOpen(false)}
+      />
 
       {/* Dashboard */}
       <PlannerDashboard periodId={periodId} />

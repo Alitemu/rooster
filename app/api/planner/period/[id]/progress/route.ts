@@ -45,7 +45,7 @@ export async function GET(
         END as has_parttime_patterns,
         (SELECT COUNT(*) FROM dienstrooster_availability
          WHERE person_id = p.id
-         AND slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE schedule_period_id = ?)
+         AND slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)
          AND blocking_level = 'ABSOLUUT') as blocked_days_count,
         CASE
           WHEN (SELECT COUNT(*) FROM dienstrooster_absence WHERE person_id = p.id) > 0

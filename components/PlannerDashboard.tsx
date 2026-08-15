@@ -100,7 +100,6 @@ export function PlannerDashboard({ periodId }: Props) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           period_id: periodId,
-          submitted_by_person_id: 'current-user', // TODO: Get from auth context
         }),
       });
 
@@ -317,9 +316,12 @@ export function PlannerDashboard({ periodId }: Props) {
           >
             📧 Invitations & Reminders
           </button>
-          <button className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors">
+          <a
+            href={`/api/exports/status-report/${periodId}`}
+            className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+          >
             📋 Download Status Report
-          </button>
+          </a>
         </div>
       </div>
 

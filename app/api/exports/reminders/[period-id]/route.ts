@@ -2,7 +2,10 @@
  * Reminders Export Route
  *
  * GET /api/exports/reminders/[period-id] - Get reminder templates for staff
- * who haven't confirmed their preferences yet.
+ * who haven't confirmed their preferences yet. Optional
+ * ?days_before_deadline=N picks the tone of the reminder (urgent close to
+ * the deadline, gentle further out); defaults to the real number of days
+ * left before the period's actual deadline.
  *
  * As with invitations, the plaintext access token is never persisted, so a
  * fresh one is issued (revoking any previous one for this period) for each
@@ -22,7 +25,18 @@ interface ReminderTemplate {
   email: string | null;
   personal_link: string;
   deadline: string;
+  subject: string;
+  body: string;
   mailto_link: string;
+}
+
+function daysBeforeDeadlineFromOverride(override: string | null, deadline: string): number {
+  if (override !== null) {
+    const parsed = parseInt(override, 10);
+    if (!isNaN(parsed)) return parsed;
+  }
+  const msRemaining = new Date(deadline).getTime() - Date.now();
+  return Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
 }
 
 export async function GET(
@@ -81,6 +95,17 @@ export async function GET(
     const baseUrl = process.env.BASE_URL || 'https://localhost:443';
     const now = new Date().toISOString();
 
+    const daysBeforeDeadline = daysBeforeDeadlineFromOverride(
+      req.nextUrl.searchParams.get('days_before_deadline'),
+      period.deadline
+    );
+    const urgency =
+      daysBeforeDeadline <= 1
+        ? 'urgent'
+        : daysBeforeDeadline <= 3
+          ? 'moderate'
+          : 'gentle';
+
     const reminders: ReminderTemplate[] = outstanding.map((person) => {
       revokeStmt.run(now, person.person_id, periodId);
       const token = generateAccessToken();
@@ -89,10 +114,23 @@ export async function GET(
       const personalLink = `${baseUrl}/person/${token}`;
       const deadline = new Date(period.deadline).toLocaleString();
 
-      const subject = `Reminder: ${period.naam} Preferences Due`;
+      const subject =
+        urgency === 'urgent'
+          ? `URGENT: ${period.naam} Preferences Due Tomorrow`
+          : urgency === 'moderate'
+            ? `Reminder: ${period.naam} Preferences Due Soon`
+            : `Reminder: ${period.naam} Preferences Due`;
+
+      const urgencyLine =
+        urgency === 'urgent'
+          ? `This is your final reminder - your preferences are due by ${deadline}.`
+          : urgency === 'moderate'
+            ? `Just a heads up: only a few days left to submit your preferences, due by ${deadline}.`
+            : `This is a reminder that your shift preferences for ${period.naam} are due by ${deadline}.`;
+
       const body = `Hello ${person.codenaam},
 
-This is a reminder that your shift preferences for ${period.naam} are due by ${deadline}.
+${urgencyLine}
 
 Please visit the following link to submit your preferences:
 ${personalLink}
@@ -111,6 +149,8 @@ Thank you!`;
         email: null, // No real emails stored
         personal_link: personalLink,
         deadline,
+        subject,
+        body,
         mailto_link: mailtoLink,
       };
     });
