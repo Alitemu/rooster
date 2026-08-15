@@ -35,25 +35,25 @@ test.describe('Concurrent Operations - E2E', () => {
       page2.goto(getPersonalLinkUrl(user2.token))
     ]);
 
-    // Both create swap requests simultaneously
-    const requests = await Promise.all([
-      (async () => {
-        const button = page1.locator('button:has-text("Request Swap")').first();
-        if (await button.isVisible({ timeout: 8000 }).catch(() => false)) {
-          await button.click();
-          return true;
-        }
+    // Both create swap requests simultaneously.
+    //
+    // waitFor, not isVisible: isVisible() reports the state at that instant
+    // and does not wait, so the timeout passed to it did nothing and the
+    // check simply raced the page's client-side fetch. That made this test
+    // fail about 3 runs in 5 - noise that masked whether concurrent swap
+    // creation actually works.
+    const clickWhenReady = async (page: typeof page1) => {
+      const button = page.locator('button:has-text("Request Swap")').first();
+      try {
+        await button.waitFor({ state: 'visible', timeout: 15000 });
+      } catch {
         return false;
-      })(),
-      (async () => {
-        const button = page2.locator('button:has-text("Request Swap")').first();
-        if (await button.isVisible({ timeout: 8000 }).catch(() => false)) {
-          await button.click();
-          return true;
-        }
-        return false;
-      })()
-    ]);
+      }
+      await button.click();
+      return true;
+    };
+
+    const requests = await Promise.all([clickWhenReady(page1), clickWhenReady(page2)]);
 
     // At least one should succeed
     expect(requests.some(r => r)).toBe(true);
