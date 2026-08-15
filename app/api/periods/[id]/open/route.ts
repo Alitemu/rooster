@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { persistSlotsForPeriod } from '@/lib/slotPersistence';
 import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
+import { applyCarryOverForPeriod } from '@/lib/carryOver';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
@@ -37,6 +38,7 @@ interface OpenPeriodResponse {
   status: string;
   slots_generated: number;
   weeks_covered: number;
+  carry_over_entries: number;
   start_datum: string;
   eind_datum: string;
 }
@@ -116,6 +118,12 @@ export async function POST(
     // members can see it
     syncAvailabilityForPeriod(id);
 
+    // Roll forward what people over- or under-worked in the pool's last
+    // published period. Done here rather than at publish time because the
+    // entries have to be booked against a period that exists, and when a
+    // period is published its successor usually hasn't been created yet.
+    const carryOverEntries = applyCarryOverForPeriod(id, auth!.userId);
+
     const response: ApiSuccessResponse<OpenPeriodResponse> = {
       success: true,
       data: {
@@ -123,6 +131,7 @@ export async function POST(
         status: 'OPEN',
         slots_generated: slotResult.totalSlotsGenerated,
         weeks_covered: slotResult.weeksCovered,
+        carry_over_entries: carryOverEntries,
         start_datum,
         eind_datum,
       },
