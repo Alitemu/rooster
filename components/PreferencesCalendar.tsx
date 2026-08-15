@@ -19,9 +19,14 @@ import { dateToISO, parseISO, getISOWeek } from '@/lib/holidays';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | null;
 
+interface SlotPreference {
+  slot_id: string;
+  level: BlockLevel;
+}
+
 interface DayPreference {
   datum: string;
-  levels: Map<string, BlockLevel>; // teller -> level
+  slots: Map<string, SlotPreference>; // teller -> {slot_id, level}
 }
 
 interface CoverageInfo {
@@ -67,10 +72,13 @@ export function PreferencesCalendar({
           if (!prefs.has(key)) {
             prefs.set(key, {
               datum: key,
-              levels: new Map(),
+              slots: new Map(),
             });
           }
-          prefs.get(key)!.levels.set(slot.teller, slot.blocking_level);
+          prefs.get(key)!.slots.set(slot.teller, {
+            slot_id: slot.slot_id,
+            level: slot.blocking_level,
+          });
         }
 
         setPreferences(prefs);
@@ -108,20 +116,10 @@ export function PreferencesCalendar({
 
   // Debounced save
   const savePreference = useCallback(
-    async (_datum: string, teller: string, level: BlockLevel) => {
+    async (slotId: string, level: BlockLevel) => {
       setIsSaving(true);
       try {
-        // Find slot_id for this date and counter
-        const slot = Array.from(preferences.values())
-          .flatMap((p) => Array.from(p.levels.entries()))
-          .find((entry) => entry[0] === teller);
-
-        if (!slot) {
-          console.error('Slot not found');
-          return;
-        }
-
-        const res = await fetch(`/api/person/${personId}/preferences/slot-id`, {
+        const res = await fetch(`/api/person/${personId}/preferences/slot/${slotId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ level }),
@@ -134,33 +132,35 @@ export function PreferencesCalendar({
         setIsSaving(false);
       }
     },
-    [personId, preferences]
+    [personId]
   );
 
   // Handle preference click
   const handleTogglePreference = useCallback(
     (datum: string, teller: string) => {
       setPreferences((prev) => {
-        const updated = new Map(prev);
-        const dayPref = updated.get(datum) || {
-          datum,
-          levels: new Map(),
-        };
+        const dayPref = prev.get(datum);
+        const slot = dayPref?.slots.get(teller);
 
-        const current = dayPref.levels.get(teller);
-        let next: BlockLevel;
+        if (!slot) {
+          console.error('Slot not found for', datum, teller);
+          return prev;
+        }
 
         // Cycle: null → LIEVER_NIET → ABSOLUUT → null
-        if (current === null) next = 'LIEVER_NIET';
-        else if (current === 'LIEVER_NIET') next = 'ABSOLUUT';
+        let next: BlockLevel;
+        if (slot.level === null) next = 'LIEVER_NIET';
+        else if (slot.level === 'LIEVER_NIET') next = 'ABSOLUUT';
         else next = null;
 
-        dayPref.levels.set(teller, next);
-        updated.set(datum, dayPref);
+        const updated = new Map(prev);
+        const updatedSlots = new Map(dayPref!.slots);
+        updatedSlots.set(teller, { slot_id: slot.slot_id, level: next });
+        updated.set(datum, { datum, slots: updatedSlots });
 
         setHasChanged(true);
         onPreferencesChange?.(true);
-        savePreference(datum, teller, next);
+        savePreference(slot.slot_id, next);
 
         return updated;
       });
@@ -188,7 +188,7 @@ export function PreferencesCalendar({
     return <div className="p-4 text-center">Loading preferences...</div>;
   }
 
-  // Generate calendar grid (5 rows × 7 columns = 35 weeks)
+  // Generate calendar grid: as many full weeks as the period actually spans
   const weeks: string[][] = [];
   const allDates = Array.from(preferences.values()).map((p) => p.datum).sort();
 
@@ -197,9 +197,13 @@ export function PreferencesCalendar({
   }
 
   const startDate = parseISO(allDates[0]);
+  const endDate = parseISO(allDates[allDates.length - 1]);
+  const totalWeeks = Math.ceil(
+    (endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000) + 1
+  );
   let currentDate = new Date(startDate);
 
-  while (weeks.length < 5) {
+  while (weeks.length < totalWeeks) {
     const week: string[] = [];
     for (let i = 0; i < 7; i++) {
       week.push(dateToISO(currentDate));
@@ -242,7 +246,12 @@ export function PreferencesCalendar({
                       {/* Preference states (stacked) */}
                       <div className="space-y-0.5">
                         {shiftCounters.map((counter) => {
-                          const level = dayPref?.levels.get(counter);
+                          const slot = dayPref?.slots.get(counter);
+                          if (!slot) {
+                            return <div key={`${datum}-${counter}`} className="w-full h-6" />;
+                          }
+
+                          const level = slot.level;
                           const stateClass = level
                             ? level === 'ABSOLUUT'
                               ? 'calendar-cell-blocked'

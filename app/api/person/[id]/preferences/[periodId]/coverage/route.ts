@@ -1,7 +1,8 @@
 /**
- * Coverage Indicator Route
+ * GET /api/person/[id]/preferences/[periodId]/coverage - Per-day available people count
  *
- * GET /api/person/[id]/preferences/[period-id]/coverage - Per-day available people count
+ * Returns available person count for each day in period.
+ * Shows how many people have blocked (ABSOLUUT) or soft-blocked (LIEVER_NIET)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -26,15 +27,9 @@ interface CoverageResponse {
   coverage_by_day: CoveragePerDay[];
 }
 
-/**
- * GET /api/person/[id]/preferences/[period-id]/coverage - Coverage per day
- *
- * Returns available person count for each day in period.
- * Shows how many people have blocked (ABSOLUUT) or soft-blocked (LIEVER_NIET)
- */
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string; periodId?: string } }
+  { params }: { params: { id: string; periodId: string } }
 ): Promise<NextResponse> {
   try {
     const { id, periodId } = params;
@@ -44,18 +39,6 @@ export async function GET(
       return forbiddenResponse();
     }
 
-    if (!periodId) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: {
-          code: 'MISSING_PERIOD_ID',
-          message: 'Period ID is required',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    // Verify person exists
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
@@ -65,7 +48,6 @@ export async function GET(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Verify period exists
     const periodStmt = db.prepare(`
       SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?
     `);
@@ -78,7 +60,6 @@ export async function GET(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Get pool size
     const poolSizeStmt = db.prepare(`
       SELECT COUNT(DISTINCT pm.person_id) as count
       FROM dienstrooster_pool_membership pm
@@ -96,14 +77,15 @@ export async function GET(
       SELECT
         s.datum,
         s.iso_week,
-        s.teller,
-        COUNT(DISTINCT CASE WHEN a.level = 'ABSOLUUT' THEN a.person_id END) as absoluut_count,
-        COUNT(DISTINCT CASE WHEN a.level = 'LIEVER_NIET' THEN a.person_id END) as liever_niet_count
+        st.teller,
+        COUNT(DISTINCT CASE WHEN a.blocking_level = 'ABSOLUUT' THEN a.person_id END) as absoluut_count,
+        COUNT(DISTINCT CASE WHEN a.blocking_level = 'LIEVER_NIET' THEN a.person_id END) as liever_niet_count
       FROM dienstrooster_shift_slot s
+      JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
       LEFT JOIN dienstrooster_availability a ON a.slot_id = s.id
       WHERE s.period_id = ?
-      GROUP BY s.datum, s.iso_week, s.teller
-      ORDER BY s.datum, s.teller
+      GROUP BY s.datum, s.iso_week, st.teller
+      ORDER BY s.datum, st.teller
     `);
 
     const slotRows = stmt.all(periodId) as any[];

@@ -89,7 +89,7 @@ export async function POST(
     // Create or update submission record
     const checkStmt = db.prepare(`
       SELECT id FROM dienstrooster_submission
-      WHERE person_id = ? AND period_id = ?
+      WHERE person_id = ? AND schedule_period_id = ?
     `);
 
     const existing = checkStmt.get(id, period_id);
@@ -99,14 +99,14 @@ export async function POST(
       const updateStmt = db.prepare(`
         UPDATE dienstrooster_submission
         SET status = 'BEVESTIGD', ingediend_op = ?, row_version = row_version + 1
-        WHERE person_id = ? AND period_id = ?
+        WHERE person_id = ? AND schedule_period_id = ?
       `);
 
       updateStmt.run(now, id, period_id);
     } else {
       const insertStmt = db.prepare(`
         INSERT INTO dienstrooster_submission
-        (id, person_id, period_id, status, ingediend_op, row_version)
+        (id, person_id, schedule_period_id, status, ingediend_op, row_version)
         VALUES (?, ?, ?, 'BEVESTIGD', ?, 1)
       `);
 
