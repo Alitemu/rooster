@@ -9,6 +9,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import {
+  TELLERS,
+  countSlotsByTeller,
+  resolveBands,
+  resolveRulesetConfig,
+  type Teller,
+} from '@/lib/rosterBands';
 
 export async function GET(
   _request: NextRequest,
@@ -64,32 +71,82 @@ export async function GET(
       valid = false;
     }
 
-    // Check 3: Get person count for band validation (sample check)
-    const people = db
+    // Check 3: Band compliance, per counter, against this period's own
+    // frozen ruleset. Counting a person's assignments across all counters
+    // and comparing that total against a single band mixes three unrelated
+    // quotas - someone can be far over on evenings and far under on
+    // weekends and still look compliant.
+    const config = resolveRulesetConfig(period);
+    const bands = resolveBands(config, countSlotsByTeller(periodId), (
+      db
+        .prepare(
+          `SELECT COUNT(*) as count FROM dienstrooster_pool_membership
+           WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+        )
+        .get(period.pool_id, period.eind_datum, period.start_datum) as { count: number }
+    ).count);
+
+    // Everyone in the pool, not just people who happen to already have an
+    // assignment - a person scheduled zero times is exactly the case the
+    // band's lower bound exists to catch.
+    const members = db
       .prepare(
-        `SELECT DISTINCT person_id FROM dienstrooster_assignment
-         WHERE schedule_version_id = ?`
+        `SELECT p.id, p.codenaam FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
       )
-      .all(periodId) as any[];
+      .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{
+      id: string;
+      codenaam: string;
+    }>;
+
+    const perPerson = db
+      .prepare(
+        `SELECT a.person_id, st.teller, COUNT(*) as count
+         FROM dienstrooster_assignment a
+         JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE a.schedule_version_id = ?
+         GROUP BY a.person_id, st.teller`
+      )
+      .all(periodId) as Array<{ person_id: string; teller: string; count: number }>;
+
+    const counts = new Map<string, number>();
+    for (const row of perPerson) counts.set(`${row.person_id}|${row.teller}`, row.count);
+
+    // Bands shift with a person's carried-over balance, the same way the
+    // solver applies it when generating.
+    const ledger = db
+      .prepare(
+        `SELECT person_id, teller, SUM(delta) as total
+         FROM dienstrooster_ledger_entry
+         WHERE geldt_voor_periode_id = ?
+         GROUP BY person_id, teller`
+      )
+      .all(periodId) as Array<{ person_id: string; teller: string; total: number }>;
+
+    const deltas = new Map<string, number>();
+    for (const row of ledger) deltas.set(`${row.person_id}|${row.teller}`, row.total || 0);
 
     let bandViolations = 0;
-    const band = [7, 8]; // Default band, could come from ruleset
+    for (const member of members) {
+      for (const teller of TELLERS) {
+        const key = `${member.id}|${teller}`;
+        const [baseMin, baseMax] = bands[teller as Teller];
+        const delta = deltas.get(key) || 0;
+        const count = counts.get(key) || 0;
 
-    for (const p of people) {
-      const assignmentCount = db
-        .prepare(
-          `SELECT COUNT(*) as count FROM dienstrooster_assignment
-           WHERE schedule_version_id = ? AND person_id = ?`
-        )
-        .get(periodId, p.person_id) as any;
-
-      if (assignmentCount.count < band[0] || assignmentCount.count > band[1]) {
-        bandViolations++;
+        if (count < baseMin + delta || count > baseMax + delta) bandViolations++;
       }
     }
 
     if (bandViolations > 0) {
-      issues.push(`${bandViolations} people have assignments outside their band range [${band[0]}, ${band[1]}]`);
+      issues.push(
+        `${bandViolations} counter totals fall outside their range ` +
+          `(evening ${bands.AVOND[0]}-${bands.AVOND[1]}, ` +
+          `weekend ${bands.WEEKEND[0]}-${bands.WEEKEND[1]}, ` +
+          `holiday ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]})`
+      );
       valid = false;
     }
 
@@ -103,10 +160,11 @@ export async function GET(
           no_hard_blocking: blockingViolations.count === 0,
           band_compliance: bandViolations === 0,
         },
+        bands,
         totals: {
           total_slots: slots.count,
           assigned_slots: assignedSlots.count,
-          people_affected: people.length,
+          people_affected: members.length,
         },
       },
     });

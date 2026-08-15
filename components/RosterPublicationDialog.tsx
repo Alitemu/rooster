@@ -66,12 +66,13 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
     setError(null);
 
     try {
+      // No publisher in the body: the route takes it from the session
+      // (auth.userId) and ignores anything sent here. The literal
+      // 'current-user' string this used to post was dead data behind a
+      // stale "TODO: get from auth" that suggested auth was still missing.
       const res = await fetch(`/api/planner/period/${periodId}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          published_by_person_id: 'current-user', // TODO: Get from auth
-        }),
       });
 
       if (!res.ok) {

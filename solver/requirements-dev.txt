@@ -1,0 +1,4 @@
+# Test-only dependencies. Kept separate from requirements.txt so the
+# production image (solver/Dockerfile) doesn't ship a test runner.
+-r requirements.txt
+pytest==8.3.4

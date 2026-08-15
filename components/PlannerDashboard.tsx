@@ -337,7 +337,9 @@ export function PlannerDashboard({ periodId }: Props) {
               {showAssignments ? 'Hide' : 'Show'}
             </button>
           </div>
-          {showAssignments && <AssignmentGrid periodId={periodId} />}
+          {showAssignments && (
+            <AssignmentGrid periodId={periodId} periodStatus={dashboard.status} />
+          )}
         </div>
       )}
 

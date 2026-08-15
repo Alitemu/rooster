@@ -32,10 +32,30 @@ class ConstraintBuilder:
         window_weeks: int
     ):
         """
-        Constraint: If person assigned to week W, cannot be assigned to weeks
-        [W-k, W+k] where k = ceil(window_weeks/2).
+        Constraint: at most one assignment in any run of `window_weeks`
+        consecutive weeks, which is exactly "windowWeeks = number of weeks
+        between shifts" as CLAUDE.md defines the setting.
 
-        Allows same-week weekend pairs (Saturday + Sunday).
+        That makes the documented example hold literally: with
+        window_weeks=2, a shift in week 12 rules out weeks 11 and 13 - and
+        nothing further out.
+
+        Deliberately a forward-only window [w, w + window_weeks - 1]
+        applied at every start week, rather than a symmetric window around
+        each week. A symmetric [w-k, w+k] spans 2k+1 weeks, so it enforces
+        a gap of 2k+1 rather than window_weeks - far stricter than
+        configured, and stricter than lib/capacity.ts promises the planner
+        (it advertises floor(weeks / windowWeeks) shifts per person). That
+        mismatch made rosters look staffable that the solver then could not
+        actually fill.
+
+        NOTE: this still permits at most one slot per person per week, so a
+        Saturday+Sunday weekend pair is split across two people. The
+        previous docstring claimed same-week pairs were allowed, but the
+        code never implemented that (every slot in week w sits inside w's
+        own window). Behaviour is left as-is here: allowing pairs changes
+        how weekends are staffed and is a scheduling-policy decision, not
+        part of fixing the gap arithmetic.
         """
         self.violations['window_rule'] = 0
 
@@ -64,11 +84,10 @@ class ConstraintBuilder:
                 if not week_vars:
                     continue
 
-                # Sum assignments in window [week - k, week + k]
-                k = (window_weeks + 1) // 2
+                # Sum assignments in window [week, week + window_weeks - 1]
                 window_vars = []
 
-                for check_week in range(week - k, week + k + 1):
+                for check_week in range(week, week + window_weeks):
                     if check_week in week_slots:
                         for slot in week_slots[check_week]:
                             if (person_id, slot['id']) in assignment_vars:
@@ -213,70 +232,20 @@ class ConstraintBuilder:
         return band_slack_vars
 
     # ========================================================================
-    # Part-time Pattern: Forced assignments on specific weekdays
+    # Part-time patterns: enforced upstream, not here
     # ========================================================================
-
-    def add_parttime_constraints(
-        self,
-        assignment_vars: dict[tuple[str, str], cp_model.IntVar],
-        people: list[str],
-        slots: list[dict],
-        patterns: dict[str, list[dict]]  # person_id -> [{ weekdag, frequentie }]
-    ):
-        """
-        Constraint: Part-time staff must be assigned on specified weekdays/frequencies.
-
-        ELKE_WEEK: every week
-        EVEN_WEKEN: only even ISO weeks
-        ONEVEN_WEKEN: only odd ISO weeks
-        """
-        self.violations['parttime_pattern'] = 0
-
-        weekday_map = {
-            'MA': 0, 'DI': 1, 'WO': 2, 'DO': 3,
-            'VR': 4, 'ZA': 5, 'ZO': 6
-        }
-
-        for person_id in people:
-            person_patterns = patterns.get(person_id, [])
-
-            for pattern in person_patterns:
-                weekday = weekday_map.get(pattern.get('weekdag'), -1)
-                frequency = pattern.get('frequentie', 'ELKE_WEEK')
-
-                if weekday < 0:
-                    continue
-
-                # Find matching slots
-                matching_slots = []
-                for slot in slots:
-                    # Parse date to get day of week
-                    # datum format: YYYY-MM-DD
-                    year, month, day = map(int, slot['datum'].split('-'))
-                    from datetime import date
-                    d = date(year, month, day)
-                    slot_weekday = d.weekday()  # 0=Mon, 6=Sun
-
-                    # Adjust for ISO (0=Mon in ISO, 0=Sun in Python)
-                    if d.weekday() == 6:  # Sunday
-                        slot_weekday = 6
-                    else:
-                        slot_weekday = d.weekday()
-
-                    if slot_weekday != weekday:
-                        continue
-
-                    # Check frequency
-                    if frequency == 'ELKE_WEEK':
-                        matching_slots.append(slot)
-                    elif frequency == 'EVEN_WEKEN' and slot['iso_week'] % 2 == 0:
-                        matching_slots.append(slot)
-                    elif frequency == 'ONEVEN_WEKEN' and slot['iso_week'] % 2 == 1:
-                        matching_slots.append(slot)
-
-                # Must assign to at least one slot per week/cycle
-                # (This is complex; simplified here)
-                # In practice: create one var per week, force exactly 1
+    #
+    # There is deliberately no part-time constraint in this model. Patterns
+    # are expanded into concrete ABSOLUUT availability rows by
+    # lib/parttimeSync.ts when a pattern is saved or a period is opened, and
+    # those arrive here as `blocked_slots` - so the rule is already enforced
+    # by add_blocking_absolute_constraints above.
+    #
+    # An add_parttime_constraints() stub used to live here that re-derived
+    # weekday/even-odd-week matching in Python. It was never called by
+    # solver.py, its body trailed off in a comment before adding any
+    # constraint, and its week-parity maths duplicated logic that
+    # parttimeSync.ts already does against the persisted iso_week column.
 
     # ========================================================================
     # Reporting

@@ -60,8 +60,16 @@ class ObjectiveBuilder:
         Objective: Prefer assignments toward middle of band range.
 
         If band is [7,8] and actual_band is [6,7]:
-        target = (6+7)/2 = 6.5
-        cost = abs(actual_count - 6.5)
+        target = (6+7)//2 = 6
+        cost = abs(actual_count - 6)
+
+        The deviation is tied to the real assignment count with
+        AddAbsEquality. That coupling is the whole point: an earlier
+        version created the deviation variable and added it to the cost but
+        never constrained it, so - because the objective minimises - the
+        solver simply set every deviation to 0 and this entire term did
+        nothing. Workload came out visibly lopsided (1/2/3 shifts across
+        three interchangeable people) while the code claimed to balance it.
         """
         imbalance_cost = 0
 
@@ -86,16 +94,21 @@ class ObjectiveBuilder:
                 if counter_vars:
                     assignment_count = sum(counter_vars)
 
-                    # Create cost: prefer being at target
-                    # Linear approximation: |count - target|
-                    # Simplified: add slack variable
-                    deviation = self.model.NewIntVar(
-                        0, max(actual_max - target, target - actual_min),
-                        f'dev_{person_id}_{counter}'
-                    )
+                    # Bound generously: the count can range over every slot
+                    # of this counter, and target may sit outside that range
+                    # once a ledger delta is applied.
+                    bound = max(len(counter_vars), abs(target))
 
-                    # This is simplified; full implementation would use
-                    # absolute value or quadratic terms
+                    diff = self.model.NewIntVar(
+                        -bound, bound, f'diff_{person_id}_{counter}'
+                    )
+                    self.model.Add(diff == assignment_count - target)
+
+                    deviation = self.model.NewIntVar(
+                        0, bound, f'dev_{person_id}_{counter}'
+                    )
+                    self.model.AddAbsEquality(deviation, diff)
+
                     imbalance_cost += weight * deviation
 
         self.objective_terms['band_imbalance'] = imbalance_cost
@@ -148,63 +161,18 @@ class ObjectiveBuilder:
 
         self.objective_terms['band_slack'] = slack_cost
         return slack_cost
-
     # ========================================================================
-    # Term 5: Holiday Rotation Equity
+    # Holiday rotation equity: not modelled
     # ========================================================================
-
-    def add_holiday_equity_objective(
-        self,
-        assignment_vars: dict[tuple[str, str], cp_model.IntVar],
-        people: list[str],
-        slots: list[dict],
-        holiday_assignments: dict[str, dict[str, int]],  # person -> { group: count }
-        weight: float = 0.3,
-        holiday_groups: list[str] = [
-            'NIEUWJAAR', 'PASEN', 'KONINGSDAG', 'BEVRIJDINGSDAG',
-            'HEMELVAART', 'PINKSTEREN', 'KERST'
-        ]
-    ):
-        """
-        Objective: Minimize variance in holiday assignments across group.
-
-        Penalizes large differences in how holidays are distributed.
-        """
-        holiday_cost = 0
-
-        for group in holiday_groups:
-            # Find all holiday slots of this group
-            holiday_slots = [
-                slot for slot in slots
-                if slot.get('is_feestdag') and slot.get('feestdag_groep') == group
-            ]
-
-            if not holiday_slots:
-                continue
-
-            # Count assignments per person for this group
-            group_counts = {}
-            for person_id in people:
-                count_var = 0
-                for slot in holiday_slots:
-                    if (person_id, slot['id']) in assignment_vars:
-                        count_var += assignment_vars[(person_id, slot['id'])]
-                group_counts[person_id] = count_var
-
-            # Calculate mean and variance (simplified)
-            # Target: each person gets equal share
-            total_holidays = len(holiday_slots)
-            people_count = len(people)
-            target_per_person = total_holidays / people_count
-
-            # Add cost for deviations
-            for person_id, count_var in group_counts.items():
-                # Cost = abs(count - target)
-                # Simplified linear form
-                pass  # Would implement with absolute value constraints
-
-        self.objective_terms['holiday_equity'] = holiday_cost
-        return holiday_cost
+    #
+    # An add_holiday_equity_objective() stub used to sit here. It was never
+    # called by solver.py, and its inner loop ended in `pass` before adding
+    # any cost - so it always returned 0 and contributed nothing.
+    #
+    # Fair holiday rotation is currently tracked outside the solver, in the
+    # holiday_history table (see lib/holidays.ts and the import-holidays
+    # route). Folding it into the objective is a real piece of work, not a
+    # gap to paper over with an empty function.
 
     # ========================================================================
     # Combined Objective

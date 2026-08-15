@@ -9,7 +9,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 
 export async function DELETE(
   request: NextRequest,
@@ -24,7 +24,7 @@ export async function DELETE(
 
     const periodId = params.id;
     const assignmentId = params['assignment-id'];
-    const body = await request.json();
+    const body = await parseJsonBody(request);
     const { reason } = body;
     const now = dateToISO(new Date());
 
@@ -52,10 +52,19 @@ export async function DELETE(
       );
     }
 
-    // Only allow deletion of MANUAL or OVERRIDE assignments
-    if (!['MANUAL', 'OVERRIDE'].includes(assignment.bron)) {
+    // Solver-produced assignments are removable too. A ward has to be able
+    // to take someone off a shift they were scheduled for - illness, a swap
+    // agreed outside the app, a mistake spotted late - and refusing that
+    // for SOLVER rows left no way to do it at all. Protecting them was also
+    // inconsistent: regenerating already deletes every SOLVER row wholesale.
+    // Every removal is recorded in dienstrooster_assignment_edit below, so
+    // the change stays auditable.
+    if (period.status === 'GEPUBLICEERD' && !reason) {
       return NextResponse.json(
-        { success: false, error: `Cannot delete ${assignment.bron} assignments` },
+        {
+          success: false,
+          error: 'A reason is required when changing a published roster',
+        },
         { status: 400 }
       );
     }

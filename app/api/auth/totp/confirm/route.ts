@@ -10,7 +10,7 @@ import { db } from '@/db/client';
 import { verifyTOTPCode, isValidTOTPFormat } from '@/lib/auth';
 import { getAuthContextFromRequest } from '@/lib/auth-context';
 import { verifyPayload } from '@/lib/session';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { TotpSetupPayload } from '../setup/route';
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
-    const body = (await request.json()) as { setup_token?: string; code?: string };
+    const body = await parseJsonBody<{ setup_token: string; code: string }>(request);
     const { setup_token: setupToken, code } = body;
 
     if (!setupToken || !code || !isValidTOTPFormat(code)) {

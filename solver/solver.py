@@ -160,7 +160,11 @@ class RosterSolver:
         # Create solver with time limit
         self.solver = cp_model.CpSolver()
         self.solver.parameters.max_time_in_seconds = self.time_limit_seconds
-        self.solver.parameters.log_search_progress = True
+        # CP-SAT's search log is ~700 lines per solve. Useful when tuning
+        # the model, overwhelming in normal operation (and in test output),
+        # so it follows the service's own log level instead of being on
+        # unconditionally.
+        self.solver.parameters.log_search_progress = logger.isEnabledFor(logging.DEBUG)
 
         # Solve
         self.status = self.solver.Solve(model)

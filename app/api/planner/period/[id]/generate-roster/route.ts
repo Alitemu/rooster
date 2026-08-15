@@ -11,6 +11,8 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBands';
+import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 
 export async function POST(
   request: NextRequest,
@@ -98,16 +100,7 @@ export async function POST(
     // Exclude those slots from the solver's problem entirely rather than
     // just filtering the insert afterward, so the solver doesn't waste a
     // candidate trying to double-fill an already-covered shift.
-    const manuallyFilledSlotIds = new Set(
-      (
-        db
-          .prepare(
-            `SELECT slot_id FROM dienstrooster_assignment
-             WHERE schedule_version_id = ? AND bron IN ('MANUAL', 'OVERRIDE')`
-          )
-          .all(periodId) as { slot_id: string }[]
-      ).map((r) => r.slot_id)
-    );
+    const manuallyFilledSlotIds = getManuallyFilledSlotIds(periodId);
     const slots = allSlots.filter((s) => !manuallyFilledSlotIds.has(s.id));
 
     // Fetch pool members whose membership window covers this period
@@ -180,42 +173,16 @@ export async function POST(
     // row, so later edits to the pool's ruleset can't retroactively change
     // an open period). Fall back to the pool's current ruleset for periods
     // that predate that freeze happening.
-    let config: any;
-    if (period.bevroren_ruleset_json) {
-      config = JSON.parse(period.bevroren_ruleset_json);
-    } else {
-      const pool = db
-        .prepare('SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?')
-        .get(period.pool_id) as { ruleset_id: string } | undefined;
-      const rulesetData = pool
-        ? (db.prepare('SELECT config_json FROM dienstrooster_ruleset WHERE id = ?').get(pool.ruleset_id) as
-            | { config_json: string }
-            | undefined)
-        : undefined;
+    //
+    // Shared with publication-check via lib/rosterBands so the gate before
+    // publishing judges the roster by the same bands it was built with.
+    const config = resolveRulesetConfig(period);
 
-      if (!rulesetData) {
-        return NextResponse.json(
-          { success: false, error: 'Ruleset not found' },
-          { status: 400 }
-        );
-      }
-
-      config = JSON.parse(rulesetData.config_json || '{}');
-    }
-
-    // A flat [7,8] band for every counter is only feasible by coincidence -
-    // WEEKEND and FEESTDAG have far fewer slots than AVOND, so the same
-    // range for all three is infeasible for most real periods. Default to
-    // each counter's actual average per person when the ruleset doesn't
-    // specify one explicitly.
-    const slotCountByTeller: Record<string, number> = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 };
+    const slotCountByTeller: Record<Teller, number> = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 };
     for (const s of slots) {
-      if (s.teller in slotCountByTeller) slotCountByTeller[s.teller]++;
+      if (s.teller in slotCountByTeller) slotCountByTeller[s.teller as Teller]++;
     }
-    const defaultBand = (teller: string): [number, number] => {
-      const avg = slotCountByTeller[teller] / Math.max(people.length, 1);
-      return [Math.max(0, Math.floor(avg)), Math.max(0, Math.ceil(avg))];
-    };
+    const bands = resolveBands(config, slotCountByTeller, people.length);
 
     // Build solver request
     const solverInput = {
@@ -234,11 +201,11 @@ export async function POST(
       person_preferences: personPreferences,
       people,
       rules: {
-        window_weeks: config.windowWeeks || 2,
-        band_avond: config.bandAvond || defaultBand('AVOND'),
-        band_weekend: config.bandWeekend || defaultBand('WEEKEND'),
-        band_feestdag: config.bandFeestdag || defaultBand('FEESTDAG'),
-        distribution_mode: config.distributionMode || 'GELIJK',
+        window_weeks: (config.windowWeeks as number) || 2,
+        band_avond: bands.AVOND,
+        band_weekend: bands.WEEKEND,
+        band_feestdag: bands.FEESTDAG,
+        distribution_mode: (config.distributionMode as string) || 'GELIJK',
       },
       balances,
       active_people: people.length,
@@ -279,9 +246,7 @@ export async function POST(
     // it) - but never touch MANUAL/OVERRIDE rows, and the slots they cover
     // were already excluded from the solver's input above, so there's no
     // conflict when inserting the fresh results below.
-    db.prepare(
-      `DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ? AND bron = 'SOLVER'`
-    ).run(periodId);
+    clearSolverAssignments(periodId);
 
     // Store assignments using raw SQL
     let assignmentCount = 0;

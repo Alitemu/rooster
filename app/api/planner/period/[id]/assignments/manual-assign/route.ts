@@ -10,7 +10,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 
 export async function POST(
   request: NextRequest,
@@ -24,7 +24,7 @@ export async function POST(
     const actorId = auth!.userId;
 
     const periodId = params.id;
-    const body = await request.json();
+    const body = await parseJsonBody(request);
     const { person_id, slot_id, reason } = body;
     const now = dateToISO(new Date());
 

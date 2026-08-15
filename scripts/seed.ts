@@ -481,6 +481,88 @@ async function seed() {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(periodId, poolId, '2027-1 (Jan-Sep)', periodStart, periodEnd, deadline, now);
 
+    // 8b. Notification templates + reminder schedule
+    //
+    // The Fase 1 plan lists both tables as "already in schema, fill in
+    // Fase 1". Without rows here, POST /api/notifications/send-test returns
+    // TEMPLATE_NOT_FOUND for every key and a planner has no wording to
+    // preview or adapt.
+    //
+    // Placeholders use the {{key}} form that renderTemplate() in
+    // app/api/notifications/send-test/route.ts substitutes. Wording is
+    // English to match the reminder/invitation exports, and refers to
+    // people only by codenaam.
+    console.log('Creating notification templates...');
+    const templates: Array<[string, string, string]> = [
+      [
+        'PERIOD_OPENED',
+        '{{periode}}: preferences are open',
+        'Hi {{codenaam}},\n\nThe schedule for **{{periode}}** is open for input.\n\nPlease fill in the days you cannot work before **{{deadline}}**.\n\n{{link}}\n\nRemember to block your holidays - they are not taken from anywhere else.',
+      ],
+      [
+        'PARTTIME_CHECK',
+        '{{periode}}: check your part-time days',
+        'Hi {{codenaam}},\n\nWe generated your part-time days for **{{periode}}** from your pattern.\n\nPlease check them - especially around the turn of the year, where week numbers can shift.\n\n{{link}}',
+      ],
+      [
+        'REMINDER',
+        'Reminder: {{periode}} preferences due',
+        'Hi {{codenaam}},\n\nWe have not received your preferences for **{{periode}}** yet.\n\nThe deadline is **{{deadline}}**.\n\n{{link}}',
+      ],
+      [
+        'FINAL_WARNING',
+        'Last call: {{periode}} preferences close soon',
+        'Hi {{codenaam}},\n\nThe deadline for **{{periode}}** is **{{deadline}}**, and your preferences are still missing.\n\nIf nothing comes in, the schedule will be generated without your blocked days.\n\n{{link}}',
+      ],
+      [
+        'DEADLINE_PASSED',
+        '{{periode}}: the deadline has passed',
+        'Hi {{codenaam}},\n\nThe deadline for **{{periode}}** has passed and preferences are now read-only.\n\nIf something needs changing, contact the planner directly.',
+      ],
+      [
+        'BLOCK_OVERRIDDEN',
+        '{{periode}}: one of your preferences could not be honoured',
+        'Hi {{codenaam}},\n\nWhile building **{{periode}}** we could not honour one of your markings:\n\n{{details}}\n\nReason: {{reden}}\n\nContact the planner if this is a problem.',
+      ],
+      [
+        'SCHEDULE_PUBLISHED',
+        '{{periode}}: the schedule is published',
+        'Hi {{codenaam}},\n\nThe schedule for **{{periode}}** is final.\n\n{{link}}\n\nYou can request a swap with a colleague from your own overview.',
+      ],
+      [
+        'SWAP_REQUESTED',
+        'Swap request from {{aanvrager}}',
+        'Hi {{codenaam}},\n\n{{aanvrager}} would like to swap a shift with you.\n\n{{details}}\n\n{{link}}',
+      ],
+      [
+        'SWAP_RESULT',
+        'Your swap request was {{uitkomst}}',
+        'Hi {{codenaam}},\n\nYour swap request has been **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
+      ],
+      [
+        'CORRECTION_BOOKED',
+        '{{periode}}: a correction was recorded',
+        'Hi {{codenaam}},\n\nA correction was recorded for you and will be applied to **{{periode}}**.\n\n{{details}}\n\nReason: {{reden}}',
+      ],
+    ];
+
+    for (const [sleutel, onderwerp, bodyMd] of templates) {
+      db.prepare(`
+        INSERT INTO dienstrooster_notification_template (id, sleutel, onderwerp, body_md)
+        VALUES (?, ?, ?, ?)
+      `).run(uuid(), sleutel, onderwerp, bodyMd);
+    }
+
+    console.log('Creating reminder schedule...');
+    // Gentle nudge three weeks out, a firmer one a week before, a last
+    // call the day before.
+    for (const dagen of [21, 7, 1]) {
+      db.prepare(`
+        INSERT INTO dienstrooster_reminder_schedule (id, period_id, dagen_voor_deadline, actief)
+        VALUES (?, ?, ?, 1)
+      `).run(uuid(), periodId, dagen);
+    }
+
     // 9. Create some ledger entries (beginsaldi)
     console.log('Creating beginsaldi...');
     for (let i = 0; i < 10; i++) {

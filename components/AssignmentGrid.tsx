@@ -7,7 +7,7 @@
  * Supports filtering and pagination.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface Assignment {
   id: string;
@@ -23,9 +23,12 @@ interface Assignment {
 
 interface Props {
   periodId: string;
+  /** Removing from a published roster requires a reason (enforced server-side). */
+  periodStatus?: string;
+  onChanged?: () => void;
 }
 
-export function AssignmentGrid({ periodId }: Props) {
+export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -33,32 +36,63 @@ export function AssignmentGrid({ periodId }: Props) {
   const [totalPages, setTotalPages] = useState(1);
   const [filterPerson, setFilterPerson] = useState('');
   const [filterShiftType, setFilterShiftType] = useState('');
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [removing, setRemoving] = useState<string | null>(null);
+
+  const isPublished = periodStatus === 'GEPUBLICEERD';
+
+  const loadAssignments = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      let url = `/api/planner/period/${periodId}/assignments?page=${page}`;
+      if (filterPerson) url += `&person_id=${filterPerson}`;
+      if (filterShiftType) url += `&shift_type=${filterShiftType}`;
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to load assignments');
+
+      const data = await res.json();
+      setAssignments(data.data.assignments);
+      setTotalPages(data.data.pagination.total_pages);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load assignments');
+    } finally {
+      setLoading(false);
+    }
+  }, [periodId, page, filterPerson, filterShiftType]);
 
   useEffect(() => {
-    const loadAssignments = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        let url = `/api/planner/period/${periodId}/assignments?page=${page}`;
-        if (filterPerson) url += `&person_id=${filterPerson}`;
-        if (filterShiftType) url += `&shift_type=${filterShiftType}`;
-
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to load assignments');
-
-        const data = await res.json();
-        setAssignments(data.data.assignments);
-        setTotalPages(data.data.pagination.total_pages);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load assignments');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     loadAssignments();
-  }, [periodId, page, filterPerson, filterShiftType]);
+  }, [loadAssignments]);
+
+  const handleRemove = async (assignmentId: string) => {
+    setRemoving(assignmentId);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/planner/period/${periodId}/assignments/${assignmentId}/delete`,
+        {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: reason.trim() || null }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to remove assignment');
+
+      setConfirmingId(null);
+      setReason('');
+      await loadAssignments();
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove assignment');
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   const shiftTypeNames: Record<string, string> = {
     AVOND: 'Evening',
@@ -146,9 +180,43 @@ export function AssignmentGrid({ periodId }: Props) {
                     </span>
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <button className="text-xs text-red-600 hover:text-red-800 font-medium">
-                      Remove
-                    </button>
+                    {confirmingId === a.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <input
+                          type="text"
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                          placeholder={isPublished ? 'Reason (required)' : 'Reason (optional)'}
+                          className="px-2 py-1 border rounded text-xs w-44"
+                        />
+                        <button
+                          onClick={() => handleRemove(a.id)}
+                          disabled={removing === a.id || (isPublished && !reason.trim())}
+                          className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:bg-neutral-300"
+                        >
+                          {removing === a.id ? 'Removing…' : 'Confirm'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setConfirmingId(null);
+                            setReason('');
+                          }}
+                          className="text-xs px-2 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setConfirmingId(a.id);
+                          setReason('');
+                        }}
+                        className="text-xs text-red-600 hover:text-red-800 font-medium"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

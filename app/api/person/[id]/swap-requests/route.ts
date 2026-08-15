@@ -10,7 +10,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 
 export async function GET(
   request: NextRequest,
@@ -81,7 +81,7 @@ export async function POST(
       return forbiddenResponse();
     }
 
-    const body = await request.json();
+    const body = await parseJsonBody(request);
     const { period_id, offered_slot_id, requested_slot_id, notes } = body;
     const now = dateToISO(new Date());
 
