@@ -54,9 +54,13 @@ export function createTestUsers(count: number = 5, periodId?: string): TestUser[
 }
 
 /**
- * Create a test period with slots and assignments
+ * Create a test period with slots and assignments.
+ *
+ * `status` matters: the planner dashboard only offers "Publish Roster" for a
+ * GEGENEREERD period, so publication tests have to start there. Defaults to
+ * GEPUBLICEERD, which is what the staff-facing tests need.
  */
-export function createTestPeriod(): TestData {
+export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   const periodId = uuid();
   const timestamp = Date.now();
 
@@ -71,11 +75,21 @@ export function createTestPeriod(): TestData {
     INSERT INTO dienstrooster_schedule_period (
       id, pool_id, naam, status, start_datum, eind_datum, deadline, aangemaakt_op
     ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `).run(periodId, pool.id, `E2E-Period-${timestamp}`, 'GEPUBLICEERD',
+  `).run(periodId, pool.id, `E2E-Period-${timestamp}`, status,
     '2027-01-04', '2027-01-10', '2026-12-31T23:59:59Z');
 
   // Create test users
   const users = createTestUsers(5, periodId);
+
+  // Put them in the pool: anything scoped to pool membership (the planner
+  // dashboard's progress list, band compliance in publication-check) skips
+  // people who aren't members, which would make those views silently empty.
+  for (const user of users) {
+    db.prepare(`
+      INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+      VALUES (?, ?, ?, '2020-01-01', '2030-12-31')
+    `).run(uuid(), user.id, pool.id);
+  }
 
   // Get shift type IDs
   const shiftTypes = db.prepare(`SELECT id, teller FROM dienstrooster_shift_type`).all() as Array<{ id: string; teller: string }>;
@@ -115,7 +129,7 @@ export function createTestPeriod(): TestData {
   }
 
   return {
-    period: { id: periodId, name: `E2E-Period-${timestamp}`, status: 'GEPUBLICEERD' },
+    period: { id: periodId, name: `E2E-Period-${timestamp}`, status },
     users,
     slots,
     assignments
@@ -173,6 +187,8 @@ export function cleanupTestData(periodId: string, userIds: string[]): void {
   // user, which would otherwise block the person delete below)
   for (const userId of userIds) {
     db.prepare('DELETE FROM dienstrooster_person_access_link WHERE person_id = ?').run(userId);
+    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(userId);
+    db.prepare('DELETE FROM dienstrooster_ledger_entry WHERE person_id = ?').run(userId);
     db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(userId);
     db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(userId);
   }

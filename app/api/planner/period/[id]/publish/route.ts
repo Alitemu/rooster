@@ -11,6 +11,7 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { runPublicationCheck } from '@/lib/publicationCheck';
 
 export async function POST(
   request: NextRequest,
@@ -41,6 +42,23 @@ export async function POST(
     if (period.status !== 'GEGENEREERD') {
       return NextResponse.json(
         { success: false, error: `Cannot publish period in ${period.status} status` },
+        { status: 400 }
+      );
+    }
+
+    // Enforce the same validation the planner saw, rather than assuming the
+    // dialog ran it. Publishing freezes the roster and tells every pool
+    // member these are their shifts, so a direct POST must not be able to
+    // ship one with unfilled slots or ABSOLUUT violations - which it could:
+    // the disabled button in the UI was the only thing standing in the way.
+    const check = runPublicationCheck(period);
+    if (!check.valid) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Roster is not ready to publish: ${check.issues.join('; ')}`,
+          data: { issues: check.issues, checks: check.checks },
+        },
         { status: 400 }
       );
     }

@@ -220,7 +220,7 @@ export default function PlannerPeriodPage() {
       />
 
       {/* Dashboard */}
-      <PlannerDashboard periodId={periodId} />
+      <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} />
     </div>
   );
 }

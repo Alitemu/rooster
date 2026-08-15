@@ -54,9 +54,16 @@ interface DashboardData {
 
 interface Props {
   periodId: string;
+  /**
+   * Called when this dashboard changes the period's status (publishing,
+   * generating). The surrounding page keeps its own copy of the period for
+   * the header badge, so without this it would keep showing the old status
+   * until a manual reload - you publish and the badge still says "Generated".
+   */
+  onPeriodChanged?: () => void;
 }
 
-export function PlannerDashboard({ periodId }: Props) {
+export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [progress, setProgress] = useState<PersonProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -362,8 +369,8 @@ export function PlannerDashboard({ periodId }: Props) {
         onClose={() => setPublicationDialogOpen(false)}
         onSuccess={() => {
           setPublicationDialogOpen(false);
-          // Reload dashboard data
           loadData();
+          onPeriodChanged?.();
         }}
       />
 

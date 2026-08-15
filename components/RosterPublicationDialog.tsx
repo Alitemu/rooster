@@ -166,19 +166,19 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
                 <h4 className="font-semibold text-sm">Validation Checks:</h4>
                 <div className="space-y-1">
                   <label className="flex items-center gap-2 text-sm">
-                    <span className={checkResult.checks.slots_filled ? '✓' : '✗'}>
+                    <span className={checkResult.checks.slots_filled ? 'text-green-700' : 'text-red-700'}>
                       {checkResult.checks.slots_filled ? '✓' : '✗'}
                     </span>
                     All slots filled
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <span>
+                    <span className={checkResult.checks.no_hard_blocking ? 'text-green-700' : 'text-red-700'}>
                       {checkResult.checks.no_hard_blocking ? '✓' : '✗'}
                     </span>
                     No hard blocking violations
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <span>
+                    <span className={checkResult.checks.band_compliance ? 'text-green-700' : 'text-red-700'}>
                       {checkResult.checks.band_compliance ? '✓' : '✗'}
                     </span>
                     Band compliance
