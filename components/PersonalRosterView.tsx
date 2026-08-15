@@ -205,8 +205,11 @@ export function PersonalRosterView({
 
       {/* Shift Swap Management */}
       <div className="card p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
+        {/* Stacks on narrow screens: side by side, the button cannot shrink
+            and pushed this row ~18px past the viewport at 375px, which
+            CLAUDE.md rules out ("readable on 375px width"). */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <h3 className="font-bold text-lg">Shift Swaps</h3>
             <p className="text-sm text-neutral-600 mt-1">
               Request to swap shifts with colleagues
@@ -214,7 +217,7 @@ export function PersonalRosterView({
           </div>
           <button
             onClick={() => setSwapDialogOpen(true)}
-            className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
             + Request Swap
           </button>

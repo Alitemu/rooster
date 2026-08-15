@@ -1,209 +1,287 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getPersonalLinkUrl, cleanupTestData } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, getBaseUrl, cleanupTestData } from './setup';
+import { db } from '@/db/client';
 
 /**
- * Phase 3 Swap Workflow E2E Tests
+ * Shift swaps, end to end through the real UI.
  *
- * Tests complete shift swap workflows with real browser automation
- * Requires: dev server running on E2E_BASE_URL
+ * Rewritten to assert unconditionally. The previous version guarded every
+ * step with `if (await locator.isVisible(...))` and looked for text the app
+ * never renders - "Swap request created", "Swap approved", "Pending
+ * Approval" - so the bodies were skipped and the tests passed having
+ * checked nothing.
+ *
+ * The assertions that matter are about state, not chrome: a swap must
+ * actually move the two assignments between the two people.
  */
 
 test.describe('Swap Request Workflow - E2E', () => {
   let testData: ReturnType<typeof createTestPeriod>;
+
+  test.describe.configure({ mode: 'serial' });
 
   test.beforeAll(() => {
     testData = createTestPeriod();
   });
 
   test.afterAll(() => {
-    cleanupTestData(testData.period.id, testData.users.map(u => u.id));
+    cleanupTestData(testData.period.id, testData.users.map((u) => u.id));
   });
 
-  test('Staff member can create swap request', async ({ browser }) => {
-    const requesterUser = testData.users[0];
-    const requesterAssignment = testData.assignments[0];
-    const respondentAssignment = testData.assignments[1];
+  const swapsFor = (personId: string) =>
+    db
+      .prepare(
+        `SELECT id, status, aanvrager_person_id, respondent_person_id,
+                aangeboden_slot_id, gevraagde_slot_id
+         FROM dienstrooster_swap_request
+         WHERE periode_id = ? AND (aanvrager_person_id = ? OR respondent_person_id = ?)`
+      )
+      .all(testData.period.id, personId, personId) as Array<{
+      id: string;
+      status: string;
+      aanvrager_person_id: string;
+      respondent_person_id: string;
+      aangeboden_slot_id: string;
+      gevraagde_slot_id: string;
+    }>;
 
+  const ownerOfSlot = (slotId: string) =>
+    (
+      db
+        .prepare(
+          'SELECT person_id FROM dienstrooster_assignment WHERE schedule_version_id = ? AND slot_id = ?'
+        )
+        .get(testData.period.id, slotId) as { person_id: string } | undefined
+    )?.person_id;
+
+  test('a staff member can create a swap request', async ({ browser }) => {
+    const requester = testData.users[0];
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // Navigate to personal page
-    await page.goto(getPersonalLinkUrl(requesterUser.token));
+    try {
+      await page.goto(getPersonalLinkUrl(requester.token));
+      await page.waitForLoadState('networkidle');
 
-    // Wait for roster to load
-    await page.waitForSelector('text=Request Swap', { timeout: 5000 }).catch(() => null);
+      await page.getByRole('button', { name: /Request Swap/i }).click();
+      await expect(page.getByRole('heading', { name: 'Request Shift Swap' })).toBeVisible();
 
-    // Click request swap button
-    const requestButton = page.locator('button:has-text("Request Swap")').first();
-    if (await requestButton.isVisible()) {
-      await requestButton.click();
+      // Offer one of my own shifts, ask for one of someone else's.
+      const offered = page.locator('select[name="offered-slot"]');
+      const requested = page.locator('select[name="requested-slot"]');
+      await expect(offered).toBeVisible();
 
-      // Select offered slot (requester's current assignment)
-      await page.selectOption('select[name="offered-slot"]', requesterAssignment.slotId);
+      const offeredValue = await offered.locator('option').nth(1).getAttribute('value');
+      const requestedValue = await requested.locator('option').nth(1).getAttribute('value');
+      expect(offeredValue).toBeTruthy();
+      expect(requestedValue).toBeTruthy();
 
-      // Select requested slot (respondent's assignment)
-      await page.selectOption('select[name="requested-slot"]', respondentAssignment.slotId);
+      await offered.selectOption(offeredValue!);
+      await requested.selectOption(requestedValue!);
+      await page.fill('textarea[name="notes"]', 'Family event that weekend');
 
-      // Add notes
-      await page.fill('textarea[name="notes"]', 'Need this day off for family event');
+      await page.getByRole('button', { name: 'Send Request' }).click();
 
-      // Submit
-      await page.click('button:has-text("Send Request")');
+      // The dialog closes on success; the request must exist and be pending.
+      await expect(page.getByRole('heading', { name: 'Request Shift Swap' })).toBeHidden({
+        timeout: 10000,
+      });
 
-      // Verify success
-      await expect(page.locator('text=Swap request created')).toBeVisible({ timeout: 5000 });
+      const swaps = swapsFor(requester.id);
+      expect(swaps.length).toBeGreaterThan(0);
+      expect(swaps[0].status).toBe('PENDING');
+      expect(swaps[0].aangeboden_slot_id).toBe(offeredValue);
+      expect(swaps[0].gevraagde_slot_id).toBe(requestedValue);
+    } finally {
+      await context.close();
     }
-
-    await context.close();
   });
 
-  test('Respondent receives notification of swap request', async ({ browser }) => {
-    const respondentUser = testData.users[1];
+  test('the respondent sees the pending request in their swap panel', async ({ browser }) => {
+    const pending = db
+      .prepare(
+        `SELECT respondent_person_id FROM dienstrooster_swap_request
+         WHERE periode_id = ? AND status = 'PENDING' LIMIT 1`
+      )
+      .get(testData.period.id) as { respondent_person_id: string };
+    expect(pending).toBeTruthy();
+
+    const respondent = testData.users.find((u) => u.id === pending.respondent_person_id)!;
+    expect(respondent).toBeTruthy();
 
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // Navigate to personal page
-    await page.goto(getPersonalLinkUrl(respondentUser.token));
+    try {
+      await page.goto(getPersonalLinkUrl(respondent.token));
+      await page.waitForLoadState('networkidle');
 
-    // Open notifications
-    await page.click('button:has-text("Notifications")').catch(() => null);
+      await page.getByRole('button', { name: /View Swap Requests/i }).click();
 
-    // Look for RUILVERZOEK notification
-    const notification = page.locator('text=Swap Request');
-    await expect(notification).toBeVisible({ timeout: 5000 }).catch(() => {
-      // Notification may not appear immediately in dev environment
-      console.log('Notification not visible in test');
-    });
-
-    await context.close();
-  });
-
-  test('Respondent can approve swap request', async ({ browser }) => {
-    const respondentUser = testData.users[1];
-
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
-    // Navigate to personal page
-    await page.goto(getPersonalLinkUrl(respondentUser.token));
-
-    // Open swap management panel
-    await page.click('button:has-text("Swap Requests")').catch(() => null);
-
-    // Find pending swap request
-    const pendingSwap = page.locator('text=Pending Approval').first();
-    if (await pendingSwap.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Approve the swap
-      await page.click('button:has-text("Approve")');
-
-      // Verify approval confirmation
-      await expect(page.locator('text=Swap approved')).toBeVisible({ timeout: 5000 });
+      const pendingRow = page.locator('[data-status="PENDING"]');
+      await expect(pendingRow.first()).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Approve' }).first()).toBeVisible();
+    } finally {
+      await context.close();
     }
-
-    await context.close();
   });
 
-  test('Requester sees updated roster after approval', async ({ browser }) => {
-    const requesterUser = testData.users[0];
+  test('approving a swap actually exchanges the two shifts', async ({ browser }) => {
+    const swap = db
+      .prepare(
+        `SELECT id, aanvrager_person_id, respondent_person_id, aangeboden_slot_id, gevraagde_slot_id
+         FROM dienstrooster_swap_request
+         WHERE periode_id = ? AND status = 'PENDING' LIMIT 1`
+      )
+      .get(testData.period.id) as {
+      id: string;
+      aanvrager_person_id: string;
+      respondent_person_id: string;
+      aangeboden_slot_id: string;
+      gevraagde_slot_id: string;
+    };
+    expect(swap).toBeTruthy();
 
+    // Who holds what before the swap.
+    expect(ownerOfSlot(swap.aangeboden_slot_id)).toBe(swap.aanvrager_person_id);
+    expect(ownerOfSlot(swap.gevraagde_slot_id)).toBe(swap.respondent_person_id);
+
+    const respondent = testData.users.find((u) => u.id === swap.respondent_person_id)!;
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // Navigate to personal page
-    await page.goto(getPersonalLinkUrl(requesterUser.token));
+    try {
+      await page.goto(getPersonalLinkUrl(respondent.token));
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: /View Swap Requests/i }).click();
 
-    // Refresh to see updated assignments
-    await page.reload();
+      await page.getByRole('button', { name: 'Approve' }).first().click();
 
-    // Verify the roster (a week grid, not an HTML table) is showing
-    // updated data reflecting the swap
-    await expect(page.getByRole('heading', { name: 'Your Roster' })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('heading', { name: 'Shifts by Week' })).toBeVisible();
+      await expect
+        .poll(
+          () =>
+            (
+              db
+                .prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?')
+                .get(swap.id) as { status: string }
+            ).status,
+          { timeout: 10000 }
+        )
+        .toBe('GOEDGEKEURD');
 
-    await context.close();
-  });
-
-  test('Swap request can be rejected with reason', async ({ browser }) => {
-    const respondentUser = testData.users[2];
-
-    const context = await browser.newContext();
-    const page = await context.newPage();
-
-    // Navigate to personal page
-    await page.goto(getPersonalLinkUrl(respondentUser.token));
-
-    // Open swap requests
-    await page.click('button:has-text("Swap Requests")').catch(() => null);
-
-    // Find pending swap and click reject
-    const rejectButton = page.locator('button:has-text("Reject")').first();
-    if (await rejectButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await rejectButton.click();
-
-      // Fill rejection reason
-      await page.fill('textarea[name="rejection-reason"]', 'Already have coverage for that date');
-
-      // Submit rejection
-      await page.click('button:has-text("Reject")');
-
-      // Verify rejection confirmation
-      await expect(page.locator('text=Swap rejected')).toBeVisible({ timeout: 5000 });
+      // The whole point: the shifts changed hands.
+      expect(ownerOfSlot(swap.aangeboden_slot_id)).toBe(swap.respondent_person_id);
+      expect(ownerOfSlot(swap.gevraagde_slot_id)).toBe(swap.aanvrager_person_id);
+    } finally {
+      await context.close();
     }
-
-    await context.close();
   });
 
-  test('Cannot request your own shift back (validation)', async ({ browser }) => {
-    const requesterUser = testData.users[3];
-    const ownAssignment = testData.assignments[3];
+  test('a swap can be rejected with a reason, leaving the shifts untouched', async ({ browser }) => {
+    // Build a fresh pending swap between users 2 and 3 via the API.
+    const requester = testData.users[2];
+    const respondent = testData.users[3];
+    const requesterSlot = testData.assignments.find((a) => a.personId === requester.id)!.slotId;
+    const respondentSlot = testData.assignments.find((a) => a.personId === respondent.id)!.slotId;
 
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // Navigate to personal page
-    await page.goto(getPersonalLinkUrl(requesterUser.token));
+    try {
+      await page.goto(getPersonalLinkUrl(requester.token));
+      await page.waitForLoadState('networkidle');
 
-    // Open swap dialog
-    await page.click('button:has-text("Request Swap")').catch(() => null);
-    await page.waitForSelector('select[name="requested-slot"]', { timeout: 5000 }).catch(() => null);
+      const created = await page.request.post(
+        `${getBaseUrl()}/api/person/${requester.id}/swap-requests`,
+        {
+          data: {
+            period_id: testData.period.id,
+            offered_slot_id: requesterSlot,
+            requested_slot_id: respondentSlot,
+            notes: null,
+          },
+        }
+      );
+      expect(created.ok()).toBeTruthy();
 
-    // The requester's own shift should never be offered as something to
-    // request back - the "requested" dropdown only lists other people's
-    // shifts, so self-swap is structurally impossible rather than caught
-    // after the fact.
-    const ownOption = page.locator(`select[name="requested-slot"] option[value="${ownAssignment.slotId}"]`);
-    await expect(ownOption).toHaveCount(0);
+      const swapId = (await created.json()).data.swap_request_id as string;
 
-    await context.close();
+      await page.goto(getPersonalLinkUrl(respondent.token));
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: /View Swap Requests/i }).click();
+
+      await page.getByRole('button', { name: 'Reject' }).first().click();
+      // The inline reason form appears below the row; its own Reject button
+      // is the one that submits.
+      await page.fill('textarea[name="rejection-reason"]', 'Already covering another shift that day');
+      await page.getByRole('button', { name: 'Reject' }).last().click();
+
+      await expect
+        .poll(
+          () =>
+            (
+              db
+                .prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?')
+                .get(swapId) as { status: string }
+            ).status,
+          { timeout: 10000 }
+        )
+        .toBe('AFGEWEZEN');
+
+      // A rejected swap must not move anything.
+      expect(ownerOfSlot(requesterSlot)).toBe(requester.id);
+      expect(ownerOfSlot(respondentSlot)).toBe(respondent.id);
+    } finally {
+      await context.close();
+    }
   });
 
-  test('Swap management panel shows all states', async ({ browser }) => {
+  test('you cannot ask for a shift you already hold', async ({ browser }) => {
     const user = testData.users[4];
+    const ownSlot = testData.assignments.find((a) => a.personId === user.id)!.slotId;
 
     const context = await browser.newContext();
     const page = await context.newPage();
 
-    // Navigate to personal page
-    await page.goto(getPersonalLinkUrl(user.token));
+    try {
+      await page.goto(getPersonalLinkUrl(user.token));
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: /Request Swap/i }).click();
 
-    // Open swap management
-    await page.click('button:has-text("Swap Requests")').catch(() => null);
+      const requested = page.locator('select[name="requested-slot"]');
+      await expect(requested).toBeVisible();
 
-    // Check for status filters
-    const statusFilter = page.locator('select[name="status-filter"]');
-    if (await statusFilter.isVisible({ timeout: 3000 }).catch(() => false)) {
-      // Test PENDING filter
-      await statusFilter.selectOption('PENDING');
-      let swaps = await page.locator('[data-status="PENDING"]').count();
-      expect(swaps).toBeGreaterThanOrEqual(0);
-
-      // Test GOEDGEKEURD filter
-      await statusFilter.selectOption('GOEDGEKEURD');
-      swaps = await page.locator('[data-status="GOEDGEKEURD"]').count();
-      expect(swaps).toBeGreaterThanOrEqual(0);
+      // Structurally impossible rather than validated after the fact: the
+      // "requested" list only contains other people's shifts.
+      await expect(requested.locator(`option[value="${ownSlot}"]`)).toHaveCount(0);
+      expect(await requested.locator('option').count()).toBeGreaterThan(1);
+    } finally {
+      await context.close();
     }
+  });
 
-    await context.close();
+  test('the swap panel filters by status', async ({ browser }) => {
+    const user = testData.users[0];
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    try {
+      await page.goto(getPersonalLinkUrl(user.token));
+      await page.waitForLoadState('networkidle');
+      await page.getByRole('button', { name: /View Swap Requests/i }).click();
+
+      const filter = page.locator('select[name="status-filter"]');
+      await expect(filter).toBeVisible();
+
+      // This user's swap was approved earlier in the file.
+      await filter.selectOption('GOEDGEKEURD');
+      await expect(page.locator('[data-status="GOEDGEKEURD"]').first()).toBeVisible();
+
+      // ...and is therefore no longer pending.
+      await filter.selectOption('PENDING');
+      await expect(page.locator('[data-status="PENDING"]')).toHaveCount(0);
+    } finally {
+      await context.close();
+    }
   });
 });

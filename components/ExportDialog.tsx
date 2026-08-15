@@ -96,7 +96,12 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Export"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+    >
       <div className="card p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
         {!exportType ? (
           <>

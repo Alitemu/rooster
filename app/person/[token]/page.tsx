@@ -254,9 +254,11 @@ export default function PersonalLinkPage() {
     <div className="container-main py-8 space-y-6">
       {/* Header */}
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-neutral-900 mb-2">
+        {/* Stacks on narrow screens; side by side the button cannot shrink
+            and pushed the header past a 375px viewport. */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">
               {period.naam}
             </h1>
             <p className="text-neutral-600 mb-4">
@@ -270,7 +272,7 @@ export default function PersonalLinkPage() {
           {period.status === 'GEPUBLICEERD' && (
             <button
               onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+              className="shrink-0 self-start px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
             >
               🔔 Notifications
             </button>
