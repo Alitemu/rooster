@@ -8,12 +8,8 @@
 }
 
 https://localhost {
-  tls internal {
-    on_demand
-  }
-  reverse_proxy web:3000 {
-    header_uri /health /health
-  }
+  tls internal
+  reverse_proxy web:3000
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Content-Type-Options "nosniff"
