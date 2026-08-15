@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SendTestRequest {
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
-    const body = (await req.json()) as SendTestRequest;
+    const body = (await parseJsonBody(req)) as SendTestRequest;
     const { sleutel, placeholders = {} } = body;
 
     if (!sleutel) {

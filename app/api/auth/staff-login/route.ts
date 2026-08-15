@@ -8,7 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { verifyPassword, isValidTOTPFormat, verifyTOTPCode } from '@/lib/auth';
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
-import { internalErrorResponse } from '@/lib/api-errors';
+import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 
 interface StaffLoginRequest {
   codenaam: string;
@@ -18,7 +18,7 @@ interface StaffLoginRequest {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const body = (await req.json()) as Partial<StaffLoginRequest>;
+    const body = await parseJsonBody<StaffLoginRequest>(req);
     const { codenaam, password, totpCode } = body;
 
     if (!codenaam || !password) {

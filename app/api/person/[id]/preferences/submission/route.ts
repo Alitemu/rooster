@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SubmissionRequest {
@@ -40,7 +40,7 @@ export async function POST(
       return forbiddenResponse();
     }
 
-    const body = (await req.json()) as SubmissionRequest;
+    const body = (await parseJsonBody(req)) as SubmissionRequest;
 
     const { period_id, parttime_confirmed } = body;
 

@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface StaffLinkMeta {
@@ -77,7 +77,7 @@ export async function POST(
     }
 
     const periodId = params.id;
-    const body: CreateLinkRequest = await req.json();
+    const body = await parseJsonBody<CreateLinkRequest>(req);
 
     if (!body.person_id) {
       const response: ApiErrorResponse = {

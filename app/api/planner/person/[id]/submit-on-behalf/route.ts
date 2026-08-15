@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SubmitRequest {
@@ -27,7 +27,7 @@ export async function POST(
     const submittedByPersonId = auth!.userId;
 
     const personId = params.id;
-    const body: SubmitRequest = await req.json();
+    const body = await parseJsonBody<SubmitRequest>(req);
 
     if (!body.period_id) {
       const response: ApiErrorResponse = {

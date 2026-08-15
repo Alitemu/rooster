@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForPattern } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -97,7 +97,7 @@ export async function POST(
       return forbiddenResponse();
     }
 
-    const body = (await req.json()) as CreatePatternRequest;
+    const body = (await parseJsonBody(req)) as CreatePatternRequest;
 
     const { weekdag, frequentie, geldig_vanaf, geldig_tot } = body;
 

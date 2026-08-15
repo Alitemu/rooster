@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CreatePeriodRequest {
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
-    const body: CreatePeriodRequest = await req.json();
+    const body = await parseJsonBody<CreatePeriodRequest>(req);
 
     if (!body.naam || !body.pool_id || !body.start_datum || !body.eind_datum || !body.deadline) {
       const response: ApiErrorResponse = {

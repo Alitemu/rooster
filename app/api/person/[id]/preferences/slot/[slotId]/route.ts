@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 export async function PATCH(
@@ -22,7 +22,7 @@ export async function PATCH(
       return forbiddenResponse();
     }
 
-    const body = (await req.json()) as { level: 'ABSOLUUT' | 'LIEVER_NIET' | null };
+    const body = (await parseJsonBody(req)) as { level: 'ABSOLUUT' | 'LIEVER_NIET' | null };
     const { level } = body; // ABSOLUUT, LIEVER_NIET, or null to clear
 
     // Verify person exists

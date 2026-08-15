@@ -13,7 +13,7 @@ import { persistSlotsForPeriod } from '@/lib/slotPersistence';
 import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
 interface RulesetConfig {
@@ -52,7 +52,7 @@ export async function POST(
     }
 
     const { id } = params;
-    const body = (await req.json()) as Partial<OpenPeriodRequest>;
+    const body = await parseJsonBody<OpenPeriodRequest>(req);
     const { naam, deadline, ruleset } = body;
     let { start_datum, eind_datum } = body;
 

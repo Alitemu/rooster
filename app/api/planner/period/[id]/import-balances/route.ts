@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
 interface BalanceRow {
@@ -31,7 +31,7 @@ export async function POST(
     }
 
     const periodId = params.id;
-    const body = (await req.json()) as { rows?: BalanceRow[] };
+    const body = (await parseJsonBody(req)) as { rows?: BalanceRow[] };
     const rows = body.rows || [];
 
     const period = db

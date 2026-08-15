@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse } from '@/types';
 
 interface HolidayRow {
@@ -33,7 +33,7 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const body = (await req.json()) as { rows?: HolidayRow[] };
+    const body = (await parseJsonBody(req)) as { rows?: HolidayRow[] };
     const rows = body.rows || [];
 
     const errors: string[] = [];

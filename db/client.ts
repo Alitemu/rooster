@@ -33,19 +33,40 @@ if (!path.isAbsolute(filePath)) {
   filePath = path.resolve(process.cwd(), filePath);
 }
 
-// Initialize database. A non-zero busy timeout matters here: `next build`
-// imports route modules across multiple parallel workers, so several
-// processes can open this same (possibly brand-new) file at once and
-// contend for the lock WAL-mode setup briefly takes. better-sqlite3
-// defaults to no wait at all, which turns that contention into an
-// immediate SQLITE_BUSY instead of one process briefly waiting for another.
+// Initialize database. A non-zero busy timeout matters here: `next build`,
+// Vitest, and Playwright all import route/test modules across multiple
+// parallel worker processes, so several of them can open this same
+// (possibly brand-new) file at once and contend for the lock WAL-mode
+// setup briefly takes. better-sqlite3 defaults to no wait at all, which
+// turns that contention into an immediate SQLITE_BUSY instead of one
+// process briefly waiting for another.
 const db: Database.Database = new Database(filePath, { timeout: 5000 });
 
+// PRAGMA journal_mode=WAL briefly needs an exclusive lock to write the
+// WAL header on a brand-new file, and empirically that specific pragma
+// doesn't always honor the busy timeout above when several processes hit
+// it at the same instant (observed under Vitest's parallel workers even
+// with the timeout set). Retry with backoff as a second line of defense.
+function withRetry<T>(fn: () => T, attempts = 5): T {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return fn();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isLockError = message.includes('database is locked') || message.includes('SQLITE_BUSY');
+      if (!isLockError || i === attempts - 1) throw error;
+      const ms = 50 * 2 ** i;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    }
+  }
+  throw new Error('unreachable');
+}
+
 // Enable WAL mode for better concurrency
-db.pragma('journal_mode = WAL');
+withRetry(() => db.pragma('journal_mode = WAL'));
 
 // Enable foreign keys
-db.pragma('foreign_keys = ON');
+withRetry(() => db.pragma('foreign_keys = ON'));
 
 // Apply any pending schema migrations. Idempotent (tracked in
 // __drizzle_migrations) and non-interactive, so it's safe to run on every
@@ -84,12 +105,23 @@ function schemaAlreadyExistsWithoutLedger(): boolean {
 // that happens to parallelize module loading, tolerate losing that race:
 // if the objects this migration creates already exist, another worker
 // already finished it - nothing left for this process to do.
+function errorChainIncludes(error: unknown, needle: string): boolean {
+  let current: unknown = error;
+  while (current instanceof Error) {
+    if (current.message.includes(needle)) return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD && !schemaAlreadyExistsWithoutLedger()) {
   try {
     migrate(drizzle(db), { migrationsFolder: path.resolve(process.cwd(), 'db/migrations') });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes('already exists')) {
+    // drizzle wraps the underlying better-sqlite3 error in its own
+    // DrizzleError via the standard `cause` chain - the "already exists"
+    // text we're checking for lives on error.cause, not error itself.
+    if (!errorChainIncludes(error, 'already exists')) {
       throw error;
     }
   }

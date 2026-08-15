@@ -14,7 +14,7 @@ import {
 } from '@/lib/priorAssignmentDerive';
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PriorAssignment {
@@ -169,7 +169,7 @@ export async function PATCH(
     }
 
     const { id } = params;
-    const body = await req.json() as any;
+    const body = await parseJsonBody(req) as any;
 
     const { datum, teller, person_codenaam } = body;
 

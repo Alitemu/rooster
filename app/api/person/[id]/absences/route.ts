@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface Absence {
@@ -94,7 +94,7 @@ export async function POST(
       return forbiddenResponse();
     }
 
-    const body = (await req.json()) as CreateAbsenceRequest;
+    const body = (await parseJsonBody(req)) as CreateAbsenceRequest;
 
     const { van_datum, tot_datum, soort, notitie } = body;
 
