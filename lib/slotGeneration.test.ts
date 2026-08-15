@@ -10,9 +10,8 @@ import {
   validateSlots,
   countWeeksInSlots,
   countHolidaysByGroup,
-  type GeneratedSlot,
 } from './slotGeneration';
-import { dateToISO, parseISO, addDays, getISOWeek } from './holidays';
+import { dateToISO, parseISO } from './holidays';
 
 describe('Slot Generation', () => {
   describe('generateSlotsForPeriod', () => {
@@ -40,7 +39,7 @@ describe('Slot Generation', () => {
       }
 
       weekMap.forEach((count, weekKey) => {
-        expect(count).toBe(7, `Week ${weekKey} should have 7 slots, got ${count}`);
+        expect(count, `Week ${weekKey} should have 7 slots, got ${count}`).toBe(7);
       });
     });
 
@@ -131,25 +130,6 @@ describe('Slot Generation', () => {
       expect(koningsdag!.is_feestdag).toBe(true);
       expect(koningsdag!.feestdag_groep).toBe('KONINGSDAG');
 
-      // 2023: April 27 is Thursday (not Sunday), so still April 27
-      // But we'll check a year where April 27 IS a Sunday
-      // 2022: April 27 is a Wednesday
-      // 2023: April 27 is a Thursday
-      // We need a year where April 27 is Sunday... that's 2028
-      const slots2028 = generateSlotsForPeriod({
-        startDate: '2028-04-01',
-        endDate: '2028-04-30',
-        shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
-      });
-
-      // 2028: April 27 is Thursday, so Koningsdag is April 27 (not Sunday adjustment needed)
-      // Try 2033: April 27 is a Sunday
-      const slots2033 = generateSlotsForPeriod({
-        startDate: '2033-04-01',
-        endDate: '2033-04-30',
-        shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
-      });
-
       // 2033: April 27 is a Wednesday, not Sunday
       // Let me check online... Actually, April 27, 2034 is a Saturday, 2035 is a Sunday
       const slots2035 = generateSlotsForPeriod({
@@ -228,10 +208,10 @@ describe('Slot Generation', () => {
       let current = new Date(startParsed);
       while (current <= endParsed) {
         const dateStr = dateToISO(current);
-        expect(dates.has(dateStr)).toBe(
-          true,
+        expect(
+          dates.has(dateStr),
           `Date ${dateStr} missing from generated slots`
-        );
+        ).toBe(true);
         current.setDate(current.getDate() + 1);
       }
     });
@@ -244,10 +224,10 @@ describe('Slot Generation', () => {
       });
 
       for (let i = 1; i < slots.length; i++) {
-        expect(slots[i].datum >= slots[i - 1].datum).toBe(
-          true,
+        expect(
+          slots[i].datum >= slots[i - 1].datum,
           `Slots not in chronological order at index ${i}`
-        );
+        ).toBe(true);
       }
     });
   });

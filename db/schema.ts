@@ -5,7 +5,9 @@ import {
   real,
   uniqueIndex,
   index,
+  check,
 } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 
 // ============================================================================
 // PERSON & AUTH
@@ -485,6 +487,10 @@ export const swapRequest = sqliteTable(
   (table) => ({
     idx: index('swap_request_periode_idx').on(table.periode_id),
     idx2: index('swap_request_status_idx').on(table.status),
+    statusCheck: check(
+      'swap_request_status_check',
+      sql`${table.status} IN ('PENDING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN')`
+    ),
   })
 );
 
@@ -506,6 +512,10 @@ export const notification = sqliteTable(
   (table) => ({
     idx: index('notification_person_idx').on(table.person_id),
     idx2: index('notification_type_idx').on(table.type),
+    typeCheck: check(
+      'notification_type_check',
+      sql`${table.type} IN ('ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'PUBLICATIE_BERICHT')`
+    ),
   })
 );
 
@@ -528,5 +538,9 @@ export const assignmentEdit = sqliteTable(
   },
   (table) => ({
     idx: index('assignment_edit_periode_idx').on(table.periode_id),
+    editTypeCheck: check(
+      'assignment_edit_type_check',
+      sql`${table.edit_type} IN ('HANDMATIG_TOEWIJZEN', 'HANDMATIG_VERWIJDEREN', 'RUIL', 'OVERRIDE')`
+    ),
   })
 );
