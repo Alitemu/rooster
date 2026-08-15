@@ -43,6 +43,19 @@ interface DistributionConfig {
   factors: Record<string, number>;
 }
 
+interface BalanceRow {
+  codenaam: string;
+  AVOND_delta: number;
+  WEEKEND_delta: number;
+  FEESTDAG_delta: number;
+}
+
+interface HolidayRow {
+  codenaam: string;
+  holiday_group: string;
+  year: number;
+}
+
 interface Props {
   period?: any;
   onComplete?: () => void;
@@ -58,17 +71,152 @@ export function SetupWizard({ period, onComplete }: Props) {
     pool_id: period?.pool_id || '',
   });
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [staffLoading, setStaffLoading] = useState(false);
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
     windowWeeks: 2,
     band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
     band_max: { AVOND: 8, WEEKEND: 3, FEESTDAG: 2 },
   });
   const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
-    mode: 'BALANCED',
+    mode: 'GELIJK',
     factors: {},
   });
+  const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
+  const [holidayRows, setHolidayRows] = useState<HolidayRow[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [openResult, setOpenResult] = useState<string | null>(null);
+
+  const loadStaff = async () => {
+    if (!periodData.pool_id) return;
+    setStaffLoading(true);
+    try {
+      const memberParams = new URLSearchParams();
+      if (periodData.start_datum) memberParams.set('period_start', periodData.start_datum);
+      if (periodData.eind_datum) memberParams.set('period_end', periodData.eind_datum);
+
+      const [membersRes, linksRes] = await Promise.all([
+        fetch(`/api/planner/pool/${periodData.pool_id}/members?${memberParams.toString()}`),
+        fetch(`/api/planner/period/${period.id}/staff-links`),
+      ]);
+      const membersData = await membersRes.json();
+      const linksData = await linksRes.json();
+      const linkedPersonIds = new Set(
+        (linksData.data || [])
+          .filter((l: any) => !l.revoked_at)
+          .map((l: any) => l.person_id)
+      );
+
+      setStaffMembers(
+        (membersData.data || [])
+          .filter((m: any) => m.is_active)
+          .map((m: any) => ({
+            person_id: m.person_id,
+            codenaam: m.codenaam,
+            is_selected: true,
+            access_link: linkedPersonIds.has(m.person_id) ? 'existing' : undefined,
+          }))
+      );
+    } catch {
+      setError('Failed to load staff members');
+    } finally {
+      setStaffLoading(false);
+    }
+  };
+
+  const parseCsv = (text: string): string[][] => {
+    return text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => line.split(',').map((cell) => cell.trim()));
+  };
+
+  const handleBalancesFile = async (file: File) => {
+    const text = await file.text();
+    const [, ...dataLines] = parseCsv(text); // skip header row
+    const rows: BalanceRow[] = dataLines.map(([codenaam, avond, weekend, feestdag]) => ({
+      codenaam,
+      AVOND_delta: parseInt(avond) || 0,
+      WEEKEND_delta: parseInt(weekend) || 0,
+      FEESTDAG_delta: parseInt(feestdag) || 0,
+    }));
+    setBalanceRows(rows);
+  };
+
+  const handleHolidaysFile = async (file: File) => {
+    const text = await file.text();
+    const [, ...dataLines] = parseCsv(text); // skip header row
+    const rows: HolidayRow[] = dataLines.map(([codenaam, holiday_group, year]) => ({
+      codenaam,
+      holiday_group,
+      year: parseInt(year) || 0,
+    }));
+    setHolidayRows(rows);
+  };
+
+  const handleOpenPeriod = async () => {
+    setLoading(true);
+    setError(null);
+    setOpenResult(null);
+
+    try {
+      const openRes = await fetch(`/api/periods/${period.id}/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          naam: periodData.naam,
+          start_datum: periodData.start_datum,
+          eind_datum: periodData.eind_datum,
+          deadline: periodData.deadline,
+          ruleset: {
+            windowWeeks: windowConfig.windowWeeks,
+            bandAvond: [windowConfig.band_min.AVOND, windowConfig.band_max.AVOND],
+            bandWeekend: [windowConfig.band_min.WEEKEND, windowConfig.band_max.WEEKEND],
+            bandFeestdag: [windowConfig.band_min.FEESTDAG, windowConfig.band_max.FEESTDAG],
+            distributionMode: distributionConfig.mode,
+          },
+        }),
+      });
+      const openData = await openRes.json();
+      if (!openRes.ok) throw new Error(openData.error?.message || 'Failed to open period');
+
+      // Create access links for selected staff who don't already have one
+      const toLink = staffMembers.filter((m) => m.is_selected && !m.access_link);
+      for (const member of toLink) {
+        await fetch(`/api/planner/period/${period.id}/staff-links`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ person_id: member.person_id }),
+        }).catch(() => null);
+      }
+
+      if (balanceRows.length > 0) {
+        await fetch(`/api/planner/period/${period.id}/import-balances`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: balanceRows }),
+        }).catch(() => null);
+      }
+
+      if (holidayRows.length > 0) {
+        await fetch(`/api/planner/period/${period.id}/import-holidays`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rows: holidayRows }),
+        }).catch(() => null);
+      }
+
+      setOpenResult(
+        `Period opened: ${openData.data.slots_generated} slots generated, ${toLink.length} invitations sent.`
+      );
+      onComplete?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open period');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const steps: { id: Step; label: string; title: string }[] = [
     { id: 'period', label: '1. Period', title: 'Period & Deadline' },
@@ -175,16 +323,32 @@ export function SetupWizard({ period, onComplete }: Props) {
         {/* Step 2: Staff Members */}
         {currentStep === 'staff' && (
           <div className="space-y-4">
-            <p className="text-sm text-neutral-600">
-              Select staff members who will receive preferences invitations for this period.
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-neutral-600">
+                Select staff members who will receive preferences invitations for this period.
+              </p>
+              <button
+                onClick={loadStaff}
+                disabled={staffLoading}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
+              >
+                {staffLoading ? 'Loading...' : 'Load Staff from Pool'}
+              </button>
+            </div>
 
             <div className="border rounded overflow-hidden">
               <table className="w-full">
                 <thead className="bg-neutral-100">
                   <tr>
                     <th className="px-4 py-2 text-left text-sm font-medium">
-                      <input type="checkbox" className="rounded" />
+                      <input
+                        type="checkbox"
+                        className="rounded"
+                        checked={staffMembers.length > 0 && staffMembers.every((m) => m.is_selected)}
+                        onChange={(e) =>
+                          setStaffMembers(staffMembers.map((m) => ({ ...m, is_selected: e.target.checked })))
+                        }
+                      />
                     </th>
                     <th className="px-4 py-2 text-left text-sm font-medium">Name</th>
                     <th className="px-4 py-2 text-left text-sm font-medium">Status</th>
@@ -212,9 +376,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                       <td className="px-4 py-2 text-sm">{member.codenaam}</td>
                       <td className="px-4 py-2 text-sm">
                         {member.access_link ? (
-                          <span className="text-green-600 font-medium">✓ Link created</span>
+                          <span className="text-green-600 font-medium">✓ Already has access</span>
+                        ) : member.is_selected ? (
+                          <span className="text-blue-600">Will be invited on open</span>
                         ) : (
-                          <span className="text-neutral-500">No link yet</span>
+                          <span className="text-neutral-500">Not selected</span>
                         )}
                       </td>
                     </tr>
@@ -318,7 +484,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             <div>
               <label className="block text-sm font-medium mb-2">Distribution Strategy</label>
               <div className="space-y-2">
-                {['BALANCED', 'SENIORITY', 'PREFERENCES_FIRST'].map((mode) => (
+                {['GELIJK', 'NAAR_RATO'].map((mode) => (
                   <label key={mode} className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="radio"
@@ -331,9 +497,8 @@ export function SetupWizard({ period, onComplete }: Props) {
                       className="rounded-full"
                     />
                     <span className="text-sm">
-                      {mode === 'BALANCED' && 'Balanced (minimize deviations)'}
-                      {mode === 'SENIORITY' && 'Seniority-weighted'}
-                      {mode === 'PREFERENCES_FIRST' && 'Preferences-first (maximize satisfaction)'}
+                      {mode === 'GELIJK' && 'Equal (same target range for everyone)'}
+                      {mode === 'NAAR_RATO' && 'Pro-rated (target range scaled to part-time factor)'}
                     </span>
                   </label>
                 ))}
@@ -343,12 +508,10 @@ export function SetupWizard({ period, onComplete }: Props) {
             <div className="bg-neutral-50 p-3 rounded text-xs text-neutral-600">
               <p className="font-medium mb-1">Chosen strategy: {distributionConfig.mode}</p>
               <p>
-                {distributionConfig.mode === 'BALANCED' &&
-                  'Tries to give everyone similar number of shifts (closest to target range).'}
-                {distributionConfig.mode === 'SENIORITY' &&
-                  'Considers tenure/seniority in preference.'}
-                {distributionConfig.mode === 'PREFERENCES_FIRST' &&
-                  'Prioritizes staff preferences over perfect balance.'}
+                {distributionConfig.mode === 'GELIJK' &&
+                  'Everyone gets the same target range, regardless of part-time factor.'}
+                {distributionConfig.mode === 'NAAR_RATO' &&
+                  "Each person's target range is scaled to their part-time factor."}
               </p>
             </div>
           </div>
@@ -370,13 +533,28 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             <div className="border-2 border-dashed rounded p-6 text-center">
               <p className="text-sm text-neutral-600 mb-2">Drag CSV here or click to select</p>
-              <input type="file" accept=".csv" className="w-full" />
+              <input
+                type="file"
+                accept=".csv"
+                className="w-full"
+                onChange={(e) => e.target.files?.[0] && handleBalancesFile(e.target.files[0])}
+              />
             </div>
 
-            <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-              <p className="font-medium">Preview (if file loaded)</p>
-              <p className="text-xs">X records ready to import</p>
-            </div>
+            {balanceRows.length > 0 && (
+              <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
+                <p className="font-medium">{balanceRows.length} records ready to import</p>
+                <ul className="text-xs mt-1 space-y-0.5">
+                  {balanceRows.slice(0, 5).map((r, i) => (
+                    <li key={i}>
+                      {r.codenaam}: AVOND {r.AVOND_delta ?? 0}, WEEKEND {r.WEEKEND_delta ?? 0},
+                      FEESTDAG {r.FEESTDAG_delta ?? 0}
+                    </li>
+                  ))}
+                  {balanceRows.length > 5 && <li>...and {balanceRows.length - 5} more</li>}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -396,13 +574,27 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             <div className="border-2 border-dashed rounded p-6 text-center">
               <p className="text-sm text-neutral-600 mb-2">Drag CSV here or click to select</p>
-              <input type="file" accept=".csv" className="w-full" />
+              <input
+                type="file"
+                accept=".csv"
+                className="w-full"
+                onChange={(e) => e.target.files?.[0] && handleHolidaysFile(e.target.files[0])}
+              />
             </div>
 
-            <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-              <p className="font-medium">Preview (if file loaded)</p>
-              <p className="text-xs">X records ready to import</p>
-            </div>
+            {holidayRows.length > 0 && (
+              <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
+                <p className="font-medium">{holidayRows.length} records ready to import</p>
+                <ul className="text-xs mt-1 space-y-0.5">
+                  {holidayRows.slice(0, 5).map((r, i) => (
+                    <li key={i}>
+                      {r.codenaam}: {r.holiday_group} {r.year}
+                    </li>
+                  ))}
+                  {holidayRows.length > 5 && <li>...and {holidayRows.length - 5} more</li>}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -452,6 +644,12 @@ export function SetupWizard({ period, onComplete }: Props) {
           <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{error}</div>
         )}
 
+        {openResult && (
+          <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
+            {openResult}
+          </div>
+        )}
+
         {/* Navigation buttons */}
         <div className="flex gap-3 mt-8">
           <button
@@ -476,14 +674,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             </button>
           ) : (
             <button
-              onClick={() => {
-                setLoading(true);
-                // TODO: Submit period creation to API
-                setTimeout(() => {
-                  setLoading(false);
-                  onComplete?.();
-                }, 1000);
-              }}
+              onClick={handleOpenPeriod}
               disabled={loading}
               className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
             >

@@ -102,17 +102,22 @@ export async function GET(
     const membersRow = membersStmt.get(id) as any;
     const activeParticipants = membersRow?.count || 0;
 
-    // Count required slots (7 slots per day, roughly)
-    // For a more accurate count, we'd use shift_slot table if it's populated
-    // For now, use a simple heuristic: 7 slots/day
     const startDate = new Date(period.start_datum);
     const endDate = new Date(period.eind_datum);
     const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    const requiredSlots = days * 7; // 3 shift types × 7 people per type, simplified
+    const weeks = days / 7;
+
+    // Prefer the actual generated slot count (accurate, reflects holidays
+    // etc.); fall back to the 7-slots-per-week heuristic before slots exist
+    // (e.g. while still setting up dates in the wizard).
+    const slotCountRow = db
+      .prepare('SELECT COUNT(*) as count FROM dienstrooster_shift_slot WHERE period_id = ?')
+      .get(id) as { count: number } | undefined;
+    const requiredSlots = slotCountRow?.count ? slotCountRow.count : Math.round(weeks) * 7;
 
     // Run capacity check
     const result = checkCapacity(
-      days / 7, // weeks
+      weeks,
       windowWeeks,
       activeParticipants,
       requiredSlots
