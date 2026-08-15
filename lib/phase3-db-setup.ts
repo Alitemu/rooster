@@ -57,7 +57,7 @@ export function setupPhase3Tables() {
         slot_id TEXT NOT NULL,
         edit_type TEXT NOT NULL CHECK (edit_type IN ('HANDMATIG_TOEWIJZEN', 'HANDMATIG_VERWIJDEREN', 'RUIL', 'OVERRIDE')),
         reden TEXT,
-        bewerkt_door_person_id TEXT,
+        bewerkt_door_person_id TEXT NOT NULL,
         aangemaakt_op TEXT NOT NULL,
         row_version INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY (toewijzing_id) REFERENCES dienstrooster_assignment(id),

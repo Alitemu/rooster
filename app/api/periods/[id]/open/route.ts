@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { persistSlotsForPeriod } from '@/lib/slotPersistence';
+import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
@@ -35,6 +36,8 @@ interface OpenPeriodResponse {
   status: string;
   slots_generated: number;
   weeks_covered: number;
+  start_datum: string;
+  eind_datum: string;
 }
 
 export async function POST(
@@ -49,7 +52,8 @@ export async function POST(
 
     const { id } = params;
     const body = (await req.json()) as Partial<OpenPeriodRequest>;
-    const { naam, start_datum, eind_datum, deadline, ruleset } = body;
+    const { naam, deadline, ruleset } = body;
+    let { start_datum, eind_datum } = body;
 
     if (!naam || !start_datum || !eind_datum || !deadline || !ruleset) {
       const response: ApiErrorResponse = {
@@ -61,6 +65,11 @@ export async function POST(
       };
       return NextResponse.json(response, { status: 400 });
     }
+
+    // Auto-round to Monday start / Sunday end on ISO-week boundaries, so
+    // every generated week has a full 7 slots
+    start_datum = dateToISO(roundToMonday(parseISO(start_datum)));
+    eind_datum = dateToISO(roundToSunday(parseISO(eind_datum)));
 
     const period = db
       .prepare('SELECT id, pool_id, status FROM dienstrooster_schedule_period WHERE id = ?')
@@ -109,6 +118,8 @@ export async function POST(
         status: 'OPEN',
         slots_generated: slotResult.totalSlotsGenerated,
         weeks_covered: slotResult.weeksCovered,
+        start_datum,
+        eind_datum,
       },
     };
 

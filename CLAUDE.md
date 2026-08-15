@@ -260,7 +260,7 @@ Show live in settings screen with interpretation in plain Dutch/English.
 
 - Codenamen: Persoon-01 through Persoon-30
 - Pool: 2-week window (default)
-- Period: 2027-01-04 to 2027-09-04 (35 weeks, 245 shifts)
+- Period: 2027-01-04 to 2027-09-05 (35 weeks, 245 shifts)
 - Various part-time patterns
 - Mixed balances (some -1, +1, 0)
 - Holiday history for 2025-2026

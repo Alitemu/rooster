@@ -261,18 +261,18 @@ describe('Phase 3 Integration Tests', () => {
       expect(() => {
         db.prepare(`
           INSERT INTO dienstrooster_assignment_edit (
-            id, toewijzing_id, periode_id, person_id, slot_id, edit_type, aangemaakt_op
-          ) VALUES (?, ?, ?, ?, ?, 'RUIL', datetime('now'))
-        `).run(editId, 'a1', periodId, 'p1', 's1');
+            id, toewijzing_id, periode_id, person_id, slot_id, edit_type, bewerkt_door_person_id, aangemaakt_op
+          ) VALUES (?, ?, ?, ?, ?, 'RUIL', ?, datetime('now'))
+        `).run(editId, 'a1', periodId, 'p1', 's1', 'p1');
       }).not.toThrow();
 
       // Invalid edit type should fail
       expect(() => {
         db.prepare(`
           INSERT INTO dienstrooster_assignment_edit (
-            id, toewijzing_id, periode_id, person_id, slot_id, edit_type, aangemaakt_op
-          ) VALUES (?, ?, ?, ?, ?, 'INVALID', datetime('now'))
-        `).run(uuid(), 'a1', periodId, 'p1', 's1');
+            id, toewijzing_id, periode_id, person_id, slot_id, edit_type, bewerkt_door_person_id, aangemaakt_op
+          ) VALUES (?, ?, ?, ?, ?, 'INVALID', ?, datetime('now'))
+        `).run(uuid(), 'a1', periodId, 'p1', 's1', 'p1');
       }).toThrow();
 
       cleanupPhase3TestData(periodId);
@@ -291,9 +291,9 @@ describe('Phase 3 Integration Tests', () => {
 
       db.prepare(`
         INSERT INTO dienstrooster_assignment_edit (
-          id, toewijzing_id, periode_id, person_id, slot_id, edit_type, reden, aangemaakt_op
-        ) VALUES (?, ?, ?, ?, ?, 'HANDMATIG_TOEWIJZEN', ?, datetime('now'))
-      `).run(editId, 'a1', periodId, 'p1', 's1', reason);
+          id, toewijzing_id, periode_id, person_id, slot_id, edit_type, reden, bewerkt_door_person_id, aangemaakt_op
+        ) VALUES (?, ?, ?, ?, ?, 'HANDMATIG_TOEWIJZEN', ?, ?, datetime('now'))
+      `).run(editId, 'a1', periodId, 'p1', 's1', reason, 'p1');
 
       const edit = db.prepare('SELECT reden FROM dienstrooster_assignment_edit WHERE id = ?').get(editId) as any;
       expect(edit.reden).toBe(reason);
@@ -403,9 +403,9 @@ describe('Phase 3 Integration Tests', () => {
         expect(() => {
           db.prepare(`
             INSERT INTO dienstrooster_assignment_edit (
-              id, toewijzing_id, periode_id, person_id, slot_id, edit_type, aangemaakt_op
-            ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-          `).run(editId, 'a1', periodId, 'p1', 's1', type);
+              id, toewijzing_id, periode_id, person_id, slot_id, edit_type, bewerkt_door_person_id, aangemaakt_op
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+          `).run(editId, 'a1', periodId, 'p1', 's1', type, 'p1');
         }).not.toThrow();
       });
 

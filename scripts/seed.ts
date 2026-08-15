@@ -473,7 +473,7 @@ async function seed() {
     console.log('Creating period...');
     const periodId = uuid();
     const periodStart = '2027-01-04'; // Monday
-    const periodEnd = '2027-09-06'; // Sunday
+    const periodEnd = '2027-09-05'; // Sunday (35 full ISO weeks from periodStart)
     const deadline = '2026-12-15T17:00:00Z';
 
     db.prepare(`
@@ -541,7 +541,7 @@ async function seed() {
         weekday,
         frequentie,
         '2027-01-04',
-        '2027-09-06',
+        '2027-09-05',
         staffId,
         now
       );
@@ -613,7 +613,7 @@ async function seed() {
     console.log(`  - Planner: PLANNER / Planner@12345`);
     console.log(`  - Staff: Persoon-01 through Persoon-30 (personal access links)`);
     console.log(`\nPool: Achterwacht (30 members)`);
-    console.log(`Period: 2027-1 (2027-01-04 to 2027-09-06)`);
+    console.log(`Period: 2027-1 (2027-01-04 to 2027-09-05)`);
     console.log(`\nPhase 1 Data:`);
     console.log(`  - Part-time patterns: 10 staff members`);
     console.log(`  - Absences: 10 vacation periods`);

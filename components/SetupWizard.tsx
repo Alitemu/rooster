@@ -208,7 +208,8 @@ export function SetupWizard({ period, onComplete }: Props) {
       }
 
       setOpenResult(
-        `Period opened: ${openData.data.slots_generated} slots generated, ${toLink.length} invitations sent.`
+        `Period opened (${openData.data.start_datum} to ${openData.data.eind_datum}): ` +
+          `${openData.data.slots_generated} slots generated, ${toLink.length} invitations sent.`
       );
       onComplete?.();
     } catch (err) {
