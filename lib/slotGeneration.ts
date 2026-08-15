@@ -134,7 +134,11 @@ export function validateSlots(slots: GeneratedSlot[]): {
     }
   });
 
-  // Check weekend_id pairing: Saturday and Sunday should share same weekend_id
+  // Check weekend_id pairing: Saturday and Sunday should share the same
+  // "YYYY-Wkk" prefix - the trailing -SAT/-SUN is expected to differ, that's
+  // what makes each day's id distinct in the first place.
+  const weekendIdPrefix = (weekendId: string) => weekendId.replace(/-(SAT|SUN)$/, '');
+
   for (const slot of slots) {
     if (isWeekend(slot.datum)) {
       const dayOfWeek = parseISO(slot.datum).getDay();
@@ -145,7 +149,7 @@ export function validateSlots(slots: GeneratedSlot[]): {
         sundayParsed.setDate(sundayParsed.getDate() + 1);
         const sundayDate = dateToISO(sundayParsed);
         const sundaySlot = slots.find((s) => s.datum === sundayDate);
-        if (sundaySlot && sundaySlot.weekend_id !== slot.weekend_id) {
+        if (sundaySlot && weekendIdPrefix(sundaySlot.weekend_id) !== weekendIdPrefix(slot.weekend_id)) {
           errors.push(
             `Weekend mismatch: Saturday ${slot.datum} has ID ${slot.weekend_id}, ` +
             `but Sunday ${sundayDate} has ID ${sundaySlot.weekend_id}`
