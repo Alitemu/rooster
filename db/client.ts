@@ -33,8 +33,13 @@ if (!path.isAbsolute(filePath)) {
   filePath = path.resolve(process.cwd(), filePath);
 }
 
-// Initialize database
-const db: Database.Database = new Database(filePath);
+// Initialize database. A non-zero busy timeout matters here: `next build`
+// imports route modules across multiple parallel workers, so several
+// processes can open this same (possibly brand-new) file at once and
+// contend for the lock WAL-mode setup briefly takes. better-sqlite3
+// defaults to no wait at all, which turns that contention into an
+// immediate SQLITE_BUSY instead of one process briefly waiting for another.
+const db: Database.Database = new Database(filePath, { timeout: 5000 });
 
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
@@ -69,8 +74,25 @@ function schemaAlreadyExistsWithoutLedger(): boolean {
   return Boolean(hasCanaryTable);
 }
 
+// Multiple test/build tools (Next.js's build workers, Vitest's parallel
+// test-file workers, ...) each get their own isolated module cache, so
+// several separate processes can all reach this line for the same fresh
+// database file at once. The busy timeout above covers raw lock
+// contention, but not the logical race where process B checks "is this
+// migration applied?" before process A has committed its answer, then
+// both try to create the same table. Rather than special-case every tool
+// that happens to parallelize module loading, tolerate losing that race:
+// if the objects this migration creates already exist, another worker
+// already finished it - nothing left for this process to do.
 if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD && !schemaAlreadyExistsWithoutLedger()) {
-  migrate(drizzle(db), { migrationsFolder: path.resolve(process.cwd(), 'db/migrations') });
+  try {
+    migrate(drizzle(db), { migrationsFolder: path.resolve(process.cwd(), 'db/migrations') });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes('already exists')) {
+      throw error;
+    }
+  }
 }
 
 export { db };
