@@ -35,7 +35,6 @@ CREATE TABLE `dienstrooster_assignment_edit` (
 	`bewerkt_door_person_id` text NOT NULL,
 	`row_version` integer DEFAULT 1 NOT NULL,
 	`aangemaakt_op` text NOT NULL,
-	FOREIGN KEY (`toewijzing_id`) REFERENCES `dienstrooster_assignment`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`periode_id`) REFERENCES `dienstrooster_schedule_period`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`person_id`) REFERENCES `dienstrooster_person`(`id`) ON UPDATE no action ON DELETE no action,
 	FOREIGN KEY (`slot_id`) REFERENCES `dienstrooster_shift_slot`(`id`) ON UPDATE no action ON DELETE no action,

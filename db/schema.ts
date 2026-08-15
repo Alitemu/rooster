@@ -523,7 +523,13 @@ export const assignmentEdit = sqliteTable(
   'dienstrooster_assignment_edit',
   {
     id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-    toewijzing_id: text('toewijzing_id').notNull().references(() => assignment.id),
+    // Deliberately NOT a foreign key to assignment.id. This table records
+    // what was done to an assignment, including HANDMATIG_VERWIJDEREN -
+    // and an audit record has to outlive the row it describes. With a hard
+    // reference here the edit row blocked the very deletion it was
+    // recording, so removing an assignment always failed with
+    // SQLITE_CONSTRAINT_FOREIGNKEY. The id is still stored for tracing.
+    toewijzing_id: text('toewijzing_id').notNull(),
     periode_id: text('periode_id').notNull().references(() => schedulePeriod.id),
     person_id: text('person_id').notNull().references(() => person.id), // Person being assigned
     slot_id: text('slot_id').notNull().references(() => shiftSlot.id),

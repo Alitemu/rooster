@@ -60,7 +60,6 @@ export function setupPhase3Tables() {
         bewerkt_door_person_id TEXT NOT NULL,
         aangemaakt_op TEXT NOT NULL,
         row_version INTEGER NOT NULL DEFAULT 1,
-        FOREIGN KEY (toewijzing_id) REFERENCES dienstrooster_assignment(id),
         FOREIGN KEY (periode_id) REFERENCES dienstrooster_schedule_period(id),
         FOREIGN KEY (person_id) REFERENCES dienstrooster_person(id),
         FOREIGN KEY (slot_id) REFERENCES dienstrooster_shift_slot(id)

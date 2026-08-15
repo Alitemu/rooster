@@ -206,6 +206,42 @@ describe('rosterGaps', () => {
       expect(remaining.map((r) => r.slot_id).sort()).toEqual([f.slotIds[0], f.slotIds[1]].sort());
     });
 
+    it('an audit row outlives the assignment it records, so removal is possible at all', () => {
+      // dienstrooster_assignment_edit records HANDMATIG_VERWIJDEREN, i.e.
+      // the removal of an assignment. It used to carry a NOT NULL foreign
+      // key to that assignment, which meant the audit row blocked the very
+      // deletion it was recording: every removal failed with
+      // SQLITE_CONSTRAINT_FOREIGNKEY. The route was unreachable from the UI,
+      // so nothing ever noticed.
+      const f = createFixture(1, '2027-01-04', '2027-01-10');
+      const assignmentId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO dienstrooster_assignment
+           (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+         VALUES (?, ?, ?, ?, 'SOLVER', 1, datetime('now'))`
+      ).run(assignmentId, f.periodId, f.personIds[0], f.slotIds[0]);
+
+      db.prepare(
+        `INSERT INTO dienstrooster_assignment_edit
+           (id, toewijzing_id, periode_id, person_id, slot_id, edit_type, reden, bewerkt_door_person_id, aangemaakt_op, row_version)
+         VALUES (?, ?, ?, ?, ?, 'HANDMATIG_VERWIJDEREN', 'sick call', ?, datetime('now'), 1)`
+      ).run(crypto.randomUUID(), assignmentId, f.periodId, f.personIds[0], f.slotIds[0], f.personIds[0]);
+
+      expect(() => {
+        db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(assignmentId);
+      }).not.toThrow();
+
+      const audit = db
+        .prepare('SELECT edit_type FROM dienstrooster_assignment_edit WHERE toewijzing_id = ?')
+        .get(assignmentId) as { edit_type: string } | undefined;
+      expect(audit?.edit_type).toBe('HANDMATIG_VERWIJDEREN');
+
+      // and the freed slot is offered up for manual filling again
+      expect(findUnfilledSlots(f.periodId).map((g) => g.slot_id)).toContain(f.slotIds[0]);
+
+      db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE toewijzing_id = ?').run(assignmentId);
+    });
+
     it('a manually filled slot never collides with the unique (period, slot) index on regenerate', () => {
       // The real failure this guards: re-solving without excluding
       // manually filled slots would try to insert a second row for the

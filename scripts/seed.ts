@@ -330,7 +330,8 @@ async function createTables() {
 
     CREATE TABLE IF NOT EXISTS dienstrooster_assignment_edit (
       id TEXT PRIMARY KEY,
-      toewijzing_id TEXT NOT NULL REFERENCES dienstrooster_assignment(id),
+      -- no FK to assignment: this row records deletions too and must outlive them
+      toewijzing_id TEXT NOT NULL,
       periode_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
