@@ -10,6 +10,8 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { ExportDialog } from '@/components/ExportDialog';
+import { RosterGenerationDialog } from '@/components/RosterGenerationDialog';
+import { FillGapsPanel } from '@/components/FillGapsPanel';
 
 interface Period {
   id: string;
@@ -31,6 +33,7 @@ export default function PlannerPeriodPage() {
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
 
   const loadPeriod = async () => {
     try {
@@ -166,6 +169,33 @@ export default function PlannerPeriodPage() {
         </div>
       )}
 
+      {period.status === 'GESLOTEN' && (
+        <div className="card p-4 bg-blue-50 border border-blue-200">
+          <p className="text-sm text-blue-900 mb-3">
+            Period is closed to new submissions. Ready to generate the roster.
+          </p>
+          <button
+            onClick={() => setGenerateDialogOpen(true)}
+            className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+          >
+            🤖 Generate Roster
+          </button>
+        </div>
+      )}
+
+      {(period.status === 'GEGENEREERD' || period.status === 'GEPUBLICEERD') && (
+        <FillGapsPanel periodId={periodId} />
+      )}
+
+      {period.status === 'GEGENEREERD' && (
+        <button
+          onClick={() => setGenerateDialogOpen(true)}
+          className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+        >
+          🔄 Regenerate Roster
+        </button>
+      )}
+
       {period.status !== 'CONCEPT' && (
         <a
           href={`/planner/period/${periodId}/prior-assignments`}
@@ -180,6 +210,13 @@ export default function PlannerPeriodPage() {
         periodName={period.naam}
         isOpen={reminderDialogOpen}
         onClose={() => setReminderDialogOpen(false)}
+      />
+
+      <RosterGenerationDialog
+        periodId={periodId}
+        isOpen={generateDialogOpen}
+        onClose={() => setGenerateDialogOpen(false)}
+        onSuccess={loadPeriod}
       />
 
       {/* Dashboard */}

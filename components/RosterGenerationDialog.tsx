@@ -9,8 +9,17 @@
 
 import { useState } from 'react';
 
+interface UnfilledSlot {
+  slot_id: string;
+  shortfall: number;
+  datum: string | null;
+  teller: string | null;
+}
+
 interface GenerateResult {
   assignments_created: number;
+  unfilled_slots: UnfilledSlot[];
+  fully_covered: boolean;
   cost: number;
   violations: Record<string, number>;
   time_seconds: number;
@@ -134,8 +143,23 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
 
           {result && !error && (
             <div className="space-y-4">
+              {!result.fully_covered && (
+                <div className="bg-amber-50 border border-amber-200 rounded p-4">
+                  <p className="text-sm font-semibold text-amber-900">
+                    ⚠️ {result.unfilled_slots.length} shift{result.unfilled_slots.length === 1 ? '' : 's'} still
+                    need{result.unfilled_slots.length === 1 ? 's' : ''} someone
+                  </p>
+                  <p className="text-xs text-amber-800 mt-1">
+                    Not enough people were available within the configured limits. Fill the rest in
+                    below on the period page.
+                  </p>
+                </div>
+              )}
+
               <div className="bg-green-50 border border-green-200 rounded p-4">
-                <h3 className="font-semibold text-green-900 mb-3">✓ Roster Generated</h3>
+                <h3 className="font-semibold text-green-900 mb-3">
+                  {result.fully_covered ? '✓ Roster Generated' : 'Roster Generated (partial)'}
+                </h3>
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <dt className="text-neutral-700">Assignments created:</dt>

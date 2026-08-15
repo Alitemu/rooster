@@ -108,11 +108,24 @@ class ConstraintBuilder:
         assignment_vars: dict[tuple[str, str], cp_model.IntVar],
         slots: list[dict],
         people: list[str]
-    ):
+    ) -> dict[str, cp_model.IntVar]:
         """
         Constraint: Each slot needs benodigd_aantal_personen assignments.
+
+        Soft via a per-slot shortfall variable rather than a hard equality:
+        real staffing math doesn't always add up (too few active people for
+        the window/band settings), and a planner would rather get a
+        best-effort roster with a handful of gaps to fill in manually than
+        no roster at all. The shortfall is penalized heavily in the
+        objective (see objective.py) so the solver only leaves a slot open
+        when there is genuinely no one left who could be assigned there
+        without violating a hard rule (ABSOLUUT block, window rule).
+
+        Returns: dict[slot_id, shortfall IntVar] - 0 when the slot ended up
+        fully staffed, >0 for however many people short it is.
         """
         self.violations['capacity'] = 0
+        shortfall_vars: dict[str, cp_model.IntVar] = {}
 
         for slot in slots:
             slot_id = slot['id']
@@ -126,7 +139,11 @@ class ConstraintBuilder:
             ]
 
             if slot_vars:
-                self.model.Add(sum(slot_vars) == required)
+                shortfall = self.model.NewIntVar(0, required, f'shortfall_{slot_id}')
+                self.model.Add(sum(slot_vars) + shortfall == required)
+                shortfall_vars[slot_id] = shortfall
+
+        return shortfall_vars
 
     # ========================================================================
     # Band Limits: Per-person assignment count in range
@@ -140,14 +157,26 @@ class ConstraintBuilder:
         band_ranges: dict[str, list[int]],  # counter -> [min, max]
         balances: dict[str, dict[str, int]],  # person -> { counter: delta }
         counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG']
-    ):
+    ) -> dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]]:
         """
         Constraint: Each person must have assignments in band range per counter.
 
         Band is adjusted by ledger balance:
         actual_band = [base_min + delta, base_max + delta]
+
+        Soft via under/over slack rather than a hard range: when there
+        genuinely aren't enough people to cover every slot within
+        everyone's target band, the solver should prefer stretching
+        someone slightly beyond their band over leaving a shift
+        completely uncovered - that mirrors how a planner would actually
+        resolve this by hand. Slack is penalized in the objective (see
+        objective.py), moderately - more than ordinary preference costs,
+        but far less than leaving a slot unfilled.
+
+        Returns: dict[(person_id, counter), (under IntVar, over IntVar)]
         """
         self.violations['band_limit'] = 0
+        band_slack_vars: dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]] = {}
 
         for person_id in people:
             for counter in counters:
@@ -168,8 +197,20 @@ class ConstraintBuilder:
 
                 if counter_vars:
                     assignment_count = sum(counter_vars)
-                    self.model.Add(assignment_count >= actual_min)
-                    self.model.Add(assignment_count <= actual_max)
+
+                    under = self.model.NewIntVar(
+                        0, max(0, actual_min), f'band_under_{person_id}_{counter}'
+                    )
+                    over = self.model.NewIntVar(
+                        0, len(counter_vars), f'band_over_{person_id}_{counter}'
+                    )
+
+                    self.model.Add(assignment_count + under >= actual_min)
+                    self.model.Add(assignment_count - over <= actual_max)
+
+                    band_slack_vars[(person_id, counter)] = (under, over)
+
+        return band_slack_vars
 
     # ========================================================================
     # Part-time Pattern: Forced assignments on specific weekdays

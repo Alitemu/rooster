@@ -79,17 +79,27 @@ class RosterSolver:
         )
 
         logger.info("Adding capacity constraints")
-        constraint_builder.add_capacity_constraints(
+        shortfall_vars = constraint_builder.add_capacity_constraints(
             assignment_vars, slots, people
         )
 
         logger.info("Adding band limit constraints")
-        constraint_builder.add_band_constraints(
+        band_slack_vars = constraint_builder.add_band_constraints(
             assignment_vars, people, slots, band_ranges, balances
         )
 
         # Add objectives
         objective_builder = ObjectiveBuilder(self.model)
+
+        logger.info("Adding shortfall objective")
+        shortfall_cost = objective_builder.add_shortfall_objective(
+            shortfall_vars, weight=1000.0
+        )
+
+        logger.info("Adding band slack objective")
+        band_slack_cost = objective_builder.add_band_slack_objective(
+            band_slack_vars, weight=5.0
+        )
 
         logger.info("Adding soft preference objective")
         soft_cost = objective_builder.add_soft_preference_objective(
@@ -102,7 +112,12 @@ class RosterSolver:
         )
 
         logger.info("Building combined objective")
-        objective_builder.build_objective(soft_cost, imbalance_cost, 0.3)
+        objective_builder.build_objective(
+            shortfall_cost=shortfall_cost,
+            band_slack_cost=band_slack_cost,
+            soft_cost=soft_cost,
+            imbalance_cost=imbalance_cost
+        )
 
         elapsed = time.time() - start
         logger.info(f"Model built in {elapsed:.2f}s")
@@ -110,6 +125,7 @@ class RosterSolver:
         return {
             'model': self.model,
             'assignment_vars': assignment_vars,
+            'shortfall_vars': shortfall_vars,
             'constraints_builder': constraint_builder,
             'objective_builder': objective_builder
         }
@@ -164,6 +180,20 @@ class RosterSolver:
 
         logger.info(f"Extracted {len(assignments)} assignments")
 
+        # Capacity is a soft constraint (see constraints.py) so the solver
+        # can return OPTIMAL/FEASIBLE with some slots still short of their
+        # required headcount - surface exactly which ones so the planner
+        # can fill the rest by hand.
+        unfilled_slots = []
+        if self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            for slot_id, shortfall_var in model_data['shortfall_vars'].items():
+                shortfall = self.solver.Value(shortfall_var)
+                if shortfall > 0:
+                    unfilled_slots.append({'slot_id': slot_id, 'shortfall': shortfall})
+
+        if unfilled_slots:
+            logger.warning(f"{len(unfilled_slots)} slots left short of required headcount")
+
         status_map = {
             cp_model.OPTIMAL: "OPTIMAL",
             cp_model.FEASIBLE: "FEASIBLE",
@@ -175,6 +205,7 @@ class RosterSolver:
             'success': self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE],
             'status': status_map.get(self.status, "UNKNOWN"),
             'assignments': assignments,
+            'unfilled_slots': unfilled_slots,
             'objective_value': self.solver.ObjectiveValue() if self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE] else None,
             'time_seconds': elapsed,
             'violations': model_data['constraints_builder'].get_violations_summary()
@@ -217,6 +248,7 @@ class RosterSolver:
                 'diagnostics': {
                     'total_slots': len(slots),
                     'total_assignments': len(result['assignments']),
+                    'unfilled_slots': result['unfilled_slots'],
                     'total_cost': result['objective_value'] or 0,
                     'time_seconds': result['time_seconds'],
                     'solver_status': result['status'],
@@ -231,6 +263,12 @@ class RosterSolver:
                 'period_id': period_id,
                 'assignments': [],
                 'diagnostics': {
-                    'error': str(e)
+                    'total_slots': len(slots),
+                    'total_assignments': 0,
+                    'unfilled_slots': [],
+                    'total_cost': 0,
+                    'time_seconds': 0,
+                    'solver_status': 'ERROR',
+                    'violations': {}
                 }
             }

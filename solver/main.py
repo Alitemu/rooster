@@ -92,9 +92,15 @@ class Assignment(BaseModel):
     source: str = "SOLVER"
 
 
+class UnfilledSlot(BaseModel):
+    slot_id: str
+    shortfall: int
+
+
 class SolverDiagnostics(BaseModel):
     total_slots: int
     total_assignments: int
+    unfilled_slots: list[UnfilledSlot] = []
     total_cost: float
     time_seconds: float
     solver_status: str

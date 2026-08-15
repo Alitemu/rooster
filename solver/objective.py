@@ -102,7 +102,55 @@ class ObjectiveBuilder:
         return imbalance_cost
 
     # ========================================================================
-    # Term 3: Holiday Rotation Equity
+    # Term 3: Slot Shortfall (unfilled capacity)
+    # ========================================================================
+
+    def add_shortfall_objective(
+        self,
+        shortfall_vars: dict[str, cp_model.IntVar],
+        weight: float = 1000.0
+    ):
+        """
+        Objective: Minimize unfilled slot capacity.
+
+        Weighted far above every other term so the solver only leaves a
+        slot short when no assignment exists that wouldn't break a hard
+        rule (ABSOLUUT block, window rule) - preference/balance costs
+        never win out over actually covering a shift.
+        """
+        shortfall_cost = weight * sum(shortfall_vars.values()) if shortfall_vars else 0
+
+        self.objective_terms['shortfall'] = shortfall_cost
+        return shortfall_cost
+
+    # ========================================================================
+    # Term 4: Band Slack (assignments outside a person's target range)
+    # ========================================================================
+
+    def add_band_slack_objective(
+        self,
+        band_slack_vars: dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]],
+        weight: float = 5.0
+    ):
+        """
+        Objective: Minimize how far anyone's assignment count strays
+        outside their target band.
+
+        Weighted above ordinary preference/imbalance costs (so the solver
+        prefers a clean roster when one exists) but far below shortfall
+        (so stretching someone's band is always preferred over leaving a
+        shift uncovered).
+        """
+        slack_cost = (
+            weight * sum(u + o for u, o in band_slack_vars.values())
+            if band_slack_vars else 0
+        )
+
+        self.objective_terms['band_slack'] = slack_cost
+        return slack_cost
+
+    # ========================================================================
+    # Term 5: Holiday Rotation Equity
     # ========================================================================
 
     def add_holiday_equity_objective(
@@ -164,19 +212,23 @@ class ObjectiveBuilder:
 
     def build_objective(
         self,
-        soft_cost: float = 1.0,
-        imbalance_cost: float = 0.5,
-        holiday_cost: float = 0.3
+        shortfall_cost: float = 0,
+        band_slack_cost: float = 0,
+        soft_cost: float = 0,
+        imbalance_cost: float = 0,
+        holiday_cost: float = 0
     ) -> float:
         """
         Combine all objective terms and set on model.
 
-        Weights scale relative importance:
-        - soft_cost = 1.0: primary goal (minimize preference violations)
-        - imbalance_cost = 0.5: secondary (prefer balanced assignments)
-        - holiday_cost = 0.3: tertiary (fair holiday rotation)
+        Each term's own weight (passed in when it was built - see
+        add_shortfall_objective, add_band_slack_objective, etc.) already
+        encodes its relative importance, from most to least critical:
+        actually covering every shift, then staying within everyone's
+        target band, then honoring soft (LIEVER_NIET) preferences and
+        balance smoothing.
         """
-        total = soft_cost + imbalance_cost + holiday_cost
+        total = shortfall_cost + band_slack_cost + soft_cost + imbalance_cost + holiday_cost
 
         self.model.Minimize(total)
         self.objective_terms['total'] = total

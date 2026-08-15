@@ -38,7 +38,12 @@ export async function POST(
       );
     }
 
-    if (!['CONCEPT', 'OPEN', 'GESLOTEN'].includes(period.status)) {
+    // GEGENEREERD is included so a planner can regenerate - e.g. after
+    // manually filling some gaps and wanting the solver to take another
+    // pass at the rest, or after a preference changed. GEPUBLICEERD stays
+    // excluded: regenerating after publish would silently invalidate a
+    // roster staff have already been told about.
+    if (!['CONCEPT', 'OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       return NextResponse.json(
         { success: false, error: `Cannot generate roster for period in ${period.status} status` },
         { status: 400 }
@@ -70,7 +75,7 @@ export async function POST(
 
     // Fetch slots (joined to shift_type for the teller - the solver
     // matches slots to counters by this name, not by shift_type_id)
-    const slots = db
+    const allSlots = db
       .prepare(
         `SELECT s.*, st.teller
          FROM dienstrooster_shift_slot s
@@ -79,12 +84,31 @@ export async function POST(
       )
       .all(periodId) as any[];
 
-    if (slots.length === 0) {
+    if (allSlots.length === 0) {
       return NextResponse.json(
         { success: false, error: 'No slots found. Generate slots first.' },
         { status: 400 }
       );
     }
+
+    // Regenerating must not collide with (or silently overwrite) slots a
+    // planner already filled in by hand - dienstrooster_assignment has a
+    // UNIQUE(schedule_version_id, slot_id) constraint, and re-solving from
+    // scratch has no notion of "this one's already spoken for" otherwise.
+    // Exclude those slots from the solver's problem entirely rather than
+    // just filtering the insert afterward, so the solver doesn't waste a
+    // candidate trying to double-fill an already-covered shift.
+    const manuallyFilledSlotIds = new Set(
+      (
+        db
+          .prepare(
+            `SELECT slot_id FROM dienstrooster_assignment
+             WHERE schedule_version_id = ? AND bron IN ('MANUAL', 'OVERRIDE')`
+          )
+          .all(periodId) as { slot_id: string }[]
+      ).map((r) => r.slot_id)
+    );
+    const slots = allSlots.filter((s) => !manuallyFilledSlotIds.has(s.id));
 
     // Fetch pool members whose membership window covers this period
     // (membership windows are open-ended, not scoped to one period)
@@ -239,11 +263,25 @@ export async function POST(
     const solverOutput = await solverResponse.json();
 
     if (!solverOutput.success) {
+      // Capacity and band limits are soft constraints (see solver/constraints.py),
+      // so the solver almost always returns a best-effort roster even when
+      // there aren't enough people - this only fires when no assignment at
+      // all is possible without breaking a hard rule (ABSOLUUT block,
+      // window rule), or the solver genuinely errored. A real business
+      // outcome, not a server fault, so 422 rather than 500.
       return NextResponse.json(
         { success: false, error: solverOutput.message || 'Solver failed' },
-        { status: 500 }
+        { status: 422 }
       );
     }
+
+    // Clear this period's previous solver attempt (a regenerate replaces
+    // it) - but never touch MANUAL/OVERRIDE rows, and the slots they cover
+    // were already excluded from the solver's input above, so there's no
+    // conflict when inserting the fresh results below.
+    db.prepare(
+      `DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ? AND bron = 'SOLVER'`
+    ).run(periodId);
 
     // Store assignments using raw SQL
     let assignmentCount = 0;
@@ -274,6 +312,21 @@ export async function POST(
        WHERE id = ?`
     ).run('GEGENEREERD', periodId);
 
+    // Enrich the solver's bare slot IDs with what the planner actually
+    // needs to see to fill a gap by hand: date and shift type.
+    const slotById = new Map(slots.map((s) => [s.id, s]));
+    const unfilledSlots = (solverOutput.diagnostics.unfilled_slots || []).map(
+      (u: { slot_id: string; shortfall: number }) => {
+        const slot = slotById.get(u.slot_id);
+        return {
+          slot_id: u.slot_id,
+          shortfall: u.shortfall,
+          datum: slot?.datum ?? null,
+          teller: slot?.teller ?? null,
+        };
+      }
+    );
+
     // Log audit entry
     db.prepare(
       `INSERT INTO dienstrooster_audit_log
@@ -289,6 +342,7 @@ export async function POST(
       JSON.stringify({
         status: 'GEGENEREERD',
         assignments_created: assignmentCount,
+        unfilled_slots: unfilledSlots.length,
         cost: solverOutput.diagnostics.total_cost,
       }),
       now
@@ -298,6 +352,8 @@ export async function POST(
       success: true,
       data: {
         assignments_created: assignmentCount,
+        unfilled_slots: unfilledSlots,
+        fully_covered: unfilledSlots.length === 0,
         cost: solverOutput.diagnostics.total_cost,
         violations: solverOutput.diagnostics.violations,
         time_seconds: solverOutput.diagnostics.time_seconds,
