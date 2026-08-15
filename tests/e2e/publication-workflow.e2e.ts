@@ -34,7 +34,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
     // Look for publication dialog or button
     const publishButton = page.locator('button:has-text("Publish")');
     if (await publishButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      expect(publishButton).toBeVisible();
+      await expect(publishButton).toBeVisible();
     }
   });
 
@@ -94,7 +94,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
       const blockCheck = page.locator('text=blocking violations');
       if (await blockCheck.isVisible({ timeout: 3000 }).catch(() => false)) {
         // Should show checkmark for valid period
-        expect(blockCheck).toBeVisible();
+        await expect(blockCheck).toBeVisible();
       }
     }
   });
@@ -138,7 +138,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
     // Look for publication notification
     const pubNotif = page.locator('text=Roster published');
     if (await pubNotif.isVisible({ timeout: 5000 }).catch(() => false)) {
-      expect(pubNotif).toBeVisible();
+      await expect(pubNotif).toBeVisible();
     }
 
     await context.close();
@@ -160,7 +160,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
     // Look for roster/assignments table
     const rosterTable = page.locator('table');
     if (await rosterTable.isVisible({ timeout: 5000 }).catch(() => false)) {
-      expect(rosterTable).toBeVisible();
+      await expect(rosterTable).toBeVisible();
 
       // Should show user's assignments
       const cells = await rosterTable.locator('td').count();
@@ -197,7 +197,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
       // Look for coverage summary
       const summary = page.locator('text=assignments');
       if (await summary.isVisible({ timeout: 3000 }).catch(() => false)) {
-        expect(summary).toBeVisible();
+        await expect(summary).toBeVisible();
       }
     }
   });
@@ -209,7 +209,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
     // After publication, period details should show publication info
     const publishedOn = page.locator('text=Published on');
     if (await publishedOn.isVisible({ timeout: 3000 }).catch(() => false)) {
-      expect(publishedOn).toBeVisible();
+      await expect(publishedOn).toBeVisible();
     }
   });
 });

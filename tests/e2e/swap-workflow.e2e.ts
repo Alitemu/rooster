@@ -116,10 +116,10 @@ test.describe('Swap Request Workflow - E2E', () => {
     // Refresh to see updated assignments
     await page.reload();
 
-    // Verify swapped assignment is now visible
-    // This would show the respondent's original assignment
-    const rosterTable = page.locator('table');
-    await expect(rosterTable).toBeVisible({ timeout: 5000 });
+    // Verify the roster (a week grid, not an HTML table) is showing
+    // updated data reflecting the swap
+    await expect(page.getByRole('heading', { name: 'Your Roster' })).toBeVisible({ timeout: 5000 });
+    await expect(page.getByRole('heading', { name: 'Shifts by Week' })).toBeVisible();
 
     await context.close();
   });
@@ -154,9 +154,9 @@ test.describe('Swap Request Workflow - E2E', () => {
     await context.close();
   });
 
-  test('Cannot swap same slot with itself (validation)', async ({ browser }) => {
+  test('Cannot request your own shift back (validation)', async ({ browser }) => {
     const requesterUser = testData.users[3];
-    const assignment = testData.assignments[3];
+    const ownAssignment = testData.assignments[3];
 
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -166,24 +166,14 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     // Open swap dialog
     await page.click('button:has-text("Request Swap")').catch(() => null);
+    await page.waitForSelector('select[name="requested-slot"]', { timeout: 5000 }).catch(() => null);
 
-    // Select same slot for both
-    await page.selectOption('select[name="offered-slot"]', assignment.slotId);
-    await page.selectOption('select[name="requested-slot"]', assignment.slotId);
-
-    // Verify submit button is disabled or shows error
-    const submitButton = page.locator('button:has-text("Send Request")');
-    const isDisabled = await submitButton.isDisabled().catch(() => false);
-
-    if (isDisabled) {
-      expect(isDisabled).toBe(true);
-    } else {
-      // Check for error message
-      const errorMsg = page.locator('text=Cannot swap same slot');
-      await expect(errorMsg).toBeVisible({ timeout: 3000 }).catch(() => {
-        console.log('Error message not shown');
-      });
-    }
+    // The requester's own shift should never be offered as something to
+    // request back - the "requested" dropdown only lists other people's
+    // shifts, so self-swap is structurally impossible rather than caught
+    // after the fact.
+    const ownOption = page.locator(`select[name="requested-slot"] option[value="${ownAssignment.slotId}"]`);
+    await expect(ownOption).toHaveCount(0);
 
     await context.close();
   });

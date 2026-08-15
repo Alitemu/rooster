@@ -13,7 +13,11 @@ interface Assignment {
   person_id: string;
   slot_id: string;
   datum: string;
-  shift_type_id: string;
+  teller: string;
+}
+
+interface OtherAssignment extends Assignment {
+  codenaam: string;
 }
 
 interface Props {
@@ -26,6 +30,7 @@ interface Props {
 
 export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSuccess }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [otherAssignments, setOtherAssignments] = useState<OtherAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +46,16 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
       setError(null);
 
       try {
-        const res = await fetch(`/api/person/${personId}/roster/${periodId}`);
-        if (!res.ok) throw new Error('Failed to load roster');
+        const [ownRes, othersRes] = await Promise.all([
+          fetch(`/api/person/${personId}/roster/${periodId}`),
+          fetch(`/api/person/${personId}/roster/${periodId}/others`),
+        ]);
+        if (!ownRes.ok || !othersRes.ok) throw new Error('Failed to load roster');
 
-        const data = await res.json();
-        setAssignments(data.data.assignments);
+        const ownData = await ownRes.json();
+        const othersData = await othersRes.json();
+        setAssignments(ownData.data.assignments);
+        setOtherAssignments(othersData.data.assignments);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load roster');
       } finally {
@@ -97,7 +107,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   };
 
   const getOfferedSlot = () => assignments.find(a => a.slot_id === offeredSlotId);
-  const getRequestedSlot = () => assignments.find(a => a.slot_id === requestedSlotId);
+  const getRequestedSlot = () => otherAssignments.find(a => a.slot_id === requestedSlotId);
 
   const shiftTypeNames: Record<string, string> = {
     AVOND: 'Evening',
@@ -142,7 +152,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   <option value="">Select a shift</option>
                   {assignments.map((a) => (
                     <option key={a.slot_id} value={a.slot_id}>
-                      {a.datum} - {shiftTypeNames[a.shift_type_id]}
+                      {a.datum} - {shiftTypeNames[a.teller]}
                     </option>
                   ))}
                 </select>
@@ -160,13 +170,14 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
                   <option value="">Select a shift</option>
-                  {assignments.map((a) => (
-                    <option
-                      key={a.slot_id}
-                      value={a.slot_id}
-                      disabled={a.slot_id === offeredSlotId}
-                    >
-                      {a.datum} - {shiftTypeNames[a.shift_type_id]}
+                  {otherAssignments.length === 0 && (
+                    <option value="" disabled>
+                      No other shifts available
+                    </option>
+                  )}
+                  {otherAssignments.map((a) => (
+                    <option key={a.slot_id} value={a.slot_id}>
+                      {a.codenaam}: {a.datum} - {shiftTypeNames[a.teller]}
                     </option>
                   ))}
                 </select>

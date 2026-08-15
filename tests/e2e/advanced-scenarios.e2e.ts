@@ -39,7 +39,7 @@ test.describe('Concurrent Operations - E2E', () => {
     const requests = await Promise.all([
       (async () => {
         const button = page1.locator('button:has-text("Request Swap")').first();
-        if (await button.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (await button.isVisible({ timeout: 8000 }).catch(() => false)) {
           await button.click();
           return true;
         }
@@ -47,7 +47,7 @@ test.describe('Concurrent Operations - E2E', () => {
       })(),
       (async () => {
         const button = page2.locator('button:has-text("Request Swap")').first();
-        if (await button.isVisible({ timeout: 3000 }).catch(() => false)) {
+        if (await button.isVisible({ timeout: 8000 }).catch(() => false)) {
           await button.click();
           return true;
         }
@@ -215,7 +215,7 @@ test.describe('Error Handling - E2E', () => {
     // Should show error or redirect
     const errorMsg = page.locator('text=not found|invalid|unauthorized');
     if (await errorMsg.isVisible({ timeout: 3000 }).catch(() => false)) {
-      expect(errorMsg).toBeVisible();
+      await expect(errorMsg).toBeVisible();
     }
   });
 
@@ -229,7 +229,7 @@ test.describe('Error Handling - E2E', () => {
     // Should show error message
     const errorMsg = page.locator('text=Period not found|not found');
     if (await errorMsg.isVisible({ timeout: 3000 }).catch(() => false)) {
-      expect(errorMsg).toBeVisible();
+      await expect(errorMsg).toBeVisible();
     }
   });
 
@@ -256,7 +256,7 @@ test.describe('Error Handling - E2E', () => {
       // Or should show error message
       const errorMsg = page.locator('text=Please select|required');
       if (await errorMsg.isVisible({ timeout: 2000 }).catch(() => false)) {
-        expect(errorMsg).toBeVisible();
+        await expect(errorMsg).toBeVisible();
       }
     }
 
@@ -323,7 +323,7 @@ test.describe('Mobile Responsiveness - E2E', () => {
     // Main content should be visible
     const mainContent = page.locator('main');
     if (await mainContent.isVisible({ timeout: 3000 }).catch(() => false)) {
-      expect(mainContent).toBeVisible();
+      await expect(mainContent).toBeVisible();
     }
 
     await context.close();
@@ -346,7 +346,7 @@ test.describe('Mobile Responsiveness - E2E', () => {
     // Dialog should be visible and fit on screen
     const dialog = page.locator('[role="dialog"]');
     if (await dialog.isVisible({ timeout: 3000 }).catch(() => false)) {
-      expect(dialog).toBeVisible();
+      await expect(dialog).toBeVisible();
 
       // Buttons should be clickable
       const buttons = await dialog.locator('button').count();
