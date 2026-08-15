@@ -54,7 +54,8 @@ export async function GET(
       );
     }
 
-    // Get person's assignments
+    // Get person's assignments (joined to shift_type for the teller -
+    // shift_type_id is a UUID, not one of the AVOND/WEEKEND/FEESTDAG counters)
     const assignments = db
       .prepare(
         `SELECT
@@ -63,9 +64,11 @@ export async function GET(
           s.datum,
           s.iso_week,
           s.shift_type_id,
+          st.teller,
           a.aangemaakt_op
          FROM dienstrooster_assignment a
          JOIN dienstrooster_shift_slot s ON a.slot_id = s.id
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
          WHERE a.schedule_version_id = ? AND a.person_id = ?
          ORDER BY s.datum ASC`
       )
@@ -79,8 +82,8 @@ export async function GET(
     };
 
     for (const a of assignments) {
-      if (byShiftType.hasOwnProperty(a.shift_type_id)) {
-        byShiftType[a.shift_type_id]++;
+      if (byShiftType.hasOwnProperty(a.teller)) {
+        byShiftType[a.teller]++;
       }
     }
 

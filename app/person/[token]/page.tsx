@@ -35,6 +35,7 @@ interface RosterData {
     datum: string;
     iso_week: number;
     shift_type_id: string;
+    teller: string;
     aangemaakt_op: string;
   }>;
   summary: {
@@ -244,7 +245,7 @@ export default function PersonalLinkPage() {
           assignedShifts={rosterData.assignments.map((a) => ({
             datum: a.datum,
             iso_week: a.iso_week,
-            teller: a.shift_type_id,
+            teller: a.teller,
           }))}
           balances={[
             {

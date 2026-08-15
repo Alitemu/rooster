@@ -90,7 +90,7 @@ export default function SetupPage() {
         period={period}
         onComplete={() => {
           // Redirect to period dashboard
-          window.location.href = `/app/planner/period/${periodId}`;
+          window.location.href = `/planner/period/${periodId}`;
         }}
       />
     </div>

@@ -118,7 +118,7 @@ export default function PlannerPeriodPage() {
         <div className="card p-4 bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-900">
             Period is still in concept. Visit{' '}
-            <a href={`/app/planner/setup/${periodId}`} className="font-medium underline">
+            <a href={`/planner/setup/${periodId}`} className="font-medium underline">
               setup wizard
             </a>{' '}
             to configure and open it.

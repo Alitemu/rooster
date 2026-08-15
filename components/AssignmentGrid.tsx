@@ -17,6 +17,7 @@ interface Assignment {
   datum: string;
   iso_week: number;
   shift_type_id: string;
+  teller: string;
   bron: string;
 }
 
@@ -138,7 +139,7 @@ export function AssignmentGrid({ periodId }: Props) {
                   <td className="px-3 py-2 font-medium">{a.datum}</td>
                   <td className="px-3 py-2 text-neutral-600">W{a.iso_week}</td>
                   <td className="px-3 py-2">{a.codenaam}</td>
-                  <td className="px-3 py-2">{shiftTypeNames[a.shift_type_id] || a.shift_type_id}</td>
+                  <td className="px-3 py-2">{shiftTypeNames[a.teller] || a.teller}</td>
                   <td className="px-3 py-2">
                     <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${sourceColors[a.bron] || 'bg-neutral-100'}`}>
                       {a.bron}

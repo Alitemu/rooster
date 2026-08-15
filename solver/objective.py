@@ -8,7 +8,6 @@ Minimizes:
 """
 
 from ortools.sat.python import cp_model
-from typing import dict, list
 
 
 class ObjectiveBuilder:
@@ -73,7 +72,8 @@ class ObjectiveBuilder:
 
                 actual_min = base_min + delta
                 actual_max = base_max + delta
-                target = (actual_min + actual_max) / 2
+                # Integer target - CP-SAT variable bounds must be integers
+                target = (actual_min + actual_max) // 2
 
                 # Count assignments for this person-counter
                 counter_vars = [

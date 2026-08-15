@@ -45,58 +45,64 @@ export async function POST(
       );
     }
 
-    // Get all people in this period
+    // Get all people whose membership window covers this period
+    // (membership windows are open-ended, not scoped to one period)
     const people = db
       .prepare(
         `SELECT DISTINCT person_id FROM dienstrooster_pool_membership
-         WHERE pool_id = ? AND geldig_vanaf = ? AND geldig_tot = ?`
+         WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
       )
-      .all(period.pool_id, period.start_datum, period.eind_datum) as any[];
+      .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
 
-    let notificationsCreated = 0;
-
-    // Update period status
-    db.prepare(
-      `UPDATE dienstrooster_schedule_period
-       SET status = ?, gepubliceerd_op = ?, gepubliceerd_door_person_id = ?, row_version = row_version + 1
-       WHERE id = ?`
-    ).run('GEPUBLICEERD', now, publishedByPersonId, periodId);
-
-    // Create notifications for each person
-    for (const p of people) {
-      const notifId = uuid();
+    // Publishing is: freeze the status change, notify everyone, and audit
+    // it - all or nothing. A partial failure part-way through (e.g. one bad
+    // insert) must not leave the period marked published with nobody
+    // actually notified.
+    const publishTx = db.transaction(() => {
       db.prepare(
+        `UPDATE dienstrooster_schedule_period
+         SET status = ?, gepubliceerd_op = ?, gepubliceerd_door_person_id = ?, row_version = row_version + 1
+         WHERE id = ?`
+      ).run('GEPUBLICEERD', now, publishedByPersonId, periodId);
+
+      const insertNotification = db.prepare(
         `INSERT INTO dienstrooster_notification
          (id, person_id, periode_id, type, onderwerp, inhoud, gelezen, aangemaakt_op)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      );
+
+      for (const p of people) {
+        insertNotification.run(
+          uuid(),
+          p.person_id,
+          periodId,
+          'PUBLICATIE_BERICHT',
+          'Roster published',
+          `Your roster for ${period.naam} is now available. Open your link to see your shifts.`,
+          0,
+          now
+        );
+      }
+
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log
+         (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
       ).run(
-        notifId,
-        p.person_id,
+        uuid(),
+        publishedByPersonId,
+        'schedule_period',
         periodId,
-        'PUBLICATIE_BERICHT',
-        'Roster published',
-        `Your roster for ${period.naam} is now available. Open your link to see your shifts.`,
-        false,
+        'PUBLISH',
+        JSON.stringify({ status: 'GEGENEREERD' }),
+        JSON.stringify({ status: 'GEPUBLICEERD', notifications_sent: people.length }),
         now
       );
-      notificationsCreated++;
-    }
 
-    // Log audit entry
-    db.prepare(
-      `INSERT INTO dienstrooster_audit_log
-       (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      uuid(),
-      publishedByPersonId,
-      'schedule_period',
-      periodId,
-      'PUBLISH',
-      JSON.stringify({ status: 'GEGENEREERD' }),
-      JSON.stringify({ status: 'GEPUBLICEERD', notifications_sent: notificationsCreated }),
-      now
-    );
+      return people.length;
+    });
+
+    const notificationsCreated = publishTx();
 
     return NextResponse.json({
       success: true,

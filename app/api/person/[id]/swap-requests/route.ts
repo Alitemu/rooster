@@ -162,7 +162,7 @@ export async function POST(
       'RUILVERZOEK',
       'New swap request',
       'Someone has requested a shift swap with you. Check your notifications for details.',
-      false,
+      0,
       now
     );
 

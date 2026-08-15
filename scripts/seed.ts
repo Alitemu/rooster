@@ -85,9 +85,39 @@ async function createTables() {
       status TEXT NOT NULL DEFAULT 'CONCEPT',
       bevroren_ruleset_json TEXT,
       overloop_bevestigd_op TEXT,
+      gepubliceerd_op TEXT,
+      gepubliceerd_door_person_id TEXT REFERENCES dienstrooster_person(id),
       row_version INTEGER NOT NULL DEFAULT 1,
       aangemaakt_op TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_period_excluded_day (
+      id TEXT PRIMARY KEY,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      datum TEXT NOT NULL,
+      reden TEXT NOT NULL,
+      bron_period_id TEXT REFERENCES dienstrooster_schedule_period(id)
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS period_excluded_day_uniq
+      ON dienstrooster_period_excluded_day(period_id, datum);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_prior_assignment (
+      id TEXT PRIMARY KEY,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      datum TEXT NOT NULL,
+      iso_jaar INTEGER NOT NULL,
+      iso_week INTEGER NOT NULL,
+      person_id TEXT REFERENCES dienstrooster_person(id),
+      teller TEXT NOT NULL CHECK(teller IN ('AVOND', 'WEEKEND', 'FEESTDAG')),
+      bron TEXT NOT NULL CHECK(bron IN ('AFGELEID', 'HANDMATIG', 'ONBEKEND')),
+      bron_period_id TEXT REFERENCES dienstrooster_schedule_period(id),
+      aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS prior_assignment_uniq
+      ON dienstrooster_prior_assignment(period_id, datum);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_shift_type (
       id TEXT PRIMARY KEY,
@@ -143,6 +173,52 @@ async function createTables() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS holiday_history_uniq
       ON dienstrooster_holiday_history(person_id, feestdag_groep, jaar);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_notification_template (
+      id TEXT PRIMARY KEY,
+      sleutel TEXT NOT NULL UNIQUE CHECK(sleutel IN (
+        'PERIOD_OPENED', 'PARTTIME_CHECK', 'REMINDER', 'FINAL_WARNING',
+        'DEADLINE_PASSED', 'BLOCK_OVERRIDDEN', 'SCHEDULE_PUBLISHED',
+        'SWAP_REQUESTED', 'SWAP_RESULT', 'CORRECTION_BOOKED'
+      )),
+      onderwerp TEXT NOT NULL,
+      body_md TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_reminder_schedule (
+      id TEXT PRIMARY KEY,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      dagen_voor_deadline INTEGER NOT NULL,
+      actief INTEGER NOT NULL DEFAULT 1
+    );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_notification_log (
+      id TEXT PRIMARY KEY,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      period_id TEXT REFERENCES dienstrooster_schedule_period(id),
+      type TEXT NOT NULL CHECK(type IN (
+        'PERIOD_OPENED', 'PARTTIME_CHECK', 'REMINDER', 'FINAL_WARNING',
+        'DEADLINE_PASSED', 'BLOCK_OVERRIDDEN', 'SCHEDULE_PUBLISHED',
+        'SWAP_REQUESTED', 'SWAP_RESULT', 'CORRECTION_BOOKED'
+      )),
+      opgesteld_op TEXT NOT NULL,
+      gemaild_op TEXT,
+      geexporteerd_op TEXT,
+      afgevinkt_op TEXT,
+      resultaat TEXT,
+      foutmelding TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_import_run (
+      id TEXT PRIMARY KEY,
+      soort TEXT NOT NULL CHECK(soort IN ('BEGINSALDI', 'FEESTDAG_HISTORIE')),
+      bestandsnaam TEXT NOT NULL,
+      aantal_regels INTEGER NOT NULL,
+      aantal_fouten INTEGER NOT NULL,
+      uitgevoerd_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      uitgevoerd_op TEXT NOT NULL,
+      resultaat_json TEXT
+    );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_audit_log (
       id TEXT PRIMARY KEY,

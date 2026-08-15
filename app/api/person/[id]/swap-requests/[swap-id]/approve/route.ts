@@ -104,7 +104,7 @@ export async function POST(
       'RUIL_GOEDGEKEURD',
       'Swap request approved',
       'Your swap request was approved. The shifts have been exchanged.',
-      false,
+      0,
       now
     );
 

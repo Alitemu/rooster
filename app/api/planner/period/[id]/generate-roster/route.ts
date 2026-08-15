@@ -45,9 +45,15 @@ export async function POST(
       );
     }
 
-    // Fetch slots
+    // Fetch slots (joined to shift_type for the teller - the solver
+    // matches slots to counters by this name, not by shift_type_id)
     const slots = db
-      .prepare('SELECT * FROM dienstrooster_shift_slot WHERE period_id = ?')
+      .prepare(
+        `SELECT s.*, st.teller
+         FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.period_id = ?`
+      )
       .all(periodId) as any[];
 
     if (slots.length === 0) {
@@ -57,13 +63,14 @@ export async function POST(
       );
     }
 
-    // Fetch pool members (active people)
+    // Fetch pool members whose membership window covers this period
+    // (membership windows are open-ended, not scoped to one period)
     const poolMembers = db
       .prepare(
         `SELECT person_id FROM dienstrooster_pool_membership
-         WHERE pool_id = ? AND geldig_vanaf = ? AND geldig_tot = ?`
+         WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
       )
-      .all(period.pool_id, period.start_datum, period.eind_datum) as any[];
+      .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
 
     const people = poolMembers.map((m) => m.person_id);
 
@@ -121,19 +128,47 @@ export async function POST(
       balances[entry.person_id][entry.teller] = entry.total || 0;
     }
 
-    // Fetch ruleset
-    const rulesetData = db
-      .prepare('SELECT * FROM dienstrooster_ruleset WHERE id = ?')
-      .get(period.ruleset_id) as any;
+    // Periods freeze their ruleset as JSON when opened (schedule_period has
+    // no ruleset_id column - a period is never live-linked to a ruleset
+    // row, so later edits to the pool's ruleset can't retroactively change
+    // an open period). Fall back to the pool's current ruleset for periods
+    // that predate that freeze happening.
+    let config: any;
+    if (period.bevroren_ruleset_json) {
+      config = JSON.parse(period.bevroren_ruleset_json);
+    } else {
+      const pool = db
+        .prepare('SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?')
+        .get(period.pool_id) as { ruleset_id: string } | undefined;
+      const rulesetData = pool
+        ? (db.prepare('SELECT config_json FROM dienstrooster_ruleset WHERE id = ?').get(pool.ruleset_id) as
+            | { config_json: string }
+            | undefined)
+        : undefined;
 
-    if (!rulesetData) {
-      return NextResponse.json(
-        { success: false, error: 'Ruleset not found' },
-        { status: 400 }
-      );
+      if (!rulesetData) {
+        return NextResponse.json(
+          { success: false, error: 'Ruleset not found' },
+          { status: 400 }
+        );
+      }
+
+      config = JSON.parse(rulesetData.config_json || '{}');
     }
 
-    const config = JSON.parse(rulesetData.config_json || '{}');
+    // A flat [7,8] band for every counter is only feasible by coincidence -
+    // WEEKEND and FEESTDAG have far fewer slots than AVOND, so the same
+    // range for all three is infeasible for most real periods. Default to
+    // each counter's actual average per person when the ruleset doesn't
+    // specify one explicitly.
+    const slotCountByTeller: Record<string, number> = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 };
+    for (const s of slots) {
+      if (s.teller in slotCountByTeller) slotCountByTeller[s.teller]++;
+    }
+    const defaultBand = (teller: string): [number, number] => {
+      const avg = slotCountByTeller[teller] / Math.max(people.length, 1);
+      return [Math.max(0, Math.floor(avg)), Math.max(0, Math.ceil(avg))];
+    };
 
     // Build solver request
     const solverInput = {
@@ -144,7 +179,7 @@ export async function POST(
         iso_jaar: s.iso_jaar,
         iso_week: s.iso_week,
         shift_type_id: s.shift_type_id,
-        shift_type_name: s.shift_type_id,
+        shift_type_name: s.teller,
         benodigd_aantal_personen: s.benodigd_aantal_personen || 1,
         is_feestdag: s.is_feestdag || false,
         feestdag_groep: s.feestdag_groep || null,
@@ -153,9 +188,9 @@ export async function POST(
       people,
       rules: {
         window_weeks: config.windowWeeks || 2,
-        band_avond: config.bandAvond || [7, 8],
-        band_weekend: config.bandWeekend || [7, 8],
-        band_feestdag: config.bandFeestdag || [7, 8],
+        band_avond: config.bandAvond || defaultBand('AVOND'),
+        band_weekend: config.bandWeekend || defaultBand('WEEKEND'),
+        band_feestdag: config.bandFeestdag || defaultBand('FEESTDAG'),
         distribution_mode: config.distributionMode || 'GELIJK',
       },
       balances,

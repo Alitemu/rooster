@@ -51,10 +51,12 @@ export async function GET(
         s.datum,
         s.iso_week,
         s.shift_type_id,
+        st.teller,
         s.benodigd_aantal_personen
       FROM dienstrooster_assignment a
       JOIN dienstrooster_person p ON a.person_id = p.id
       JOIN dienstrooster_shift_slot s ON a.slot_id = s.id
+      JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
       WHERE a.schedule_version_id = ?
     `;
     const params_list: any[] = [periodId];
@@ -65,7 +67,7 @@ export async function GET(
     }
 
     if (shiftType) {
-      query += ' AND s.shift_type_id = ?';
+      query += ' AND st.teller = ?';
       params_list.push(shiftType);
     }
 

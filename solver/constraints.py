@@ -11,7 +11,6 @@ Implements hard constraints for roster generation:
 """
 
 from ortools.sat.python import cp_model
-from typing import dict, list, set
 
 
 class ConstraintBuilder:

@@ -8,8 +8,8 @@ import logging
 import time
 from ortools.sat.python import cp_model
 from typing import Optional
-from .constraints import ConstraintBuilder
-from .objective import ObjectiveBuilder
+from constraints import ConstraintBuilder
+from objective import ObjectiveBuilder
 
 logger = logging.getLogger(__name__)
 

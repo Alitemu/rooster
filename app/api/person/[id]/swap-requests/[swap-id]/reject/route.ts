@@ -74,7 +74,7 @@ export async function POST(
       'RUILVERZOEK',
       'Swap request rejected',
       reason ? `Your swap request was rejected. Reason: ${reason}` : 'Your swap request was rejected.',
-      false,
+      0,
       now
     );
 
