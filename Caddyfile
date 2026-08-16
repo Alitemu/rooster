@@ -5,15 +5,28 @@
 			name "Dienstrooster Internal"
 		}
 	}
+
+	# The site below has no fixed hostname, so Caddy has no cert to
+	# pre-generate - it issues one on demand for whatever name/IP a client
+	# connects with (localhost, the host's LAN IP, a hostname). Rate
+	# limited so repeatedly connecting with new SNI values can't force
+	# unbounded cert generation; this deployment is internal-network only
+	# to begin with (see docker-compose.yml: only caddy is host-published).
+	on_demand_tls {
+		interval 2m
+		burst 10
+	}
 }
 
 # Port 8010 by default; override with APP_PORT in .env, which moves both
-# the published host port and this listener together. The generated host
-# matcher is the bare hostname, so the port here only sets what Caddy
-# listens on - but keeping host and container port identical is what makes
-# the exported personal links (BASE_URL) line up with what people type.
-https://localhost:{$APP_PORT:8010} {
-	tls internal
+# the published host port and this listener together. No hostname in the
+# site address - matches any Host, since staff reach this from their own
+# devices via the server's LAN IP or a DNS name, not just localhost on the
+# machine running Docker.
+https://:{$APP_PORT:8010} {
+	tls internal {
+		on_demand
+	}
 	reverse_proxy web:3000
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
