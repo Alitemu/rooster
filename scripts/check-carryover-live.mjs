@@ -22,8 +22,26 @@
  */
 import Database from 'better-sqlite3';
 
+import nodePath from 'path';
+import { fileURLToPath } from 'url';
+
 const BASE = 'http://localhost:3000';
-const db = new Database('/home/user/rooster/rooster.db');
+
+// Same resolution as db/client.ts, so this script always inspects the very
+// database the server it is testing is writing to (locally ./rooster.db,
+// in Docker the /data volume). Imported as `nodePath` because req() below
+// takes a parameter called `path`.
+function resolveDbPath() {
+  let p = process.env.DATABASE_URL || 'file:./rooster.db';
+  if (p.startsWith('file:')) {
+    p = p.slice(5);
+    if (p.startsWith('//')) p = p.slice(2);
+  }
+  if (nodePath.isAbsolute(p)) return p;
+  return nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..', p);
+}
+
+const db = new Database(resolveDbPath());
 
 function ch(j) { return Object.entries(j).map(([k, v]) => `${k}=${v}`).join('; '); }
 function grab(res, jar) {

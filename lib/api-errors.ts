@@ -25,6 +25,23 @@ export async function parseJsonBody<T = Record<string, unknown>>(req: NextReques
   }
 }
 
+/**
+ * True when a write failed because it would duplicate a UNIQUE index.
+ *
+ * A uniqueness collision is a user-level conflict ("you already have
+ * that"), not a server fault, so routes that can hit one should answer 409
+ * rather than letting it fall through to a 500.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error;
+  while (current instanceof Error) {
+    const code = (current as { code?: string }).code;
+    if (code === 'SQLITE_CONSTRAINT_UNIQUE' || code === 'SQLITE_CONSTRAINT_PRIMARYKEY') return true;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return false;
+}
+
 export function internalErrorResponse(context: string, error: unknown, status = 500): NextResponse {
   console.error(`[${context}]`, error);
   return NextResponse.json(

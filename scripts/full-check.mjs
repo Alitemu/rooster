@@ -17,8 +17,26 @@
  */
 import Database from 'better-sqlite3';
 
+import nodePath from 'path';
+import { fileURLToPath } from 'url';
+
 const BASE = 'http://localhost:3000';
-const db = new Database('/home/user/rooster/rooster.db');
+
+// Same resolution as db/client.ts, so this script always inspects the very
+// database the server it is testing is writing to (locally ./rooster.db,
+// in Docker the /data volume). Imported as `nodePath` because req() below
+// takes a parameter called `path`.
+function resolveDbPath() {
+  let p = process.env.DATABASE_URL || 'file:./rooster.db';
+  if (p.startsWith('file:')) {
+    p = p.slice(5);
+    if (p.startsWith('//')) p = p.slice(2);
+  }
+  if (nodePath.isAbsolute(p)) return p;
+  return nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..', p);
+}
+
+const db = new Database(resolveDbPath());
 const results = [];
 
 function rec(name, ok, detail) {
@@ -107,15 +125,35 @@ async function main() {
   const cov = await req('GET', `/api/person/${s1.id}/preferences/${period.id}/coverage`, { jar: person });
   rec('Coverage indicator (counts only, no names)', cov.status === 200 && !JSON.stringify(cov.json).includes('Persoon-'));
 
+  // Re-submitting a day this person already has must be refused as a
+  // conflict, not a 500. This only bites against a schema that actually
+  // carries parttime_pattern_uniq - seed.ts was missing it, so the
+  // duplicate used to succeed locally and 500 in production.
+  const existingPattern = db.prepare(
+    `SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE person_id=? LIMIT 1`
+  ).get(s1.id);
+  if (existingPattern) {
+    const dup = await req('POST', `/api/person/${s1.id}/parttime-patterns`, { jar: person, body: existingPattern });
+    rec('Duplicate part-time pattern → 409 (not 500)', eq(dup.status, 409), `status=${dup.status}`);
+  }
+
+  // ...then a genuinely new day, on a weekday this person does not use yet.
+  const usedDays = db.prepare(`SELECT weekdag FROM dienstrooster_parttime_pattern WHERE person_id=?`)
+    .all(s1.id).map((r) => r.weekdag);
+  const freeDay = ['MA', 'DI', 'WO', 'DO', 'VR'].find((d) => !usedDays.includes(d));
+
   const pt = await req('POST', `/api/person/${s1.id}/parttime-patterns`, {
-    jar: person, body: { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2027-01-04', geldig_tot: '2027-09-05' },
+    jar: person, body: { weekdag: freeDay, frequentie: 'ELKE_WEEK', geldig_vanaf: '2027-01-04', geldig_tot: '2027-09-05' },
   });
-  rec('Create part-time pattern', eq(pt.status, 201));
+  rec('Create part-time pattern', eq(pt.status, 201), `weekdag=${freeDay}`);
   const patternId = pt.json?.data?.id;
   const genRows = db.prepare(`SELECT COUNT(*) c FROM dienstrooster_availability WHERE source='PARTTIME' AND person_id=?`).get(s1.id);
   rec('Part-time sync generated real ABSOLUUT rows', genRows.c > 0, `${genRows.c} rows`);
   rec('generated-days endpoint', eq((await req('GET', `/api/person/${s1.id}/parttime-patterns/generated-days?period_id=${period.id}`, { jar: person })).status, 200));
-  rec('Edit pattern weekday', eq((await req('PATCH', `/api/person/${s1.id}/parttime-patterns/${patternId}`, { jar: person, body: { weekdag: 'DI' } })).status, 200));
+  // Move it to another unused day - editing onto an occupied one would
+  // (correctly) conflict, which is covered by the 409 check above.
+  const otherFreeDay = ['MA', 'DI', 'WO', 'DO', 'VR'].find((d) => !usedDays.includes(d) && d !== freeDay);
+  rec('Edit pattern weekday', eq((await req('PATCH', `/api/person/${s1.id}/parttime-patterns/${patternId}`, { jar: person, body: { weekdag: otherFreeDay } })).status, 200), `${freeDay} → ${otherFreeDay}`);
   rec('Delete pattern (no FK error)', eq((await req('DELETE', `/api/person/${s1.id}/parttime-patterns/${patternId}`, { jar: person })).status, 200));
   const orphans = db.prepare(`SELECT COUNT(*) c FROM dienstrooster_availability WHERE bron_pattern_id=?`).get(patternId);
   rec('Zero orphaned availability rows', orphans.c === 0);

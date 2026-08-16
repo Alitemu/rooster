@@ -13,7 +13,30 @@ import { hashPassword, hashToken } from '../lib/auth';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = path.join(__dirname, '..', 'rooster.db');
+
+/**
+ * Resolve the database the same way db/client.ts does.
+ *
+ * This used to be hardcoded to <repo>/rooster.db, which is right locally
+ * and silently wrong in Docker: compose runs the app against
+ * DATABASE_URL=file:/data/rooster.db, so `docker compose exec web npm run
+ * seed` filled /app/rooster.db while the running app kept reading the
+ * still-empty volume - an app with no data and no error to explain it.
+ */
+function resolveDbPath(): string {
+  const raw = process.env.DATABASE_URL || 'file:./rooster.db';
+  let filePath = raw;
+  if (filePath.startsWith('file:')) {
+    filePath = filePath.slice(5);
+    if (filePath.startsWith('//')) filePath = filePath.slice(2);
+  }
+  if (path.isAbsolute(filePath)) return filePath;
+  // Relative paths are relative to the repo root, not to wherever the
+  // script happens to be invoked from.
+  return path.resolve(__dirname, '..', filePath);
+}
+
+const dbPath = resolveDbPath();
 
 console.log(`Seeding database at: ${dbPath}`);
 
@@ -244,6 +267,14 @@ async function createTables() {
       aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
       aangemaakt_op TEXT NOT NULL
     );
+
+    -- Present in db/schema.ts and in the real migration, but missing here,
+    -- so a duplicate part-time pattern quietly succeeded locally while
+    -- returning 500 against a migration-built (production) database. Dev
+    -- and production have to enforce the same constraints or bugs like
+    -- that stay invisible until deploy.
+    CREATE UNIQUE INDEX IF NOT EXISTS parttime_pattern_uniq
+      ON dienstrooster_parttime_pattern(person_id, weekdag, geldig_vanaf, geldig_tot);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_absence (
       id TEXT PRIMARY KEY,

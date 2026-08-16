@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { forbiddenResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForPattern, removePatternAvailability } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -100,6 +100,18 @@ export async function PATCH(
 
     return NextResponse.json(response);
   } catch (error) {
+    // Moving a pattern onto a weekday the same person already has collides
+    // with parttime_pattern_uniq - a conflict to explain, not a 500.
+    if (isUniqueViolation(error)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'PATTERN_ALREADY_EXISTS',
+          message: 'You already have a part-time pattern for this day over the same period',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
+    }
     return internalErrorResponse('parttime-pattern-update', error);
   }
 }
