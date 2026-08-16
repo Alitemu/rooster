@@ -347,10 +347,76 @@ async function createTables() {
   `);
 }
 
+/**
+ * Every table the seed populates, ordered children-before-parents so the
+ * deletes below never trip a foreign key.
+ */
+const SEEDED_TABLES = [
+  'dienstrooster_assignment_edit',
+  'dienstrooster_swap_request',
+  'dienstrooster_notification',
+  'dienstrooster_notification_log',
+  'dienstrooster_assignment',
+  'dienstrooster_availability',
+  'dienstrooster_submission',
+  'dienstrooster_absence',
+  'dienstrooster_parttime_pattern',
+  'dienstrooster_audit_log',
+  'dienstrooster_import_run',
+  'dienstrooster_reminder_schedule',
+  'dienstrooster_notification_template',
+  'dienstrooster_holiday_history',
+  'dienstrooster_ledger_entry',
+  'dienstrooster_shift_slot',
+  'dienstrooster_shift_type',
+  'dienstrooster_prior_assignment',
+  'dienstrooster_period_excluded_day',
+  'dienstrooster_schedule_period',
+  'dienstrooster_pool_membership',
+  'dienstrooster_pool',
+  'dienstrooster_ruleset',
+  'dienstrooster_person_access_link',
+  'dienstrooster_person',
+];
+
+/** True once a previous seed run has populated this database. */
+function alreadySeeded(): boolean {
+  const row = db
+    .prepare(`SELECT COUNT(*) as count FROM dienstrooster_person WHERE codenaam IN ('ADMIN', 'PLANNER')`)
+    .get() as { count: number };
+  return row.count > 0;
+}
+
+function wipe() {
+  db.pragma('foreign_keys = OFF');
+  const clear = db.transaction(() => {
+    for (const table of SEEDED_TABLES) db.prepare(`DELETE FROM ${table}`).run();
+  });
+  clear();
+  db.pragma('foreign_keys = ON');
+}
+
 async function seed() {
   try {
     console.log('Creating tables...');
     createTables();
+
+    // Re-running the seed used to die on `UNIQUE constraint failed:
+    // dienstrooster_person.codenaam` - a raw SQLite error that says nothing
+    // about what to do next, on a script the verification scripts document
+    // as their first step. Wiping is destructive, so it stays opt-in.
+    if (alreadySeeded()) {
+      if (!process.argv.includes('--reset')) {
+        console.error(
+          '\n❌ This database already contains seed data.\n' +
+            '   Re-run with `npm run seed -- --reset` to clear it and seed again,\n' +
+            `   or delete ${dbPath} first.\n`
+        );
+        process.exit(1);
+      }
+      console.log('Clearing existing data (--reset)...');
+      wipe();
+    }
 
     const now = new Date().toISOString();
 

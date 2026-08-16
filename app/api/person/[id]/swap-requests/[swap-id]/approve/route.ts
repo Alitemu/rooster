@@ -75,6 +75,25 @@ export async function POST(
       );
     }
 
+    // Both shifts must still be held by the two people this request is
+    // about. Nothing stops a second swap, or a planner correction, from
+    // moving one of them in the meantime - and approving anyway would swap
+    // whoever holds the slot *now*, taking a shift off someone who was
+    // never asked and giving them one they never agreed to.
+    if (
+      requesterAssignment.person_id !== swapRequest.aanvrager_person_id ||
+      respondentAssignment.person_id !== swapRequest.respondent_person_id
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            'These shifts have changed hands since this request was made, so it can no longer be approved',
+        },
+        { status: 409 }
+      );
+    }
+
     // Swap person_ids in assignments
     db.prepare(
       'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
