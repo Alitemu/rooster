@@ -92,7 +92,7 @@ export async function GET(
       VALUES (?, ?, ?, ?, ?)
     `);
 
-    const baseUrl = process.env.BASE_URL || 'https://localhost:443';
+    const baseUrl = process.env.BASE_URL || 'https://localhost:8010';
     const now = new Date().toISOString();
 
     const daysBeforeDeadline = daysBeforeDeadlineFromOverride(

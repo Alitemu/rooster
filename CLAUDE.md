@@ -252,7 +252,7 @@ Show live in settings screen with interpretation in plain Dutch/English.
 
 **Networking:**
 - All services on internal bridge network
-- Only `caddy` exposes port 443 to host
+- Only `caddy` exposes the app port (default 8010) to host
 
 ## Seed Script
 

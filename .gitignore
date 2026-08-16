@@ -66,3 +66,7 @@ venv/
 Thumbs.db
 playwright-report/
 test-results/
+
+# Generated session signing key (created beside the database when
+# SESSION_SECRET is unset). Never commit or bake into an image.
+.session_secret

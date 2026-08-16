@@ -73,7 +73,7 @@ export async function GET(
     });
 
     // Build CSV content
-    const baseUrl = process.env.BASE_URL || 'https://localhost:443';
+    const baseUrl = process.env.BASE_URL || 'https://localhost:8010';
     const csvLines: string[] = [
       'Name,Personal Link,Deadline',
       ...links.map((link) => {

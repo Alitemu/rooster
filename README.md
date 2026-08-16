@@ -188,7 +188,7 @@ Formula 2 is typically more restrictive.
 Three containers with internal networking:
 
 ```
-caddy:443 ──→ web:3000 ──→ solver:8000
+caddy:8010 ──→ web:3000 ──→ solver:8000
   (TLS)       (Next.js)    (Python/FastAPI)
 ```
 

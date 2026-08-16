@@ -4,7 +4,10 @@ services:
   caddy:
     image: caddy:2.7-alpine
     ports:
-      - "443:443"
+      # Host and container port stay identical - see the note in Caddyfile.
+      - "${APP_PORT:-8010}:${APP_PORT:-8010}"
+    environment:
+      APP_PORT: "${APP_PORT:-8010}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
@@ -26,8 +29,11 @@ services:
       NODE_ENV: production
       DATABASE_URL: "file:/data/rooster.db"
       SOLVER_URL: "http://solver:8000"
-      SESSION_SECRET: "${SESSION_SECRET:?Set SESSION_SECRET in your .env file, e.g. via: openssl rand -hex 32}"
-      BASE_URL: "${BASE_URL:-https://localhost:443}"
+      # Optional. Left empty the app generates one on first start and keeps
+      # it in the db_data volume, so sessions survive restarts. Set it here
+      # (or in .env) to pin your own: openssl rand -hex 32
+      SESSION_SECRET: "${SESSION_SECRET:-}"
+      BASE_URL: "${BASE_URL:-https://localhost:${APP_PORT:-8010}}"
     volumes:
       - db_data:/data
     networks:

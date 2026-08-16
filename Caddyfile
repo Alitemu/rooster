@@ -1,19 +1,24 @@
 {
-  # Use internal certificate infrastructure
-  pki {
-    ca internal {
-      name "Dienstrooster Internal"
-    }
-  }
+	# Use internal certificate infrastructure
+	pki {
+		ca internal {
+			name "Dienstrooster Internal"
+		}
+	}
 }
 
-https://localhost {
-  tls internal
-  reverse_proxy web:3000
-  header {
-    Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    X-Content-Type-Options "nosniff"
-    X-Frame-Options "SAMEORIGIN"
-    X-XSS-Protection "1; mode=block"
-  }
+# Port 8010 by default; override with APP_PORT in .env, which moves both
+# the published host port and this listener together. The generated host
+# matcher is the bare hostname, so the port here only sets what Caddy
+# listens on - but keeping host and container port identical is what makes
+# the exported personal links (BASE_URL) line up with what people type.
+https://localhost:{$APP_PORT:8010} {
+	tls internal
+	reverse_proxy web:3000
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		X-XSS-Protection "1; mode=block"
+	}
 }
