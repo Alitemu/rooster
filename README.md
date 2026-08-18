@@ -196,6 +196,12 @@ caddy:8010 ──→ web:3000 ──→ solver:8000
 - Web: Next.js + SQLite (WAL mode)
 - Solver: Python FastAPI (healthcheck only in Phase 0)
 
+Set `SEED_ON_START=true` in `.env` to auto-create the ADMIN/PLANNER
+accounts and demo data the first time the `db_data` volume is empty -
+useful for testing/demo deployments. Safe to leave on across restarts and
+reinstalls (it only acts once, on a genuinely fresh database), but leave
+it unset for a real deployment with real staff.
+
 ### Production
 
 1. Use `docker-compose up` on dedicated hardware (not cloud/Kubernetes)

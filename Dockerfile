@@ -21,6 +21,8 @@ RUN npm run build
 # named volume mounted here inherits correct ownership on first use.
 RUN mkdir -p /data && chown -R node:node /app /data
 
+RUN chmod +x docker-entrypoint.sh
+
 # Expose port
 EXPOSE 3000
 
@@ -34,5 +36,5 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
 
 USER node
 
-# Start Next.js
-CMD ["npm", "start"]
+# Runs the optional demo-data seed (SEED_ON_START) before starting Next.js.
+ENTRYPOINT ["./docker-entrypoint.sh"]

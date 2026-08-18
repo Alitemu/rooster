@@ -29,6 +29,10 @@ services:
       NODE_ENV: production
       DATABASE_URL: "file:/data/rooster.db"
       SOLVER_URL: "http://solver:8000"
+      # Optional. When true, creates the ADMIN/PLANNER accounts and demo
+      # data on first boot of a fresh db_data volume - see .env.example.
+      # Safe to leave set across restarts/reinstalls: no-ops once seeded.
+      SEED_ON_START: "${SEED_ON_START:-false}"
       # Optional. Left empty the app generates one on first start and keeps
       # it in the db_data volume, so sessions survive restarts. Set it here
       # (or in .env) to pin your own: openssl rand -hex 32
