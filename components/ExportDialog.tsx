@@ -46,7 +46,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
     setLoading(true);
     try {
       const res = await fetch(`/api/exports/reminders/${periodId}`);
-      if (!res.ok) throw new Error('Failed to load reminders');
+      if (!res.ok) throw new Error('Laden van herinneringen mislukt');
 
       const data = await res.json();
       setReminders(data.data);
@@ -56,7 +56,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
       }
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load reminders');
+      setError(err instanceof Error ? err.message : 'Laden van herinneringen mislukt');
       setLoading(false);
     }
   };
@@ -75,7 +75,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
   const downloadInvitations = async () => {
     try {
       const res = await fetch(`/api/exports/invitations/${periodId}`);
-      if (!res.ok) throw new Error('Failed to download invitations');
+      if (!res.ok) throw new Error('Downloaden van uitnodigingen mislukt');
 
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -89,7 +89,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
 
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to download');
+      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
     }
   };
 
@@ -99,28 +99,28 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Export"
+      aria-label="Exporteren"
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
     >
       <div className="card p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
         {!exportType ? (
           <>
-            <h2 className="text-2xl font-bold mb-4">Export & Communications</h2>
+            <h2 className="text-2xl font-bold mb-4">Exporteren en communicatie</h2>
             <div className="space-y-3 mb-6">
               <button
                 onClick={() => setExportType('invitations')}
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
-                <p className="font-semibold text-neutral-900">📊 Download Invitations</p>
-                <p className="text-sm text-neutral-600">CSV file with staff names and personal links</p>
+                <p className="font-semibold text-neutral-900">📊 Uitnodigingen downloaden</p>
+                <p className="text-sm text-neutral-600">CSV-bestand met namen en persoonlijke links</p>
               </button>
 
               <button
                 onClick={() => setExportType('reminders')}
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
-                <p className="font-semibold text-neutral-900">📧 Send Reminders</p>
-                <p className="text-sm text-neutral-600">Pre-filled mailto templates for deadline reminders</p>
+                <p className="font-semibold text-neutral-900">📧 Herinneringen versturen</p>
+                <p className="text-sm text-neutral-600">Vooraf ingevulde mailto-sjablonen voor deadline-herinneringen</p>
               </button>
             </div>
 
@@ -128,18 +128,18 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
               onClick={onClose}
               className="w-full py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
-              Close
+              Sluiten
             </button>
           </>
         ) : exportType === 'invitations' ? (
           <>
-            <h2 className="text-2xl font-bold mb-4">Download Invitations</h2>
+            <h2 className="text-2xl font-bold mb-4">Uitnodigingen downloaden</h2>
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
-                CSV file will contain staff names and personal links to the preferences form.
+                Het CSV-bestand bevat namen en persoonlijke links naar het voorkeurenformulier.
               </p>
               <p className="text-xs text-blue-800 mt-2">
-                Columns: Name, Personal Link, Deadline
+                Kolommen: Naam, Persoonlijke link, Deadline
               </p>
             </div>
 
@@ -148,41 +148,41 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                 onClick={downloadInvitations}
                 className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
               >
-                📥 Download CSV
+                📥 CSV downloaden
               </button>
               <button
                 onClick={() => setExportType(null)}
                 className="flex-1 py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
               >
-                Back
+                Terug
               </button>
             </div>
           </>
         ) : (
           <>
-            <h2 className="text-2xl font-bold mb-4">Send Reminders</h2>
+            <h2 className="text-2xl font-bold mb-4">Herinneringen versturen</h2>
 
             {error && (
               <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>
             )}
 
             {loading ? (
-              <p className="text-center text-neutral-600">Loading reminders...</p>
+              <p className="text-center text-neutral-600">Herinneringen laden...</p>
             ) : reminders.length === 0 ? (
               <div className="bg-green-50 border border-green-200 rounded p-4 mb-6">
-                <p className="text-sm text-green-900">✓ All staff have already submitted their preferences!</p>
+                <p className="text-sm text-green-900">✓ Iedereen heeft al voorkeuren ingediend!</p>
               </div>
             ) : (
               <>
                 <div className="mb-4 space-y-2">
-                  <label className="block text-xs font-semibold text-neutral-700">Subject</label>
+                  <label className="block text-xs font-semibold text-neutral-700">Onderwerp</label>
                   <input
                     type="text"
                     value={editedSubject}
                     onChange={(e) => setEditedSubject(e.target.value)}
                     className="w-full px-3 py-2 border rounded text-sm"
                   />
-                  <label className="block text-xs font-semibold text-neutral-700">Message</label>
+                  <label className="block text-xs font-semibold text-neutral-700">Bericht</label>
                   <textarea
                     value={editedBody}
                     onChange={(e) => setEditedBody(e.target.value)}
@@ -190,12 +190,12 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                     className="w-full px-3 py-2 border rounded text-sm font-mono"
                   />
                   <p className="text-xs text-neutral-500 italic">
-                    Edits apply to every reminder below - each person's own personal link is kept intact.
+                    Wijzigingen gelden voor elke herinnering hieronder - ieders eigen persoonlijke link blijft intact.
                   </p>
                 </div>
 
                 <p className="text-sm text-neutral-600 mb-4">
-                  Click on a staff member to open their reminder email in your default email client.
+                  Klik op iemand om hun herinneringsmail te openen in je standaard e-mailprogramma.
                 </p>
 
                 <div className="space-y-2 mb-6">
@@ -214,8 +214,8 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                 </div>
 
                 <p className="text-xs text-neutral-500 mb-4 italic">
-                  Note: Clicking a name will open your email client with a pre-filled message. You may need
-                  to update the recipient address manually before sending.
+                  Let op: als je op een naam klikt, opent je e-mailprogramma met een vooraf ingevuld bericht.
+                  Mogelijk moet je het ontvangersadres handmatig invullen voordat je verstuurt.
                 </p>
               </>
             )}
@@ -224,7 +224,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
               onClick={() => setExportType(null)}
               className="w-full py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
-              Back
+              Terug
             </button>
           </>
         )}

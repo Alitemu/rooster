@@ -43,13 +43,13 @@ export function NotificationCenter({ personId, periodId }: Props) {
         if (unreadOnly) url += `&unread_only=true`;
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to load notifications');
+        if (!res.ok) throw new Error('Laden van meldingen mislukt');
 
         const data = await res.json();
         setNotifications(data.data.notifications);
         setUnreadCount(data.data.unread_count);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load notifications');
+        setError(err instanceof Error ? err.message : 'Laden van meldingen mislukt');
       } finally {
         setLoading(false);
       }
@@ -78,11 +78,11 @@ export function NotificationCenter({ personId, periodId }: Props) {
   };
 
   const typeNames: Record<string, string> = {
-    ROSTER_GEREED: '📋 Roster Ready',
-    TOEWIJZING: '📅 Assignment Made',
-    RUILVERZOEK: '🔄 Swap Requested',
-    RUIL_GOEDGEKEURD: '✓ Swap Approved',
-    PUBLICATIE_BERICHT: '📢 Publication Notice',
+    ROSTER_GEREED: '📋 Rooster gereed',
+    TOEWIJZING: '📅 Toewijzing gemaakt',
+    RUILVERZOEK: '🔄 Ruilverzoek',
+    RUIL_GOEDGEKEURD: '✓ Ruil goedgekeurd',
+    PUBLICATIE_BERICHT: '📢 Publicatiebericht',
   };
 
   const typeColors: Record<string, string> = {
@@ -96,7 +96,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
   if (loading) {
     return (
       <div className="card p-8 text-center">
-        <p className="text-lg text-neutral-600">Loading notifications...</p>
+        <p className="text-lg text-neutral-600">Meldingen laden...</p>
       </div>
     );
   }
@@ -114,7 +114,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
       {/* Filters */}
       <div className="card p-4 bg-neutral-50 flex gap-4 items-center flex-wrap">
         <span className="text-sm font-medium text-neutral-700">
-          Unread: <span data-testid="unread-count">{unreadCount}</span>
+          Ongelezen: <span data-testid="unread-count">{unreadCount}</span>
         </span>
 
         <select
@@ -123,12 +123,12 @@ export function NotificationCenter({ personId, periodId }: Props) {
           onChange={(e) => setFilterType(e.target.value)}
           className="px-3 py-2 border rounded text-sm"
         >
-          <option value="">All types</option>
-          <option value="ROSTER_GEREED">Roster Ready</option>
-          <option value="TOEWIJZING">Assignment Made</option>
-          <option value="RUILVERZOEK">Swap Requested</option>
-          <option value="RUIL_GOEDGEKEURD">Swap Approved</option>
-          <option value="PUBLICATIE_BERICHT">Publication Notice</option>
+          <option value="">Alle types</option>
+          <option value="ROSTER_GEREED">Rooster gereed</option>
+          <option value="TOEWIJZING">Toewijzing gemaakt</option>
+          <option value="RUILVERZOEK">Ruilverzoek</option>
+          <option value="RUIL_GOEDGEKEURD">Ruil goedgekeurd</option>
+          <option value="PUBLICATIE_BERICHT">Publicatiebericht</option>
         </select>
 
         <label className="flex items-center gap-2 text-sm">
@@ -138,7 +138,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
             onChange={(e) => setUnreadOnly(e.target.checked)}
             className="w-4 h-4"
           />
-          Unread only
+          Alleen ongelezen
         </label>
       </div>
 
@@ -146,7 +146,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
       <div className="space-y-3">
         {notifications.length === 0 && (
           <div className="card p-8 text-center">
-            <p className="text-neutral-600">No notifications</p>
+            <p className="text-neutral-600">Geen meldingen</p>
           </div>
         )}
 
@@ -190,7 +190,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
                   onClick={() => handleMarkRead(notif.id)}
                   className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
                 >
-                  Mark as read
+                  Markeer als gelezen
                 </button>
               )}
             </div>

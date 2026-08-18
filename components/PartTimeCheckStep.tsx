@@ -62,17 +62,17 @@ export function PartTimeCheckStep({ personId, periodId, patterns, onConfirm }: P
   }, [confirmed, onConfirm]);
 
   if (loading) {
-    return <div className="p-4 text-center">Generating part-time days...</div>;
+    return <div className="p-4 text-center">Deeltijddagen genereren...</div>;
   }
 
   if (generatedDays.length === 0) {
     return (
       <div className="card p-6">
-        <h3 className="font-bold text-lg mb-2">Part-time Days</h3>
+        <h3 className="font-bold text-lg mb-2">Deeltijddagen</h3>
         <p className="text-neutral-600">
           {patterns.length === 0
-            ? 'No part-time patterns configured'
-            : 'No part-time days fall within this period'}
+            ? 'Geen deeltijdpatronen ingesteld'
+            : 'Er vallen geen deeltijddagen binnen deze periode'}
         </p>
       </div>
     );
@@ -83,9 +83,9 @@ export function PartTimeCheckStep({ personId, periodId, patterns, onConfirm }: P
   return (
     <div className="card p-6 space-y-4">
       <div>
-        <h3 className="font-bold text-lg mb-1">Part-time Days Verification</h3>
+        <h3 className="font-bold text-lg mb-1">Deeltijddagen controleren</h3>
         <p className="text-sm text-neutral-600">
-          Please verify these days are correct, especially around year boundaries
+          Controleer of deze dagen kloppen, vooral rond de jaarwisseling
         </p>
       </div>
 
@@ -93,8 +93,8 @@ export function PartTimeCheckStep({ personId, periodId, patterns, onConfirm }: P
       {boundaryDays.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded p-3">
           <p className="text-sm text-amber-900 font-medium">
-            ⚠️ {boundaryDays.length} days fall on year boundaries (Dec/Jan).
-            Please verify week numbers are correct.
+            ⚠️ {boundaryDays.length} dagen vallen rond de jaarwisseling (dec/jan).
+            Controleer of de weeknummers kloppen.
           </p>
         </div>
       )}
@@ -135,14 +135,14 @@ export function PartTimeCheckStep({ personId, periodId, patterns, onConfirm }: P
                      focus:ring-blue-500 cursor-pointer"
         />
         <span className="text-sm text-neutral-700">
-          I have reviewed the part-time days above and confirm they are correct.
-          I understand that week numbers may differ if I work across year boundaries.
+          Ik heb de deeltijddagen hierboven gecontroleerd en bevestig dat ze kloppen.
+          Ik begrijp dat weeknummers kunnen verschillen bij werken rond de jaarwisseling.
         </span>
       </label>
 
       {/* Summary */}
       <div className="text-xs text-neutral-500 italic">
-        Total: {generatedDays.length} days • Year boundary: {boundaryDays.length} days
+        Totaal: {generatedDays.length} dagen • Jaarwisseling: {boundaryDays.length} dagen
       </div>
     </div>
   );

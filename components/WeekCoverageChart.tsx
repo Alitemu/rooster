@@ -61,23 +61,23 @@ export function WeekCoverageChart({ periodId }: Props) {
   }, [periodId]);
 
   if (loading) {
-    return <div className="card p-6 text-center text-neutral-600">Loading week coverage...</div>;
+    return <div className="card p-6 text-center text-neutral-600">Weekdekking laden...</div>;
   }
 
   if (weeks.length === 0) {
     return (
       <div className="card p-6">
-        <h3 className="font-bold text-lg mb-2">Week Coverage</h3>
-        <p className="text-neutral-600">No slots generated yet for this period</p>
+        <h3 className="font-bold text-lg mb-2">Weekdekking</h3>
+        <p className="text-neutral-600">Nog geen diensten gegenereerd voor deze periode</p>
       </div>
     );
   }
 
   return (
     <div className="card p-6">
-      <h3 className="font-bold text-lg mb-1">Week Coverage</h3>
+      <h3 className="font-bold text-lg mb-1">Weekdekking</h3>
       <p className="text-sm text-neutral-600 mb-4">
-        How many staff are still available per week, based on submitted preferences
+        Hoeveel personeel er per week nog beschikbaar is, op basis van ingediende voorkeuren
       </p>
       <div className="space-y-1">
         {weeks.map((week) => (
@@ -94,7 +94,7 @@ export function WeekCoverageChart({ periodId }: Props) {
             <span
               className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium w-24 text-center shrink-0 ${STATUS_STYLES[week.status]}`}
             >
-              {week.available_count} of {week.pool_size}
+              {week.available_count} van {week.pool_size}
             </span>
           </div>
         ))}

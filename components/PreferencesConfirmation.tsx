@@ -39,12 +39,12 @@ export function PreferencesConfirmation({
 
   const handleSubmit = async () => {
     if (!hasVacationCheck) {
-      setError('Please confirm you have blocked your vacation days');
+      setError('Bevestig dat je je vakantiedagen hebt geblokkeerd');
       return;
     }
 
     if (!parttimeConfirmed) {
-      setError('Please confirm part-time days first');
+      setError('Bevestig eerst je deeltijddagen');
       return;
     }
 
@@ -62,12 +62,12 @@ export function PreferencesConfirmation({
       });
 
       if (!res.ok) {
-        throw new Error('Failed to submit preferences');
+        throw new Error('Indienen van voorkeuren mislukt');
       }
 
       onSubmit?.(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unknown error';
+      const message = err instanceof Error ? err.message : 'Onbekende fout';
       setError(message);
       onSubmit?.(false);
     } finally {
@@ -76,27 +76,27 @@ export function PreferencesConfirmation({
   };
 
   const formatNumber = (n: number): string => {
-    if (n === 0) return 'no';
+    if (n === 0) return 'geen';
     if (n === 1) return '1';
     return String(n);
   };
 
-  const avondText = blockedDays.AVOND === 1 ? 'evening shift' : 'evening shifts';
-  const weekendText = blockedDays.WEEKEND === 1 ? 'weekend shift' : 'weekend shifts';
-  const feestdagText = blockedDays.FEESTDAG === 1 ? 'holiday shift' : 'holiday shifts';
+  const avondText = blockedDays.AVOND === 1 ? 'avonddienst' : 'avonddiensten';
+  const weekendText = blockedDays.WEEKEND === 1 ? 'weekenddienst' : 'weekenddiensten';
+  const feestdagText = blockedDays.FEESTDAG === 1 ? 'feestdagdienst' : 'feestdagdiensten';
 
   return (
     <div className="card p-6 space-y-6">
       <div>
-        <h3 className="font-bold text-lg mb-2">Confirm Your Preferences</h3>
+        <h3 className="font-bold text-lg mb-2">Bevestig je voorkeuren</h3>
         <p className="text-sm text-neutral-600">
-          Please review and confirm your blocked days before submitting
+          Controleer en bevestig je geblokkeerde dagen voordat je indient
         </p>
       </div>
 
       {/* Summary by counter type */}
       <div className="space-y-3">
-        <h4 className="font-semibold text-neutral-800">Blocked days by shift type:</h4>
+        <h4 className="font-semibold text-neutral-800">Geblokkeerde dagen per diensttype:</h4>
         <div className="space-y-2 pl-4">
           {blockedDays.AVOND > 0 && (
             <p className="text-sm">
@@ -114,21 +114,21 @@ export function PreferencesConfirmation({
             </p>
           )}
           {blockedDays.total === 0 && (
-            <p className="text-sm text-neutral-600 italic">No days blocked</p>
+            <p className="text-sm text-neutral-600 italic">Geen dagen geblokkeerd</p>
           )}
         </div>
       </div>
 
       {/* Critical vacation reminder */}
       <div className="bg-red-50 border-2 border-red-300 rounded p-4">
-        <p className="font-bold text-red-900 mb-2">⚠️ Important Reminder</p>
+        <p className="font-bold text-red-900 mb-2">⚠️ Belangrijke herinnering</p>
         <p className="text-red-900 font-semibold mb-2">
-          Have you blocked all your vacation days?
+          Heb je al je vakantiedagen geblokkeerd?
         </p>
         <p className="text-sm text-red-800 mb-3">
-          Vacation days will not be retrieved from any other source. If you don't block them here,
-          you will be scheduled to work during your vacation. Please verify all vacation periods
-          are marked as "blocked" before confirming.
+          Vakantiedagen worden nergens anders vandaan gehaald. Als je ze hier niet blokkeert,
+          kun je ingedeeld worden tijdens je vakantie. Controleer of alle vakantieperiodes zijn
+          gemarkeerd als "geblokkeerd" voordat je bevestigt.
         </p>
 
         <label className="flex items-start gap-3 cursor-pointer">
@@ -140,7 +140,7 @@ export function PreferencesConfirmation({
                        focus:ring-red-500 cursor-pointer"
           />
           <span className="text-sm font-medium text-red-900">
-            Yes, I have blocked all my vacation days
+            Ja, ik heb al mijn vakantiedagen geblokkeerd
           </span>
         </label>
       </div>
@@ -153,8 +153,8 @@ export function PreferencesConfirmation({
         </span>
         <span className={parttimeConfirmed ? 'text-green-900' : 'text-amber-900 font-medium'}>
           {parttimeConfirmed
-            ? 'Part-time days confirmed'
-            : 'Part-time days must be confirmed before submitting'}
+            ? 'Deeltijddagen bevestigd'
+            : 'Deeltijddagen moeten bevestigd zijn voordat je kunt indienen'}
         </span>
       </div>
 
@@ -174,12 +174,12 @@ export function PreferencesConfirmation({
             ? 'bg-neutral-400 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'}`}
       >
-        {submitting ? 'Submitting...' : 'Confirm and Submit'}
+        {submitting ? 'Bezig met indienen...' : 'Bevestigen en indienen'}
       </button>
 
       {/* Help text */}
       <div className="text-xs text-neutral-500 italic">
-        Once submitted, you cannot change your preferences until the period is closed.
+        Na het indienen kun je je voorkeuren niet meer wijzigen totdat de periode is gesloten.
       </div>
     </div>
   );

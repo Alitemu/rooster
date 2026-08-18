@@ -34,9 +34,9 @@ interface Props {
 }
 
 const TELLER_LABELS: Record<string, string> = {
-  AVOND: 'Evening',
+  AVOND: 'Avond',
   WEEKEND: 'Weekend',
-  FEESTDAG: 'Holiday',
+  FEESTDAG: 'Feestdag',
 };
 
 export function FillGapsPanel({ periodId, onAllFilled }: Props) {
@@ -71,11 +71,11 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
         body: JSON.stringify({ person_id: personId, slot_id: slotId, reason: 'Handmatig aangevuld' }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to assign');
+      if (!res.ok) throw new Error(data.error || 'Toewijzen mislukt');
 
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to assign');
+      setError(err instanceof Error ? err.message : 'Toewijzen mislukt');
     } finally {
       setAssigning(null);
     }
@@ -89,7 +89,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
     return (
       <div className="card p-4 bg-green-50 border border-green-200">
         <p className="text-sm text-green-900 font-medium">
-          ✓ Every shift in this roster is covered.
+          ✓ Elke dienst in dit rooster is ingevuld.
         </p>
       </div>
     );
@@ -98,11 +98,11 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
   return (
     <div className="card p-6 bg-amber-50 border border-amber-200">
       <h3 className="font-semibold text-amber-900 mb-1">
-        ⚠️ {slots.length} shift{slots.length === 1 ? '' : 's'} still need{slots.length === 1 ? 's' : ''} someone
+        ⚠️ {slots.length} dienst{slots.length === 1 ? '' : 'en'} nog niet ingevuld
       </h3>
       <p className="text-sm text-amber-800 mb-4">
-        The solver couldn&apos;t find anyone for these within the configured limits. Fill them in yourself,
-        in consultation with whoever is available.
+        De solver kon hiervoor niemand vinden binnen de ingestelde grenzen. Vul ze zelf in,
+        in overleg met wie beschikbaar is.
       </p>
 
       {error && (
@@ -127,13 +127,13 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
                 · {TELLER_LABELS[slot.teller] || slot.teller}
               </p>
               <p className="text-xs text-neutral-500">
-                Week {slot.iso_week} · {slot.assigned_count}/{slot.benodigd_aantal_personen} filled
+                Week {slot.iso_week} · {slot.assigned_count}/{slot.benodigd_aantal_personen} ingevuld
               </p>
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
               {slot.eligible_people.length === 0 ? (
-                <span className="text-xs text-red-600">No one is eligible (all blocked)</span>
+                <span className="text-xs text-red-600">Niemand komt in aanmerking (allemaal geblokkeerd)</span>
               ) : (
                 <>
                   <select
@@ -143,7 +143,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
                       setSelection((prev) => ({ ...prev, [slot.slot_id]: e.target.value }))
                     }
                   >
-                    <option value="">Choose someone…</option>
+                    <option value="">Kies iemand…</option>
                     {slot.eligible_people.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.codenaam}
@@ -155,7 +155,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
                     disabled={!selection[slot.slot_id] || assigning === slot.slot_id}
                     className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 transition-colors"
                   >
-                    {assigning === slot.slot_id ? 'Assigning…' : 'Assign'}
+                    {assigning === slot.slot_id ? 'Bezig…' : 'Toewijzen'}
                   </button>
                 </>
               )}
