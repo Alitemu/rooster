@@ -99,7 +99,7 @@ export async function POST(
       data: {
         swap_request_id: swapId,
         status: 'AFGEWEZEN',
-        message: 'Swap request rejected',
+        message: 'Ruilverzoek geweigerd',
       },
     });
   } catch (error) {

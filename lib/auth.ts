@@ -104,19 +104,19 @@ export function validatePasswordStrength(password: string): string[] {
   const errors: string[] = [];
 
   if (password.length < 12) {
-    errors.push('Password must be at least 12 characters');
+    errors.push('Wachtwoord moet minimaal 12 tekens bevatten');
   }
   if (!/[a-z]/.test(password)) {
-    errors.push('Password must contain lowercase letters');
+    errors.push('Wachtwoord moet kleine letters bevatten');
   }
   if (!/[A-Z]/.test(password)) {
-    errors.push('Password must contain uppercase letters');
+    errors.push('Wachtwoord moet hoofdletters bevatten');
   }
   if (!/[0-9]/.test(password)) {
-    errors.push('Password must contain numbers');
+    errors.push('Wachtwoord moet cijfers bevatten');
   }
   if (!/[!@#$%^&*()_\-+=\[\]{};:'",.<>?/\\|`~]/.test(password)) {
-    errors.push('Password must contain special characters');
+    errors.push('Wachtwoord moet speciale tekens bevatten');
   }
 
   return errors;

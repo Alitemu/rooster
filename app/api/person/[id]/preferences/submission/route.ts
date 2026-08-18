@@ -49,7 +49,7 @@ export async function POST(
         success: false,
         error: {
           code: 'MISSING_PERIOD_ID',
-          message: 'Period ID is required',
+          message: 'Periode-ID is verplicht',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -60,7 +60,7 @@ export async function POST(
         success: false,
         error: {
           code: 'PARTTIME_NOT_CONFIRMED',
-          message: 'Must confirm part-time days before submitting',
+          message: 'Bevestig eerst je deeltijddagen voordat je indient',
         },
       };
       return NextResponse.json(response, { status: 400 });

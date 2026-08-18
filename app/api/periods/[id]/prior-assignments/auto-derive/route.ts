@@ -89,7 +89,7 @@ export async function POST(
           period_id: id,
           derived_count: 0,
           from_previous_period_id: null,
-          message: 'No previous published period found',
+          message: 'Geen vorige gepubliceerde periode gevonden',
         },
       };
       return NextResponse.json(response);

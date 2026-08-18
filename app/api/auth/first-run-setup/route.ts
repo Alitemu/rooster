@@ -30,7 +30,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!codenaam || !password) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'MISSING_FIELDS', message: 'Codenaam and password are required' },
+        error: { code: 'MISSING_FIELDS', message: 'Codenaam en wachtwoord zijn verplicht' },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -57,7 +57,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!person || person.wachtwoord_hash !== null) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'SETUP_NOT_AVAILABLE', message: 'This account is not available for first-run setup' },
+        error: { code: 'SETUP_NOT_AVAILABLE', message: 'Dit account is niet beschikbaar voor eerste installatie' },
       };
       return NextResponse.json(response, { status: 409 });
     }
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (result.changes === 0) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'SETUP_NOT_AVAILABLE', message: 'This account is not available for first-run setup' },
+        error: { code: 'SETUP_NOT_AVAILABLE', message: 'Dit account is niet beschikbaar voor eerste installatie' },
       };
       return NextResponse.json(response, { status: 409 });
     }

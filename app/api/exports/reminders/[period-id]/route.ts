@@ -60,7 +60,7 @@ export async function GET(
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Period not found',
+          message: 'Periode niet gevonden',
         },
       };
       return NextResponse.json(response, { status: 404 });
@@ -116,30 +116,30 @@ export async function GET(
 
       const subject =
         urgency === 'urgent'
-          ? `URGENT: ${period.naam} Preferences Due Tomorrow`
+          ? `DRINGEND: voorkeuren voor ${period.naam} moeten morgen binnen zijn`
           : urgency === 'moderate'
-            ? `Reminder: ${period.naam} Preferences Due Soon`
-            : `Reminder: ${period.naam} Preferences Due`;
+            ? `Herinnering: voorkeuren voor ${period.naam} moeten binnenkort binnen zijn`
+            : `Herinnering: voorkeuren voor ${period.naam} nog niet ontvangen`;
 
       const urgencyLine =
         urgency === 'urgent'
-          ? `This is your final reminder - your preferences are due by ${deadline}.`
+          ? `Dit is je laatste herinnering - je voorkeuren moeten uiterlijk ${deadline} binnen zijn.`
           : urgency === 'moderate'
-            ? `Just a heads up: only a few days left to submit your preferences, due by ${deadline}.`
-            : `This is a reminder that your shift preferences for ${period.naam} are due by ${deadline}.`;
+            ? `Even een seintje: je hebt nog maar een paar dagen om je voorkeuren in te dienen, uiterlijk ${deadline}.`
+            : `Dit is een herinnering dat je dienstvoorkeuren voor ${period.naam} uiterlijk ${deadline} binnen moeten zijn.`;
 
-      const body = `Hello ${person.codenaam},
+      const body = `Hoi ${person.codenaam},
 
 ${urgencyLine}
 
-Please visit the following link to submit your preferences:
+Ga naar de volgende link om je voorkeuren in te dienen:
 ${personalLink}
 
-Your input helps us create a fair roster that considers everyone's needs and availability.
+Jouw input helpt ons een eerlijk rooster te maken dat rekening houdt met ieders wensen en beschikbaarheid.
 
-If you have any questions, please contact the scheduler.
+Heb je vragen? Neem dan contact op met de roosteraar.
 
-Thank you!`;
+Bedankt!`;
 
       const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 

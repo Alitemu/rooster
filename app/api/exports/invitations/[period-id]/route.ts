@@ -37,7 +37,7 @@ export async function GET(
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Period not found',
+          message: 'Periode niet gevonden',
         },
       };
       return NextResponse.json(response, { status: 404 });
@@ -75,7 +75,7 @@ export async function GET(
     // Build CSV content
     const baseUrl = process.env.BASE_URL || 'https://localhost:8010';
     const csvLines: string[] = [
-      'Name,Personal Link,Deadline',
+      'Naam,Persoonlijke link,Deadline',
       ...links.map((link) => {
         const personalLink = `${baseUrl}/person/${link.token}`;
         const deadline = new Date(period.deadline).toLocaleString();

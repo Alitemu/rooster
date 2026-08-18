@@ -25,7 +25,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     if (!setupToken || !code || !isValidTOTPFormat(code)) {
       return NextResponse.json(
-        { success: false, error: { code: 'INVALID_INPUT', message: 'Setup token and 6-digit code are required' } },
+        { success: false, error: { code: 'INVALID_INPUT', message: 'Setup-token en 6-cijferige code zijn verplicht' } },
         { status: 400 }
       );
     }
@@ -33,14 +33,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const setupPayload = verifyPayload<TotpSetupPayload>(setupToken);
     if (!setupPayload || setupPayload.kind !== 'totp-setup' || setupPayload.personId !== auth.userId) {
       return NextResponse.json(
-        { success: false, error: { code: 'SETUP_EXPIRED', message: 'Setup token is invalid or expired. Start again.' } },
+        { success: false, error: { code: 'SETUP_EXPIRED', message: 'Setup-token is ongeldig of verlopen. Begin opnieuw.' } },
         { status: 400 }
       );
     }
 
     if (!verifyTOTPCode(setupPayload.secret, code)) {
       return NextResponse.json(
-        { success: false, error: { code: 'INVALID_CODE', message: 'Incorrect code' } },
+        { success: false, error: { code: 'INVALID_CODE', message: 'Onjuiste code' } },
         { status: 400 }
       );
     }

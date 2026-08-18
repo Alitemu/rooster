@@ -84,7 +84,7 @@ export async function POST(
         success: false,
         error: {
           code: 'MISSING_PERSON_ID',
-          message: 'person_id is required',
+          message: 'person_id is verplicht',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -99,7 +99,7 @@ export async function POST(
         success: false,
         error: {
           code: 'PERSON_NOT_FOUND',
-          message: 'Person not found',
+          message: 'Persoon niet gevonden',
         },
       };
       return NextResponse.json(response, { status: 404 });
@@ -116,7 +116,7 @@ export async function POST(
         success: false,
         error: {
           code: 'LINK_EXISTS',
-          message: 'Access link already exists for this person and period',
+          message: 'Er bestaat al een toegangslink voor deze persoon en periode',
         },
       };
       return NextResponse.json(response, { status: 409 });

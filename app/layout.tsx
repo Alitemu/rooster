@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Dienstrooster',
-  description: 'Fair shift scheduling for medical wards',
+  description: 'Eerlijke roosterplanning voor medische afdelingen',
   viewport: {
     width: 'device-width',
     initialScale: 1,

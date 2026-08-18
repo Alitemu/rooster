@@ -107,7 +107,7 @@ export async function POST(
         success: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'Missing required fields',
+          message: 'Verplichte velden ontbreken',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -199,7 +199,7 @@ export async function POST(
         success: false,
         error: {
           code: 'PATTERN_ALREADY_EXISTS',
-          message: 'You already have a part-time pattern for this day over the same period',
+          message: 'Je hebt al een deeltijdpatroon voor deze dag in dezelfde periode',
         },
       };
       return NextResponse.json(response, { status: 409 });

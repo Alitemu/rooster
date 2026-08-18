@@ -592,60 +592,59 @@ async function seed() {
     // preview or adapt.
     //
     // Placeholders use the {{key}} form that renderTemplate() in
-    // app/api/notifications/send-test/route.ts substitutes. Wording is
-    // English to match the reminder/invitation exports, and refers to
-    // people only by codenaam.
+    // app/api/notifications/send-test/route.ts substitutes. Wording refers
+    // to people only by codenaam.
     console.log('Creating notification templates...');
     const templates: Array<[string, string, string]> = [
       [
         'PERIOD_OPENED',
-        '{{periode}}: preferences are open',
-        'Hi {{codenaam}},\n\nThe schedule for **{{periode}}** is open for input.\n\nPlease fill in the days you cannot work before **{{deadline}}**.\n\n{{link}}\n\nRemember to block your holidays - they are not taken from anywhere else.',
+        '{{periode}}: voorkeuren staan open',
+        'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** staat open voor invoer.\n\nGeef de dagen waarop je niet kunt werken door vóór **{{deadline}}**.\n\n{{link}}\n\nVergeet niet je vakantiedagen te blokkeren - die worden nergens anders vandaan gehaald.',
       ],
       [
         'PARTTIME_CHECK',
-        '{{periode}}: check your part-time days',
-        'Hi {{codenaam}},\n\nWe generated your part-time days for **{{periode}}** from your pattern.\n\nPlease check them - especially around the turn of the year, where week numbers can shift.\n\n{{link}}',
+        '{{periode}}: controleer je deeltijddagen',
+        'Hoi {{codenaam}},\n\nWe hebben je deeltijddagen voor **{{periode}}** gegenereerd op basis van je patroon.\n\nControleer ze - vooral rond de jaarwisseling, waar weeknummers kunnen verschuiven.\n\n{{link}}',
       ],
       [
         'REMINDER',
-        'Reminder: {{periode}} preferences due',
-        'Hi {{codenaam}},\n\nWe have not received your preferences for **{{periode}}** yet.\n\nThe deadline is **{{deadline}}**.\n\n{{link}}',
+        'Herinnering: voorkeuren {{periode}} nog niet ontvangen',
+        'Hoi {{codenaam}},\n\nWe hebben je voorkeuren voor **{{periode}}** nog niet ontvangen.\n\nDe deadline is **{{deadline}}**.\n\n{{link}}',
       ],
       [
         'FINAL_WARNING',
-        'Last call: {{periode}} preferences close soon',
-        'Hi {{codenaam}},\n\nThe deadline for **{{periode}}** is **{{deadline}}**, and your preferences are still missing.\n\nIf nothing comes in, the schedule will be generated without your blocked days.\n\n{{link}}',
+        'Laatste kans: voorkeuren {{periode}} sluiten binnenkort',
+        'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is **{{deadline}}**, en je voorkeuren ontbreken nog.\n\nAls er niets binnenkomt, wordt het rooster gegenereerd zonder je geblokkeerde dagen.\n\n{{link}}',
       ],
       [
         'DEADLINE_PASSED',
-        '{{periode}}: the deadline has passed',
-        'Hi {{codenaam}},\n\nThe deadline for **{{periode}}** has passed and preferences are now read-only.\n\nIf something needs changing, contact the planner directly.',
+        '{{periode}}: de deadline is verstreken',
+        'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
       ],
       [
         'BLOCK_OVERRIDDEN',
-        '{{periode}}: one of your preferences could not be honoured',
-        'Hi {{codenaam}},\n\nWhile building **{{periode}}** we could not honour one of your markings:\n\n{{details}}\n\nReason: {{reden}}\n\nContact the planner if this is a problem.',
+        '{{periode}}: een van je voorkeuren kon niet worden gehonoreerd',
+        'Hoi {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de roosteraar als dit een probleem is.',
       ],
       [
         'SCHEDULE_PUBLISHED',
-        '{{periode}}: the schedule is published',
-        'Hi {{codenaam}},\n\nThe schedule for **{{periode}}** is final.\n\n{{link}}\n\nYou can request a swap with a colleague from your own overview.',
+        '{{periode}}: het rooster is gepubliceerd',
+        'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** is definitief.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
       ],
       [
         'SWAP_REQUESTED',
-        'Swap request from {{aanvrager}}',
-        'Hi {{codenaam}},\n\n{{aanvrager}} would like to swap a shift with you.\n\n{{details}}\n\n{{link}}',
+        'Ruilverzoek van {{aanvrager}}',
+        'Hoi {{codenaam}},\n\n{{aanvrager}} wil een dienst met je ruilen.\n\n{{details}}\n\n{{link}}',
       ],
       [
         'SWAP_RESULT',
-        'Your swap request was {{uitkomst}}',
-        'Hi {{codenaam}},\n\nYour swap request has been **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
+        'Je ruilverzoek is {{uitkomst}}',
+        'Hoi {{codenaam}},\n\nJe ruilverzoek is **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
       ],
       [
         'CORRECTION_BOOKED',
-        '{{periode}}: a correction was recorded',
-        'Hi {{codenaam}},\n\nA correction was recorded for you and will be applied to **{{periode}}**.\n\n{{details}}\n\nReason: {{reden}}',
+        '{{periode}}: een correctie is geregistreerd',
+        'Hoi {{codenaam}},\n\nEr is een correctie voor je geregistreerd die wordt toegepast op **{{periode}}**.\n\n{{details}}\n\nReden: {{reden}}',
       ],
     ];
 

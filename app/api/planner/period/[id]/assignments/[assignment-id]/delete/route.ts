@@ -110,7 +110,7 @@ export async function DELETE(
       success: true,
       data: {
         assignment_id: assignmentId,
-        message: 'Assignment deleted',
+        message: 'Toewijzing verwijderd',
       },
     });
   } catch (error) {

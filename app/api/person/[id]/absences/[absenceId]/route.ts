@@ -70,7 +70,7 @@ export async function PATCH(
     if (Object.keys(updates).length === 0) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'NO_UPDATES', message: 'No fields to update' },
+        error: { code: 'NO_UPDATES', message: 'Geen velden om bij te werken' },
       };
       return NextResponse.json(response, { status: 400 });
     }

@@ -178,7 +178,7 @@ export async function PATCH(
         success: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'Missing required fields: datum, teller',
+          message: 'Verplichte velden ontbreken: datum, teller',
         },
       };
       return NextResponse.json(response, { status: 400 });

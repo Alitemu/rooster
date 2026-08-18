@@ -31,7 +31,7 @@ export async function GET(
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'NOT_FOUND', message: 'Period not found' },
+        error: { code: 'NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

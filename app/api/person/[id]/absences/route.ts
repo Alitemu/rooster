@@ -104,7 +104,7 @@ export async function POST(
         success: false,
         error: {
           code: 'INVALID_INPUT',
-          message: 'Missing required fields: van_datum, tot_datum, soort',
+          message: 'Verplichte velden ontbreken: van_datum, tot_datum, soort',
         },
       };
       return NextResponse.json(response, { status: 400 });

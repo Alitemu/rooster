@@ -42,7 +42,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'MISSING_FIELDS',
-          message: 'Missing required fields: naam, pool_id, start_datum, eind_datum, deadline',
+          message: 'Verplichte velden ontbreken: naam, pool_id, start_datum, eind_datum, deadline',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'INVALID_DATE',
-          message: 'Invalid date format. Use ISO-8601 (YYYY-MM-DD)',
+          message: 'Ongeldige datumnotatie. Gebruik ISO-8601 (JJJJ-MM-DD)',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -69,7 +69,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'INVALID_PERIOD',
-          message: 'Start date must be before end date',
+          message: 'Startdatum moet vóór einddatum liggen',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'INVALID_DEADLINE',
-          message: 'Deadline must be before or on end date',
+          message: 'Deadline moet vóór of op de einddatum liggen',
         },
       };
       return NextResponse.json(response, { status: 400 });

@@ -111,7 +111,7 @@ export async function POST(
         success: true,
         data: {
           assignment: existing,
-          message: 'Assignment already exists',
+          message: 'Toewijzing bestaat al',
         },
       });
     }
@@ -151,7 +151,7 @@ export async function POST(
           bron: 'MANUAL',
           aangemaakt_op: now,
         },
-        message: 'Assignment created successfully',
+        message: 'Toewijzing succesvol aangemaakt',
       },
     });
   } catch (error) {

@@ -55,7 +55,7 @@ export async function GET(
         success: false,
         error: {
           code: 'NOT_FOUND',
-          message: 'Period not found',
+          message: 'Periode niet gevonden',
         },
       };
       return NextResponse.json(response, { status: 404 });

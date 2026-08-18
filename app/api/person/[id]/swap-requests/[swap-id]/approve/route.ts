@@ -148,7 +148,7 @@ export async function POST(
       data: {
         swap_request_id: swapId,
         status: 'GOEDGEKEURD',
-        message: 'Swap approved and assignments swapped',
+        message: 'Ruil goedgekeurd en diensten geruild',
       },
     });
   } catch (error) {

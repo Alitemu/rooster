@@ -72,9 +72,9 @@ export function PersonalRosterView({
 
   // Map counter type to display name
   const counterDisplayName: Record<string, string> = {
-    AVOND: 'Evening',
+    AVOND: 'Avond',
     WEEKEND: 'Weekend',
-    FEESTDAG: 'Holiday',
+    FEESTDAG: 'Feestdag',
   };
 
   const softBlockSet = new Set(
@@ -85,15 +85,15 @@ export function PersonalRosterView({
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-neutral-900 mb-2">Your Roster</h2>
+        <h2 className="text-2xl font-bold text-neutral-900 mb-2">Jouw rooster</h2>
         <p className="text-neutral-600">
-          Shifts assigned for this period based on your preferences and availability
+          Toegewezen diensten voor deze periode, op basis van je voorkeuren en beschikbaarheid
         </p>
       </div>
 
       {/* Balance summary */}
       <div className="card p-6 space-y-4">
-        <h3 className="font-bold text-lg">Balance Summary</h3>
+        <h3 className="font-bold text-lg">Overzicht saldo</h3>
         <div className="space-y-3">
           {balances.map((balance) => (
             <div key={balance.counter} className="flex items-start gap-4 pb-3 border-b last:border-b-0">
@@ -105,7 +105,7 @@ export function PersonalRosterView({
                   {balance.message}
                 </p>
                 <p className="text-xs text-neutral-600">
-                  Current: {balance.current} | Target: {balance.target_min}–{balance.target_max}
+                  Huidig: {balance.current} | Streefaantal: {balance.target_min}–{balance.target_max}
                 </p>
               </div>
             </div>
@@ -120,11 +120,11 @@ export function PersonalRosterView({
             <span className="text-xl">⚠️</span>
             <div>
               <p className="font-semibold text-amber-900">
-                Assigned on preferred days off
+                Ingedeeld op dagen met voorkeur "liever niet"
               </p>
               <p className="text-sm text-amber-800 mt-1">
-                You are scheduled on {softBlockViolations.length} day(s) that you
-                marked as "prefer not":
+                Je bent ingedeeld op {softBlockViolations.length} dag(en) die je hebt
+                gemarkeerd als "liever niet":
               </p>
               <ul className="text-sm text-amber-800 mt-2 space-y-1">
                 {softBlockViolations.slice(0, 5).map((v) => (
@@ -133,7 +133,7 @@ export function PersonalRosterView({
                   </li>
                 ))}
                 {softBlockViolations.length > 5 && (
-                  <li>• ... and {softBlockViolations.length - 5} more</li>
+                  <li>• ... en {softBlockViolations.length - 5} meer</li>
                 )}
               </ul>
             </div>
@@ -143,7 +143,7 @@ export function PersonalRosterView({
 
       {/* Shifts by week */}
       <div className="card p-6">
-        <h3 className="font-bold text-lg mb-4">Shifts by Week</h3>
+        <h3 className="font-bold text-lg mb-4">Diensten per week</h3>
         <div className="space-y-4">
           {Array.from(weekView.entries())
             .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
@@ -154,7 +154,7 @@ export function PersonalRosterView({
                   {shifts.map((shift) => {
                     const [datum, teller] = shift.split('/');
                     const date = parseISO(datum);
-                    const dayName = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'][
+                    const dayName = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'][
                       date.getDay()
                     ];
                     const isSoftBlocked = softBlockSet.has(shift);
@@ -190,22 +190,22 @@ export function PersonalRosterView({
             CLAUDE.md rules out ("readable on 375px width"). */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h3 className="font-bold text-lg">Shift Swaps</h3>
+            <h3 className="font-bold text-lg">Diensten ruilen</h3>
             <p className="text-sm text-neutral-600 mt-1">
-              Request to swap shifts with colleagues
+              Vraag een collega om een dienst te ruilen
             </p>
           </div>
           <button
             onClick={() => setSwapDialogOpen(true)}
             className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
-            + Request Swap
+            + Ruilverzoek
           </button>
         </div>
 
         {swapSuccessMessage && (
           <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-            Swap request created
+            Ruilverzoek aangemaakt
           </div>
         )}
 
@@ -216,7 +216,7 @@ export function PersonalRosterView({
               onClick={() => setShowSwapManagement(false)}
               className="text-sm text-neutral-600 hover:text-neutral-900 mb-3"
             >
-              Hide Swap Requests
+              Ruilverzoeken verbergen
             </button>
             <SwapManagementPanel personId={personId} periodId={periodId} />
           </div>
@@ -226,7 +226,7 @@ export function PersonalRosterView({
             onClick={() => setShowSwapManagement(true)}
             className="text-sm text-blue-600 hover:text-blue-700 font-medium"
           >
-            View Swap Requests
+            Ruilverzoeken bekijken
           </button>
         )}
       </div>
@@ -234,11 +234,11 @@ export function PersonalRosterView({
       {/* Help text */}
       <div className="bg-neutral-50 p-4 rounded text-sm text-neutral-600 space-y-2">
         <p>
-          <strong>A</strong> = Evening shift | <strong>W</strong> = Weekend shift |{' '}
-          <strong>H</strong> = Holiday shift
+          <strong>A</strong> = Avonddienst | <strong>W</strong> = Weekenddienst |{' '}
+          <strong>F</strong> = Feestdagdienst
         </p>
         <p>
-          Questions about your roster? Contact your scheduler or visit the help section.
+          Vragen over je rooster? Neem contact op met de roosteraar.
         </p>
       </div>
 

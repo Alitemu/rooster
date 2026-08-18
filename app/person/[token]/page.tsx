@@ -95,7 +95,7 @@ export default function PersonalLinkPage() {
         // Validate token format and fetch person info
         const res = await fetch(`/api/auth/verify-link?token=${encodeURIComponent(token)}`);
         if (!res.ok) {
-          throw new Error('Invalid or expired access link');
+          throw new Error('Ongeldige of verlopen toegangslink');
         }
 
         const data = await res.json();
@@ -105,7 +105,7 @@ export default function PersonalLinkPage() {
 
         // Fetch period details
         const periodRes = await fetch(`/api/periods/${period_id}`);
-        if (!periodRes.ok) throw new Error('Failed to load period');
+        if (!periodRes.ok) throw new Error('Kon periode niet laden');
 
         const periodData = await periodRes.json();
         const periodInfo = periodData.data;
@@ -151,7 +151,7 @@ export default function PersonalLinkPage() {
 
         setLoading(false);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load preferences';
+        const message = err instanceof Error ? err.message : 'Kon voorkeuren niet laden';
         setError(message);
         setLoading(false);
       }
@@ -197,7 +197,7 @@ export default function PersonalLinkPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8 text-center">
-          <p className="text-lg text-neutral-600">Loading preferences...</p>
+          <p className="text-lg text-neutral-600">Voorkeuren laden...</p>
         </div>
       </div>
     );
@@ -207,11 +207,11 @@ export default function PersonalLinkPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Access Error</h1>
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Toegangsfout</h1>
           <p className="text-neutral-700 mb-6">{error}</p>
           <p className="text-sm text-neutral-600">
-            If you received this link in an email, please check that the URL is complete and correct.
-            The link may have expired. Contact your scheduler for a new link.
+            Controleer of de URL volledig en juist is als je deze link via e-mail hebt gekregen.
+            De link kan verlopen zijn. Neem contact op met de roosteraar voor een nieuwe link.
           </p>
         </div>
       </div>
@@ -222,7 +222,7 @@ export default function PersonalLinkPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8">
-          <p className="text-neutral-600">Failed to load period information</p>
+          <p className="text-neutral-600">Kon periode-informatie niet laden</p>
         </div>
       </div>
     );
@@ -240,7 +240,7 @@ export default function PersonalLinkPage() {
               {period.naam}
             </h1>
             <p className="text-neutral-600 mb-4">
-              {new Date(period.start_datum).toLocaleDateString()} to{' '}
+              {new Date(period.start_datum).toLocaleDateString()} t/m{' '}
               {new Date(period.eind_datum).toLocaleDateString()}
             </p>
             <p className="text-sm text-neutral-600">
@@ -252,7 +252,7 @@ export default function PersonalLinkPage() {
               onClick={() => setNotificationsOpen(!notificationsOpen)}
               className="shrink-0 self-start px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
             >
-              🔔 Notifications
+              🔔 Meldingen
             </button>
           )}
         </div>
@@ -265,7 +265,7 @@ export default function PersonalLinkPage() {
             onClick={() => setNotificationsOpen(false)}
             className="text-sm text-blue-600 hover:text-blue-700 font-medium mb-3"
           >
-            Close Notifications
+            Meldingen sluiten
           </button>
           <NotificationCenter personId={personId} />
         </div>
@@ -286,10 +286,10 @@ export default function PersonalLinkPage() {
                     ? 'bg-green-100 text-green-800'
                     : 'bg-neutral-200 text-neutral-700 hover:bg-neutral-300'}`}
             >
-              {step === 'calendar' && '📅 Preferences'}
-              {step === 'parttime' && '⏰ Part-time'}
-              {step === 'confirmation' && '✓ Confirm'}
-              {step === 'submitted' && '✅ Submitted'}
+              {step === 'calendar' && '📅 Voorkeuren'}
+              {step === 'parttime' && '⏰ Deeltijd'}
+              {step === 'confirmation' && '✓ Bevestigen'}
+              {step === 'submitted' && '✅ Ingediend'}
             </button>
           ))}
         </div>
@@ -311,21 +311,21 @@ export default function PersonalLinkPage() {
               current: rosterData.summary.balances['AVOND'] || 0,
               target_min: 0,
               target_max: 0,
-              message: `${rosterData.summary.by_shift_type['AVOND'] || 0} evening shifts assigned`,
+              message: `${rosterData.summary.by_shift_type['AVOND'] || 0} avonddiensten toegewezen`,
             },
             {
               counter: 'WEEKEND',
               current: rosterData.summary.balances['WEEKEND'] || 0,
               target_min: 0,
               target_max: 0,
-              message: `${rosterData.summary.by_shift_type['WEEKEND'] || 0} weekend shifts assigned`,
+              message: `${rosterData.summary.by_shift_type['WEEKEND'] || 0} weekenddiensten toegewezen`,
             },
             {
               counter: 'FEESTDAG',
               current: rosterData.summary.balances['FEESTDAG'] || 0,
               target_min: 0,
               target_max: 0,
-              message: `${rosterData.summary.by_shift_type['FEESTDAG'] || 0} holiday shifts assigned`,
+              message: `${rosterData.summary.by_shift_type['FEESTDAG'] || 0} feestdagdiensten toegewezen`,
             },
           ]}
           softBlockViolations={softBlockViolations}
@@ -346,7 +346,7 @@ export default function PersonalLinkPage() {
                        text-white hover:bg-blue-700 active:bg-blue-800
                        transition-colors"
           >
-            Next: Review Part-time Days
+            Volgende: deeltijddagen controleren
           </button>
         </div>
       )}
@@ -365,7 +365,7 @@ export default function PersonalLinkPage() {
               className="flex-1 py-3 px-4 rounded font-semibold bg-neutral-200
                          text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
-              Back
+              Terug
             </button>
             <button
               onClick={() => setCurrentStep('confirmation')}
@@ -376,7 +376,7 @@ export default function PersonalLinkPage() {
                   ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
                   : 'bg-neutral-400 cursor-not-allowed'}`}
             >
-              Next: Confirm
+              Volgende: bevestigen
             </button>
           </div>
         </div>
@@ -404,14 +404,13 @@ export default function PersonalLinkPage() {
       {period.status !== 'GEPUBLICEERD' && currentStep === 'submitted' && (
         <div className="card p-8 bg-green-50 border-2 border-green-300 text-center space-y-4">
           <div className="text-6xl mb-4">✅</div>
-          <h2 className="text-2xl font-bold text-green-900">Preferences Submitted</h2>
+          <h2 className="text-2xl font-bold text-green-900">Voorkeuren ingediend</h2>
           <p className="text-green-800">
-            Your preferences have been successfully submitted. You will receive a confirmation
-            email shortly.
+            Je voorkeuren zijn succesvol ingediend.
           </p>
           <p className="text-sm text-green-700">
-            You can close this window. The scheduler will generate the roster based on all
-            submitted preferences.
+            Je kunt dit venster sluiten. De roosteraar genereert het rooster op basis van alle
+            ingediende voorkeuren.
           </p>
         </div>
       )}

@@ -71,7 +71,7 @@ export async function PATCH(
     if (Object.keys(updates).length === 0) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'NO_UPDATES', message: 'No fields to update' },
+        error: { code: 'NO_UPDATES', message: 'Geen velden om bij te werken' },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -107,7 +107,7 @@ export async function PATCH(
         success: false,
         error: {
           code: 'PATTERN_ALREADY_EXISTS',
-          message: 'You already have a part-time pattern for this day over the same period',
+          message: 'Je hebt al een deeltijdpatroon voor deze dag in dezelfde periode',
         },
       };
       return NextResponse.json(response, { status: 409 });

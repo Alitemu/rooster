@@ -49,7 +49,7 @@ export async function GET(
         success: false,
         error: {
           code: 'INVALID_PERIOD_ID',
-          message: 'Period ID must be a valid string',
+          message: 'Periode-ID moet een geldige tekenreeks zijn',
         },
       };
       return NextResponse.json(response, { status: 400 });

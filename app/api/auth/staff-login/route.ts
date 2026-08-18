@@ -23,14 +23,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (!codenaam || !password) {
       return NextResponse.json(
-        { success: false, error: { code: 'MISSING_FIELDS', message: 'Codenaam and password are required' } },
+        { success: false, error: { code: 'MISSING_FIELDS', message: 'Codenaam en wachtwoord zijn verplicht' } },
         { status: 400 }
       );
     }
 
     const invalidCredentials = () =>
       NextResponse.json(
-        { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' } },
+        { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Ongeldige inloggegevens' } },
         { status: 401 }
       );
 
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (person.totp_secret) {
       if (!totpCode || !isValidTOTPFormat(totpCode)) {
         return NextResponse.json(
-          { success: false, error: { code: 'TOTP_REQUIRED', message: 'Authentication code is required' } },
+          { success: false, error: { code: 'TOTP_REQUIRED', message: 'Authenticatiecode is verplicht' } },
           { status: 401 }
         );
       }

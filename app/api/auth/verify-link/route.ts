@@ -32,7 +32,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'MISSING_TOKEN',
-          message: 'Access token is required',
+          message: 'Toegangstoken is verplicht',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'INVALID_TOKEN',
-          message: 'Invalid or expired access link',
+          message: 'Ongeldige of verlopen toegangslink',
         },
       };
       return NextResponse.json(response, { status: 401 });
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'TOKEN_REVOKED',
-          message: 'This access link has been revoked',
+          message: 'Deze toegangslink is ingetrokken',
         },
       };
       return NextResponse.json(response, { status: 401 });
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         success: false,
         error: {
           code: 'NO_ACTIVE_PERIOD',
-          message: 'No active scheduling period found',
+          message: 'Geen actieve roosterperiode gevonden',
         },
       };
       return NextResponse.json(response, { status: 404 });

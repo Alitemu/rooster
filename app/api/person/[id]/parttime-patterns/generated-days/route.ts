@@ -38,7 +38,7 @@ export async function GET(
     if (!periodId) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'MISSING_PERIOD_ID', message: 'period_id query param is required' },
+        error: { code: 'MISSING_PERIOD_ID', message: 'de queryparameter period_id is verplicht' },
       };
       return NextResponse.json(response, { status: 400 });
     }

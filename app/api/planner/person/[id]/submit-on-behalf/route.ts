@@ -34,7 +34,7 @@ export async function POST(
         success: false,
         error: {
           code: 'MISSING_FIELDS',
-          message: 'Missing required field: period_id',
+          message: 'Verplicht veld ontbreekt: period_id',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -56,7 +56,7 @@ export async function POST(
         success: false,
         error: {
           code: 'NO_PREFERENCES',
-          message: 'Person has no preferences submitted yet. Cannot submit empty preferences.',
+          message: 'Deze persoon heeft nog geen voorkeuren ingediend. Kan geen lege voorkeuren indienen.',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -74,7 +74,7 @@ export async function POST(
         success: false,
         error: {
           code: 'ALREADY_SUBMITTED',
-          message: 'This person has already submitted their preferences',
+          message: 'Deze persoon heeft al voorkeuren ingediend',
         },
       };
       return NextResponse.json(response, { status: 409 });

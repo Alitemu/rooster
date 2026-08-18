@@ -36,7 +36,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!sleutel) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'MISSING_SLEUTEL', message: 'sleutel is required' },
+        error: { code: 'MISSING_SLEUTEL', message: 'sleutel is verplicht' },
       };
       return NextResponse.json(response, { status: 400 });
     }

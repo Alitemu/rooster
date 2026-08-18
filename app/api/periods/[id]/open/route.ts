@@ -63,7 +63,7 @@ export async function POST(
         success: false,
         error: {
           code: 'MISSING_FIELDS',
-          message: 'naam, start_datum, eind_datum, deadline, and ruleset are all required',
+          message: 'naam, start_datum, eind_datum, deadline en ruleset zijn allemaal verplicht',
         },
       };
       return NextResponse.json(response, { status: 400 });
