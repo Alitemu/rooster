@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
-import { hashPassword, hashToken } from '../lib/auth';
+import { hashToken } from '../lib/auth';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -452,24 +452,29 @@ async function seed() {
     const now = new Date().toISOString();
 
     // 1. Create admin user
-    console.log('Creating admin user...');
+    //
+    // No password is set here on purpose - a fixed password checked into a
+    // public repo would be a real credential, not a placeholder. The
+    // account exists but wachtwoord_hash stays NULL until the first visit
+    // to /planner/login walks the operator through setting one (see
+    // app/api/auth/first-run-setup/route.ts); staff-login already treats a
+    // NULL hash as "cannot log in yet", so this is safe to leave seeded.
+    console.log('Creating admin user (password set on first login)...');
     const adminId = uuid();
-    const adminPwHash = await hashPassword('Admin@12345');
 
     db.prepare(`
-      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(adminId, 'ADMIN', 'ADMIN', 1, adminPwHash, now);
+      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(adminId, 'ADMIN', 'ADMIN', 1, now);
 
-    // 2. Create planner user
-    console.log('Creating planner user...');
+    // 2. Create planner user (same as admin: password set on first login)
+    console.log('Creating planner user (password set on first login)...');
     const plannerId = uuid();
-    const plannerPwHash = await hashPassword('Planner@12345');
 
     db.prepare(`
-      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(plannerId, 'PLANNER', 'PLANNER', 1, plannerPwHash, now);
+      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(plannerId, 'PLANNER', 'PLANNER', 1, now);
 
     // 3. Create 30 staff members
     console.log('Creating 30 staff members...');
@@ -789,8 +794,8 @@ async function seed() {
 
     console.log('\n✅ Seed completed successfully!');
     console.log(`\nUsers created:`);
-    console.log(`  - Admin: ADMIN / Admin@12345`);
-    console.log(`  - Planner: PLANNER / Planner@12345`);
+    console.log(`  - Admin: ADMIN (no password yet - set one at /planner/login)`);
+    console.log(`  - Planner: PLANNER (no password yet - set one at /planner/login)`);
     console.log(`  - Staff: Persoon-01 through Persoon-30 (personal access links)`);
     console.log(`\nPool: Achterwacht (30 members)`);
     console.log(`Period: 2027-1 (2027-01-04 to 2027-09-05)`);

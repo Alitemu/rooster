@@ -59,7 +59,17 @@ async function req(method, path, { jar, body } = {}) {
 
 const RULESET = { windowWeeks: 1, distributionMode: 'EVEN' }; // no explicit bands -> derived from real slot counts
 
+// scripts/seed.ts no longer sets a password on PLANNER - claim it via the
+// same first-run-setup flow a real operator uses at /planner/login. A 409
+// just means a previous run already claimed it, which is fine: the login
+// right after proves whether this password is actually the active one.
+async function ensureStaffPassword(codenaam, password) {
+  await req('POST', '/api/auth/first-run-setup', { body: { codenaam, password } });
+}
+
 async function main() {
+  await ensureStaffPassword('PLANNER', 'Planner@12345');
+
   const planner = {};
   await req('POST', '/api/auth/staff-login', { jar: planner, body: { codenaam: 'PLANNER', password: 'Planner@12345' } });
 

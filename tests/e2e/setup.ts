@@ -7,7 +7,7 @@
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import type { Page } from '@playwright/test';
-import { generateAccessToken, hashToken } from '@/lib/auth';
+import { generateAccessToken, hashToken, hashPassword } from '@/lib/auth';
 
 interface TestUser {
   id: string;
@@ -150,11 +150,25 @@ export function getBaseUrl(): string {
  * requirePlannerAccess, so tests that visit /planner/* must call this first.
  */
 export async function loginAsPlanner(page: Page): Promise<void> {
+  const codenaam = process.env.E2E_PLANNER_CODENAAM || 'PLANNER';
+  const password = process.env.E2E_PLANNER_PASSWORD || 'Planner@12345';
+
+  // scripts/seed.ts no longer sets a password on PLANNER (see its comment)
+  // - claim it directly here if this is the first time a test needs to log
+  // in as planner. Writing the hash straight into the DB (rather than
+  // calling the first-run-setup API) keeps this fast and skips the setup
+  // UI entirely, which is fine: that flow gets its own coverage in
+  // scripts/full-check.mjs.
+  const existing = db
+    .prepare(`SELECT wachtwoord_hash FROM dienstrooster_person WHERE codenaam = ?`)
+    .get(codenaam) as { wachtwoord_hash: string | null } | undefined;
+  if (existing && existing.wachtwoord_hash === null) {
+    const hash = await hashPassword(password);
+    db.prepare(`UPDATE dienstrooster_person SET wachtwoord_hash = ? WHERE codenaam = ?`).run(hash, codenaam);
+  }
+
   const res = await page.request.post(`${getBaseUrl()}/api/auth/staff-login`, {
-    data: {
-      codenaam: process.env.E2E_PLANNER_CODENAAM || 'PLANNER',
-      password: process.env.E2E_PLANNER_PASSWORD || 'Planner@12345',
-    },
+    data: { codenaam, password },
   });
 
   if (!res.ok()) {
