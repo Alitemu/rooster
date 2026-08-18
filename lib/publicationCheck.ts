@@ -58,7 +58,7 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
 
   const slotsFilled = slots.count === assignedSlots.count;
   if (!slotsFilled) {
-    issues.push(`Only ${assignedSlots.count} of ${slots.count} slots are filled`);
+    issues.push(`Nog niet alle diensten zijn ingedeeld (${assignedSlots.count} van ${slots.count} ingevuld)`);
   }
 
   const blockingViolations = db
@@ -70,7 +70,9 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     .get(periodId) as { count: number };
 
   if (blockingViolations.count > 0) {
-    issues.push(`${blockingViolations.count} hard blocking violations (ABSOLUUT) found`);
+    issues.push(
+      `${blockingViolations.count} toewijzing(en) staan op een dag die geblokkeerd is voor die persoon - dit mag niet gebeuren`
+    );
   }
 
   // Band compliance, per counter, against this period's own frozen ruleset.
@@ -131,10 +133,12 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
 
   if (bandViolations > 0) {
     issues.push(
-      `${bandViolations} counter totals fall outside their range ` +
-        `(evening ${bands.AVOND[0]}-${bands.AVOND[1]}, ` +
+      `${bandViolations}x valt een persoon buiten het streefbereik voor een diensttype ` +
+        `(avond ${bands.AVOND[0]}-${bands.AVOND[1]}, ` +
         `weekend ${bands.WEEKEND[0]}-${bands.WEEKEND[1]}, ` +
-        `holiday ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]})`
+        `feestdag ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]}). ` +
+        `Pas het streefbereik aan bij de instellingen van deze periode, of wissel handmatig ` +
+        `wie welke dienst draait, en genereer daarna opnieuw`
     );
   }
 

@@ -201,7 +201,7 @@ describe('runPublicationCheck', () => {
     expect(result.valid).toBe(false);
     expect(result.checks.slots_filled).toBe(false);
     expect(result.totals.assigned_slots).toBe(0);
-    expect(result.issues.join(' ')).toContain(`0 of ${slotIds.length}`);
+    expect(result.issues.join(' ')).toContain(`0 van ${slotIds.length}`);
   });
 
   it('refuses a roster that is one slot short', () => {
@@ -213,7 +213,7 @@ describe('runPublicationCheck', () => {
 
     expect(result.valid).toBe(false);
     expect(result.checks.slots_filled).toBe(false);
-    expect(result.issues.join(' ')).toContain(`${slotIds.length - 1} of ${slotIds.length}`);
+    expect(result.issues.join(' ')).toContain(`${slotIds.length - 1} van ${slotIds.length}`);
   });
 
   it('refuses a roster that schedules someone on a day they blocked absolutely', () => {
@@ -229,7 +229,9 @@ describe('runPublicationCheck', () => {
     expect(result.valid).toBe(false);
     expect(result.checks.no_hard_blocking).toBe(false);
     expect(result.checks.slots_filled).toBe(true);
-    expect(result.issues.join(' ')).toContain('ABSOLUUT');
+    // User-facing text says "geblokkeerd", not the internal ABSOLUUT enum
+    // value (CLAUDE.md terminology: ABSOLUUT -> "Geblokkeerd" for users).
+    expect(result.issues.join(' ')).toContain('geblokkeerd');
   });
 
   it('allows a soft "prefer not" day to be used', () => {

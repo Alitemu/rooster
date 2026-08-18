@@ -122,15 +122,15 @@ export function getCapacityInterpretation(windowWeeks: number, slots: number, pe
   const distinctRequired = 7 * windowWeeks;
 
   const lines = [
-    `With a window of ${windowWeeks} weeks:`,
-    `- You need at least ${distinctRequired} different people to cover all weeks`,
-    `- Each person can do at most ${Math.floor(slots / Math.max(people, 1))} shifts`,
+    `Bij een venster van ${windowWeeks} weken:`,
+    `- zijn minimaal ${distinctRequired} verschillende mensen nodig om alle weken te dekken`,
+    `- kan iemand maximaal ${Math.floor(slots / Math.max(people, 1))} diensten draaien`,
   ];
 
   if (people < distinctRequired) {
-    lines.push(`⚠️ NOT ENOUGH: You have ${people} people but need ${distinctRequired}`);
+    lines.push(`✗ Onvoldoende: er zijn ${people} mensen, maar ${distinctRequired} nodig`);
   } else {
-    lines.push(`✓ SUFFICIENT: ${people} people available`);
+    lines.push(`✓ Voldoende: ${people} mensen beschikbaar`);
   }
 
   return lines.join('\n');

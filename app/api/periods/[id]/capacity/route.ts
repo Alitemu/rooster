@@ -9,6 +9,8 @@ import { db } from '@/db/client';
 import { checkCapacity, getCapacityInterpretation } from '@/lib/capacity';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { generateSlotsForPeriod } from '@/lib/slotGeneration';
+import { resolveBands, type Teller, type BandsByTeller } from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CapacityCheckResult {
@@ -26,6 +28,7 @@ interface CapacityCheckResult {
   };
   message: string;
   is_constraining: 'distinct_people' | 'total_capacity' | 'both' | 'none';
+  suggested_band: BandsByTeller;
 }
 
 /**
@@ -136,6 +139,47 @@ export async function GET(
       requiredSlots
     );
 
+    // A realistic starting point for the "Streefbereik" (band) inputs the
+    // planner sets on this same wizard step - derived from this period's
+    // own slot counts per counter, not a one-size-fits-all guess. Without
+    // this the wizard used to show a fixed default regardless of how many
+    // slots or people this specific period actually had, which could ask
+    // for a band no roster of this size could ever satisfy (e.g. a band of
+    // 7-8 evening shifts per person when there are only enough evening
+    // slots for 5-6 each) - the roster would then generate "successfully"
+    // but fail the publish gate for reasons the planner never saw coming.
+    //
+    // Prefer real persisted slots (accurate, reflects holidays) when they
+    // already exist; otherwise preview via the same generator + teller
+    // priority (feestdag > weekend > weekday) real generation uses, so the
+    // suggestion matches what generation would actually produce.
+    let slotCountByTeller: Record<Teller, number> = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 };
+    if (slotCountRow?.count) {
+      const rows = db
+        .prepare(
+          `SELECT st.teller, COUNT(*) as count
+           FROM dienstrooster_shift_slot s
+           JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+           WHERE s.period_id = ?
+           GROUP BY st.teller`
+        )
+        .all(id) as Array<{ teller: string; count: number }>;
+      for (const row of rows) {
+        if (row.teller in slotCountByTeller) slotCountByTeller[row.teller as Teller] = row.count;
+      }
+    } else if (period.start_datum && period.eind_datum) {
+      const preview = generateSlotsForPeriod({
+        startDate: period.start_datum,
+        endDate: period.eind_datum,
+        shiftTypes: ['AVOND', 'WEEKEND', 'FEESTDAG'],
+      });
+      for (const slot of preview) {
+        const teller: Teller = slot.is_feestdag ? 'FEESTDAG' : slot.weekend_id ? 'WEEKEND' : 'AVOND';
+        slotCountByTeller[teller]++;
+      }
+    }
+    const suggestedBand = resolveBands({}, slotCountByTeller, activeParticipants);
+
     // Determine which constraint is more restrictive
     let isConstraining: 'distinct_people' | 'total_capacity' | 'both' | 'none' = 'none';
     if (!result.distinctPeople.passed && !result.totalCapacity.passed) {
@@ -163,6 +207,7 @@ export async function GET(
         },
         message: getCapacityInterpretation(windowWeeks, requiredSlots, activeParticipants),
         is_constraining: isConstraining,
+        suggested_band: suggestedBand,
       },
     };
 

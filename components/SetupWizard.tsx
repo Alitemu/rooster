@@ -22,6 +22,7 @@ interface CapacityCheckResult {
   total_capacity: { satisfied: boolean; pool_capacity: number; required_slots: number };
   distinct_people: { satisfied: boolean; required_people: number; active_participants: number };
   message: string;
+  suggested_band: { AVOND: [number, number]; WEEKEND: [number, number]; FEESTDAG: [number, number] };
 }
 
 interface PeriodData {
@@ -95,6 +96,12 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [openResult, setOpenResult] = useState<string | null>(null);
   const [capacityCheck, setCapacityCheck] = useState<CapacityCheckResult | null>(null);
   const [capacityLoading, setCapacityLoading] = useState(false);
+  // Whether the planner has hand-edited a Streefbereik field. Until they
+  // do, the fields track the capacity check's own suggestion (based on this
+  // period's real slot counts and headcount) rather than a fixed guess -
+  // once they've typed a value of their own, further capacity refreshes
+  // (e.g. from changing the window) must not silently overwrite it.
+  const [bandTouched, setBandTouched] = useState(false);
 
   useEffect(() => {
     if (currentStep !== 'window' || !period?.id) return;
@@ -108,7 +115,23 @@ export function SetupWizard({ period, onComplete }: Props) {
 
         const res = await fetch(`/api/periods/${period.id}/capacity?${params.toString()}`);
         const data = await res.json();
-        setCapacityCheck(data.success ? data.data : null);
+        const result: CapacityCheckResult | null = data.success ? data.data : null;
+        setCapacityCheck(result);
+        if (result?.suggested_band && !bandTouched) {
+          setWindowConfig((prev) => ({
+            ...prev,
+            band_min: {
+              AVOND: result.suggested_band.AVOND[0],
+              WEEKEND: result.suggested_band.WEEKEND[0],
+              FEESTDAG: result.suggested_band.FEESTDAG[0],
+            },
+            band_max: {
+              AVOND: result.suggested_band.AVOND[1],
+              WEEKEND: result.suggested_band.WEEKEND[1],
+              FEESTDAG: result.suggested_band.FEESTDAG[1],
+            },
+          }));
+        }
       } catch {
         setCapacityCheck(null);
       } finally {
@@ -117,7 +140,8 @@ export function SetupWizard({ period, onComplete }: Props) {
     };
 
     loadCapacity();
-  }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched]);
 
   const loadStaff = async () => {
     if (!periodData.pool_id) return;
@@ -482,7 +506,11 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div>
-              <h3 className="font-semibold mb-3">Streefbereik</h3>
+              <h3 className="font-semibold mb-1">Streefbereik</h3>
+              <p className="text-xs text-neutral-600 mb-3">
+                Voorstel op basis van dit rooster en het aantal mensen - pas het gerust aan, maar
+                een ruimer bereik dan hier voorgesteld is voor deze periode niet haalbaar.
+              </p>
               <div className="grid grid-cols-2 gap-4">
                 {['AVOND', 'WEEKEND', 'FEESTDAG'].map((counter) => (
                   <div key={counter}>
@@ -494,15 +522,16 @@ export function SetupWizard({ period, onComplete }: Props) {
                         type="number"
                         min="0"
                         value={windowConfig.band_min[counter] || 0}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setBandTouched(true);
                           setWindowConfig({
                             ...windowConfig,
                             band_min: {
                               ...windowConfig.band_min,
                               [counter]: parseInt(e.target.value),
                             },
-                          })
-                        }
+                          });
+                        }}
                         className="w-1/2 px-2 py-1 border rounded text-sm"
                         placeholder="Min"
                       />
@@ -510,15 +539,16 @@ export function SetupWizard({ period, onComplete }: Props) {
                         type="number"
                         min="0"
                         value={windowConfig.band_max[counter] || 0}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          setBandTouched(true);
                           setWindowConfig({
                             ...windowConfig,
                             band_max: {
                               ...windowConfig.band_max,
                               [counter]: parseInt(e.target.value),
                             },
-                          })
-                        }
+                          });
+                        }}
                         className="w-1/2 px-2 py-1 border rounded text-sm"
                         placeholder="Max"
                       />

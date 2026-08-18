@@ -58,6 +58,51 @@ export function clearSolverAssignments(periodId: string): number {
 }
 
 /**
+ * Pool members who could take over a specific slot - active pool members
+ * during the period, minus whoever marked the slot ABSOLUUT (manual-assign
+ * rejects them anyway) and minus `excludePersonId` (normally whoever is
+ * already assigned - re-picking them isn't a reassignment).
+ *
+ * Shared by the unfilled-slots gap-filling flow below and the
+ * already-assigned reassign flow in the assignments grid, so both offer the
+ * same notion of "who is actually eligible".
+ */
+export function getEligiblePeopleForSlot(
+  periodId: string,
+  slotId: string,
+  excludePersonId?: string
+): EligiblePerson[] {
+  const period = db
+    .prepare(
+      'SELECT pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?'
+    )
+    .get(periodId) as { pool_id: string; start_datum: string; eind_datum: string } | undefined;
+
+  if (!period) return [];
+
+  const poolMembers = db
+    .prepare(
+      `SELECT p.id, p.codenaam FROM dienstrooster_pool_membership pm
+       JOIN dienstrooster_person p ON p.id = pm.person_id
+       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
+    )
+    .all(period.pool_id, period.eind_datum, period.start_datum) as EligiblePerson[];
+
+  const blocked = new Set(
+    (
+      db
+        .prepare(
+          `SELECT person_id FROM dienstrooster_availability
+           WHERE blocking_level = 'ABSOLUUT' AND slot_id = ?`
+        )
+        .all(slotId) as Array<{ person_id: string }>
+    ).map((r) => r.person_id)
+  );
+
+  return poolMembers.filter((p) => !blocked.has(p.id) && p.id !== excludePersonId);
+}
+
+/**
  * Every slot still short of its required headcount, with the pool members
  * who could take it.
  *

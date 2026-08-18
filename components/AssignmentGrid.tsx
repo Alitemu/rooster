@@ -21,6 +21,11 @@ interface Assignment {
   bron: string;
 }
 
+interface EligiblePerson {
+  id: string;
+  codenaam: string;
+}
+
 interface Props {
   periodId: string;
   /** Removing from a published roster requires a reason (enforced server-side). */
@@ -39,6 +44,12 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [removing, setRemoving] = useState<string | null>(null);
+  const [reassigningId, setReassigningId] = useState<string | null>(null);
+  const [eligiblePeople, setEligiblePeople] = useState<EligiblePerson[] | null>(null);
+  const [eligibleLoading, setEligibleLoading] = useState(false);
+  const [reassignPersonId, setReassignPersonId] = useState('');
+  const [reassignReason, setReassignReason] = useState('');
+  const [reassigning, setReassigning] = useState<string | null>(null);
 
   const isPublished = periodStatus === 'GEPUBLICEERD';
 
@@ -91,6 +102,57 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       setError(err instanceof Error ? err.message : 'Verwijderen van toewijzing mislukt');
     } finally {
       setRemoving(null);
+    }
+  };
+
+  const openReassign = async (assignmentId: string) => {
+    setConfirmingId(null);
+    setReassigningId(assignmentId);
+    setReassignPersonId('');
+    setReassignReason('');
+    setEligiblePeople(null);
+    setEligibleLoading(true);
+    try {
+      const res = await fetch(
+        `/api/planner/period/${periodId}/assignments/${assignmentId}/eligible-people`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ophalen van beschikbare collega\'s mislukt');
+      setEligiblePeople(data.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ophalen van beschikbare collega\'s mislukt');
+      setEligiblePeople([]);
+    } finally {
+      setEligibleLoading(false);
+    }
+  };
+
+  const handleReassign = async (assignmentId: string) => {
+    if (!reassignPersonId) return;
+    setReassigning(assignmentId);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/planner/period/${periodId}/assignments/${assignmentId}/reassign`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ person_id: reassignPersonId, reason: reassignReason.trim() || null }),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Wisselen van toewijzing mislukt');
+
+      setReassigningId(null);
+      setReassignPersonId('');
+      setReassignReason('');
+      setEligiblePeople(null);
+      await loadAssignments();
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Wisselen van toewijzing mislukt');
+    } finally {
+      setReassigning(null);
     }
   };
 
@@ -206,16 +268,74 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           Annuleren
                         </button>
                       </div>
+                    ) : reassigningId === a.id ? (
+                      <div className="flex items-center justify-end gap-2">
+                        {eligibleLoading || eligiblePeople === null ? (
+                          <span className="text-xs text-neutral-500">Collega&apos;s laden…</span>
+                        ) : eligiblePeople.length === 0 ? (
+                          <span className="text-xs text-red-600">Niemand anders komt in aanmerking</span>
+                        ) : (
+                          <select
+                            value={reassignPersonId}
+                            onChange={(e) => setReassignPersonId(e.target.value)}
+                            className="text-xs border border-neutral-300 rounded px-2 py-1"
+                          >
+                            <option value="">Kies iemand…</option>
+                            {eligiblePeople.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.codenaam}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <input
+                          type="text"
+                          value={reassignReason}
+                          onChange={(e) => setReassignReason(e.target.value)}
+                          placeholder={isPublished ? 'Reden (verplicht)' : 'Reden (optioneel)'}
+                          className="px-2 py-1 border rounded text-xs w-36"
+                        />
+                        <button
+                          onClick={() => handleReassign(a.id)}
+                          disabled={
+                            reassigning === a.id ||
+                            !reassignPersonId ||
+                            (isPublished && !reassignReason.trim())
+                          }
+                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300"
+                        >
+                          {reassigning === a.id ? 'Bezig…' : 'Bevestigen'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setReassigningId(null);
+                            setEligiblePeople(null);
+                            setReassignReason('');
+                          }}
+                          className="text-xs px-2 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
+                        >
+                          Annuleren
+                        </button>
+                      </div>
                     ) : (
-                      <button
-                        onClick={() => {
-                          setConfirmingId(a.id);
-                          setReason('');
-                        }}
-                        className="text-xs text-red-600 hover:text-red-800 font-medium"
-                      >
-                        Verwijderen
-                      </button>
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={() => openReassign(a.id)}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          Wisselen
+                        </button>
+                        <button
+                          onClick={() => {
+                            setReassigningId(null);
+                            setConfirmingId(a.id);
+                            setReason('');
+                          }}
+                          className="text-xs text-red-600 hover:text-red-800 font-medium"
+                        >
+                          Niemand toewijzen
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
