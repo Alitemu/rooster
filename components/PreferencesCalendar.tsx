@@ -185,7 +185,7 @@ export function PreferencesCalendar({
   );
 
   if (loading) {
-    return <div className="p-4 text-center">Loading preferences...</div>;
+    return <div className="p-4 text-center">Voorkeuren laden...</div>;
   }
 
   // Generate calendar grid: as many full weeks as the period actually spans
@@ -193,7 +193,7 @@ export function PreferencesCalendar({
   const allDates = Array.from(preferences.values()).map((p) => p.datum).sort();
 
   if (allDates.length === 0) {
-    return <div className="p-4 text-center">No dates available</div>;
+    return <div className="p-4 text-center">Geen datums beschikbaar</div>;
   }
 
   const startDate = parseISO(allDates[0]);
@@ -232,7 +232,7 @@ export function PreferencesCalendar({
               <div className="grid grid-cols-7 gap-1">
                 {week.map((datum, dayIdx) => {
                   const dayPref = preferences.get(datum);
-                  const dayName = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'][dayIdx];
+                  const dayName = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'][dayIdx];
                   const isSaturday = dayIdx === 5;
                   const cov = coverage.get(datum);
 
@@ -269,7 +269,7 @@ export function PreferencesCalendar({
                                 hover:shadow-sm active:scale-95
                                 disabled:opacity-50
                               `}
-                              title={`${counter}: ${level || 'available'}`}
+                              title={`${counter}: ${level || 'beschikbaar'}`}
                             >
                               {counter[0]}
                             </button>
@@ -285,7 +285,7 @@ export function PreferencesCalendar({
                           className="w-full h-5 text-xs bg-neutral-200 hover:bg-neutral-300
                                      rounded text-neutral-700 font-medium transition-colors
                                      disabled:opacity-50"
-                          title="Block whole weekend"
+                          title="Heel weekend blokkeren"
                         >
                           WE
                         </button>
@@ -309,13 +309,13 @@ export function PreferencesCalendar({
       {/* Save status */}
       {isSaving && (
         <div className="sticky bottom-0 p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
-          Saving preferences...
+          Voorkeuren opslaan...
         </div>
       )}
 
       {hasChanged && !isSaving && (
         <div className="sticky bottom-0 p-2 bg-green-50 border-t border-green-200 text-sm text-green-700">
-          Preferences saved
+          Voorkeuren opgeslagen
         </div>
       )}
     </div>
