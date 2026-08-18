@@ -40,15 +40,15 @@ interface StaffMember {
 }
 
 const TELLER_LABELS: Record<string, string> = {
-  AVOND: 'Evening',
+  AVOND: 'Avond',
   WEEKEND: 'Weekend',
-  FEESTDAG: 'Holiday',
+  FEESTDAG: 'Feestdag',
 };
 
 const BRON_LABELS: Record<string, string> = {
-  AFGELEID: 'Auto-derived',
-  HANDMATIG: 'Manual',
-  ONBEKEND: 'Unknown',
+  AFGELEID: 'Automatisch afgeleid',
+  HANDMATIG: 'Handmatig',
+  ONBEKEND: 'Onbekend',
 };
 
 export default function PriorAssignmentsPage() {
@@ -86,7 +86,7 @@ export default function PriorAssignmentsPage() {
         );
       }
     } catch {
-      setError('Failed to load prior assignments');
+      setError('Laden van eerdere toewijzingen mislukt');
     } finally {
       setLoading(false);
     }
@@ -105,10 +105,10 @@ export default function PriorAssignmentsPage() {
         method: 'POST',
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error?.message || 'Auto-derive failed');
+      if (!res.ok) throw new Error(result.error?.message || 'Automatisch afleiden mislukt');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Auto-derive failed');
+      setError(err instanceof Error ? err.message : 'Automatisch afleiden mislukt');
     } finally {
       setDeriving(false);
     }
@@ -126,11 +126,11 @@ export default function PriorAssignmentsPage() {
       });
       if (!res.ok) {
         const result = await res.json();
-        throw new Error(result.error?.message || 'Failed to save');
+        throw new Error(result.error?.message || 'Opslaan mislukt');
       }
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save');
+      setError(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSavingKey(null);
     }
@@ -145,11 +145,11 @@ export default function PriorAssignmentsPage() {
         method: 'PATCH',
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.error?.message || 'Confirmation failed');
-      setConfirmResult('Prior assignments confirmed.');
+      if (!res.ok) throw new Error(result.error?.message || 'Bevestigen mislukt');
+      setConfirmResult('Eerdere toewijzingen bevestigd.');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Confirmation failed');
+      setError(err instanceof Error ? err.message : 'Bevestigen mislukt');
     } finally {
       setConfirming(false);
     }
@@ -158,7 +158,7 @@ export default function PriorAssignmentsPage() {
   if (loading) {
     return (
       <div className="container-main py-12">
-        <div className="card p-8 text-center text-neutral-600">Loading prior assignments...</div>
+        <div className="card p-8 text-center text-neutral-600">Eerdere toewijzingen laden...</div>
       </div>
     );
   }
@@ -167,7 +167,7 @@ export default function PriorAssignmentsPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8 bg-red-50 border border-red-200">
-          <p className="text-red-700">{error || 'Failed to load prior assignments'}</p>
+          <p className="text-red-700">{error || 'Laden van eerdere toewijzingen mislukt'}</p>
         </div>
       </div>
     );
@@ -178,28 +178,28 @@ export default function PriorAssignmentsPage() {
   return (
     <div className="container-main py-8 space-y-6">
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
-        <h1 className="text-2xl font-bold text-neutral-900 mb-1">Prior Assignments</h1>
+        <h1 className="text-2xl font-bold text-neutral-900 mb-1">Eerdere toewijzingen</h1>
         <p className="text-neutral-600">
-          {period.naam} · carry-over window {data.date_range[0]} to {data.date_range[1]}
+          {period.naam} · overloopvenster {data.date_range[0]} t/m {data.date_range[1]}
         </p>
         {period.overloop_bevestigd_op && (
           <p className="text-sm text-green-700 mt-2">
-            ✓ Confirmed on {new Date(period.overloop_bevestigd_op).toLocaleString()}
+            ✓ Bevestigd op {new Date(period.overloop_bevestigd_op).toLocaleString()}
           </p>
         )}
       </div>
 
       <div className="card p-4 flex items-center justify-between">
         <p className="text-sm font-medium">
-          {knownCount} of {data.total_entries} assigned{' '}
-          {data.status === 'complete' ? '(all entries present)' : '(entries still missing)'}
+          {knownCount} van {data.total_entries} ingevuld{' '}
+          {data.status === 'complete' ? '(alle gegevens compleet)' : '(gegevens ontbreken nog)'}
         </p>
         <button
           onClick={handleAutoDerive}
           disabled={deriving}
           className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
         >
-          {deriving ? 'Deriving...' : 'Auto-derive from previous period'}
+          {deriving ? 'Bezig met afleiden...' : 'Automatisch afleiden uit vorige periode'}
         </button>
       </div>
 
@@ -216,11 +216,11 @@ export default function PriorAssignmentsPage() {
         <table className="w-full text-sm">
           <thead className="bg-neutral-100">
             <tr>
-              <th className="px-3 py-2 text-left">Date</th>
+              <th className="px-3 py-2 text-left">Datum</th>
               <th className="px-3 py-2 text-left">Week</th>
-              <th className="px-3 py-2 text-left">Shift</th>
-              <th className="px-3 py-2 text-left">Assigned to</th>
-              <th className="px-3 py-2 text-left">Source</th>
+              <th className="px-3 py-2 text-left">Dienst</th>
+              <th className="px-3 py-2 text-left">Toegewezen aan</th>
+              <th className="px-3 py-2 text-left">Bron</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -238,7 +238,7 @@ export default function PriorAssignmentsPage() {
                       onChange={(e) => handleAssign(a.datum, a.teller, e.target.value || null)}
                       className="px-2 py-1 border rounded text-sm w-full"
                     >
-                      <option value="">Unknown</option>
+                      <option value="">Onbekend</option>
                       {staff.map((s) => (
                         <option key={s.person_id} value={s.codenaam}>
                           {s.codenaam}
@@ -255,7 +255,7 @@ export default function PriorAssignmentsPage() {
             {data.assignments.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-3 py-8 text-center text-neutral-500">
-                  No entries yet - try auto-deriving from the previous period
+                  Nog geen gegevens - probeer automatisch af te leiden uit de vorige periode
                 </td>
               </tr>
             )}
@@ -273,10 +273,10 @@ export default function PriorAssignmentsPage() {
         }`}
       >
         {confirming
-          ? 'Confirming...'
+          ? 'Bezig met bevestigen...'
           : data.status !== 'complete'
-            ? 'Fill in all entries before confirming'
-            : 'Confirm Prior Assignments'}
+            ? 'Vul alle gegevens in voordat je bevestigt'
+            : 'Eerdere toewijzingen bevestigen'}
       </button>
     </div>
   );
