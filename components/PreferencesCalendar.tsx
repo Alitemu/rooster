@@ -283,6 +283,21 @@ export function PreferencesCalendar({
     weeks.push(week);
   }
 
+  // Group weeks by calendar month (of the week's Monday) so the calendar
+  // reads as a series of distinct months instead of one continuous wall of
+  // weeks - a week that straddles a month boundary stays with the month it
+  // starts in, rather than splitting its row in two.
+  const monthGroups: { label: string; weeks: string[][] }[] = [];
+  for (const week of weeks) {
+    const label = parseISO(week[0]).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
+    const current = monthGroups[monthGroups.length - 1];
+    if (current && current.label === label) {
+      current.weeks.push(week);
+    } else {
+      monthGroups.push({ label, weeks: [week] });
+    }
+  }
+
   // Blocked-days summary per shift type, computed live from what's on
   // screen - no extra request needed, updates the moment a cell is clicked.
   const counterTotals = new Map<string, { blocked: number; total: number }>();
@@ -345,127 +360,132 @@ export function PreferencesCalendar({
         </span>
       </div>
 
-      {/* Calendar table */}
-      <div className="w-full overflow-x-auto">
-        <table className="w-full border-separate" style={{ borderSpacing: '3px' }}>
-          <thead>
-            <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
-              <th className="w-9 text-center font-semibold pb-1">wk</th>
-              {['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d) => (
-                <th key={d} className="font-semibold pb-1">{d}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {weeks.map((week, weekIdx) => {
-              const [, isoWeek] = getISOWeek(parseISO(week[0]));
-
-              return (
-                <tr key={`week-${weekIdx}`}>
-                  <td className="week-number text-center align-top pt-2">{isoWeek}</td>
-                  {week.map((datum, dayIdx) => {
-                    const dayPref = preferences.get(datum);
-                    const isSaturday = dayIdx === 5;
-                    const cov = coverage.get(datum);
-                    const holiday = getHolidayInfo(datum);
-                    const tag = holiday ? holiday.name : WEEKDAY_TAG[dayIdx];
-                    const ratio = cov && cov.total_in_pool > 0 ? cov.available / cov.total_in_pool : 1;
-
-                    return (
-                      <td key={datum} className="align-top p-0">
-                        <div
-                          className={`relative min-h-[92px] rounded-lg border p-1.5 pt-1
-                            ${holiday ? 'holiday-slot' : 'border-neutral-200 bg-white'}`}
-                        >
-                          <div className="flex items-start justify-between gap-1">
-                            <span className="text-xs font-semibold tabular-nums">
-                              {parseISO(datum).getDate()}
-                            </span>
-                            {tag && (
-                              <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate max-w-[46px]" title={tag}>
-                                {holiday ? '★' : tag}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="flex flex-col gap-0.5 mt-1">
-                            {shiftCounters.map((counter) => {
-                              const slot = dayPref?.slots.get(counter);
-                              if (!slot) return null;
-
-                              const level = slot.level;
-                              const isParttime = slot.source === 'PARTTIME';
-
-                              if (isParttime) {
-                                return (
-                                  <div
-                                    key={`${datum}-${counter}`}
-                                    className="calendar-cell-parttime w-full h-5 rounded text-[10px] font-semibold
-                                      flex items-center justify-center cursor-not-allowed"
-                                    title={`${COUNTER_LABEL[counter] || counter}: parttime dag (automatisch geblokkeerd)`}
-                                  >
-                                    PT
-                                  </div>
-                                );
-                              }
-
-                              const stateClass = level
-                                ? level === 'ABSOLUUT'
-                                  ? 'calendar-cell-blocked'
-                                  : 'calendar-cell-prefer-not'
-                                : 'calendar-cell-neutral';
-
-                              return (
-                                <button
-                                  key={`${datum}-${counter}`}
-                                  onClick={() => handleTogglePreference(datum, counter)}
-                                  disabled={isSaving}
-                                  className={`w-full h-5 rounded text-[10px] font-semibold transition-all
-                                    ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
-                                  title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'}`}
-                                >
-                                  {counter[0]}{level ? GLYPH[level] : ''}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          {isSaturday && (
-                            <button
-                              onClick={() => handleBlockWeekend(datum)}
-                              disabled={isSaving}
-                              className="absolute top-0.5 right-0.5 text-[8px] font-bold px-1 py-0.5 rounded
-                                bg-neutral-200 hover:bg-neutral-300 text-neutral-700 transition-colors
-                                disabled:opacity-50"
-                              title="Heel weekend blokkeren"
-                            >
-                              WE
-                            </button>
-                          )}
-
-                          {cov && (
-                            <div className="mt-1">
-                              <div className="coverage-bar">
-                                <div
-                                  className={`coverage-bar-fill ${coverageBarClass(ratio)}`}
-                                  style={{ width: `${Math.round(ratio * 100)}%` }}
-                                />
-                              </div>
-                              <div className="text-[9px] text-neutral-500 text-center mt-0.5 tabular-nums">
-                                {cov.available}/{cov.total_in_pool}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    );
-                  })}
+      {/* Calendar, one card per calendar month */}
+      {monthGroups.map((group) => (
+        <div key={group.label} className="border border-neutral-200 rounded-lg p-3 bg-neutral-50/50">
+          <h3 className="text-sm font-bold text-neutral-800 mb-2 capitalize">{group.label}</h3>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full border-separate" style={{ borderSpacing: '3px' }}>
+              <thead>
+                <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
+                  <th className="w-9 text-center font-semibold pb-1">wk</th>
+                  {['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d) => (
+                    <th key={d} className="font-semibold pb-1">{d}</th>
+                  ))}
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {group.weeks.map((week, weekIdx) => {
+                  const [, isoWeek] = getISOWeek(parseISO(week[0]));
+
+                  return (
+                    <tr key={`week-${weekIdx}`}>
+                      <td className="week-number text-center align-top pt-2">{isoWeek}</td>
+                      {week.map((datum, dayIdx) => {
+                        const dayPref = preferences.get(datum);
+                        const isSaturday = dayIdx === 5;
+                        const cov = coverage.get(datum);
+                        const holiday = getHolidayInfo(datum);
+                        const tag = holiday ? holiday.name : WEEKDAY_TAG[dayIdx];
+                        const ratio = cov && cov.total_in_pool > 0 ? cov.available / cov.total_in_pool : 1;
+
+                        return (
+                          <td key={datum} className="align-top p-0">
+                            <div
+                              className={`relative min-h-[92px] rounded-lg border p-1.5 pt-1
+                                ${holiday ? 'holiday-slot' : 'border-neutral-200 bg-white'}`}
+                            >
+                              <div className="flex items-start justify-between gap-1">
+                                <span className="text-xs font-semibold tabular-nums">
+                                  {parseISO(datum).getDate()}
+                                </span>
+                                {tag && (
+                                  <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate max-w-[46px]" title={tag}>
+                                    {holiday ? '★' : tag}
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col gap-0.5 mt-1">
+                                {shiftCounters.map((counter) => {
+                                  const slot = dayPref?.slots.get(counter);
+                                  if (!slot) return null;
+
+                                  const level = slot.level;
+                                  const isParttime = slot.source === 'PARTTIME';
+
+                                  if (isParttime) {
+                                    return (
+                                      <div
+                                        key={`${datum}-${counter}`}
+                                        className="calendar-cell-parttime w-full h-5 rounded text-[10px] font-semibold
+                                          flex items-center justify-center cursor-not-allowed"
+                                        title={`${COUNTER_LABEL[counter] || counter}: parttime dag (automatisch geblokkeerd)`}
+                                      >
+                                        {counter[0]}·PT
+                                      </div>
+                                    );
+                                  }
+
+                                  const stateClass = level
+                                    ? level === 'ABSOLUUT'
+                                      ? 'calendar-cell-blocked'
+                                      : 'calendar-cell-prefer-not'
+                                    : 'calendar-cell-neutral';
+
+                                  return (
+                                    <button
+                                      key={`${datum}-${counter}`}
+                                      onClick={() => handleTogglePreference(datum, counter)}
+                                      disabled={isSaving}
+                                      className={`w-full h-5 rounded text-[10px] font-semibold transition-all
+                                        ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
+                                      title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'}`}
+                                    >
+                                      {counter[0]}{level ? GLYPH[level] : ''}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+
+                              {isSaturday && (
+                                <button
+                                  onClick={() => handleBlockWeekend(datum)}
+                                  disabled={isSaving}
+                                  className="absolute top-0.5 right-0.5 text-[8px] font-bold px-1 py-0.5 rounded
+                                    bg-neutral-200 hover:bg-neutral-300 text-neutral-700 transition-colors
+                                    disabled:opacity-50"
+                                  title="Heel weekend blokkeren"
+                                >
+                                  WE
+                                </button>
+                              )}
+
+                              {cov && (
+                                <div className="mt-1">
+                                  <div className="coverage-bar">
+                                    <div
+                                      className={`coverage-bar-fill ${coverageBarClass(ratio)}`}
+                                      style={{ width: `${Math.round(ratio * 100)}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[9px] text-neutral-500 text-center mt-0.5 tabular-nums">
+                                    {cov.available}/{cov.total_in_pool}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
 
       {/* Coverage notice - reacts to the last day you touched */}
       {highlightCov && (
