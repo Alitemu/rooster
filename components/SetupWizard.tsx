@@ -150,7 +150,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           }))
       );
     } catch {
-      setError('Failed to load staff members');
+      setError('Laden van personeel mislukt');
     } finally {
       setStaffLoading(false);
     }
@@ -211,7 +211,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         }),
       });
       const openData = await openRes.json();
-      if (!openRes.ok) throw new Error(openData.error?.message || 'Failed to open period');
+      if (!openRes.ok) throw new Error(openData.error?.message || 'Openen van periode mislukt');
 
       // Create access links for selected staff who don't already have one
       const toLink = staffMembers.filter((m) => m.is_selected && !m.access_link);
@@ -240,25 +240,25 @@ export function SetupWizard({ period, onComplete }: Props) {
       }
 
       setOpenResult(
-        `Period opened (${openData.data.start_datum} to ${openData.data.eind_datum}): ` +
-          `${openData.data.slots_generated} slots generated, ${toLink.length} invitations sent.`
+        `Periode geopend (${openData.data.start_datum} t/m ${openData.data.eind_datum}): ` +
+          `${openData.data.slots_generated} diensten gegenereerd, ${toLink.length} uitnodigingen verstuurd.`
       );
       onComplete?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to open period');
+      setError(err instanceof Error ? err.message : 'Openen van periode mislukt');
     } finally {
       setLoading(false);
     }
   };
 
   const steps: { id: Step; label: string; title: string }[] = [
-    { id: 'period', label: '1. Period', title: 'Period & Deadline' },
-    { id: 'staff', label: '2. Staff', title: 'Add Staff Members' },
-    { id: 'window', label: '3. Window', title: 'Window & Budgets' },
-    { id: 'distribution', label: '4. Distribution', title: 'Distribution Mode' },
-    { id: 'balances', label: '5. Balances', title: 'Import Initial Balances' },
-    { id: 'holidays', label: '6. Holidays', title: 'Import Holiday History' },
-    { id: 'confirm', label: '7. Confirm', title: 'Review and Open' },
+    { id: 'period', label: '1. Periode', title: 'Periode en deadline' },
+    { id: 'staff', label: '2. Personeel', title: 'Personeel toevoegen' },
+    { id: 'window', label: '3. Venster', title: 'Venster en budgetten' },
+    { id: 'distribution', label: '4. Verdeling', title: 'Verdelingsmodus' },
+    { id: 'balances', label: '5. Saldi', title: 'Beginsaldi importeren' },
+    { id: 'holidays', label: '6. Feestdagen', title: 'Feestdagrotatie importeren' },
+    { id: 'confirm', label: '7. Bevestigen', title: 'Controleren en openen' },
   ];
 
   const handleNext = () => {
@@ -305,19 +305,19 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'period' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Period Name</label>
+              <label className="block text-sm font-medium mb-1">Naam periode</label>
               <input
                 type="text"
                 value={periodData.naam}
                 onChange={(e) => setPeriodData({ ...periodData, naam: e.target.value })}
                 className="w-full px-3 py-2 border rounded"
-                placeholder="e.g., January 2027 Roster"
+                placeholder="bijv. Rooster januari 2027"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Start Date</label>
+                <label className="block text-sm font-medium mb-1">Startdatum</label>
                 <input
                   type="date"
                   value={periodData.start_datum}
@@ -326,7 +326,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">End Date</label>
+                <label className="block text-sm font-medium mb-1">Einddatum</label>
                 <input
                   type="date"
                   value={periodData.eind_datum}
@@ -337,7 +337,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Preference Deadline</label>
+              <label className="block text-sm font-medium mb-1">Deadline voorkeuren</label>
               <input
                 type="datetime-local"
                 value={periodData.deadline}
@@ -345,7 +345,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                 className="w-full px-3 py-2 border rounded"
               />
               <p className="text-xs text-neutral-600 mt-1">
-                Staff must submit preferences before this date/time
+                Personeel moet vóór dit tijdstip hun voorkeuren indienen
               </p>
             </div>
 
@@ -358,14 +358,14 @@ export function SetupWizard({ period, onComplete }: Props) {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <p className="text-sm text-neutral-600">
-                Select staff members who will receive preferences invitations for this period.
+                Selecteer het personeel dat een uitnodiging voor voorkeuren krijgt voor deze periode.
               </p>
               <button
                 onClick={loadStaff}
                 disabled={staffLoading}
                 className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
-                {staffLoading ? 'Loading...' : 'Load Staff from Pool'}
+                {staffLoading ? 'Bezig met laden...' : 'Personeel laden uit pool'}
               </button>
             </div>
 
@@ -383,7 +383,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                         }
                       />
                     </th>
-                    <th className="px-4 py-2 text-left text-sm font-medium">Name</th>
+                    <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
                     <th className="px-4 py-2 text-left text-sm font-medium">Status</th>
                   </tr>
                 </thead>
@@ -409,11 +409,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                       <td className="px-4 py-2 text-sm">{member.codenaam}</td>
                       <td className="px-4 py-2 text-sm">
                         {member.access_link ? (
-                          <span className="text-green-600 font-medium">✓ Already has access</span>
+                          <span className="text-green-600 font-medium">✓ Heeft al toegang</span>
                         ) : member.is_selected ? (
-                          <span className="text-blue-600">Will be invited on open</span>
+                          <span className="text-blue-600">Wordt uitgenodigd bij openen</span>
                         ) : (
-                          <span className="text-neutral-500">Not selected</span>
+                          <span className="text-neutral-500">Niet geselecteerd</span>
                         )}
                       </td>
                     </tr>
@@ -424,7 +424,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             {staffMembers.length === 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
-                No staff members loaded. Load from pool to continue.
+                Nog geen personeel geladen. Laad de pool om verder te gaan.
               </div>
             )}
           </div>
@@ -434,7 +434,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'window' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Window (weeks between shifts)</label>
+              <label className="block text-sm font-medium mb-1">Venster (weken tussen diensten)</label>
               <input
                 type="number"
                 min="1"
@@ -446,7 +446,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                 className="w-full px-3 py-2 border rounded"
               />
               <p className="text-xs text-neutral-600 mt-1">
-                Minimum weeks between assignments of the same shift type
+                Minimaal aantal weken tussen toewijzingen van hetzelfde diensttype
               </p>
             </div>
 
@@ -459,21 +459,21 @@ export function SetupWizard({ period, onComplete }: Props) {
                     : 'bg-red-50 border-red-200'
               }`}
             >
-              <p className="font-medium mb-2">Capacity Check</p>
+              <p className="font-medium mb-2">Capaciteitscheck</p>
               {capacityLoading || !capacityCheck ? (
-                <p className="text-neutral-600">Checking capacity...</p>
+                <p className="text-neutral-600">Capaciteit controleren...</p>
               ) : (
                 <>
                   <p className="whitespace-pre-line">{capacityCheck.message}</p>
                   <ul className="text-xs mt-2 space-y-1 ml-4">
                     <li>
-                      • Distinct people: {capacityCheck.distinct_people.active_participants} of{' '}
-                      {capacityCheck.distinct_people.required_people} required{' '}
+                      • Aantal personen: {capacityCheck.distinct_people.active_participants} van{' '}
+                      {capacityCheck.distinct_people.required_people} nodig{' '}
                       {capacityCheck.distinct_people.satisfied ? '✓' : '✗'}
                     </li>
                     <li>
-                      • Total capacity: {capacityCheck.total_capacity.pool_capacity} shifts available for{' '}
-                      {capacityCheck.total_capacity.required_slots} needed{' '}
+                      • Totale capaciteit: {capacityCheck.total_capacity.pool_capacity} diensten beschikbaar voor{' '}
+                      {capacityCheck.total_capacity.required_slots} benodigd{' '}
                       {capacityCheck.total_capacity.satisfied ? '✓' : '✗'}
                     </li>
                   </ul>
@@ -482,12 +482,12 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div>
-              <h3 className="font-semibold mb-3">Target Ranges (band)</h3>
+              <h3 className="font-semibold mb-3">Streefbereik</h3>
               <div className="grid grid-cols-2 gap-4">
                 {['AVOND', 'WEEKEND', 'FEESTDAG'].map((counter) => (
                   <div key={counter}>
                     <label className="block text-xs font-medium mb-2">
-                      {counter === 'AVOND' ? 'Evening' : counter === 'WEEKEND' ? 'Weekend' : 'Holiday'}
+                      {counter === 'AVOND' ? 'Avond' : counter === 'WEEKEND' ? 'Weekend' : 'Feestdag'}
                     </label>
                     <div className="flex gap-2">
                       <input
@@ -534,7 +534,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'distribution' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-2">Distribution Strategy</label>
+              <label className="block text-sm font-medium mb-2">Verdelingsstrategie</label>
               <div className="space-y-2">
                 {['GELIJK', 'NAAR_RATO'].map((mode) => (
                   <label key={mode} className="flex items-center gap-2 cursor-pointer">
@@ -549,8 +549,8 @@ export function SetupWizard({ period, onComplete }: Props) {
                       className="rounded-full"
                     />
                     <span className="text-sm">
-                      {mode === 'GELIJK' && 'Equal (same target range for everyone)'}
-                      {mode === 'NAAR_RATO' && 'Pro-rated (target range scaled to part-time factor)'}
+                      {mode === 'GELIJK' && 'Gelijk (zelfde streefbereik voor iedereen)'}
+                      {mode === 'NAAR_RATO' && 'Naar rato (streefbereik geschaald naar deeltijdfactor)'}
                     </span>
                   </label>
                 ))}
@@ -558,12 +558,12 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div className="bg-neutral-50 p-3 rounded text-xs text-neutral-600">
-              <p className="font-medium mb-1">Chosen strategy: {distributionConfig.mode}</p>
+              <p className="font-medium mb-1">Gekozen strategie: {distributionConfig.mode}</p>
               <p>
                 {distributionConfig.mode === 'GELIJK' &&
-                  'Everyone gets the same target range, regardless of part-time factor.'}
+                  'Iedereen krijgt hetzelfde streefbereik, ongeacht deeltijdfactor.'}
                 {distributionConfig.mode === 'NAAR_RATO' &&
-                  "Each person's target range is scaled to their part-time factor."}
+                  'Ieders streefbereik wordt geschaald naar hun deeltijdfactor.'}
               </p>
             </div>
           </div>
@@ -573,7 +573,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'balances' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Upload a CSV file with initial balances from the previous period. Format:
+              Upload een CSV-bestand met beginsaldi uit de vorige periode. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,AVOND_delta,WEEKEND_delta,FEESTDAG_delta
@@ -584,7 +584,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div className="border-2 border-dashed rounded p-6 text-center">
-              <p className="text-sm text-neutral-600 mb-2">Drag CSV here or click to select</p>
+              <p className="text-sm text-neutral-600 mb-2">Sleep een CSV hierheen of klik om te selecteren</p>
               <input
                 type="file"
                 accept=".csv"
@@ -595,7 +595,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             {balanceRows.length > 0 && (
               <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-                <p className="font-medium">{balanceRows.length} records ready to import</p>
+                <p className="font-medium">{balanceRows.length} records klaar om te importeren</p>
                 <ul className="text-xs mt-1 space-y-0.5">
                   {balanceRows.slice(0, 5).map((r, i) => (
                     <li key={i}>
@@ -603,7 +603,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                       FEESTDAG {r.FEESTDAG_delta ?? 0}
                     </li>
                   ))}
-                  {balanceRows.length > 5 && <li>...and {balanceRows.length - 5} more</li>}
+                  {balanceRows.length > 5 && <li>...en {balanceRows.length - 5} meer</li>}
                 </ul>
               </div>
             )}
@@ -614,7 +614,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'holidays' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Upload holiday rotation history. Format:
+              Upload de feestdagrotatie-geschiedenis. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,holiday_group,year
@@ -625,7 +625,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div className="border-2 border-dashed rounded p-6 text-center">
-              <p className="text-sm text-neutral-600 mb-2">Drag CSV here or click to select</p>
+              <p className="text-sm text-neutral-600 mb-2">Sleep een CSV hierheen of klik om te selecteren</p>
               <input
                 type="file"
                 accept=".csv"
@@ -636,14 +636,14 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             {holidayRows.length > 0 && (
               <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-                <p className="font-medium">{holidayRows.length} records ready to import</p>
+                <p className="font-medium">{holidayRows.length} records klaar om te importeren</p>
                 <ul className="text-xs mt-1 space-y-0.5">
                   {holidayRows.slice(0, 5).map((r, i) => (
                     <li key={i}>
                       {r.codenaam}: {r.holiday_group} {r.year}
                     </li>
                   ))}
-                  {holidayRows.length > 5 && <li>...and {holidayRows.length - 5} more</li>}
+                  {holidayRows.length > 5 && <li>...en {holidayRows.length - 5} meer</li>}
                 </ul>
               </div>
             )}
@@ -654,40 +654,40 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'confirm' && (
           <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded p-4">
-              <h3 className="font-semibold text-blue-900 mb-3">Review Configuration</h3>
+              <h3 className="font-semibold text-blue-900 mb-3">Configuratie controleren</h3>
               <div className="space-y-2 text-sm text-blue-900">
                 <p>
-                  <strong>Period:</strong> {periodData.naam} ({periodData.start_datum} to{' '}
+                  <strong>Periode:</strong> {periodData.naam} ({periodData.start_datum} t/m{' '}
                   {periodData.eind_datum})
                 </p>
                 <p>
                   <strong>Deadline:</strong> {periodData.deadline}
                 </p>
                 <p>
-                  <strong>Staff:</strong> {staffMembers.filter((s) => s.is_selected).length} selected
+                  <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_selected).length} geselecteerd
                 </p>
                 <p>
-                  <strong>Window:</strong> {windowConfig.windowWeeks} weeks
+                  <strong>Venster:</strong> {windowConfig.windowWeeks} weken
                 </p>
                 <p>
-                  <strong>Distribution:</strong> {distributionConfig.mode}
+                  <strong>Verdeling:</strong> {distributionConfig.mode}
                 </p>
               </div>
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded p-4">
-              <p className="font-semibold text-amber-900 mb-2">⚠️ Before opening</p>
+              <p className="font-semibold text-amber-900 mb-2">⚠️ Voordat je opent</p>
               <ul className="text-sm text-amber-800 space-y-1 ml-4">
-                <li>✓ Period dates and deadline are correct</li>
-                <li>✓ All staff members have been invited</li>
-                <li>✓ Window and budget settings are appropriate</li>
-                <li>✓ Initial balances (if any) have been imported</li>
+                <li>✓ Periodedata en deadline zijn correct</li>
+                <li>✓ Al het personeel is uitgenodigd</li>
+                <li>✓ Venster- en budgetinstellingen zijn geschikt</li>
+                <li>✓ Beginsaldi (indien van toepassing) zijn geïmporteerd</li>
               </ul>
             </div>
 
             <p className="text-sm text-neutral-600 italic">
-              Once you open the period, staff will be able to submit preferences. The period status
-              will be set to OPEN.
+              Zodra je de periode opent, kan het personeel voorkeuren indienen. De periodestatus
+              wordt op OPEN gezet.
             </p>
           </div>
         )}
@@ -714,7 +714,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                   : 'bg-neutral-200 text-neutral-900 hover:bg-neutral-300'
               }`}
           >
-            Back
+            Terug
           </button>
 
           {currentStep !== 'confirm' ? (
@@ -722,7 +722,7 @@ export function SetupWizard({ period, onComplete }: Props) {
               onClick={handleNext}
               className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
             >
-              Next
+              Volgende
             </button>
           ) : (
             <button
@@ -730,7 +730,7 @@ export function SetupWizard({ period, onComplete }: Props) {
               disabled={loading}
               className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
             >
-              {loading ? 'Opening...' : 'Open Period'}
+              {loading ? 'Bezig met openen...' : 'Periode openen'}
             </button>
           )}
         </div>

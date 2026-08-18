@@ -72,31 +72,36 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 
 ### Frontend Rules
 
+**Language: all user-facing text is Dutch.** Every screen a participant or
+planner sees - labels, buttons, error messages, notification templates,
+exported CSV/mailto content - is in Dutch. English stays in code
+identifiers, DB fields, comments, and console/log output only.
+
 **Balance & Saldo Messaging:**
 - ❌ Never show raw numbers: `-1`, `+2`, `band: [7,8]`
 - ✅ Always in words:
-  - "1 fewer evening shifts" / "1 extra evening shift"
-  - "You receive 8 or 9 evening shifts"
-  - "2 shifts to make up from last period"
+  - "1 avonddienst minder" / "1 avonddienst extra"
+  - "Je krijgt 8 of 9 avonddiensten"
+  - "2 diensten in te halen van vorige periode"
 
 **Terminology:**
 - Internal code terms: `windowWeeks`, `teller`, `band`, `slot`, `basis`
-- User-facing: "window (weeks)", "evening/weekend/holiday shifts", "range", "service", "target amount"
-- Never say "band" to users
-- `FEESTDAG` = "holiday shift"
-- `AVOND` = "evening shift"
-- `WEEKEND` = "weekend shift"
-- `LIEVER_NIET` = "prefer not"
-- `ABSOLUUT` = "blocked"
+- User-facing (Dutch): "venster (weken)", "avond-/weekend-/feestdagdiensten", "bereik", "dienst", "streefaantal"
+- Never say "band" to users - use "bereik" ("range")
+- `FEESTDAG` = "feestdagdienst"
+- `AVOND` = "avonddienst"
+- `WEEKEND` = "weekenddienst"
+- `LIEVER_NIET` = "liever niet"
+- `ABSOLUUT` = "geblokkeerd"
 
 **Calendar/UI Constraints:**
 - Grid must remain readable on 375px width (mobile-first)
 - Always show ISO week numbers
-- Saturday and Sunday as separate cells with "block whole weekend" quick action
+- Saturday and Sunday as separate cells with a "heel weekend blokkeren" quick action
 - 4 states per day must be visually distinct without color alone:
   - Neutral (no marking)
-  - Prefer not (soft)
-  - Blocked (hard)
+  - Liever niet (soft)
+  - Geblokkeerd (hard)
   - Part-time (auto-generated)
 - Print-friendly: must work in B&W
 
