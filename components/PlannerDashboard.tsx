@@ -81,7 +81,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
         fetch(`/api/planner/period/${periodId}/progress`),
       ]);
 
-      if (!dashRes.ok || !progRes.ok) throw new Error('Failed to load dashboard');
+      if (!dashRes.ok || !progRes.ok) throw new Error('Laden van dashboard mislukt');
 
       const dashData = await dashRes.json();
       const progData = await progRes.json();
@@ -90,7 +90,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       setProgress(progData.data);
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
+      setError(err instanceof Error ? err.message : 'Laden van dashboard mislukt');
       setLoading(false);
     }
   };
@@ -112,7 +112,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error?.message || 'Failed to submit');
+        throw new Error(data.error?.message || 'Indienen mislukt');
       }
 
       // Reload progress
@@ -120,7 +120,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       const progData = await progRes.json();
       setProgress(progData.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to submit');
+      setError(err instanceof Error ? err.message : 'Indienen mislukt');
     } finally {
       setSubmittingFor(null);
     }
@@ -129,7 +129,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   if (loading) {
     return (
       <div className="card p-8 text-center">
-        <p className="text-lg text-neutral-600">Loading dashboard...</p>
+        <p className="text-lg text-neutral-600">Dashboard laden...</p>
       </div>
     );
   }
@@ -145,7 +145,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   if (!dashboard) {
     return (
       <div className="card p-8">
-        <p className="text-neutral-600">No dashboard data available</p>
+        <p className="text-neutral-600">Geen dashboardgegevens beschikbaar</p>
       </div>
     );
   }
@@ -156,28 +156,28 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     totalSubmissions > 0 ? Math.round((stats.confirmed / totalSubmissions) * 100) : 0;
 
   const counterDisplayName: Record<string, string> = {
-    AVOND: 'Evening',
+    AVOND: 'Avond',
     WEEKEND: 'Weekend',
-    FEESTDAG: 'Holiday',
+    FEESTDAG: 'Feestdag',
   };
 
   return (
     <div className="space-y-6">
       {/* Submission Progress Summary */}
       <div className="card p-6">
-        <h3 className="font-bold text-lg mb-4">Submission Progress</h3>
+        <h3 className="font-bold text-lg mb-4">Voortgang indiening</h3>
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center">
             <div className="text-3xl font-bold text-blue-600">{stats.not_started}</div>
-            <div className="text-sm text-neutral-600">Not started</div>
+            <div className="text-sm text-neutral-600">Niet begonnen</div>
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-amber-600">{stats.in_progress}</div>
-            <div className="text-sm text-neutral-600">In progress</div>
+            <div className="text-sm text-neutral-600">Bezig</div>
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-green-600">{stats.confirmed}</div>
-            <div className="text-sm text-neutral-600">Confirmed</div>
+            <div className="text-sm text-neutral-600">Bevestigd</div>
           </div>
         </div>
 
@@ -189,7 +189,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           />
         </div>
         <p className="text-sm text-neutral-600 text-center">
-          {submissionProgress}% confirmed ({stats.confirmed} of {totalSubmissions})
+          {submissionProgress}% bevestigd ({stats.confirmed} van {totalSubmissions})
         </p>
       </div>
 
@@ -199,7 +199,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       {/* Large Imbalances */}
       {dashboard.large_imbalances.length > 0 && (
         <div className="card p-6 bg-amber-50 border border-amber-200">
-          <h3 className="font-bold text-lg mb-3">⚠️ Large Imbalances (≥2 shift difference)</h3>
+          <h3 className="font-bold text-lg mb-3">⚠️ Grote verschillen (≥2 diensten verschil)</h3>
           <div className="space-y-2">
             {dashboard.large_imbalances.slice(0, 8).map((item) => (
               <div key={`${item.person_id}-${item.counter}`} className="flex justify-between text-sm">
@@ -211,7 +211,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             ))}
             {dashboard.large_imbalances.length > 8 && (
               <p className="text-xs text-amber-700 pt-2">
-                ... and {dashboard.large_imbalances.length - 8} more imbalances
+                ... en {dashboard.large_imbalances.length - 8} meer verschillen
               </p>
             )}
           </div>
@@ -221,27 +221,27 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       {/* Pool Info */}
       <div className="grid grid-cols-2 gap-4">
         <div className="card p-4">
-          <p className="text-sm text-neutral-600">Total staff</p>
+          <p className="text-sm text-neutral-600">Totaal personeel</p>
           <p className="text-2xl font-bold text-neutral-900">{dashboard.total_staff}</p>
         </div>
         <div className="card p-4">
-          <p className="text-sm text-neutral-600">With part-time patterns</p>
+          <p className="text-sm text-neutral-600">Met deeltijdpatroon</p>
           <p className="text-2xl font-bold text-neutral-900">{dashboard.staff_with_parttime}</p>
         </div>
       </div>
 
       {/* Staff Status Table */}
       <div className="card p-6">
-        <h3 className="font-bold text-lg mb-4">Staff Status</h3>
+        <h3 className="font-bold text-lg mb-4">Status personeel</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold">Name</th>
+                <th className="px-3 py-2 text-left font-semibold">Naam</th>
                 <th className="px-3 py-2 text-left font-semibold">Status</th>
-                <th className="px-3 py-2 text-center font-semibold">Blocked Days</th>
-                <th className="px-3 py-2 text-center font-semibold">Part-time</th>
-                <th className="px-3 py-2 text-center font-semibold">Actions</th>
+                <th className="px-3 py-2 text-center font-semibold">Geblokkeerde dagen</th>
+                <th className="px-3 py-2 text-center font-semibold">Deeltijd</th>
+                <th className="px-3 py-2 text-center font-semibold">Acties</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -251,15 +251,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                   <td className="px-3 py-2">
                     {!person.submission_status ? (
                       <span className="inline-block px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
-                        Not started
+                        Niet begonnen
                       </span>
                     ) : person.submission_status === 'BEZIG' ? (
                       <span className="inline-block px-2 py-1 rounded-full text-xs bg-amber-100 text-amber-800">
-                        In progress
+                        Bezig
                       </span>
                     ) : (
                       <span className="inline-block px-2 py-1 rounded-full text-xs bg-green-100 text-green-800">
-                        ✓ Confirmed
+                        ✓ Bevestigd
                       </span>
                     )}
                   </td>
@@ -278,7 +278,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                         disabled={submittingFor === person.person_id}
                         className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
                       >
-                        {submittingFor === person.person_id ? 'Submitting...' : 'Submit'}
+                        {submittingFor === person.person_id ? 'Bezig...' : 'Indienen'}
                       </button>
                     )}
                   </td>
@@ -291,7 +291,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
 
       {/* Roster Generation & Export */}
       <div className="card p-6">
-        <h3 className="font-bold text-lg mb-4">Roster Generation</h3>
+        <h3 className="font-bold text-lg mb-4">Rooster genereren</h3>
         <div className="mb-6">
           <div className="flex gap-3 flex-wrap">
             <button
@@ -299,14 +299,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               disabled={dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD'}
               className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
             >
-              🚀 Generate Roster with Solver
+              🚀 Rooster genereren met solver
             </button>
             {dashboard.status === 'GEGENEREERD' && (
               <button
                 onClick={() => setPublicationDialogOpen(true)}
                 className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
               >
-                ✅ Publish Roster
+                ✅ Rooster publiceren
               </button>
             )}
           </div>
@@ -315,19 +315,19 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           </p>
         </div>
 
-        <h3 className="font-bold text-lg mb-4">Export & Communications</h3>
+        <h3 className="font-bold text-lg mb-4">Exporteren en communicatie</h3>
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setExportDialogOpen(true)}
             className="px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
           >
-            📧 Invitations & Reminders
+            📧 Uitnodigingen en herinneringen
           </button>
           <a
             href={`/api/exports/status-report/${periodId}`}
             className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
           >
-            📋 Download Status Report
+            📋 Statusrapport downloaden
           </a>
         </div>
       </div>
@@ -336,12 +336,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       {(dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD') && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-lg">Assignments</h3>
+            <h3 className="font-bold text-lg">Toewijzingen</h3>
             <button
               onClick={() => setShowAssignments(!showAssignments)}
               className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
-              {showAssignments ? 'Hide' : 'Show'}
+              {showAssignments ? 'Verbergen' : 'Tonen'}
             </button>
           </div>
           {showAssignments && (
