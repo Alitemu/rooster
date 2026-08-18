@@ -66,16 +66,6 @@ interface SoftBlockViolation {
   date_str: string;
 }
 
-const HOLIDAY_GROUP_NAMES: Record<string, string> = {
-  NIEUWJAAR: 'New Year',
-  PASEN: 'Easter',
-  KONINGSDAG: "King's Day",
-  BEVRIJDINGSDAG: 'Liberation Day',
-  HEMELVAART: 'Ascension Day',
-  PINKSTEREN: 'Pentecost',
-  KERST: 'Christmas',
-};
-
 export default function PersonalLinkPage() {
   const params = useParams();
   const token = params.token as string;
@@ -94,7 +84,6 @@ export default function PersonalLinkPage() {
     total: 0,
   });
   const [softBlockViolations, setSoftBlockViolations] = useState<SoftBlockViolation[]>([]);
-  const [holidayHistory, setHolidayHistory] = useState<Array<{ feestdag: string; année: number }>>([]);
   const [parttimeConfirmed, setParttimeConfirmed] = useState(false);
   const [_preferencesChanged, setPreferencesChanged] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -124,10 +113,9 @@ export default function PersonalLinkPage() {
 
         // If period is published, load roster; otherwise load patterns
         if (periodInfo.status === 'GEPUBLICEERD') {
-          const [rosterRes, preferencesRes, holidayRes] = await Promise.all([
+          const [rosterRes, preferencesRes] = await Promise.all([
             fetch(`/api/person/${person_id}/roster/${period_id}`),
             fetch(`/api/person/${person_id}/preferences/${period_id}`),
-            fetch(`/api/person/${person_id}/holiday-history`),
           ]);
 
           if (rosterRes.ok) {
@@ -151,16 +139,6 @@ export default function PersonalLinkPage() {
                 }));
               setSoftBlockViolations(violations);
             }
-          }
-
-          if (holidayRes.ok) {
-            const holidayInfo = await holidayRes.json();
-            setHolidayHistory(
-              holidayInfo.data.history.map((h: { feestdag_groep: string; jaar: number }) => ({
-                feestdag: HOLIDAY_GROUP_NAMES[h.feestdag_groep] || h.feestdag_groep,
-                année: h.jaar,
-              }))
-            );
           }
         } else {
           // Fetch part-time patterns for preference entry
@@ -351,7 +329,6 @@ export default function PersonalLinkPage() {
             },
           ]}
           softBlockViolations={softBlockViolations}
-          holidayHistory={holidayHistory}
         />
       )}
 

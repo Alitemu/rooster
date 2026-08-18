@@ -176,7 +176,6 @@ async function main() {
   const abs = await req('POST', `/api/person/${s1.id}/absences`, { jar: person, body: { van_datum: '2027-02-01', tot_datum: '2027-02-07', soort: 'VAKANTIE' } });
   rec('Create absence', eq(abs.status, 201));
   rec('Delete absence', eq((await req('DELETE', `/api/person/${s1.id}/absences/${abs.json?.data?.id}`, { jar: person })).status, 200));
-  rec('Holiday history', eq((await req('GET', `/api/person/${s1.id}/holiday-history`, { jar: person })).status, 200));
   rec('Notifications', eq((await req('GET', `/api/person/${s1.id}/notifications`, { jar: person })).status, 200));
   rec('Swap requests list', eq((await req('GET', `/api/person/${s1.id}/swap-requests`, { jar: person })).status, 200));
 

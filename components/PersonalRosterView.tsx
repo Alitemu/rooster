@@ -41,7 +41,6 @@ interface Props {
   assignedShifts: AssignedShift[];
   balances: BalanceDisplay[];
   softBlockViolations?: SoftBlockViolation[];
-  holidayHistory?: Array<{ feestdag: string; année: number }>;
 }
 
 export function PersonalRosterView({
@@ -50,7 +49,6 @@ export function PersonalRosterView({
   assignedShifts,
   balances,
   softBlockViolations = [],
-  holidayHistory = [],
 }: Props) {
   const [weekView, setWeekView] = useState<Map<string, string[]>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
@@ -184,24 +182,6 @@ export function PersonalRosterView({
             ))}
         </div>
       </div>
-
-      {/* Holiday history */}
-      {holidayHistory.length > 0 && (
-        <div className="card p-6">
-          <h3 className="font-bold text-lg mb-3">Holiday Rotation</h3>
-          <p className="text-sm text-neutral-600 mb-4">
-            Your holiday shift assignments for recent years
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            {holidayHistory.map((entry) => (
-              <div key={`${entry.feestdag}-${entry.année}`} className="text-sm">
-                <span className="font-medium text-neutral-800">{entry.feestdag}</span>
-                <span className="text-neutral-600"> {entry.année}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Shift Swap Management */}
       <div className="card p-6 space-y-4">
