@@ -50,14 +50,14 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
           fetch(`/api/person/${personId}/roster/${periodId}`),
           fetch(`/api/person/${personId}/roster/${periodId}/others`),
         ]);
-        if (!ownRes.ok || !othersRes.ok) throw new Error('Failed to load roster');
+        if (!ownRes.ok || !othersRes.ok) throw new Error('Laden van rooster mislukt');
 
         const ownData = await ownRes.json();
         const othersData = await othersRes.json();
         setAssignments(ownData.data.assignments);
         setOtherAssignments(othersData.data.assignments);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load roster');
+        setError(err instanceof Error ? err.message : 'Laden van rooster mislukt');
       } finally {
         setLoading(false);
       }
@@ -68,12 +68,12 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
 
   const handleSubmit = async () => {
     if (!offeredSlotId || !requestedSlotId) {
-      setError('Please select both slots');
+      setError('Selecteer beide diensten');
       return;
     }
 
     if (offeredSlotId === requestedSlotId) {
-      setError('Cannot swap same slot with itself');
+      setError('Je kunt een dienst niet met zichzelf ruilen');
       return;
     }
 
@@ -94,13 +94,13 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Failed to create swap request');
+        throw new Error(data.error || 'Aanmaken van ruilverzoek mislukt');
       }
 
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create swap request');
+      setError(err instanceof Error ? err.message : 'Aanmaken van ruilverzoek mislukt');
     } finally {
       setSubmitting(false);
     }
@@ -110,9 +110,9 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   const getRequestedSlot = () => otherAssignments.find(a => a.slot_id === requestedSlotId);
 
   const shiftTypeNames: Record<string, string> = {
-    AVOND: 'Evening',
+    AVOND: 'Avond',
     WEEKEND: 'Weekend',
-    FEESTDAG: 'Holiday',
+    FEESTDAG: 'Feestdag',
   };
 
   if (!isOpen) return null;
@@ -121,15 +121,15 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Request Shift Swap"
+      aria-label="Ruilverzoek indienen"
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
     >
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
         {/* Header */}
         <div className="border-b p-6">
-          <h2 className="text-xl font-bold">Request Shift Swap</h2>
+          <h2 className="text-xl font-bold">Ruilverzoek indienen</h2>
           <p className="text-sm text-neutral-600 mt-1">
-            Select a shift you want to give and one you want to receive
+            Kies een dienst die je wilt afstaan en een die je wilt ontvangen
           </p>
         </div>
 
@@ -137,7 +137,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
         <div className="p-6 space-y-4">
           {loading && (
             <div className="text-center py-8">
-              <p className="text-neutral-600">Loading your assignments...</p>
+              <p className="text-neutral-600">Je diensten laden...</p>
             </div>
           )}
 
@@ -146,7 +146,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
               {/* Offered Slot */}
               <div>
                 <label className="block text-sm font-semibold text-neutral-900 mb-2">
-                  Shift you offer
+                  Dienst die je aanbiedt
                 </label>
                 <select
                   name="offered-slot"
@@ -154,7 +154,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   onChange={(e) => setOfferedSlotId(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
-                  <option value="">Select a shift</option>
+                  <option value="">Kies een dienst</option>
                   {assignments.map((a) => (
                     <option key={a.slot_id} value={a.slot_id}>
                       {a.datum} - {shiftTypeNames[a.teller]}
@@ -166,7 +166,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
               {/* Requested Slot */}
               <div>
                 <label className="block text-sm font-semibold text-neutral-900 mb-2">
-                  Shift you want (from another person)
+                  Dienst die je wilt (van iemand anders)
                 </label>
                 <select
                   name="requested-slot"
@@ -174,10 +174,10 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   onChange={(e) => setRequestedSlotId(e.target.value)}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
-                  <option value="">Select a shift</option>
+                  <option value="">Kies een dienst</option>
                   {otherAssignments.length === 0 && (
                     <option value="" disabled>
-                      No other shifts available
+                      Geen andere diensten beschikbaar
                     </option>
                   )}
                   {otherAssignments.map((a) => (
@@ -191,13 +191,13 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
               {/* Preview */}
               {getOfferedSlot() && getRequestedSlot() && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <h3 className="font-semibold text-sm text-blue-900 mb-2">Swap Preview</h3>
+                  <h3 className="font-semibold text-sm text-blue-900 mb-2">Voorbeeld van de ruil</h3>
                   <div className="space-y-1 text-sm text-blue-800">
                     <p>
-                      You offer: <span className="font-semibold">{getOfferedSlot()?.datum}</span>
+                      Je biedt aan: <span className="font-semibold">{getOfferedSlot()?.datum}</span>
                     </p>
                     <p>
-                      You receive: <span className="font-semibold">{getRequestedSlot()?.datum}</span>
+                      Je ontvangt: <span className="font-semibold">{getRequestedSlot()?.datum}</span>
                     </p>
                   </div>
                 </div>
@@ -206,13 +206,13 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
               {/* Notes */}
               <div>
                 <label className="block text-sm font-semibold text-neutral-900 mb-2">
-                  Optional notes
+                  Opmerking (optioneel)
                 </label>
                 <textarea
                   name="notes"
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Why do you need this swap? (optional)"
+                  placeholder="Waarom wil je deze ruil? (optioneel)"
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                   rows={3}
                 />
@@ -234,14 +234,14 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
             disabled={submitting}
             className="flex-1 px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
           >
-            Cancel
+            Annuleren
           </button>
           <button
             onClick={handleSubmit}
             disabled={submitting || !offeredSlotId || !requestedSlotId || loading}
             className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
           >
-            {submitting ? 'Sending...' : 'Send Request'}
+            {submitting ? 'Versturen...' : 'Verzoek versturen'}
           </button>
         </div>
       </div>

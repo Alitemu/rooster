@@ -48,12 +48,12 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         if (filterStatus) url += `&status=${filterStatus}`;
 
         const res = await fetch(url);
-        if (!res.ok) throw new Error('Failed to load swap requests');
+        if (!res.ok) throw new Error('Laden van ruilverzoeken mislukt');
 
         const data = await res.json();
         setSwapRequests(data.data.swap_requests);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load swap requests');
+        setError(err instanceof Error ? err.message : 'Laden van ruilverzoeken mislukt');
       } finally {
         setLoading(false);
       }
@@ -73,12 +73,12 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         method: 'POST',
       });
 
-      if (!res.ok) throw new Error('Failed to approve swap');
+      if (!res.ok) throw new Error('Goedkeuren van ruil mislukt');
 
       setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
-      showSuccess('Swap approved');
+      showSuccess('Ruil goedgekeurd');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to approve swap');
+      setError(err instanceof Error ? err.message : 'Goedkeuren van ruil mislukt');
     }
   };
 
@@ -90,21 +90,21 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         body: JSON.stringify({ reason: reason || null }),
       });
 
-      if (!res.ok) throw new Error('Failed to reject swap');
+      if (!res.ok) throw new Error('Weigeren van ruil mislukt');
 
       setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
       setRejectingId(null);
       setRejectionReason('');
-      showSuccess('Swap rejected');
+      showSuccess('Ruil geweigerd');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reject swap');
+      setError(err instanceof Error ? err.message : 'Weigeren van ruil mislukt');
     }
   };
 
   const shiftTypeNames: Record<string, string> = {
-    AVOND: 'Evening',
+    AVOND: 'Avond',
     WEEKEND: 'Weekend',
-    FEESTDAG: 'Holiday',
+    FEESTDAG: 'Feestdag',
   };
 
   const statusBadges: Record<string, string> = {
@@ -115,16 +115,16 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
   };
 
   const statusLabels: Record<string, string> = {
-    PENDING: 'Pending',
-    GOEDGEKEURD: 'Approved',
-    AFGEWEZEN: 'Rejected',
-    INGETROKKEN: 'Withdrawn',
+    PENDING: 'In behandeling',
+    GOEDGEKEURD: 'Goedgekeurd',
+    AFGEWEZEN: 'Geweigerd',
+    INGETROKKEN: 'Ingetrokken',
   };
 
   if (loading) {
     return (
       <div className="card p-8 text-center">
-        <p className="text-lg text-neutral-600">Loading swap requests...</p>
+        <p className="text-lg text-neutral-600">Ruilverzoeken laden...</p>
       </div>
     );
   }
@@ -153,18 +153,18 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
           onChange={(e) => setFilterStatus(e.target.value)}
           className="px-3 py-2 border rounded text-sm"
         >
-          <option value="">All statuses</option>
-          <option value="PENDING">Pending</option>
-          <option value="GOEDGEKEURD">Approved</option>
-          <option value="AFGEWEZEN">Rejected</option>
-          <option value="INGETROKKEN">Withdrawn</option>
+          <option value="">Alle statussen</option>
+          <option value="PENDING">In behandeling</option>
+          <option value="GOEDGEKEURD">Goedgekeurd</option>
+          <option value="AFGEWEZEN">Geweigerd</option>
+          <option value="INGETROKKEN">Ingetrokken</option>
         </select>
       </div>
 
       {/* Swap Requests */}
       {swapRequests.length === 0 && (
         <div className="card p-8 text-center">
-          <p className="text-neutral-600">No swap requests found</p>
+          <p className="text-neutral-600">Geen ruilverzoeken gevonden</p>
         </div>
       )}
 
@@ -188,12 +188,12 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                     </span>
                     {isRequester && (
                       <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        You requested
+                        Door jou aangevraagd
                       </span>
                     )}
                     {isRespondent && isPending && (
                       <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
-                        Pending Approval
+                        Wacht op jouw goedkeuring
                       </span>
                     )}
                   </div>
@@ -201,20 +201,20 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                   <div className="text-sm mb-2">
                     <p className="font-semibold text-neutral-900">
                       {isRequester
-                        ? `You → ${swap.respondent_codenaam}`
-                        : `${swap.aanvrager_codenaam} → You`}
+                        ? `Jij → ${swap.respondent_codenaam}`
+                        : `${swap.aanvrager_codenaam} → Jij`}
                     </p>
                   </div>
 
                   <div className="bg-neutral-50 rounded p-3 text-sm space-y-1 mb-2">
                     <div className="flex justify-between">
-                      <span className="text-neutral-600">Offered:</span>
+                      <span className="text-neutral-600">Aangeboden:</span>
                       <span className="font-medium">
                         {swap.aangeboden_datum} ({shiftTypeNames[swap.aangeboden_type]})
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-neutral-600">Requested:</span>
+                      <span className="text-neutral-600">Gevraagd:</span>
                       <span className="font-medium">
                         {swap.gevraagde_datum} ({shiftTypeNames[swap.gevraagde_type]})
                       </span>
@@ -233,7 +233,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                       onClick={() => handleApprove(swap.id)}
                       className="px-3 py-1 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
                     >
-                      Approve
+                      Goedkeuren
                     </button>
                     <button
                       onClick={() => {
@@ -242,7 +242,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                       }}
                       className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
                     >
-                      Reject
+                      Weigeren
                     </button>
                   </div>
                 )}
@@ -251,7 +251,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
               {isPending && isRespondent && rejectingId === swap.id && (
                 <div className="mt-3 pt-3 border-t space-y-2">
                   <label className="block text-xs font-medium text-neutral-700">
-                    Reason (optional)
+                    Reden (optioneel)
                   </label>
                   <textarea
                     name="rejection-reason"
@@ -265,13 +265,13 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                       onClick={() => handleReject(swap.id, rejectionReason)}
                       className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
                     >
-                      Reject
+                      Weigeren
                     </button>
                     <button
                       onClick={() => setRejectingId(null)}
                       className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
                     >
-                      Cancel
+                      Annuleren
                     </button>
                   </div>
                 </div>

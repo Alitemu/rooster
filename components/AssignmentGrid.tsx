@@ -52,13 +52,13 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       if (filterShiftType) url += `&shift_type=${filterShiftType}`;
 
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Failed to load assignments');
+      if (!res.ok) throw new Error('Laden van toewijzingen mislukt');
 
       const data = await res.json();
       setAssignments(data.data.assignments);
       setTotalPages(data.data.pagination.total_pages);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load assignments');
+      setError(err instanceof Error ? err.message : 'Laden van toewijzingen mislukt');
     } finally {
       setLoading(false);
     }
@@ -81,23 +81,23 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         }
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to remove assignment');
+      if (!res.ok) throw new Error(data.error || 'Verwijderen van toewijzing mislukt');
 
       setConfirmingId(null);
       setReason('');
       await loadAssignments();
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to remove assignment');
+      setError(err instanceof Error ? err.message : 'Verwijderen van toewijzing mislukt');
     } finally {
       setRemoving(null);
     }
   };
 
   const shiftTypeNames: Record<string, string> = {
-    AVOND: 'Evening',
+    AVOND: 'Avond',
     WEEKEND: 'Weekend',
-    FEESTDAG: 'Holiday',
+    FEESTDAG: 'Feestdag',
   };
 
   const sourceColors: Record<string, string> = {
@@ -109,7 +109,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   if (loading) {
     return (
       <div className="card p-8 text-center">
-        <p className="text-lg text-neutral-600">Loading assignments...</p>
+        <p className="text-lg text-neutral-600">Toewijzingen laden...</p>
       </div>
     );
   }
@@ -129,7 +129,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         <div className="grid grid-cols-2 gap-4">
           <input
             type="text"
-            placeholder="Filter by person code"
+            placeholder="Filter op codenaam"
             value={filterPerson}
             onChange={(e) => {
               setFilterPerson(e.target.value);
@@ -145,10 +145,10 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             }}
             className="px-3 py-2 border rounded text-sm"
           >
-            <option value="">All shift types</option>
-            <option value="AVOND">Evening</option>
+            <option value="">Alle diensttypes</option>
+            <option value="AVOND">Avond</option>
             <option value="WEEKEND">Weekend</option>
-            <option value="FEESTDAG">Holiday</option>
+            <option value="FEESTDAG">Feestdag</option>
           </select>
         </div>
       </div>
@@ -159,12 +159,12 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
           <table className="w-full text-sm">
             <thead className="border-b bg-neutral-50">
               <tr>
-                <th className="px-3 py-2 text-left font-semibold">Date</th>
+                <th className="px-3 py-2 text-left font-semibold">Datum</th>
                 <th className="px-3 py-2 text-left font-semibold">Week</th>
-                <th className="px-3 py-2 text-left font-semibold">Person</th>
-                <th className="px-3 py-2 text-left font-semibold">Shift Type</th>
-                <th className="px-3 py-2 text-left font-semibold">Source</th>
-                <th className="px-3 py-2 text-left font-semibold">Actions</th>
+                <th className="px-3 py-2 text-left font-semibold">Persoon</th>
+                <th className="px-3 py-2 text-left font-semibold">Diensttype</th>
+                <th className="px-3 py-2 text-left font-semibold">Bron</th>
+                <th className="px-3 py-2 text-left font-semibold">Acties</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -186,7 +186,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           type="text"
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
-                          placeholder={isPublished ? 'Reason (required)' : 'Reason (optional)'}
+                          placeholder={isPublished ? 'Reden (verplicht)' : 'Reden (optioneel)'}
                           className="px-2 py-1 border rounded text-xs w-44"
                         />
                         <button
@@ -194,7 +194,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           disabled={removing === a.id || (isPublished && !reason.trim())}
                           className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:bg-neutral-300"
                         >
-                          {removing === a.id ? 'Removing…' : 'Confirm'}
+                          {removing === a.id ? 'Bezig…' : 'Bevestigen'}
                         </button>
                         <button
                           onClick={() => {
@@ -203,7 +203,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           }}
                           className="text-xs px-2 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
                         >
-                          Cancel
+                          Annuleren
                         </button>
                       </div>
                     ) : (
@@ -214,7 +214,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                         }}
                         className="text-xs text-red-600 hover:text-red-800 font-medium"
                       >
-                        Remove
+                        Verwijderen
                       </button>
                     )}
                   </td>
@@ -226,7 +226,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
 
         {assignments.length === 0 && (
           <div className="text-center py-8">
-            <p className="text-neutral-500">No assignments found</p>
+            <p className="text-neutral-500">Geen toewijzingen gevonden</p>
           </div>
         )}
       </div>
@@ -239,17 +239,17 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             disabled={page === 1}
             className="px-3 py-2 rounded border disabled:bg-neutral-100 disabled:text-neutral-400"
           >
-            Previous
+            Vorige
           </button>
           <span className="px-3 py-2">
-            Page {page} of {totalPages}
+            Pagina {page} van {totalPages}
           </span>
           <button
             onClick={() => setPage(Math.min(totalPages, page + 1))}
             disabled={page === totalPages}
             className="px-3 py-2 rounded border disabled:bg-neutral-100 disabled:text-neutral-400"
           >
-            Next
+            Volgende
           </button>
         </div>
       )}
