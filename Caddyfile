@@ -12,10 +12,32 @@
 	# limited so repeatedly connecting with new SNI values can't force
 	# unbounded cert generation; this deployment is internal-network only
 	# to begin with (see docker-compose.yml: only caddy is host-published).
+	#
+	# `ask` is required, not optional: Caddy denies every on-demand
+	# certificate unless a permission check is configured (hardening
+	# against unbounded issuance). Without it, this deployment was TLS-dead
+	# - every handshake failed, because the internal check Caddy ran by
+	# default always errored out. The endpoint below is served by this
+	# same Caddy instance on a loopback-only port with no docker-compose
+	# port mapping, so it's unreachable from outside the container; it
+	# just says yes to everything, which is fine given the interval/burst
+	# limit above and that this only ever issues certs from our own
+	# private CA, never a public/rate-limited one.
 	on_demand_tls {
+		ask http://127.0.0.1:9053/ask
 		interval 2m
 		burst 10
 	}
+}
+
+# Answers the ask check above. Explicit http:// - without it Caddy treats
+# 127.0.0.1 as a manageable domain and tries to issue *this* site its own
+# automatic certificate before it will serve anything, which is exactly
+# the circular dependency this endpoint exists to avoid. Loopback-only,
+# not published in docker-compose.yml - nothing outside this container
+# can reach it.
+http://127.0.0.1:9053 {
+	respond /ask 200
 }
 
 # Port 8010 by default; override with APP_PORT in .env, which moves both
