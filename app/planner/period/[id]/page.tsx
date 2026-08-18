@@ -38,13 +38,13 @@ export default function PlannerPeriodPage() {
   const loadPeriod = async () => {
     try {
       const res = await fetch(`/api/periods/${periodId}`);
-      if (!res.ok) throw new Error('Failed to load period');
+      if (!res.ok) throw new Error('Laden van periode mislukt');
 
       const data = await res.json();
       setPeriod(data.data);
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load period');
+      setError(err instanceof Error ? err.message : 'Laden van periode mislukt');
       setLoading(false);
     }
   };
@@ -55,10 +55,10 @@ export default function PlannerPeriodPage() {
     try {
       const res = await fetch(`/api/periods/${periodId}/close`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || 'Failed to close period');
+      if (!res.ok) throw new Error(data.error?.message || 'Sluiten van periode mislukt');
       await loadPeriod();
     } catch (err) {
-      setCloseError(err instanceof Error ? err.message : 'Failed to close period');
+      setCloseError(err instanceof Error ? err.message : 'Sluiten van periode mislukt');
     } finally {
       setClosing(false);
     }
@@ -72,7 +72,7 @@ export default function PlannerPeriodPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8 text-center">
-          <p className="text-lg text-neutral-600">Loading period...</p>
+          <p className="text-lg text-neutral-600">Periode laden...</p>
         </div>
       </div>
     );
@@ -82,8 +82,8 @@ export default function PlannerPeriodPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8 bg-red-50 border border-red-200">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
-          <p className="text-neutral-700">{error || 'Period not found'}</p>
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Fout</h1>
+          <p className="text-neutral-700">{error || 'Periode niet gevonden'}</p>
         </div>
       </div>
     );
@@ -107,7 +107,7 @@ export default function PlannerPeriodPage() {
           <div>
             <h1 className="text-3xl font-bold text-neutral-900 mb-2">{period.naam}</h1>
             <p className="text-neutral-600 mb-2">
-              {new Date(period.start_datum).toLocaleDateString()} to{' '}
+              {new Date(period.start_datum).toLocaleDateString()} t/m{' '}
               {new Date(period.eind_datum).toLocaleDateString()}
             </p>
             <p className="text-sm text-neutral-600">
@@ -118,14 +118,14 @@ export default function PlannerPeriodPage() {
             <div className={`px-4 py-2 rounded font-semibold ${statusColor.bg} ${statusColor.text}`}>
               {period.status === 'CONCEPT' && '⚙️ Concept'}
               {period.status === 'OPEN' && '📖 Open'}
-              {period.status === 'GESLOTEN' && '🔒 Closed'}
-              {period.status === 'GEGENEREERD' && '🤖 Generated'}
+              {period.status === 'GESLOTEN' && '🔒 Gesloten'}
+              {period.status === 'GEGENEREERD' && '🤖 Gegenereerd'}
               {period.status === 'GEPUBLICEERD' && (
                 <>
-                  ✅ Published
+                  ✅ Gepubliceerd
                   {period.gepubliceerd_op && (
                     <span className="ml-2 font-normal text-sm">
-                      · Published on {new Date(period.gepubliceerd_op).toLocaleString()}
+                      · Gepubliceerd op {new Date(period.gepubliceerd_op).toLocaleString()}
                     </span>
                   )}
                 </>
@@ -139,11 +139,11 @@ export default function PlannerPeriodPage() {
       {period.status === 'CONCEPT' && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-900">
-            Period is still in concept. Visit{' '}
+            Deze periode staat nog op concept. Ga naar de{' '}
             <a href={`/planner/setup/${periodId}`} className="font-medium underline">
-              setup wizard
+              instelwizard
             </a>{' '}
-            to configure and open it.
+            om deze in te stellen en te openen.
           </p>
         </div>
       )}
@@ -155,14 +155,14 @@ export default function PlannerPeriodPage() {
               onClick={() => setReminderDialogOpen(true)}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
-              📧 Send Deadline Reminder
+              📧 Deadlineherinnering versturen
             </button>
             <button
               onClick={handleClosePeriod}
               disabled={closing}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
             >
-              {closing ? 'Closing...' : '🔒 Close Period'}
+              {closing ? 'Bezig met sluiten...' : '🔒 Periode sluiten'}
             </button>
           </div>
           {closeError && <p className="text-sm text-red-600">{closeError}</p>}
@@ -172,13 +172,13 @@ export default function PlannerPeriodPage() {
       {period.status === 'GESLOTEN' && (
         <div className="card p-4 bg-blue-50 border border-blue-200">
           <p className="text-sm text-blue-900 mb-3">
-            Period is closed to new submissions. Ready to generate the roster.
+            Deze periode is gesloten voor nieuwe indieningen. Klaar om het rooster te genereren.
           </p>
           <button
             onClick={() => setGenerateDialogOpen(true)}
             className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
           >
-            🤖 Generate Roster
+            🤖 Rooster genereren
           </button>
         </div>
       )}
@@ -192,7 +192,7 @@ export default function PlannerPeriodPage() {
           onClick={() => setGenerateDialogOpen(true)}
           className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
         >
-          🔄 Regenerate Roster
+          🔄 Rooster opnieuw genereren
         </button>
       )}
 
@@ -201,7 +201,7 @@ export default function PlannerPeriodPage() {
           href={`/planner/period/${periodId}/prior-assignments`}
           className="inline-block px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
         >
-          🔁 Prior Assignments
+          🔁 Eerdere toewijzingen
         </a>
       )}
 

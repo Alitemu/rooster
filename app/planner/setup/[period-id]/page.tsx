@@ -33,13 +33,13 @@ export default function SetupPage() {
     const loadPeriod = async () => {
       try {
         const res = await fetch(`/api/periods/${periodId}`);
-        if (!res.ok) throw new Error('Failed to load period');
+        if (!res.ok) throw new Error('Laden van periode mislukt');
 
         const data = await res.json();
         setPeriod(data.data);
         setLoading(false);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to load period';
+        const message = err instanceof Error ? err.message : 'Laden van periode mislukt';
         setError(message);
         setLoading(false);
       }
@@ -52,7 +52,7 @@ export default function SetupPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8 text-center">
-          <p className="text-lg text-neutral-600">Loading period...</p>
+          <p className="text-lg text-neutral-600">Periode laden...</p>
         </div>
       </div>
     );
@@ -62,7 +62,7 @@ export default function SetupPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Error</h1>
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Fout</h1>
           <p className="text-neutral-700">{error}</p>
         </div>
       </div>
@@ -73,7 +73,7 @@ export default function SetupPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8">
-          <p className="text-neutral-600">Period not found</p>
+          <p className="text-neutral-600">Periode niet gevonden</p>
         </div>
       </div>
     );
@@ -82,8 +82,8 @@ export default function SetupPage() {
   return (
     <div className="container-main py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-neutral-900 mb-2">Period Setup</h1>
-        <p className="text-neutral-600">Configure and open a new scheduling period</p>
+        <h1 className="text-3xl font-bold text-neutral-900 mb-2">Periode instellen</h1>
+        <p className="text-neutral-600">Stel een nieuwe roosterperiode in en open deze</p>
       </div>
 
       <SetupWizard

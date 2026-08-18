@@ -30,9 +30,9 @@ interface Pool {
 const statusLabels: Record<string, string> = {
   CONCEPT: '⚙️ Concept',
   OPEN: '📖 Open',
-  GESLOTEN: '🔒 Closed',
-  GEGENEREERD: '🤖 Generated',
-  GEPUBLICEERD: '✅ Published',
+  GESLOTEN: '🔒 Gesloten',
+  GEGENEREERD: '🤖 Gegenereerd',
+  GEPUBLICEERD: '✅ Gepubliceerd',
 };
 
 export default function PlannerHomePage() {
@@ -67,7 +67,7 @@ export default function PlannerHomePage() {
         setForm((f) => ({ ...f, pool_id: poolsData.data[0].id }));
       }
     } catch {
-      setError('Failed to load periods');
+      setError('Laden van periodes mislukt');
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,7 @@ export default function PlannerHomePage() {
     setError(null);
 
     if (!form.naam || !form.pool_id || !form.start_datum || !form.eind_datum || !form.deadline) {
-      setError('All fields are required');
+      setError('Alle velden zijn verplicht');
       return;
     }
 
@@ -96,12 +96,12 @@ export default function PlannerHomePage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error?.message || 'Failed to create period');
+        throw new Error(data.error?.message || 'Aanmaken van periode mislukt');
       }
 
       router.push(`/planner/setup/${data.data.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create period');
+      setError(err instanceof Error ? err.message : 'Aanmaken van periode mislukt');
       setCreating(false);
     }
   };
@@ -114,29 +114,29 @@ export default function PlannerHomePage() {
   return (
     <div className="container-main py-8 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-neutral-900">Periods</h1>
+        <h1 className="text-3xl font-bold text-neutral-900">Periodes</h1>
         <div className="flex gap-3">
           <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
-            {showCreate ? 'Cancel' : '+ New Period'}
+            {showCreate ? 'Annuleren' : '+ Nieuwe periode'}
           </button>
           <button onClick={handleLogout} className="btn-secondary">
-            Log out
+            Uitloggen
           </button>
         </div>
       </div>
 
       {showCreate && (
         <div className="card card-padding space-y-4">
-          <h2 className="text-lg font-semibold">Create New Period</h2>
+          <h2 className="text-lg font-semibold">Nieuwe periode aanmaken</h2>
 
           <div className="form-group">
-            <label className="label">Period Name</label>
+            <label className="label">Naam periode</label>
             <input
               type="text"
               className="input w-full"
               value={form.naam}
               onChange={(e) => setForm({ ...form, naam: e.target.value })}
-              placeholder="e.g., 2027-2"
+              placeholder="bijv. 2027-2"
             />
           </div>
 
@@ -149,7 +149,7 @@ export default function PlannerHomePage() {
             >
               {pools.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.naam} ({p.member_count} members)
+                  {p.naam} ({p.member_count} leden)
                 </option>
               ))}
             </select>
@@ -157,7 +157,7 @@ export default function PlannerHomePage() {
 
           <div className="grid grid-cols-3 gap-4">
             <div className="form-group">
-              <label className="label">Start Date</label>
+              <label className="label">Startdatum</label>
               <input
                 type="date"
                 className="input w-full"
@@ -166,7 +166,7 @@ export default function PlannerHomePage() {
               />
             </div>
             <div className="form-group">
-              <label className="label">End Date</label>
+              <label className="label">Einddatum</label>
               <input
                 type="date"
                 className="input w-full"
@@ -188,24 +188,24 @@ export default function PlannerHomePage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
 
           <button onClick={handleCreate} disabled={creating} className="btn-primary">
-            {creating ? 'Creating...' : 'Create and Continue to Setup'}
+            {creating ? 'Bezig met aanmaken...' : 'Aanmaken en instellen'}
           </button>
         </div>
       )}
 
       {loading ? (
-        <div className="card p-8 text-center text-neutral-600">Loading periods...</div>
+        <div className="card p-8 text-center text-neutral-600">Periodes laden...</div>
       ) : periods.length === 0 ? (
         <div className="card p-8 text-center text-neutral-600">
-          No periods yet. Create one to get started.
+          Nog geen periodes. Maak er een aan om te beginnen.
         </div>
       ) : (
         <div className="card overflow-hidden">
           <table className="w-full">
             <thead className="bg-neutral-100">
               <tr>
-                <th className="px-4 py-2 text-left text-sm font-medium">Name</th>
-                <th className="px-4 py-2 text-left text-sm font-medium">Dates</th>
+                <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
+                <th className="px-4 py-2 text-left text-sm font-medium">Data</th>
                 <th className="px-4 py-2 text-left text-sm font-medium">Status</th>
                 <th className="px-4 py-2 text-left text-sm font-medium"></th>
               </tr>
@@ -215,7 +215,7 @@ export default function PlannerHomePage() {
                 <tr key={p.id} className="hover:bg-neutral-50">
                   <td className="px-4 py-2 text-sm font-medium">{p.naam}</td>
                   <td className="px-4 py-2 text-sm text-neutral-600">
-                    {p.start_datum} to {p.eind_datum}
+                    {p.start_datum} t/m {p.eind_datum}
                   </td>
                   <td className="px-4 py-2 text-sm">{statusLabels[p.status] || p.status}</td>
                   <td className="px-4 py-2 text-sm">
@@ -223,7 +223,7 @@ export default function PlannerHomePage() {
                       href={p.status === 'CONCEPT' ? `/planner/setup/${p.id}` : `/planner/period/${p.id}`}
                       className="text-blue-600 hover:text-blue-700 font-medium"
                     >
-                      {p.status === 'CONCEPT' ? 'Continue setup' : 'Open'} →
+                      {p.status === 'CONCEPT' ? 'Instellen vervolgen' : 'Openen'} →
                     </Link>
                   </td>
                 </tr>
