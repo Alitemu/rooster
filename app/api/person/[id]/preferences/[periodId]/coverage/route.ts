@@ -118,13 +118,13 @@ export async function GET(
       entry.available = Math.max(0, entry.total_in_pool - entry.absoluut_blocked);
 
       if (entry.absoluut_blocked > 0 && entry.liever_niet > 0) {
-        entry.message = `${entry.absoluut_blocked} blocked, ${entry.liever_niet} prefer not`;
+        entry.message = `${entry.absoluut_blocked} geblokkeerd, ${entry.liever_niet} liever niet`;
       } else if (entry.absoluut_blocked > 0) {
-        entry.message = `${entry.absoluut_blocked} blocked`;
+        entry.message = `${entry.absoluut_blocked} geblokkeerd`;
       } else if (entry.liever_niet > 0) {
-        entry.message = `${entry.liever_niet} prefer not`;
+        entry.message = `${entry.liever_niet} liever niet`;
       } else {
-        entry.message = 'All available';
+        entry.message = 'Iedereen beschikbaar';
       }
     }
 
