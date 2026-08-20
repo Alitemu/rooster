@@ -126,7 +126,7 @@ async function main() {
       ruleset: { windowWeeks: 7, bandAvond: [8, 9], bandWeekend: [4, 5], bandFeestdag: [1, 2], distributionMode: 'EVEN' },
     },
   });
-  rec('Open period → OPEN + 245 slots / 35 weeks', open.status === 200 && open.json?.data?.slots_generated === 245 && open.json?.data?.weeks_covered === 35,
+  rec('Open period → OPEN + 154 slots / 22 weeks', open.status === 200 && open.json?.data?.slots_generated === 154 && open.json?.data?.weeks_covered === 22,
       `${open.json?.data?.slots_generated} slots, ${open.json?.data?.weeks_covered} weeks`);
   rec('Dates auto-rounded to full ISO weeks', open.json?.data?.start_datum === '2027-01-04');
 

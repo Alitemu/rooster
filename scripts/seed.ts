@@ -1,15 +1,17 @@
 /**
  * Seed script for Dienstrooster
- * Creates 30 pseudonymous staff members with sample data
+ * Creates 31 pseudonymous staff members with sample data
  *
  * Usage: npm run seed
  */
 
 import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
 import { hashToken } from '../lib/auth';
+import { generateSlotsForPeriod } from '../lib/slotGeneration';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -476,11 +478,11 @@ async function seed() {
       VALUES (?, ?, ?, ?, ?)
     `).run(plannerId, 'PLANNER', 'PLANNER', 1, now);
 
-    // 3. Create 30 staff members
-    console.log('Creating 30 staff members...');
+    // 3. Create 31 staff members
+    console.log('Creating 31 staff members...');
     const staffIds: string[] = [];
 
-    for (let i = 1; i <= 30; i++) {
+    for (let i = 1; i <= 31; i++) {
       const staffId = uuid();
       staffIds.push(staffId);
       const codenaam = `Persoon-${String(i).padStart(2, '0')}`;
@@ -573,16 +575,57 @@ async function seed() {
     }
 
     // 8. Create period
+    // Dates match tests/fixtures/blokkades-2027-h1.csv (a real ward's
+    // blockades for Jan-Jun 2027, anonymized - see step 11b below) so the
+    // seeded period and the availability data seeded into it agree with
+    // each other.
     console.log('Creating period...');
     const periodId = uuid();
     const periodStart = '2027-01-04'; // Monday
-    const periodEnd = '2027-09-05'; // Sunday (35 full ISO weeks from periodStart)
+    const periodEnd = '2027-06-06'; // Sunday (22 full ISO weeks from periodStart)
     const deadline = '2026-12-15T17:00:00Z';
 
     db.prepare(`
       INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(periodId, poolId, '2027-1 (Jan-Sep)', periodStart, periodEnd, deadline, now);
+    `).run(periodId, poolId, '2027-1 (Jan-Jun)', periodStart, periodEnd, deadline, now);
+
+    // 8a. Generate this period's shift slots now (not just on /open) so the
+    // blockade import in step 11b below has real slot_id values to attach
+    // to. The period itself is left in CONCEPT status - opening it is still
+    // a normal planner action (ruleset, band, deadline) - persistSlotsForPeriod
+    // is idempotent, so a later /open call for this period just finds these
+    // slots already there instead of generating duplicates.
+    console.log('Generating shift slots...');
+    const generatedSlots = generateSlotsForPeriod({
+      startDate: periodStart,
+      endDate: periodEnd,
+      shiftTypes: Object.keys(shiftTypeMap),
+    });
+
+    const slotIdByDate = new Map<string, string>();
+    const insertSlotStmt = db.prepare(`
+      INSERT INTO dienstrooster_shift_slot
+        (id, period_id, shift_type_id, datum, iso_jaar, iso_week, weekend_id,
+         is_feestdag, feestdag_groep, benodigd_aantal_personen)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+    `);
+    for (const slot of generatedSlots) {
+      const teller = slot.is_feestdag ? 'FEESTDAG' : slot.weekend_id ? 'WEEKEND' : 'AVOND';
+      const slotId = uuid();
+      insertSlotStmt.run(
+        slotId,
+        periodId,
+        shiftTypeMap[teller],
+        slot.datum,
+        slot.iso_jaar,
+        slot.iso_week,
+        slot.weekend_id || null,
+        slot.is_feestdag ? 1 : 0,
+        slot.feestdag_groep
+      );
+      slotIdByDate.set(slot.datum, slotId);
+    }
 
     // 8b. Notification templates + reminder schedule
     //
@@ -724,19 +767,20 @@ async function seed() {
         staffId,
         weekday,
         frequentie,
-        '2027-01-04',
-        '2027-09-05',
+        periodStart,
+        periodEnd,
         staffId,
         now
       );
     }
 
-    // 12. Create absences for some staff
+    // 12. Create absences for some staff (dates within the period itself,
+    // not past its end - the period only runs to periodEnd now)
     console.log('Creating absences...');
     for (let i = 5; i < 15; i++) {
       const staffId = staffIds[i];
-      const startDate = new Date('2027-06-15');
-      startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 60));
+      const startDate = new Date('2027-02-01');
+      startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 80));
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 3 + Math.floor(Math.random() * 7));
 
@@ -755,9 +799,80 @@ async function seed() {
       );
     }
 
+    // 11b. Import real blockades (anonymized) as hard blocks (ABSOLUUT).
+    //
+    // tests/fixtures/blokkades-2027-h1.csv is a real ward's actual
+    // day-by-day blockades for Jan-Jun 2027, so roster generation can be
+    // tested against real constraint pressure instead of only synthetic
+    // random data. The source spreadsheet used real staff initials as
+    // column headers; those never enter this codebase or the database -
+    // the fixture already has them replaced with Persoon-01..31 (in the
+    // header's original left-to-right column order) before being checked
+    // in, matching CLAUDE.md's "no real names - only codenaam" rule.
+    //
+    // A marked cell in the source (whether it held a non-breaking space or
+    // the person's own initials again - both forms appeared, meaning the
+    // same thing) became a plain 'X' in the fixture; empty stayed empty.
+    console.log('Importing real blockades (anonymized)...');
+    const maandNummer: Record<string, number> = {
+      Januari: 1, Februari: 2, Maart: 3, April: 4, Mei: 5, Juni: 6,
+      Juli: 7, Augustus: 8, September: 9, Oktober: 10, November: 11, December: 12,
+    };
+    const codenaamById = new Map(staffIds.map((id, idx) => [`Persoon-${String(idx + 1).padStart(2, '0')}`, id]));
+    const blockadesCsv = fs
+      .readFileSync(path.resolve(__dirname, '../tests/fixtures/blokkades-2027-h1.csv'), 'utf-8')
+      .trim()
+      .split(/\r?\n/)
+      .map((line) => line.split(';'));
+    const [blockadesHeader, ...blockadesRows] = blockadesCsv;
+    const blockedByPersonSlot = new Set<string>(); // `${personId}|${slotId}`, so step 11c can skip these
+
+    const insertAvailabilityStmt = db.prepare(`
+      INSERT OR IGNORE INTO dienstrooster_availability
+        (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    let blockadesImported = 0;
+    for (const row of blockadesRows) {
+      const [, dagStr, maand] = row;
+      const datum = `2027-${String(maandNummer[maand]).padStart(2, '0')}-${dagStr.padStart(2, '0')}`;
+      const slotId = slotIdByDate.get(datum);
+      if (!slotId) continue; // outside the generated period, shouldn't happen given the dates match
+
+      for (let col = 3; col < blockadesHeader.length; col++) {
+        if (row[col]?.trim() !== 'X') continue;
+        const personId = codenaamById.get(blockadesHeader[col]);
+        if (!personId) continue;
+
+        insertAvailabilityStmt.run(uuid(), personId, slotId, 'ABSOLUUT', 'MANUAL', now);
+        blockedByPersonSlot.add(`${personId}|${slotId}`);
+        blockadesImported++;
+      }
+    }
+
+    // 11c. Sprinkle in some "liever niet" (soft) preferences too, so the
+    // seeded data exercises both blocking levels - the imported file only
+    // ever distinguishes blocked/not-blocked, no soft preference. A few
+    // random days per person, skipping anything already hard-blocked
+    // above (availability has a UNIQUE(person_id, slot_id) index - only
+    // one preference level per person per slot).
+    console.log('Adding random "liever niet" preferences...');
+    const allSlotIds = Array.from(slotIdByDate.values());
+    let lieverNietAdded = 0;
+    for (const staffId of staffIds) {
+      const count = 3 + Math.floor(Math.random() * 6); // 3-8 per person
+      for (let n = 0; n < count; n++) {
+        const slotId = allSlotIds[Math.floor(Math.random() * allSlotIds.length)];
+        if (blockedByPersonSlot.has(`${staffId}|${slotId}`)) continue;
+        const info = insertAvailabilityStmt.run(uuid(), staffId, slotId, 'LIEVER_NIET', 'MANUAL', now);
+        if (info.changes > 0) lieverNietAdded++;
+      }
+    }
+
     // 13. Create submissions with mixed statuses
     console.log('Creating submissions...');
-    for (let i = 0; i < 30; i++) {
+    for (let i = 0; i < staffIds.length; i++) {
       const staffId = staffIds[i];
       const status = i < 10 ? 'BEVESTIGD' : i < 20 ? 'BEZIG' : 'NIET_BEGONNEN';
       const submissionId = uuid();
@@ -780,8 +895,8 @@ async function seed() {
     // 14. Update access links to reference the period
     console.log('Updating access links with period reference...');
     // Get all access links and update them
-    const linkStmt = db.prepare('SELECT id FROM dienstrooster_person_access_link LIMIT 30');
-    const links = linkStmt.all() as any[];
+    const linkStmt = db.prepare('SELECT id FROM dienstrooster_person_access_link LIMIT ?');
+    const links = linkStmt.all(staffIds.length) as any[];
 
     for (const link of links) {
       db.prepare(`
@@ -795,13 +910,15 @@ async function seed() {
     console.log(`\nUsers created:`);
     console.log(`  - Admin: ADMIN (no password yet - set one at /planner/login)`);
     console.log(`  - Planner: PLANNER (no password yet - set one at /planner/login)`);
-    console.log(`  - Staff: Persoon-01 through Persoon-30 (personal access links)`);
-    console.log(`\nPool: Achterwacht (30 members)`);
-    console.log(`Period: 2027-1 (2027-01-04 to 2027-09-05)`);
+    console.log(`  - Staff: Persoon-01 through Persoon-31 (personal access links)`);
+    console.log(`\nPool: Achterwacht (31 members)`);
+    console.log(`Period: 2027-1 (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);
     console.log(`\nPhase 1 Data:`);
     console.log(`  - Part-time patterns: 10 staff members`);
     console.log(`  - Absences: 10 vacation periods`);
-    console.log(`  - Submissions: 10 confirmed, 10 in progress, 10 not started`);
+    console.log(`  - Real blockades imported (anonymized, ABSOLUUT): ${blockadesImported}`);
+    console.log(`  - Random "liever niet" preferences added: ${lieverNietAdded}`);
+    console.log(`  - Submissions: 10 confirmed, 10 in progress, ${staffIds.length - 20} not started`);
     console.log(`  - Holiday history: 15 assignments`);
     console.log(`\nDatabase: ${dbPath}`);
 

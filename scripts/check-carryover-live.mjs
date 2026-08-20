@@ -16,9 +16,9 @@
  * therefore publishes a clean roster and then removes one shift the way a
  * planner would when someone calls in sick.
  *
- * windowWeeks is 1 here so the seeded 35-week period is fully coverable;
- * at 2 the solver can only fill 150 of 245 and the roster is correctly
- * unpublishable, which would test the gate rather than the ledger.
+ * windowWeeks is 1 here so the seeded 22-week period is fully coverable;
+ * at higher values the solver can't fill every slot and the roster is
+ * correctly unpublishable, which would test the gate rather than the ledger.
  */
 import Database from 'better-sqlite3';
 
