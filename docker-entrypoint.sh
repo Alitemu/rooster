@@ -11,4 +11,15 @@ if [ "$SEED_ON_START" = "true" ]; then
   npm run seed || echo "Seed step exited non-zero (likely: already seeded) - continuing startup."
 fi
 
+# Optional: claim the ADMIN/PLANNER password from .env instead of the
+# interactive /planner/login first-run form - see SEED_ADMIN_PASSWORD /
+# SEED_PLANNER_PASSWORD in .env.example. Idempotent (only ever touches an
+# account with no password yet), so safe to leave set across restarts.
+if [ -n "$SEED_ADMIN_PASSWORD" ]; then
+  npx tsx scripts/claim-password.ts ADMIN "$SEED_ADMIN_PASSWORD" || echo "ADMIN password claim failed - continuing startup."
+fi
+if [ -n "$SEED_PLANNER_PASSWORD" ]; then
+  npx tsx scripts/claim-password.ts PLANNER "$SEED_PLANNER_PASSWORD" || echo "PLANNER password claim failed - continuing startup."
+fi
+
 exec npm start
