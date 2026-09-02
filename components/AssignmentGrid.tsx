@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { getHolidayInfo } from '@/lib/holidays';
 
 interface Assignment {
   id: string;
@@ -168,6 +169,23 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     OVERRIDE: 'bg-purple-100 text-purple-800',
   };
 
+  // Feestdag always wins over weekend for a given date (a slot's teller is
+  // already assigned that way at generation time - see
+  // lib/slotPersistence.ts - so this just mirrors it), so checking teller
+  // alone is enough to tell the two apart here.
+  const dienstTypeLabel = (a: Assignment): string => {
+    if (a.teller === 'FEESTDAG') {
+      return getHolidayInfo(a.datum)?.name || shiftTypeNames.FEESTDAG;
+    }
+    return shiftTypeNames[a.teller] || a.teller;
+  };
+
+  const rowBackground = (a: Assignment): string => {
+    if (a.teller === 'FEESTDAG') return 'bg-violet-50 hover:bg-violet-100';
+    if (a.teller === 'WEEKEND') return 'bg-sky-50 hover:bg-sky-100';
+    return 'hover:bg-neutral-50';
+  };
+
   if (loading) {
     return (
       <div className="card p-8 text-center">
@@ -231,11 +249,11 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             </thead>
             <tbody className="divide-y">
               {assignments.map((a) => (
-                <tr key={a.id} className="hover:bg-neutral-50">
+                <tr key={a.id} className={rowBackground(a)}>
                   <td className="px-3 py-2 font-medium">{a.datum}</td>
                   <td className="px-3 py-2 text-neutral-600">W{a.iso_week}</td>
                   <td className="px-3 py-2">{a.codenaam}</td>
-                  <td className="px-3 py-2">{shiftTypeNames[a.teller] || a.teller}</td>
+                  <td className="px-3 py-2">{dienstTypeLabel(a)}</td>
                   <td className="px-3 py-2">
                     <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${sourceColors[a.bron] || 'bg-neutral-100'}`}>
                       {a.bron}
