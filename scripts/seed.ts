@@ -10,11 +10,24 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
-import { hashToken } from '../lib/auth';
+import { hashToken, hashPassword } from '../lib/auth';
 import { generateSlotsForPeriod } from '../lib/slotGeneration';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// ADMIN and PLANNER get this password set directly by the seed, on
+// explicit request - a known password checked into git that's trivial to
+// type on a phone during testing, no /planner/login "first run" form or
+// separate .env file needed. Both accounts still go through the exact
+// same validatePasswordStrength/hashPassword lib/auth.ts uses for that
+// form - only the source of the password changed, not the strength rule.
+//
+// CHANGE OR REMOVE THIS before pointing a deployment at real staff and
+// real schedules: anyone with read access to this repository (now or at
+// any point in its git history) knows this password. It controls the
+// entire roster for every participant, not just the account itself.
+const DEFAULT_TEST_PASSWORD = 'Password123!';
 
 /**
  * Resolve the database the same way db/client.ts does.
@@ -453,30 +466,28 @@ async function seed() {
 
     const now = new Date().toISOString();
 
-    // 1. Create admin user
-    //
-    // No password is set here on purpose - a fixed password checked into a
-    // public repo would be a real credential, not a placeholder. The
-    // account exists but wachtwoord_hash stays NULL until the first visit
-    // to /planner/login walks the operator through setting one (see
-    // app/api/auth/first-run-setup/route.ts); staff-login already treats a
-    // NULL hash as "cannot log in yet", so this is safe to leave seeded.
-    console.log('Creating admin user (password set on first login)...');
+    // 1. Create admin user, with DEFAULT_TEST_PASSWORD already set (see the
+    // warning on that constant above). /planner/login's "first run" form
+    // (app/api/auth/first-run-setup/route.ts) only ever acts on an account
+    // whose wachtwoord_hash is still NULL, so it has nothing left to do for
+    // either account after this - log in directly with the password above.
+    console.log('Creating admin user...');
     const adminId = uuid();
+    const defaultPasswordHash = await hashPassword(DEFAULT_TEST_PASSWORD);
 
     db.prepare(`
-      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(adminId, 'ADMIN', 'ADMIN', 1, now);
+      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(adminId, 'ADMIN', 'ADMIN', 1, defaultPasswordHash, now);
 
-    // 2. Create planner user (same as admin: password set on first login)
-    console.log('Creating planner user (password set on first login)...');
+    // 2. Create planner user (same default password as admin)
+    console.log('Creating planner user...');
     const plannerId = uuid();
 
     db.prepare(`
-      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(plannerId, 'PLANNER', 'PLANNER', 1, now);
+      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(plannerId, 'PLANNER', 'PLANNER', 1, defaultPasswordHash, now);
 
     // 3. Create 31 staff members
     console.log('Creating 31 staff members...');
@@ -908,8 +919,8 @@ async function seed() {
 
     console.log('\n✅ Seed completed successfully!');
     console.log(`\nUsers created:`);
-    console.log(`  - Admin: ADMIN (no password yet - set one at /planner/login)`);
-    console.log(`  - Planner: PLANNER (no password yet - set one at /planner/login)`);
+    console.log(`  - Admin: ADMIN / password: ${DEFAULT_TEST_PASSWORD} (change before real use - see DEFAULT_TEST_PASSWORD in this file)`);
+    console.log(`  - Planner: PLANNER / password: ${DEFAULT_TEST_PASSWORD} (same)`);
     console.log(`  - Staff: Persoon-01 through Persoon-31 (personal access links)`);
     console.log(`\nPool: Achterwacht (31 members)`);
     console.log(`Period: 2027-1 (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);

@@ -151,13 +151,15 @@ export function getBaseUrl(): string {
  */
 export async function loginAsPlanner(page: Page): Promise<void> {
   const codenaam = process.env.E2E_PLANNER_CODENAAM || 'PLANNER';
-  const password = process.env.E2E_PLANNER_PASSWORD || 'Planner@12345';
+  // Must match DEFAULT_TEST_PASSWORD in scripts/seed.ts, which PLANNER is
+  // seeded with directly.
+  const password = process.env.E2E_PLANNER_PASSWORD || 'Password123!';
 
-  // scripts/seed.ts no longer sets a password on PLANNER (see its comment)
-  // - claim it directly here if this is the first time a test needs to log
-  // in as planner. Writing the hash straight into the DB (rather than
-  // calling the first-run-setup API) keeps this fast and skips the setup
-  // UI entirely, which is fine: that flow gets its own coverage in
+  // Fallback only - PLANNER is normally already seeded with the password
+  // above (scripts/seed.ts). This just covers a database that predates
+  // that (wachtwoord_hash still NULL), writing the hash straight into the
+  // DB rather than calling the first-run-setup API, which keeps this fast
+  // and skips the setup UI entirely - that flow gets its own coverage in
   // scripts/full-check.mjs.
   const existing = db
     .prepare(`SELECT wachtwoord_hash FROM dienstrooster_person WHERE codenaam = ?`)

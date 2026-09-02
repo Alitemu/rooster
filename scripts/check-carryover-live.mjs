@@ -59,19 +59,20 @@ async function req(method, path, { jar, body } = {}) {
 
 const RULESET = { windowWeeks: 1, distributionMode: 'EVEN' }; // no explicit bands -> derived from real slot counts
 
-// scripts/seed.ts no longer sets a password on PLANNER - claim it via the
-// same first-run-setup flow a real operator uses at /planner/login. A 409
-// just means a previous run already claimed it, which is fine: the login
-// right after proves whether this password is actually the active one.
+// scripts/seed.ts sets PLANNER to DEFAULT_TEST_PASSWORD directly (see its
+// comment) - this only ever exercises the "already claimed" 409 path now,
+// kept as coverage of that route for whenever the seeded password is
+// cleared instead.
+const SEEDED_TEST_PASSWORD = 'Password123!'; // must match DEFAULT_TEST_PASSWORD in scripts/seed.ts
 async function ensureStaffPassword(codenaam, password) {
   await req('POST', '/api/auth/first-run-setup', { body: { codenaam, password } });
 }
 
 async function main() {
-  await ensureStaffPassword('PLANNER', 'Planner@12345');
+  await ensureStaffPassword('PLANNER', SEEDED_TEST_PASSWORD);
 
   const planner = {};
-  await req('POST', '/api/auth/staff-login', { jar: planner, body: { codenaam: 'PLANNER', password: 'Planner@12345' } });
+  await req('POST', '/api/auth/staff-login', { jar: planner, body: { codenaam: 'PLANNER', password: SEEDED_TEST_PASSWORD } });
 
   const p1 = db.prepare('SELECT * FROM dienstrooster_schedule_period LIMIT 1').get();
   console.log('Period 1:', p1.id);
