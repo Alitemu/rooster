@@ -26,12 +26,10 @@ export default function Home() {
               Aan de slag
             </h3>
             <p className="text-sm text-primary-800 mb-4">
-              Gebruik je persoonlijke link of log in met je wachtwoord.
+              Deelnemers gebruiken hun persoonlijke link (ontvangen van de roosteraar). Roosteraars
+              loggen hieronder in met wachtwoord.
             </p>
             <div className="space-y-2">
-              <button className="w-full btn-primary">
-                Met link inloggen
-              </button>
               <Link href="/planner/login" className="w-full btn-secondary block text-center">
                 Met wachtwoord inloggen
               </Link>
@@ -45,10 +43,10 @@ export default function Home() {
           <h3 className="text-lg font-semibold text-neutral-900 mb-2">
             Voor deelnemers
           </h3>
-          <p className="text-neutral-600 text-sm mb-4">
-            Voer je voorkeuren in, blokkeer je dagen en bekijk je toegewezen diensten.
+          <p className="text-neutral-600 text-sm">
+            Voer je voorkeuren in, blokkeer je dagen en bekijk je toegewezen diensten via je
+            persoonlijke link, ontvangen van de roosteraar.
           </p>
-          <button className="btn-primary">Naar mijn rooster</button>
         </div>
 
         <div className="card card-padding">
