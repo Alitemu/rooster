@@ -155,7 +155,7 @@ export default function PlannerHomePage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="form-group">
               <label className="label">Startdatum</label>
               <input
@@ -174,15 +174,20 @@ export default function PlannerHomePage() {
                 onChange={(e) => setForm({ ...form, eind_datum: e.target.value })}
               />
             </div>
-            <div className="form-group">
-              <label className="label">Deadline</label>
-              <input
-                type="date"
-                className="input w-full"
-                value={form.deadline}
-                onChange={(e) => setForm({ ...form, deadline: e.target.value })}
-              />
-            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="label">Deadline voorkeuren</label>
+            {/* datetime-local, net als de deadline-stap in de setup wizard
+                verderop - zelfde invoerformaat, zodat deze waarde daar
+                automatisch wordt overgenomen in plaats van leeg te lijken en
+                opnieuw ingevuld te moeten worden. */}
+            <input
+              type="datetime-local"
+              className="input w-full"
+              value={form.deadline}
+              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+            />
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
