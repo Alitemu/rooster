@@ -126,7 +126,8 @@ async function createTables() {
       gepubliceerd_op TEXT,
       gepubliceerd_door_person_id TEXT REFERENCES dienstrooster_person(id),
       row_version INTEGER NOT NULL DEFAULT 1,
-      aangemaakt_op TEXT NOT NULL
+      aangemaakt_op TEXT NOT NULL,
+      verwijderd_op TEXT
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_excluded_day (

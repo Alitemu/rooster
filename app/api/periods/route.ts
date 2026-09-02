@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { purgeExpiredPeriods } from '@/lib/periodTrash';
 import type { ApiSuccessResponse } from '@/types';
 
 interface PeriodSummary {
@@ -33,7 +34,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
-    // Query all periods ordered by start date descending
+    // Lazy sweep: there's no scheduler service in this deployment, so a
+    // period past its 30-day trash retention gets purged the next time
+    // anyone loads the periods list, rather than on a fixed schedule.
+    purgeExpiredPeriods(auth!.userId);
+
+    // Query all non-deleted periods ordered by start date descending
     const stmt = db.prepare(`
       SELECT
         id,
@@ -44,6 +50,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         status,
         pool_id
       FROM dienstrooster_schedule_period
+      WHERE verwijderd_op IS NULL
       ORDER BY start_datum DESC
       LIMIT 100
     `);

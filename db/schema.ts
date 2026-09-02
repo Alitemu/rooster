@@ -155,6 +155,7 @@ export const schedulePeriod = sqliteTable(
     gepubliceerd_door_person_id: text('gepubliceerd_door_person_id').references(() => person.id), // Phase 3: who published
     row_version: integer('row_version').default(1).notNull(), // Optimistic locking
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+    verwijderd_op: text('verwijderd_op'), // Soft-delete marker; null = not in trash. Purged 30 days after this.
   }
 );
 

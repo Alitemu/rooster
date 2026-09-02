@@ -27,6 +27,17 @@ interface Pool {
   member_count: number;
 }
 
+interface TrashedPeriod {
+  id: string;
+  naam: string;
+  start_datum: string;
+  eind_datum: string;
+  status: string;
+  pool_id: string;
+  verwijderd_op: string;
+  dagen_resterend: number;
+}
+
 const statusLabels: Record<string, string> = {
   CONCEPT: '⚙️ Concept',
   OPEN: '📖 Open',
@@ -34,6 +45,20 @@ const statusLabels: Record<string, string> = {
   GEGENEREERD: '🤖 Gegenereerd',
   GEPUBLICEERD: '✅ Gepubliceerd',
 };
+
+// The stakes of deleting a period differ a lot by status - a CONCEPT
+// period nobody has seen yet is low-risk, but deleting an OPEN or
+// published one throws away real participant data (submitted preferences,
+// or a roster people have already viewed).
+function deleteWarningText(status: string): string {
+  if (status === 'GEPUBLICEERD') {
+    return 'Dit rooster is al gepubliceerd en deelnemers hebben het al kunnen bekijken. Zij verliezen direct toegang tot hun rooster in deze periode.';
+  }
+  if (status === 'CONCEPT') {
+    return 'Deze periode staat nog op concept en is nog niet zichtbaar voor deelnemers.';
+  }
+  return 'Deelnemers hebben deze periode al kunnen zien en mogelijk al voorkeuren ingevoerd. Die gegevens verdwijnen mee.';
+}
 
 export default function PlannerHomePage() {
   const router = useRouter();
@@ -52,17 +77,31 @@ export default function PlannerHomePage() {
     deadline: '',
   });
 
+  const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const [showTrash, setShowTrash] = useState(false);
+  const [trash, setTrash] = useState<TrashedPeriod[]>([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
+  const [purgingPeriod, setPurgingPeriod] = useState<TrashedPeriod | null>(null);
+  const [purgeError, setPurgeError] = useState<string | null>(null);
+
   const loadData = async () => {
     setLoading(true);
     try {
-      const [periodsRes, poolsRes] = await Promise.all([
+      const [periodsRes, poolsRes, trashRes] = await Promise.all([
         fetch('/api/periods'),
         fetch('/api/planner/pools'),
+        fetch('/api/periods/trash'),
       ]);
       const periodsData = await periodsRes.json();
       const poolsData = await poolsRes.json();
+      const trashData = await trashRes.json();
       setPeriods(periodsData.data || []);
       setPools(poolsData.data || []);
+      setTrash(trashData.data || []);
       if (poolsData.data?.length && !form.pool_id) {
         setForm((f) => ({ ...f, pool_id: poolsData.data[0].id }));
       }
@@ -77,6 +116,74 @@ export default function PlannerHomePage() {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadTrash = async () => {
+    setTrashLoading(true);
+    try {
+      const res = await fetch('/api/periods/trash');
+      const data = await res.json();
+      setTrash(data.data || []);
+    } catch {
+      // Leave the previous list in place on a failed refresh
+    } finally {
+      setTrashLoading(false);
+    }
+  };
+
+  const handleDeleteClick = (period: Period) => {
+    setDeleteError(null);
+    setDeletingPeriod(period);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingPeriod) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(`/api/periods/${deletingPeriod.id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
+
+      setPeriods((prev) => prev.filter((p) => p.id !== deletingPeriod.id));
+      setDeletingPeriod(null);
+      loadTrash();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Verwijderen mislukt');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleRestore = async (id: string) => {
+    setTrashActionBusy(id);
+    try {
+      const res = await fetch(`/api/periods/${id}/restore`, { method: 'POST' });
+      if (!res.ok) throw new Error();
+      await loadData();
+    } catch {
+      // Leave it in the trash list - the planner can retry
+    } finally {
+      setTrashActionBusy(null);
+    }
+  };
+
+  const handleConfirmPurge = async () => {
+    if (!purgingPeriod) return;
+    setTrashActionBusy(purgingPeriod.id);
+    setPurgeError(null);
+    try {
+      const res = await fetch(`/api/periods/${purgingPeriod.id}/purge`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Definitief verwijderen mislukt');
+
+      setTrash((prev) => prev.filter((p) => p.id !== purgingPeriod.id));
+      setPurgingPeriod(null);
+    } catch (err) {
+      setPurgeError(err instanceof Error ? err.message : 'Definitief verwijderen mislukt');
+    } finally {
+      setTrashActionBusy(null);
+    }
+  };
 
   const handleCreate = async () => {
     setError(null);
@@ -116,6 +223,15 @@ export default function PlannerHomePage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-neutral-900">Periodes</h1>
         <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setShowTrash(!showTrash);
+              if (!showTrash) loadTrash();
+            }}
+            className="btn-secondary"
+          >
+            🗑️ Prullenbak{trash.length > 0 ? ` (${trash.length})` : ''}
+          </button>
           <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
             {showCreate ? 'Annuleren' : '+ Nieuwe periode'}
           </button>
@@ -224,17 +340,160 @@ export default function PlannerHomePage() {
                   </td>
                   <td className="px-4 py-2 text-sm">{statusLabels[p.status] || p.status}</td>
                   <td className="px-4 py-2 text-sm">
-                    <Link
-                      href={p.status === 'CONCEPT' ? `/planner/setup/${p.id}` : `/planner/period/${p.id}`}
-                      className="text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      {p.status === 'CONCEPT' ? 'Instellen vervolgen' : 'Openen'} →
-                    </Link>
+                    <div className="flex items-center gap-4">
+                      <Link
+                        href={p.status === 'CONCEPT' ? `/planner/setup/${p.id}` : `/planner/period/${p.id}`}
+                        className="text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        {p.status === 'CONCEPT' ? 'Instellen vervolgen' : 'Openen'} →
+                      </Link>
+                      <button
+                        onClick={() => handleDeleteClick(p)}
+                        className="text-red-600 hover:text-red-700 font-medium"
+                      >
+                        Verwijderen
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {showTrash && (
+        <div className="card card-padding space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Prullenbak</h2>
+            <p className="text-sm text-neutral-600">
+              Verwijderde periodes blijven 30 dagen lang herstelbaar voordat ze definitief
+              verdwijnen.
+            </p>
+          </div>
+
+          {trashLoading ? (
+            <p className="text-sm text-neutral-600">Prullenbak laden...</p>
+          ) : trash.length === 0 ? (
+            <p className="text-sm text-neutral-600">De prullenbak is leeg.</p>
+          ) : (
+            <div className="divide-y">
+              {trash.map((p) => (
+                <div key={p.id} className="py-3 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-medium">{p.naam}</p>
+                    <p className="text-xs text-neutral-600">
+                      {p.start_datum} t/m {p.eind_datum} · was {statusLabels[p.status] || p.status} ·{' '}
+                      {p.dagen_resterend === 0
+                        ? 'wordt binnenkort definitief verwijderd'
+                        : `nog ${p.dagen_resterend} dag${p.dagen_resterend === 1 ? '' : 'en'} te herstellen`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0">
+                    <button
+                      onClick={() => handleRestore(p.id)}
+                      disabled={trashActionBusy === p.id}
+                      className="text-blue-600 hover:text-blue-700 font-medium text-sm disabled:opacity-50"
+                    >
+                      Herstellen
+                    </button>
+                    <button
+                      onClick={() => {
+                        setPurgeError(null);
+                        setPurgingPeriod(p);
+                      }}
+                      disabled={trashActionBusy === p.id}
+                      className="text-red-600 hover:text-red-700 font-medium text-sm disabled:opacity-50"
+                    >
+                      Definitief verwijderen
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {deletingPeriod && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Periode verwijderen"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
+          <div className="card p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-2">Periode verwijderen?</h2>
+            <p className="text-sm text-neutral-700 mb-3">
+              &quot;{deletingPeriod.naam}&quot; wordt naar de prullenbak verplaatst.
+            </p>
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 mb-4">
+              <p className="text-sm text-amber-900">{deleteWarningText(deletingPeriod.status)}</p>
+              <p className="text-sm text-amber-900 mt-2">
+                Je kunt de periode nog 30 dagen lang terughalen via de prullenbak. Daarna wordt hij
+                automatisch definitief verwijderd.
+              </p>
+            </div>
+
+            {deleteError && <p className="text-sm text-red-600 mb-3">{deleteError}</p>}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeletingPeriod(null)}
+                disabled={deleteBusy}
+                className="flex-1 py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors disabled:opacity-50"
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleteBusy}
+                className="flex-1 py-2 px-4 rounded font-medium bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {deleteBusy ? 'Bezig...' : 'Verwijderen'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permanent purge confirmation - a second, stronger warning since this
+          one is irreversible and skips the rest of the 30-day window. */}
+      {purgingPeriod && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Periode definitief verwijderen"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+        >
+          <div className="card p-6 max-w-md w-full mx-4">
+            <h2 className="text-xl font-bold mb-2 text-red-700">Definitief verwijderen?</h2>
+            <p className="text-sm text-neutral-700 mb-3">
+              &quot;{purgingPeriod.naam}&quot; en alle bijbehorende gegevens (voorkeuren,
+              toewijzingen, saldi) worden nu meteen en onherroepelijk verwijderd - dit kan niet
+              ongedaan gemaakt worden, ook niet via de prullenbak.
+            </p>
+
+            {purgeError && <p className="text-sm text-red-600 mb-3">{purgeError}</p>}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPurgingPeriod(null)}
+                disabled={trashActionBusy === purgingPeriod.id}
+                className="flex-1 py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors disabled:opacity-50"
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleConfirmPurge}
+                disabled={trashActionBusy === purgingPeriod.id}
+                className="flex-1 py-2 px-4 rounded font-medium bg-red-700 text-white hover:bg-red-800 transition-colors disabled:opacity-50"
+              >
+                {trashActionBusy === purgingPeriod.id ? 'Bezig...' : 'Ja, definitief verwijderen'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

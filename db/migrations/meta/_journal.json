@@ -15,6 +15,13 @@
       "when": 1788357923063,
       "tag": "0001_thankful_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1788382954299,
+      "tag": "0002_awesome_mephisto",
+      "breakpoints": true
     }
   ]
 }

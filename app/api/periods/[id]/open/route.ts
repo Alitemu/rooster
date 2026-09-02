@@ -74,6 +74,40 @@ export async function POST(
     start_datum = dateToISO(roundToMonday(parseISO(start_datum)));
     eind_datum = dateToISO(roundToSunday(parseISO(eind_datum)));
 
+    // The wizard lets a planner re-edit dates and deadline right up until
+    // this call - the create-period form validates the same relationship,
+    // but nothing re-checks it here, and the step indicator tabs let a
+    // planner jump straight to "Bevestigen" without ever passing back
+    // through step 1's own validation. This is the actual point of
+    // enforcement; the client-side check is only an early warning.
+    const startCheck = parseISO(start_datum);
+    const endCheck = parseISO(eind_datum);
+    const deadlineCheck = new Date(deadline);
+
+    if (isNaN(deadlineCheck.getTime())) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DEADLINE', message: 'Ongeldige deadline' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (startCheck >= endCheck) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_PERIOD', message: 'Startdatum moet vóór einddatum liggen' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (deadlineCheck >= startCheck) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DEADLINE', message: 'Deadline moet vóór de startdatum liggen' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     const period = db
       .prepare('SELECT id, pool_id, status FROM dienstrooster_schedule_period WHERE id = ?')
       .get(id) as { id: string; pool_id: string; status: string } | undefined;

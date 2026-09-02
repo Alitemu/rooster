@@ -285,7 +285,38 @@ export function SetupWizard({ period, onComplete }: Props) {
     { id: 'confirm', label: '7. Bevestigen', title: 'Controleren en openen' },
   ];
 
+  // Mirrors the server-side checks in POST /api/planner/periods and
+  // POST /api/periods/[id]/open, so a planner sees the problem immediately
+  // instead of only at the final "Periode openen" step.
+  const validatePeriodStep = (): string | null => {
+    if (!periodData.naam.trim()) return 'Naam periode is verplicht';
+    if (!periodData.start_datum || !periodData.eind_datum || !periodData.deadline) {
+      return 'Startdatum, einddatum en deadline zijn verplicht';
+    }
+
+    const start = new Date(periodData.start_datum);
+    const end = new Date(periodData.eind_datum);
+    const deadline = new Date(periodData.deadline);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || isNaN(deadline.getTime())) {
+      return 'Ongeldige datumnotatie';
+    }
+    if (start >= end) return 'Startdatum moet vóór einddatum liggen';
+    if (deadline >= start) return 'Deadline moet vóór de startdatum liggen';
+
+    return null;
+  };
+
   const handleNext = () => {
+    if (currentStep === 'period') {
+      const validationError = validatePeriodStep();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
+    setError(null);
     const stepIndex = steps.findIndex((s) => s.id === currentStep);
     if (stepIndex < steps.length - 1) {
       setCurrentStep(steps[stepIndex + 1].id);

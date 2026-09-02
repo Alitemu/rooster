@@ -1,0 +1,1 @@
+ALTER TABLE dienstrooster_schedule_period ADD `verwijderd_op` text;
