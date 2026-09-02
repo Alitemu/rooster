@@ -55,13 +55,10 @@ npm run test
 
 After running `npm run seed`:
 
-- **Admin:** Codenaam `ADMIN` - no password yet, set one at `/planner/login`
-- **Planner:** Codenaam `PLANNER` - no password yet, set one at `/planner/login`
-- **Staff:** Persoon-01 through Persoon-30 (personal access links)
-
-Neither account gets a password from seeding - the first time
-`/planner/login` is opened it asks you to set one for each, so no password
-ever lives in this repo.
+- **Planner:** Codenaam `planner` (lowercase - login is case-sensitive),
+  password `Password123!` (see `DEFAULT_TEST_PASSWORD` in `scripts/seed.ts`
+  - change it before pointing this at real staff and real schedules)
+- **Staff:** Persoon-01 through Persoon-31 (personal access links)
 
 ## Development
 
@@ -201,11 +198,12 @@ caddy:8010 ──→ web:3000 ──→ solver:8000
 - Solver: Python FastAPI (healthcheck only in Phase 0)
 
 `SEED_ON_START` defaults to `true`: the first time the `db_data` volume is
-empty, it auto-creates the ADMIN/PLANNER accounts (no password - set one
-at `/planner/login` on first visit) and demo data. Safe to leave on across
-restarts and reinstalls, since it only acts once on a genuinely fresh
-database. Set `SEED_ON_START=false` in `.env` for a deployment where you
-don't want the demo participants and sample period created automatically.
+empty, it auto-creates the planner account (codenaam `planner`, password
+`Password123!` - see `DEFAULT_TEST_PASSWORD` in `scripts/seed.ts`) and demo
+data. Safe to leave on across restarts and reinstalls, since it only acts
+once on a genuinely fresh database. Set `SEED_ON_START=false` in `.env` for
+a deployment where you don't want the demo participants and sample period
+created automatically.
 
 ### Production
 

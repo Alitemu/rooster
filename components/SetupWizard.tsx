@@ -410,6 +410,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       return 'Ongeldige datumnotatie';
     }
     if (start >= end) return 'Startdatum moet vóór einddatum liggen';
+    if (deadline < new Date()) return 'Deadline mag niet in het verleden liggen';
     if (deadline >= start) return 'Deadline moet vóór de startdatum liggen';
 
     return null;

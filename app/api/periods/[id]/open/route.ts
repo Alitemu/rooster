@@ -100,6 +100,14 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
+    if (deadlineCheck < new Date()) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DEADLINE', message: 'Deadline mag niet in het verleden liggen' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     if (deadlineCheck >= startCheck) {
       const response: ApiErrorResponse = {
         success: false,

@@ -75,6 +75,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 400 });
     }
 
+    if (deadline < new Date()) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'INVALID_DEADLINE',
+          message: 'Deadline mag niet in het verleden liggen',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     if (deadline >= start) {
       const response: ApiErrorResponse = {
         success: false,

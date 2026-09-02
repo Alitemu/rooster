@@ -144,18 +144,18 @@ export function getBaseUrl(): string {
 }
 
 /**
- * Log in as the seeded PLANNER account (see scripts/seed.ts) so the page's
+ * Log in as the seeded planner account (see scripts/seed.ts) so the page's
  * browser context carries a valid staff session cookie. Planner pages are
  * protected by middleware.ts and their data comes from routes gated by
  * requirePlannerAccess, so tests that visit /planner/* must call this first.
  */
 export async function loginAsPlanner(page: Page): Promise<void> {
-  const codenaam = process.env.E2E_PLANNER_CODENAAM || 'PLANNER';
-  // Must match DEFAULT_TEST_PASSWORD in scripts/seed.ts, which PLANNER is
+  const codenaam = process.env.E2E_PLANNER_CODENAAM || 'planner';
+  // Must match DEFAULT_TEST_PASSWORD in scripts/seed.ts, which planner is
   // seeded with directly.
   const password = process.env.E2E_PLANNER_PASSWORD || 'Password123!';
 
-  // Fallback only - PLANNER is normally already seeded with the password
+  // Fallback only - planner is normally already seeded with the password
   // above (scripts/seed.ts). This just covers a database that predates
   // that (wachtwoord_hash still NULL), writing the hash straight into the
   // DB rather than calling the first-run-setup API, which keeps this fast

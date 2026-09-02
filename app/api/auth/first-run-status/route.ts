@@ -1,13 +1,14 @@
 /**
  * First-Run Setup Status
  *
- * GET /api/auth/first-run-status - which staff accounts (ADMIN/PLANNER)
- * still have no password set.
+ * GET /api/auth/first-run-status - which staff accounts (rol ADMIN or
+ * PLANNER - only the latter is actually seeded, but the query stays
+ * rol-based rather than hardcoding "planner") still have no password set.
  *
  * Deliberately unauthenticated: nobody CAN be authenticated yet on a fresh
- * deployment, since neither seeded account has a password. Exposing which
- * of two fixed, publicly-known codenamen ("ADMIN", "PLANNER") still need
- * setup isn't a secret - the login form already shows those same names.
+ * deployment, since the seeded account has no password. Exposing which
+ * fixed, publicly-known codenamen still need setup isn't a secret - the
+ * login form already shows those same names.
  */
 
 import { NextResponse } from 'next/server';

@@ -21,6 +21,7 @@ interface Period {
   deadline: string;
   status: string;
   gepubliceerd_op?: string | null;
+  bevroren_ruleset_json?: string | null;
 }
 
 export default function PlannerPeriodPage() {
@@ -113,6 +114,21 @@ export default function PlannerPeriodPage() {
             <p className="text-sm text-neutral-600">
               Deadline: {new Date(period.deadline).toLocaleString()}
             </p>
+            {period.bevroren_ruleset_json && (() => {
+              try {
+                const cfg = JSON.parse(period.bevroren_ruleset_json);
+                return (
+                  <p className="text-sm text-neutral-600 mt-1">
+                    Venster: {cfg.windowWeeks ?? '?'} weken · Avond {cfg.bandAvond?.[0] ?? '?'}-
+                    {cfg.bandAvond?.[1] ?? '?'} · Weekend {cfg.bandWeekend?.[0] ?? '?'}-
+                    {cfg.bandWeekend?.[1] ?? '?'} · Feestdag {cfg.bandFeestdag?.[0] ?? '?'}-
+                    {cfg.bandFeestdag?.[1] ?? '?'}
+                  </p>
+                );
+              } catch {
+                return null;
+              }
+            })()}
           </div>
           <div>
             <div className={`px-4 py-2 rounded font-semibold ${statusColor.bg} ${statusColor.text}`}>

@@ -58,9 +58,9 @@ async function req(method, path, { jar, body } = {}) {
 }
 const eq = (a, b) => a === b;
 
-// scripts/seed.ts sets ADMIN/PLANNER to DEFAULT_TEST_PASSWORD directly (see
-// its comment) - both accounts already have it, so this only ever exercises
-// the "already claimed" 409 path now. Kept as coverage of that route rather
+// scripts/seed.ts sets planner to DEFAULT_TEST_PASSWORD directly (see its
+// comment) - the account already has it, so this only ever exercises the
+// "already claimed" 409 path now. Kept as coverage of that route rather
 // than removed: a real operator who does clear the seeded password (or a
 // future deployment that goes back to leaving it unset) still goes through
 // exactly this flow, and this proves it still works either way.
@@ -74,17 +74,14 @@ async function main() {
   console.log('\n━━ AUTH ━━');
   rec('Unauthenticated /api/periods → 401', eq((await req('GET', '/api/periods')).status, 401));
 
-  await ensureStaffPassword('PLANNER', SEEDED_TEST_PASSWORD);
-  await ensureStaffPassword('ADMIN', SEEDED_TEST_PASSWORD);
+  await ensureStaffPassword('planner', SEEDED_TEST_PASSWORD);
 
   const planner = {};
-  const pLogin = await req('POST', '/api/auth/staff-login', { jar: planner, body: { codenaam: 'PLANNER', password: SEEDED_TEST_PASSWORD } });
+  const pLogin = await req('POST', '/api/auth/staff-login', { jar: planner, body: { codenaam: 'planner', password: SEEDED_TEST_PASSWORD } });
   rec('Planner login', eq(pLogin.status, 200));
   const plannerId = pLogin.json?.data?.person_id;
 
-  const admin = {};
-  rec('Admin login', eq((await req('POST', '/api/auth/staff-login', { jar: admin, body: { codenaam: 'ADMIN', password: SEEDED_TEST_PASSWORD } })).status, 200));
-  rec('Wrong password → 401', eq((await req('POST', '/api/auth/staff-login', { jar: {}, body: { codenaam: 'ADMIN', password: 'nope' } })).status, 401));
+  rec('Wrong password → 401', eq((await req('POST', '/api/auth/staff-login', { jar: {}, body: { codenaam: 'planner', password: 'nope' } })).status, 401));
   rec('Login with no body → 400 (not 500)', eq((await req('POST', '/api/auth/staff-login', { jar: {} })).status, 400));
 
   const me = await req('GET', '/api/auth/me', { jar: planner });

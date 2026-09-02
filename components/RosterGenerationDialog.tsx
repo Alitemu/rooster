@@ -7,7 +7,20 @@
  * and displaying results (assignments, cost, violations, time).
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+interface RulesetConfig {
+  windowWeeks: number;
+  bandAvond: [number, number];
+  bandWeekend: [number, number];
+  bandFeestdag: [number, number];
+}
+
+const COUNTER_LABEL: Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', string> = {
+  AVOND: 'Avond',
+  WEEKEND: 'Weekend',
+  FEESTDAG: 'Feestdag',
+};
 
 interface UnfilledSlot {
   slot_id: string;
@@ -37,6 +50,33 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rulesetLoading, setRulesetLoading] = useState(false);
+  const [ruleset, setRuleset] = useState<RulesetConfig | null>(null);
+  const [rulesetError, setRulesetError] = useState<string | null>(null);
+
+  // Load the period's current frozen window/band every time the dialog
+  // opens - it's otherwise invisible once a period leaves the setup
+  // wizard, and a regenerate with nothing changed just reproduces the same
+  // roster.
+  useEffect(() => {
+    if (!isOpen) return;
+    setRulesetLoading(true);
+    setRulesetError(null);
+    fetch(`/api/periods/${periodId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const raw = data?.data?.bevroren_ruleset_json;
+        const parsed = raw ? JSON.parse(raw) : {};
+        setRuleset({
+          windowWeeks: typeof parsed.windowWeeks === 'number' ? parsed.windowWeeks : 2,
+          bandAvond: Array.isArray(parsed.bandAvond) ? parsed.bandAvond : [7, 8],
+          bandWeekend: Array.isArray(parsed.bandWeekend) ? parsed.bandWeekend : [2, 3],
+          bandFeestdag: Array.isArray(parsed.bandFeestdag) ? parsed.bandFeestdag : [1, 2],
+        });
+      })
+      .catch(() => setRulesetError('Laden van huidige instellingen mislukt'))
+      .finally(() => setRulesetLoading(false));
+  }, [isOpen, periodId]);
 
   const handleGenerate = async () => {
     setLoading(true);
@@ -44,6 +84,18 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     setResult(null);
 
     try {
+      if (ruleset) {
+        const rulesetRes = await fetch(`/api/periods/${periodId}/ruleset`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ruleset),
+        });
+        if (!rulesetRes.ok) {
+          const data = await rulesetRes.json();
+          throw new Error(data.error?.message || 'Opslaan van venster/streefbereik mislukt');
+        }
+      }
+
       const res = await fetch(`/api/planner/period/${periodId}/generate-roster`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -82,7 +134,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       aria-label="Rooster genereren"
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
         {/* Header */}
         <div className="border-b p-6">
           <h2 className="text-xl font-bold">Rooster genereren</h2>
@@ -95,6 +147,81 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         <div className="p-6">
           {!result && !error && (
             <div className="space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-800 mb-1">Venster en streefbereik</h3>
+                <p className="text-xs text-neutral-500 mb-3">
+                  Dit zijn de huidige instellingen voor deze periode - onveranderd levert opnieuw
+                  genereren hetzelfde resultaat op. Pas aan voor een ander resultaat.
+                </p>
+
+                {rulesetLoading && <p className="text-sm text-neutral-600">Instellingen laden...</p>}
+                {rulesetError && <p className="text-sm text-red-600">{rulesetError}</p>}
+
+                {ruleset && (
+                  <div className="space-y-3 bg-neutral-50 border border-neutral-200 rounded p-3">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-600 mb-1">
+                        Venster (weken tussen diensten)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="8"
+                        value={ruleset.windowWeeks}
+                        onChange={(e) =>
+                          setRuleset({ ...ruleset, windowWeeks: parseInt(e.target.value) || 0 })
+                        }
+                        className="w-24 px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      {(['AVOND', 'WEEKEND', 'FEESTDAG'] as const).map((counter) => {
+                        const key = `band${counter.charAt(0)}${counter.slice(1).toLowerCase()}` as
+                          | 'bandAvond'
+                          | 'bandWeekend'
+                          | 'bandFeestdag';
+                        const [min, max] = ruleset[key];
+                        return (
+                          <div key={counter}>
+                            <label className="block text-xs font-medium text-neutral-600 mb-1">
+                              {COUNTER_LABEL[counter]}
+                            </label>
+                            <div className="flex gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                value={min}
+                                onChange={(e) =>
+                                  setRuleset({
+                                    ...ruleset,
+                                    [key]: [parseInt(e.target.value) || 0, max],
+                                  })
+                                }
+                                className="w-1/2 px-1.5 py-1 border rounded text-xs"
+                                placeholder="Min"
+                              />
+                              <input
+                                type="number"
+                                min="0"
+                                value={max}
+                                onChange={(e) =>
+                                  setRuleset({
+                                    ...ruleset,
+                                    [key]: [min, parseInt(e.target.value) || 0],
+                                  })
+                                }
+                                className="w-1/2 px-1.5 py-1 border rounded text-xs"
+                                placeholder="Max"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <p className="text-sm text-neutral-700">
                 De solver zal:
               </p>
@@ -184,6 +311,14 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                     <dd className="font-semibold text-neutral-900">{result.time_seconds.toFixed(2)}s</dd>
                   </div>
                 </dl>
+
+                {ruleset && (
+                  <p className="text-xs text-green-800 mt-3 pt-3 border-t border-green-200">
+                    Gegenereerd met venster {ruleset.windowWeeks} weken · avond {ruleset.bandAvond[0]}-
+                    {ruleset.bandAvond[1]} · weekend {ruleset.bandWeekend[0]}-{ruleset.bandWeekend[1]} ·
+                    feestdag {ruleset.bandFeestdag[0]}-{ruleset.bandFeestdag[1]}
+                  </p>
+                )}
 
                 {Object.keys(result.violations).length > 0 && (
                   <div className="mt-4 pt-4 border-t border-green-200">

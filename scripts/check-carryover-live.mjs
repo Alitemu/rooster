@@ -69,10 +69,10 @@ async function ensureStaffPassword(codenaam, password) {
 }
 
 async function main() {
-  await ensureStaffPassword('PLANNER', SEEDED_TEST_PASSWORD);
+  await ensureStaffPassword('planner', SEEDED_TEST_PASSWORD);
 
   const planner = {};
-  await req('POST', '/api/auth/staff-login', { jar: planner, body: { codenaam: 'PLANNER', password: SEEDED_TEST_PASSWORD } });
+  await req('POST', '/api/auth/staff-login', { jar: planner, body: { codenaam: 'planner', password: SEEDED_TEST_PASSWORD } });
 
   const p1 = db.prepare('SELECT * FROM dienstrooster_schedule_period LIMIT 1').get();
   console.log('Period 1:', p1.id);

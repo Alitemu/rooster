@@ -16,12 +16,12 @@ import { generateSlotsForPeriod } from '../lib/slotGeneration';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ADMIN and PLANNER get this password set directly by the seed, on
+// The planner account gets this password set directly by the seed, on
 // explicit request - a known password checked into git that's trivial to
 // type on a phone during testing, no /planner/login "first run" form or
-// separate .env file needed. Both accounts still go through the exact
-// same validatePasswordStrength/hashPassword lib/auth.ts uses for that
-// form - only the source of the password changed, not the strength rule.
+// separate .env file needed. It still goes through the exact same
+// validatePasswordStrength/hashPassword lib/auth.ts uses for that form -
+// only the source of the password changed, not the strength rule.
 //
 // CHANGE OR REMOVE THIS before pointing a deployment at real staff and
 // real schedules: anyone with read access to this repository (now or at
@@ -429,7 +429,7 @@ const SEEDED_TABLES = [
 /** True once a previous seed run has populated this database. */
 function alreadySeeded(): boolean {
   const row = db
-    .prepare(`SELECT COUNT(*) as count FROM dienstrooster_person WHERE codenaam IN ('ADMIN', 'PLANNER')`)
+    .prepare(`SELECT COUNT(*) as count FROM dienstrooster_person WHERE codenaam = 'planner'`)
     .get() as { count: number };
   return row.count > 0;
 }
@@ -467,30 +467,28 @@ async function seed() {
 
     const now = new Date().toISOString();
 
-    // 1. Create admin user, with DEFAULT_TEST_PASSWORD already set (see the
-    // warning on that constant above). /planner/login's "first run" form
-    // (app/api/auth/first-run-setup/route.ts) only ever acts on an account
-    // whose wachtwoord_hash is still NULL, so it has nothing left to do for
-    // either account after this - log in directly with the password above.
-    console.log('Creating admin user...');
-    const adminId = uuid();
+    // 1. Create planner user, with DEFAULT_TEST_PASSWORD already set (see
+    // the warning on that constant above). /planner/login's "first run"
+    // form (app/api/auth/first-run-setup/route.ts) only ever acts on an
+    // account whose wachtwoord_hash is still NULL, so it has nothing left
+    // to do here - log in directly with the password above.
+    //
+    // Codenaam is lowercase 'planner' by explicit request - login is
+    // case-sensitive, so this is what gets typed at /planner/login. There
+    // used to be a separate ADMIN account too, but it had no functional
+    // difference from PLANNER anywhere in the app (every permission check
+    // treats the two roles identically), so it was dropped rather than
+    // kept as a second account with nothing distinct to do.
+    console.log('Creating planner user...');
+    const plannerId = uuid();
     const defaultPasswordHash = await hashPassword(DEFAULT_TEST_PASSWORD);
 
     db.prepare(`
       INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(adminId, 'ADMIN', 'ADMIN', 1, defaultPasswordHash, now);
+    `).run(plannerId, 'planner', 'PLANNER', 1, defaultPasswordHash, now);
 
-    // 2. Create planner user (same default password as admin)
-    console.log('Creating planner user...');
-    const plannerId = uuid();
-
-    db.prepare(`
-      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(plannerId, 'PLANNER', 'PLANNER', 1, defaultPasswordHash, now);
-
-    // 3. Create 31 staff members
+    // 2. Create 31 staff members
     console.log('Creating 31 staff members...');
     const staffIds: string[] = [];
 
@@ -514,7 +512,7 @@ async function seed() {
       `).run(uuid(), staffId, tokenHash, now);
     }
 
-    // 4. Create ruleset
+    // 3. Create ruleset
     console.log('Creating ruleset...');
     const rulesetId = uuid();
     const rulesetConfig = {
@@ -545,7 +543,7 @@ async function seed() {
       VALUES (?, ?, ?, ?)
     `).run(rulesetId, 'Default Ruleset', JSON.stringify(rulesetConfig), now);
 
-    // 5. Create pool
+    // 4. Create pool
     console.log('Creating pool...');
     const poolId = uuid();
 
@@ -554,7 +552,7 @@ async function seed() {
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(poolId, 'Achterwacht', 'ACHTERWACHT', rulesetId, 'GELIJK', now);
 
-    // 6. Add staff to pool
+    // 5. Add staff to pool
     console.log('Adding staff to pool...');
     const membershipStartDate = '2027-01-01';
     const membershipEndDate = '2029-12-31';
@@ -566,7 +564,7 @@ async function seed() {
       `).run(uuid(), staffId, poolId, 1.0, membershipStartDate, membershipEndDate);
     }
 
-    // 7. Create shift types
+    // 6. Create shift types
     console.log('Creating shift types...');
     const shiftTypes = [
       { naam: 'Avonddienst', teller: 'AVOND' },
@@ -586,7 +584,7 @@ async function seed() {
       `).run(typeId, poolId, type.naam, type.teller);
     }
 
-    // 8. Create period
+    // 7. Create period
     // Dates match tests/fixtures/blokkades-2027-h1.csv (a real ward's
     // blockades for Jan-Jun 2027, anonymized - see step 11b below) so the
     // seeded period and the availability data seeded into it agree with
@@ -720,7 +718,7 @@ async function seed() {
       `).run(uuid(), periodId, dagen);
     }
 
-    // 9. Create some ledger entries (beginsaldi)
+    // 8. Create some ledger entries (beginsaldi)
     console.log('Creating beginsaldi...');
     for (let i = 0; i < 10; i++) {
       const staffId = staffIds[i];
@@ -740,13 +738,13 @@ async function seed() {
           delta,
           'Beginsaldo vanuit import',
           'BEGINSALDO',
-          adminId,
+          plannerId,
           now
         );
       }
     }
 
-    // 10. Create holiday history for past years
+    // 9. Create holiday history for past years
     console.log('Creating holiday history...');
     const holidayGroups = ['KERST', 'PASEN', 'KONINGSDAG', 'PINKSTEREN'];
     for (let i = 0; i < 15; i++) {
@@ -760,7 +758,7 @@ async function seed() {
       `).run(uuid(), staffId, group, year, 'IMPORT');
     }
 
-    // 11. Create part-time patterns for some staff (first 10)
+    // 10. Create part-time patterns for some staff (first 10)
     console.log('Creating part-time patterns...');
     const weekdays = ['MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO'];
     const frequencies = ['ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN'];
@@ -786,7 +784,7 @@ async function seed() {
       );
     }
 
-    // 12. Create absences for some staff (dates within the period itself,
+    // 11. Create absences for some staff (dates within the period itself,
     // not past its end - the period only runs to periodEnd now)
     console.log('Creating absences...');
     for (let i = 5; i < 15; i++) {
@@ -882,7 +880,7 @@ async function seed() {
       }
     }
 
-    // 13. Create submissions with mixed statuses
+    // 12. Create submissions with mixed statuses
     console.log('Creating submissions...');
     for (let i = 0; i < staffIds.length; i++) {
       const staffId = staffIds[i];
@@ -904,7 +902,7 @@ async function seed() {
       );
     }
 
-    // 14. Update access links to reference the period
+    // 13. Update access links to reference the period
     console.log('Updating access links with period reference...');
     // Get all access links and update them
     const linkStmt = db.prepare('SELECT id FROM dienstrooster_person_access_link LIMIT ?');
@@ -920,8 +918,7 @@ async function seed() {
 
     console.log('\n✅ Seed completed successfully!');
     console.log(`\nUsers created:`);
-    console.log(`  - Admin: ADMIN / password: ${DEFAULT_TEST_PASSWORD} (change before real use - see DEFAULT_TEST_PASSWORD in this file)`);
-    console.log(`  - Planner: PLANNER / password: ${DEFAULT_TEST_PASSWORD} (same)`);
+    console.log(`  - Planner: planner / password: ${DEFAULT_TEST_PASSWORD} (change before real use - see DEFAULT_TEST_PASSWORD in this file)`);
     console.log(`  - Staff: Persoon-01 through Persoon-31 (personal access links)`);
     console.log(`\nPool: Achterwacht (31 members)`);
     console.log(`Period: 2027-1 (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);
