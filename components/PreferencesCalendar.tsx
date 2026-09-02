@@ -9,8 +9,11 @@
  *   source of "onoverzichtelijk" (unclear) feedback on the previous version.
  * - ISO week numbers always visible, in their own column
  * - Saturday/Sunday separate cells
- * - Four states per day: neutral, prefer-not, blocked, part-time -
+ * - Five states per day: neutral, voorkeur, prefer-not, blocked, part-time -
  *   distinguished by color, pattern, and glyph together, never color alone
+ * - Click cycles through the states; right-click (or long-press on touch,
+ *   which fires the same 'contextmenu' event) opens a menu to jump to one
+ *   directly
  * - "Block whole weekend" quick action, absolutely positioned so it can't
  *   stretch Saturday's row taller than the rest (the old layout bug)
  * - Live per-day coverage bar + count, and a running blocked-days summary
@@ -54,6 +57,23 @@ interface Props {
   onPreferencesChange?: (changed: boolean) => void;
   onCoverageUpdate?: (coverage: Map<string, CoverageInfo>) => void;
 }
+
+interface ContextMenuState {
+  datum: string;
+  teller: string;
+  x: number;
+  y: number;
+}
+
+// Order matches the click-to-cycle order, so the menu reads as "the same
+// options, just pick one directly instead of cycling to it".
+const MENU_LEVELS: BlockLevel[] = [null, 'VOORKEUR', 'LIEVER_NIET', 'ABSOLUUT'];
+
+const LEVEL_LABEL: Record<Exclude<BlockLevel, null>, string> = {
+  VOORKEUR: 'Voorkeur',
+  LIEVER_NIET: 'Liever niet',
+  ABSOLUUT: 'Geblokkeerd',
+};
 
 const COUNTER_LABEL: Record<string, string> = {
   AVOND: 'Avonddiensten',
@@ -107,6 +127,7 @@ export function PreferencesCalendar({
   const [isSaving, setIsSaving] = useState(false);
   const [hasChanged, setHasChanged] = useState(false);
   const [highlightDatum, setHighlightDatum] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   // Fetch initial preferences
   useEffect(() => {
@@ -204,12 +225,14 @@ export function PreferencesCalendar({
     [personId, fetchCoverage]
   );
 
-  // Handle preference click. Slots generated from a part-time pattern
+  // Set a slot to a specific level - shared by the click-to-cycle handler
+  // and the right-click menu, which picks a level directly instead of
+  // cycling through them. Slots generated from a part-time pattern
   // (source === 'PARTTIME') are locked - see the day-cell rendering below,
-  // which never wires this handler to their button in the first place, so
-  // this is only ever called for slots the participant can actually edit.
-  const handleTogglePreference = useCallback(
-    (datum: string, teller: string) => {
+  // which never wires either of those to their button in the first place,
+  // so this is only ever called for slots the participant can actually edit.
+  const applyPreferenceLevel = useCallback(
+    (datum: string, teller: string, next: BlockLevel) => {
       setHighlightDatum(datum);
       setPreferences((prev) => {
         const dayPref = prev.get(datum);
@@ -219,13 +242,6 @@ export function PreferencesCalendar({
           console.error('Slot not found for', datum, teller);
           return prev;
         }
-
-        // Cycle: null → VOORKEUR → LIEVER_NIET → ABSOLUUT → null
-        let next: BlockLevel;
-        if (slot.level === null) next = 'VOORKEUR';
-        else if (slot.level === 'VOORKEUR') next = 'LIEVER_NIET';
-        else if (slot.level === 'LIEVER_NIET') next = 'ABSOLUUT';
-        else next = null;
 
         const updated = new Map(prev);
         const updatedSlots = new Map(dayPref!.slots);
@@ -241,6 +257,74 @@ export function PreferencesCalendar({
     },
     [savePreference, onPreferencesChange]
   );
+
+  // Left click: cycle null → VOORKEUR → LIEVER_NIET → ABSOLUUT → null
+  const handleTogglePreference = useCallback(
+    (datum: string, teller: string) => {
+      const slot = preferences.get(datum)?.slots.get(teller);
+      if (!slot) {
+        console.error('Slot not found for', datum, teller);
+        return;
+      }
+
+      let next: BlockLevel;
+      if (slot.level === null) next = 'VOORKEUR';
+      else if (slot.level === 'VOORKEUR') next = 'LIEVER_NIET';
+      else if (slot.level === 'LIEVER_NIET') next = 'ABSOLUUT';
+      else next = null;
+
+      applyPreferenceLevel(datum, teller, next);
+    },
+    [preferences, applyPreferenceLevel]
+  );
+
+  // Right click (or long-press on touch devices, which fires the same
+  // 'contextmenu' event): jump straight to a chosen level instead of
+  // cycling through the others to get there.
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, datum: string, teller: string) => {
+      e.preventDefault();
+      // Stop this event from reaching the window-level listener below,
+      // which closes any already-open menu on the next 'contextmenu' event
+      // it sees - without this, right-clicking a second cell would open a
+      // menu for it and then immediately close it again as the same event
+      // keeps bubbling.
+      e.stopPropagation();
+      if (isSaving) return;
+      setContextMenu({ datum, teller, x: e.clientX, y: e.clientY });
+    },
+    [isSaving]
+  );
+
+  const selectContextMenuLevel = useCallback(
+    (level: BlockLevel) => {
+      if (!contextMenu) return;
+      applyPreferenceLevel(contextMenu.datum, contextMenu.teller, level);
+      setContextMenu(null);
+    },
+    [contextMenu, applyPreferenceLevel]
+  );
+
+  // Dismiss the menu on an outside click, a right-click elsewhere (see the
+  // stopPropagation note above), Escape, or scrolling the page out from
+  // under a menu positioned at a fixed pixel coordinate.
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    const closeOnEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setContextMenu(null);
+    };
+    window.addEventListener('click', close);
+    window.addEventListener('contextmenu', close);
+    window.addEventListener('keydown', closeOnEscape);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('contextmenu', close);
+      window.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [contextMenu]);
 
   // Block whole weekend
   const handleBlockWeekend = useCallback(
@@ -459,10 +543,11 @@ export function PreferencesCalendar({
                                     <button
                                       key={`${datum}-${counter}`}
                                       onClick={() => handleTogglePreference(datum, counter)}
+                                      onContextMenu={(e) => handleContextMenu(e, datum, counter)}
                                       disabled={isSaving}
                                       className={`w-full h-5 rounded text-[10px] font-semibold transition-all
                                         ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
-                                      title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'}`}
+                                      title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'} (rechtsklik voor opties)`}
                                     >
                                       {counter[0]}{level ? GLYPH[level] : ''}
                                     </button>
@@ -528,6 +613,40 @@ export function PreferencesCalendar({
           Voorkeuren opgeslagen
         </div>
       )}
+
+      {/* Right-click / long-press menu: pick a level directly instead of
+          clicking through the cycle. Position clamped to the viewport so it
+          never overflows off a narrow (375px) screen. */}
+      {contextMenu && (() => {
+        const menuWidth = 176;
+        const currentLevel = preferences.get(contextMenu.datum)?.slots.get(contextMenu.teller)?.level ?? null;
+        const left = Math.min(contextMenu.x, window.innerWidth - menuWidth - 8);
+        const top = Math.min(contextMenu.y, window.innerHeight - 172);
+
+        return (
+          <div
+            role="menu"
+            className="fixed z-50 w-44 rounded-lg border border-neutral-200 bg-white shadow-lg py-1"
+            style={{ left, top }}
+          >
+            <div className="px-3 py-1.5 text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">
+              {COUNTER_LABEL[contextMenu.teller] || contextMenu.teller}
+            </div>
+            {MENU_LEVELS.map((level) => (
+              <button
+                key={level ?? 'NEUTRAL'}
+                role="menuitem"
+                onClick={() => selectContextMenuLevel(level)}
+                className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-neutral-100
+                  ${currentLevel === level ? 'font-semibold text-blue-700' : 'text-neutral-800'}`}
+              >
+                <span className="w-4 text-center">{currentLevel === level ? '✓' : ''}</span>
+                {level ? GLYPH[level] : ''} {level ? LEVEL_LABEL[level] : 'Beschikbaar'}
+              </button>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 }
