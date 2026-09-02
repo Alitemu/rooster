@@ -8,6 +8,12 @@
  * around the year boundary) is visible at a glance rather than requiring
  * the participant to scan a flat list of dates. Requires checkbox
  * confirmation before preferences can be submitted.
+ *
+ * Deliberately just shows what the pattern generated - not why a day the
+ * pattern would otherwise touch didn't end up blocked (a prior manual
+ * block, an absence, ...). That's real information but it lives one level
+ * too deep for this screen's job, which is purely "does this match what I
+ * expect to see" at a glance.
  */
 
 import { useState, useEffect } from 'react';
@@ -28,13 +34,6 @@ interface GeneratedDay {
   is_year_boundary: boolean;
 }
 
-interface ConflictDay {
-  datum: string;
-  weekdag: string;
-  pattern_id: string;
-  reden: string;
-}
-
 interface Props {
   personId: string;
   periodId: string;
@@ -44,17 +43,8 @@ interface Props {
   onConfirm?: (confirmed: boolean) => void;
 }
 
-function formatDayLong(datum: string): string {
-  return parseISO(datum).toLocaleDateString('nl-NL', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-}
-
 export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, patterns, onConfirm }: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
-  const [conflictDays, setConflictDays] = useState<ConflictDay[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -67,10 +57,8 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
         );
         const data = await res.json();
         setGeneratedDays(data.data?.generated_days || []);
-        setConflictDays(data.data?.conflict_days || []);
       } catch {
         setGeneratedDays([]);
-        setConflictDays([]);
       } finally {
         setLoading(false);
       }
@@ -88,7 +76,6 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
   }
 
   const byDate = new Map(generatedDays.map((d) => [d.datum, d]));
-  const byConflictDate = new Map(conflictDays.map((d) => [d.datum, d]));
   const boundaryDays = generatedDays.filter((d) => d.is_year_boundary);
 
   const startDate = parseISO(periodStart);
@@ -130,7 +117,7 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
         </p>
       </div>
 
-      {generatedDays.length === 0 && conflictDays.length === 0 && (
+      {generatedDays.length === 0 && (
         <p className="text-sm text-neutral-600">
           {patterns.length === 0
             ? 'Geen deeltijdpatronen ingesteld.'
@@ -156,23 +143,6 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
         </div>
       )}
 
-      {conflictDays.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded p-3">
-          <p className="text-sm text-orange-900 font-medium mb-1">
-            ⚠️ {conflictDays.length} dag{conflictDays.length === 1 ? '' : 'en'} (gestreept omrand
-            hieronder) {conflictDays.length === 1 ? 'valt' : 'vallen'} wel op je patroon, maar
-            {conflictDays.length === 1 ? ' is' : ' zijn'} niet automatisch geblokkeerd:
-          </p>
-          <ul className="text-sm text-orange-900 list-disc list-inside">
-            {conflictDays.map((c) => (
-              <li key={`${c.pattern_id}-${c.datum}`}>
-                {formatDayLong(c.datum)} - {c.reden}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* Legend */}
       <div className="flex gap-4 flex-wrap text-xs text-neutral-600">
         <span className="flex items-center gap-1.5">
@@ -186,10 +156,6 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
         <span className="flex items-center gap-1.5">
           <i className="calendar-cell-parttime inline-block w-5 h-4 rounded ring-2 ring-amber-400" />
           Deeltijddag rond de jaarwisseling
-        </span>
-        <span className="flex items-center gap-1.5">
-          <i className="inline-block w-5 h-4 rounded border-2 border-dashed border-orange-400 bg-white" />
-          Valt op patroon, maar al anders gemarkeerd
         </span>
       </div>
 
@@ -216,23 +182,14 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
                         <td className="week-number text-center align-top pt-2">{isoWeek}</td>
                         {week.map((datum) => {
                           const generated = byDate.get(datum);
-                          const conflict = !generated ? byConflictDate.get(datum) : undefined;
                           return (
                             <td key={datum} className="align-top p-0">
                               <div
                                 className={`h-11 rounded-lg border flex items-start justify-center pt-1 text-xs font-semibold tabular-nums
                                   ${generated
                                     ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-amber-400' : ''}`
-                                    : conflict
-                                      ? 'border-2 border-dashed border-orange-400 bg-white text-orange-900'
-                                      : 'border-neutral-200 bg-white text-neutral-900'}`}
-                                title={
-                                  generated
-                                    ? 'Deeltijddag (automatisch geblokkeerd)'
-                                    : conflict
-                                      ? `Valt op je patroon, maar ${conflict.reden}`
-                                      : undefined
-                                }
+                                    : 'border-neutral-200 bg-white text-neutral-900'}`}
+                                title={generated ? 'Deeltijddag (automatisch geblokkeerd)' : undefined}
                               >
                                 {parseISO(datum).getDate()}
                               </div>
@@ -268,7 +225,6 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
       <div className="text-xs text-neutral-500 italic">
         Totaal: {generatedDays.length} dagen
         {boundaryDays.length > 0 && <> • Jaarwisseling: {boundaryDays.length} dagen</>}
-        {conflictDays.length > 0 && <> • Al anders gemarkeerd: {conflictDays.length} dagen</>}
       </div>
     </div>
   );
