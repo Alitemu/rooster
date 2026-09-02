@@ -11,6 +11,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
 import { PartTimeCheckStep } from '@/components/PartTimeCheckStep';
+import { ParttimePatternEditor } from '@/components/ParttimePatternEditor';
 import { PreferencesConfirmation } from '@/components/PreferencesConfirmation';
 import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -353,7 +354,22 @@ export default function PersonalLinkPage() {
 
       {period.status !== 'GEPUBLICEERD' && currentStep === 'parttime' && (
         <div className="space-y-4">
+          <ParttimePatternEditor
+            personId={personId}
+            patterns={patterns}
+            defaultVanaf={period.start_datum}
+            defaultTot={period.eind_datum}
+            onPatternsChange={(next) => {
+              setPatterns(next);
+              // A changed pattern means the generated days below may have
+              // changed too - make the participant look at them again
+              // rather than carrying over a confirmation that no longer
+              // matches what they just edited.
+              setParttimeConfirmed(false);
+            }}
+          />
           <PartTimeCheckStep
+            key={patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(',')}
             personId={personId}
             periodId={period.id}
             patterns={patterns}
@@ -396,7 +412,7 @@ export default function PersonalLinkPage() {
             className="w-full py-3 px-4 rounded font-semibold bg-neutral-200
                        text-neutral-900 hover:bg-neutral-300 transition-colors"
           >
-            Back
+            Terug
           </button>
         </div>
       )}
