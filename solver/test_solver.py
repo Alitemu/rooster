@@ -35,7 +35,7 @@ def make_slots(num_weeks, teller='AVOND', per_week=1):
     return slots
 
 
-def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None):
+def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None, preferred=None):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -48,6 +48,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         band_ranges=band_ranges,
         balances=balances or {p: {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0} for p in people},
         window_weeks=window_weeks,
+        preferred_slots=preferred or {},
     )
 
 
@@ -228,3 +229,32 @@ def test_workload_is_balanced_across_people():
 
     spread = max(counts.values()) - min(counts.values())
     assert spread <= 1, f'workload is lopsided: {counts}'
+
+
+# ---------------------------------------------------------------------------
+# PREFERENCE: VOORKEUR reward
+# ---------------------------------------------------------------------------
+
+def test_preference_is_honoured_when_choice_is_otherwise_tied():
+    """
+    A VOORKEUR preference is soft, like band imbalance - this doesn't prove
+    it's always honoured, just that it shapes the outcome when the choice
+    would otherwise be a tie.
+
+    One slot, two interchangeable people (same empty balance, same wide
+    band): whichever of them gets the shift costs the same on every other
+    objective term (band imbalance is symmetric here - exactly one person
+    ends up with 1 assignment either way). The only thing that can break
+    the tie is p1's stated preference for this slot, so the solver should
+    reliably choose p1.
+    """
+    slots = make_slots(1)
+    people = ['p1', 'p2']
+    preferred = {('p1', slots[0]['id']): 1.0}
+    result = solve(people, slots, window_weeks=1, preferred=preferred)
+
+    assert result['success']
+    assigned = [a['person_id'] for a in result['assignments']]
+    assert assigned == ['p1'], (
+        f'expected the preferred person p1 to get the sole shift, got {assigned}'
+    )

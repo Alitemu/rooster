@@ -306,7 +306,7 @@ async function createTables() {
       id TEXT PRIMARY KEY,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
-      blocking_level TEXT CHECK(blocking_level IN ('ABSOLUUT', 'LIEVER_NIET', NULL)),
+      blocking_level TEXT CHECK(blocking_level IN ('ABSOLUUT', 'LIEVER_NIET', 'VOORKEUR', NULL)),
       source TEXT NOT NULL CHECK(source IN ('MANUAL', 'PARTTIME', 'ABSENCE')),
       bron_pattern_id TEXT REFERENCES dienstrooster_parttime_pattern(id),
       aangemaakt_op TEXT NOT NULL

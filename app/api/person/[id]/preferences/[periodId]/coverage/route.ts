@@ -17,6 +17,7 @@ interface CoveragePerDay {
   total_in_pool: number;
   absoluut_blocked: number;
   liever_niet: number;
+  voorkeur: number;
   available: number;
   message: string;
 }
@@ -79,7 +80,8 @@ export async function GET(
         s.iso_week,
         st.teller,
         COUNT(DISTINCT CASE WHEN a.blocking_level = 'ABSOLUUT' THEN a.person_id END) as absoluut_count,
-        COUNT(DISTINCT CASE WHEN a.blocking_level = 'LIEVER_NIET' THEN a.person_id END) as liever_niet_count
+        COUNT(DISTINCT CASE WHEN a.blocking_level = 'LIEVER_NIET' THEN a.person_id END) as liever_niet_count,
+        COUNT(DISTINCT CASE WHEN a.blocking_level = 'VOORKEUR' THEN a.person_id END) as voorkeur_count
       FROM dienstrooster_shift_slot s
       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
       LEFT JOIN dienstrooster_availability a ON a.slot_id = s.id
@@ -103,6 +105,7 @@ export async function GET(
           total_in_pool: poolSize,
           absoluut_blocked: 0,
           liever_niet: 0,
+          voorkeur: 0,
           available: poolSize,
           message: '',
         });
@@ -111,21 +114,19 @@ export async function GET(
       const entry = coverageMap.get(key)!;
       entry.absoluut_blocked += row.absoluut_count;
       entry.liever_niet += row.liever_niet_count;
+      entry.voorkeur += row.voorkeur_count;
     }
 
     // Calculate available and message for each day
     for (const entry of coverageMap.values()) {
       entry.available = Math.max(0, entry.total_in_pool - entry.absoluut_blocked);
 
-      if (entry.absoluut_blocked > 0 && entry.liever_niet > 0) {
-        entry.message = `${entry.absoluut_blocked} geblokkeerd, ${entry.liever_niet} liever niet`;
-      } else if (entry.absoluut_blocked > 0) {
-        entry.message = `${entry.absoluut_blocked} geblokkeerd`;
-      } else if (entry.liever_niet > 0) {
-        entry.message = `${entry.liever_niet} liever niet`;
-      } else {
-        entry.message = 'Iedereen beschikbaar';
-      }
+      const parts: string[] = [];
+      if (entry.absoluut_blocked > 0) parts.push(`${entry.absoluut_blocked} geblokkeerd`);
+      if (entry.liever_niet > 0) parts.push(`${entry.liever_niet} liever niet`);
+      if (entry.voorkeur > 0) parts.push(`${entry.voorkeur} voorkeur`);
+
+      entry.message = parts.length > 0 ? parts.join(', ') : 'Iedereen beschikbaar';
     }
 
     const coverage = Array.from(coverageMap.values());

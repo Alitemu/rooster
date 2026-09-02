@@ -5,6 +5,9 @@ Minimizes:
 1. LIEVER_NIET (soft blocking) violations
 2. Band imbalance (assignment count vs target)
 3. Holiday rotation inequality
+
+Rewards (subtracts from the total):
+4. VOORKEUR (preferred) assignments
 """
 
 from ortools.sat.python import cp_model
@@ -41,6 +44,39 @@ class ObjectiveBuilder:
 
         self.objective_terms['soft_blocking'] = soft_cost
         return soft_cost
+
+    # ========================================================================
+    # Term 1b: VOORKEUR Preference Reward
+    # ========================================================================
+
+    def add_preference_reward_objective(
+        self,
+        assignment_vars: dict[tuple[str, str], cp_model.IntVar],
+        preferred_slots: dict[tuple[str, str], float],  # (person, slot) -> reward
+        weight: float = 0.3
+    ):
+        """
+        Objective: Reward assignments to VOORKEUR (preferred) slots.
+
+        Mirror image of add_soft_preference_objective: instead of adding a
+        cost when assigned, it subtracts one - the more a person's stated
+        preferences are honoured, the lower the total objective.
+
+        Weighted below band_imbalance (0.5) on purpose: when two people
+        want the same day, fairness and coverage still decide first, and a
+        preference only tips the balance between choices that were already
+        equally good on every other term.
+        """
+        reward = 0
+
+        for (person_id, slot_id), value in preferred_slots.items():
+            if (person_id, slot_id) in assignment_vars:
+                var = assignment_vars[(person_id, slot_id)]
+                reward += weight * value * var
+
+        preference_reward_cost = -reward
+        self.objective_terms['preference_reward'] = preference_reward_cost
+        return preference_reward_cost
 
     # ========================================================================
     # Term 2: Band Imbalance
@@ -184,7 +220,8 @@ class ObjectiveBuilder:
         band_slack_cost: float = 0,
         soft_cost: float = 0,
         imbalance_cost: float = 0,
-        holiday_cost: float = 0
+        holiday_cost: float = 0,
+        preference_reward_cost: float = 0
     ) -> float:
         """
         Combine all objective terms and set on model.
@@ -194,9 +231,15 @@ class ObjectiveBuilder:
         encodes its relative importance, from most to least critical:
         actually covering every shift, then staying within everyone's
         target band, then honoring soft (LIEVER_NIET) preferences and
-        balance smoothing.
+        balance smoothing, then rewarding VOORKEUR preferences.
+        preference_reward_cost is already negative (see
+        add_preference_reward_objective), so adding it here lowers the
+        total when a preference is honoured.
         """
-        total = shortfall_cost + band_slack_cost + soft_cost + imbalance_cost + holiday_cost
+        total = (
+            shortfall_cost + band_slack_cost + soft_cost + imbalance_cost
+            + holiday_cost + preference_reward_cost
+        )
 
         self.model.Minimize(total)
         self.objective_terms['total'] = total

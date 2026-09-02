@@ -22,8 +22,10 @@ export async function PATCH(
       return forbiddenResponse();
     }
 
-    const body = (await parseJsonBody(req)) as { level: 'ABSOLUUT' | 'LIEVER_NIET' | null };
-    const { level } = body; // ABSOLUUT, LIEVER_NIET, or null to clear
+    const body = (await parseJsonBody(req)) as {
+      level: 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
+    };
+    const { level } = body; // ABSOLUUT, LIEVER_NIET, VOORKEUR, or null to clear
 
     // Verify person exists
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);

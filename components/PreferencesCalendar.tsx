@@ -24,7 +24,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { dateToISO, parseISO, getISOWeek, getHolidayInfo, addDays } from '@/lib/holidays';
 
-type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | null;
+type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
 
 interface SlotPreference {
   slot_id: string;
@@ -42,6 +42,7 @@ interface CoverageInfo {
   total_in_pool: number;
   absoluut_blocked: number;
   liever_niet: number;
+  voorkeur: number;
   available: number;
   message: string;
 }
@@ -61,6 +62,7 @@ const COUNTER_LABEL: Record<string, string> = {
 };
 
 const GLYPH: Record<Exclude<BlockLevel, null>, string> = {
+  VOORKEUR: '+',
   LIEVER_NIET: '~',
   ABSOLUUT: '✕',
 };
@@ -218,9 +220,10 @@ export function PreferencesCalendar({
           return prev;
         }
 
-        // Cycle: null → LIEVER_NIET → ABSOLUUT → null
+        // Cycle: null → VOORKEUR → LIEVER_NIET → ABSOLUUT → null
         let next: BlockLevel;
-        if (slot.level === null) next = 'LIEVER_NIET';
+        if (slot.level === null) next = 'VOORKEUR';
+        else if (slot.level === 'VOORKEUR') next = 'LIEVER_NIET';
         else if (slot.level === 'LIEVER_NIET') next = 'ABSOLUUT';
         else next = null;
 
@@ -346,6 +349,10 @@ export function PreferencesCalendar({
           Beschikbaar
         </span>
         <span className="flex items-center gap-1.5">
+          <i className="calendar-cell-voorkeur inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">+</i>
+          Voorkeur
+        </span>
+        <span className="flex items-center gap-1.5">
           <i className="calendar-cell-prefer-not inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">~</i>
           Liever niet
         </span>
@@ -443,7 +450,9 @@ export function PreferencesCalendar({
                                   const stateClass = level
                                     ? level === 'ABSOLUUT'
                                       ? 'calendar-cell-blocked'
-                                      : 'calendar-cell-prefer-not'
+                                      : level === 'VOORKEUR'
+                                        ? 'calendar-cell-voorkeur'
+                                        : 'calendar-cell-prefer-not'
                                     : 'calendar-cell-neutral';
 
                                   return (

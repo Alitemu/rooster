@@ -78,6 +78,10 @@
   @apply bg-white border-neutral-200 text-neutral-900;
 }
 
+.calendar-cell-voorkeur {
+  @apply bg-green-50 border-green-300 text-green-900;
+}
+
 .calendar-cell-prefer-not {
   @apply bg-amber-50 border-amber-300 text-amber-900;
 }

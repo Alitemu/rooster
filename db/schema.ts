@@ -413,7 +413,7 @@ export const availability = sqliteTable(
     person_id: text('person_id').notNull().references(() => person.id),
     slot_id: text('slot_id').notNull().references(() => shiftSlot.id),
     blocking_level: text('blocking_level', {
-      enum: ['ABSOLUUT', 'LIEVER_NIET'],
+      enum: ['ABSOLUUT', 'LIEVER_NIET', 'VOORKEUR'],
     }), // null = neutral (default is NULL in SQLite)
     source: text('source', {
       enum: ['MANUAL', 'PARTTIME', 'ABSENCE'],

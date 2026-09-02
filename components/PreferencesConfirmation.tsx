@@ -22,6 +22,7 @@ interface Props {
   personId: string;
   periodId: string;
   blockedDays: BlockedDaysSummary;
+  voorkeurDays?: number;
   parttimeConfirmed: boolean;
   onSubmit?: (success: boolean) => void;
 }
@@ -30,6 +31,7 @@ export function PreferencesConfirmation({
   personId,
   periodId,
   blockedDays,
+  voorkeurDays = 0,
   parttimeConfirmed,
   onSubmit,
 }: Props) {
@@ -118,6 +120,15 @@ export function PreferencesConfirmation({
           )}
         </div>
       </div>
+
+      {voorkeurDays > 0 && (
+        <div className="bg-green-50 border border-green-200 rounded p-3">
+          <p className="text-sm text-green-900">
+            <span className="font-mono font-bold">{voorkeurDays}</span>{' '}
+            {voorkeurDays === 1 ? 'dag' : 'dagen'} als voorkeur opgegeven
+          </p>
+        </div>
+      )}
 
       {/* Critical vacation reminder */}
       <div className="bg-red-50 border-2 border-red-300 rounded p-4">

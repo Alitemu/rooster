@@ -36,7 +36,8 @@ class RosterSolver:
         capacity_required: dict[str, int],
         band_ranges: dict[str, list[int]],
         balances: dict[str, dict[str, int]],
-        window_weeks: int = 2
+        window_weeks: int = 2,
+        preferred_slots: Optional[dict[tuple[str, str], float]] = None
     ) -> dict:
         """
         Build the CP-SAT model with all constraints and objectives.
@@ -111,12 +112,18 @@ class RosterSolver:
             assignment_vars, people, slots, band_ranges, balances, weight=0.5
         )
 
+        logger.info("Adding preference reward objective")
+        preference_reward_cost = objective_builder.add_preference_reward_objective(
+            assignment_vars, preferred_slots or {}, weight=0.3
+        )
+
         logger.info("Building combined objective")
         objective_builder.build_objective(
             shortfall_cost=shortfall_cost,
             band_slack_cost=band_slack_cost,
             soft_cost=soft_cost,
-            imbalance_cost=imbalance_cost
+            imbalance_cost=imbalance_cost,
+            preference_reward_cost=preference_reward_cost
         )
 
         elapsed = time.time() - start
@@ -228,7 +235,8 @@ class RosterSolver:
         soft_slots: dict[tuple[str, str], float],
         band_ranges: dict[str, list[int]],
         balances: dict[str, dict[str, int]],
-        window_weeks: int = 2
+        window_weeks: int = 2,
+        preferred_slots: Optional[dict[tuple[str, str], float]] = None
     ) -> dict:
         """
         End-to-end: build model, solve, extract assignments.
@@ -239,7 +247,7 @@ class RosterSolver:
             # Build
             model_data = self.build_model(
                 people, slots, blocked_slots, soft_slots, {},
-                band_ranges, balances, window_weeks
+                band_ranges, balances, window_weeks, preferred_slots
             )
 
             # Solve

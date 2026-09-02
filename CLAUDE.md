@@ -93,14 +93,16 @@ identifiers, DB fields, comments, and console/log output only.
 - `WEEKEND` = "weekenddienst"
 - `LIEVER_NIET` = "liever niet"
 - `ABSOLUUT` = "geblokkeerd"
+- `VOORKEUR` = "voorkeur"
 
 **Calendar/UI Constraints:**
 - Grid must remain readable on 375px width (mobile-first)
 - Always show ISO week numbers
 - Saturday and Sunday as separate cells with a "heel weekend blokkeren" quick action
-- 4 states per day must be visually distinct without color alone:
+- 5 states per day must be visually distinct without color alone:
   - Neutral (no marking)
-  - Liever niet (soft)
+  - Voorkeur (soft, positive)
+  - Liever niet (soft, negative)
   - Geblokkeerd (hard)
   - Part-time (auto-generated)
 - Print-friendly: must work in B&W
@@ -139,7 +141,7 @@ These avoid subtle bugs when UI and code use different sign conventions:
 | Time window | `windowWeeks` | "Number of weeks between shifts" | Setting in UI, config in code |
 | Balance amount | Stored as delta, delta < 0 = fewer | "1 fewer shift" | Never show raw sign to user |
 | Balance range | `band[min, max]` | "8 or 9 evening shifts" | Band is internal; show the range |
-| Preference level | `ABSOLUUT`, `LIEVER_NIET` | "Blocked", "Prefer not" | Enums in code |
+| Preference level | `ABSOLUUT`, `LIEVER_NIET`, `VOORKEUR` | "Blocked", "Prefer not", "Preferred" | Enums in code |
 
 ### Server-Side Functions
 

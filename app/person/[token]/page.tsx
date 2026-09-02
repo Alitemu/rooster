@@ -61,6 +61,10 @@ interface BlockedDaysSummary {
   total: number;
 }
 
+interface VoorkeurDaysSummary {
+  total: number;
+}
+
 interface SoftBlockViolation {
   datum: string;
   teller: string;
@@ -84,6 +88,7 @@ export default function PersonalLinkPage() {
     FEESTDAG: 0,
     total: 0,
   });
+  const [voorkeurDays, setVoorkeurDays] = useState<VoorkeurDaysSummary>({ total: 0 });
   const [softBlockViolations, setSoftBlockViolations] = useState<SoftBlockViolation[]>([]);
   const [parttimeConfirmed, setParttimeConfirmed] = useState(false);
   const [_preferencesChanged, setPreferencesChanged] = useState(false);
@@ -174,7 +179,12 @@ export default function PersonalLinkPage() {
         const data = await res.json();
 
         const summary: BlockedDaysSummary = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0, total: 0 };
+        let voorkeurCount = 0;
         for (const pref of data.data.preferences as Array<{ teller: string; blocking_level: string | null }>) {
+          if (pref.blocking_level === 'VOORKEUR') {
+            voorkeurCount++;
+            continue;
+          }
           if (pref.blocking_level !== 'ABSOLUUT') continue;
           if (pref.teller in summary) {
             summary[pref.teller as 'AVOND' | 'WEEKEND' | 'FEESTDAG']++;
@@ -182,6 +192,7 @@ export default function PersonalLinkPage() {
           }
         }
         setBlockedDays(summary);
+        setVoorkeurDays({ total: voorkeurCount });
       } catch {
         // Leave the previous summary in place on failure
       }
@@ -406,6 +417,7 @@ export default function PersonalLinkPage() {
             personId={personId}
             periodId={period.id}
             blockedDays={blockedDays}
+            voorkeurDays={voorkeurDays.total}
             parttimeConfirmed={parttimeConfirmed}
             onSubmit={handleSubmitSuccess}
           />

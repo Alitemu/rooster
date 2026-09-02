@@ -65,7 +65,7 @@ class Slot(BaseModel):
 
 class PersonPreference(BaseModel):
     slot_id: str
-    blocking_level: str  # ABSOLUUT or LIEVER_NIET
+    blocking_level: str  # ABSOLUUT, LIEVER_NIET, or VOORKEUR
 
 
 class RuleSet(BaseModel):
@@ -167,9 +167,10 @@ async def solve_roster(request: SolverInput):
     try:
         from solver import RosterSolver
 
-        # Build blocked and soft slot sets
+        # Build blocked, soft, and preferred slot sets
         blocked_slots = set()
         soft_slots = {}
+        preferred_slots = {}
 
         for person_id, preferences in request.person_preferences.items():
             for pref in preferences:
@@ -177,6 +178,8 @@ async def solve_roster(request: SolverInput):
                     blocked_slots.add((person_id, pref.slot_id))
                 elif pref.blocking_level == "LIEVER_NIET":
                     soft_slots[(person_id, pref.slot_id)] = 1.0
+                elif pref.blocking_level == "VOORKEUR":
+                    preferred_slots[(person_id, pref.slot_id)] = 1.0
 
         # Build band ranges
         band_ranges = {
@@ -195,7 +198,8 @@ async def solve_roster(request: SolverInput):
             soft_slots=soft_slots,
             band_ranges=band_ranges,
             balances=request.balances,
-            window_weeks=request.rules.window_weeks
+            window_weeks=request.rules.window_weeks,
+            preferred_slots=preferred_slots
         )
 
         if not result['success']:
