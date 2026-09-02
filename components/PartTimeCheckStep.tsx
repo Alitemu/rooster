@@ -3,13 +3,15 @@
 /**
  * Part-time Verification Step Component
  *
- * Shows generated part-time days for user verification.
- * Marks weeks around year boundary for extra attention.
- * Requires checkbox confirmation before preferences can be submitted.
+ * Shows the period as a month-by-month calendar with generated part-time
+ * days clearly hatched, so a mismatch (wrong weekday, wrong week parity
+ * around the year boundary) is visible at a glance rather than requiring
+ * the participant to scan a flat list of dates. Requires checkbox
+ * confirmation before preferences can be submitted.
  */
 
 import { useState, useEffect } from 'react';
-import { parseISO } from '@/lib/holidays';
+import { dateToISO, parseISO, getISOWeek } from '@/lib/holidays';
 
 interface ParttimePattern {
   id: string;
@@ -29,11 +31,13 @@ interface GeneratedDay {
 interface Props {
   personId: string;
   periodId: string;
+  periodStart: string;
+  periodEnd: string;
   patterns: ParttimePattern[];
   onConfirm?: (confirmed: boolean) => void;
 }
 
-export function PartTimeCheckStep({ personId, periodId, patterns, onConfirm }: Props) {
+export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, patterns, onConfirm }: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -65,64 +69,129 @@ export function PartTimeCheckStep({ personId, periodId, patterns, onConfirm }: P
     return <div className="p-4 text-center">Deeltijddagen genereren...</div>;
   }
 
-  if (generatedDays.length === 0) {
-    return (
-      <div className="card p-6">
-        <h3 className="font-bold text-lg mb-2">Deeltijddagen</h3>
-        <p className="text-neutral-600">
-          {patterns.length === 0
-            ? 'Geen deeltijdpatronen ingesteld'
-            : 'Er vallen geen deeltijddagen binnen deze periode'}
-        </p>
-      </div>
-    );
+  const byDate = new Map(generatedDays.map((d) => [d.datum, d]));
+  const boundaryDays = generatedDays.filter((d) => d.is_year_boundary);
+
+  const startDate = parseISO(periodStart);
+  const endDate = parseISO(periodEnd);
+  const totalDays = Math.round((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const totalWeeks = Math.ceil(totalDays / 7);
+
+  const weeks: string[][] = [];
+  let currentDate = new Date(startDate);
+  while (weeks.length < totalWeeks) {
+    const week: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      week.push(dateToISO(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    weeks.push(week);
   }
 
-  const boundaryDays = generatedDays.filter((d) => d.is_year_boundary);
+  // Same month-grouping as PreferencesCalendar - a week straddling a month
+  // boundary stays with the month of its Monday.
+  const monthGroups: { label: string; weeks: string[][] }[] = [];
+  for (const week of weeks) {
+    const label = parseISO(week[0]).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
+    const current = monthGroups[monthGroups.length - 1];
+    if (current && current.label === label) {
+      current.weeks.push(week);
+    } else {
+      monthGroups.push({ label, weeks: [week] });
+    }
+  }
 
   return (
     <div className="card p-6 space-y-4">
       <div>
         <h3 className="font-bold text-lg mb-1">Deeltijddagen controleren</h3>
         <p className="text-sm text-neutral-600">
-          Controleer of deze dagen kloppen, vooral rond de jaarwisseling
+          De gearceerde dagen zijn automatisch geblokkeerd op basis van je deeltijdpatroon. Loop de
+          maanden door en controleer of dat op de juiste weekdag is - vooral rond de jaarwisseling
+          (met een gele rand hieronder), waar weeknummers een sprong maken en &quot;om de week&quot;
+          daardoor minder voor de hand liggend kan uitpakken dan je zou verwachten.
         </p>
       </div>
 
-      {/* Year boundary warning */}
+      {generatedDays.length === 0 && (
+        <p className="text-sm text-neutral-600">
+          {patterns.length === 0
+            ? 'Geen deeltijdpatronen ingesteld.'
+            : 'Er vallen geen deeltijddagen binnen deze periode.'}
+        </p>
+      )}
+
       {boundaryDays.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded p-3">
           <p className="text-sm text-amber-900 font-medium">
-            ⚠️ {boundaryDays.length} dagen vallen rond de jaarwisseling (dec/jan).
-            Controleer of de weeknummers kloppen.
+            ⚠️ {boundaryDays.length} deeltijddag{boundaryDays.length === 1 ? '' : 'en'} val
+            {boundaryDays.length === 1 ? 't' : 'len'} rond de jaarwisseling (geel omrand hieronder) -
+            controleer die extra goed.
           </p>
         </div>
       )}
 
-      {/* Generated days list */}
-      <div className="max-h-64 overflow-y-auto border rounded p-3 bg-neutral-50">
-        <div className="space-y-2">
-          {generatedDays.map((day, idx) => {
-            const date = parseISO(day.datum);
-            const label = date.toLocaleDateString('nl-NL', {
-              weekday: 'short',
-              day: '2-digit',
-              month: 'short',
-            });
+      {/* Legend */}
+      <div className="flex gap-4 flex-wrap text-xs text-neutral-600">
+        <span className="flex items-center gap-1.5">
+          <i className="inline-block w-5 h-4 rounded border border-neutral-300 bg-white" />
+          Gewone dag
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="calendar-cell-parttime inline-block w-5 h-4 rounded" />
+          Deeltijddag (automatisch geblokkeerd)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="calendar-cell-parttime inline-block w-5 h-4 rounded ring-2 ring-amber-400" />
+          Deeltijddag rond de jaarwisseling
+        </span>
+      </div>
 
-            return (
-              <div
-                key={idx}
-                className={`flex justify-between items-center text-sm p-2 rounded
-                  ${day.is_year_boundary ? 'bg-amber-100' : 'bg-white'}`}
-              >
-                <span className="font-mono">{day.datum}</span>
-                <span className="text-neutral-600">{label}</span>
-                <span className="text-xs text-neutral-500">{day.weekdag}</span>
-              </div>
-            );
-          })}
-        </div>
+      {/* Calendar, one card per calendar month */}
+      <div className="space-y-4">
+        {monthGroups.map((group) => (
+          <div key={group.label} className="border border-neutral-200 rounded-lg p-3 bg-neutral-50/50">
+            <h4 className="text-sm font-bold text-neutral-800 mb-2 capitalize">{group.label}</h4>
+            <div className="w-full overflow-x-auto">
+              <table className="w-full border-separate" style={{ borderSpacing: '3px' }}>
+                <thead>
+                  <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
+                    <th className="w-9 text-center font-semibold pb-1">wk</th>
+                    {['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'].map((d) => (
+                      <th key={d} className="font-semibold pb-1">{d}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.weeks.map((week, weekIdx) => {
+                    const [, isoWeek] = getISOWeek(parseISO(week[0]));
+                    return (
+                      <tr key={`week-${weekIdx}`}>
+                        <td className="week-number text-center align-top pt-2">{isoWeek}</td>
+                        {week.map((datum) => {
+                          const generated = byDate.get(datum);
+                          return (
+                            <td key={datum} className="align-top p-0">
+                              <div
+                                className={`h-11 rounded-lg border flex items-start justify-center pt-1 text-xs font-semibold tabular-nums
+                                  ${generated
+                                    ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-amber-400' : ''}`
+                                    : 'border-neutral-200 bg-white text-neutral-900'}`}
+                                title={generated ? 'Deeltijddag (automatisch geblokkeerd)' : undefined}
+                              >
+                                {parseISO(datum).getDate()}
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Confirmation checkbox */}

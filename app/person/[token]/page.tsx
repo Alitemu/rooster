@@ -372,6 +372,8 @@ export default function PersonalLinkPage() {
             key={patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(',')}
             personId={personId}
             periodId={period.id}
+            periodStart={period.start_datum}
+            periodEnd={period.eind_datum}
             patterns={patterns}
             onConfirm={setParttimeConfirmed}
           />
