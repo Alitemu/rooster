@@ -22,7 +22,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { dateToISO, parseISO, getISOWeek, getHolidayInfo } from '@/lib/holidays';
+import { dateToISO, parseISO, getISOWeek, getHolidayInfo, addDays } from '@/lib/holidays';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | null;
 
@@ -269,9 +269,12 @@ export function PreferencesCalendar({
 
   const startDate = parseISO(allDates[0]);
   const endDate = parseISO(allDates[allDates.length - 1]);
-  const totalWeeks = Math.ceil(
-    (endDate.getTime() - startDate.getTime()) / (7 * 24 * 60 * 60 * 1000) + 1
-  );
+  // Inclusive day count first, then divide - not (days / 7) + 1, which
+  // over-counts by a full week (e.g. a real 22-week, 154-day period came
+  // out as 23) and pushed the period's real last day into a spare row
+  // under the wrong weekday column.
+  const totalDays = Math.round((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  const totalWeeks = Math.ceil(totalDays / 7);
   let currentDate = new Date(startDate);
 
   while (weeks.length < totalWeeks) {
@@ -355,8 +358,12 @@ export function PreferencesCalendar({
           Parttime dag
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="holiday-slot inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">★</i>
-          Feestdag
+          <i className="weekend-slot inline-block w-5 h-4 rounded" />
+          Weekend
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="holiday-slot inline-block w-5 h-4 rounded" />
+          Feestdag (naam in het vakje)
         </span>
       </div>
 
@@ -384,8 +391,14 @@ export function PreferencesCalendar({
                       {week.map((datum, dayIdx) => {
                         const dayPref = preferences.get(datum);
                         const isSaturday = dayIdx === 5;
+                        const isSunday = dayIdx === 6;
+                        const isWeekendDay = isSaturday || isSunday;
                         const cov = coverage.get(datum);
                         const holiday = getHolidayInfo(datum);
+                        // Feestdag wins over weekend when a date is both
+                        // (e.g. a Sunday that's also Eerste Paasdag) - same
+                        // priority the server already assigns a slot's
+                        // teller by (lib/slotPersistence.ts).
                         const tag = holiday ? holiday.name : WEEKDAY_TAG[dayIdx];
                         const ratio = cov && cov.total_in_pool > 0 ? cov.available / cov.total_in_pool : 1;
 
@@ -393,7 +406,7 @@ export function PreferencesCalendar({
                           <td key={datum} className="align-top p-0">
                             <div
                               className={`relative min-h-[92px] rounded-lg border p-1.5 pt-1
-                                ${holiday ? 'holiday-slot' : 'border-neutral-200 bg-white'}`}
+                                ${holiday ? 'holiday-slot' : isWeekendDay ? 'weekend-slot' : 'border-neutral-200 bg-white'}`}
                             >
                               <div className="flex items-start justify-between gap-1">
                                 <span className="text-xs font-semibold tabular-nums">
@@ -401,7 +414,7 @@ export function PreferencesCalendar({
                                 </span>
                                 {tag && (
                                   <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate max-w-[46px]" title={tag}>
-                                    {holiday ? '★' : tag}
+                                    {tag}
                                   </span>
                                 )}
                               </div>
@@ -448,9 +461,9 @@ export function PreferencesCalendar({
                                 })}
                               </div>
 
-                              {isSaturday && (
+                              {isWeekendDay && (
                                 <button
-                                  onClick={() => handleBlockWeekend(datum)}
+                                  onClick={() => handleBlockWeekend(isSaturday ? datum : addDays(datum, -1))}
                                   disabled={isSaving}
                                   className="absolute top-0.5 right-0.5 text-[8px] font-bold px-1 py-0.5 rounded
                                     bg-neutral-200 hover:bg-neutral-300 text-neutral-700 transition-colors

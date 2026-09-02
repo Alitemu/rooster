@@ -178,6 +178,29 @@ describe('holidays.ts', () => {
       expect(parsed.getMonth()).toBe(0); // January
       expect(parsed.getDate()).toBe(15);
     });
+
+    it('dateToISO must not shift the date in a non-UTC timezone', () => {
+      // Reads the LOCAL calendar date - not toISOString()'s UTC one. This
+      // module runs both server-side (a UTC container, where the bug this
+      // proves was invisible) and client-side, in the browser's actual
+      // local timezone (Europe/Amsterdam for this app's real users, always
+      // ahead of UTC) - a UTC conversion of a local-midnight Date silently
+      // rolls it back a day there. Compounded with a second bug in the
+      // preferences calendar's own week-count, a real date could land
+      // under the wrong weekday column entirely (reported live: the
+      // period's actual last day, a Sunday, rendered under Monday).
+      const original = process.env.TZ;
+      process.env.TZ = 'Europe/Amsterdam';
+      try {
+        const winter = new Date(2027, 0, 4, 0, 0, 0, 0); // Jan 4 - CET, UTC+1
+        expect(dateToISO(winter)).toBe('2027-01-04');
+
+        const summer = new Date(2027, 5, 6, 0, 0, 0, 0); // Jun 6 - CEST, UTC+2
+        expect(dateToISO(summer)).toBe('2027-06-06');
+      } finally {
+        process.env.TZ = original;
+      }
+    });
   });
 
   describe('Holiday queries', () => {

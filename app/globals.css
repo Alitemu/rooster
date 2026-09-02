@@ -107,6 +107,15 @@
   @apply bg-purple-100 border-purple-300 text-purple-900 font-semibold;
 }
 
+/* Weekend day styling - feestdag (.holiday-slot above) always takes
+   priority when a day is both, so this only ever applies to a plain
+   Saturday/Sunday. Sky rather than the parttime state's blue-50/blue-300
+   (see .calendar-cell-parttime), so a locked part-time cell sitting
+   inside a weekend day stays visually distinct from its own container. */
+.weekend-slot {
+  @apply bg-sky-50 border-sky-300;
+}
+
 /* Week number styling */
 .week-number {
   @apply text-xs font-semibold text-neutral-500 block mb-1;

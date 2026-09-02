@@ -254,9 +254,24 @@ export function getWeeksInYear(year: number): number {
 
 /**
  * Convert JavaScript Date to ISO string (YYYY-MM-DD)
+ *
+ * Reads the LOCAL calendar date, not toISOString()'s UTC one - every
+ * caller in this codebase constructs Date objects at local midnight
+ * (parseISO, new Date(y, m, d), .setDate() arithmetic), so a UTC
+ * conversion silently shifts the result by a day in any timezone ahead of
+ * UTC (all of them the app is meant to run in - Europe/Amsterdam is
+ * UTC+1/+2). Invisible everywhere this module runs server-side in a UTC
+ * container, but this module also runs client-side (PreferencesCalendar,
+ * AssignmentGrid), in the visitor's actual local timezone - where it
+ * previously misdated every day by one and, compounding with a second bug
+ * in the calendar's week-count, could land a real date under the wrong
+ * weekday column entirely.
  */
 export function dateToISO(date: Date): string {
-  return date.toISOString().split('T')[0];
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 /**
