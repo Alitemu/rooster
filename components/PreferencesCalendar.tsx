@@ -379,7 +379,7 @@ export function PreferencesCalendar({
         <div key={group.label} className="border border-neutral-200 rounded-lg p-3 bg-neutral-50/50">
           <h3 className="text-sm font-bold text-neutral-800 mb-2 capitalize">{group.label}</h3>
           <div className="w-full overflow-x-auto">
-            <table className="w-full border-separate" style={{ borderSpacing: '3px' }}>
+            <table className="w-full table-fixed border-separate" style={{ borderSpacing: '3px' }}>
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-neutral-500">
                   <th className="w-9 text-center font-semibold pb-1">wk</th>
