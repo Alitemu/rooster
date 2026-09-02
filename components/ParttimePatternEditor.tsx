@@ -30,6 +30,11 @@ interface Props {
   onPatternsChange: (patterns: ParttimePattern[]) => void;
 }
 
+// Full map (incl. weekend) so any pre-existing pattern still displays
+// correctly. Selectable options below are deliberately narrower: a
+// part-time pattern only ever means "I don't work this weekday" - weekend
+// shifts are their own separate WEEKEND counter, not something a part-time
+// pattern blocks.
 const WEEKDAG_LABEL: Record<string, string> = {
   MA: 'Maandag',
   DI: 'Dinsdag',
@@ -39,6 +44,8 @@ const WEEKDAG_LABEL: Record<string, string> = {
   ZA: 'Zaterdag',
   ZO: 'Zondag',
 };
+
+const WEEKDAG_OPTIONS = ['MA', 'DI', 'WO', 'DO', 'VR'];
 
 const FREQUENTIE_LABEL: Record<string, string> = {
   ELKE_WEEK: 'Elke week',
@@ -188,8 +195,8 @@ export function ParttimePatternEditor({ personId, patterns, defaultVanaf, defaul
               onChange={(e) => setForm({ ...form, weekdag: e.target.value })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
             >
-              {Object.entries(WEEKDAG_LABEL).map(([code, label]) => (
-                <option key={code} value={code}>{label}</option>
+              {WEEKDAG_OPTIONS.map((code) => (
+                <option key={code} value={code}>{WEEKDAG_LABEL[code]}</option>
               ))}
             </select>
           </div>

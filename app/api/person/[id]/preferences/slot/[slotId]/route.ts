@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { markSubmissionStarted } from '@/lib/submissionStatus';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 export async function PATCH(
@@ -39,12 +40,12 @@ export async function PATCH(
 
     // Verify slot exists and its period still accepts preference changes
     const slotStmt = db.prepare(
-      `SELECT s.id, sp.status as period_status
+      `SELECT s.id, s.period_id, sp.status as period_status
        FROM dienstrooster_shift_slot s
        JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
        WHERE s.id = ?`
     );
-    const slot = slotStmt.get(slotId) as { id: string; period_status: string } | undefined;
+    const slot = slotStmt.get(slotId) as { id: string; period_id: string; period_status: string } | undefined;
     if (!slot) {
       const response: ApiErrorResponse = {
         success: false,
@@ -87,6 +88,8 @@ export async function PATCH(
         ).run(crypto.randomUUID(), id, slotId, level, new Date().toISOString());
       }
     }
+
+    markSubmissionStarted(id, slot.period_id);
 
     const response: ApiSuccessResponse<{ updated: boolean }> = {
       success: true,

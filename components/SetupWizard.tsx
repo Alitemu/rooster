@@ -34,9 +34,12 @@ interface PeriodData {
 }
 
 interface StaffMember {
+  id: string; // pool_membership row id
   person_id: string;
   codenaam: string;
-  is_selected: boolean;
+  geldig_vanaf: string;
+  geldig_tot: string;
+  is_active: boolean; // membership covers this period's dates
   access_link?: string;
 }
 
@@ -80,6 +83,13 @@ export function SetupWizard({ period, onComplete }: Props) {
   });
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
+  const [staffError, setStaffError] = useState<string | null>(null);
+  const [newMember, setNewMember] = useState({ codenaam: '', geldig_vanaf: '', geldig_tot: '' });
+  const [addingMember, setAddingMember] = useState(false);
+  const [editingMembershipId, setEditingMembershipId] = useState<string | null>(null);
+  const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '' });
+  const [savingMembership, setSavingMembership] = useState(false);
+  const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
     windowWeeks: 2,
     band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
@@ -143,9 +153,15 @@ export function SetupWizard({ period, onComplete }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched]);
 
+  // Real pool membership (with its geldig_vanaf/geldig_tot date range) is
+  // the one source of truth for "who's active in this period" - the solver
+  // and the capacity check already read it directly. Shows every member
+  // (not just active ones) so a planner can see who's about to roll off or
+  // who hasn't started yet, not just who's currently eligible.
   const loadStaff = async () => {
     if (!periodData.pool_id) return;
     setStaffLoading(true);
+    setStaffError(null);
     try {
       const memberParams = new URLSearchParams();
       if (periodData.start_datum) memberParams.set('period_start', periodData.start_datum);
@@ -164,19 +180,108 @@ export function SetupWizard({ period, onComplete }: Props) {
       );
 
       setStaffMembers(
-        (membersData.data || [])
-          .filter((m: any) => m.is_active)
-          .map((m: any) => ({
-            person_id: m.person_id,
-            codenaam: m.codenaam,
-            is_selected: true,
-            access_link: linkedPersonIds.has(m.person_id) ? 'existing' : undefined,
-          }))
+        (membersData.data || []).map((m: any) => ({
+          id: m.id,
+          person_id: m.person_id,
+          codenaam: m.codenaam,
+          geldig_vanaf: m.geldig_vanaf,
+          geldig_tot: m.geldig_tot,
+          is_active: m.is_active,
+          access_link: linkedPersonIds.has(m.person_id) ? 'existing' : undefined,
+        }))
       );
     } catch {
-      setError('Laden van personeel mislukt');
+      setStaffError('Laden van personeel mislukt');
     } finally {
       setStaffLoading(false);
+    }
+  };
+
+  // Auto-load when the step is reached (and refresh if the pool or dates
+  // change under it) - matches the window step's capacity check, which
+  // loads itself rather than requiring a manual button.
+  useEffect(() => {
+    if (currentStep !== 'staff' || !periodData.pool_id) return;
+    loadStaff();
+    setNewMember((prev) => ({
+      ...prev,
+      geldig_vanaf: prev.geldig_vanaf || periodData.start_datum,
+      geldig_tot: prev.geldig_tot || periodData.eind_datum,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, periodData.pool_id]);
+
+  const handleAddMember = async () => {
+    if (!newMember.codenaam.trim() || !newMember.geldig_vanaf || !newMember.geldig_tot) {
+      setStaffError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
+      return;
+    }
+    setAddingMember(true);
+    setStaffError(null);
+    try {
+      const res = await fetch(`/api/planner/pool/${periodData.pool_id}/members`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newMember),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
+
+      setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum });
+      await loadStaff();
+    } catch (err) {
+      setStaffError(err instanceof Error ? err.message : 'Toevoegen mislukt');
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
+  const startEditMembership = (member: StaffMember) => {
+    setStaffError(null);
+    setEditingMembershipId(member.id);
+    setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot });
+  };
+
+  const handleSaveMembership = async (membershipId: string) => {
+    setSavingMembership(true);
+    setStaffError(null);
+    try {
+      const res = await fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editDates),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Opslaan mislukt');
+
+      setEditingMembershipId(null);
+      await loadStaff();
+    } catch (err) {
+      setStaffError(err instanceof Error ? err.message : 'Opslaan mislukt');
+    } finally {
+      setSavingMembership(false);
+    }
+  };
+
+  const handleRemoveMembership = async (membershipId: string) => {
+    if (removingMembershipId !== membershipId) {
+      // First click arms the confirmation instead of deleting immediately.
+      setRemovingMembershipId(membershipId);
+      return;
+    }
+    setStaffError(null);
+    try {
+      const res = await fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
+
+      await loadStaff();
+    } catch (err) {
+      setStaffError(err instanceof Error ? err.message : 'Verwijderen mislukt');
+    } finally {
+      setRemovingMembershipId(null);
     }
   };
 
@@ -237,8 +342,11 @@ export function SetupWizard({ period, onComplete }: Props) {
       const openData = await openRes.json();
       if (!openRes.ok) throw new Error(openData.error?.message || 'Openen van periode mislukt');
 
-      // Create access links for selected staff who don't already have one
-      const toLink = staffMembers.filter((m) => m.is_selected && !m.access_link);
+      // Invite everyone whose pool membership actually covers this period -
+      // that's the same list the solver and capacity check already use, so
+      // an invitation never goes to (or skips) someone differently than who
+      // actually ends up eligible for the roster.
+      const toLink = staffMembers.filter((m) => m.is_active && !m.access_link);
       for (const member of toLink) {
         await fetch(`/api/planner/period/${period.id}/staff-links`, {
           method: 'POST',
@@ -411,77 +519,173 @@ export function SetupWizard({ period, onComplete }: Props) {
         {/* Step 2: Staff Members */}
         {currentStep === 'staff' && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-neutral-600">
-                Selecteer het personeel dat een uitnodiging voor voorkeuren krijgt voor deze periode.
-              </p>
-              <button
-                onClick={loadStaff}
-                disabled={staffLoading}
-                className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
-              >
-                {staffLoading ? 'Bezig met laden...' : 'Personeel laden uit pool'}
-              </button>
-            </div>
+            <p className="text-sm text-neutral-600">
+              Iedereen die hieronder actief staat voor deze periode (op basis van geldig
+              vanaf/tot) doet mee in het rooster en krijgt bij het openen een uitnodiging.
+              Pas de datums aan voor start/einde contract of een tijdelijke pauze, of voeg iemand
+              nieuw toe.
+            </p>
 
-            <div className="border rounded overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-neutral-100">
-                  <tr>
-                    <th className="px-4 py-2 text-left text-sm font-medium">
-                      <input
-                        type="checkbox"
-                        className="rounded"
-                        checked={staffMembers.length > 0 && staffMembers.every((m) => m.is_selected)}
-                        onChange={(e) =>
-                          setStaffMembers(staffMembers.map((m) => ({ ...m, is_selected: e.target.checked })))
-                        }
-                      />
-                    </th>
-                    <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
-                    <th className="px-4 py-2 text-left text-sm font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {staffMembers.map((member) => (
-                    <tr key={member.person_id} className="hover:bg-neutral-50">
-                      <td className="px-4 py-2">
-                        <input
-                          type="checkbox"
-                          checked={member.is_selected}
-                          onChange={(e) => {
-                            setStaffMembers(
-                              staffMembers.map((m) =>
-                                m.person_id === member.person_id
-                                  ? { ...m, is_selected: e.target.checked }
-                                  : m
-                              )
-                            );
-                          }}
-                          className="rounded"
-                        />
-                      </td>
-                      <td className="px-4 py-2 text-sm">{member.codenaam}</td>
-                      <td className="px-4 py-2 text-sm">
-                        {member.access_link ? (
-                          <span className="text-green-600 font-medium">✓ Heeft al toegang</span>
-                        ) : member.is_selected ? (
-                          <span className="text-blue-600">Wordt uitgenodigd bij openen</span>
-                        ) : (
-                          <span className="text-neutral-500">Niet geselecteerd</span>
-                        )}
-                      </td>
+            {staffError && (
+              <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
+            )}
+
+            {staffLoading ? (
+              <div className="border rounded p-4 text-sm text-neutral-600 text-center">Personeel laden...</div>
+            ) : (
+              <div className="border rounded overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-neutral-100">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium">Actief in deze periode</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium">Geldig vanaf</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium">Geldig tot</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium">Toegang</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium"></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {staffMembers.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
-                Nog geen personeel geladen. Laad de pool om verder te gaan.
+                  </thead>
+                  <tbody className="divide-y">
+                    {staffMembers.map((member) => {
+                      const isEditing = editingMembershipId === member.id;
+                      return (
+                        <tr key={member.id} className="hover:bg-neutral-50">
+                          <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
+                          <td className="px-4 py-2 text-sm">
+                            {member.is_active ? (
+                              <span className="text-green-600 font-medium">✓ Actief</span>
+                            ) : (
+                              <span className="text-neutral-500">Niet actief</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-sm">
+                            {isEditing ? (
+                              <input
+                                type="date"
+                                value={editDates.geldig_vanaf}
+                                onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
+                                className="px-2 py-1 border rounded text-sm w-36"
+                              />
+                            ) : (
+                              member.geldig_vanaf
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-sm">
+                            {isEditing ? (
+                              <input
+                                type="date"
+                                value={editDates.geldig_tot}
+                                onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
+                                className="px-2 py-1 border rounded text-sm w-36"
+                              />
+                            ) : (
+                              member.geldig_tot
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-sm">
+                            {member.access_link ? (
+                              <span className="text-green-600 font-medium">✓ Heeft al toegang</span>
+                            ) : member.is_active ? (
+                              <span className="text-blue-600">Wordt uitgenodigd bij openen</span>
+                            ) : (
+                              <span className="text-neutral-500">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-sm whitespace-nowrap">
+                            {isEditing ? (
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => handleSaveMembership(member.id)}
+                                  disabled={savingMembership}
+                                  className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                                >
+                                  {savingMembership ? 'Bezig…' : 'Opslaan'}
+                                </button>
+                                <button
+                                  onClick={() => setEditingMembershipId(null)}
+                                  className="text-xs font-medium text-neutral-600 hover:text-neutral-800"
+                                >
+                                  Annuleren
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-3">
+                                <button
+                                  onClick={() => startEditMembership(member)}
+                                  className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                                >
+                                  Bewerken
+                                </button>
+                                <button
+                                  onClick={() => handleRemoveMembership(member.id)}
+                                  className="text-xs font-medium text-red-600 hover:text-red-800"
+                                >
+                                  {removingMembershipId === member.id ? 'Zeker weten?' : 'Verwijderen'}
+                                </button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {staffMembers.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-500">
+                          Nog niemand in deze pool. Voeg hieronder iemand toe.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             )}
+
+            <div className="border-t border-neutral-200 pt-4 space-y-3">
+              <p className="text-sm font-medium text-neutral-800">Nieuw personeelslid toevoegen</p>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
+                  <input
+                    type="text"
+                    value={newMember.codenaam}
+                    onChange={(e) => setNewMember({ ...newMember, codenaam: e.target.value })}
+                    placeholder="bijv. Persoon-31"
+                    className="w-full px-2 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig vanaf</label>
+                  <input
+                    type="date"
+                    value={newMember.geldig_vanaf}
+                    onChange={(e) => setNewMember({ ...newMember, geldig_vanaf: e.target.value })}
+                    className="w-full px-2 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig tot</label>
+                  <input
+                    type="date"
+                    value={newMember.geldig_tot}
+                    onChange={(e) => setNewMember({ ...newMember, geldig_tot: e.target.value })}
+                    className="w-full px-2 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleAddMember}
+                    disabled={addingMember}
+                    className="w-full px-3 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
+                  >
+                    {addingMember ? 'Bezig…' : 'Toevoegen'}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-neutral-500">
+                Bestaat de codenaam al (bijv. iemand die eerder in een andere pool zat), dan wordt
+                die persoon hergebruikt in plaats van dubbel aangemaakt.
+              </p>
+            </div>
           </div>
         )}
 
@@ -492,7 +696,7 @@ export function SetupWizard({ period, onComplete }: Props) {
               <label className="block text-sm font-medium mb-1">Venster (weken tussen diensten)</label>
               <input
                 type="number"
-                min="1"
+                min="0"
                 max="8"
                 value={windowConfig.windowWeeks}
                 onChange={(e) =>
@@ -634,7 +838,8 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'balances' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Upload een CSV-bestand met beginsaldi uit de vorige periode. Formaat:
+              Upload een CSV-bestand met beginsaldi uit de vorige periode: hoeveel diensten iemand
+              per diensttype meer of minder heeft gedraaid dan zijn streefaantal. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,AVOND_delta,WEEKEND_delta,FEESTDAG_delta
@@ -643,6 +848,11 @@ export function SetupWizard({ period, onComplete }: Props) {
               <br />
               Persoon-02,0,+2,-1
             </div>
+            <p className="text-xs text-neutral-500 italic">
+              &quot;FEESTDAG_delta&quot; is hier het saldo van het diensttype feestdagdienst (een
+              getal), niet de naam van een specifieke feestdag - welke feestdag iemand wanneer
+              heeft gedraaid stel je hierna in bij stap 6. Feestdagen.
+            </p>
 
             <div className="border-2 border-dashed rounded p-6 text-center">
               <p className="text-sm text-neutral-600 mb-2">Sleep een CSV hierheen of klik om te selecteren</p>
@@ -675,15 +885,30 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'holidays' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Upload de feestdagrotatie-geschiedenis. Formaat:
+              Losstaand van de beginsaldi hierboven: geef per persoon aan welke feestdag hij/zij in
+              welk jaar heeft gedraaid, zodat de feestdagrotatie eerlijk verdeeld blijft. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,holiday_group,year
               <br />
-              Persoon-01,KERST,2025
+              Persoon-01,NIEUWJAAR,2025
               <br />
-              Persoon-02,PASEN,2026
+              Persoon-02,PASEN,2025
+              <br />
+              Persoon-03,KONINGSDAG,2025
+              <br />
+              Persoon-04,BEVRIJDINGSDAG,2025
+              <br />
+              Persoon-05,HEMELVAART,2026
+              <br />
+              Persoon-06,PINKSTEREN,2026
+              <br />
+              Persoon-07,KERST,2026
             </div>
+            <p className="text-xs text-neutral-500 italic">
+              Geldige waarden voor holiday_group: NIEUWJAAR, PASEN, KONINGSDAG, BEVRIJDINGSDAG,
+              HEMELVAART, PINKSTEREN, KERST.
+            </p>
 
             <div className="border-2 border-dashed rounded p-6 text-center">
               <p className="text-sm text-neutral-600 mb-2">Sleep een CSV hierheen of klik om te selecteren</p>
@@ -725,7 +950,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Deadline:</strong> {periodData.deadline}
                 </p>
                 <p>
-                  <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_selected).length} geselecteerd
+                  <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_active).length} actief in deze periode
                 </p>
                 <p>
                   <strong>Venster:</strong> {windowConfig.windowWeeks} weken

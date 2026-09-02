@@ -29,6 +29,13 @@ const WEEKDAG_TO_JS_DAY: Record<Weekdag, number> = {
   ZA: 6,
 };
 
+// A part-time pattern only ever means "I don't work this weekday" - the
+// weekend shift counter (WEEKEND) is separate, so ZA/ZO are excluded from
+// what a new/edited pattern may target even though the type above (and the
+// matching logic) still has to understand them for any pattern that
+// predates this rule.
+export const PARTTIME_WEEKDAGEN: Weekdag[] = ['MA', 'DI', 'WO', 'DO', 'VR'];
+
 export interface ParttimePatternRow {
   id: string;
   person_id: string;
@@ -141,7 +148,7 @@ function reconcilePatternForPeriod(pattern: ParttimePatternRow, periodId: string
   };
 }
 
-function getOpenPeriodsForPerson(personId: string): string[] {
+export function getOpenPeriodsForPerson(personId: string): string[] {
   const rows = db
     .prepare(
       `SELECT sp.id

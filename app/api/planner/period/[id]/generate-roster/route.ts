@@ -201,7 +201,10 @@ export async function POST(
       person_preferences: personPreferences,
       people,
       rules: {
-        window_weeks: (config.windowWeeks as number) || 2,
+        // `|| 2` would silently replace an explicit 0 (no minimum gap
+        // between shifts, a valid planner choice) with 2 - only fall back
+        // when the value is genuinely absent.
+        window_weeks: typeof config.windowWeeks === 'number' ? config.windowWeeks : 2,
         band_avond: bands.AVOND,
         band_weekend: bands.WEEKEND,
         band_feestdag: bands.FEESTDAG,

@@ -225,7 +225,10 @@ export function PartTimeCheckStep({
         ))}
       </div>
 
-      {/* Confirmation checkbox */}
+      {/* Confirmation checkbox - wording depends on whether there's
+          actually anything to check, so "geen deeltijdpatroon" doesn't have
+          to be confirmed with a sentence about checking a calendar that's
+          empty. */}
       <label className="flex items-start gap-3 cursor-pointer">
         <input
           type="checkbox"
@@ -235,8 +238,14 @@ export function PartTimeCheckStep({
                      focus:ring-blue-500 cursor-pointer"
         />
         <span className="text-sm text-neutral-700">
-          Ik heb de deeltijddagen hierboven gecontroleerd en bevestig dat ze kloppen.
-          Ik begrijp dat weeknummers kunnen verschillen bij werken rond de jaarwisseling.
+          {patterns.length === 0 ? (
+            'Ik heb geen deeltijddagen - ik werk het volledige rooster.'
+          ) : (
+            <>
+              Ik heb de deeltijddagen hierboven gecontroleerd en bevestig dat ze kloppen.
+              Ik begrijp dat weeknummers kunnen verschillen bij werken rond de jaarwisseling.
+            </>
+          )}
         </span>
       </label>
 

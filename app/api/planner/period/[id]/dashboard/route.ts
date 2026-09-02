@@ -64,7 +64,7 @@ export async function GET(
     // Get submission stats
     const statsStmt = db.prepare(`
       SELECT
-        COUNT(CASE WHEN s.status IS NULL THEN 1 END) as not_started,
+        COUNT(CASE WHEN s.status IS NULL OR s.status = 'NIET_BEGONNEN' THEN 1 END) as not_started,
         COUNT(CASE WHEN s.status = 'BEZIG' THEN 1 END) as in_progress,
         COUNT(CASE WHEN s.status = 'BEVESTIGD' THEN 1 END) as confirmed
       FROM dienstrooster_person p

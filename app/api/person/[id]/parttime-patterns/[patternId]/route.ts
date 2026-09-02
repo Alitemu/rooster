@@ -9,7 +9,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
-import { syncAvailabilityForPattern, removePatternAvailability } from '@/lib/parttimeSync';
+import {
+  syncAvailabilityForPattern,
+  removePatternAvailability,
+  getOpenPeriodsForPerson,
+  PARTTIME_WEEKDAGEN,
+} from '@/lib/parttimeSync';
+import { markSubmissionStarted } from '@/lib/submissionStatus';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePatternRequest {
@@ -61,6 +67,17 @@ export async function PATCH(
       return NextResponse.json(response, { status: 404 });
     }
 
+    if (body.weekdag && !PARTTIME_WEEKDAGEN.includes(body.weekdag as any)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'INVALID_WEEKDAG',
+          message: 'Een deeltijdpatroon geldt alleen voor doordeweekse dagen (maandag t/m vrijdag)',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Update fields
     const updates: Record<string, any> = {};
     if (body.weekdag) updates.weekdag = body.weekdag;
@@ -92,6 +109,10 @@ export async function PATCH(
     });
 
     const syncResult = updateAndSync();
+
+    for (const periodId of getOpenPeriodsForPerson(id)) {
+      markSubmissionStarted(id, periodId);
+    }
 
     const response: ApiSuccessResponse<{ updated: boolean; availability_generated: number }> = {
       success: true,
@@ -162,6 +183,10 @@ export async function DELETE(
         error: { code: 'PATTERN_NOT_FOUND', message: `Pattern ${patternId} not found` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    for (const periodId of getOpenPeriodsForPerson(id)) {
+      markSubmissionStarted(id, periodId);
     }
 
     const response: ApiSuccessResponse<{ deleted: boolean }> = {

@@ -249,7 +249,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                 <tr key={person.person_id} className="hover:bg-neutral-50">
                   <td className="px-3 py-2 font-medium">{person.codenaam}</td>
                   <td className="px-3 py-2">
-                    {!person.submission_status ? (
+                    {!person.submission_status || person.submission_status === 'NIET_BEGONNEN' ? (
                       <span className="inline-block px-2 py-1 rounded-full text-xs bg-red-100 text-red-800">
                         Niet begonnen
                       </span>
@@ -272,7 +272,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-center">
-                    {!person.submission_status && (
+                    {(!person.submission_status || person.submission_status === 'NIET_BEGONNEN') && (
                       <button
                         onClick={() => handleSubmitOnBehalf(person.person_id)}
                         disabled={submittingFor === person.person_id}

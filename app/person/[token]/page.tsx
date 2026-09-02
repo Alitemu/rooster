@@ -77,7 +77,7 @@ export default function PersonalLinkPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState<Step>('calendar');
+  const [currentStep, setCurrentStep] = useState<Step>('parttime');
   const [personId, setPersonId] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period | null>(null);
   const [patterns, setPatterns] = useState<ParttimePattern[]>([]);
@@ -286,7 +286,7 @@ export default function PersonalLinkPage() {
       {/* Pre-published: Step indicator and preferences entry */}
       {period.status !== 'GEPUBLICEERD' && (
         <div className="flex gap-2 justify-center">
-          {(['calendar', 'parttime', 'confirmation', 'submitted'] as const).map((step) => (
+          {(['parttime', 'calendar', 'confirmation', 'submitted'] as const).map((step) => (
             <button
               key={step}
               onClick={() => step !== 'submitted' && setCurrentStep(step)}
@@ -344,25 +344,10 @@ export default function PersonalLinkPage() {
         />
       )}
 
-      {period.status !== 'GEPUBLICEERD' && currentStep === 'calendar' && (
-        <div className="space-y-4">
-          <PreferencesCalendar
-            personId={personId}
-            periodId={period.id}
-            onPreferencesChange={setPreferencesChanged}
-            onCoverageUpdate={() => {}}
-          />
-          <button
-            onClick={() => setCurrentStep('parttime')}
-            className="w-full py-3 px-4 rounded font-semibold bg-blue-600
-                       text-white hover:bg-blue-700 active:bg-blue-800
-                       transition-colors"
-          >
-            Volgende: deeltijddagen controleren
-          </button>
-        </div>
-      )}
-
+      {/* Deeltijddagen komen eerst: welke dagen automatisch geblokkeerd
+          worden staat dan al vast voordat je de voorkeurenkalender ziet,
+          in plaats van dat je halverwege moet terugspringen om dat nog te
+          controleren. */}
       {period.status !== 'GEPUBLICEERD' && currentStep === 'parttime' && (
         <div className="space-y-4">
           <ParttimePatternEditor
@@ -389,9 +374,31 @@ export default function PersonalLinkPage() {
             patterns={patterns}
             onConfirm={setParttimeConfirmed}
           />
+          <button
+            onClick={() => setCurrentStep('calendar')}
+            disabled={!parttimeConfirmed}
+            className={`w-full py-3 px-4 rounded font-semibold text-white
+              transition-colors
+              ${parttimeConfirmed
+                ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
+                : 'bg-neutral-400 cursor-not-allowed'}`}
+          >
+            Volgende: voorkeuren opgeven
+          </button>
+        </div>
+      )}
+
+      {period.status !== 'GEPUBLICEERD' && currentStep === 'calendar' && (
+        <div className="space-y-4">
+          <PreferencesCalendar
+            personId={personId}
+            periodId={period.id}
+            onPreferencesChange={setPreferencesChanged}
+            onCoverageUpdate={() => {}}
+          />
           <div className="flex gap-3">
             <button
-              onClick={() => setCurrentStep('calendar')}
+              onClick={() => setCurrentStep('parttime')}
               className="flex-1 py-3 px-4 rounded font-semibold bg-neutral-200
                          text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
@@ -399,12 +406,9 @@ export default function PersonalLinkPage() {
             </button>
             <button
               onClick={() => setCurrentStep('confirmation')}
-              disabled={!parttimeConfirmed}
-              className={`flex-1 py-3 px-4 rounded font-semibold text-white
-                transition-colors
-                ${parttimeConfirmed
-                  ? 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
-                  : 'bg-neutral-400 cursor-not-allowed'}`}
+              className="flex-1 py-3 px-4 rounded font-semibold bg-blue-600
+                         text-white hover:bg-blue-700 active:bg-blue-800
+                         transition-colors"
             >
               Volgende: bevestigen
             </button>
@@ -423,7 +427,7 @@ export default function PersonalLinkPage() {
             onSubmit={handleSubmitSuccess}
           />
           <button
-            onClick={() => setCurrentStep('parttime')}
+            onClick={() => setCurrentStep('calendar')}
             className="w-full py-3 px-4 rounded font-semibold bg-neutral-200
                        text-neutral-900 hover:bg-neutral-300 transition-colors"
           >

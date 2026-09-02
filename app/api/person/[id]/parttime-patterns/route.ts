@@ -11,7 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
-import { syncAvailabilityForPattern } from '@/lib/parttimeSync';
+import { syncAvailabilityForPattern, getOpenPeriodsForPerson, PARTTIME_WEEKDAGEN } from '@/lib/parttimeSync';
+import { markSubmissionStarted } from '@/lib/submissionStatus';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ParttimePattern {
@@ -113,13 +114,12 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const validWeekdagen = ['MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO'];
-    if (!validWeekdagen.includes(weekdag)) {
+    if (!PARTTIME_WEEKDAGEN.includes(weekdag as any)) {
       const response: ApiErrorResponse = {
         success: false,
         error: {
           code: 'INVALID_WEEKDAG',
-          message: `Invalid weekdag: ${weekdag}`,
+          message: 'Een deeltijdpatroon geldt alleen voor doordeweekse dagen (maandag t/m vrijdag)',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -172,6 +172,10 @@ export async function POST(
     });
 
     const syncResult = createAndSync();
+
+    for (const periodId of getOpenPeriodsForPerson(id)) {
+      markSubmissionStarted(id, periodId);
+    }
 
     const createdPattern: ParttimePattern = {
       id: patternId,

@@ -86,7 +86,10 @@ export async function GET(
     if (rulesetRow?.bevroren_ruleset_json) {
       try {
         const config = JSON.parse(rulesetRow.bevroren_ruleset_json);
-        windowWeeks = config.windowWeeks || 7;
+        // `|| 7` would silently replace an explicit 0 (no minimum gap
+        // between shifts, a valid planner choice) with 7 - only fall back
+        // when the value is genuinely absent.
+        windowWeeks = typeof config.windowWeeks === 'number' ? config.windowWeeks : 7;
       } catch (e) {
         // Fallback to default if JSON parse fails
       }
@@ -98,7 +101,7 @@ export async function GET(
     const windowWeeksOverride = req.nextUrl.searchParams.get('window_weeks');
     if (windowWeeksOverride) {
       const parsed = parseInt(windowWeeksOverride, 10);
-      if (!isNaN(parsed) && parsed > 0) windowWeeks = parsed;
+      if (!isNaN(parsed) && parsed >= 0) windowWeeks = parsed;
     }
     const startDatumOverride = req.nextUrl.searchParams.get('start_datum');
     const eindDatumOverride = req.nextUrl.searchParams.get('eind_datum');
