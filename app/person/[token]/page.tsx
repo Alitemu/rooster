@@ -385,6 +385,7 @@ export default function PersonalLinkPage() {
             periodId={period.id}
             periodStart={period.start_datum}
             periodEnd={period.eind_datum}
+            periodStatus={period.status}
             patterns={patterns}
             onConfirm={setParttimeConfirmed}
           />

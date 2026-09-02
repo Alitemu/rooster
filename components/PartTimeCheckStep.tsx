@@ -39,11 +39,20 @@ interface Props {
   periodId: string;
   periodStart: string;
   periodEnd: string;
+  periodStatus?: string;
   patterns: ParttimePattern[];
   onConfirm?: (confirmed: boolean) => void;
 }
 
-export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, patterns, onConfirm }: Props) {
+export function PartTimeCheckStep({
+  personId,
+  periodId,
+  periodStart,
+  periodEnd,
+  periodStatus,
+  patterns,
+  onConfirm,
+}: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -117,7 +126,17 @@ export function PartTimeCheckStep({ personId, periodId, periodStart, periodEnd, 
         </p>
       </div>
 
-      {generatedDays.length === 0 && (
+      {generatedDays.length === 0 && patterns.length > 0 && periodStatus && periodStatus !== 'OPEN' && (
+        <div className="bg-amber-50 border border-amber-200 rounded p-3">
+          <p className="text-sm text-amber-900">
+            Deze periode is nog niet geopend door de planner. Je deeltijdpatroon is opgeslagen en
+            wordt automatisch omgezet naar geblokkeerde dagen zodra de planner de periode opent - je
+            hoeft dan niets opnieuw in te voeren.
+          </p>
+        </div>
+      )}
+
+      {generatedDays.length === 0 && (patterns.length === 0 || !periodStatus || periodStatus === 'OPEN') && (
         <p className="text-sm text-neutral-600">
           {patterns.length === 0
             ? 'Geen deeltijdpatronen ingesteld.'
