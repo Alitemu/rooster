@@ -58,7 +58,6 @@ interface BalanceRow {
   codenaam: string;
   AVOND_delta: number;
   WEEKEND_delta: number;
-  FEESTDAG_delta: number;
 }
 
 interface HolidayRow {
@@ -90,6 +89,8 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '' });
   const [savingMembership, setSavingMembership] = useState(false);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
+  const [togglingMembershipId, setTogglingMembershipId] = useState<string | null>(null);
+  const [bulkActivating, setBulkActivating] = useState(false);
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
     windowWeeks: 2,
     band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
@@ -285,6 +286,83 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
   };
 
+  // Membership is_active is purely date-range-based (geldig_vanaf/tot
+  // overlapping the period), so "activating" someone for this period just
+  // means widening their range to cover it, and "deactivating" means
+  // ending (or delaying the start of) their membership around it - there's
+  // no separate flag to flip.
+  const addDays = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().split('T')[0];
+  };
+
+  const computeActivationPatch = (
+    member: StaffMember,
+    activate: boolean
+  ): { geldig_vanaf?: string; geldig_tot?: string } | null => {
+    const { start_datum, eind_datum } = periodData;
+    if (activate) {
+      const patch: { geldig_vanaf?: string; geldig_tot?: string } = {};
+      if (member.geldig_vanaf > start_datum) patch.geldig_vanaf = start_datum;
+      if (member.geldig_tot && member.geldig_tot < eind_datum) patch.geldig_tot = eind_datum;
+      return Object.keys(patch).length > 0 ? patch : null;
+    }
+    // Deactivate: end the membership just before this period starts, or if
+    // it was due to start during/after this period, push the start past it.
+    if (member.geldig_vanaf <= start_datum) {
+      return { geldig_tot: addDays(start_datum, -1) };
+    }
+    return { geldig_vanaf: addDays(eind_datum, 1) };
+  };
+
+  const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }) =>
+    fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+
+  const handleToggleActive = async (member: StaffMember) => {
+    const patch = computeActivationPatch(member, !member.is_active);
+    if (!patch) return;
+    setTogglingMembershipId(member.id);
+    setStaffError(null);
+    try {
+      const res = await patchMembership(member.id, patch);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Bijwerken mislukt');
+      await loadStaff();
+    } catch (err) {
+      setStaffError(err instanceof Error ? err.message : 'Bijwerken mislukt');
+    } finally {
+      setTogglingMembershipId(null);
+    }
+  };
+
+  const handleActivateAll = async () => {
+    const inactive = staffMembers.filter((m) => !m.is_active);
+    if (inactive.length === 0) return;
+    setBulkActivating(true);
+    setStaffError(null);
+    try {
+      const results = await Promise.all(
+        inactive.map((member) => {
+          const patch = computeActivationPatch(member, true);
+          return patch ? patchMembership(member.id, patch) : Promise.resolve(null);
+        })
+      );
+      if (results.some((r) => r && !r.ok)) {
+        setStaffError('Niet iedereen kon geactiveerd worden');
+      }
+      await loadStaff();
+    } catch {
+      setStaffError('Niet iedereen kon geactiveerd worden');
+    } finally {
+      setBulkActivating(false);
+    }
+  };
+
   const parseCsv = (text: string): string[][] => {
     return text
       .split(/\r?\n/)
@@ -296,11 +374,10 @@ export function SetupWizard({ period, onComplete }: Props) {
   const handleBalancesFile = async (file: File) => {
     const text = await file.text();
     const [, ...dataLines] = parseCsv(text); // skip header row
-    const rows: BalanceRow[] = dataLines.map(([codenaam, avond, weekend, feestdag]) => ({
+    const rows: BalanceRow[] = dataLines.map(([codenaam, avond, weekend]) => ({
       codenaam,
       AVOND_delta: parseInt(avond) || 0,
       WEEKEND_delta: parseInt(weekend) || 0,
-      FEESTDAG_delta: parseInt(feestdag) || 0,
     }));
     setBalanceRows(rows);
   };
@@ -512,8 +589,6 @@ export function SetupWizard({ period, onComplete }: Props) {
                 Personeel moet vóór dit tijdstip hun voorkeuren indienen
               </p>
             </div>
-
-            {error && <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{error}</div>}
           </div>
         )}
 
@@ -529,6 +604,18 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             {staffError && (
               <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
+            )}
+
+            {!staffLoading && staffMembers.some((m) => !m.is_active) && (
+              <button
+                onClick={handleActivateAll}
+                disabled={bulkActivating}
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+              >
+                {bulkActivating
+                  ? 'Bezig met activeren...'
+                  : `Activeer alle ${staffMembers.filter((m) => !m.is_active).length} niet-actieve leden voor deze periode`}
+              </button>
             )}
 
             {staffLoading ? (
@@ -553,11 +640,22 @@ export function SetupWizard({ period, onComplete }: Props) {
                         <tr key={member.id} className="hover:bg-neutral-50">
                           <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
                           <td className="px-4 py-2 text-sm">
-                            {member.is_active ? (
-                              <span className="text-green-600 font-medium">✓ Actief</span>
-                            ) : (
-                              <span className="text-neutral-500">Niet actief</span>
-                            )}
+                            <label className="inline-flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={member.is_active}
+                                disabled={togglingMembershipId === member.id}
+                                onChange={() => handleToggleActive(member)}
+                                className="rounded"
+                              />
+                              <span className={member.is_active ? 'text-green-600 font-medium' : 'text-neutral-500'}>
+                                {togglingMembershipId === member.id
+                                  ? 'Bezig…'
+                                  : member.is_active
+                                    ? 'Actief'
+                                    : 'Niet actief'}
+                              </span>
+                            </label>
                           </td>
                           <td className="px-4 py-2 text-sm">
                             {isEditing ? (
@@ -843,15 +941,14 @@ export function SetupWizard({ period, onComplete }: Props) {
               per diensttype meer of minder heeft gedraaid dan zijn streefaantal. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
-              codenaam,AVOND_delta,WEEKEND_delta,FEESTDAG_delta
+              codenaam,AVOND_delta,WEEKEND_delta
               <br />
-              Persoon-01,-1,0,+1
+              Persoon-01,-1,0
               <br />
-              Persoon-02,0,+2,-1
+              Persoon-02,0,+2
             </div>
             <p className="text-xs text-neutral-500 italic">
-              &quot;FEESTDAG_delta&quot; is hier het saldo van het diensttype feestdagdienst (een
-              getal), niet de naam van een specifieke feestdag - welke feestdag iemand wanneer
+              Het saldo van feestdagdiensten hoort hier niet bij - welke feestdag iemand wanneer
               heeft gedraaid stel je hierna in bij stap 6. Feestdagen.
             </p>
 
@@ -871,8 +968,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                 <ul className="text-xs mt-1 space-y-0.5">
                   {balanceRows.slice(0, 5).map((r, i) => (
                     <li key={i}>
-                      {r.codenaam}: AVOND {r.AVOND_delta ?? 0}, WEEKEND {r.WEEKEND_delta ?? 0},
-                      FEESTDAG {r.FEESTDAG_delta ?? 0}
+                      {r.codenaam}: AVOND {r.AVOND_delta ?? 0}, WEEKEND {r.WEEKEND_delta ?? 0}
                     </li>
                   ))}
                   {balanceRows.length > 5 && <li>...en {balanceRows.length - 5} meer</li>}
