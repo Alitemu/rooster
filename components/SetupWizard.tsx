@@ -13,7 +13,7 @@
  * 7. Confirm and open period
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'holidays' | 'confirm';
 
@@ -90,7 +90,11 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [savingMembership, setSavingMembership] = useState(false);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
   const [togglingMembershipId, setTogglingMembershipId] = useState<string | null>(null);
-  const [bulkActivating, setBulkActivating] = useState(false);
+  // Guards the one-time auto-activation below from re-running (and undoing
+  // a planner's manual uncheck) every time the staff step is re-entered
+  // within the same wizard session - it should only bring everyone up to
+  // date the first time this period's staff list is loaded.
+  const autoActivatedPeriodRef = useRef<string | null>(null);
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
     windowWeeks: 2,
     band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
@@ -154,6 +158,43 @@ export function SetupWizard({ period, onComplete }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched]);
 
+  // Membership is_active is purely date-range-based (geldig_vanaf/tot
+  // overlapping the period), so "activating" someone for this period just
+  // means widening their range to cover it, and "deactivating" means
+  // ending (or delaying the start of) their membership around it - there's
+  // no separate flag to flip.
+  const addDays = (dateStr: string, days: number): string => {
+    const d = new Date(dateStr + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().split('T')[0];
+  };
+
+  const computeActivationPatch = (
+    member: StaffMember,
+    activate: boolean
+  ): { geldig_vanaf?: string; geldig_tot?: string } | null => {
+    const { start_datum, eind_datum } = periodData;
+    if (activate) {
+      const patch: { geldig_vanaf?: string; geldig_tot?: string } = {};
+      if (member.geldig_vanaf > start_datum) patch.geldig_vanaf = start_datum;
+      if (member.geldig_tot && member.geldig_tot < eind_datum) patch.geldig_tot = eind_datum;
+      return Object.keys(patch).length > 0 ? patch : null;
+    }
+    // Deactivate: end the membership just before this period starts, or if
+    // it was due to start during/after this period, push the start past it.
+    if (member.geldig_vanaf <= start_datum) {
+      return { geldig_tot: addDays(start_datum, -1) };
+    }
+    return { geldig_vanaf: addDays(eind_datum, 1) };
+  };
+
+  const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }) =>
+    fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+
   // Real pool membership (with its geldig_vanaf/geldig_tot date range) is
   // the one source of truth for "who's active in this period" - the solver
   // and the capacity check already read it directly. Shows every member
@@ -167,18 +208,39 @@ export function SetupWizard({ period, onComplete }: Props) {
       const memberParams = new URLSearchParams();
       if (periodData.start_datum) memberParams.set('period_start', periodData.start_datum);
       if (periodData.eind_datum) memberParams.set('period_end', periodData.eind_datum);
+      const membersUrl = `/api/planner/pool/${periodData.pool_id}/members?${memberParams.toString()}`;
 
       const [membersRes, linksRes] = await Promise.all([
-        fetch(`/api/planner/pool/${periodData.pool_id}/members?${memberParams.toString()}`),
+        fetch(membersUrl),
         fetch(`/api/planner/period/${period.id}/staff-links`),
       ]);
-      const membersData = await membersRes.json();
+      let membersData = await membersRes.json();
       const linksData = await linksRes.json();
       const linkedPersonIds = new Set(
         (linksData.data || [])
           .filter((l: any) => !l.revoked_at)
           .map((l: any) => l.person_id)
       );
+
+      // The first time this period's staff list is opened, everyone in the
+      // pool should already be checked in as available - matches how a
+      // newly-added member already defaults to this period's dates. Bring
+      // any leftover members from an earlier period's date range up to
+      // date automatically instead of making the planner click each one.
+      if (period?.id && autoActivatedPeriodRef.current !== period.id) {
+        autoActivatedPeriodRef.current = period.id;
+        const toActivate = (membersData.data || []).filter((m: any) => !m.is_active);
+        if (toActivate.length > 0) {
+          await Promise.all(
+            toActivate.map((m: any) => {
+              const patch = computeActivationPatch(m, true);
+              return patch ? patchMembership(m.id, patch) : Promise.resolve(null);
+            })
+          );
+          const refreshedRes = await fetch(membersUrl);
+          membersData = await refreshedRes.json();
+        }
+      }
 
       setStaffMembers(
         (membersData.data || []).map((m: any) => ({
@@ -286,43 +348,6 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
   };
 
-  // Membership is_active is purely date-range-based (geldig_vanaf/tot
-  // overlapping the period), so "activating" someone for this period just
-  // means widening their range to cover it, and "deactivating" means
-  // ending (or delaying the start of) their membership around it - there's
-  // no separate flag to flip.
-  const addDays = (dateStr: string, days: number): string => {
-    const d = new Date(dateStr + 'T00:00:00Z');
-    d.setUTCDate(d.getUTCDate() + days);
-    return d.toISOString().split('T')[0];
-  };
-
-  const computeActivationPatch = (
-    member: StaffMember,
-    activate: boolean
-  ): { geldig_vanaf?: string; geldig_tot?: string } | null => {
-    const { start_datum, eind_datum } = periodData;
-    if (activate) {
-      const patch: { geldig_vanaf?: string; geldig_tot?: string } = {};
-      if (member.geldig_vanaf > start_datum) patch.geldig_vanaf = start_datum;
-      if (member.geldig_tot && member.geldig_tot < eind_datum) patch.geldig_tot = eind_datum;
-      return Object.keys(patch).length > 0 ? patch : null;
-    }
-    // Deactivate: end the membership just before this period starts, or if
-    // it was due to start during/after this period, push the start past it.
-    if (member.geldig_vanaf <= start_datum) {
-      return { geldig_tot: addDays(start_datum, -1) };
-    }
-    return { geldig_vanaf: addDays(eind_datum, 1) };
-  };
-
-  const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }) =>
-    fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-
   const handleToggleActive = async (member: StaffMember) => {
     const patch = computeActivationPatch(member, !member.is_active);
     if (!patch) return;
@@ -337,29 +362,6 @@ export function SetupWizard({ period, onComplete }: Props) {
       setStaffError(err instanceof Error ? err.message : 'Bijwerken mislukt');
     } finally {
       setTogglingMembershipId(null);
-    }
-  };
-
-  const handleActivateAll = async () => {
-    const inactive = staffMembers.filter((m) => !m.is_active);
-    if (inactive.length === 0) return;
-    setBulkActivating(true);
-    setStaffError(null);
-    try {
-      const results = await Promise.all(
-        inactive.map((member) => {
-          const patch = computeActivationPatch(member, true);
-          return patch ? patchMembership(member.id, patch) : Promise.resolve(null);
-        })
-      );
-      if (results.some((r) => r && !r.ok)) {
-        setStaffError('Niet iedereen kon geactiveerd worden');
-      }
-      await loadStaff();
-    } catch {
-      setStaffError('Niet iedereen kon geactiveerd worden');
-    } finally {
-      setBulkActivating(false);
     }
   };
 
@@ -596,26 +598,14 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'staff' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Iedereen die hieronder actief staat voor deze periode (op basis van geldig
-              vanaf/tot) doet mee in het rooster en krijgt bij het openen een uitnodiging.
-              Pas de datums aan voor start/einde contract of een tijdelijke pauze, of voeg iemand
-              nieuw toe.
+              Iedereen in de pool doet standaard mee met deze periode (vinkje &quot;Actief&quot;
+              staat aan) en krijgt bij het openen een uitnodiging. Vink iemand uit om diegene voor
+              deze periode uit te sluiten - de geldigheidsdatum wordt dan automatisch aangepast.
+              Voeg hieronder eventueel iemand nieuw toe.
             </p>
 
             {staffError && (
               <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
-            )}
-
-            {!staffLoading && staffMembers.some((m) => !m.is_active) && (
-              <button
-                onClick={handleActivateAll}
-                disabled={bulkActivating}
-                className="text-sm font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
-              >
-                {bulkActivating
-                  ? 'Bezig met activeren...'
-                  : `Activeer alle ${staffMembers.filter((m) => !m.is_active).length} niet-actieve leden voor deze periode`}
-              </button>
             )}
 
             {staffLoading ? (
