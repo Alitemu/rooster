@@ -4,8 +4,10 @@ import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import {
   matchSlotsToPattern,
   isYearBoundaryWeek,
+  previewPatternDates,
   syncAvailabilityForPattern,
   removePatternAvailability,
+  type PatternRule,
 } from '@/lib/parttimeSync';
 
 interface Fixture {
@@ -178,6 +180,45 @@ describe('parttimeSync', () => {
         slots
       );
       expect(matched).toEqual([]);
+    });
+  });
+
+  describe('previewPatternDates', () => {
+    it('agrees exactly with matchSlotsToPattern for the same range - a preview before a period opens can never show different days than what actually gets blocked once it does', () => {
+      const pattern: PatternRule = { weekdag: 'WO', frequentie: 'EVEN_WEKEN', geldig_vanaf: '2026-01-01', geldig_tot: '2027-12-31' };
+      const slots = generateSlotsForPeriod({
+        startDate: '2026-12-21',
+        endDate: '2027-01-10',
+        shiftTypes: ['AVOND'],
+      }).map((s) => ({ id: s.datum, datum: s.datum, iso_week: s.iso_week }));
+
+      const matchedDates = matchSlotsToPattern(pattern, slots).sort();
+      const previewedDates = previewPatternDates(pattern, '2026-12-21', '2027-01-10')
+        .map((d) => d.datum)
+        .sort();
+
+      expect(previewedDates).toEqual(matchedDates);
+    });
+
+    it('excludes dates outside the pattern validity range even when the requested range is wider', () => {
+      const previewed = previewPatternDates(
+        { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2027-02-01', geldig_tot: '2027-02-28' },
+        '2027-01-01',
+        '2027-03-31'
+      );
+      expect(previewed.every((d) => d.datum >= '2027-02-01' && d.datum <= '2027-02-28')).toBe(true);
+      expect(previewed.some((d) => d.datum === '2027-02-01')).toBe(true);
+      expect(previewed.some((d) => d.datum.startsWith('2027-01'))).toBe(false);
+      expect(previewed.some((d) => d.datum.startsWith('2027-03'))).toBe(false);
+    });
+
+    it('returns nothing when the pattern and the requested range never overlap', () => {
+      const previewed = previewPatternDates(
+        { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2027-01-01', geldig_tot: '2027-01-31' },
+        '2027-03-01',
+        '2027-03-31'
+      );
+      expect(previewed).toEqual([]);
     });
   });
 

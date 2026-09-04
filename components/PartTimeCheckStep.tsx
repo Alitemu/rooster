@@ -105,17 +105,17 @@ export function PartTimeCheckStep({
         </p>
       </div>
 
-      {generatedDays.length === 0 && patterns.length > 0 && periodStatus && periodStatus !== 'OPEN' && (
-        <div className="bg-amber-50 border border-amber-200 rounded p-3">
-          <p className="text-sm text-amber-900">
-            Deze periode is nog niet geopend door de planner. Je deeltijdpatroon is opgeslagen en
-            wordt automatisch omgezet naar geblokkeerde dagen zodra de planner de periode opent - je
-            hoeft dan niets opnieuw in te voeren.
+      {periodStatus === 'CONCEPT' && patterns.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded p-3">
+          <p className="text-sm text-blue-900">
+            Deze periode is nog niet geopend door de planner. De kalender hieronder toont daarom een
+            voorbeeld op basis van je deeltijdpatroon - zodra de planner de periode opent, worden
+            deze dagen automatisch echt geblokkeerd. Je hoeft dan niets opnieuw in te voeren.
           </p>
         </div>
       )}
 
-      {generatedDays.length === 0 && (patterns.length === 0 || !periodStatus || periodStatus === 'OPEN') && (
+      {generatedDays.length === 0 && (
         <p className="text-sm text-neutral-600">
           {patterns.length === 0
             ? 'Geen deeltijdpatronen ingesteld.'

@@ -14,10 +14,10 @@
  */
 
 import { db } from '@/db/client';
-import { parseISO } from '@/lib/holidays';
+import { parseISO, dateToISO, getISOWeek } from '@/lib/holidays';
 
-type Weekdag = 'MA' | 'DI' | 'WO' | 'DO' | 'VR' | 'ZA' | 'ZO';
-type Frequentie = 'ELKE_WEEK' | 'EVEN_WEKEN' | 'ONEVEN_WEKEN';
+export type Weekdag = 'MA' | 'DI' | 'WO' | 'DO' | 'VR' | 'ZA' | 'ZO';
+export type Frequentie = 'ELKE_WEEK' | 'EVEN_WEKEN' | 'ONEVEN_WEKEN';
 
 const WEEKDAG_TO_JS_DAY: Record<Weekdag, number> = {
   ZO: 0,
@@ -58,27 +58,63 @@ export interface SyncResult {
   periodsAffected: string[];
 }
 
+export type PatternRule = Pick<ParttimePatternRow, 'weekdag' | 'frequentie' | 'geldig_vanaf' | 'geldig_tot'>;
+
+/**
+ * The one predicate that decides whether a pattern covers a given date -
+ * shared by the real matching below (against actual slots) and the preview
+ * generator (against a plain date range, for a period that has no slots
+ * yet because it hasn't been opened). Keeping this in one place means a
+ * preview shown before a period opens can never drift from what actually
+ * gets blocked once it does.
+ */
+function dateMatchesPattern(pattern: PatternRule, datum: string, isoWeek: number): boolean {
+  if (datum < pattern.geldig_vanaf || datum > pattern.geldig_tot) return false;
+  if (parseISO(datum).getDay() !== WEEKDAG_TO_JS_DAY[pattern.weekdag]) return false;
+  if (pattern.frequentie === 'EVEN_WEKEN' && isoWeek % 2 !== 0) return false;
+  if (pattern.frequentie === 'ONEVEN_WEKEN' && isoWeek % 2 !== 1) return false;
+  return true;
+}
+
 /**
  * Pure matching: which of these slots does this pattern cover?
  * Uses the slot's already-computed iso_week (from slot generation) for
  * EVEN_WEKEN/ONEVEN_WEKEN parity - never recompute ISO week math here.
  */
-export function matchSlotsToPattern(
-  pattern: Pick<ParttimePatternRow, 'weekdag' | 'frequentie' | 'geldig_vanaf' | 'geldig_tot'>,
-  slots: SlotForMatching[]
-): string[] {
-  const targetDay = WEEKDAG_TO_JS_DAY[pattern.weekdag];
-  const matched: string[] = [];
+export function matchSlotsToPattern(pattern: PatternRule, slots: SlotForMatching[]): string[] {
+  return slots.filter((slot) => dateMatchesPattern(pattern, slot.datum, slot.iso_week)).map((slot) => slot.id);
+}
 
-  for (const slot of slots) {
-    if (slot.datum < pattern.geldig_vanaf || slot.datum > pattern.geldig_tot) continue;
-    if (parseISO(slot.datum).getDay() !== targetDay) continue;
-    if (pattern.frequentie === 'EVEN_WEKEN' && slot.iso_week % 2 !== 0) continue;
-    if (pattern.frequentie === 'ONEVEN_WEKEN' && slot.iso_week % 2 !== 1) continue;
-    matched.push(slot.id);
+export interface PreviewedDay {
+  datum: string;
+  iso_jaar: number;
+  iso_week: number;
+}
+
+/**
+ * Which dates in [rangeStart, rangeEnd] this pattern would cover - for a
+ * period that doesn't have real shift slots yet (still CONCEPT, not opened
+ * by the planner). Intersects the pattern's own validity range with the
+ * given range first, so a pattern that only partially overlaps the period
+ * doesn't preview days outside either.
+ */
+export function previewPatternDates(pattern: PatternRule, rangeStart: string, rangeEnd: string): PreviewedDay[] {
+  const from = rangeStart > pattern.geldig_vanaf ? rangeStart : pattern.geldig_vanaf;
+  const to = rangeEnd < pattern.geldig_tot ? rangeEnd : pattern.geldig_tot;
+  if (from > to) return [];
+
+  const days: PreviewedDay[] = [];
+  const cursor = parseISO(from);
+  const end = parseISO(to);
+  while (cursor <= end) {
+    const datum = dateToISO(cursor);
+    const [isoYear, isoWeek] = getISOWeek(cursor);
+    if (dateMatchesPattern(pattern, datum, isoWeek)) {
+      days.push({ datum, iso_jaar: isoYear, iso_week: isoWeek });
+    }
+    cursor.setDate(cursor.getDate() + 1);
   }
-
-  return matched;
+  return days;
 }
 
 export function isYearBoundaryWeek(isoWeek: number): boolean {
