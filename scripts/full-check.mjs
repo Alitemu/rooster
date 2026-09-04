@@ -179,10 +179,6 @@ async function main() {
   console.log('\n━━ PLANNER MONITORING ━━');
   rec('Dashboard', eq((await req('GET', `/api/planner/period/${period.id}/dashboard`, { jar: planner })).status, 200));
   rec('Progress', eq((await req('GET', `/api/planner/period/${period.id}/progress`, { jar: planner })).status, 200));
-  const cbw = await req('GET', `/api/planner/period/${period.id}/coverage-by-week`, { jar: planner });
-  const weeks = cbw.json?.data?.weeks || cbw.json?.data;
-  rec('Week coverage (red/orange/green)', cbw.status === 200 && Array.isArray(weeks) && weeks.length > 0,
-      `${weeks?.length} weeks, first status=${weeks?.[0]?.status}`);
   rec('Staff links', eq((await req('GET', `/api/planner/period/${period.id}/staff-links`, { jar: planner })).status, 200));
   rec('Export invitations', eq((await req('GET', `/api/exports/invitations/${period.id}`, { jar: planner })).status, 200));
   rec('Export reminders', eq((await req('GET', `/api/exports/reminders/${period.id}`, { jar: planner })).status, 200));

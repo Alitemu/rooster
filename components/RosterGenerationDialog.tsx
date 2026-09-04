@@ -53,6 +53,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const [rulesetLoading, setRulesetLoading] = useState(false);
   const [ruleset, setRuleset] = useState<RulesetConfig | null>(null);
   const [rulesetError, setRulesetError] = useState<string | null>(null);
+  // Not a hard rule - a planner can always generate early, e.g. once it's
+  // clear stragglers won't respond in time. This just makes "generating
+  // before everyone's had a chance to answer" a visible choice rather than
+  // something that quietly happens by clicking the same button as always.
+  const [notReadyWarning, setNotReadyWarning] = useState<string | null>(null);
 
   // Load the period's current frozen window/band every time the dialog
   // opens - it's otherwise invisible once a period leaves the setup
@@ -73,6 +78,25 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           bandWeekend: Array.isArray(parsed.bandWeekend) ? parsed.bandWeekend : [2, 3],
           bandFeestdag: Array.isArray(parsed.bandFeestdag) ? parsed.bandFeestdag : [1, 2],
         });
+
+        const deadline = data?.data?.deadline;
+        if (!deadline || new Date(deadline) < new Date()) {
+          setNotReadyWarning(null);
+          return;
+        }
+        fetch(`/api/planner/period/${periodId}/dashboard`)
+          .then((res) => res.json())
+          .then((dashData) => {
+            const stats = dashData?.data?.submission_stats;
+            if (!stats) return;
+            const notDone = (stats.not_started || 0) + (stats.in_progress || 0);
+            setNotReadyWarning(
+              notDone > 0
+                ? `${notDone} ${notDone === 1 ? 'personeelslid heeft zijn/haar voorkeuren' : 'personeelsleden hebben hun voorkeuren'} nog niet bevestigd, en de deadline is nog niet verstreken. Genereer je nu, dan tellen hun voorkeuren mogelijk niet (volledig) mee.`
+                : null
+            );
+          })
+          .catch(() => setNotReadyWarning(null));
       })
       .catch(() => setRulesetError('Laden van huidige instellingen mislukt'))
       .finally(() => setRulesetLoading(false));
@@ -122,6 +146,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const handleClose = () => {
     setResult(null);
     setError(null);
+    setNotReadyWarning(null);
     onClose();
   };
 
@@ -147,6 +172,12 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         <div className="p-6">
           {!result && !error && (
             <div className="space-y-4">
+              {notReadyWarning && (
+                <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
+                  ⚠️ {notReadyWarning}
+                </div>
+              )}
+
               <div>
                 <h3 className="text-sm font-semibold text-neutral-800 mb-1">Venster en streefbereik</h3>
                 <p className="text-xs text-neutral-500 mb-3">

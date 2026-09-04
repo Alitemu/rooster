@@ -136,6 +136,29 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
+    // A period with nobody active to fill it isn't a mistake the planner
+    // would want to discover only after publishing an empty roster - same
+    // overlap check the pool-members list and the capacity check already
+    // use for "active in this period".
+    const activeStaffCount = db
+      .prepare(
+        `SELECT COUNT(*) as count FROM dienstrooster_pool_membership
+         WHERE pool_id = ? AND geldig_vanaf <= ? AND (geldig_tot IS NULL OR geldig_tot >= ?)`
+      )
+      .get(period.pool_id, eind_datum, start_datum) as { count: number };
+
+    if (activeStaffCount.count === 0) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'NO_ACTIVE_STAFF',
+          message:
+            'Er is geen personeel actief voor deze periode. Voeg personeel toe of activeer bestaande leden bij stap 2 (Personeel) voordat je de periode opent.',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Generate slots before touching the period row - if this fails (e.g.
     // pool is missing a shift type), the period stays in CONCEPT rather
     // than ending up OPEN with nothing for staff to block against.

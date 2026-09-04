@@ -1048,6 +1048,19 @@ export function SetupWizard({ period, onComplete }: Props) {
               </div>
             </div>
 
+            {staffMembers.filter((s) => s.is_active).length === 0 && (
+              <div className="bg-red-50 border border-red-200 rounded p-4">
+                <p className="text-sm font-semibold text-red-900">
+                  ⚠️ Nog niemand actief voor deze periode
+                </p>
+                <p className="text-sm text-red-800 mt-1">
+                  Er is geen personeel actief voor deze periode - ga terug naar stap 2 (Personeel) om
+                  iemand toe te voegen of te activeren. Zonder actief personeel kan de periode niet
+                  geopend worden.
+                </p>
+              </div>
+            )}
+
             <div className="bg-amber-50 border border-amber-200 rounded p-4">
               <p className="font-semibold text-amber-900 mb-2">⚠️ Voordat je opent</p>
               <ul className="text-sm text-amber-800 space-y-1 ml-4">
@@ -1100,7 +1113,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           ) : (
             <button
               onClick={handleOpenPeriod}
-              disabled={loading}
+              disabled={loading || staffMembers.filter((s) => s.is_active).length === 0}
               className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
             >
               {loading ? 'Bezig met openen...' : 'Periode openen'}
