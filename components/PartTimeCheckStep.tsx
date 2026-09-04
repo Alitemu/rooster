@@ -17,7 +17,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { dateToISO, parseISO, getISOWeek } from '@/lib/holidays';
+import { parseISO } from '@/lib/holidays';
+import { buildMonthGroups } from '@/lib/calendarMonths';
 
 interface ParttimePattern {
   id: string;
@@ -89,32 +90,10 @@ export function PartTimeCheckStep({
 
   const startDate = parseISO(periodStart);
   const endDate = parseISO(periodEnd);
-  const totalDays = Math.round((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-  const totalWeeks = Math.ceil(totalDays / 7);
-
-  const weeks: string[][] = [];
-  let currentDate = new Date(startDate);
-  while (weeks.length < totalWeeks) {
-    const week: string[] = [];
-    for (let i = 0; i < 7; i++) {
-      week.push(dateToISO(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    weeks.push(week);
-  }
-
-  // Same month-grouping as PreferencesCalendar - a week straddling a month
-  // boundary stays with the month of its Monday.
-  const monthGroups: { label: string; weeks: string[][] }[] = [];
-  for (const week of weeks) {
-    const label = parseISO(week[0]).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
-    const current = monthGroups[monthGroups.length - 1];
-    if (current && current.label === label) {
-      current.weeks.push(week);
-    } else {
-      monthGroups.push({ label, weeks: [week] });
-    }
-  }
+  // One true calendar month per group, same as PreferencesCalendar - a
+  // month always starts on its actual 1st and ends on its actual last day,
+  // never bleeding into a neighboring month's days. See lib/calendarMonths.ts.
+  const monthGroups = buildMonthGroups(startDate, endDate);
 
   return (
     <div className="card p-6 space-y-4">
@@ -195,11 +174,13 @@ export function PartTimeCheckStep({
                 </thead>
                 <tbody>
                   {group.weeks.map((week, weekIdx) => {
-                    const [, isoWeek] = getISOWeek(parseISO(week[0]));
                     return (
                       <tr key={`week-${weekIdx}`}>
-                        <td className="week-number text-center align-top pt-2">{isoWeek}</td>
-                        {week.map((datum) => {
+                        <td className="week-number text-center align-top pt-2">{week.isoWeek}</td>
+                        {week.days.map((datum, dayIdx) => {
+                          if (datum === null) {
+                            return <td key={`blank-${weekIdx}-${dayIdx}`} className="p-0" />;
+                          }
                           const generated = byDate.get(datum);
                           return (
                             <td key={datum} className="align-top p-0">

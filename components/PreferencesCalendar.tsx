@@ -25,7 +25,8 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { dateToISO, parseISO, getISOWeek, getHolidayInfo, addDays } from '@/lib/holidays';
+import { dateToISO, parseISO, getHolidayInfo, addDays } from '@/lib/holidays';
+import { buildMonthGroups } from '@/lib/calendarMonths';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
 
@@ -346,8 +347,10 @@ export function PreferencesCalendar({
     return <div className="p-4 text-center">Voorkeuren laden...</div>;
   }
 
-  // Generate calendar grid: as many full weeks as the period actually spans
-  const weeks: string[][] = [];
+  // Generate calendar grid, one true calendar month per group - a month
+  // always starts on its actual 1st (or the period's start date) and ends
+  // on its actual last day (or the period's end date), never bleeding into
+  // a neighboring month's days. See lib/calendarMonths.ts.
   const allDates = Array.from(preferences.values()).map((p) => p.datum).sort();
 
   if (allDates.length === 0) {
@@ -356,37 +359,7 @@ export function PreferencesCalendar({
 
   const startDate = parseISO(allDates[0]);
   const endDate = parseISO(allDates[allDates.length - 1]);
-  // Inclusive day count first, then divide - not (days / 7) + 1, which
-  // over-counts by a full week (e.g. a real 22-week, 154-day period came
-  // out as 23) and pushed the period's real last day into a spare row
-  // under the wrong weekday column.
-  const totalDays = Math.round((endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-  const totalWeeks = Math.ceil(totalDays / 7);
-  let currentDate = new Date(startDate);
-
-  while (weeks.length < totalWeeks) {
-    const week: string[] = [];
-    for (let i = 0; i < 7; i++) {
-      week.push(dateToISO(currentDate));
-      currentDate.setDate(currentDate.getDate() + 1);
-    }
-    weeks.push(week);
-  }
-
-  // Group weeks by calendar month (of the week's Monday) so the calendar
-  // reads as a series of distinct months instead of one continuous wall of
-  // weeks - a week that straddles a month boundary stays with the month it
-  // starts in, rather than splitting its row in two.
-  const monthGroups: { label: string; weeks: string[][] }[] = [];
-  for (const week of weeks) {
-    const label = parseISO(week[0]).toLocaleDateString('nl-NL', { month: 'long', year: 'numeric' });
-    const current = monthGroups[monthGroups.length - 1];
-    if (current && current.label === label) {
-      current.weeks.push(week);
-    } else {
-      monthGroups.push({ label, weeks: [week] });
-    }
-  }
+  const monthGroups = buildMonthGroups(startDate, endDate);
 
   // Blocked-days summary per shift type, computed live from what's on
   // screen - no extra request needed, updates the moment a cell is clicked.
@@ -474,12 +447,13 @@ export function PreferencesCalendar({
               </thead>
               <tbody>
                 {group.weeks.map((week, weekIdx) => {
-                  const [, isoWeek] = getISOWeek(parseISO(week[0]));
-
                   return (
                     <tr key={`week-${weekIdx}`}>
-                      <td className="week-number text-center align-top pt-2">{isoWeek}</td>
-                      {week.map((datum, dayIdx) => {
+                      <td className="week-number text-center align-top pt-2">{week.isoWeek}</td>
+                      {week.days.map((datum, dayIdx) => {
+                        if (datum === null) {
+                          return <td key={`blank-${weekIdx}-${dayIdx}`} className="p-0" />;
+                        }
                         const dayPref = preferences.get(datum);
                         const isSaturday = dayIdx === 5;
                         const isSunday = dayIdx === 6;
