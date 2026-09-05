@@ -88,6 +88,11 @@ const GLYPH: Record<Exclude<BlockLevel, null>, string> = {
   ABSOLUUT: '✕',
 };
 
+// Shown on a slot with no preference set yet - makes "beschikbaar" its own
+// visible state instead of a blank cell that looks the same whether it was
+// checked and left available, or never looked at at all.
+const AVAILABLE_GLYPH = '✓';
+
 const WEEKDAY_TAG = ['', '', '', '', '', 'za', 'zo']; // index 5/6 = Saturday/Sunday
 
 function coverageBarClass(ratio: number): string {
@@ -402,7 +407,9 @@ export function PreferencesCalendar({
       {/* Legend */}
       <div className="flex gap-4 flex-wrap text-xs text-neutral-600">
         <span className="flex items-center gap-1.5">
-          <i className="inline-block w-5 h-4 rounded border border-neutral-300 bg-white" />
+          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">
+            {AVAILABLE_GLYPH}
+          </i>
           Beschikbaar
         </span>
         <span className="flex items-center gap-1.5">
@@ -420,6 +427,14 @@ export function PreferencesCalendar({
         <span className="flex items-center gap-1.5">
           <i className="calendar-cell-parttime inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">PT</i>
           Parttime dag
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">A</i>
+          Avonddienst
+        </span>
+        <span className="flex items-center gap-1.5">
+          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">W</i>
+          Weekenddienst
         </span>
         <span className="flex items-center gap-1.5">
           <i className="weekend-slot inline-block w-5 h-4 rounded" />
@@ -523,7 +538,7 @@ export function PreferencesCalendar({
                                         ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
                                       title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'} (rechtsklik voor opties)`}
                                     >
-                                      {counter[0]}{level ? GLYPH[level] : ''}
+                                      {counter[0]}{level ? GLYPH[level] : AVAILABLE_GLYPH}
                                     </button>
                                   );
                                 })}
