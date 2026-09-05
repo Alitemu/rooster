@@ -5,6 +5,7 @@ import {
   matchSlotsToPattern,
   isYearBoundaryWeek,
   previewPatternDates,
+  findBlockedElsewhereDays,
   syncAvailabilityForPattern,
   removePatternAvailability,
   type PatternRule,
@@ -219,6 +220,48 @@ describe('parttimeSync', () => {
         '2027-03-31'
       );
       expect(previewed).toEqual([]);
+    });
+  });
+
+  describe('findBlockedElsewhereDays', () => {
+    it('flags a matching day that already has a different source, and excludes it from generatedDatums', () => {
+      // Reproduces the real-world case: a Friday part-time pattern, where
+      // one of the Fridays already has an imported historical blockade -
+      // reconcilePatternForPeriod skips inserting a PARTTIME row there, so
+      // this is the only way that day surfaces as "covered" at all.
+      const pattern: { id: string } & PatternRule = {
+        id: 'p1',
+        weekdag: 'VR',
+        frequentie: 'ELKE_WEEK',
+        geldig_vanaf: '2027-01-01',
+        geldig_tot: '2027-01-31',
+      };
+      const slots = [
+        { id: 'fri-08', datum: '2027-01-08', iso_week: 1 },
+        { id: 'fri-15', datum: '2027-01-15', iso_week: 2 },
+        { id: 'fri-22', datum: '2027-01-22', iso_week: 3 },
+      ];
+      // fri-08 already got a real PARTTIME row (so it's in generatedDatums);
+      // fri-15 has someone else's row (an imported blockade); fri-22 is untouched.
+      const generatedDatums = new Set(['2027-01-08']);
+      const otherSourceBySlotId = new Map([['fri-15', 'MANUAL']]);
+
+      const result = findBlockedElsewhereDays([pattern], slots, generatedDatums, otherSourceBySlotId);
+
+      expect(result).toEqual([{ datum: '2027-01-15', pattern_id: 'p1', source: 'MANUAL' }]);
+    });
+
+    it('returns nothing when every matching day is either generated or untouched', () => {
+      const pattern: { id: string } & PatternRule = {
+        id: 'p1',
+        weekdag: 'MA',
+        frequentie: 'ELKE_WEEK',
+        geldig_vanaf: '2027-01-01',
+        geldig_tot: '2027-01-31',
+      };
+      const slots = [{ id: 'mon-04', datum: '2027-01-04', iso_week: 1 }];
+      const result = findBlockedElsewhereDays([pattern], slots, new Set(['2027-01-04']), new Map());
+      expect(result).toEqual([]);
     });
   });
 

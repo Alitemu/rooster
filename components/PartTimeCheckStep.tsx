@@ -9,11 +9,13 @@
  * the participant to scan a flat list of dates. Requires checkbox
  * confirmation before preferences can be submitted.
  *
- * Deliberately just shows what the pattern generated - not why a day the
- * pattern would otherwise touch didn't end up blocked (a prior manual
- * block, an absence, ...). That's real information but it lives one level
- * too deep for this screen's job, which is purely "does this match what I
- * expect to see" at a glance.
+ * Also marks (in grey) a day the pattern would otherwise cover but that's
+ * already blocked under a different source (an imported historical
+ * blockade, an absence, ...) - reconcilePatternForPeriod deliberately
+ * leaves those alone rather than overwriting them. Without this, such a
+ * day looked exactly like a plain, unblocked one here, which read as "my
+ * pattern silently skipped this day" even though it's still fully blocked,
+ * just not by this pattern.
  */
 
 import { useState, useEffect } from 'react';
@@ -33,6 +35,13 @@ interface GeneratedDay {
   weekdag: string;
   pattern_id: string;
   is_year_boundary: boolean;
+}
+
+interface BlockedElsewhereDay {
+  datum: string;
+  weekdag: string;
+  pattern_id: string;
+  source: string;
 }
 
 interface Props {
@@ -55,6 +64,7 @@ export function PartTimeCheckStep({
   onConfirm,
 }: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
+  const [blockedElsewhereDays, setBlockedElsewhereDays] = useState<BlockedElsewhereDay[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -67,8 +77,10 @@ export function PartTimeCheckStep({
         );
         const data = await res.json();
         setGeneratedDays(data.data?.generated_days || []);
+        setBlockedElsewhereDays(data.data?.blocked_elsewhere_days || []);
       } catch {
         setGeneratedDays([]);
+        setBlockedElsewhereDays([]);
       } finally {
         setLoading(false);
       }
@@ -86,6 +98,7 @@ export function PartTimeCheckStep({
   }
 
   const byDate = new Map(generatedDays.map((d) => [d.datum, d]));
+  const blockedElsewhereByDate = new Map(blockedElsewhereDays.map((d) => [d.datum, d]));
   const boundaryDays = generatedDays.filter((d) => d.is_year_boundary);
 
   const startDate = parseISO(periodStart);
@@ -115,12 +128,24 @@ export function PartTimeCheckStep({
         </div>
       )}
 
-      {generatedDays.length === 0 && (
+      {generatedDays.length === 0 && blockedElsewhereDays.length === 0 && (
         <p className="text-sm text-neutral-600">
           {patterns.length === 0
             ? 'Geen deeltijdpatronen ingesteld.'
             : 'Er vallen geen deeltijddagen binnen deze periode.'}
         </p>
+      )}
+
+      {blockedElsewhereDays.length > 0 && (
+        <div className="bg-neutral-100 border border-neutral-200 rounded p-3">
+          <p className="text-sm text-neutral-700">
+            {blockedElsewhereDays.length} dag{blockedElsewhereDays.length === 1 ? '' : 'en'} die je
+            patroon zou raken {blockedElsewhereDays.length === 1 ? 'is' : 'zijn'} hieronder grijs
+            gemarkeerd - die {blockedElsewhereDays.length === 1 ? 'is' : 'zijn'} al op een andere
+            manier geblokkeerd (bijvoorbeeld een eerder ingevoerde blokkade of afwezigheid), dus je
+            patroon hoeft daar niets te doen.
+          </p>
+        </div>
       )}
 
       {boundaryDays.length > 0 && (
@@ -155,6 +180,10 @@ export function PartTimeCheckStep({
           <i className="calendar-cell-parttime inline-block w-5 h-4 rounded ring-2 ring-amber-400" />
           Deeltijddag rond de jaarwisseling
         </span>
+        <span className="flex items-center gap-1.5">
+          <i className="calendar-cell-blocked-elsewhere inline-block w-5 h-4 rounded" />
+          Al geblokkeerd om een andere reden
+        </span>
       </div>
 
       {/* Calendar, one card per calendar month */}
@@ -182,14 +211,23 @@ export function PartTimeCheckStep({
                             return <td key={`blank-${weekIdx}-${dayIdx}`} className="p-0" />;
                           }
                           const generated = byDate.get(datum);
+                          const blockedElsewhere = !generated ? blockedElsewhereByDate.get(datum) : undefined;
                           return (
                             <td key={datum} className="align-top p-0">
                               <div
                                 className={`h-11 rounded-lg border flex items-start justify-center pt-1 text-xs font-semibold tabular-nums
                                   ${generated
                                     ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-amber-400' : ''}`
-                                    : 'border-neutral-200 bg-white text-neutral-900'}`}
-                                title={generated ? 'Deeltijddag (automatisch geblokkeerd)' : undefined}
+                                    : blockedElsewhere
+                                      ? 'calendar-cell-blocked-elsewhere'
+                                      : 'border-neutral-200 bg-white text-neutral-900'}`}
+                                title={
+                                  generated
+                                    ? 'Deeltijddag (automatisch geblokkeerd)'
+                                    : blockedElsewhere
+                                      ? 'Deze dag is al om een andere reden geblokkeerd - je patroon hoeft hier niets te doen'
+                                      : undefined
+                                }
                               >
                                 {parseISO(datum).getDate()}
                               </div>
@@ -234,6 +272,7 @@ export function PartTimeCheckStep({
       <div className="text-xs text-neutral-500 italic">
         Totaal: {generatedDays.length} dagen
         {boundaryDays.length > 0 && <> • Jaarwisseling: {boundaryDays.length} dagen</>}
+        {blockedElsewhereDays.length > 0 && <> • Al elders geblokkeerd: {blockedElsewhereDays.length} dagen</>}
       </div>
     </div>
   );

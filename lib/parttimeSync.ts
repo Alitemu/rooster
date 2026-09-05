@@ -121,6 +121,45 @@ export function isYearBoundaryWeek(isoWeek: number): boolean {
   return isoWeek === 1 || isoWeek === 52 || isoWeek === 53;
 }
 
+export interface BlockedElsewhereDay {
+  datum: string;
+  pattern_id: string;
+  source: string;
+}
+
+/**
+ * Days one or more patterns would cover but that already have a different
+ * source's availability row on that slot - reconcilePatternForPeriod
+ * deliberately skips inserting a PARTTIME row there rather than
+ * overwriting it (see its own doc comment). That day is still genuinely
+ * blocked, just not tagged PARTTIME, so without surfacing this separately
+ * a participant checking their pattern against the calendar would see a
+ * plain, seemingly unblocked day and have no way to tell their pattern
+ * didn't actually "miss" it - something else already covers it.
+ */
+export function findBlockedElsewhereDays(
+  patterns: Array<{ id: string } & PatternRule>,
+  slots: SlotForMatching[],
+  generatedDatums: Set<string>,
+  otherSourceBySlotId: Map<string, string>
+): BlockedElsewhereDay[] {
+  const slotById = new Map(slots.map((s) => [s.id, s]));
+  const results: BlockedElsewhereDay[] = [];
+
+  for (const pattern of patterns) {
+    for (const slotId of matchSlotsToPattern(pattern, slots)) {
+      const slot = slotById.get(slotId)!;
+      if (generatedDatums.has(slot.datum)) continue;
+      const source = otherSourceBySlotId.get(slotId);
+      if (source) {
+        results.push({ datum: slot.datum, pattern_id: pattern.id, source });
+      }
+    }
+  }
+
+  return results;
+}
+
 /**
  * Reconciles one pattern's PARTTIME rows against one period's slots:
  * deletes stale rows this pattern owns, inserts missing ones, and skips

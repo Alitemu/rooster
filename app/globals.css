@@ -106,6 +106,28 @@
   }
 }
 
+/* A day a part-time pattern would otherwise cover, but that's already
+   blocked under a different source (an imported historical blockade, an
+   absence, ...) - reconcilePatternForPeriod deliberately leaves those
+   alone rather than overwriting them. Grey rather than parttime's blue, so
+   it reads as "already handled, just not by this pattern" instead of
+   looking like a plain, unblocked day. */
+.calendar-cell-blocked-elsewhere {
+  @apply bg-neutral-100 border-neutral-300 text-neutral-500;
+}
+
+@supports (background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0, 0, 0, 0.06) 10px, rgba(0, 0, 0, 0.06) 20px)) {
+  .calendar-cell-blocked-elsewhere {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(0, 0, 0, 0.06) 10px,
+      rgba(0, 0, 0, 0.06) 20px
+    );
+  }
+}
+
 /* Holiday styling */
 .holiday-slot {
   @apply bg-purple-100 border-purple-300 text-purple-900 font-semibold;

@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
-import { isYearBoundaryWeek, previewPatternDates, type PatternRule } from '@/lib/parttimeSync';
+import { isYearBoundaryWeek, previewPatternDates, findBlockedElsewhereDays, type PatternRule } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface GeneratedDay {
@@ -24,6 +24,13 @@ interface GeneratedDay {
   weekdag: string;
   pattern_id: string;
   is_year_boundary: boolean;
+}
+
+interface BlockedElsewhereDay {
+  datum: string;
+  weekdag: string;
+  pattern_id: string;
+  source: string;
 }
 
 export async function GET(
@@ -60,6 +67,7 @@ export async function GET(
     }
 
     let generatedDays: GeneratedDay[];
+    let blockedElsewhereDays: BlockedElsewhereDay[] = [];
 
     if (period.status === 'CONCEPT') {
       // No slots exist yet - preview straight from the person's own
@@ -113,11 +121,48 @@ export async function GET(
         pattern_id: row.pattern_id,
         is_year_boundary: row.frequentie !== 'ELKE_WEEK' && isYearBoundaryWeek(row.iso_week),
       }));
+
+      // A pattern never overwrites a slot that already has a different
+      // availability row (e.g. an imported historical blockade, or an
+      // absence) - reconcilePatternForPeriod deliberately skips those. That
+      // day is still genuinely blocked, just not tagged PARTTIME, so
+      // without this it would look like the pattern silently "missed" a
+      // day it should have covered.
+      const patterns = db
+        .prepare(
+          `SELECT id, weekdag, frequentie, geldig_vanaf, geldig_tot
+           FROM dienstrooster_parttime_pattern WHERE person_id = ?`
+        )
+        .all(id) as Array<{ id: string } & PatternRule>;
+
+      if (patterns.length > 0) {
+        const slots = db
+          .prepare('SELECT id, datum, iso_week FROM dienstrooster_shift_slot WHERE period_id = ?')
+          .all(periodId) as Array<{ id: string; datum: string; iso_week: number }>;
+        const generatedDatums = new Set(generatedDays.map((d) => d.datum));
+
+        const otherSourceRows = db
+          .prepare(
+            `SELECT a.slot_id, a.source FROM dienstrooster_availability a
+             JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+             WHERE a.person_id = ? AND s.period_id = ? AND a.source != 'PARTTIME'`
+          )
+          .all(id, periodId) as Array<{ slot_id: string; source: string }>;
+        const otherSourceBySlotId = new Map(otherSourceRows.map((r) => [r.slot_id, r.source]));
+
+        const patternById = new Map(patterns.map((p) => [p.id, p]));
+        blockedElsewhereDays = findBlockedElsewhereDays(patterns, slots, generatedDatums, otherSourceBySlotId).map(
+          (day) => ({ ...day, weekdag: patternById.get(day.pattern_id)!.weekdag })
+        );
+      }
     }
 
-    const response: ApiSuccessResponse<{ generated_days: GeneratedDay[] }> = {
+    const response: ApiSuccessResponse<{
+      generated_days: GeneratedDay[];
+      blocked_elsewhere_days: BlockedElsewhereDay[];
+    }> = {
       success: true,
-      data: { generated_days: generatedDays },
+      data: { generated_days: generatedDays, blocked_elsewhere_days: blockedElsewhereDays },
     };
 
     return NextResponse.json(response);
