@@ -48,14 +48,16 @@ export async function GET(
            AND blocking_level = 'ABSOLUUT') as blocked_days_count,
           CASE
             WHEN (SELECT COUNT(*) FROM dienstrooster_parttime_pattern WHERE person_id = p.id) > 0
-            THEN 'Yes' ELSE 'No'
+            THEN 'Ja' ELSE 'Nee'
           END as has_parttime_patterns
         FROM dienstrooster_person p
         LEFT JOIN dienstrooster_submission s ON p.id = s.person_id AND s.schedule_period_id = ?
         WHERE p.id IN (
-          SELECT DISTINCT person_id
-          FROM dienstrooster_pool_membership
-          WHERE pool_id = (SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?)
+          SELECT DISTINCT pm.person_id
+          FROM dienstrooster_pool_membership pm
+          JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
+          WHERE pm.pool_id = sp2.pool_id
+            AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum
         )
         ORDER BY p.codenaam ASC`
       )
@@ -67,11 +69,17 @@ export async function GET(
         has_parttime_patterns: string;
       }>;
 
+    const statusLabels: Record<string, string> = {
+      NIET_BEGONNEN: 'Niet begonnen',
+      BEZIG: 'Bezig',
+      BEVESTIGD: 'Bevestigd',
+    };
+
     const csvLines: string[] = [
-      'Name,Status,Submitted At,Blocked Days,Has Part-time Patterns',
+      'Codenaam,Status,Ingediend op,Geblokkeerde dagen,Heeft deeltijdpatroon',
       ...rows.map(
         (r) =>
-          `"${r.codenaam}","${r.status}","${r.submitted_at || ''}",${r.blocked_days_count},"${r.has_parttime_patterns}"`
+          `"${r.codenaam}","${statusLabels[r.status] || r.status}","${r.submitted_at || ''}",${r.blocked_days_count},"${r.has_parttime_patterns}"`
       ),
     ];
 

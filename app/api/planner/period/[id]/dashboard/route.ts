@@ -78,8 +78,10 @@ export async function GET(
       LEFT JOIN dienstrooster_submission s ON p.id = s.person_id AND s.schedule_period_id = ?
       WHERE p.id IN (
         SELECT DISTINCT person_id
-        FROM dienstrooster_pool_membership
-        WHERE pool_id = (SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?)
+        FROM dienstrooster_pool_membership pm
+        JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
+        WHERE pm.pool_id = sp2.pool_id
+          AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum
       )
     `);
 
@@ -113,9 +115,11 @@ export async function GET(
         SELECT DISTINCT person_id FROM dienstrooster_parttime_pattern
       )
       AND p.id IN (
-        SELECT DISTINCT person_id
-        FROM dienstrooster_pool_membership
-        WHERE pool_id = (SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?)
+        SELECT DISTINCT pm.person_id
+        FROM dienstrooster_pool_membership pm
+        JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
+        WHERE pm.pool_id = sp2.pool_id
+          AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum
       )
     `);
 
@@ -123,9 +127,11 @@ export async function GET(
 
     // Get total staff
     const totalStaffStmt = db.prepare(`
-      SELECT COUNT(DISTINCT person_id) as count
-      FROM dienstrooster_pool_membership
-      WHERE pool_id = (SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?)
+      SELECT COUNT(DISTINCT pm.person_id) as count
+      FROM dienstrooster_pool_membership pm
+      JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
+      WHERE pm.pool_id = sp2.pool_id
+        AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum
     `);
 
     const totalStaff = totalStaffStmt.get(periodId) as any;

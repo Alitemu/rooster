@@ -151,16 +151,30 @@ export async function POST(
         person = { id: personId };
       }
 
+      // A person can only be one row in this pool at any given date - two
+      // overlapping memberships would make generate-roster count them
+      // twice (inflating headcount/bands) with a non-deterministic
+      // deelnamefactor, since nothing else de-duplicates by person_id.
+      const overlapping = db
+        .prepare(
+          `SELECT id FROM dienstrooster_pool_membership
+           WHERE pool_id = ? AND person_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+        )
+        .get(poolId, person.id, body.geldig_tot, body.geldig_vanaf);
+      if (overlapping) {
+        return { conflict: true as const };
+      }
+
       const membershipId = crypto.randomUUID();
       db.prepare(
         `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
          VALUES (?, ?, ?, ?, ?, ?)`
       ).run(membershipId, person.id, poolId, deelnamefactor, body.geldig_vanaf, body.geldig_tot);
 
-      return { membershipId, personId: person.id };
+      return { conflict: false as const, membershipId, personId: person.id };
     });
 
-    let result: { membershipId: string; personId: string };
+    let result: { conflict: false; membershipId: string; personId: string } | { conflict: true };
     try {
       result = addMember();
     } catch (error) {
@@ -175,6 +189,17 @@ export async function POST(
         return NextResponse.json(response, { status: 409 });
       }
       throw error;
+    }
+
+    if (result.conflict) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'MEMBERSHIP_OVERLAP',
+          message: 'Deze persoon heeft in deze pool al een lidmaatschap dat deze periode overlapt',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     const response: ApiSuccessResponse<{ id: string; person_id: string; codenaam: string }> = {

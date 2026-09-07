@@ -104,13 +104,22 @@ export async function POST(
     const slots = allSlots.filter((s) => !manuallyFilledSlotIds.has(s.id));
 
     // Fetch pool members whose membership window covers this period
-    // (membership windows are open-ended, not scoped to one period)
-    const poolMembers = db
+    // (membership windows are open-ended, not scoped to one period).
+    // Overlapping membership rows for the same person are now rejected at
+    // creation (see pool/[id]/members routes), but this still de-duplicates
+    // defensively - any pre-existing overlap must not double-count someone
+    // in the headcount/bands or leave their deelnamefactor picked
+    // non-deterministically by whichever row SQLite happens to return last.
+    const poolMembersRaw = db
       .prepare(
         `SELECT person_id, deelnamefactor FROM dienstrooster_pool_membership
          WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
       )
       .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
+
+    const poolMembers = Array.from(
+      new Map(poolMembersRaw.map((m) => [m.person_id, m])).values()
+    );
 
     const people = poolMembers.map((m) => m.person_id);
 

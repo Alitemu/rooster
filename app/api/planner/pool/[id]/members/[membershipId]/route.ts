@@ -28,11 +28,11 @@ function isValidDeelnamefactor(value: unknown): value is number {
 function getMembership(poolId: string, membershipId: string) {
   return db
     .prepare(
-      `SELECT id, geldig_vanaf, geldig_tot, deelnamefactor FROM dienstrooster_pool_membership
+      `SELECT id, person_id, geldig_vanaf, geldig_tot, deelnamefactor FROM dienstrooster_pool_membership
        WHERE id = ? AND pool_id = ?`
     )
     .get(membershipId, poolId) as
-    | { id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }
+    | { id: string; person_id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }
     | undefined;
 }
 
@@ -84,6 +84,24 @@ export async function PATCH(
         error: { code: 'INVALID_DEELNAMEFACTOR', message: 'Deelnamefactor moet tussen 0 (exclusief) en 1 liggen' },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // Same overlap rule as creating a new membership - see members/route.ts.
+    const overlapping = db
+      .prepare(
+        `SELECT id FROM dienstrooster_pool_membership
+         WHERE pool_id = ? AND person_id = ? AND id != ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+      )
+      .get(poolId, membership.person_id, membershipId, geldig_tot, geldig_vanaf);
+    if (overlapping) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'MEMBERSHIP_OVERLAP',
+          message: 'Deze persoon heeft in deze pool al een lidmaatschap dat deze periode overlapt',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     db.prepare(
