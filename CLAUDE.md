@@ -263,15 +263,16 @@ Show live in settings screen with interpretation in plain Dutch/English.
 
 ## Seed Script
 
-`npm run seed` loads 30 pseudonymous participants:
+`npm run seed` loads 31 pseudonymous participants:
 
-- Codenamen: Persoon-01 through Persoon-30
+- Codenamen: Persoon-01 through Persoon-31
 - Pool: 2-week window (default)
-- Period: 2027-01-04 to 2027-09-05 (35 weeks, 245 shifts)
+- Period: 2027-01-04 to 2027-06-06 (22 weeks)
 - Various part-time patterns
 - Mixed balances (some -1, +1, 0)
-- Holiday history for 2025-2026
-- Full audit log
+- Holiday history for 2025-2028
+- Creates the audit_log table, but does not insert any rows into it - a
+  fresh seed has an empty audit trail until real actions happen
 
 All data uses codenamen only, no real personal data.
 
