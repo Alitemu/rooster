@@ -12,6 +12,7 @@ import { useParams } from 'next/navigation';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
 import { PartTimeCheckStep } from '@/components/PartTimeCheckStep';
 import { ParttimePatternEditor } from '@/components/ParttimePatternEditor';
+import { AbsenceManager, type Absence } from '@/components/AbsenceManager';
 import { PreferencesConfirmation } from '@/components/PreferencesConfirmation';
 import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
@@ -82,6 +83,7 @@ export default function PersonalLinkPage() {
   const [personId, setPersonId] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period | null>(null);
   const [patterns, setPatterns] = useState<ParttimePattern[]>([]);
+  const [absences, setAbsences] = useState<Absence[]>([]);
   const [rosterData, setRosterData] = useState<RosterData | null>(null);
   const [blockedDays, setBlockedDays] = useState<BlockedDaysSummary>({
     AVOND: 0,
@@ -148,11 +150,18 @@ export default function PersonalLinkPage() {
             }
           }
         } else {
-          // Fetch part-time patterns for preference entry
-          const patternsRes = await fetch(`/api/person/${person_id}/parttime-patterns`);
+          // Fetch part-time patterns and absences for preference entry
+          const [patternsRes, absencesRes] = await Promise.all([
+            fetch(`/api/person/${person_id}/parttime-patterns`),
+            fetch(`/api/person/${person_id}/absences`),
+          ]);
           if (patternsRes.ok) {
             const patternsData = await patternsRes.json();
             setPatterns(patternsData.data);
+          }
+          if (absencesRes.ok) {
+            const absencesData = await absencesRes.json();
+            setAbsences(absencesData.data);
           }
         }
 
@@ -380,6 +389,14 @@ export default function PersonalLinkPage() {
               // matches what they just edited.
               setParttimeConfirmed(false);
             }}
+          />
+          <AbsenceManager
+            personId={personId}
+            absences={absences}
+            defaultVanaf={period.start_datum}
+            defaultTot={period.eind_datum}
+            readOnly={deadlinePassed}
+            onAbsencesChange={setAbsences}
           />
           <PartTimeCheckStep
             key={patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(',')}
