@@ -158,7 +158,6 @@ export interface RulesetConfig {
   softBlockPenalty: number;
   softBlockPenaltyPerPriorViolation: number;
   softBlockPriorViolationCap: number;
-  fairShareMode: DistributionMode;
   largeBalanceThreshold: number;
   bandDeviationPenalty: number[];
   bandDeviationMultiplier: number;

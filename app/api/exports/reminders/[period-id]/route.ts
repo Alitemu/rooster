@@ -3,9 +3,12 @@
  *
  * GET /api/exports/reminders/[period-id] - Get reminder templates for staff
  * who haven't confirmed their preferences yet. Optional
- * ?days_before_deadline=N picks the tone of the reminder (urgent close to
- * the deadline, gentle further out); defaults to the real number of days
- * left before the period's actual deadline.
+ * ?days_before_deadline=N overrides how many days out to pretend it is;
+ * defaults to the real number of days left before the period's actual
+ * deadline. Either way, the tone (urgent/moderate/gentle) is decided by
+ * where that number falls among the period's configured reminder
+ * milestones (dienstrooster_reminder_schedule, see lib/reminderSchedule.ts)
+ * rather than a fixed cutoff.
  *
  * As with invitations, the plaintext access token is never persisted, so a
  * fresh one is issued (revoking any previous one for this period) for each
@@ -17,6 +20,7 @@ import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { getActiveReminderMilestones, resolveReminderUrgency } from '@/lib/reminderSchedule';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ReminderTemplate {
@@ -99,12 +103,8 @@ export async function GET(
       req.nextUrl.searchParams.get('days_before_deadline'),
       period.deadline
     );
-    const urgency =
-      daysBeforeDeadline <= 1
-        ? 'urgent'
-        : daysBeforeDeadline <= 3
-          ? 'moderate'
-          : 'gentle';
+    const milestones = getActiveReminderMilestones(periodId);
+    const urgency = resolveReminderUrgency(daysBeforeDeadline, milestones);
 
     const reminders: ReminderTemplate[] = outstanding.map((person) => {
       revokeStmt.run(now, person.person_id, periodId);

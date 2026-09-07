@@ -97,6 +97,10 @@ class SolverInput(BaseModel):
     balances: dict[str, dict[str, int]]
     active_people: int
     prior_assignments: list[PriorAssignment] = []
+    # person_id -> pool_membership.deelnamefactor (e.g. 0.5 for half-time).
+    # Only consulted when rules.distribution_mode == "NAAR_RATO" - see
+    # constraints.add_band_constraints.
+    participation_factors: dict[str, float] = {}
 
 
 class Assignment(BaseModel):
@@ -216,7 +220,9 @@ async def solve_roster(request: SolverInput):
             window_weeks=request.rules.window_weeks,
             preferred_slots=preferred_slots,
             prior_assignments=[p.dict() for p in request.prior_assignments],
-            soft_block_penalty=request.rules.soft_block_penalty
+            soft_block_penalty=request.rules.soft_block_penalty,
+            distribution_mode=request.rules.distribution_mode,
+            participation_factors=request.participation_factors
         )
 
         if not result['success']:

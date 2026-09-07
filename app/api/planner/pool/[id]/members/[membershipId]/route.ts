@@ -17,15 +17,23 @@ import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 interface UpdateMembershipRequest {
   geldig_vanaf?: string;
   geldig_tot?: string;
+  deelnamefactor?: number;
+}
+
+/** 0 excluded (no participation at all isn't a membership) - 1 is full-time. */
+function isValidDeelnamefactor(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1;
 }
 
 function getMembership(poolId: string, membershipId: string) {
   return db
     .prepare(
-      `SELECT id, geldig_vanaf, geldig_tot FROM dienstrooster_pool_membership
+      `SELECT id, geldig_vanaf, geldig_tot, deelnamefactor FROM dienstrooster_pool_membership
        WHERE id = ? AND pool_id = ?`
     )
-    .get(membershipId, poolId) as { id: string; geldig_vanaf: string; geldig_tot: string } | undefined;
+    .get(membershipId, poolId) as
+    | { id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }
+    | undefined;
 }
 
 export async function PATCH(
@@ -52,8 +60,9 @@ export async function PATCH(
 
     const geldig_vanaf = body.geldig_vanaf || membership.geldig_vanaf;
     const geldig_tot = body.geldig_tot || membership.geldig_tot;
+    const deelnamefactor = body.deelnamefactor ?? membership.deelnamefactor;
 
-    if (!body.geldig_vanaf && !body.geldig_tot) {
+    if (!body.geldig_vanaf && !body.geldig_tot && body.deelnamefactor === undefined) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'NO_UPDATES', message: 'Geen velden om bij te werken' },
@@ -69,13 +78,21 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
 
-    db.prepare(
-      `UPDATE dienstrooster_pool_membership SET geldig_vanaf = ?, geldig_tot = ? WHERE id = ?`
-    ).run(geldig_vanaf, geldig_tot, membershipId);
+    if (body.deelnamefactor !== undefined && !isValidDeelnamefactor(deelnamefactor)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DEELNAMEFACTOR', message: 'Deelnamefactor moet tussen 0 (exclusief) en 1 liggen' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
 
-    const response: ApiSuccessResponse<{ id: string; geldig_vanaf: string; geldig_tot: string }> = {
+    db.prepare(
+      `UPDATE dienstrooster_pool_membership SET geldig_vanaf = ?, geldig_tot = ?, deelnamefactor = ? WHERE id = ?`
+    ).run(geldig_vanaf, geldig_tot, deelnamefactor, membershipId);
+
+    const response: ApiSuccessResponse<{ id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }> = {
       success: true,
-      data: { id: membershipId, geldig_vanaf, geldig_tot },
+      data: { id: membershipId, geldig_vanaf, geldig_tot, deelnamefactor },
     };
     return NextResponse.json(response);
   } catch (error) {

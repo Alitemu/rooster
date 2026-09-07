@@ -40,6 +40,7 @@ interface StaffMember {
   geldig_vanaf: string;
   geldig_tot: string;
   is_active: boolean; // membership covers this period's dates
+  deelnamefactor: number; // 1.0 = fulltime; only affects targets when Verdeelmodus = "Naar rato"
   access_link?: string;
 }
 
@@ -92,10 +93,10 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
-  const [newMember, setNewMember] = useState({ codenaam: '', geldig_vanaf: '', geldig_tot: '' });
+  const [newMember, setNewMember] = useState({ codenaam: '', geldig_vanaf: '', geldig_tot: '', deelnamefactor: 1 });
   const [addingMember, setAddingMember] = useState(false);
   const [editingMembershipId, setEditingMembershipId] = useState<string | null>(null);
-  const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '' });
+  const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '', deelnamefactor: 1 });
   const [savingMembership, setSavingMembership] = useState(false);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
   const [togglingMembershipId, setTogglingMembershipId] = useState<string | null>(null);
@@ -264,6 +265,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           geldig_vanaf: m.geldig_vanaf,
           geldig_tot: m.geldig_tot,
           is_active: m.is_active,
+          deelnamefactor: typeof m.deelnamefactor === 'number' ? m.deelnamefactor : 1,
           access_link: linkedPersonIds.has(m.person_id) ? 'existing' : undefined,
         }))
       );
@@ -304,7 +306,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
 
-      setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum });
+      setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum, deelnamefactor: 1 });
       await loadStaff();
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Toevoegen mislukt');
@@ -316,7 +318,7 @@ export function SetupWizard({ period, onComplete }: Props) {
   const startEditMembership = (member: StaffMember) => {
     setStaffError(null);
     setEditingMembershipId(member.id);
-    setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot });
+    setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot, deelnamefactor: member.deelnamefactor });
   };
 
   const handleSaveMembership = async (membershipId: string) => {
@@ -644,6 +646,9 @@ export function SetupWizard({ period, onComplete }: Props) {
                       <th className="px-4 py-2 text-left text-sm font-medium">Actief in deze periode</th>
                       <th className="px-4 py-2 text-left text-sm font-medium">Geldig vanaf</th>
                       <th className="px-4 py-2 text-left text-sm font-medium">Geldig tot</th>
+                      <th className="px-4 py-2 text-left text-sm font-medium" title='Alleen van invloed als Verdeelmodus (stap 4) op "Naar rato" staat'>
+                        Deelnamefactor
+                      </th>
                       <th className="px-4 py-2 text-left text-sm font-medium">Toegang</th>
                       <th className="px-4 py-2 text-left text-sm font-medium"></th>
                     </tr>
@@ -697,6 +702,25 @@ export function SetupWizard({ period, onComplete }: Props) {
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                min="0.1"
+                                max="1"
+                                step="0.1"
+                                value={editDates.deelnamefactor}
+                                onChange={(e) =>
+                                  setEditDates({ ...editDates, deelnamefactor: parseFloat(e.target.value) })
+                                }
+                                className="px-2 py-1 border rounded text-sm w-20"
+                              />
+                            ) : member.deelnamefactor < 1 ? (
+                              `${Math.round(member.deelnamefactor * 100)}%`
+                            ) : (
+                              'Fulltime'
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-sm">
                             {member.access_link ? (
                               <span className="text-green-600 font-medium">✓ Heeft al toegang</span>
                             ) : member.is_active ? (
@@ -744,7 +768,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                     })}
                     {staffMembers.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-500">
+                        <td colSpan={7} className="px-4 py-6 text-center text-sm text-neutral-500">
                           Nog niemand in deze pool. Voeg hieronder iemand toe.
                         </td>
                       </tr>
@@ -756,7 +780,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             <div className="border-t border-neutral-200 pt-4 space-y-3">
               <p className="text-sm font-medium text-neutral-800">Nieuw personeelslid toevoegen</p>
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
                   <input
@@ -782,6 +806,18 @@ export function SetupWizard({ period, onComplete }: Props) {
                     type="date"
                     value={newMember.geldig_tot}
                     onChange={(e) => setNewMember({ ...newMember, geldig_tot: e.target.value })}
+                    className="w-full px-2 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-600 mb-1">Deelnamefactor</label>
+                  <input
+                    type="number"
+                    min="0.1"
+                    max="1"
+                    step="0.1"
+                    value={newMember.deelnamefactor}
+                    onChange={(e) => setNewMember({ ...newMember, deelnamefactor: parseFloat(e.target.value) })}
                     className="w-full px-2 py-2 border rounded text-sm"
                   />
                 </div>
@@ -999,7 +1035,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                 {distributionConfig.mode === 'GELIJK' &&
                   'Iedereen krijgt hetzelfde streefbereik, ongeacht deeltijdfactor.'}
                 {distributionConfig.mode === 'NAAR_RATO' &&
-                  'Ieders streefbereik wordt geschaald naar hun deeltijdfactor.'}
+                  'Ieders streefbereik wordt geschaald naar hun deeltijdfactor (in te stellen bij stap 2, Personeel).'}
               </p>
             </div>
           </div>

@@ -10,6 +10,8 @@ Rewards (subtracts from the total):
 4. VOORKEUR (preferred) assignments
 """
 
+from typing import Optional
+
 from ortools.sat.python import cp_model
 
 
@@ -90,7 +92,9 @@ class ObjectiveBuilder:
         band_ranges: dict[str, list[int]],
         balances: dict[str, dict[str, int]],
         weight: float = 0.5,
-        counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG']
+        counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
+        distribution_mode: str = 'GELIJK',
+        participation_factors: Optional[dict[str, float]] = None
     ):
         """
         Objective: Prefer assignments toward middle of band range.
@@ -106,12 +110,27 @@ class ObjectiveBuilder:
         solver simply set every deviation to 0 and this entire term did
         nothing. Workload came out visibly lopsided (1/2/3 shifts across
         three interchangeable people) while the code claimed to balance it.
+
+        distribution_mode/participation_factors mirror
+        constraints.add_band_constraints exactly - this term has to pull
+        toward the *same* scaled middle that term constrains against, or a
+        part-timer's target here would silently disagree with their actual
+        band there, and this (much smaller) weight would just get
+        overruled by the band-slack term picking whichever allocation this
+        one didn't prefer.
         """
         imbalance_cost = 0
+        factors = participation_factors or {}
 
         for person_id in people:
             for counter in counters:
                 base_min, base_max = band_ranges.get(counter, [7, 8])
+
+                if distribution_mode == 'NAAR_RATO':
+                    factor = factors.get(person_id, 1.0)
+                    base_min = round(base_min * factor)
+                    base_max = max(base_min, round(base_max * factor))
+
                 delta = balances.get(person_id, {}).get(counter, 0)
 
                 actual_min = base_min + delta

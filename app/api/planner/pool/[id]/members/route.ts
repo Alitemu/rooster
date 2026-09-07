@@ -24,6 +24,12 @@ interface PoolMember {
   geldig_vanaf: string;
   geldig_tot: string | null;
   is_active: boolean;
+  deelnamefactor: number;
+}
+
+/** 0 excluded (no participation at all isn't a membership) - 1 is full-time. */
+function isValidDeelnamefactor(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1;
 }
 
 export async function GET(
@@ -48,6 +54,7 @@ export async function GET(
         p.codenaam,
         pm.geldig_vanaf,
         pm.geldig_tot,
+        pm.deelnamefactor,
         CASE
           WHEN pm.geldig_vanaf <= ? AND (pm.geldig_tot IS NULL OR pm.geldig_tot >= ?)
           THEN 1
@@ -76,6 +83,7 @@ interface AddMemberRequest {
   codenaam: string;
   geldig_vanaf: string;
   geldig_tot: string;
+  deelnamefactor?: number;
 }
 
 export async function POST(
@@ -104,6 +112,15 @@ export async function POST(
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_RANGE', message: '"Geldig vanaf" moet vóór of op "geldig tot" liggen' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    const deelnamefactor = body.deelnamefactor ?? 1.0;
+    if (!isValidDeelnamefactor(deelnamefactor)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DEELNAMEFACTOR', message: 'Deelnamefactor moet tussen 0 (exclusief) en 1 liggen' },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -137,8 +154,8 @@ export async function POST(
       const membershipId = crypto.randomUUID();
       db.prepare(
         `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
-         VALUES (?, ?, ?, 1.0, ?, ?)`
-      ).run(membershipId, person.id, poolId, body.geldig_vanaf, body.geldig_tot);
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(membershipId, person.id, poolId, deelnamefactor, body.geldig_vanaf, body.geldig_tot);
 
       return { membershipId, personId: person.id };
     });

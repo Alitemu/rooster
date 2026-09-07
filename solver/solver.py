@@ -39,7 +39,9 @@ class RosterSolver:
         window_weeks: int = 2,
         preferred_slots: Optional[dict[tuple[str, str], float]] = None,
         prior_assignments: Optional[list[dict]] = None,
-        soft_block_penalty: float = 1.0
+        soft_block_penalty: float = 1.0,
+        distribution_mode: str = 'GELIJK',
+        participation_factors: Optional[dict[str, float]] = None
     ) -> dict:
         """
         Build the CP-SAT model with all constraints and objectives.
@@ -93,7 +95,8 @@ class RosterSolver:
 
         logger.info("Adding band limit constraints")
         band_slack_vars = constraint_builder.add_band_constraints(
-            assignment_vars, people, slots, band_ranges, balances
+            assignment_vars, people, slots, band_ranges, balances,
+            distribution_mode=distribution_mode, participation_factors=participation_factors
         )
 
         # Add objectives
@@ -116,7 +119,8 @@ class RosterSolver:
 
         logger.info("Adding band imbalance objective")
         imbalance_cost = objective_builder.add_band_imbalance_objective(
-            assignment_vars, people, slots, band_ranges, balances, weight=0.5
+            assignment_vars, people, slots, band_ranges, balances, weight=0.5,
+            distribution_mode=distribution_mode, participation_factors=participation_factors
         )
 
         logger.info("Adding preference reward objective")
@@ -245,7 +249,9 @@ class RosterSolver:
         window_weeks: int = 2,
         preferred_slots: Optional[dict[tuple[str, str], float]] = None,
         prior_assignments: Optional[list[dict]] = None,
-        soft_block_penalty: float = 1.0
+        soft_block_penalty: float = 1.0,
+        distribution_mode: str = 'GELIJK',
+        participation_factors: Optional[dict[str, float]] = None
     ) -> dict:
         """
         End-to-end: build model, solve, extract assignments.
@@ -257,7 +263,8 @@ class RosterSolver:
             model_data = self.build_model(
                 people, slots, blocked_slots, soft_slots, {},
                 band_ranges, balances, window_weeks, preferred_slots,
-                prior_assignments, soft_block_penalty
+                prior_assignments, soft_block_penalty,
+                distribution_mode, participation_factors
             )
 
             # Solve

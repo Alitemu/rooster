@@ -11,6 +11,7 @@ Implements hard constraints for roster generation:
 """
 
 from datetime import date, timedelta
+from typing import Optional
 
 from ortools.sat.python import cp_model
 
@@ -247,13 +248,24 @@ class ConstraintBuilder:
         slots: list[dict],
         band_ranges: dict[str, list[int]],  # counter -> [min, max]
         balances: dict[str, dict[str, int]],  # person -> { counter: delta }
-        counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG']
+        counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
+        distribution_mode: str = 'GELIJK',
+        participation_factors: Optional[dict[str, float]] = None
     ) -> dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]]:
         """
         Constraint: Each person must have assignments in band range per counter.
 
         Band is adjusted by ledger balance:
         actual_band = [base_min + delta, base_max + delta]
+
+        With distribution_mode='NAAR_RATO', base_min/base_max are first
+        scaled by the person's participation_factors entry (their
+        pool_membership.deelnamefactor, e.g. 0.5 for a half-time
+        participant) before the balance delta is applied - so a part-timer
+        is held to a proportionally smaller target instead of the same
+        band as everyone else. 'GELIJK' (the default) ignores the factor
+        entirely, on purpose: everyone gets the same target regardless of
+        participation.
 
         Soft via under/over slack rather than a hard range: when there
         genuinely aren't enough people to cover every slot within
@@ -268,10 +280,16 @@ class ConstraintBuilder:
         """
         self.violations['band_limit'] = 0
         band_slack_vars: dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]] = {}
+        factors = participation_factors or {}
 
         for person_id in people:
             for counter in counters:
                 base_min, base_max = band_ranges.get(counter, [7, 8])
+
+                if distribution_mode == 'NAAR_RATO':
+                    factor = factors.get(person_id, 1.0)
+                    base_min = round(base_min * factor)
+                    base_max = max(base_min, round(base_max * factor))
 
                 # Get person's balance for this counter
                 delta = balances.get(person_id, {}).get(counter, 0)

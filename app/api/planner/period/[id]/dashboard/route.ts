@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { resolveRulesetConfig } from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SubmissionStats {
@@ -47,7 +48,9 @@ export async function GET(
     const periodId = params.id;
 
     // Get period info
-    const periodStmt = db.prepare('SELECT id, naam, status FROM dienstrooster_schedule_period WHERE id = ?');
+    const periodStmt = db.prepare(
+      'SELECT id, naam, status, pool_id, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?'
+    );
     const period = periodStmt.get(periodId) as any;
 
     if (!period) {
@@ -60,6 +63,10 @@ export async function GET(
       };
       return NextResponse.json(response, { status: 404 });
     }
+
+    const config = resolveRulesetConfig(period);
+    const largeBalanceThreshold =
+      typeof config.largeBalanceThreshold === 'number' ? config.largeBalanceThreshold : 2;
 
     // Get submission stats
     const statsStmt = db.prepare(`
@@ -78,7 +85,8 @@ export async function GET(
 
     const stats = statsStmt.get(periodId, periodId) as any;
 
-    // Get large imbalances (>= 2)
+    // Get large imbalances - the ruleset's largeBalanceThreshold decides
+    // what counts as "large" (falls back to 2 when unset, see above)
     const imbalancesStmt = db.prepare(`
       SELECT
         p.id as person_id,
@@ -91,11 +99,11 @@ export async function GET(
       JOIN dienstrooster_schedule_period sp ON le.geldt_voor_periode_id = sp.id
       WHERE le.geldt_voor_periode_id = ?
       GROUP BY p.id, le.teller
-      HAVING ABS(delta) >= 2
+      HAVING ABS(delta) >= ?
       ORDER BY ABS(delta) DESC
     `);
 
-    const imbalances = imbalancesStmt.all(periodId) as ImbalanceItem[];
+    const imbalances = imbalancesStmt.all(periodId, largeBalanceThreshold) as ImbalanceItem[];
 
     // Get staff with parttime patterns
     const parttimeStmt = db.prepare(`

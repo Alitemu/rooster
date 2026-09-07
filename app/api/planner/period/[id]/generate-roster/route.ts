@@ -107,7 +107,7 @@ export async function POST(
     // (membership windows are open-ended, not scoped to one period)
     const poolMembers = db
       .prepare(
-        `SELECT person_id FROM dienstrooster_pool_membership
+        `SELECT person_id, deelnamefactor FROM dienstrooster_pool_membership
          WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
       )
       .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
@@ -119,6 +119,13 @@ export async function POST(
         { success: false, error: 'No active pool members' },
         { status: 400 }
       );
+    }
+
+    // Only consulted by the solver when distribution_mode is NAAR_RATO -
+    // see lib/rosterBands's resolveRulesetConfig / the RuleSet comment.
+    const participationFactors: Record<string, number> = {};
+    for (const m of poolMembers) {
+      participationFactors[m.person_id] = m.deelnamefactor;
     }
 
     // Build parameterized placeholders for SQL IN clauses
@@ -232,6 +239,7 @@ export async function POST(
         person_id: r.person_id,
         datum: r.datum,
       })),
+      participation_factors: participationFactors,
     };
 
     // Call solver service

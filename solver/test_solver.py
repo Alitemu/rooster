@@ -53,7 +53,8 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
 
 
 def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None,
-          preferred=None, prior=None, soft_block_penalty=1.0):
+          preferred=None, prior=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
+          participation_factors=None):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -69,6 +70,8 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         preferred_slots=preferred or {},
         prior_assignments=prior or [],
         soft_block_penalty=soft_block_penalty,
+        distribution_mode=distribution_mode,
+        participation_factors=participation_factors,
     )
 
 
@@ -393,3 +396,46 @@ def test_soft_block_penalty_weight_controls_whether_it_is_honoured():
     assert [a['person_id'] for a in high['assignments']] == ['p2'], (
         'at a high penalty, avoiding the LIEVER_NIET slot should win even at the cost of band imbalance'
     )
+
+
+# ---------------------------------------------------------------------------
+# DISTRIBUTION MODE: NAAR_RATO band scaling by participation factor
+# ---------------------------------------------------------------------------
+
+def test_naar_rato_scales_a_part_timers_band_by_their_participation_factor():
+    """
+    distribution_mode='NAAR_RATO' scales each person's band by their
+    pool_membership.deelnamefactor before anything else - a half-time
+    person's target should be roughly half of a full-timer's, while
+    'GELIJK' (the default) holds everyone to the same target regardless.
+
+    6 AVOND slots, 3 people, band [2,2] (a tight target of 2 each - exactly
+    enough for a 2/2/2 split). p3 has a participation factor of 0.5.
+
+    - Under GELIJK, the factor is ignored: p3 gets the same target as
+      everyone else, so a 2/2/2 split remains optimal.
+    - Under NAAR_RATO, p3's actual band becomes [1,1] (round(2*0.5)). With
+      only 5 target shifts now spoken for across 6 slots, someone has to
+      absorb the 6th - cheaper to stretch a full-timer 1 over their band
+      (band-slack cost) than leave a slot uncovered (shortfall cost), so
+      p3 should end up with exactly 1.
+    """
+    slots = make_slots(6)
+    people = ['p1', 'p2', 'p3']
+    band = {'AVOND': [2, 2], 'WEEKEND': [2, 2], 'FEESTDAG': [2, 2]}
+
+    def count_for(result, person):
+        return sum(1 for a in result['assignments'] if a['person_id'] == person)
+
+    gelijk = solve(people, slots, window_weeks=2, band=band, distribution_mode='GELIJK',
+                    participation_factors={'p3': 0.5})
+    assert count_for(gelijk, 'p3') == 2, (
+        'GELIJK must ignore the participation factor - p3 should get the same target as everyone else'
+    )
+
+    naar_rato = solve(people, slots, window_weeks=2, band=band, distribution_mode='NAAR_RATO',
+                       participation_factors={'p3': 0.5})
+    assert count_for(naar_rato, 'p3') == 1, (
+        f"NAAR_RATO should scale p3's target down to 1, got {count_for(naar_rato, 'p3')}"
+    )
+    assert len(naar_rato['assignments']) == 6, 'all 6 slots should still end up covered'

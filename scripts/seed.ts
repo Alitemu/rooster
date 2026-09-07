@@ -531,7 +531,6 @@ async function seed() {
       softBlockPenalty: 3.0,
       softBlockPenaltyPerPriorViolation: 1.0,
       softBlockPriorViolationCap: 3,
-      fairShareMode: 'GELIJK',
       largeBalanceThreshold: 2,
       bandDeviationPenalty: [10, 40, 160],
       bandDeviationMultiplier: 4,
