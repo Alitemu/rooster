@@ -166,14 +166,14 @@ const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReas
       label: 'Ruil avond- voor weekenddienst',
       defaultAantal: 1,
       explain: (n) =>
-        `Heeft een avonddienst geruild voor een weekenddienst: avonddienst wordt ${n} meer, weekenddienst wordt ${n} minder.`,
+        `Heeft een avonddienst geruild voor een weekenddienst: avonddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}, weekenddienst wordt ${n >= 0 ? n + ' minder' : Math.abs(n) + ' meer'}.`,
     },
     {
       type: 'RUIL_WEEKEND_VOOR_AVOND',
       label: 'Ruil weekend- voor avonddienst',
       defaultAantal: 1,
       explain: (n) =>
-        `Heeft een weekenddienst geruild voor een avonddienst: weekenddienst wordt ${n} meer, avonddienst wordt ${n} minder.`,
+        `Heeft een weekenddienst geruild voor een avonddienst: weekenddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}, avonddienst wordt ${n >= 0 ? n + ' minder' : Math.abs(n) + ' meer'}.`,
     },
   ],
 };
@@ -538,7 +538,12 @@ export function SetupWizard({ period, onComplete }: Props) {
   };
 
   const handleAddCorrection = () => {
-    if (!correctionForm.personId || correctionForm.aantal === '' || correctionForm.aantal === 0) {
+    if (
+      !correctionForm.personId ||
+      correctionForm.aantal === '' ||
+      !Number.isFinite(correctionForm.aantal) ||
+      correctionForm.aantal === 0
+    ) {
       setError('Kies een medewerker en vul een aantal (ongelijk aan 0) in');
       return;
     }
@@ -659,8 +664,9 @@ export function SetupWizard({ period, onComplete }: Props) {
         }).catch(() => null);
       }
 
+      let correctionsFailed = false;
       if (corrections.length > 0) {
-        await fetch(`/api/planner/period/${period.id}/ledger-corrections`, {
+        const correctionsRes = await fetch(`/api/planner/period/${period.id}/ledger-corrections`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -672,11 +678,15 @@ export function SetupWizard({ period, onComplete }: Props) {
             })),
           }),
         }).catch(() => null);
+        correctionsFailed = !correctionsRes || !correctionsRes.ok;
       }
 
       setOpenResult(
         `Periode geopend (${openData.data.start_datum} t/m ${openData.data.eind_datum}): ` +
-          `${openData.data.slots_generated} diensten gegenereerd, ${toLink.length} uitnodigingen verstuurd.`
+          `${openData.data.slots_generated} diensten gegenereerd, ${toLink.length} uitnodigingen verstuurd.` +
+          (correctionsFailed
+            ? ' Let op: de handmatige correcties zijn niet opgeslagen. Noteer ze en laat de beheerder ze alsnog verwerken.'
+            : '')
       );
       onComplete?.();
     } catch (err) {
@@ -1462,7 +1472,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                         <td className="px-3 py-2 font-medium">{c.codenaam}</td>
                         <td className="px-3 py-2">{CORRECTION_TYPE_LABELS[c.type]}</td>
                         <td className="px-3 py-2">{c.reden}</td>
-                        <td className="px-3 py-2">{c.aantal >= 0 ? `+${c.aantal}` : c.aantal}</td>
+                        <td className="px-3 py-2">{Math.abs(c.aantal)} {c.aantal >= 0 ? 'meer' : 'minder'}</td>
                         <td className="px-3 py-2 text-right">
                           <button
                             onClick={() => handleRemoveCorrection(c.id)}
