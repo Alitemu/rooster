@@ -189,9 +189,9 @@ export function PreferencesConfirmation({
       {/* Submit button */}
       <button
         onClick={handleSubmit}
-        disabled={submitting || !parttimeConfirmed || readOnly}
+        disabled={submitting || !parttimeConfirmed || !hasVacationCheck || readOnly}
         className={`w-full py-3 px-4 rounded font-semibold text-white transition-colors
-          ${submitting || !parttimeConfirmed || readOnly
+          ${submitting || !parttimeConfirmed || !hasVacationCheck || readOnly
             ? 'bg-neutral-400 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'}`}
       >
