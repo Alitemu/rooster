@@ -1347,9 +1347,6 @@ export function SetupWizard({ period, onComplete }: Props) {
               onClick={() => setCorrectionFormOpen((v) => !v)}
               className="flex items-center gap-2 px-4 py-2 rounded font-medium bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors"
             >
-              <span className={`inline-block transition-transform ${correctionFormOpen ? 'rotate-180' : ''}`}>
-                ⌄
-              </span>
               Correctie toepassen
             </button>
 
