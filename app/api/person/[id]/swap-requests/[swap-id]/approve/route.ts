@@ -101,22 +101,6 @@ export async function POST(
       );
     }
 
-    // Swap person_ids in assignments
-    db.prepare(
-      'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
-    ).run(respondentAssignment.person_id, 'MANUAL', requesterAssignment.id);
-
-    db.prepare(
-      'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
-    ).run(requesterAssignment.person_id, 'MANUAL', respondentAssignment.id);
-
-    // Update swap request status
-    db.prepare(
-      `UPDATE dienstrooster_swap_request
-       SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?
-       WHERE id = ?`
-    ).run('GOEDGEKEURD', now, personId, swapId);
-
     // Notify requester that swap was approved
     const aanvrager = db
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
@@ -144,31 +128,53 @@ export async function POST(
       details,
       link: '',
     });
-    if (rendered) {
-      insertNotification({
-        personId: swapRequest.aanvrager_person_id,
-        periodId: swapRequest.periode_id,
-        type: 'RUIL_GOEDGEKEURD',
-        onderwerp: rendered.onderwerp,
-        inhoud: rendered.inhoud,
-      });
-    }
+    // Swapping the two assignments, updating the request status, and
+    // logging the notification/audit trail must all succeed together - a
+    // crash partway through (e.g. after the first assignment UPDATE but
+    // before the second) would otherwise leave the respondent holding both
+    // shifts and the requester holding neither, with the request still
+    // PENDING and no audit trail of what happened.
+    const approveTx = db.transaction(() => {
+      db.prepare(
+        'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
+      ).run(respondentAssignment.person_id, 'MANUAL', requesterAssignment.id);
 
-    // Log audit entry
-    db.prepare(
-      `INSERT INTO dienstrooster_audit_log
-       (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      uuid(),
-      personId,
-      'swap_request',
-      swapId,
-      'APPROVE',
-      JSON.stringify({ status: 'PENDING' }),
-      JSON.stringify({ status: 'GOEDGEKEURD' }),
-      now
-    );
+      db.prepare(
+        'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
+      ).run(requesterAssignment.person_id, 'MANUAL', respondentAssignment.id);
+
+      db.prepare(
+        `UPDATE dienstrooster_swap_request
+         SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?
+         WHERE id = ?`
+      ).run('GOEDGEKEURD', now, personId, swapId);
+
+      if (rendered) {
+        insertNotification({
+          personId: swapRequest.aanvrager_person_id,
+          periodId: swapRequest.periode_id,
+          type: 'RUIL_GOEDGEKEURD',
+          onderwerp: rendered.onderwerp,
+          inhoud: rendered.inhoud,
+        });
+      }
+
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log
+         (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        uuid(),
+        personId,
+        'swap_request',
+        swapId,
+        'APPROVE',
+        JSON.stringify({ status: 'PENDING' }),
+        JSON.stringify({ status: 'GOEDGEKEURD' }),
+        now
+      );
+    });
+    approveTx();
 
     return NextResponse.json({
       success: true,

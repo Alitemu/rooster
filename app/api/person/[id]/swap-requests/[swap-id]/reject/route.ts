@@ -61,13 +61,6 @@ export async function POST(
       );
     }
 
-    // Update swap request status
-    db.prepare(
-      `UPDATE dienstrooster_swap_request
-       SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?, opmerkingen = ?
-       WHERE id = ?`
-    ).run('AFGEWEZEN', now, personId, reason || null, swapId);
-
     // Notify requester that swap was rejected
     const aanvrager = db
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
@@ -96,31 +89,41 @@ export async function POST(
       details,
       link: '',
     });
-    if (rendered) {
-      insertNotification({
-        personId: swapRequest.aanvrager_person_id,
-        periodId: swapRequest.periode_id,
-        type: 'RUIL_AFGEWEZEN',
-        onderwerp: rendered.onderwerp,
-        inhoud: rendered.inhoud,
-      });
-    }
+    // Updating the request status and logging the notification/audit trail
+    // together - see approve/route.ts's identical reasoning.
+    const rejectTx = db.transaction(() => {
+      db.prepare(
+        `UPDATE dienstrooster_swap_request
+         SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?, opmerkingen = ?
+         WHERE id = ?`
+      ).run('AFGEWEZEN', now, personId, reason || null, swapId);
 
-    // Log audit entry
-    db.prepare(
-      `INSERT INTO dienstrooster_audit_log
-       (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      uuid(),
-      personId,
-      'swap_request',
-      swapId,
-      'REJECT',
-      JSON.stringify({ status: 'PENDING' }),
-      JSON.stringify({ status: 'AFGEWEZEN', reason: reason || null }),
-      now
-    );
+      if (rendered) {
+        insertNotification({
+          personId: swapRequest.aanvrager_person_id,
+          periodId: swapRequest.periode_id,
+          type: 'RUIL_AFGEWEZEN',
+          onderwerp: rendered.onderwerp,
+          inhoud: rendered.inhoud,
+        });
+      }
+
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log
+         (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        uuid(),
+        personId,
+        'swap_request',
+        swapId,
+        'REJECT',
+        JSON.stringify({ status: 'PENDING' }),
+        JSON.stringify({ status: 'AFGEWEZEN', reason: reason || null }),
+        now
+      );
+    });
+    rejectTx();
 
     return NextResponse.json({
       success: true,
