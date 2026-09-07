@@ -108,6 +108,24 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
     }
   };
 
+  const handleCancel = async (swapId: string) => {
+    try {
+      const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/cancel`, {
+        method: 'POST',
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Intrekken van ruilverzoek mislukt');
+      }
+
+      setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
+      showSuccess('Ruilverzoek ingetrokken');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Intrekken van ruilverzoek mislukt');
+    }
+  };
+
   const shiftTypeNames: Record<string, string> = {
     AVOND: 'Avond',
     WEEKEND: 'Weekend',
@@ -256,6 +274,16 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                       className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
                     >
                       Weigeren
+                    </button>
+                  </div>
+                )}
+                {isPending && isRequester && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCancel(swap.id)}
+                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                    >
+                      Intrekken
                     </button>
                   </div>
                 )}
