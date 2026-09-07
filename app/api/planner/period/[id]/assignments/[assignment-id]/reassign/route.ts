@@ -22,6 +22,13 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { resolveRulesetConfig } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
+import { queueBlockOverriddenNotification } from '@/lib/notifications';
+
+const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
+  BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
+  PARTTIME_OVERRIDE: 'een parttime-vrije dag is toch ingepland',
+  WINDOW_OVERRIDE: 'een dienst binnen het venster is toch ingepland',
+};
 
 export async function POST(
   request: NextRequest,
@@ -42,7 +49,7 @@ export async function POST(
 
     if (!newPersonId) {
       return NextResponse.json(
-        { success: false, error: 'Missing person_id' },
+        { success: false, error: 'person_id ontbreekt' },
         { status: 400 }
       );
     }
@@ -53,7 +60,7 @@ export async function POST(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
       );
     }
@@ -64,7 +71,7 @@ export async function POST(
 
     if (!assignment) {
       return NextResponse.json(
-        { success: false, error: 'Assignment not found' },
+        { success: false, error: 'Toewijzing niet gevonden' },
         { status: 404 }
       );
     }
@@ -73,7 +80,7 @@ export async function POST(
     // see, so an unexplained change to it isn't acceptable.
     if (period.status === 'GEPUBLICEERD' && !reason) {
       return NextResponse.json(
-        { success: false, error: 'A reason is required when changing a published roster' },
+        { success: false, error: 'Een reden is verplicht bij het wijzigen van een gepubliceerd rooster' },
         { status: 400 }
       );
     }
@@ -86,12 +93,12 @@ export async function POST(
     }
 
     const newPerson = db
-      .prepare('SELECT id FROM dienstrooster_person WHERE id = ?')
-      .get(newPersonId);
+      .prepare('SELECT id, codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(newPersonId) as { id: string; codenaam: string } | undefined;
 
     if (!newPerson) {
       return NextResponse.json(
-        { success: false, error: 'Person not found' },
+        { success: false, error: 'Persoon niet gevonden' },
         { status: 404 }
       );
     }
@@ -111,8 +118,8 @@ export async function POST(
     // derived from other slots - matches the category priority in
     // lib/rosterGaps.ts.
     const slot = db
-      .prepare('SELECT iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
-      .get(assignment.slot_id) as { iso_jaar: number; iso_week: number };
+      .prepare('SELECT datum, iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
+      .get(assignment.slot_id) as { datum: string; iso_jaar: number; iso_week: number };
     const config = resolveRulesetConfig(period);
     const windowWeeks = typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
     const windowConflict =
@@ -204,6 +211,21 @@ export async function POST(
     });
 
     run();
+
+    // Prepared for when there's a way to reach the participant outside the
+    // app - see lib/notifications.ts. A no-op today (NOTIFICATIONS_ENABLED
+    // is off by default), never allowed to affect whether the swap itself
+    // succeeded.
+    if (warning) {
+      queueBlockOverriddenNotification({
+        personId: newPersonId as string,
+        codenaam: newPerson.codenaam,
+        periodId,
+        periodeNaam: period.naam,
+        details: `Dienst op ${slot.datum}`,
+        reden: (reason as string | undefined) || OVERRIDE_REDEN_FALLBACK[warning.code],
+      });
+    }
 
     return NextResponse.json({
       success: true,

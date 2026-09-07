@@ -21,6 +21,13 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { resolveRulesetConfig } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
+import { queueBlockOverriddenNotification } from '@/lib/notifications';
+
+const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
+  BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
+  PARTTIME_OVERRIDE: 'een parttime-vrije dag is toch ingepland',
+  WINDOW_OVERRIDE: 'een dienst binnen het venster is toch ingepland',
+};
 
 export async function POST(
   request: NextRequest,
@@ -40,7 +47,7 @@ export async function POST(
 
     if (!person_id || !slot_id) {
       return NextResponse.json(
-        { success: false, error: 'Missing person_id or slot_id' },
+        { success: false, error: 'person_id of slot_id ontbreekt' },
         { status: 400 }
       );
     }
@@ -52,14 +59,14 @@ export async function POST(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
       );
     }
 
     if (!['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Cannot edit assignments in ${period.status} status` },
+        { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
         { status: 400 }
       );
     }
@@ -71,7 +78,7 @@ export async function POST(
 
     if (!person) {
       return NextResponse.json(
-        { success: false, error: 'Person not found' },
+        { success: false, error: 'Persoon niet gevonden' },
         { status: 404 }
       );
     }
@@ -83,7 +90,7 @@ export async function POST(
 
     if (!slot) {
       return NextResponse.json(
-        { success: false, error: 'Slot not found' },
+        { success: false, error: 'Dienst niet gevonden' },
         { status: 404 }
       );
     }
@@ -95,7 +102,7 @@ export async function POST(
 
     if (existing && existing.person_id !== person_id) {
       return NextResponse.json(
-        { success: false, error: 'Slot already assigned to another person' },
+        { success: false, error: 'Deze dienst is al aan iemand anders toegewezen' },
         { status: 409 }
       );
     }
@@ -179,6 +186,21 @@ export async function POST(
       }),
       now
     );
+
+    // Prepared for when there's a way to reach the participant outside the
+    // app - see lib/notifications.ts. A no-op today (NOTIFICATIONS_ENABLED
+    // is off by default), never allowed to affect whether the assignment
+    // itself succeeded.
+    if (warning) {
+      queueBlockOverriddenNotification({
+        personId: person_id as string,
+        codenaam: person.codenaam,
+        periodId,
+        periodeNaam: period.naam,
+        details: `Dienst op ${slot.datum}`,
+        reden: (reason as string | undefined) || OVERRIDE_REDEN_FALLBACK[warning.code],
+      });
+    }
 
     return NextResponse.json({
       success: true,

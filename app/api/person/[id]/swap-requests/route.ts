@@ -11,6 +11,13 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+
+const TELLER_LABELS: Record<string, string> = {
+  AVOND: 'avonddienst',
+  WEEKEND: 'weekenddienst',
+  FEESTDAG: 'feestdagdienst',
+};
 
 export async function GET(
   request: NextRequest,
@@ -87,7 +94,7 @@ export async function POST(
 
     if (!period_id || !offered_slot_id || !requested_slot_id) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields' },
+        { success: false, error: 'Verplichte velden ontbreken' },
         { status: 400 }
       );
     }
@@ -102,7 +109,7 @@ export async function POST(
 
     if (!requesterAssignment) {
       return NextResponse.json(
-        { success: false, error: 'You do not have the offered slot assigned' },
+        { success: false, error: 'Je hebt de aangeboden dienst niet toegewezen gekregen' },
         { status: 400 }
       );
     }
@@ -117,14 +124,14 @@ export async function POST(
 
     if (!respondentAssignment) {
       return NextResponse.json(
-        { success: false, error: 'Requested slot has no assignee' },
+        { success: false, error: 'De gevraagde dienst heeft geen toegewezen persoon' },
         { status: 400 }
       );
     }
 
     if (respondentAssignment.person_id === personId) {
       return NextResponse.json(
-        { success: false, error: 'Cannot swap with yourself' },
+        { success: false, error: 'Je kunt niet met jezelf ruilen' },
         { status: 400 }
       );
     }
@@ -150,21 +157,44 @@ export async function POST(
     );
 
     // Create notification for respondent
-    const notifId = uuid();
-    db.prepare(
-      `INSERT INTO dienstrooster_notification
-       (id, person_id, periode_id, type, onderwerp, inhoud, gelezen, aangemaakt_op)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      notifId,
-      respondentAssignment.person_id,
-      period_id,
-      'RUILVERZOEK',
-      'New swap request',
-      'Someone has requested a shift swap with you. Check your notifications for details.',
-      0,
-      now
-    );
+    const aanvrager = db
+      .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(personId) as { codenaam: string } | undefined;
+    const respondent = db
+      .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(respondentAssignment.person_id) as { codenaam: string } | undefined;
+    const offeredSlot = db
+      .prepare(
+        `SELECT s.datum, st.teller FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(offered_slot_id) as { datum: string; teller: string } | undefined;
+    const requestedSlot = db
+      .prepare(
+        `SELECT s.datum, st.teller FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(requested_slot_id) as { datum: string; teller: string } | undefined;
+
+    const details = `Aangeboden: ${offeredSlot?.datum} (${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller})\nGevraagd: ${requestedSlot?.datum} (${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller})`;
+
+    const rendered = renderNotificationTemplate('SWAP_REQUESTED', {
+      codenaam: respondent?.codenaam ?? '',
+      aanvrager: aanvrager?.codenaam ?? '',
+      details,
+      link: '',
+    });
+    if (rendered) {
+      insertNotification({
+        personId: respondentAssignment.person_id,
+        periodId: period_id as string,
+        type: 'RUILVERZOEK',
+        onderwerp: rendered.onderwerp,
+        inhoud: rendered.inhoud,
+      });
+    }
 
     return NextResponse.json({
       success: true,

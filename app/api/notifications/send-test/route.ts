@@ -7,20 +7,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { renderNotificationTemplate } from '@/lib/notifications';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SendTestRequest {
   sleutel: string;
   placeholders?: Record<string, string>;
-}
-
-function renderTemplate(text: string, placeholders: Record<string, string>): string {
-  return text.replace(/\{\{(\w+)\}\}/g, (match, key) =>
-    key in placeholders ? placeholders[key] : match
-  );
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -41,11 +35,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 400 });
     }
 
-    const template = db
-      .prepare('SELECT onderwerp, body_md FROM dienstrooster_notification_template WHERE sleutel = ?')
-      .get(sleutel) as { onderwerp: string; body_md: string } | undefined;
+    const rendered = renderNotificationTemplate(sleutel, placeholders);
 
-    if (!template) {
+    if (!rendered) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'TEMPLATE_NOT_FOUND', message: `No template configured for ${sleutel}` },
@@ -55,10 +47,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const response: ApiSuccessResponse<{ subject: string; body: string }> = {
       success: true,
-      data: {
-        subject: renderTemplate(template.onderwerp, placeholders),
-        body: renderTemplate(template.body_md, placeholders),
-      },
+      data: { subject: rendered.onderwerp, body: rendered.inhoud },
     };
 
     return NextResponse.json(response);

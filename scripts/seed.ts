@@ -364,7 +364,7 @@ async function createTables() {
       id TEXT PRIMARY KEY,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       periode_id TEXT REFERENCES dienstrooster_schedule_period(id),
-      type TEXT NOT NULL CHECK(type IN ('ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'PUBLICATIE_BERICHT')),
+      type TEXT NOT NULL CHECK(type IN ('ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'RUIL_AFGEWEZEN', 'PUBLICATIE_BERICHT', 'BLOCK_OVERRIDDEN')),
       onderwerp TEXT NOT NULL,
       inhoud TEXT NOT NULL,
       gelezen INTEGER NOT NULL DEFAULT 0,

@@ -508,7 +508,15 @@ export const notification = sqliteTable(
     person_id: text('person_id').notNull().references(() => person.id),
     periode_id: text('periode_id').references(() => schedulePeriod.id), // NULL for non-period notifications
     type: text('type', {
-      enum: ['ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'PUBLICATIE_BERICHT'],
+      enum: [
+        'ROSTER_GEREED',
+        'TOEWIJZING',
+        'RUILVERZOEK',
+        'RUIL_GOEDGEKEURD',
+        'RUIL_AFGEWEZEN',
+        'PUBLICATIE_BERICHT',
+        'BLOCK_OVERRIDDEN',
+      ],
     }).notNull(),
     onderwerp: text('onderwerp').notNull(),
     inhoud: text('inhoud').notNull(), // Markdown format
@@ -521,7 +529,7 @@ export const notification = sqliteTable(
     idx2: index('notification_type_idx').on(table.type),
     typeCheck: check(
       'notification_type_check',
-      sql`${table.type} IN ('ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'PUBLICATIE_BERICHT')`
+      sql`${table.type} IN ('ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'RUIL_AFGEWEZEN', 'PUBLICATIE_BERICHT', 'BLOCK_OVERRIDDEN')`
     ),
   })
 );

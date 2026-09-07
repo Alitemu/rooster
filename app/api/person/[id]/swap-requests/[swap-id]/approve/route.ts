@@ -11,6 +11,13 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+
+const TELLER_LABELS: Record<string, string> = {
+  AVOND: 'avonddienst',
+  WEEKEND: 'weekenddienst',
+  FEESTDAG: 'feestdagdienst',
+};
 
 export async function POST(
   request: NextRequest,
@@ -34,21 +41,21 @@ export async function POST(
 
     if (!swapRequest) {
       return NextResponse.json(
-        { success: false, error: 'Swap request not found' },
+        { success: false, error: 'Ruilverzoek niet gevonden' },
         { status: 404 }
       );
     }
 
     if (swapRequest.respondent_person_id !== personId) {
       return NextResponse.json(
-        { success: false, error: 'You are not the respondent' },
+        { success: false, error: 'Je bent niet degene aan wie dit ruilverzoek is gericht' },
         { status: 403 }
       );
     }
 
     if (swapRequest.status !== 'PENDING') {
       return NextResponse.json(
-        { success: false, error: `Cannot approve ${swapRequest.status} request` },
+        { success: false, error: `Kan een verzoek met status ${swapRequest.status} niet goedkeuren` },
         { status: 400 }
       );
     }
@@ -70,7 +77,7 @@ export async function POST(
 
     if (!requesterAssignment || !respondentAssignment) {
       return NextResponse.json(
-        { success: false, error: 'One or both assignments not found' },
+        { success: false, error: 'Een of beide toewijzingen niet gevonden' },
         { status: 400 }
       );
     }
@@ -88,7 +95,7 @@ export async function POST(
         {
           success: false,
           error:
-            'These shifts have changed hands since this request was made, so it can no longer be approved',
+            'Deze diensten zijn sinds dit verzoek van eigenaar gewisseld, dus het kan niet meer worden goedgekeurd',
         },
         { status: 409 }
       );
@@ -111,21 +118,41 @@ export async function POST(
     ).run('GOEDGEKEURD', now, personId, swapId);
 
     // Notify requester that swap was approved
-    const notifId = uuid();
-    db.prepare(
-      `INSERT INTO dienstrooster_notification
-       (id, person_id, periode_id, type, onderwerp, inhoud, gelezen, aangemaakt_op)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      notifId,
-      swapRequest.aanvrager_person_id,
-      swapRequest.periode_id,
-      'RUIL_GOEDGEKEURD',
-      'Swap request approved',
-      'Your swap request was approved. The shifts have been exchanged.',
-      0,
-      now
-    );
+    const aanvrager = db
+      .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(swapRequest.aanvrager_person_id) as { codenaam: string } | undefined;
+    const offeredSlot = db
+      .prepare(
+        `SELECT s.datum, st.teller FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(swapRequest.aangeboden_slot_id) as { datum: string; teller: string } | undefined;
+    const requestedSlot = db
+      .prepare(
+        `SELECT s.datum, st.teller FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(swapRequest.gevraagde_slot_id) as { datum: string; teller: string } | undefined;
+
+    const details = `Jouw ${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller} op ${offeredSlot?.datum} is geruild tegen de ${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller} op ${requestedSlot?.datum}.`;
+
+    const rendered = renderNotificationTemplate('SWAP_RESULT', {
+      codenaam: aanvrager?.codenaam ?? '',
+      uitkomst: 'goedgekeurd',
+      details,
+      link: '',
+    });
+    if (rendered) {
+      insertNotification({
+        personId: swapRequest.aanvrager_person_id,
+        periodId: swapRequest.periode_id,
+        type: 'RUIL_GOEDGEKEURD',
+        onderwerp: rendered.onderwerp,
+        inhoud: rendered.inhoud,
+      });
+    }
 
     // Log audit entry
     db.prepare(
