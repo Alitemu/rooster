@@ -36,15 +36,36 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
   const [editedSubject, setEditedSubject] = useState('');
   const [editedBody, setEditedBody] = useState('');
   const [remindersLoaded, setRemindersLoaded] = useState(false);
+  const [remindersLoadFailed, setRemindersLoadFailed] = useState(false);
 
   useEffect(() => {
     if (exportType !== 'reminders') {
       setRemindersLoaded(false);
+      setRemindersLoadFailed(false);
     }
   }, [exportType]);
 
+  // The component never unmounts between opens (isOpen just toggles
+  // whether it renders null), so without this, reopening the dialog - for
+  // this period or a different one - would briefly show whatever export
+  // type, reminders, or error text was left over from the previous time
+  // it was open.
+  useEffect(() => {
+    if (isOpen) {
+      setExportType(null);
+      setReminders([]);
+      setLoading(false);
+      setError(null);
+      setEditedSubject('');
+      setEditedBody('');
+      setRemindersLoaded(false);
+      setRemindersLoadFailed(false);
+    }
+  }, [isOpen, periodId]);
+
   const loadReminders = async () => {
     setRemindersLoaded(true);
+    setRemindersLoadFailed(false);
     setLoading(true);
     try {
       const res = await fetch(`/api/exports/reminders/${periodId}`);
@@ -59,6 +80,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
       setLoading(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Laden van herinneringen mislukt');
+      setRemindersLoadFailed(true);
       setLoading(false);
     }
   };
@@ -251,6 +273,13 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
               </>
             ) : loading ? (
               <p className="text-center text-neutral-600">Herinneringen laden...</p>
+            ) : remindersLoadFailed ? (
+              <button
+                onClick={loadReminders}
+                className="w-full py-2 px-4 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors mb-3"
+              >
+                Opnieuw proberen
+              </button>
             ) : reminders.length === 0 ? (
               <div className="bg-green-50 border border-green-200 rounded p-4 mb-6">
                 <p className="text-sm text-green-900">✓ Iedereen heeft al voorkeuren ingediend!</p>
