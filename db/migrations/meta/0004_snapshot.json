@@ -1,8 +1,8 @@
 {
   "version": "5",
   "dialect": "sqlite",
-  "id": "802f763d-26ca-4aa9-ab59-5e73a56aee2a",
-  "prevId": "285f0808-209f-4eb6-81fc-6b950f318439",
+  "id": "8bdb5f46-ed48-4d5d-b13a-2a0d2e09be34",
+  "prevId": "802f763d-26ca-4aa9-ab59-5e73a56aee2a",
   "tables": {
     "dienstrooster_absence": {
       "name": "dienstrooster_absence",
