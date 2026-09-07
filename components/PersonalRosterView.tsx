@@ -23,7 +23,7 @@ interface AssignedShift {
 
 interface BalanceDisplay {
   counter: string; // Evening, Weekend, Holiday
-  current: number;
+  assigned: number;
   target_min: number;
   target_max: number;
   message: string; // e.g., "1 fewer evening shifts" or "8 or 9 evening shifts"
@@ -77,6 +77,22 @@ export function PersonalRosterView({
     FEESTDAG: 'Feestdag',
   };
 
+  const counterPluralLower: Record<string, string> = {
+    AVOND: 'avonddiensten',
+    WEEKEND: 'weekenddiensten',
+    FEESTDAG: 'feestdagdiensten',
+  };
+
+  // "8 of 9 avonddiensten" rather than a raw "8–9" range or tuple - CLAUDE.md
+  // is explicit that a balance/band is always expressed in words, never as
+  // a bare number or [min,max] pair.
+  const targetRangeLabel = (balance: BalanceDisplay): string => {
+    const noun = counterPluralLower[balance.counter] || balance.counter.toLowerCase();
+    return balance.target_min === balance.target_max
+      ? `${balance.target_min} ${noun}`
+      : `${balance.target_min} of ${balance.target_max} ${noun}`;
+  };
+
   const softBlockSet = new Set(
     softBlockViolations.map((v) => `${v.datum}/${v.teller}`)
   );
@@ -105,7 +121,7 @@ export function PersonalRosterView({
                   {balance.message}
                 </p>
                 <p className="text-xs text-neutral-600">
-                  Huidig: {balance.current} | Streefaantal: {balance.target_min}–{balance.target_max}
+                  Streefbereik: je krijgt {targetRangeLabel(balance)}
                 </p>
               </div>
             </div>

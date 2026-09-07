@@ -43,6 +43,7 @@ interface RosterData {
     total_assignments: number;
     by_shift_type: Record<string, number>;
     balances: Record<string, number>;
+    target_bands: Record<string, { min: number; max: number }>;
   };
 }
 
@@ -335,23 +336,23 @@ export default function PersonalLinkPage() {
           balances={[
             {
               counter: 'AVOND',
-              current: rosterData.summary.balances['AVOND'] || 0,
-              target_min: 0,
-              target_max: 0,
+              assigned: rosterData.summary.by_shift_type['AVOND'] || 0,
+              target_min: rosterData.summary.target_bands['AVOND']?.min ?? 0,
+              target_max: rosterData.summary.target_bands['AVOND']?.max ?? 0,
               message: `${rosterData.summary.by_shift_type['AVOND'] || 0} avonddiensten toegewezen`,
             },
             {
               counter: 'WEEKEND',
-              current: rosterData.summary.balances['WEEKEND'] || 0,
-              target_min: 0,
-              target_max: 0,
+              assigned: rosterData.summary.by_shift_type['WEEKEND'] || 0,
+              target_min: rosterData.summary.target_bands['WEEKEND']?.min ?? 0,
+              target_max: rosterData.summary.target_bands['WEEKEND']?.max ?? 0,
               message: `${rosterData.summary.by_shift_type['WEEKEND'] || 0} weekenddiensten toegewezen`,
             },
             {
               counter: 'FEESTDAG',
-              current: rosterData.summary.balances['FEESTDAG'] || 0,
-              target_min: 0,
-              target_max: 0,
+              assigned: rosterData.summary.by_shift_type['FEESTDAG'] || 0,
+              target_min: rosterData.summary.target_bands['FEESTDAG']?.min ?? 0,
+              target_max: rosterData.summary.target_bands['FEESTDAG']?.max ?? 0,
               message: `${rosterData.summary.by_shift_type['FEESTDAG'] || 0} feestdagdiensten toegewezen`,
             },
           ]}

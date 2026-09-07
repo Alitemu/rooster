@@ -201,7 +201,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               <div key={`${item.person_id}-${item.counter}`} className="flex justify-between text-sm">
                 <span className="font-medium">{item.codenaam}</span>
                 <span className="text-amber-800">
-                  {item.delta > 0 ? '+' : ''}{item.delta} {counterDisplayName[item.counter]}
+                  {Math.abs(item.delta)} {counterDisplayName[item.counter]} {item.delta > 0 ? 'extra' : 'minder'}
                 </span>
               </div>
             ))}

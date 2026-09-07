@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { resolveRulesetConfig, resolveBands, countSlotsByTeller, TELLERS, type Teller } from '@/lib/rosterBands';
 
 export async function GET(
   request: NextRequest,
@@ -107,6 +108,43 @@ export async function GET(
       balances[entry.teller] = entry.total || 0;
     }
 
+    // The target band shown to the participant must be the exact same one
+    // the solver actually enforced when building this roster - not a
+    // separately-eyeballed number that could quietly disagree with it.
+    const config = resolveRulesetConfig(period);
+    const slotCountByTeller = countSlotsByTeller(periodId);
+    const activePeople = db
+      .prepare(
+        `SELECT COUNT(*) as count FROM dienstrooster_pool_membership
+         WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+      )
+      .get(period.pool_id, period.eind_datum, period.start_datum) as { count: number };
+    const baseBands = resolveBands(config, slotCountByTeller, activePeople.count);
+
+    const membership = db
+      .prepare(
+        `SELECT deelnamefactor FROM dienstrooster_pool_membership
+         WHERE pool_id = ? AND person_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+      )
+      .get(period.pool_id, personId, period.eind_datum, period.start_datum) as
+      | { deelnamefactor: number }
+      | undefined;
+    const factor = membership?.deelnamefactor ?? 1;
+    const naarRato = config.distributionMode === 'NAAR_RATO';
+
+    const targetBands: Record<Teller, { min: number; max: number }> = {
+      AVOND: { min: 0, max: 0 },
+      WEEKEND: { min: 0, max: 0 },
+      FEESTDAG: { min: 0, max: 0 },
+    };
+    for (const teller of TELLERS) {
+      const [baseMin, baseMax] = baseBands[teller];
+      const scaledMin = naarRato ? Math.round(baseMin * factor) : baseMin;
+      const scaledMax = naarRato ? Math.max(scaledMin, Math.round(baseMax * factor)) : baseMax;
+      const delta = balances[teller];
+      targetBands[teller] = { min: scaledMin + delta, max: scaledMax + delta };
+    }
+
     return NextResponse.json({
       success: true,
       data: {
@@ -126,6 +164,7 @@ export async function GET(
           total_assignments: assignments.length,
           by_shift_type: byShiftType,
           balances,
+          target_bands: targetBands,
         },
       },
     });
