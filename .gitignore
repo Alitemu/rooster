@@ -47,6 +47,7 @@ yarn-error.log*
 
 # Backup
 *.bak
+/backups/
 *backup*
 
 # Caddy

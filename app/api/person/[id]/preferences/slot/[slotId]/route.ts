@@ -9,6 +9,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 export async function PATCH(
@@ -90,6 +91,13 @@ export async function PATCH(
     }
 
     markSubmissionStarted(id, slot.period_id);
+
+    try {
+      writePreferencesBackup(id, slot.period_id);
+    } catch (backupError) {
+      // Never let a filesystem backup problem fail the actual save.
+      console.error('preferences-backup-write-failed', backupError);
+    }
 
     const response: ApiSuccessResponse<{ updated: boolean }> = {
       success: true,

@@ -13,6 +13,7 @@ import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-conte
 import { forbiddenResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForPattern, getOpenPeriodsForPerson, PARTTIME_WEEKDAGEN } from '@/lib/parttimeSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ParttimePattern {
@@ -175,6 +176,11 @@ export async function POST(
 
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);
+      try {
+        writePreferencesBackup(id, periodId);
+      } catch (backupError) {
+        console.error('preferences-backup-write-failed', backupError);
+      }
     }
 
     const createdPattern: ParttimePattern = {

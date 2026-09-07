@@ -16,6 +16,7 @@ import {
   PARTTIME_WEEKDAGEN,
 } from '@/lib/parttimeSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePatternRequest {
@@ -112,6 +113,11 @@ export async function PATCH(
 
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);
+      try {
+        writePreferencesBackup(id, periodId);
+      } catch (backupError) {
+        console.error('preferences-backup-write-failed', backupError);
+      }
     }
 
     const response: ApiSuccessResponse<{ updated: boolean; availability_generated: number }> = {
@@ -187,6 +193,11 @@ export async function DELETE(
 
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);
+      try {
+        writePreferencesBackup(id, periodId);
+      } catch (backupError) {
+        console.error('preferences-backup-write-failed', backupError);
+      }
     }
 
     const response: ApiSuccessResponse<{ deleted: boolean }> = {

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SubmissionRequest {
@@ -123,6 +124,12 @@ export async function POST(
       `);
 
       insertStmt.run(crypto.randomUUID(), id, period_id, now);
+    }
+
+    try {
+      writePreferencesBackup(id, period_id);
+    } catch (backupError) {
+      console.error('preferences-backup-write-failed', backupError);
     }
 
     const response: ApiSuccessResponse<SubmissionResponse> = {

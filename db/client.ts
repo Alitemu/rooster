@@ -127,4 +127,10 @@ if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD && !schemaAlreadyExistsWit
   }
 }
 
+// Resolved absolute path to the SQLite file - exported so anything that
+// needs to write beside the database (e.g. lib/preferencesBackup.ts) uses
+// the exact same directory in both local dev and the Docker db_data
+// volume, without re-deriving DATABASE_URL parsing itself.
+export const dbFilePath = filePath;
+
 export { db };
