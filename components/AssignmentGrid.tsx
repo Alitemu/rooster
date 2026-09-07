@@ -25,7 +25,13 @@ interface Assignment {
 interface EligiblePerson {
   id: string;
   codenaam: string;
+  blocked_reason?: 'PARTTIME' | 'GEBLOKKEERD';
 }
+
+const BLOCKED_LABELS: Record<string, string> = {
+  PARTTIME: 'parttime-vrij',
+  GEBLOKKEERD: 'geblokkeerd',
+};
 
 interface Props {
   periodId: string;
@@ -51,6 +57,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   const [reassignPersonId, setReassignPersonId] = useState('');
   const [reassignReason, setReassignReason] = useState('');
   const [reassigning, setReassigning] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const isPublished = periodStatus === 'GEPUBLICEERD';
 
@@ -113,6 +120,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     setReassignReason('');
     setEligiblePeople(null);
     setEligibleLoading(true);
+    setWarning(null);
     try {
       const res = await fetch(
         `/api/planner/period/${periodId}/assignments/${assignmentId}/eligible-people`
@@ -143,6 +151,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Wisselen van toewijzing mislukt');
+      if (data.data?.warning) setWarning(data.data.warning.message);
 
       setReassigningId(null);
       setReassignPersonId('');
@@ -233,6 +242,12 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         </div>
       </div>
 
+      {warning && (
+        <div className="card p-3 bg-orange-50 border border-orange-300 text-sm text-orange-900">
+          ⚠️ {warning}
+        </div>
+      )}
+
       {/* Table */}
       <div className="card p-6">
         <div className="overflow-x-auto">
@@ -302,6 +317,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                             {eligiblePeople.map((p) => (
                               <option key={p.id} value={p.id}>
                                 {p.codenaam}
+                                {p.blocked_reason ? ` ⚠ ${BLOCKED_LABELS[p.blocked_reason]}` : ''}
                               </option>
                             ))}
                           </select>

@@ -145,15 +145,30 @@ describe('rosterGaps', () => {
       expect(gapIds).not.toContain(f.slotIds[1]);
     });
 
-    it('never offers someone who hard-blocked that slot', () => {
+    it('still offers someone who hard-blocked that slot, flagged so the planner can override deliberately', () => {
       const f = createFixture(3, '2027-01-04', '2027-01-10');
       blockSlot(f.personIds[0], f.slotIds[0], 'ABSOLUUT');
 
       const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === f.slotIds[0]);
 
       expect(gap).toBeDefined();
-      expect(gap!.eligible_people.map((p) => p.id)).not.toContain(f.personIds[0]);
-      expect(gap!.eligible_people).toHaveLength(2);
+      expect(gap!.eligible_people).toHaveLength(3);
+      const blockedPerson = gap!.eligible_people.find((p) => p.id === f.personIds[0]);
+      expect(blockedPerson?.blocked_reason).toBe('GEBLOKKEERD');
+      const unblockedPerson = gap!.eligible_people.find((p) => p.id === f.personIds[1]);
+      expect(unblockedPerson?.blocked_reason).toBeUndefined();
+    });
+
+    it('flags a part-time-sourced block distinctly from any other block', () => {
+      const f = createFixture(1, '2027-01-04', '2027-01-10');
+      db.prepare(
+        `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+         VALUES (?, ?, ?, 'ABSOLUUT', 'PARTTIME', datetime('now'))`
+      ).run(crypto.randomUUID(), f.personIds[0], f.slotIds[0]);
+
+      const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === f.slotIds[0]);
+
+      expect(gap!.eligible_people.find((p) => p.id === f.personIds[0])?.blocked_reason).toBe('PARTTIME');
     });
 
     it('still offers someone who only marked the slot as prefer-not', () => {

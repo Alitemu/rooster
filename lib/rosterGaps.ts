@@ -13,9 +13,21 @@
 
 import { db } from '@/db/client';
 
+export type BlockedReason = 'PARTTIME' | 'GEBLOKKEERD';
+
 export interface EligiblePerson {
   id: string;
   codenaam: string;
+  /**
+   * Set when this person marked the slot ABSOLUUT. Not excluded from the
+   * list - a manual fill is a deliberate planner exception made in
+   * consultation with the person, so blocking someone from being picked
+   * here would defeat that. The reason is surfaced instead, so the
+   * planner sees it before overriding: 'PARTTIME' when the block comes
+   * from a part-time pattern, 'GEBLOKKEERD' for any other block (manual
+   * or imported absence).
+   */
+  blocked_reason?: BlockedReason;
 }
 
 export interface UnfilledSlot {
@@ -27,6 +39,10 @@ export interface UnfilledSlot {
   assigned_count: number;
   shortfall: number;
   eligible_people: EligiblePerson[];
+}
+
+function toBlockedReason(source: string): BlockedReason {
+  return source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD';
 }
 
 /**
@@ -59,14 +75,14 @@ export function clearSolverAssignments(periodId: string): number {
 
 /**
  * Pool members who could take over a specific slot - active pool members
- * during the period, minus whoever marked the slot ABSOLUUT (manual-assign
- * rejects them anyway) and minus `excludePersonId` (normally whoever is
- * already assigned - re-picking them isn't a reassignment).
+ * during the period, minus `excludePersonId` (normally whoever is already
+ * assigned - re-picking them isn't a reassignment).
  *
- * Deliberately does not filter by the window rule or band limits: a
- * planner filling a gap or swapping a shift by hand is making a deliberate
- * exception, in consultation with the person taking it, and must be able
- * to pick anyone in the pool.
+ * Whoever marked the slot ABSOLUUT stays in the list, flagged via
+ * `blocked_reason`: a planner filling a gap or swapping a shift by hand is
+ * making a deliberate exception, in consultation with the person taking
+ * it, and must be able to pick anyone in the pool - including someone
+ * who blocked the day - as long as that's shown clearly before they do.
  *
  * Shared by the unfilled-slots gap-filling flow below and the
  * already-assigned reassign flow in the assignments grid, so both offer the
@@ -93,26 +109,31 @@ export function getEligiblePeopleForSlot(
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as EligiblePerson[];
 
-  const blocked = new Set(
+  const blockedSource = new Map(
     (
       db
         .prepare(
-          `SELECT person_id FROM dienstrooster_availability
+          `SELECT person_id, source FROM dienstrooster_availability
            WHERE blocking_level = 'ABSOLUUT' AND slot_id = ?`
         )
-        .all(slotId) as Array<{ person_id: string }>
-    ).map((r) => r.person_id)
+        .all(slotId) as Array<{ person_id: string; source: string }>
+    ).map((r) => [r.person_id, r.source])
   );
 
-  return poolMembers.filter((p) => !blocked.has(p.id) && p.id !== excludePersonId);
+  return poolMembers
+    .filter((p) => p.id !== excludePersonId)
+    .map((p) => {
+      const source = blockedSource.get(p.id);
+      return source ? { ...p, blocked_reason: toBlockedReason(source) } : p;
+    });
 }
 
 /**
  * Every slot still short of its required headcount, with the pool members
  * who could take it.
  *
- * People who marked the slot ABSOLUUT are filtered out: manual-assign
- * rejects them anyway, so offering them would be a dead end.
+ * Whoever marked the slot ABSOLUUT stays in `eligible_people`, flagged via
+ * `blocked_reason` - see getEligiblePeopleForSlot above for why.
  */
 export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
   const period = db
@@ -159,19 +180,19 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
   const placeholders = gapSlotIds.map(() => '?').join(',');
   const blockedRows = db
     .prepare(
-      `SELECT person_id, slot_id FROM dienstrooster_availability
+      `SELECT person_id, slot_id, source FROM dienstrooster_availability
        WHERE blocking_level = 'ABSOLUUT' AND slot_id IN (${placeholders})`
     )
-    .all(...gapSlotIds) as Array<{ person_id: string; slot_id: string }>;
+    .all(...gapSlotIds) as Array<{ person_id: string; slot_id: string; source: string }>;
 
-  const blockedBySlot = new Map<string, Set<string>>();
+  const blockedBySlot = new Map<string, Map<string, string>>();
   for (const row of blockedRows) {
-    if (!blockedBySlot.has(row.slot_id)) blockedBySlot.set(row.slot_id, new Set());
-    blockedBySlot.get(row.slot_id)!.add(row.person_id);
+    if (!blockedBySlot.has(row.slot_id)) blockedBySlot.set(row.slot_id, new Map());
+    blockedBySlot.get(row.slot_id)!.set(row.person_id, row.source);
   }
 
   return gaps.map((slot) => {
-    const blocked = blockedBySlot.get(slot.id) ?? new Set<string>();
+    const blockedSource = blockedBySlot.get(slot.id) ?? new Map<string, string>();
     const required = slot.benodigd_aantal_personen || 1;
     return {
       slot_id: slot.id,
@@ -181,7 +202,10 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       benodigd_aantal_personen: required,
       assigned_count: slot.assigned_count,
       shortfall: required - slot.assigned_count,
-      eligible_people: poolMembers.filter((p) => !blocked.has(p.id)),
+      eligible_people: poolMembers.map((p) => {
+        const source = blockedSource.get(p.id);
+        return source ? { ...p, blocked_reason: toBlockedReason(source) } : p;
+      }),
     };
   });
 }

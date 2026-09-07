@@ -2,8 +2,10 @@
  * GET /api/planner/period/[id]/assignments/[assignment-id]/eligible-people
  *
  * Who could take over this assignment's slot instead - active pool members
- * minus whoever marked it ABSOLUUT and minus the person already on it.
- * Feeds the "wisselen" (swap) action in the assignments grid.
+ * minus the person already on it. Anyone who marked the slot ABSOLUUT is
+ * still included, flagged via blocked_reason (see lib/rosterGaps.ts) so
+ * the planner can knowingly override it. Feeds the "wisselen" (swap)
+ * action in the assignments grid.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

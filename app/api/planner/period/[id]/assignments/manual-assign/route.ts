@@ -1,13 +1,14 @@
 /**
  * POST /api/planner/period/[id]/assignments/manual-assign
  *
- * Manually assign a person to a slot with validation.
- * Validates: ABSOLUUT blocking only. The window rule, band limits and
- * capacity are all deliberately left to the planner's judgement here - a
- * manual fill is by definition an exception the planner is making in
- * consultation with the person taking the shift, so this route must never
- * stand in the way of that, even a full week of consecutive shifts if
- * that's genuinely what was agreed.
+ * Manually assign a person to a slot.
+ * Nothing here is a hard block, including an ABSOLUUT preference or a
+ * part-time-free day - a manual fill is by definition an exception the
+ * planner is making in consultation with the person taking the shift, so
+ * this route must never stand in the way of that, even a full week of
+ * consecutive shifts or a day the person explicitly blocked, if that's
+ * genuinely what was agreed. A block is still surfaced as a `warning` on
+ * the success response so the planner sees it before it's too late.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -95,20 +96,20 @@ export async function POST(
       );
     }
 
-    // Check blocking preferences
+    // Check blocking preferences - not a hard block (see docstring above),
+    // just surfaced as a warning so the planner knowingly overrides it.
     const blocked = db
       .prepare(
-        `SELECT * FROM dienstrooster_availability
+        `SELECT source FROM dienstrooster_availability
          WHERE person_id = ? AND slot_id = ? AND blocking_level = 'ABSOLUUT'`
       )
-      .get(person_id, slot_id) as any;
+      .get(person_id, slot_id) as { source: string } | undefined;
 
-    if (blocked) {
-      return NextResponse.json(
-        { success: false, error: 'Cannot assign: person has blocked this slot (ABSOLUUT)' },
-        { status: 400 }
-      );
-    }
+    const warning = blocked
+      ? blocked.source === 'PARTTIME'
+        ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een parttime-vrije dag voor deze persoon.' }
+        : { code: 'BLOCKED_OVERRIDE', message: 'Let op: deze persoon heeft deze dag geblokkeerd.' }
+      : null;
 
     // If assignment already exists, return it
     if (existing && existing.person_id === person_id) {
@@ -117,6 +118,7 @@ export async function POST(
         data: {
           assignment: existing,
           message: 'Toewijzing bestaat al',
+          warning,
         },
       });
     }
@@ -157,6 +159,7 @@ export async function POST(
           aangemaakt_op: now,
         },
         message: 'Toewijzing succesvol aangemaakt',
+        warning,
       },
     });
   } catch (error) {

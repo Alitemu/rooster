@@ -7,7 +7,8 @@
  * are soft constraints - see solver/constraints.py) and lets the planner
  * assign someone to each one by hand, in consultation with the person on
  * duty. Calls the same manual-assign endpoint used for any manual
- * override, so the usual hard-block (ABSOLUUT) check still applies.
+ * override - even someone who blocked the day is offered, flagged so the
+ * planner can knowingly override it.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -15,6 +16,7 @@ import { useState, useEffect, useCallback } from 'react';
 interface EligiblePerson {
   id: string;
   codenaam: string;
+  blocked_reason?: 'PARTTIME' | 'GEBLOKKEERD';
 }
 
 interface UnfilledSlot {
@@ -39,11 +41,17 @@ const TELLER_LABELS: Record<string, string> = {
   FEESTDAG: 'Feestdag',
 };
 
+const BLOCKED_LABELS: Record<string, string> = {
+  PARTTIME: 'parttime-vrij',
+  GEBLOKKEERD: 'geblokkeerd',
+};
+
 export function FillGapsPanel({ periodId, onAllFilled }: Props) {
   const [slots, setSlots] = useState<UnfilledSlot[] | null>(null);
   const [selection, setSelection] = useState<Record<string, string>>({});
   const [assigning, setAssigning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/planner/period/${periodId}/unfilled-slots`);
@@ -64,6 +72,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
 
     setAssigning(slotId);
     setError(null);
+    setWarning(null);
     try {
       const res = await fetch(`/api/planner/period/${periodId}/assignments/manual-assign`, {
         method: 'POST',
@@ -72,6 +81,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Toewijzen mislukt');
+      if (data.data?.warning) setWarning(data.data.warning.message);
 
       await load();
     } catch (err) {
@@ -111,57 +121,72 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
         </div>
       )}
 
-      <div className="space-y-2">
-        {slots.map((slot) => (
-          <div
-            key={slot.slot_id}
-            className="flex items-center justify-between gap-3 p-3 rounded bg-white border border-amber-200"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-neutral-900">
-                {new Date(slot.datum).toLocaleDateString(undefined, {
-                  weekday: 'short',
-                  day: 'numeric',
-                  month: 'short',
-                })}{' '}
-                · {TELLER_LABELS[slot.teller] || slot.teller}
-              </p>
-              <p className="text-xs text-neutral-500">
-                Week {slot.iso_week} · {slot.assigned_count}/{slot.benodigd_aantal_personen} ingevuld
-              </p>
-            </div>
+      {warning && (
+        <div className="mb-4 p-3 rounded bg-orange-50 border border-orange-300 text-sm text-orange-900">
+          ⚠️ {warning}
+        </div>
+      )}
 
-            <div className="flex items-center gap-2 shrink-0">
-              {slot.eligible_people.length === 0 ? (
-                <span className="text-xs text-red-600">Niemand komt in aanmerking (allemaal geblokkeerd)</span>
-              ) : (
-                <>
-                  <select
-                    className="text-sm border border-neutral-300 rounded px-2 py-1"
-                    value={selection[slot.slot_id] || ''}
-                    onChange={(e) =>
-                      setSelection((prev) => ({ ...prev, [slot.slot_id]: e.target.value }))
-                    }
-                  >
-                    <option value="">Kies iemand…</option>
-                    {slot.eligible_people.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.codenaam}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={() => handleAssign(slot.slot_id)}
-                    disabled={!selection[slot.slot_id] || assigning === slot.slot_id}
-                    className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 transition-colors"
-                  >
-                    {assigning === slot.slot_id ? 'Bezig…' : 'Toewijzen'}
-                  </button>
-                </>
-              )}
+      <div className="space-y-2">
+        {slots.map((slot) => {
+          const selectedPerson = slot.eligible_people.find((p) => p.id === selection[slot.slot_id]);
+          return (
+            <div
+              key={slot.slot_id}
+              className="flex items-center justify-between gap-3 p-3 rounded bg-white border border-amber-200"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-neutral-900">
+                  {new Date(slot.datum).toLocaleDateString(undefined, {
+                    weekday: 'short',
+                    day: 'numeric',
+                    month: 'short',
+                  })}{' '}
+                  · {TELLER_LABELS[slot.teller] || slot.teller}
+                </p>
+                <p className="text-xs text-neutral-500">
+                  Week {slot.iso_week} · {slot.assigned_count}/{slot.benodigd_aantal_personen} ingevuld
+                </p>
+                {selectedPerson?.blocked_reason && (
+                  <p className="text-xs text-orange-700 mt-1">
+                    ⚠️ {selectedPerson.codenaam} heeft deze dag {BLOCKED_LABELS[selectedPerson.blocked_reason]}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {slot.eligible_people.length === 0 ? (
+                  <span className="text-xs text-red-600">Niemand in de pool beschikbaar</span>
+                ) : (
+                  <>
+                    <select
+                      className="text-sm border border-neutral-300 rounded px-2 py-1"
+                      value={selection[slot.slot_id] || ''}
+                      onChange={(e) =>
+                        setSelection((prev) => ({ ...prev, [slot.slot_id]: e.target.value }))
+                      }
+                    >
+                      <option value="">Kies iemand…</option>
+                      {slot.eligible_people.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.codenaam}
+                          {p.blocked_reason ? ` ⚠ ${BLOCKED_LABELS[p.blocked_reason]}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => handleAssign(slot.slot_id)}
+                      disabled={!selection[slot.slot_id] || assigning === slot.slot_id}
+                      className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 transition-colors"
+                    >
+                      {assigning === slot.slot_id ? 'Bezig…' : 'Toewijzen'}
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

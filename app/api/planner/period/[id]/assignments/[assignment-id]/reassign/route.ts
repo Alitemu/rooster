@@ -7,6 +7,9 @@
  * failure partway through could leave it that way. Both steps happen in one
  * transaction here instead, and both are logged the same way a plain manual
  * delete or manual assign already are.
+ *
+ * An ABSOLUUT block on the new person is not a hard stop - same reasoning
+ * as manual-assign - just a `warning` on the success response.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -89,19 +92,22 @@ export async function POST(
       );
     }
 
+    // Not a hard block - a swap is a deliberate planner exception, made in
+    // consultation with the person taking the shift, so this must never
+    // stand in the way of it, even a day the person explicitly blocked.
+    // Surfaced as a warning instead, so the planner knowingly overrides it.
     const blocked = db
       .prepare(
-        `SELECT 1 FROM dienstrooster_availability
+        `SELECT source FROM dienstrooster_availability
          WHERE person_id = ? AND slot_id = ? AND blocking_level = 'ABSOLUUT'`
       )
-      .get(newPersonId, assignment.slot_id);
+      .get(newPersonId, assignment.slot_id) as { source: string } | undefined;
 
-    if (blocked) {
-      return NextResponse.json(
-        { success: false, error: 'Cannot assign: person has blocked this slot (ABSOLUUT)' },
-        { status: 400 }
-      );
-    }
+    const warning = blocked
+      ? blocked.source === 'PARTTIME'
+        ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een parttime-vrije dag voor deze persoon.' }
+        : { code: 'BLOCKED_OVERRIDE', message: 'Let op: deze persoon heeft deze dag geblokkeerd.' }
+      : null;
 
     const newAssignmentId = uuid();
 
@@ -171,6 +177,7 @@ export async function POST(
       data: {
         assignment_id: newAssignmentId,
         message: 'Toewijzing gewisseld',
+        warning,
       },
     });
   } catch (error) {
