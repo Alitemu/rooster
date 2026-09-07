@@ -9,6 +9,7 @@
 
 import { NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/session';
+import { db } from '@/db/client';
 
 export interface AuthContext {
   userId: string;
@@ -33,6 +34,22 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
       timestamp: new Date().toISOString(),
     };
   }
+
+  // The session cookie is self-contained and good for up to 30 days, but a
+  // personal link must be revocable "anytime" (CLAUDE.md) - without this
+  // check, revoking someone's link (dienstrooster_person_access_link.
+  // ingetrokken_op) would only stop a *future* login, while an already
+  // logged-in session kept working until it naturally expired. Requires at
+  // least one still-valid link for this person, not the specific one that
+  // was used to log in - revoking access means losing it entirely, not
+  // just that one link.
+  const stillValid = db
+    .prepare(
+      `SELECT 1 FROM dienstrooster_person_access_link
+       WHERE person_id = ? AND ingetrokken_op IS NULL LIMIT 1`
+    )
+    .get(session.personId);
+  if (!stillValid) return null;
 
   return {
     userId: session.personId,
