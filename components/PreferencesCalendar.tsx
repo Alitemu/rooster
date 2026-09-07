@@ -335,7 +335,11 @@ export function PreferencesCalendar({
     };
   }, [contextMenu]);
 
-  // Block whole weekend
+  // Block whole weekend - sets both days directly to ABSOLUUT rather than
+  // cycling them, so the result never depends on whatever state a day
+  // already happened to be in (cycling a day already at ABSOLUUT would
+  // unblock it instead of blocking it, and cycling one at VOORKEUR would
+  // only step it to LIEVER_NIET, not all the way to blocked).
   const handleBlockWeekend = useCallback(
     (satDate: string) => {
       const satParsed = parseISO(satDate);
@@ -344,11 +348,11 @@ export function PreferencesCalendar({
       const sunDate = dateToISO(sunParsed);
 
       for (const counter of shiftCounters) {
-        handleTogglePreference(satDate, counter);
-        handleTogglePreference(sunDate, counter);
+        applyPreferenceLevel(satDate, counter, 'ABSOLUUT');
+        applyPreferenceLevel(sunDate, counter, 'ABSOLUUT');
       }
     },
-    [shiftCounters, handleTogglePreference]
+    [shiftCounters, applyPreferenceLevel]
   );
 
   if (loading) {

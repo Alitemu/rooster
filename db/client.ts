@@ -5,6 +5,7 @@
  */
 
 import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
@@ -65,8 +66,18 @@ function withRetry<T>(fn: () => T, attempts = 5): T {
 // Enable WAL mode for better concurrency
 withRetry(() => db.pragma('journal_mode = WAL'));
 
-// Enable foreign keys
-withRetry(() => db.pragma('foreign_keys = ON'));
+// better-sqlite3 defaults foreign_keys to ON for every new connection, so it
+// must be explicitly turned off before migrating. SQLite's own recommended
+// pattern for a schema change that recreates a table referenced by other
+// tables' foreign keys (create-copy-drop-rename) requires foreign_keys to be
+// off for the duration - it can't be toggled mid-migration since SQLite
+// ignores writes to this pragma inside an open transaction, and drizzle's
+// migrator wraps the whole batch in one BEGIN/COMMIT (see
+// db/migrations/0005_*.sql, which rebuilds dienstrooster_pool - referenced
+// by dienstrooster_ledger_entry, dienstrooster_pool_membership and
+// dienstrooster_schedule_period). Turned back on further down, once the
+// migration transaction (if any) has committed.
+withRetry(() => db.pragma('foreign_keys = OFF'));
 
 // Apply any pending schema migrations. Idempotent (tracked in
 // __drizzle_migrations) and non-interactive, so it's safe to run on every
@@ -114,6 +125,29 @@ function errorChainIncludes(error: unknown, needle: string): boolean {
   return false;
 }
 
+// The last migration's own folder timestamp - used below to tell "someone
+// else's transaction already fully committed every migration" apart from
+// "this migration genuinely failed for an unrelated reason", since both
+// look identical as a caught "already exists" error otherwise.
+function lastJournalEntryWhen(): number {
+  const journalPath = path.resolve(process.cwd(), 'db/migrations/meta/_journal.json');
+  const journal = JSON.parse(fs.readFileSync(journalPath, 'utf8')) as {
+    entries: Array<{ when: number }>;
+  };
+  return journal.entries[journal.entries.length - 1]?.when ?? 0;
+}
+
+function migrationsFullyApplied(): boolean {
+  const hasLedger = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = '__drizzle_migrations'`)
+    .get();
+  if (!hasLedger) return false;
+  const last = db
+    .prepare(`SELECT MAX(created_at) as latest FROM __drizzle_migrations`)
+    .get() as { latest: number | null };
+  return (last.latest ?? 0) >= lastJournalEntryWhen();
+}
+
 if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD && !schemaAlreadyExistsWithoutLedger()) {
   try {
     migrate(drizzle(db), { migrationsFolder: path.resolve(process.cwd(), 'db/migrations') });
@@ -121,11 +155,22 @@ if (process.env.NEXT_PHASE !== PHASE_PRODUCTION_BUILD && !schemaAlreadyExistsWit
     // drizzle wraps the underlying better-sqlite3 error in its own
     // DrizzleError via the standard `cause` chain - the "already exists"
     // text we're checking for lives on error.cause, not error itself.
-    if (!errorChainIncludes(error, 'already exists')) {
+    //
+    // "already exists" is swallowed only for the specific parallel-worker
+    // race this exists for (see comment above) - and only once verified
+    // that every migration this process would have applied was in fact
+    // already committed by whichever worker won the race. Without that
+    // check, a genuine mid-batch failure (unrelated to the race) would
+    // silently strand every migration after the failing one, forever,
+    // with nothing ever reporting it - each run.
+    if (!errorChainIncludes(error, 'already exists') || !migrationsFullyApplied()) {
       throw error;
     }
   }
 }
+
+// Enable foreign keys, now that any table-recreating migrations have committed.
+withRetry(() => db.pragma('foreign_keys = ON'));
 
 // Resolved absolute path to the SQLite file - exported so anything that
 // needs to write beside the database (e.g. lib/preferencesBackup.ts) uses

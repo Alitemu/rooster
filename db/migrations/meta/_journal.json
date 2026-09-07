@@ -36,6 +36,13 @@
       "when": 1788775675232,
       "tag": "0004_lively_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1788800000000,
+      "tag": "0005_enum_check_constraints",
+      "breakpoints": true
     }
   ]
 }
