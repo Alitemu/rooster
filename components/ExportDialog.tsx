@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react';
 
-type ExportType = 'invitations' | 'reminders' | null;
+type ExportType = 'invitations' | 'reminders' | 'audit-trail' | null;
 
 interface ReminderTemplate {
   person_id: string;
@@ -93,6 +93,27 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
     }
   };
 
+  const downloadAuditTrail = async () => {
+    try {
+      const res = await fetch(`/api/exports/audit-trail/${periodId}`);
+      if (!res.ok) throw new Error('Downloaden van wijzigingsgeschiedenis mislukt');
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wijzigingsgeschiedenis_${periodName.replace(/ /g, '_')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -122,6 +143,14 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                 <p className="font-semibold text-neutral-900">📧 Herinneringen versturen</p>
                 <p className="text-sm text-neutral-600">Vooraf ingevulde mailto-sjablonen voor deadline-herinneringen</p>
               </button>
+
+              <button
+                onClick={() => setExportType('audit-trail')}
+                className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
+              >
+                <p className="font-semibold text-neutral-900">📄 Wijzigingsgeschiedenis downloaden</p>
+                <p className="text-sm text-neutral-600">CSV met alle handmatige toewijzingen, wisselingen en verwijderingen - voor verantwoording</p>
+              </button>
             </div>
 
             <button
@@ -146,6 +175,35 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
             <div className="flex gap-3">
               <button
                 onClick={downloadInvitations}
+                className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+              >
+                📥 CSV downloaden
+              </button>
+              <button
+                onClick={() => setExportType(null)}
+                className="flex-1 py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+              >
+                Terug
+              </button>
+            </div>
+          </>
+        ) : exportType === 'audit-trail' ? (
+          <>
+            <h2 className="text-2xl font-bold mb-4">Wijzigingsgeschiedenis downloaden</h2>
+            <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
+              <p className="text-sm text-blue-900">
+                Elke handmatige toewijzing, wisseling en verwijdering in deze periode, met reden,
+                wie het deed en of daarbij een blokkade, parttime-dag of de vensterregel is
+                overruled.
+              </p>
+              <p className="text-xs text-blue-800 mt-2">
+                Kolommen: Datum wijziging, Actie, Betreft, Dienstdatum, Diensttype, Reden, Overrule, Aangepast door
+              </p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={downloadAuditTrail}
                 className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
               >
                 📥 CSV downloaden
