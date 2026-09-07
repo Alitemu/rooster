@@ -197,7 +197,13 @@ export const priorAssignment = sqliteTable(
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   },
   (table) => ({
-    uniq: uniqueIndex('prior_assignment_uniq').on(table.period_id, table.datum),
+    // Per (period, date, teller): a day can carry over an AVOND, WEEKEND
+    // and FEESTDAG entry independently (matches generateSkeletonPriorAssignments
+    // and the confirm gate's expected-entry count, which both assume up to
+    // three rows per day). A (period, date)-only index made the second and
+    // third teller row for any date fail with a UNIQUE violation, so the
+    // confirm gate could never actually be satisfied.
+    uniq: uniqueIndex('prior_assignment_uniq').on(table.period_id, table.datum, table.teller),
   })
 );
 

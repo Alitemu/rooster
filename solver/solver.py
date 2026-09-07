@@ -37,7 +37,8 @@ class RosterSolver:
         band_ranges: dict[str, list[int]],
         balances: dict[str, dict[str, int]],
         window_weeks: int = 2,
-        preferred_slots: Optional[dict[tuple[str, str], float]] = None
+        preferred_slots: Optional[dict[tuple[str, str], float]] = None,
+        prior_assignments: Optional[list[dict]] = None
     ) -> dict:
         """
         Build the CP-SAT model with all constraints and objectives.
@@ -72,6 +73,11 @@ class RosterSolver:
         logger.info("Adding window constraints")
         constraint_builder.add_window_constraints(
             assignment_vars, people, slots, window_weeks
+        )
+
+        logger.info("Adding prior-period window carry-over constraints")
+        constraint_builder.add_prior_assignment_constraints(
+            assignment_vars, slots, prior_assignments or [], window_weeks
         )
 
         logger.info("Adding blocking absolute constraints")
@@ -236,7 +242,8 @@ class RosterSolver:
         band_ranges: dict[str, list[int]],
         balances: dict[str, dict[str, int]],
         window_weeks: int = 2,
-        preferred_slots: Optional[dict[tuple[str, str], float]] = None
+        preferred_slots: Optional[dict[tuple[str, str], float]] = None,
+        prior_assignments: Optional[list[dict]] = None
     ) -> dict:
         """
         End-to-end: build model, solve, extract assignments.
@@ -247,7 +254,8 @@ class RosterSolver:
             # Build
             model_data = self.build_model(
                 people, slots, blocked_slots, soft_slots, {},
-                band_ranges, balances, window_weeks, preferred_slots
+                band_ranges, balances, window_weeks, preferred_slots,
+                prior_assignments
             )
 
             # Solve

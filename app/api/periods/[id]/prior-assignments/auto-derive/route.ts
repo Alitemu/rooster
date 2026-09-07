@@ -36,6 +36,7 @@ export async function POST(
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const actorId = auth!.userId;
 
     const { id } = params;
 
@@ -107,6 +108,7 @@ export async function POST(
       SELECT
         a.slot_id,
         s.datum,
+        s.iso_jaar,
         s.iso_week,
         st.teller,
         a.person_id
@@ -139,18 +141,21 @@ export async function POST(
         // Insert new prior assignment
         const insertStmt = db.prepare(`
           INSERT INTO dienstrooster_prior_assignment
-          (id, period_id, datum, iso_week, teller, person_id, bron, bron_period_id)
-          VALUES (?, ?, ?, ?, ?, ?, 'AFGELEID', ?)
+          (id, period_id, datum, iso_jaar, iso_week, teller, person_id, bron, bron_period_id, aangemaakt_door, aangemaakt_op)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'AFGELEID', ?, ?, ?)
         `);
 
         insertStmt.run(
           crypto.randomUUID(),
           id,
           assignment.datum,
+          assignment.iso_jaar,
           assignment.iso_week,
           assignment.teller,
           assignment.person_id,
-          prevPeriod.id
+          prevPeriod.id,
+          actorId,
+          new Date().toISOString()
         );
 
         derivedCount++;

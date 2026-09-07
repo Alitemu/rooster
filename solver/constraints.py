@@ -125,6 +125,53 @@ class ConstraintBuilder:
                     self.model.Add(sum(window_vars) <= 1)
 
     # ========================================================================
+    # Window Rule carry-over: respect shifts from just before this period
+    # ========================================================================
+
+    def add_prior_assignment_constraints(
+        self,
+        assignment_vars: dict[tuple[str, str], cp_model.IntVar],
+        slots: list[dict],
+        prior_assignments: list[dict],  # [{'person_id': str, 'datum': str}, ...]
+        window_weeks: int
+    ):
+        """
+        Extends the window rule across a period boundary.
+
+        add_window_constraints only sees this period's own slots, so on its
+        own it has no memory that a person worked the last few days of the
+        *previous* period - the same person could then be assigned again
+        within window_weeks of a shift that already happened, right at the
+        start of the new period. This was a confirmed bug: rosters the
+        solver itself produced could show someone with two shifts a few
+        days apart, straddling a period boundary.
+
+        prior_assignments carries exactly the tail needed to close that gap
+        - the last (window_weeks - 1) weeks of the previous period, which
+        the planner reviews and confirms via the Prior Assignments screen
+        before generation is allowed to run (see
+        dienstrooster_prior_assignment). Each entry is a shift that has
+        already happened, so it isn't a variable to optimise around like
+        this period's own slots - it's a fixed fact that rules out any of
+        this period's slots landing too close to it, the same way
+        add_window_constraints rules out two of the period's own slots
+        landing too close to each other.
+        """
+        if window_weeks <= 1 or not prior_assignments:
+            return
+
+        for prior in prior_assignments:
+            person_id = prior['person_id']
+            prior_week = _week_ordinal(prior['datum'])
+
+            for slot in slots:
+                key = (person_id, slot['id'])
+                if key not in assignment_vars:
+                    continue
+                if abs(_week_ordinal(slot['datum']) - prior_week) < window_weeks:
+                    self.model.Add(assignment_vars[key] == 0)
+
+    # ========================================================================
     # Blocking Absolute: Cannot assign to ABSOLUUT (blocked) slots
     # ========================================================================
 

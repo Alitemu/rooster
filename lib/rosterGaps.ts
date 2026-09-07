@@ -12,8 +12,6 @@
  */
 
 import { db } from '@/db/client';
-import { resolveRulesetConfig } from '@/lib/rosterBands';
-import { getWindowConflictingPersonIds } from '@/lib/windowRule';
 
 export interface EligiblePerson {
   id: string;
@@ -62,10 +60,13 @@ export function clearSolverAssignments(periodId: string): number {
 /**
  * Pool members who could take over a specific slot - active pool members
  * during the period, minus whoever marked the slot ABSOLUUT (manual-assign
- * rejects them anyway), minus anyone who already has another shift within
- * the period's window rule of this slot's week (same hard rule the solver
- * enforces - see lib/windowRule.ts), and minus `excludePersonId` (normally
- * whoever is already assigned - re-picking them isn't a reassignment).
+ * rejects them anyway) and minus `excludePersonId` (normally whoever is
+ * already assigned - re-picking them isn't a reassignment).
+ *
+ * Deliberately does not filter by the window rule or band limits: a
+ * planner filling a gap or swapping a shift by hand is making a deliberate
+ * exception, in consultation with the person taking it, and must be able
+ * to pick anyone in the pool.
  *
  * Shared by the unfilled-slots gap-filling flow below and the
  * already-assigned reassign flow in the assignments grid, so both offer the
@@ -78,18 +79,11 @@ export function getEligiblePeopleForSlot(
 ): EligiblePerson[] {
   const period = db
     .prepare(
-      `SELECT pool_id, start_datum, eind_datum, bevroren_ruleset_json
-       FROM dienstrooster_schedule_period WHERE id = ?`
+      'SELECT pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?'
     )
-    .get(periodId) as
-    | { pool_id: string; start_datum: string; eind_datum: string; bevroren_ruleset_json: string | null }
-    | undefined;
+    .get(periodId) as { pool_id: string; start_datum: string; eind_datum: string } | undefined;
 
   if (!period) return [];
-
-  const slot = db
-    .prepare('SELECT iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
-    .get(slotId) as { iso_jaar: number; iso_week: number } | undefined;
 
   const poolMembers = db
     .prepare(
@@ -110,20 +104,7 @@ export function getEligiblePeopleForSlot(
     ).map((r) => r.person_id)
   );
 
-  const windowWeeks = getWindowWeeks(period);
-  const windowConflicting = slot
-    ? getWindowConflictingPersonIds(periodId, slot.iso_jaar, slot.iso_week, windowWeeks, slotId)
-    : new Set<string>();
-
-  return poolMembers.filter(
-    (p) => !blocked.has(p.id) && !windowConflicting.has(p.id) && p.id !== excludePersonId
-  );
-}
-
-/** Same fallback default (2) generate-roster uses when a ruleset doesn't name windowWeeks. */
-function getWindowWeeks(period: { bevroren_ruleset_json?: string | null; pool_id: string }): number {
-  const config = resolveRulesetConfig(period);
-  return typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
+  return poolMembers.filter((p) => !blocked.has(p.id) && p.id !== excludePersonId);
 }
 
 /**
@@ -131,30 +112,22 @@ function getWindowWeeks(period: { bevroren_ruleset_json?: string | null; pool_id
  * who could take it.
  *
  * People who marked the slot ABSOLUUT are filtered out: manual-assign
- * rejects them anyway, so offering them would be a dead end. Same for
- * anyone the window rule would rule out for this slot's week.
+ * rejects them anyway, so offering them would be a dead end.
  */
 export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
   const period = db
     .prepare(
-      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
-       FROM dienstrooster_schedule_period WHERE id = ?`
+      'SELECT id, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?'
     )
     .get(periodId) as
-    | {
-        id: string;
-        pool_id: string;
-        start_datum: string;
-        eind_datum: string;
-        bevroren_ruleset_json: string | null;
-      }
+    | { id: string; pool_id: string; start_datum: string; eind_datum: string }
     | undefined;
 
   if (!period) return [];
 
   const slots = db
     .prepare(
-      `SELECT s.id, s.datum, s.iso_jaar, s.iso_week, st.teller, s.benodigd_aantal_personen,
+      `SELECT s.id, s.datum, s.iso_week, st.teller, s.benodigd_aantal_personen,
               (SELECT COUNT(*) FROM dienstrooster_assignment a
                WHERE a.schedule_version_id = ? AND a.slot_id = s.id) as assigned_count
        FROM dienstrooster_shift_slot s
@@ -165,7 +138,6 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
     .all(periodId, periodId) as Array<{
     id: string;
     datum: string;
-    iso_jaar: number;
     iso_week: number;
     teller: string;
     benodigd_aantal_personen: number;
@@ -198,17 +170,8 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
     blockedBySlot.get(row.slot_id)!.add(row.person_id);
   }
 
-  const windowWeeks = getWindowWeeks(period);
-
   return gaps.map((slot) => {
     const blocked = blockedBySlot.get(slot.id) ?? new Set<string>();
-    const windowConflicting = getWindowConflictingPersonIds(
-      periodId,
-      slot.iso_jaar,
-      slot.iso_week,
-      windowWeeks,
-      slot.id
-    );
     const required = slot.benodigd_aantal_personen || 1;
     return {
       slot_id: slot.id,
@@ -218,7 +181,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       benodigd_aantal_personen: required,
       assigned_count: slot.assigned_count,
       shortfall: required - slot.assigned_count,
-      eligible_people: poolMembers.filter((p) => !blocked.has(p.id) && !windowConflicting.has(p.id)),
+      eligible_people: poolMembers.filter((p) => !blocked.has(p.id)),
     };
   });
 }

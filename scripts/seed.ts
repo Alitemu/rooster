@@ -156,7 +156,7 @@ async function createTables() {
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS prior_assignment_uniq
-      ON dienstrooster_prior_assignment(period_id, datum);
+      ON dienstrooster_prior_assignment(period_id, datum, teller);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_shift_type (
       id TEXT PRIMARY KEY,

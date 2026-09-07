@@ -69,14 +69,14 @@ export async function GET(
     // The lookback window is relative to the previous published period's
     // end date, not this period's own - matches auto-derive's anchor.
     const prevPeriodStmt = db.prepare(`
-      SELECT eind_datum
+      SELECT id, eind_datum
       FROM dienstrooster_schedule_period
       WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
       ORDER BY eind_datum DESC
       LIMIT 1
     `);
     const prevPeriod = prevPeriodStmt.get(period.pool_id, period.start_datum) as
-      | { eind_datum: string }
+      | { id: string; eind_datum: string }
       | undefined;
     const lookbackAnchor = prevPeriod?.eind_datum || period.start_datum;
 
@@ -133,7 +133,24 @@ export async function GET(
 
     // Determine completeness - a pool's first-ever period has no previous
     // period to carry over from, so there's nothing to fill in.
-    const expectedCount = prevPeriod ? weeksToLookBack * 7 * 3 : 0; // 7 days × 3 counters
+    //
+    // "Complete" means every real shift in the lookback window is
+    // accounted for, not 3 rows per calendar day - WEEKEND only applies
+    // Sat/Sun and FEESTDAG only on an actual holiday, so a flat
+    // weeksToLookBack * 7 * 3 could never be reached in practice. Matches
+    // the same real-count basis the confirm route now uses.
+    const expectedCount = prevPeriod
+      ? (
+          db
+            .prepare(
+              `SELECT COUNT(*) as count
+               FROM dienstrooster_assignment a
+               JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+               WHERE s.period_id = ? AND s.datum >= ? AND s.datum <= ?`
+            )
+            .get(prevPeriod.id, startDate, endDate) as { count: number }
+        ).count
+      : 0;
     const status = assignments.length >= expectedCount ? 'complete' : 'partial';
 
     const response: ApiSuccessResponse<ListResponse> = {
@@ -167,6 +184,7 @@ export async function PATCH(
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const actorId = auth!.userId;
 
     const { id } = params;
     const body = await parseJsonBody(req) as any;
@@ -218,19 +236,22 @@ export async function PATCH(
       // Insert if not exists
       const insertStmt = db.prepare(`
         INSERT INTO dienstrooster_prior_assignment
-        (id, period_id, datum, iso_week, teller, person_id, bron, bron_period_id)
-        VALUES (?, ?, ?, ?, ?, ?, 'HANDMATIG', NULL)
+        (id, period_id, datum, iso_jaar, iso_week, teller, person_id, bron, bron_period_id, aangemaakt_door, aangemaakt_op)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'HANDMATIG', NULL, ?, ?)
       `);
 
-      const [, week] = getISOWeek(parseISO(datum));
+      const [year, week] = getISOWeek(parseISO(datum));
 
       insertStmt.run(
         crypto.randomUUID(),
         id,
         datum,
+        year,
         week,
         teller,
-        personId
+        personId,
+        actorId,
+        new Date().toISOString()
       );
     }
 

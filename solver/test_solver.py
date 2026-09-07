@@ -52,7 +52,7 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
     return slots
 
 
-def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None, preferred=None):
+def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None, preferred=None, prior=None):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -66,6 +66,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         balances=balances or {p: {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0} for p in people},
         window_weeks=window_weeks,
         preferred_slots=preferred or {},
+        prior_assignments=prior or [],
     )
 
 
@@ -139,6 +140,48 @@ def test_window_rule_holds_across_a_year_boundary():
     assert len(result['assignments']) == 1, (
         f"window rule broken across the year boundary: expected exactly 1 "
         f"assignment, got {result['assignments']}"
+    )
+
+
+def test_window_rule_carries_over_from_the_previous_period():
+    """
+    Regression: a period's solve only ever saw its own slots, so the
+    window rule reset to zero knowledge at week 1 of every new period. A
+    person who worked the last day of the *previous* period could be
+    handed a shift on day 1 of the *new* one - a real violation the
+    solver itself produced, not a manual-override edge case.
+
+    prior_assignments carries the confirmed tail of the previous period
+    (dienstrooster_prior_assignment) into this period's solve. One
+    person, one slot in week 1 of a fresh period, and a prior assignment
+    for that same person one calendar week earlier: with windowWeeks=2
+    the slot must be left unfilled rather than handed to the only
+    candidate who already worked days ago.
+    """
+    slots = make_slots(1, start_year=2027, start_week=2)  # a lone slot in week 2, 2027
+    prior = [{'person_id': 'p1', 'datum': '2027-01-04'}]  # p1 worked week 1, 2027
+
+    result = solve(['p1'], slots, window_weeks=2, prior=prior)
+
+    assert result['assignments'] == [], (
+        f"window rule ignored the previous period's carry-over: {result['assignments']}"
+    )
+    assert len(result['diagnostics']['unfilled_slots']) == 1
+
+
+def test_window_rule_carry_over_respects_the_configured_gap():
+    """
+    The carry-over check must use the same gap as the in-period window
+    rule, not something stricter or looser: a prior assignment exactly
+    windowWeeks away is far enough and must not block the new slot.
+    """
+    slots = make_slots(1, start_year=2027, start_week=3)  # week 3, 2027
+    prior = [{'person_id': 'p1', 'datum': '2027-01-04'}]  # p1 worked week 1 - 2 weeks earlier
+
+    result = solve(['p1'], slots, window_weeks=2, prior=prior)
+
+    assert len(result['assignments']) == 1, (
+        f"carry-over blocked a gap that exactly matches windowWeeks: {result['assignments']}"
     )
 
 

@@ -68,6 +68,17 @@ class PersonPreference(BaseModel):
     blocking_level: str  # ABSOLUUT, LIEVER_NIET, or VOORKEUR
 
 
+class PriorAssignment(BaseModel):
+    """
+    A shift that already happened just before this period started - the
+    confirmed tail of the previous period (dienstrooster_prior_assignment).
+    Lets the window rule see across the period boundary instead of
+    resetting at week 1 of every new period.
+    """
+    person_id: str
+    datum: str  # YYYY-MM-DD
+
+
 class RuleSet(BaseModel):
     window_weeks: int = 2
     band_avond: list[int] = [7, 8]
@@ -84,6 +95,7 @@ class SolverInput(BaseModel):
     rules: RuleSet
     balances: dict[str, dict[str, int]]
     active_people: int
+    prior_assignments: list[PriorAssignment] = []
 
 
 class Assignment(BaseModel):
@@ -153,6 +165,8 @@ async def solve_roster(request: SolverInput):
     - rules: Window weeks, band ranges, distribution mode
     - balances: Current balance per person per counter
     - active_people: Number of active pool members
+    - prior_assignments: Confirmed tail of the previous period, so the
+      window rule carries over across the period boundary
 
     Returns:
     - assignments: List of person-slot pairings
@@ -199,7 +213,8 @@ async def solve_roster(request: SolverInput):
             band_ranges=band_ranges,
             balances=request.balances,
             window_weeks=request.rules.window_weeks,
-            preferred_slots=preferred_slots
+            preferred_slots=preferred_slots,
+            prior_assignments=[p.dict() for p in request.prior_assignments]
         )
 
         if not result['success']:

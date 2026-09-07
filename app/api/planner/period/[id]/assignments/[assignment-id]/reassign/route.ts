@@ -15,8 +15,6 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { resolveRulesetConfig } from '@/lib/rosterBands';
-import { personWouldViolateWindowRule } from '@/lib/windowRule';
 
 export async function POST(
   request: NextRequest,
@@ -101,33 +99,6 @@ export async function POST(
     if (blocked) {
       return NextResponse.json(
         { success: false, error: 'Cannot assign: person has blocked this slot (ABSOLUUT)' },
-        { status: 400 }
-      );
-    }
-
-    // Check window rule - same hard rule the solver enforces, but a swap
-    // goes straight to the database and skips the solver entirely, so it
-    // needs its own check against the same rule.
-    const slot = db
-      .prepare('SELECT iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
-      .get(assignment.slot_id) as { iso_jaar: number; iso_week: number };
-    const config = resolveRulesetConfig(period);
-    const windowWeeks = typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
-    if (
-      personWouldViolateWindowRule(
-        periodId,
-        newPersonId as string,
-        slot.iso_jaar,
-        slot.iso_week,
-        windowWeeks,
-        assignment.slot_id
-      )
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Kan niet toewijzen: deze persoon heeft al een dienst binnen het venster van ${windowWeeks} weken`,
-        },
         { status: 400 }
       );
     }

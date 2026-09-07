@@ -2,10 +2,12 @@
  * POST /api/planner/period/[id]/assignments/manual-assign
  *
  * Manually assign a person to a slot with validation.
- * Validates: blocking prefs (ABSOLUUT) and the window rule - the same two
- * hard rules the solver itself enforces (solver/constraints.py). Capacity
- * and band limits are soft constraints even for the solver, so this route
- * doesn't second-guess a planner's manual fill on those.
+ * Validates: ABSOLUUT blocking only. The window rule, band limits and
+ * capacity are all deliberately left to the planner's judgement here - a
+ * manual fill is by definition an exception the planner is making in
+ * consultation with the person taking the shift, so this route must never
+ * stand in the way of that, even a full week of consecutive shifts if
+ * that's genuinely what was agreed.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,8 +16,6 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { resolveRulesetConfig } from '@/lib/rosterBands';
-import { personWouldViolateWindowRule } from '@/lib/windowRule';
 
 export async function POST(
   request: NextRequest,
@@ -106,30 +106,6 @@ export async function POST(
     if (blocked) {
       return NextResponse.json(
         { success: false, error: 'Cannot assign: person has blocked this slot (ABSOLUUT)' },
-        { status: 400 }
-      );
-    }
-
-    // Check window rule - same hard rule the solver enforces, but manual
-    // assignment goes straight to the database and skips the solver
-    // entirely, so it needs its own check against the same rule.
-    const config = resolveRulesetConfig(period);
-    const windowWeeks = typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
-    if (
-      personWouldViolateWindowRule(
-        periodId,
-        person_id as string,
-        slot.iso_jaar,
-        slot.iso_week,
-        windowWeeks,
-        slot_id as string
-      )
-    ) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Kan niet toewijzen: deze persoon heeft al een dienst binnen het venster van ${windowWeeks} weken`,
-        },
         { status: 400 }
       );
     }

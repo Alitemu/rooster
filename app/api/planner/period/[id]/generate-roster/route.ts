@@ -184,6 +184,20 @@ export async function POST(
     }
     const bands = resolveBands(config, slotCountByTeller, people.length);
 
+    // Fetch the confirmed carry-over from the previous period (the "Prior
+    // Assignments" screen, gated above by overloop_bevestigd_op) - without
+    // this, the window rule would only ever see this period's own slots
+    // and reset to zero knowledge at week 1, letting the solver hand
+    // someone a shift days after they already worked the tail end of the
+    // previous period. Rows with no known person (bron='ONBEKEND') carry
+    // nothing actionable and are excluded.
+    const priorAssignmentRows = db
+      .prepare(
+        `SELECT person_id, datum FROM dienstrooster_prior_assignment
+         WHERE period_id = ? AND person_id IS NOT NULL`
+      )
+      .all(periodId) as Array<{ person_id: string; datum: string }>;
+
     // Build solver request
     const solverInput = {
       period_id: periodId,
@@ -212,6 +226,10 @@ export async function POST(
       },
       balances,
       active_people: people.length,
+      prior_assignments: priorAssignmentRows.map((r) => ({
+        person_id: r.person_id,
+        datum: r.datum,
+      })),
     };
 
     // Call solver service
