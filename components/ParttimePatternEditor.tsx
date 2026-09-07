@@ -27,6 +27,7 @@ interface Props {
   patterns: ParttimePattern[];
   defaultVanaf: string;
   defaultTot: string;
+  readOnly?: boolean; // True once the period's deadline has passed - view only
   onPatternsChange: (patterns: ParttimePattern[]) => void;
 }
 
@@ -60,7 +61,14 @@ const emptyForm = (defaultVanaf: string, defaultTot: string) => ({
   geldig_tot: defaultTot,
 });
 
-export function ParttimePatternEditor({ personId, patterns, defaultVanaf, defaultTot, onPatternsChange }: Props) {
+export function ParttimePatternEditor({
+  personId,
+  patterns,
+  defaultVanaf,
+  defaultTot,
+  readOnly = false,
+  onPatternsChange,
+}: Props) {
   const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -163,26 +171,35 @@ export function ParttimePatternEditor({ personId, patterns, defaultVanaf, defaul
                   {p.geldig_vanaf} t/m {p.geldig_tot}
                 </span>
               </div>
-              <div className="flex gap-3 shrink-0">
-                <button
-                  onClick={() => startEdit(p)}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-800"
-                >
-                  Bewerken
-                </button>
-                <button
-                  onClick={() => handleDelete(p.id)}
-                  disabled={removingId === p.id}
-                  className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
-                >
-                  {removingId === p.id ? 'Bezig…' : 'Verwijderen'}
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="flex gap-3 shrink-0">
+                  <button
+                    onClick={() => startEdit(p)}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    Bewerken
+                  </button>
+                  <button
+                    onClick={() => handleDelete(p.id)}
+                    disabled={removingId === p.id}
+                    className="text-xs font-medium text-red-600 hover:text-red-800 disabled:opacity-50"
+                  >
+                    {removingId === p.id ? 'Bezig…' : 'Verwijderen'}
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>
       )}
 
+      {readOnly ? (
+        <div className="border-t border-neutral-200 pt-4">
+          <p className="text-sm text-neutral-600">
+            De deadline voor deze periode is verstreken - deeltijdpatronen zijn nu alleen-lezen.
+          </p>
+        </div>
+      ) : (
       <div className="border-t border-neutral-200 pt-4 space-y-3">
         <p className="text-sm font-medium text-neutral-800">
           {editingId ? 'Patroon bewerken' : 'Nieuw patroon toevoegen'}
@@ -250,6 +267,7 @@ export function ParttimePatternEditor({ personId, patterns, defaultVanaf, defaul
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

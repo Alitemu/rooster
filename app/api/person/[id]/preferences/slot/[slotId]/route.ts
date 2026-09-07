@@ -10,6 +10,7 @@ import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-conte
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 export async function PATCH(
@@ -41,12 +42,14 @@ export async function PATCH(
 
     // Verify slot exists and its period still accepts preference changes
     const slotStmt = db.prepare(
-      `SELECT s.id, s.period_id, sp.status as period_status
+      `SELECT s.id, s.period_id, sp.status as period_status, sp.deadline as period_deadline
        FROM dienstrooster_shift_slot s
        JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
        WHERE s.id = ?`
     );
-    const slot = slotStmt.get(slotId) as { id: string; period_id: string; period_status: string } | undefined;
+    const slot = slotStmt.get(slotId) as
+      | { id: string; period_id: string; period_status: string; period_deadline: string }
+      | undefined;
     if (!slot) {
       const response: ApiErrorResponse = {
         success: false,
@@ -55,13 +58,11 @@ export async function PATCH(
       return NextResponse.json(response, { status: 404 });
     }
 
-    if (slot.period_status !== 'OPEN') {
+    const gate = checkPeriodAcceptsInput({ status: slot.period_status, deadline: slot.period_deadline });
+    if (!gate.allowed) {
       const response: ApiErrorResponse = {
         success: false,
-        error: {
-          code: 'PERIOD_NOT_OPEN',
-          message: `Preferences are read-only once the period is ${slot.period_status}`,
-        },
+        error: { code: gate.code!, message: gate.message! },
       };
       return NextResponse.json(response, { status: 403 });
     }

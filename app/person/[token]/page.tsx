@@ -240,6 +240,12 @@ export default function PersonalLinkPage() {
     );
   }
 
+  // Deadline is the actual cutoff for input, independent of whether the
+  // planner has gotten around to closing the period yet - see
+  // lib/periodInputGate.ts, which the server-side routes enforce this
+  // same way. Viewing what was entered is never blocked, only changing it.
+  const deadlinePassed = period.status !== 'GEPUBLICEERD' && new Date() > new Date(period.deadline);
+
   return (
     <div className="container-main py-8 space-y-6">
       {/* Header */}
@@ -269,6 +275,15 @@ export default function PersonalLinkPage() {
           )}
         </div>
       </div>
+
+      {deadlinePassed && (
+        <div className="card p-4 bg-amber-50 border border-amber-200">
+          <p className="text-sm text-amber-900">
+            ⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt
+            ingevuld, maar wijzigen kan niet meer.
+          </p>
+        </div>
+      )}
 
       {/* Notifications Panel */}
       {period.status === 'GEPUBLICEERD' && notificationsOpen && personId && (
@@ -355,6 +370,7 @@ export default function PersonalLinkPage() {
             patterns={patterns}
             defaultVanaf={period.start_datum}
             defaultTot={period.eind_datum}
+            readOnly={deadlinePassed}
             onPatternsChange={(next) => {
               setPatterns(next);
               // A changed pattern means the generated days below may have
@@ -393,6 +409,7 @@ export default function PersonalLinkPage() {
           <PreferencesCalendar
             personId={personId}
             periodId={period.id}
+            readOnly={deadlinePassed}
             onPreferencesChange={setPreferencesChanged}
             onCoverageUpdate={() => {}}
           />
@@ -424,6 +441,7 @@ export default function PersonalLinkPage() {
             blockedDays={blockedDays}
             voorkeurDays={voorkeurDays.total}
             parttimeConfirmed={parttimeConfirmed}
+            readOnly={deadlinePassed}
             onSubmit={handleSubmitSuccess}
           />
           <button
@@ -444,16 +462,15 @@ export default function PersonalLinkPage() {
             Je voorkeuren zijn succesvol ingediend.
           </p>
           <p className="text-sm text-green-700">
-            Je kunt dit venster sluiten - maar je kunt ook nog iets aanpassen: zolang de deadline
-            ({new Date(period.deadline).toLocaleString()}) niet verstreken is, tellen je laatste
-            wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet
-            opnieuw in te dienen.
+            {deadlinePassed
+              ? `Je kunt dit venster sluiten. De deadline (${new Date(period.deadline).toLocaleString()}) is verstreken, dus wijzigen kan niet meer.`
+              : `Je kunt dit venster sluiten - maar je kunt ook nog iets aanpassen: zolang de deadline (${new Date(period.deadline).toLocaleString()}) niet verstreken is, tellen je laatste wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet opnieuw in te dienen.`}
           </p>
           <button
             onClick={() => setCurrentStep('calendar')}
             className="px-4 py-2 rounded font-medium bg-white border border-green-300 text-green-900 hover:bg-green-100 transition-colors"
           >
-            Voorkeuren aanpassen
+            {deadlinePassed ? 'Ingevoerde voorkeuren bekijken' : 'Voorkeuren aanpassen'}
           </button>
         </div>
       )}

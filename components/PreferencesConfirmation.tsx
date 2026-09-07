@@ -24,6 +24,7 @@ interface Props {
   blockedDays: BlockedDaysSummary;
   voorkeurDays?: number;
   parttimeConfirmed: boolean;
+  readOnly?: boolean;
   onSubmit?: (success: boolean) => void;
 }
 
@@ -33,6 +34,7 @@ export function PreferencesConfirmation({
   blockedDays,
   voorkeurDays = 0,
   parttimeConfirmed,
+  readOnly = false,
   onSubmit,
 }: Props) {
   const [submitting, setSubmitting] = useState(false);
@@ -176,12 +178,20 @@ export function PreferencesConfirmation({
         </div>
       )}
 
+      {readOnly && (
+        <div className="bg-neutral-100 border border-neutral-300 rounded p-3">
+          <p className="text-sm text-neutral-700">
+            De deadline voor deze periode is verstreken - indienen en wijzigen kan niet meer.
+          </p>
+        </div>
+      )}
+
       {/* Submit button */}
       <button
         onClick={handleSubmit}
-        disabled={submitting || !parttimeConfirmed}
+        disabled={submitting || !parttimeConfirmed || readOnly}
         className={`w-full py-3 px-4 rounded font-semibold text-white transition-colors
-          ${submitting || !parttimeConfirmed
+          ${submitting || !parttimeConfirmed || readOnly
             ? 'bg-neutral-400 cursor-not-allowed'
             : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'}`}
       >
@@ -189,9 +199,12 @@ export function PreferencesConfirmation({
       </button>
 
       {/* Help text */}
-      <div className="text-xs text-neutral-500 italic">
-        Na het indienen kun je je voorkeuren niet meer wijzigen totdat de periode is gesloten.
-      </div>
+      {!readOnly && (
+        <div className="text-xs text-neutral-500 italic">
+          Ook na het indienen kun je je voorkeuren nog aanpassen, zolang de deadline niet
+          verstreken is.
+        </div>
+      )}
     </div>
   );
 }

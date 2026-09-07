@@ -35,6 +35,10 @@ export default function PlannerPeriodPage() {
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [editingDeadline, setEditingDeadline] = useState(false);
+  const [deadlineInput, setDeadlineInput] = useState('');
+  const [savingDeadline, setSavingDeadline] = useState(false);
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
 
   const loadPeriod = async () => {
     try {
@@ -47,6 +51,43 @@ export default function PlannerPeriodPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Laden van periode mislukt');
       setLoading(false);
+    }
+  };
+
+  // datetime-local wants "YYYY-MM-DDTHH:mm" (no seconds, no timezone) -
+  // strip both from the stored ISO value so the input starts pre-filled
+  // with the deadline as it already is, not blank.
+  const toDatetimeLocal = (iso: string): string => {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  const startEditDeadline = () => {
+    if (!period) return;
+    setDeadlineError(null);
+    setDeadlineInput(toDatetimeLocal(period.deadline));
+    setEditingDeadline(true);
+  };
+
+  const handleSaveDeadline = async () => {
+    setSavingDeadline(true);
+    setDeadlineError(null);
+    try {
+      const res = await fetch(`/api/periods/${periodId}/deadline`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deadline: deadlineInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Aanpassen van deadline mislukt');
+      setEditingDeadline(false);
+      await loadPeriod();
+    } catch (err) {
+      setDeadlineError(err instanceof Error ? err.message : 'Aanpassen van deadline mislukt');
+    } finally {
+      setSavingDeadline(false);
     }
   };
 
@@ -111,9 +152,43 @@ export default function PlannerPeriodPage() {
               {new Date(period.start_datum).toLocaleDateString()} t/m{' '}
               {new Date(period.eind_datum).toLocaleDateString()}
             </p>
-            <p className="text-sm text-neutral-600">
-              Deadline: {new Date(period.deadline).toLocaleString()}
-            </p>
+            {editingDeadline ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <label className="text-neutral-600">Deadline:</label>
+                <input
+                  type="datetime-local"
+                  value={deadlineInput}
+                  onChange={(e) => setDeadlineInput(e.target.value)}
+                  className="px-2 py-1 border rounded text-sm"
+                />
+                <button
+                  onClick={handleSaveDeadline}
+                  disabled={savingDeadline}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                >
+                  {savingDeadline ? 'Bezig…' : 'Opslaan'}
+                </button>
+                <button
+                  onClick={() => setEditingDeadline(false)}
+                  className="text-xs font-medium text-neutral-600 hover:text-neutral-800"
+                >
+                  Annuleren
+                </button>
+                {deadlineError && <p className="w-full text-xs text-red-600">{deadlineError}</p>}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-600">
+                Deadline: {new Date(period.deadline).toLocaleString()}
+                {period.status === 'OPEN' && (
+                  <button
+                    onClick={startEditDeadline}
+                    className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    Aanpassen
+                  </button>
+                )}
+              </p>
+            )}
             {period.bevroren_ruleset_json && (() => {
               try {
                 const cfg = JSON.parse(period.bevroren_ruleset_json);

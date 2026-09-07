@@ -360,6 +360,21 @@ describe('parttimeSync', () => {
 
       expect(result.inserted).toBe(0);
     });
+
+    it('stops generating rows once the period deadline has passed, even while still OPEN', () => {
+      // A planner who hasn't gotten around to closing the period yet must
+      // not leave part-time patterns free to keep writing new blocks past
+      // the deadline the participant was actually told about.
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+      db.prepare(`UPDATE dienstrooster_schedule_period SET deadline = '2020-01-01T00:00:00Z' WHERE id = ?`).run(
+        fixture.periodId
+      );
+
+      const patternId = createPattern(fixture.personId, 'MA', 'ELKE_WEEK', '2027-01-01', '2027-12-31');
+      const result = syncAvailabilityForPattern(patternId);
+
+      expect(result.inserted).toBe(0);
+    });
   });
 
   describe('removePatternAvailability', () => {

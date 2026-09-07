@@ -9,6 +9,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SubmissionRequest {
@@ -78,8 +79,8 @@ export async function POST(
     }
 
     // Verify period exists and still accepts submissions
-    const periodStmt = db.prepare(`SELECT id, status FROM dienstrooster_schedule_period WHERE id = ?`);
-    const period = periodStmt.get(period_id) as { id: string; status: string } | undefined;
+    const periodStmt = db.prepare(`SELECT id, status, deadline FROM dienstrooster_schedule_period WHERE id = ?`);
+    const period = periodStmt.get(period_id) as { id: string; status: string; deadline: string } | undefined;
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
@@ -88,13 +89,11 @@ export async function POST(
       return NextResponse.json(response, { status: 404 });
     }
 
-    if (period.status !== 'OPEN') {
+    const gate = checkPeriodAcceptsInput(period);
+    if (!gate.allowed) {
       const response: ApiErrorResponse = {
         success: false,
-        error: {
-          code: 'PERIOD_NOT_OPEN',
-          message: `Preferences are read-only once the period is ${period.status}`,
-        },
+        error: { code: gate.code!, message: gate.message! },
       };
       return NextResponse.json(response, { status: 403 });
     }

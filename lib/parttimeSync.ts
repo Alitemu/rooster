@@ -223,7 +223,13 @@ function reconcilePatternForPeriod(pattern: ParttimePatternRow, periodId: string
   };
 }
 
-export function getOpenPeriodsForPerson(personId: string): string[] {
+// "Open" here means genuinely still accepting input - status OPEN and its
+// deadline not yet passed. A pattern change (or anything else looping over
+// this) must never write a new PARTTIME row into a period whose deadline
+// has passed, even if the planner hasn't gotten around to closing it yet -
+// see lib/periodInputGate.ts, which the single-slot and submission routes
+// use for the same rule.
+export function getOpenPeriodsForPerson(personId: string, now: Date = new Date()): string[] {
   const rows = db
     .prepare(
       `SELECT sp.id
@@ -231,9 +237,10 @@ export function getOpenPeriodsForPerson(personId: string): string[] {
        JOIN dienstrooster_pool_membership pm ON pm.pool_id = sp.pool_id
        WHERE pm.person_id = ?
          AND sp.status = 'OPEN'
+         AND sp.deadline >= ?
          AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum`
     )
-    .all(personId) as Array<{ id: string }>;
+    .all(personId, now.toISOString()) as Array<{ id: string }>;
   return rows.map((r) => r.id);
 }
 

@@ -55,6 +55,7 @@ interface Props {
   personId: string;
   periodId: string;
   shiftCounters?: string[]; // Default: ['AVOND', 'WEEKEND', 'FEESTDAG']
+  readOnly?: boolean; // True once the period's deadline has passed - view only
   onPreferencesChange?: (changed: boolean) => void;
   onCoverageUpdate?: (coverage: Map<string, CoverageInfo>) => void;
 }
@@ -124,6 +125,7 @@ export function PreferencesCalendar({
   personId,
   periodId,
   shiftCounters = ['AVOND', 'WEEKEND', 'FEESTDAG'],
+  readOnly = false,
   onPreferencesChange,
   onCoverageUpdate,
 }: Props) {
@@ -267,6 +269,7 @@ export function PreferencesCalendar({
   // Left click: cycle null → VOORKEUR → LIEVER_NIET → ABSOLUUT → null
   const handleTogglePreference = useCallback(
     (datum: string, teller: string) => {
+      if (readOnly) return;
       const slot = preferences.get(datum)?.slots.get(teller);
       if (!slot) {
         console.error('Slot not found for', datum, teller);
@@ -281,7 +284,7 @@ export function PreferencesCalendar({
 
       applyPreferenceLevel(datum, teller, next);
     },
-    [preferences, applyPreferenceLevel]
+    [preferences, applyPreferenceLevel, readOnly]
   );
 
   // Right click (or long-press on touch devices, which fires the same
@@ -296,10 +299,10 @@ export function PreferencesCalendar({
       // menu for it and then immediately close it again as the same event
       // keeps bubbling.
       e.stopPropagation();
-      if (isSaving) return;
+      if (isSaving || readOnly) return;
       setContextMenu({ datum, teller, x: e.clientX, y: e.clientY });
     },
-    [isSaving]
+    [isSaving, readOnly]
   );
 
   const selectContextMenuLevel = useCallback(
@@ -533,7 +536,7 @@ export function PreferencesCalendar({
                                       key={`${datum}-${counter}`}
                                       onClick={() => handleTogglePreference(datum, counter)}
                                       onContextMenu={(e) => handleContextMenu(e, datum, counter)}
-                                      disabled={isSaving}
+                                      disabled={isSaving || readOnly}
                                       className={`w-full h-5 rounded text-[10px] font-semibold transition-all
                                         ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
                                       title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'} (rechtsklik voor opties)`}
@@ -547,7 +550,7 @@ export function PreferencesCalendar({
                               {isWeekendDay && (
                                 <button
                                   onClick={() => handleBlockWeekend(isSaturday ? datum : addDays(datum, -1))}
-                                  disabled={isSaving}
+                                  disabled={isSaving || readOnly}
                                   className="absolute top-0.5 right-0.5 text-[8px] font-bold px-1 py-0.5 rounded
                                     bg-neutral-200 hover:bg-neutral-300 text-neutral-700 transition-colors
                                     disabled:opacity-50"
