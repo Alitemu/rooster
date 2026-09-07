@@ -309,7 +309,7 @@ class ConstraintBuilder:
         assignment_vars: dict[tuple[str, str], cp_model.IntVar],
         people: list[str],
         slots: list[dict],
-        band_ranges: dict[str, list[int]],  # counter -> [min, max]
+        band_ranges: dict[str, tuple[int, int]],  # counter -> [min, max]
         balances: dict[str, dict[str, int]],  # person -> { counter: delta }
         counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
         distribution_mode: str = 'GELIJK',
@@ -373,8 +373,13 @@ class ConstraintBuilder:
                     under = self.model.NewIntVar(
                         0, max(0, actual_min), f'band_under_{person_id}_{counter}'
                     )
+                    # Mirrors `under`'s headroom: assignment_count ranges up
+                    # to len(counter_vars), so when actual_max is pulled
+                    # negative by a large enough delta, over must be able to
+                    # cover the full gap (len(counter_vars) - actual_max) or
+                    # the model becomes infeasible for every solution.
                     over = self.model.NewIntVar(
-                        0, len(counter_vars), f'band_over_{person_id}_{counter}'
+                        0, len(counter_vars) - min(0, actual_max), f'band_over_{person_id}_{counter}'
                     )
 
                     self.model.Add(assignment_count + under >= actual_min)

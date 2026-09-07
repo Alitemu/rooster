@@ -12,7 +12,7 @@ import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Literal, Optional
 from datetime import datetime
 
 # Setup logging - LOG_LEVEL (docker-compose.yml / .env.example) picks the
@@ -69,7 +69,11 @@ class Slot(BaseModel):
 
 class PersonPreference(BaseModel):
     slot_id: str
-    blocking_level: str  # ABSOLUUT, LIEVER_NIET, or VOORKEUR
+    # A typo here (e.g. "ABSOLUT") used to fall through every branch in
+    # solve_roster's if/elif as silently-untreated, no error and no
+    # constraint applied - Literal makes FastAPI reject it as a 422
+    # instead of solving the wrong problem.
+    blocking_level: Literal['ABSOLUUT', 'LIEVER_NIET', 'VOORKEUR', 'NEUTRAL']
 
 
 class PriorAssignment(BaseModel):
@@ -85,10 +89,15 @@ class PriorAssignment(BaseModel):
 
 class RuleSet(BaseModel):
     window_weeks: int = 2
-    band_avond: list[int] = [7, 8]
-    band_weekend: list[int] = [7, 8]
-    band_feestdag: list[int] = [7, 8]
-    distribution_mode: str = "GELIJK"
+    # A fixed 2-tuple rather than list[int]: constraints.py always does
+    # `base_min, base_max = band_ranges.get(counter, [7, 8])`, and a
+    # wrong-length list used to reach that unpack and crash with a raw
+    # Python ValueError, caught by generate_roster's broad except as a
+    # generic solver ERROR instead of a clean 422 at the API boundary.
+    band_avond: tuple[int, int] = (7, 8)
+    band_weekend: tuple[int, int] = (7, 8)
+    band_feestdag: tuple[int, int] = (7, 8)
+    distribution_mode: Literal['GELIJK', 'NAAR_RATO'] = "GELIJK"
     soft_block_penalty: float = 1.0
     # Cumulative, escalating cost per unit a person strays outside their
     # band - see objective.add_band_slack_objective. Default reproduces

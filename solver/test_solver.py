@@ -296,6 +296,27 @@ def test_band_is_stretched_rather_than_leaving_a_slot_empty():
     )
 
 
+def test_a_large_negative_balance_correction_does_not_make_the_whole_model_infeasible():
+    """
+    A large enough negative delta (e.g. a manual ledger correction) pulls a
+    person's effective band maximum below zero. The `over` slack variable
+    must have enough headroom to absorb that gap - otherwise the hard
+    band-max constraint becomes unsatisfiable for every possible solution,
+    and generation fails for the whole period over one person's balance.
+    """
+    slots = make_slots(1, teller='FEESTDAG')
+    result = solve(
+        ['p1'], slots, window_weeks=1,
+        band={'AVOND': [7, 8], 'WEEKEND': [7, 8], 'FEESTDAG': [7, 8]},
+        balances={'p1': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': -20}},
+    )
+
+    assert result['success'], (
+        f"expected a solvable model despite the large negative delta, got "
+        f"solver_status={result.get('solver_status')}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # FAIRNESS: band imbalance objective
 # ---------------------------------------------------------------------------
@@ -513,6 +534,45 @@ def test_band_deviation_penalty_spreads_a_shortage_instead_of_concentrating_it()
     )
     over_band = sum(1 for c in counts.values() if c > 1)
     assert over_band == 2, f'the 2 extra shifts should land on 2 different people, not concentrated: {counts}'
+
+
+def test_band_deviation_penalty_keeps_growing_past_the_reified_tier_cap():
+    """
+    add_band_slack_objective only reifies max_tiers=8 "deviation >= N"
+    booleans - deviation beyond that has no boolean of its own. If nothing
+    prices the gap, a deviation of 10 costs exactly the same as a deviation
+    of 8, which defeats the whole point of an *escalating* penalty right
+    when a badly understaffed pool needs it most.
+
+    1 person forced to take all 8 slots of a fixed-size period (nobody
+    else exists, so the huge shortfall weight always wins over any band
+    cost) isolates deviation via the ledger delta alone, not headcount:
+    delta=-8 makes their effective band max 0 (deviation=8); delta=-10
+    makes it -2 (deviation=10). Both scenarios have identical assignment
+    counts and slot counts, so the only things that can move are the
+    band-slack term (this bug) and the band-imbalance term (a separate,
+    already-correct term with a known fixed weight of 0.5) - both track
+    the same 2-unit delta, so the total cost must rise by
+    tier_cost(9)*2 + 0.5*2 = 5.0*2 + 1.0 = 11.0, not by just the
+    imbalance term's 1.0 alone.
+    """
+    slots = make_slots(8)
+    band = {'AVOND': [8, 8], 'WEEKEND': [8, 8], 'FEESTDAG': [8, 8]}
+
+    at_tier_cap = solve(['p1'], slots, window_weeks=1, band=band,
+                         balances={'p1': {'AVOND': -8, 'WEEKEND': 0, 'FEESTDAG': 0}})
+    past_tier_cap = solve(['p1'], slots, window_weeks=1, band=band,
+                           balances={'p1': {'AVOND': -10, 'WEEKEND': 0, 'FEESTDAG': 0}})
+
+    assert at_tier_cap['success'] and past_tier_cap['success']
+    assert len(at_tier_cap['assignments']) == 8 and len(past_tier_cap['assignments']) == 8
+
+    delta_cost = past_tier_cap['diagnostics']['total_cost'] - at_tier_cap['diagnostics']['total_cost']
+    assert delta_cost == pytest.approx(11.0), (
+        f'2 extra units of deviation past the tier cap should cost 11.0 more '
+        f'(10.0 band-slack + 1.0 imbalance), got {delta_cost} more - '
+        f'deviation beyond max_tiers is being priced at 0'
+    )
 
 
 # ---------------------------------------------------------------------------

@@ -89,7 +89,7 @@ class ObjectiveBuilder:
         assignment_vars: dict[tuple[str, str], cp_model.IntVar],
         people: list[str],
         slots: list[dict],
-        band_ranges: dict[str, list[int]],
+        band_ranges: dict[str, tuple[int, int]],
         balances: dict[str, dict[str, int]],
         weight: float = 0.5,
         counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
@@ -149,10 +149,16 @@ class ObjectiveBuilder:
                 if counter_vars:
                     assignment_count = sum(counter_vars)
 
-                    # Bound generously: the count can range over every slot
-                    # of this counter, and target may sit outside that range
-                    # once a ledger delta is applied.
-                    bound = max(len(counter_vars), abs(target))
+                    # diff = assignment_count - target, and assignment_count
+                    # ranges over [0, len(counter_vars)] - so diff itself
+                    # ranges over [-target, len(counter_vars) - target]. A
+                    # large ledger delta can push target well outside
+                    # [0, len(counter_vars)] in either direction, so the
+                    # bound has to cover both ends of that range, not just
+                    # len(counter_vars) and target independently (which
+                    # under-covers whenever a very negative target adds to,
+                    # rather than falls within, the count's own range).
+                    bound = max(abs(target), abs(len(counter_vars) - target))
 
                     diff = self.model.NewIntVar(
                         -bound, bound, f'diff_{person_id}_{counter}'
@@ -248,6 +254,20 @@ class ObjectiveBuilder:
                 self.model.Add(deviation >= level).OnlyEnforceIf(at_least)
                 self.model.Add(deviation < level).OnlyEnforceIf(at_least.Not())
                 slack_cost += tier_cost(level) * at_least
+
+            # Deviation beyond max_tiers must keep getting more expensive,
+            # not become free: without this, nothing prices the difference
+            # between a deviation of exactly max_tiers and one far beyond
+            # it, since no reified "at least" boolean exists past max_tiers.
+            # `excess` only needs a lower bound (>= deviation - max_tiers)
+            # because minimizing the objective already pushes it down to
+            # exactly max(0, deviation - max_tiers) - CP-SAT's standard
+            # idiom for a max(0, x) term. The domain's upper bound is a
+            # generous cap, not a real constraint: deviation can never
+            # realistically approach it.
+            excess = self.model.NewIntVar(0, 100_000, f'band_dev_{person_id}_{counter}_excess')
+            self.model.Add(excess >= deviation - max_tiers)
+            slack_cost += tier_cost(max_tiers + 1) * excess
 
         self.objective_terms['band_slack'] = slack_cost
         return slack_cost
