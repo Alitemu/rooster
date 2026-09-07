@@ -33,7 +33,7 @@ export default function RootLayout({
           </main>
           <footer className="bg-neutral-100 border-t border-neutral-200 mt-8">
             <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-neutral-600">
-              <p>Dienstrooster - Eerlijke roosterplanning</p>
+              <p>Dienstrooster: eerlijke roosterplanning</p>
             </div>
           </footer>
         </div>

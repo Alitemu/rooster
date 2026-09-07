@@ -128,7 +128,7 @@ const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReas
       label: 'Last minute avonddienst overgenomen',
       defaultAantal: -2,
       explain: (n) =>
-        `Vorige periode last minute een avonddienst overgenomen - wordt nu beloond met ${Math.abs(n)} avonddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
+        `Heeft vorige periode last minute een avonddienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} avonddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
     },
     {
       type: 'AVOND',
@@ -143,7 +143,7 @@ const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReas
       label: 'Last minute weekenddienst overgenomen',
       defaultAantal: -2,
       explain: (n) =>
-        `Vorige periode last minute een weekenddienst overgenomen - wordt nu beloond met ${Math.abs(n)} weekenddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
+        `Heeft vorige periode last minute een weekenddienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} weekenddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
     },
     {
       type: 'WEEKEND',
@@ -166,14 +166,14 @@ const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReas
       label: 'Ruil avond- voor weekenddienst',
       defaultAantal: 1,
       explain: (n) =>
-        `Heeft een avonddienst geruild voor een weekenddienst - avonddienst wordt ${n} meer, weekenddienst wordt ${n} minder.`,
+        `Heeft een avonddienst geruild voor een weekenddienst: avonddienst wordt ${n} meer, weekenddienst wordt ${n} minder.`,
     },
     {
       type: 'RUIL_WEEKEND_VOOR_AVOND',
       label: 'Ruil weekend- voor avonddienst',
       defaultAantal: 1,
       explain: (n) =>
-        `Heeft een weekenddienst geruild voor een avonddienst - weekenddienst wordt ${n} meer, avonddienst wordt ${n} minder.`,
+        `Heeft een weekenddienst geruild voor een avonddienst: weekenddienst wordt ${n} meer, avonddienst wordt ${n} minder.`,
     },
   ],
 };
@@ -825,7 +825,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             <p className="text-sm text-neutral-600">
               Iedereen in de pool doet standaard mee met deze periode (vinkje &quot;Actief&quot;
               staat aan) en krijgt bij het openen een uitnodiging. Vink iemand uit om diegene voor
-              deze periode uit te sluiten - de geldigheidsdatum wordt dan automatisch aangepast.
+              deze periode uit te sluiten, waardoor de geldigheidsdatum automatisch wordt aangepast.
               Voeg hieronder eventueel iemand nieuw toe.
             </p>
 
@@ -1091,7 +1091,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             <div>
               <h3 className="font-semibold mb-1">Streefbereik</h3>
               <p className="text-xs text-neutral-600 mb-3">
-                Voorstel op basis van dit rooster en het aantal mensen - pas het gerust aan, maar
+                Voorstel op basis van dit rooster en het aantal mensen. Pas het gerust aan, maar
                 een ruimer bereik dan hier voorgesteld is voor deze periode niet haalbaar.
               </p>
               <div className="grid grid-cols-2 gap-4">
@@ -1145,8 +1145,8 @@ export function SetupWizard({ period, onComplete }: Props) {
               <h3 className="font-semibold mb-1">Blokkadebudget</h3>
               <p className="text-xs text-neutral-600 mb-3">
                 Begrens hoeveel procent van de diensten één persoon mag blokkeren of als &quot;liever
-                niet&quot; mag opgeven. Op 100% zit er geen limiet op - de deelnemer kan dan net als
-                voorheen zoveel dagen markeren als gewenst.
+                niet&quot; mag opgeven. Op 100% zit er geen limiet op, waardoor de deelnemer net als
+                voorheen zoveel dagen kan markeren als gewenst.
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -1254,8 +1254,8 @@ export function SetupWizard({ period, onComplete }: Props) {
               Persoon-02,0,+2
             </div>
             <p className="text-xs text-neutral-500 italic">
-              Het saldo van feestdagdiensten hoort hier niet bij - welke feestdag iemand wanneer
-              heeft gedraaid stel je hierna in bij stap 6. Feestdagen.
+              Het saldo van feestdagdiensten hoort hier niet bij. Welke feestdag iemand wanneer
+              heeft gedraaid, stel je hierna in bij stap 6. Feestdagen.
             </p>
 
             <div className="border-2 border-dashed rounded p-6 text-center">
@@ -1343,7 +1343,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'corrections' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Corrigeer hier het saldo van een medewerker voor een uitzonderlijke situatie - bijvoorbeeld
+              Corrigeer hier het saldo van een medewerker voor een uitzonderlijke situatie, bijvoorbeeld
               het laatste moment overnemen van een dienst, of een ongelijke ruil. De gewone overloop
               tussen periodes gebeurt al automatisch en hoeft hier niet.
             </p>
@@ -1431,7 +1431,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
                 {typeof correctionForm.aantal === 'number' && Math.abs(correctionForm.aantal) >= CORRECTION_AANTAL_WARNING_THRESHOLD && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                    Ongebruikelijk groot aantal ({correctionForm.aantal}) - weet je zeker dat dit geen typefout is?
+                    Ongebruikelijk groot aantal ({correctionForm.aantal}). Weet je zeker dat dit geen typefout is?
                   </p>
                 )}
 
@@ -1514,9 +1514,9 @@ export function SetupWizard({ period, onComplete }: Props) {
                   ⚠️ Nog niemand actief voor deze periode
                 </p>
                 <p className="text-sm text-red-800 mt-1">
-                  Er is geen personeel actief voor deze periode - ga terug naar stap 2 (Personeel) om
-                  iemand toe te voegen of te activeren. Zonder actief personeel kan de periode niet
-                  geopend worden.
+                  Er is geen personeel actief voor deze periode. Ga terug naar stap 2 (Personeel) om
+                  iemand toe te voegen of te activeren, want zonder actief personeel kan de periode
+                  niet geopend worden.
                 </p>
               </div>
             )}
