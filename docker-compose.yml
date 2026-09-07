@@ -41,6 +41,11 @@ services:
       # (or in .env) to pin your own: openssl rand -hex 32
       SESSION_SECRET: "${SESSION_SECRET:-}"
       BASE_URL: "${BASE_URL:-https://localhost:${APP_PORT:-8010}}"
+      # Optional override for the seeded planner account's password - see
+      # .env.example. Only has an effect on an account with no password
+      # yet. Left unset (the default), docker-entrypoint.sh's claim-password
+      # step is skipped entirely.
+      SEED_PLANNER_PASSWORD: "${SEED_PLANNER_PASSWORD:-}"
     volumes:
       - db_data:/data
     networks:
@@ -54,7 +59,7 @@ services:
       context: ./solver
       dockerfile: Dockerfile
     environment:
-      LOG_LEVEL: INFO
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
     # `expose`, not `ports`: a bare `ports: - "8000"` publishes the port to
     # the host on a random ephemeral port, which would put this service -
     # which has no authentication of any kind - on the host's interface.

@@ -5,9 +5,6 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['@radix-ui'],
   },
-  env: {
-    NEXT_PUBLIC_SOLVER_URL: process.env.SOLVER_URL || 'http://solver:8000',
-  },
   headers: async () => [
     {
       source: '/:path*',

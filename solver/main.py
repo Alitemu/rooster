@@ -7,6 +7,7 @@ Phase 2: Constraint implementation and solver execution
 """
 
 import logging
+import os
 import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,9 +15,12 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
-# Setup logging
+# Setup logging - LOG_LEVEL (docker-compose.yml / .env.example) picks the
+# verbosity; an unset or unrecognised value falls back to INFO rather than
+# failing startup over a typo.
+_log_level = getattr(logging, os.environ.get('LOG_LEVEL', 'INFO').upper(), logging.INFO)
 logging.basicConfig(
-    level=logging.INFO,
+    level=_log_level,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
