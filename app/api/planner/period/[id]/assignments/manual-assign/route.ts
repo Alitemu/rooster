@@ -2,13 +2,15 @@
  * POST /api/planner/period/[id]/assignments/manual-assign
  *
  * Manually assign a person to a slot.
- * Nothing here is a hard block, including an ABSOLUUT preference or a
- * part-time-free day - a manual fill is by definition an exception the
- * planner is making in consultation with the person taking the shift, so
- * this route must never stand in the way of that, even a full week of
- * consecutive shifts or a day the person explicitly blocked, if that's
- * genuinely what was agreed. A block is still surfaced as a `warning` on
- * the success response so the planner sees it before it's too late.
+ * Nothing here is a hard block, including an ABSOLUUT preference, a
+ * part-time-free day, or the window rule - a manual fill is by definition
+ * an exception the planner is making in consultation with the person
+ * taking the shift, so this route must never stand in the way of that,
+ * even a full week of consecutive shifts or a day the person explicitly
+ * blocked, if that's genuinely what was agreed. Any of those is still
+ * surfaced as a `warning` on the success response, and recorded on the
+ * audit log entry, so the override is visible both at the moment it
+ * happens and afterwards.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,6 +19,8 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { resolveRulesetConfig } from '@/lib/rosterBands';
+import { personWouldViolateWindowRule } from '@/lib/windowRule';
 
 export async function POST(
   request: NextRequest,
@@ -96,8 +100,12 @@ export async function POST(
       );
     }
 
-    // Check blocking preferences - not a hard block (see docstring above),
-    // just surfaced as a warning so the planner knowingly overrides it.
+    // Check blocking preferences and the window rule - neither is a hard
+    // block here (see docstring above), just surfaced as a warning so the
+    // planner knowingly overrides it. An ABSOLUUT block on this exact slot
+    // outranks a window conflict derived from other slots, since it's the
+    // more direct, more specific signal - matches the category priority in
+    // lib/rosterGaps.ts.
     const blocked = db
       .prepare(
         `SELECT source FROM dienstrooster_availability
@@ -105,11 +113,29 @@ export async function POST(
       )
       .get(person_id, slot_id) as { source: string } | undefined;
 
+    const config = resolveRulesetConfig(period);
+    const windowWeeks = typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
+    const windowConflict =
+      !blocked &&
+      personWouldViolateWindowRule(
+        periodId,
+        person_id as string,
+        slot.iso_jaar,
+        slot.iso_week,
+        windowWeeks,
+        slot_id as string
+      );
+
     const warning = blocked
       ? blocked.source === 'PARTTIME'
         ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een parttime-vrije dag voor deze persoon.' }
         : { code: 'BLOCKED_OVERRIDE', message: 'Let op: deze persoon heeft deze dag geblokkeerd.' }
-      : null;
+      : windowConflict
+        ? {
+            code: 'WINDOW_OVERRIDE',
+            message: `Let op: deze persoon heeft al een dienst binnen het venster van ${windowWeeks} weken.`,
+          }
+        : null;
 
     // If assignment already exists, return it
     if (existing && existing.person_id === person_id) {
@@ -131,7 +157,9 @@ export async function POST(
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).run(assignmentId, periodId, person_id, slot_id, 'MANUAL', 1, now);
 
-    // Log audit entry
+    // Log audit entry - includes the override reason (if any) so a
+    // deliberate overrule of a block/parttime-day/window-conflict is
+    // visible in the audit trail, not just at the moment it happened.
     db.prepare(
       `INSERT INTO dienstrooster_audit_log
        (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
@@ -143,7 +171,12 @@ export async function POST(
       assignmentId,
       'MANUAL_ASSIGN',
       null,
-      JSON.stringify({ person_id, slot_id, reason: reason || null }),
+      JSON.stringify({
+        person_id,
+        slot_id,
+        reason: reason || null,
+        override: warning ? { code: warning.code } : null,
+      }),
       now
     );
 

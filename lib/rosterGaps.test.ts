@@ -154,9 +154,9 @@ describe('rosterGaps', () => {
       expect(gap).toBeDefined();
       expect(gap!.eligible_people).toHaveLength(3);
       const blockedPerson = gap!.eligible_people.find((p) => p.id === f.personIds[0]);
-      expect(blockedPerson?.blocked_reason).toBe('GEBLOKKEERD');
+      expect(blockedPerson?.category).toBe('GEBLOKKEERD');
       const unblockedPerson = gap!.eligible_people.find((p) => p.id === f.personIds[1]);
-      expect(unblockedPerson?.blocked_reason).toBeUndefined();
+      expect(unblockedPerson?.category).toBe('BESCHIKBAAR');
     });
 
     it('flags a part-time-sourced block distinctly from any other block', () => {
@@ -168,7 +168,31 @@ describe('rosterGaps', () => {
 
       const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === f.slotIds[0]);
 
-      expect(gap!.eligible_people.find((p) => p.id === f.personIds[0])?.blocked_reason).toBe('PARTTIME');
+      expect(gap!.eligible_people.find((p) => p.id === f.personIds[0])?.category).toBe('PARTTIME');
+    });
+
+    it('flags a window-rule conflict when the person has another shift too close by', () => {
+      const f = createFixture(2, '2027-01-04', '2027-01-24'); // weeks 1-4
+      db.prepare(
+        `UPDATE dienstrooster_ruleset SET config_json = '{"windowWeeks":2}' WHERE id =
+         (SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?)`
+      ).run(f.poolId);
+      const week2Slot = f.slotIds.find(
+        (id) =>
+          (db.prepare('SELECT iso_week FROM dienstrooster_shift_slot WHERE id = ?').get(id) as any)
+            .iso_week === 2
+      )!;
+      const week3Slot = f.slotIds.find(
+        (id) =>
+          (db.prepare('SELECT iso_week FROM dienstrooster_shift_slot WHERE id = ?').get(id) as any)
+            .iso_week === 3
+      )!;
+      assign(f.periodId, f.personIds[0], week2Slot, 'MANUAL');
+
+      const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === week3Slot);
+
+      expect(gap!.eligible_people.find((p) => p.id === f.personIds[0])?.category).toBe('VENSTERBLOK');
+      expect(gap!.eligible_people.find((p) => p.id === f.personIds[1])?.category).toBe('BESCHIKBAAR');
     });
 
     it('still offers someone who only marked the slot as prefer-not', () => {

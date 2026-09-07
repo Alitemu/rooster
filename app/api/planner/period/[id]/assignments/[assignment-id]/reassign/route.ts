@@ -8,8 +8,10 @@
  * transaction here instead, and both are logged the same way a plain manual
  * delete or manual assign already are.
  *
- * An ABSOLUUT block on the new person is not a hard stop - same reasoning
- * as manual-assign - just a `warning` on the success response.
+ * An ABSOLUUT block, a part-time-free day, or a window-rule conflict on
+ * the new person is not a hard stop - same reasoning as manual-assign -
+ * just a `warning` on the success response and a note on the audit log
+ * entry.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +20,8 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { resolveRulesetConfig } from '@/lib/rosterBands';
+import { personWouldViolateWindowRule } from '@/lib/windowRule';
 
 export async function POST(
   request: NextRequest,
@@ -103,11 +107,35 @@ export async function POST(
       )
       .get(newPersonId, assignment.slot_id) as { source: string } | undefined;
 
+    // An ABSOLUUT block on this exact slot outranks a window conflict
+    // derived from other slots - matches the category priority in
+    // lib/rosterGaps.ts.
+    const slot = db
+      .prepare('SELECT iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
+      .get(assignment.slot_id) as { iso_jaar: number; iso_week: number };
+    const config = resolveRulesetConfig(period);
+    const windowWeeks = typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
+    const windowConflict =
+      !blocked &&
+      personWouldViolateWindowRule(
+        periodId,
+        newPersonId as string,
+        slot.iso_jaar,
+        slot.iso_week,
+        windowWeeks,
+        assignment.slot_id
+      );
+
     const warning = blocked
       ? blocked.source === 'PARTTIME'
         ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een parttime-vrije dag voor deze persoon.' }
         : { code: 'BLOCKED_OVERRIDE', message: 'Let op: deze persoon heeft deze dag geblokkeerd.' }
-      : null;
+      : windowConflict
+        ? {
+            code: 'WINDOW_OVERRIDE',
+            message: `Let op: deze persoon heeft al een dienst binnen het venster van ${windowWeeks} weken.`,
+          }
+        : null;
 
     const newAssignmentId = uuid();
 
@@ -165,7 +193,12 @@ export async function POST(
         newAssignmentId,
         'UPDATE',
         JSON.stringify(assignment),
-        JSON.stringify({ id: newAssignmentId, person_id: newPersonId, slot_id: assignment.slot_id }),
+        JSON.stringify({
+          id: newAssignmentId,
+          person_id: newPersonId,
+          slot_id: assignment.slot_id,
+          override: warning ? { code: warning.code } : null,
+        }),
         now
       );
     });

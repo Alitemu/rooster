@@ -7,16 +7,19 @@
  * are soft constraints - see solver/constraints.py) and lets the planner
  * assign someone to each one by hand, in consultation with the person on
  * duty. Calls the same manual-assign endpoint used for any manual
- * override - even someone who blocked the day is offered, flagged so the
- * planner can knowingly override it.
+ * override - everyone in the pool is offered, grouped by category so a
+ * blocked or window-conflicted person is never hidden, just clearly
+ * marked before the planner picks them.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 
+type EligibilityCategory = 'BESCHIKBAAR' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
+
 interface EligiblePerson {
   id: string;
   codenaam: string;
-  blocked_reason?: 'PARTTIME' | 'GEBLOKKEERD';
+  category: EligibilityCategory;
 }
 
 interface UnfilledSlot {
@@ -41,10 +44,29 @@ const TELLER_LABELS: Record<string, string> = {
   FEESTDAG: 'Feestdag',
 };
 
-const BLOCKED_LABELS: Record<string, string> = {
-  PARTTIME: 'parttime-vrij',
-  GEBLOKKEERD: 'geblokkeerd',
+// Display order for the grouped menu, and the group headings.
+const CATEGORY_ORDER: EligibilityCategory[] = ['BESCHIKBAAR', 'VENSTERBLOK', 'PARTTIME', 'GEBLOKKEERD'];
+
+const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
+  BESCHIKBAAR: 'Beschikbaar',
+  VENSTERBLOK: 'Dienst valt in vensterblok',
+  PARTTIME: 'Part-time dag',
+  GEBLOKKEERD: 'Geblokkeerd',
 };
+
+// Short note shown next to a selected non-available person.
+const CATEGORY_NOTES: Record<EligibilityCategory, string> = {
+  BESCHIKBAAR: '',
+  VENSTERBLOK: 'heeft al een dienst binnen het venster',
+  PARTTIME: 'heeft parttime-vrij op deze dag',
+  GEBLOKKEERD: 'heeft deze dag geblokkeerd',
+};
+
+function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, EligiblePerson[]]> {
+  return CATEGORY_ORDER.map(
+    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, people.filter((p) => p.category === cat)]
+  ).filter(([, group]) => group.length > 0);
+}
 
 export function FillGapsPanel({ periodId, onAllFilled }: Props) {
   const [slots, setSlots] = useState<UnfilledSlot[] | null>(null);
@@ -130,6 +152,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
       <div className="space-y-2">
         {slots.map((slot) => {
           const selectedPerson = slot.eligible_people.find((p) => p.id === selection[slot.slot_id]);
+          const groups = groupByCategory(slot.eligible_people);
           return (
             <div
               key={slot.slot_id}
@@ -147,9 +170,9 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
                 <p className="text-xs text-neutral-500">
                   Week {slot.iso_week} · {slot.assigned_count}/{slot.benodigd_aantal_personen} ingevuld
                 </p>
-                {selectedPerson?.blocked_reason && (
+                {selectedPerson && selectedPerson.category !== 'BESCHIKBAAR' && (
                   <p className="text-xs text-orange-700 mt-1">
-                    ⚠️ {selectedPerson.codenaam} heeft deze dag {BLOCKED_LABELS[selectedPerson.blocked_reason]}
+                    ⚠️ {selectedPerson.codenaam} {CATEGORY_NOTES[selectedPerson.category]}
                   </p>
                 )}
               </div>
@@ -167,11 +190,17 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
                       }
                     >
                       <option value="">Kies iemand…</option>
-                      {slot.eligible_people.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.codenaam}
-                          {p.blocked_reason ? ` ⚠ ${BLOCKED_LABELS[p.blocked_reason]}` : ''}
-                        </option>
+                      {groups.map(([category, people]) => (
+                        <optgroup
+                          key={category}
+                          label={`${CATEGORY_GROUP_LABELS[category]} (${people.length})`}
+                        >
+                          {people.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.codenaam}
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                     <button

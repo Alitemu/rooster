@@ -22,16 +22,29 @@ interface Assignment {
   bron: string;
 }
 
+type EligibilityCategory = 'BESCHIKBAAR' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
+
 interface EligiblePerson {
   id: string;
   codenaam: string;
-  blocked_reason?: 'PARTTIME' | 'GEBLOKKEERD';
+  category: EligibilityCategory;
 }
 
-const BLOCKED_LABELS: Record<string, string> = {
-  PARTTIME: 'parttime-vrij',
-  GEBLOKKEERD: 'geblokkeerd',
+// Display order for the grouped menu, and the group headings.
+const CATEGORY_ORDER: EligibilityCategory[] = ['BESCHIKBAAR', 'VENSTERBLOK', 'PARTTIME', 'GEBLOKKEERD'];
+
+const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
+  BESCHIKBAAR: 'Beschikbaar',
+  VENSTERBLOK: 'Dienst valt in vensterblok',
+  PARTTIME: 'Part-time dag',
+  GEBLOKKEERD: 'Geblokkeerd',
 };
+
+function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, EligiblePerson[]]> {
+  return CATEGORY_ORDER.map(
+    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, people.filter((p) => p.category === cat)]
+  ).filter(([, group]) => group.length > 0);
+}
 
 interface Props {
   periodId: string;
@@ -314,11 +327,17 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                             className="text-xs border border-neutral-300 rounded px-2 py-1"
                           >
                             <option value="">Kies iemand…</option>
-                            {eligiblePeople.map((p) => (
-                              <option key={p.id} value={p.id}>
-                                {p.codenaam}
-                                {p.blocked_reason ? ` ⚠ ${BLOCKED_LABELS[p.blocked_reason]}` : ''}
-                              </option>
+                            {groupByCategory(eligiblePeople).map(([category, people]) => (
+                              <optgroup
+                                key={category}
+                                label={`${CATEGORY_GROUP_LABELS[category]} (${people.length})`}
+                              >
+                                {people.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.codenaam}
+                                  </option>
+                                ))}
+                              </optgroup>
                             ))}
                           </select>
                         )}
