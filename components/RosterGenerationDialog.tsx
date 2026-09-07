@@ -22,6 +22,26 @@ const COUNTER_LABEL: Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', string> = {
   FEESTDAG: 'Feestdag',
 };
 
+// Mirrors solver/solver.py's status_map plus its 'ERROR' catch-all - see
+// solver.py:227-236 and solver.py:313.
+const SOLVER_STATUS_LABEL: Record<string, string> = {
+  OPTIMAL: 'Optimaal',
+  FEASIBLE: 'Haalbaar (niet per se optimaal)',
+  INFEASIBLE: 'Onhaalbaar',
+  MODEL_INVALID: 'Ongeldig model',
+  UNKNOWN: 'Onbekend',
+  ERROR: 'Fout tijdens genereren',
+};
+
+// Mirrors the fixed keys solver/constraints.py always initializes on
+// `self.violations` - see constraints.py:86, 251, 282, 344.
+const VIOLATION_LABEL: Record<string, string> = {
+  window_rule: 'Vensterregel',
+  blocking_absolute: 'Geblokkeerde dag toch toegewezen',
+  capacity: 'Onvoldoende bezetting',
+  band_limit: 'Buiten streefbereik',
+};
+
 interface UnfilledSlot {
   slot_id: string;
   shortfall: number;
@@ -65,11 +85,13 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // roster.
   useEffect(() => {
     if (!isOpen) return;
+    let cancelled = false;
     setRulesetLoading(true);
     setRulesetError(null);
     fetch(`/api/periods/${periodId}`)
       .then((res) => res.json())
       .then((data) => {
+        if (cancelled) return;
         const raw = data?.data?.bevroren_ruleset_json;
         const parsed = raw ? JSON.parse(raw) : {};
         setRuleset({
@@ -87,6 +109,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         fetch(`/api/planner/period/${periodId}/dashboard`)
           .then((res) => res.json())
           .then((dashData) => {
+            if (cancelled) return;
             const stats = dashData?.data?.submission_stats;
             if (!stats) return;
             const notDone = (stats.not_started || 0) + (stats.in_progress || 0);
@@ -96,10 +119,19 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 : null
             );
           })
-          .catch(() => setNotReadyWarning(null));
+          .catch(() => {
+            if (!cancelled) setNotReadyWarning(null);
+          });
       })
-      .catch(() => setRulesetError('Laden van huidige instellingen mislukt'))
-      .finally(() => setRulesetLoading(false));
+      .catch(() => {
+        if (!cancelled) setRulesetError('Laden van huidige instellingen mislukt');
+      })
+      .finally(() => {
+        if (!cancelled) setRulesetLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen, periodId]);
 
   const handleGenerate = async () => {
@@ -331,7 +363,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-neutral-700">Status solver:</dt>
-                    <dd className="font-semibold text-neutral-900">{result.solver_status}</dd>
+                    <dd className="font-semibold text-neutral-900">
+                      {SOLVER_STATUS_LABEL[result.solver_status] || result.solver_status}
+                    </dd>
                   </div>
                   <div className="flex justify-between">
                     <dt className="text-neutral-700">Totale kosten:</dt>
@@ -357,7 +391,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                     <div className="space-y-1">
                       {Object.entries(result.violations).map(([key, count]) => (
                         <div key={key} className="flex justify-between text-xs text-green-800">
-                          <span>{key}:</span>
+                          <span>{VIOLATION_LABEL[key] || key}:</span>
                           <span>{count}</span>
                         </div>
                       ))}
