@@ -10,7 +10,26 @@ Implements hard constraints for roster generation:
 6. Holiday rotation (fair distribution across group)
 """
 
+from datetime import date, timedelta
+
 from ortools.sat.python import cp_model
+
+
+def _week_ordinal(datum: str) -> int:
+    """
+    Continuous, year-boundary-safe week index for a slot's date.
+
+    Grouping by the raw iso_week field breaks at a year boundary: ISO week
+    numbers reset to 1 at the start of each year, so week 52 (or 53) of one
+    year and week 1 of the next look far apart under plain integer
+    arithmetic even though they're a single calendar week apart. Anchoring
+    on each date's Monday and dividing by 7 gives every week a number that
+    increases by exactly 1 from one calendar week to the next, with no
+    reset.
+    """
+    d = date.fromisoformat(datum)
+    monday = d - timedelta(days=d.isoweekday() - 1)
+    return monday.toordinal() // 7
 
 
 class ConstraintBuilder:
@@ -56,6 +75,12 @@ class ConstraintBuilder:
         own window). Behaviour is left as-is here: allowing pairs changes
         how weekends are staffed and is a scheduling-policy decision, not
         part of fixing the gap arithmetic.
+
+        Grouped by _week_ordinal(datum) rather than the raw iso_week field:
+        a period that spans a year boundary would otherwise let week 52 (or
+        53) of one year and week 1 of the next - one calendar week apart -
+        sail through unchecked, since neither `range(52, 52+window_weeks)`
+        nor `range(1, 1+window_weeks)` sees the other side of the boundary.
         """
         self.violations['window_rule'] = 0
 
@@ -65,7 +90,7 @@ class ConstraintBuilder:
         # Build map: week -> list of slots
         week_slots = {}
         for slot in slots:
-            week = slot['iso_week']
+            week = _week_ordinal(slot['datum'])
             if week not in week_slots:
                 week_slots[week] = []
             week_slots[week].append(slot)

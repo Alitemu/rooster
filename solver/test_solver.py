@@ -8,6 +8,8 @@ Run: pytest solver/ -v      (deps: pip install -r solver/requirements-dev.txt)
 """
 
 import math
+from datetime import date, timedelta
+
 import pytest
 from solver import RosterSolver
 
@@ -16,16 +18,31 @@ from solver import RosterSolver
 # Fixtures / helpers
 # ---------------------------------------------------------------------------
 
-def make_slots(num_weeks, teller='AVOND', per_week=1):
-    """One slot per ISO week, weeks 1..num_weeks."""
+def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_week=1):
+    """
+    One slot per real calendar week, starting at the Monday of
+    (start_year, start_week) and advancing one real week at a time.
+
+    Real dates matter here, not just the labelled iso_week: the window
+    rule constraint groups slots by calendar week derived from `datum`
+    (see solver/constraints.py:_week_ordinal), so a fixture whose dates
+    don't actually advance by 7 days per labelled week would silently
+    test something other than what the constraint enforces. Defaulting to
+    (2027, 1) keeps every existing call site within a single ISO year;
+    test_window_rule_holds_across_a_year_boundary below overrides the
+    start to straddle two years on purpose.
+    """
+    base_monday = date.fromisocalendar(start_year, start_week, 1)
     slots = []
-    for w in range(1, num_weeks + 1):
+    for w in range(num_weeks):
+        d = base_monday + timedelta(weeks=w)
+        iso_year, iso_week, _ = d.isocalendar()
         for i in range(per_week):
             slots.append({
-                'id': f'slot-w{w}-{i}',
-                'datum': f'2027-{((w - 1) // 4) + 1:02d}-{((w - 1) % 4) * 7 + 1:02d}',
-                'iso_jaar': 2027,
-                'iso_week': w,
+                'id': f'slot-w{w + 1}-{i}',
+                'datum': d.isoformat(),
+                'iso_jaar': iso_year,
+                'iso_week': iso_week,
                 'shift_type_id': 'st-1',
                 'shift_type_name': teller,
                 'benodigd_aantal_personen': 1,
@@ -96,6 +113,33 @@ def test_window_rule_matches_documented_example():
         assert w - 1 not in weeks and w + 1 not in weeks, (
             f'week {w} has a neighbouring assignment; weeks={sorted(weeks)}'
         )
+
+
+def test_window_rule_holds_across_a_year_boundary():
+    """
+    Regression: the window rule used to be checked by grouping slots on
+    the raw iso_week field, which resets to 1 at every year boundary. A
+    period spanning December into January could then give the same person
+    two shifts one calendar week apart (week 52/53 of one year, week 1 of
+    the next) without tripping the constraint at all.
+
+    Two slots, one person, one calendar week apart, straddling the
+    2026/2027 boundary. With windowWeeks=2 the person may take at most
+    one of them - the other must be left unfilled, exactly like the
+    same-year case in test_shortfall_is_preferred_over_breaking_a_hard_rule.
+    """
+    # ISO week 53 of 2026 is the last week of that year; ISO week 1 of
+    # 2027 starts the very next calendar week.
+    slots = make_slots(2, start_year=2026, start_week=53)
+    assert slots[0]['iso_jaar'] == 2026 and slots[0]['iso_week'] == 53
+    assert slots[1]['iso_jaar'] == 2027 and slots[1]['iso_week'] == 1
+
+    result = solve(['p1'], slots, window_weeks=2)
+
+    assert len(result['assignments']) == 1, (
+        f"window rule broken across the year boundary: expected exactly 1 "
+        f"assignment, got {result['assignments']}"
+    )
 
 
 @pytest.mark.parametrize('window_weeks', [2, 3, 4, 5, 7])
