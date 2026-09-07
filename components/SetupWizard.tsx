@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 
-type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'holidays' | 'confirm';
+type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'holidays' | 'confirm';
 
 interface CapacityCheckResult {
   valid: boolean;
@@ -76,6 +76,103 @@ interface HolidayRow {
   year: number;
 }
 
+type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG' | 'RUIL_AVOND_VOOR_WEEKEND' | 'RUIL_WEEKEND_VOOR_AVOND';
+// What the planner picks first - "Ongelijke ruil" then expands into a
+// reden dropdown covering both RUIL_* correction types at once.
+type CorrectionTopLevel = 'RUIL' | 'AVOND' | 'WEEKEND' | 'FEESTDAG';
+
+interface Correction {
+  id: string; // local, for the pending list - not a database id
+  personId: string;
+  codenaam: string;
+  type: CorrectionType;
+  reden: string;
+  aantal: number;
+}
+
+interface CorrectionReasonOption {
+  type: CorrectionType;
+  label: string;
+  // null = the planner must fill in their own value; the field starts empty.
+  defaultAantal: number | null;
+  explain: (aantal: number) => string;
+}
+
+const CORRECTION_TOP_LEVEL_LABELS: Record<CorrectionTopLevel, string> = {
+  RUIL: 'Ongelijke ruil',
+  AVOND: 'Avonddienst',
+  WEEKEND: 'Weekenddienst',
+  FEESTDAG: 'Feestdag',
+};
+
+// Per-teller label for the pending-corrections table - distinct from
+// CORRECTION_TOP_LEVEL_LABELS because the two RUIL_* types need their own
+// text (they touch two tellers at once), not just the 4-way top-level group.
+const CORRECTION_TYPE_LABELS: Record<CorrectionType, string> = {
+  AVOND: 'Avonddienst',
+  WEEKEND: 'Weekenddienst',
+  FEESTDAG: 'Feestdag',
+  RUIL_AVOND_VOOR_WEEKEND: 'Ruil avond → weekend',
+  RUIL_WEEKEND_VOOR_AVOND: 'Ruil weekend → avond',
+};
+
+const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReasonOption[]> = {
+  AVOND: [
+    {
+      type: 'AVOND',
+      label: 'Last minute avonddienst overgenomen',
+      defaultAantal: -2,
+      explain: (n) =>
+        `Vorige periode last minute een avonddienst overgenomen - wordt nu beloond met ${Math.abs(n)} avonddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
+    },
+    {
+      type: 'AVOND',
+      label: 'Overig',
+      defaultAantal: null,
+      explain: (n) => `Handmatige correctie: avonddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
+    },
+  ],
+  WEEKEND: [
+    {
+      type: 'WEEKEND',
+      label: 'Last minute weekenddienst overgenomen',
+      defaultAantal: -2,
+      explain: (n) =>
+        `Vorige periode last minute een weekenddienst overgenomen - wordt nu beloond met ${Math.abs(n)} weekenddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
+    },
+    {
+      type: 'WEEKEND',
+      label: 'Overig',
+      defaultAantal: null,
+      explain: (n) => `Handmatige correctie: weekenddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
+    },
+  ],
+  FEESTDAG: [
+    {
+      type: 'FEESTDAG',
+      label: 'Overig',
+      defaultAantal: null,
+      explain: (n) => `Handmatige correctie: feestdag wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
+    },
+  ],
+  RUIL: [
+    {
+      type: 'RUIL_AVOND_VOOR_WEEKEND',
+      label: 'Ruil avond- voor weekenddienst',
+      defaultAantal: 1,
+      explain: (n) =>
+        `Heeft een avonddienst geruild voor een weekenddienst - avonddienst wordt ${n} meer, weekenddienst wordt ${n} minder.`,
+    },
+    {
+      type: 'RUIL_WEEKEND_VOOR_AVOND',
+      label: 'Ruil weekend- voor avonddienst',
+      defaultAantal: 1,
+      explain: (n) =>
+        `Heeft een weekenddienst geruild voor een avonddienst - weekenddienst wordt ${n} meer, avonddienst wordt ${n} minder.`,
+    },
+  ],
+};
+
 interface Props {
   period?: any;
   onComplete?: () => void;
@@ -121,6 +218,14 @@ export function SetupWizard({ period, onComplete }: Props) {
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [holidayRows, setHolidayRows] = useState<HolidayRow[]>([]);
+  const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [correctionFormOpen, setCorrectionFormOpen] = useState(false);
+  const [correctionForm, setCorrectionForm] = useState({
+    personId: '',
+    topLevel: 'AVOND' as CorrectionTopLevel,
+    reasonIndex: 0,
+    aantal: (CORRECTION_REASONS_BY_TOP_LEVEL.AVOND[0].defaultAantal ?? '') as number | '',
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openResult, setOpenResult] = useState<string | null>(null);
@@ -278,9 +383,12 @@ export function SetupWizard({ period, onComplete }: Props) {
 
   // Auto-load when the step is reached (and refresh if the pool or dates
   // change under it) - matches the window step's capacity check, which
-  // loads itself rather than requiring a manual button.
+  // loads itself rather than requiring a manual button. Also loads for
+  // 'corrections': that step needs the same staff list for its persoon
+  // dropdown, and a planner can reach it via the step tabs without ever
+  // visiting 'staff' first.
   useEffect(() => {
-    if (currentStep !== 'staff' || !periodData.pool_id) return;
+    if ((currentStep !== 'staff' && currentStep !== 'corrections') || !periodData.pool_id) return;
     loadStaff();
     setNewMember((prev) => ({
       ...prev,
@@ -411,6 +519,46 @@ export function SetupWizard({ period, onComplete }: Props) {
     setHolidayRows(rows);
   };
 
+  const correctionReasonOptions = CORRECTION_REASONS_BY_TOP_LEVEL[correctionForm.topLevel];
+  const correctionSelectedReason = correctionReasonOptions[correctionForm.reasonIndex] ?? correctionReasonOptions[0];
+
+  const applyReasonDefault = (topLevel: CorrectionTopLevel, reasonIndex: number) => {
+    const reason = CORRECTION_REASONS_BY_TOP_LEVEL[topLevel][reasonIndex];
+    setCorrectionForm((f) => ({
+      ...f,
+      topLevel,
+      reasonIndex,
+      aantal: reason.defaultAantal ?? '',
+    }));
+  };
+
+  const handleAddCorrection = () => {
+    if (!correctionForm.personId || correctionForm.aantal === '' || correctionForm.aantal === 0) {
+      setError('Kies een medewerker en vul een aantal (ongelijk aan 0) in');
+      return;
+    }
+    const member = staffMembers.find((m) => m.person_id === correctionForm.personId);
+    if (!member) return;
+
+    setCorrections((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        personId: correctionForm.personId,
+        codenaam: member.codenaam,
+        type: correctionSelectedReason.type,
+        reden: correctionSelectedReason.label,
+        aantal: correctionForm.aantal as number,
+      },
+    ]);
+    setError(null);
+    applyReasonDefault(correctionForm.topLevel, correctionForm.reasonIndex);
+  };
+
+  const handleRemoveCorrection = (id: string) => {
+    setCorrections((prev) => prev.filter((c) => c.id !== id));
+  };
+
   const handleOpenPeriod = async () => {
     setLoading(true);
     setError(null);
@@ -477,6 +625,21 @@ export function SetupWizard({ period, onComplete }: Props) {
         }).catch(() => null);
       }
 
+      if (corrections.length > 0) {
+        await fetch(`/api/planner/period/${period.id}/ledger-corrections`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            corrections: corrections.map((c) => ({
+              person_id: c.personId,
+              type: c.type,
+              reden: c.reden,
+              aantal: c.aantal,
+            })),
+          }),
+        }).catch(() => null);
+      }
+
       setOpenResult(
         `Periode geopend (${openData.data.start_datum} t/m ${openData.data.eind_datum}): ` +
           `${openData.data.slots_generated} diensten gegenereerd, ${toLink.length} uitnodigingen verstuurd.`
@@ -496,7 +659,8 @@ export function SetupWizard({ period, onComplete }: Props) {
     { id: 'distribution', label: '4. Verdeling', title: 'Verdelingsmodus' },
     { id: 'balances', label: '5. Saldi', title: 'Beginsaldi importeren' },
     { id: 'holidays', label: '6. Feestdagen', title: 'Feestdagrotatie importeren' },
-    { id: 'confirm', label: '7. Bevestigen', title: 'Controleren en openen' },
+    { id: 'corrections', label: '7. Correcties', title: 'Handmatige correcties' },
+    { id: 'confirm', label: '8. Bevestigen', title: 'Controleren en openen' },
   ];
 
   // Mirrors the server-side checks in POST /api/planner/periods and
@@ -1141,7 +1305,145 @@ export function SetupWizard({ period, onComplete }: Props) {
           </div>
         )}
 
-        {/* Step 7: Confirm */}
+        {/* Step 7: Corrections */}
+        {currentStep === 'corrections' && (
+          <div className="space-y-4">
+            <p className="text-sm text-neutral-600">
+              Corrigeer hier het saldo van een medewerker voor een uitzonderlijke situatie - bijvoorbeeld
+              het laatste moment overnemen van een dienst, of een ongelijke ruil. De gewone overloop
+              tussen periodes gebeurt al automatisch en hoeft hier niet.
+            </p>
+
+            <button
+              onClick={() => setCorrectionFormOpen((v) => !v)}
+              className="flex items-center gap-2 px-4 py-2 rounded font-medium bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors"
+            >
+              <span className={`inline-block transition-transform ${correctionFormOpen ? 'rotate-180' : ''}`}>
+                ⌄
+              </span>
+              Correctie toepassen
+            </button>
+
+            {correctionFormOpen && (
+              <div className="border rounded p-4 space-y-3 bg-neutral-50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Persoon</label>
+                    <select
+                      value={correctionForm.personId}
+                      onChange={(e) => setCorrectionForm((f) => ({ ...f, personId: e.target.value }))}
+                      className="w-full px-2 py-2 border rounded text-sm"
+                    >
+                      <option value="">Kies een medewerker...</option>
+                      {staffMembers.map((m) => (
+                        <option key={m.person_id} value={m.person_id}>
+                          {m.codenaam}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Type</label>
+                    <select
+                      value={correctionForm.topLevel}
+                      onChange={(e) => applyReasonDefault(e.target.value as CorrectionTopLevel, 0)}
+                      className="w-full px-2 py-2 border rounded text-sm"
+                    >
+                      {(Object.keys(CORRECTION_TOP_LEVEL_LABELS) as CorrectionTopLevel[]).map((tl) => (
+                        <option key={tl} value={tl}>
+                          {CORRECTION_TOP_LEVEL_LABELS[tl]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Reden</label>
+                    <select
+                      value={correctionForm.reasonIndex}
+                      onChange={(e) => applyReasonDefault(correctionForm.topLevel, parseInt(e.target.value))}
+                      className="w-full px-2 py-2 border rounded text-sm"
+                    >
+                      {correctionReasonOptions.map((r, i) => (
+                        <option key={i} value={i}>
+                          {r.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-neutral-600 mb-1">Aantal</label>
+                    <input
+                      type="number"
+                      value={correctionForm.aantal}
+                      onChange={(e) =>
+                        setCorrectionForm((f) => ({
+                          ...f,
+                          aantal: e.target.value === '' ? '' : parseInt(e.target.value),
+                        }))
+                      }
+                      placeholder={correctionSelectedReason.defaultAantal === null ? 'Zelf invullen' : undefined}
+                      className="w-full px-2 py-2 border rounded text-sm"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-xs text-neutral-500 italic">
+                  {correctionSelectedReason.explain(
+                    correctionForm.aantal === '' ? 0 : correctionForm.aantal
+                  )}
+                </p>
+
+                <button
+                  onClick={handleAddCorrection}
+                  className="px-4 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                >
+                  Toevoegen
+                </button>
+              </div>
+            )}
+
+            {corrections.length > 0 && (
+              <div className="border rounded overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-neutral-100">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium">Persoon</th>
+                      <th className="px-3 py-2 text-left font-medium">Type</th>
+                      <th className="px-3 py-2 text-left font-medium">Reden</th>
+                      <th className="px-3 py-2 text-left font-medium">Aantal</th>
+                      <th className="px-3 py-2 text-left font-medium"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {corrections.map((c) => (
+                      <tr key={c.id}>
+                        <td className="px-3 py-2 font-medium">{c.codenaam}</td>
+                        <td className="px-3 py-2">{CORRECTION_TYPE_LABELS[c.type]}</td>
+                        <td className="px-3 py-2">{c.reden}</td>
+                        <td className="px-3 py-2">{c.aantal >= 0 ? `+${c.aantal}` : c.aantal}</td>
+                        <td className="px-3 py-2 text-right">
+                          <button
+                            onClick={() => handleRemoveCorrection(c.id)}
+                            className="text-xs font-medium text-red-600 hover:text-red-800"
+                          >
+                            Verwijderen
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 8: Confirm */}
         {currentStep === 'confirm' && (
           <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded p-4">
@@ -1162,6 +1464,9 @@ export function SetupWizard({ period, onComplete }: Props) {
                 </p>
                 <p>
                   <strong>Verdeling:</strong> {distributionConfig.mode}
+                </p>
+                <p>
+                  <strong>Correcties:</strong> {corrections.length} klaar om toe te passen
                 </p>
               </div>
             </div>
