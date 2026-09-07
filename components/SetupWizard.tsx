@@ -392,16 +392,35 @@ export function SetupWizard({ period, onComplete }: Props) {
   // 'corrections': that step needs the same staff list for its persoon
   // dropdown, and a planner can reach it via the step tabs without ever
   // visiting 'staff' first.
+  //
+  // The new-member date fields default to the period's dates, but a planner
+  // can go back to step 1 and change those dates after already having
+  // visited 'staff' once - a plain "fill only if empty" check would then
+  // keep showing the stale original dates forever, since the fields are no
+  // longer empty. lastAutoFilledDatesRef tracks what was last auto-filled so
+  // the default can track a period-date change, while still leaving a value
+  // the planner typed in by hand alone.
+  const lastAutoFilledDatesRef = useRef({ start: '', end: '' });
   useEffect(() => {
     if ((currentStep !== 'staff' && currentStep !== 'corrections') || !periodData.pool_id) return;
     loadStaff();
-    setNewMember((prev) => ({
-      ...prev,
-      geldig_vanaf: prev.geldig_vanaf || periodData.start_datum,
-      geldig_tot: prev.geldig_tot || periodData.eind_datum,
-    }));
+    setNewMember((prev) => {
+      const lastAuto = lastAutoFilledDatesRef.current;
+      return {
+        ...prev,
+        geldig_vanaf:
+          !prev.geldig_vanaf || prev.geldig_vanaf === lastAuto.start
+            ? periodData.start_datum
+            : prev.geldig_vanaf,
+        geldig_tot:
+          !prev.geldig_tot || prev.geldig_tot === lastAuto.end
+            ? periodData.eind_datum
+            : prev.geldig_tot,
+      };
+    });
+    lastAutoFilledDatesRef.current = { start: periodData.start_datum, end: periodData.eind_datum };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, periodData.pool_id]);
+  }, [currentStep, periodData.pool_id, periodData.start_datum, periodData.eind_datum]);
 
   const handleAddMember = async () => {
     if (!newMember.codenaam.trim() || !newMember.geldig_vanaf || !newMember.geldig_tot) {
@@ -753,6 +772,24 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
   };
 
+  // Clicking a step tab jumps directly, bypassing handleNext's validation -
+  // apply the same period-step check here whenever the jump moves forward
+  // past it, so it can't be skipped by clicking ahead in the tab bar.
+  // Jumping backward (e.g. to review) is always allowed.
+  const handleStepClick = (targetStep: Step) => {
+    const currentIndex = steps.findIndex((s) => s.id === currentStep);
+    const targetIndex = steps.findIndex((s) => s.id === targetStep);
+    if (targetIndex > currentIndex && currentStep === 'period') {
+      const validationError = validatePeriodStep();
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+    setError(null);
+    setCurrentStep(targetStep);
+  };
+
   return (
     <div className="space-y-6">
       {/* Step indicator */}
@@ -760,7 +797,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {steps.map((step, idx) => (
           <button
             key={step.id}
-            onClick={() => setCurrentStep(step.id)}
+            onClick={() => handleStepClick(step.id)}
             className={`px-3 py-2 rounded text-sm font-medium whitespace-nowrap transition-colors
               ${currentStep === step.id
                 ? 'bg-blue-600 text-white'
