@@ -12,6 +12,7 @@ import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
+import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 
 export async function POST(
   request: NextRequest,
@@ -67,8 +68,9 @@ export async function POST(
     // (membership windows are open-ended, not scoped to one period)
     const people = db
       .prepare(
-        `SELECT DISTINCT person_id FROM dienstrooster_pool_membership
-         WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+        `SELECT DISTINCT pm.person_id, p.codenaam FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?`
       )
       .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
 
@@ -83,23 +85,21 @@ export async function POST(
          WHERE id = ?`
       ).run('GEPUBLICEERD', now, publishedByPersonId, periodId);
 
-      const insertNotification = db.prepare(
-        `INSERT INTO dienstrooster_notification
-         (id, person_id, periode_id, type, onderwerp, inhoud, gelezen, aangemaakt_op)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-      );
-
       for (const p of people) {
-        insertNotification.run(
-          uuid(),
-          p.person_id,
+        const rendered = renderNotificationTemplate('SCHEDULE_PUBLISHED', {
+          codenaam: p.codenaam,
+          periode: period.naam,
+          link: '',
+        });
+        insertNotification({
+          personId: p.person_id,
           periodId,
-          'PUBLICATIE_BERICHT',
-          'Roster published',
-          `Your roster for ${period.naam} is now available. Open your link to see your shifts.`,
-          0,
-          now
-        );
+          type: 'PUBLICATIE_BERICHT',
+          onderwerp: rendered?.onderwerp || `${period.naam}: het rooster is gepubliceerd`,
+          inhoud:
+            rendered?.inhoud ||
+            `Het rooster voor ${period.naam} is gepubliceerd. Open je eigen link om je diensten te bekijken.`,
+        });
       }
 
       db.prepare(
