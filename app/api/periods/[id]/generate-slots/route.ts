@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { persistSlotsForPeriod } from '@/lib/slotPersistence';
 import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
+import { syncAvailabilityForPeriod as syncAbsenceAvailabilityForPeriod } from '@/lib/absenceSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -71,6 +72,7 @@ export async function POST(
     // period is already OPEN, since availability only applies to slots
     // staff can actually see and block against)
     syncAvailabilityForPeriod(id);
+    syncAbsenceAvailabilityForPeriod(id);
 
     const response: ApiSuccessResponse<SlotGenerationResponse> = {
       success: true,

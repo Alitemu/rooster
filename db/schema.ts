@@ -426,6 +426,7 @@ export const availability = sqliteTable(
       enum: ['MANUAL', 'PARTTIME', 'ABSENCE'],
     }).notNull(), // How the blocking was created
     bron_pattern_id: text('bron_pattern_id').references(() => parttimePattern.id), // If source=PARTTIME
+    bron_absence_id: text('bron_absence_id').references(() => absence.id), // If source=ABSENCE
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   },
   (table) => ({

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { syncAvailabilityForAbsence } from '@/lib/absenceSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface Absence {
@@ -122,6 +123,14 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
+    if (van_datum > tot_datum) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "tot" liggen' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Verify person exists
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);
     const person = personStmt.get(id) as any;
@@ -151,6 +160,8 @@ export async function POST(
       id, // Created by self
       new Date().toISOString()
     );
+
+    syncAvailabilityForAbsence(absenceId);
 
     const createdAbsence: Absence = {
       id: absenceId,

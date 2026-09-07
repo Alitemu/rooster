@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { persistSlotsForPeriod } from '@/lib/slotPersistence';
 import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
+import { syncAvailabilityForPeriod as syncAbsenceAvailabilityForPeriod } from '@/lib/absenceSync';
 import { applyCarryOverForPeriod } from '@/lib/carryOver';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -190,6 +191,7 @@ export async function POST(
     // Backfill part-time blocking now that the period is OPEN and pool
     // members can see it
     syncAvailabilityForPeriod(id);
+    syncAbsenceAvailabilityForPeriod(id);
 
     // Roll forward what people over- or under-worked in the pool's last
     // published period. Done here rather than at publish time because the

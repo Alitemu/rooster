@@ -310,6 +310,7 @@ async function createTables() {
       blocking_level TEXT CHECK(blocking_level IN ('ABSOLUUT', 'LIEVER_NIET', 'VOORKEUR', NULL)),
       source TEXT NOT NULL CHECK(source IN ('MANUAL', 'PARTTIME', 'ABSENCE')),
       bron_pattern_id TEXT REFERENCES dienstrooster_parttime_pattern(id),
+      bron_absence_id TEXT REFERENCES dienstrooster_absence(id),
       aangemaakt_op TEXT NOT NULL
     );
 

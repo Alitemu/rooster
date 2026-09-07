@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { syncAvailabilityForAbsence, removeAbsenceAvailability } from '@/lib/absenceSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateAbsenceRequest {
@@ -75,6 +76,16 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
 
+    const newVanDatum = updates.van_datum ?? absence.van_datum;
+    const newTotDatum = updates.tot_datum ?? absence.tot_datum;
+    if (newVanDatum > newTotDatum) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "tot" liggen' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Build UPDATE statement dynamically
     const updateCols = Object.keys(updates).map((key) => `${key} = ?`).join(', ');
     const values = [...Object.values(updates), absenceId, id];
@@ -86,6 +97,8 @@ export async function PATCH(
     `);
 
     updateStmt.run(...values);
+
+    syncAvailabilityForAbsence(absenceId);
 
     const response: ApiSuccessResponse<{ updated: boolean }> = {
       success: true,
@@ -123,21 +136,28 @@ export async function DELETE(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Delete absence
-    const deleteStmt = db.prepare(`
-      DELETE FROM dienstrooster_absence
-      WHERE id = ? AND person_id = ?
-    `);
-
-    const result = deleteStmt.run(absenceId, id);
-
-    if (result.changes === 0) {
+    // Verify absence exists and belongs to person - must check ownership
+    // before touching its availability rows below, otherwise a crafted
+    // absenceId belonging to someone else would have its blocking rows
+    // wiped even though the final DELETE (correctly scoped to this person)
+    // would then no-op.
+    const absence = db
+      .prepare(`SELECT id FROM dienstrooster_absence WHERE id = ? AND person_id = ?`)
+      .get(absenceId, id);
+    if (!absence) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'ABSENCE_NOT_FOUND', message: `Absence ${absenceId} not found` },
       };
       return NextResponse.json(response, { status: 404 });
     }
+
+    // Must remove the availability rows this absence generated first,
+    // since bron_absence_id has no ON DELETE clause and foreign_keys=ON
+    // would otherwise reject deleting the absence row.
+    removeAbsenceAvailability(absenceId);
+
+    db.prepare(`DELETE FROM dienstrooster_absence WHERE id = ? AND person_id = ?`).run(absenceId, id);
 
     const response: ApiSuccessResponse<{ deleted: boolean }> = {
       success: true,
