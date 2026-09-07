@@ -98,6 +98,11 @@ interface CorrectionReasonOption {
   explain: (aantal: number) => string;
 }
 
+// Every predefined reden defaults to +-1 or +-2 (see defaultAantal above) -
+// anything at or beyond this magnitude is far more likely a typo (5 instead
+// of 2) than a real correction, so it gets flagged without blocking entry.
+const CORRECTION_AANTAL_WARNING_THRESHOLD = 3;
+
 const CORRECTION_TOP_LEVEL_LABELS: Record<CorrectionTopLevel, string> = {
   RUIL: 'Ongelijke ruil',
   AVOND: 'Avonddienst',
@@ -1423,6 +1428,12 @@ export function SetupWizard({ period, onComplete }: Props) {
                     correctionForm.aantal === '' ? 0 : correctionForm.aantal
                   )}
                 </p>
+
+                {typeof correctionForm.aantal === 'number' && Math.abs(correctionForm.aantal) >= CORRECTION_AANTAL_WARNING_THRESHOLD && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                    Ongebruikelijk groot aantal ({correctionForm.aantal}) - weet je zeker dat dit geen typefout is?
+                  </p>
+                )}
 
                 <button
                   onClick={handleAddCorrection}
