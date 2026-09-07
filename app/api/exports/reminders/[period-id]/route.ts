@@ -112,7 +112,7 @@ export async function GET(
       insertStmt.run(crypto.randomUUID(), person.person_id, periodId, hashToken(token), now);
 
       const personalLink = `${baseUrl}/person/${token}`;
-      const deadline = new Date(period.deadline).toLocaleString();
+      const deadline = new Date(period.deadline).toLocaleString('nl-NL');
 
       const subject =
         urgency === 'urgent'

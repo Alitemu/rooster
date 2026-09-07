@@ -74,7 +74,10 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         method: 'POST',
       });
 
-      if (!res.ok) throw new Error('Goedkeuren van ruil mislukt');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Goedkeuren van ruil mislukt');
+      }
 
       setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
       showSuccess('Ruil goedgekeurd');
@@ -91,7 +94,10 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         body: JSON.stringify({ reason: reason || null }),
       });
 
-      if (!res.ok) throw new Error('Weigeren van ruil mislukt');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || 'Weigeren van ruil mislukt');
+      }
 
       setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
       setRejectingId(null);
@@ -229,7 +235,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                   )}
 
                   <p className="text-xs text-neutral-500">
-                    {new Date(swap.aangemaakt_op).toLocaleDateString()}
+                    {new Date(swap.aangemaakt_op).toLocaleDateString('nl-NL')}
                   </p>
                 </div>
 

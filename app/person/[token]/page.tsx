@@ -142,7 +142,7 @@ export default function PersonalLinkPage() {
                 .map((a: { datum: string; teller: string }) => ({
                   datum: a.datum,
                   teller: a.teller,
-                  date_str: new Date(a.datum).toLocaleDateString(),
+                  date_str: new Date(a.datum).toLocaleDateString('nl-NL'),
                 }));
               setSoftBlockViolations(violations);
             }
@@ -259,11 +259,11 @@ export default function PersonalLinkPage() {
               {period.naam}
             </h1>
             <p className="text-neutral-600 mb-4">
-              {new Date(period.start_datum).toLocaleDateString()} t/m{' '}
-              {new Date(period.eind_datum).toLocaleDateString()}
+              {new Date(period.start_datum).toLocaleDateString('nl-NL')} t/m{' '}
+              {new Date(period.eind_datum).toLocaleDateString('nl-NL')}
             </p>
             <p className="text-sm text-neutral-600">
-              Deadline: {new Date(period.deadline).toLocaleString()}
+              Deadline: {new Date(period.deadline).toLocaleString('nl-NL')}
             </p>
           </div>
           {period.status === 'GEPUBLICEERD' && (
@@ -464,8 +464,8 @@ export default function PersonalLinkPage() {
           </p>
           <p className="text-sm text-green-700">
             {deadlinePassed
-              ? `Je kunt dit venster sluiten. De deadline (${new Date(period.deadline).toLocaleString()}) is verstreken, dus wijzigen kan niet meer.`
-              : `Je kunt dit venster sluiten - maar je kunt ook nog iets aanpassen: zolang de deadline (${new Date(period.deadline).toLocaleString()}) niet verstreken is, tellen je laatste wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet opnieuw in te dienen.`}
+              ? `Je kunt dit venster sluiten. De deadline (${new Date(period.deadline).toLocaleString('nl-NL')}) is verstreken, dus wijzigen kan niet meer.`
+              : `Je kunt dit venster sluiten - maar je kunt ook nog iets aanpassen: zolang de deadline (${new Date(period.deadline).toLocaleString('nl-NL')}) niet verstreken is, tellen je laatste wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet opnieuw in te dienen.`}
           </p>
           <button
             onClick={() => setCurrentStep('calendar')}

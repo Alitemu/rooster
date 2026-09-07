@@ -149,8 +149,8 @@ export default function PlannerPeriodPage() {
           <div>
             <h1 className="text-3xl font-bold text-neutral-900 mb-2">{period.naam}</h1>
             <p className="text-neutral-600 mb-2">
-              {new Date(period.start_datum).toLocaleDateString()} t/m{' '}
-              {new Date(period.eind_datum).toLocaleDateString()}
+              {new Date(period.start_datum).toLocaleDateString('nl-NL')} t/m{' '}
+              {new Date(period.eind_datum).toLocaleDateString('nl-NL')}
             </p>
             {editingDeadline ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -178,7 +178,7 @@ export default function PlannerPeriodPage() {
               </div>
             ) : (
               <p className="text-sm text-neutral-600">
-                Deadline: {new Date(period.deadline).toLocaleString()}
+                Deadline: {new Date(period.deadline).toLocaleString('nl-NL')}
                 {period.status === 'OPEN' && (
                   <button
                     onClick={startEditDeadline}
@@ -216,7 +216,7 @@ export default function PlannerPeriodPage() {
                   ✅ Gepubliceerd
                   {period.gepubliceerd_op && (
                     <span className="ml-2 font-normal text-sm">
-                      · Gepubliceerd op {new Date(period.gepubliceerd_op).toLocaleString()}
+                      · Gepubliceerd op {new Date(period.gepubliceerd_op).toLocaleString('nl-NL')}
                     </span>
                   )}
                 </>

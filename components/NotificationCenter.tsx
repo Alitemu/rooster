@@ -100,7 +100,9 @@ export function NotificationCenter({ personId, periodId }: Props) {
     TOEWIJZING: '📅 Toewijzing gemaakt',
     RUILVERZOEK: '🔄 Ruilverzoek',
     RUIL_GOEDGEKEURD: '✓ Ruil goedgekeurd',
+    RUIL_AFGEWEZEN: '✗ Ruil geweigerd',
     PUBLICATIE_BERICHT: '📢 Publicatiebericht',
+    BLOCK_OVERRIDDEN: '⚠ Voorkeur overschreven',
   };
 
   const typeColors: Record<string, string> = {
@@ -108,7 +110,9 @@ export function NotificationCenter({ personId, periodId }: Props) {
     TOEWIJZING: 'text-green-600 bg-green-50',
     RUILVERZOEK: 'text-amber-600 bg-amber-50',
     RUIL_GOEDGEKEURD: 'text-green-600 bg-green-50',
+    RUIL_AFGEWEZEN: 'text-red-600 bg-red-50',
     PUBLICATIE_BERICHT: 'text-purple-600 bg-purple-50',
+    BLOCK_OVERRIDDEN: 'text-amber-600 bg-amber-50',
   };
 
   if (loading) {
@@ -199,7 +203,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
                 <h3 className="font-semibold text-neutral-900">{notif.onderwerp}</h3>
                 <p className="text-sm text-neutral-700 mt-1">{notif.inhoud}</p>
                 <p className="text-xs text-neutral-500 mt-2">
-                  {new Date(notif.aangemaakt_op).toLocaleString()}
+                  {new Date(notif.aangemaakt_op).toLocaleString('nl-NL')}
                 </p>
               </div>
 

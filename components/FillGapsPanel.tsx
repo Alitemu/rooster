@@ -160,7 +160,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-neutral-900">
-                  {new Date(slot.datum).toLocaleDateString(undefined, {
+                  {new Date(slot.datum).toLocaleDateString('nl-NL', {
                     weekday: 'short',
                     day: 'numeric',
                     month: 'short',

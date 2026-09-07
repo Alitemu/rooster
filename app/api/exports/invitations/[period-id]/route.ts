@@ -78,7 +78,7 @@ export async function GET(
       'Naam,Persoonlijke link,Deadline',
       ...links.map((link) => {
         const personalLink = `${baseUrl}/person/${link.token}`;
-        const deadline = new Date(period.deadline).toLocaleString();
+        const deadline = new Date(period.deadline).toLocaleString('nl-NL');
         return `"${link.codenaam}","${personalLink}","${deadline}"`;
       }),
     ];

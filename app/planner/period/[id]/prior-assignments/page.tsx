@@ -184,7 +184,7 @@ export default function PriorAssignmentsPage() {
         </p>
         {period.overloop_bevestigd_op && (
           <p className="text-sm text-green-700 mt-2">
-            ✓ Bevestigd op {new Date(period.overloop_bevestigd_op).toLocaleString()}
+            ✓ Bevestigd op {new Date(period.overloop_bevestigd_op).toLocaleString('nl-NL')}
           </p>
         )}
       </div>
