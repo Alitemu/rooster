@@ -14,6 +14,7 @@ interface Pool {
   id: string;
   naam: string;
   type: string;
+  actief: boolean;
   member_count: number;
 }
 
@@ -24,14 +25,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
+    // Inactive pools are excluded by default - a deactivated pool
+    // shouldn't be offered as a place to open a new period. Pass
+    // ?include_inactive=true to see everything (e.g. an admin screen
+    // managing pools themselves, not just picking one for a period).
+    const includeInactive = req.nextUrl.searchParams.get('include_inactive') === 'true';
+
     const poolsStmt = db.prepare(`
       SELECT
         p.id,
         p.naam,
         p.type,
+        p.actief,
         COUNT(pm.person_id) as member_count
       FROM dienstrooster_pool p
       LEFT JOIN dienstrooster_pool_membership pm ON p.id = pm.pool_id
+      ${includeInactive ? '' : 'WHERE p.actief = 1'}
       GROUP BY p.id
       ORDER BY p.naam ASC
     `);

@@ -40,11 +40,14 @@ export async function GET(
       );
     }
 
-    // Build query
+    // Build query. Dismissed notifications (gesloten_op set) are excluded
+    // by default - dismissing hides a notification from view without
+    // deleting it, so it should behave like that everywhere the list is
+    // read, not just in the one screen that happens to filter it today.
     let query = `
       SELECT id, periode_id, type, onderwerp, inhoud, gelezen, gesloten_op, aangemaakt_op
       FROM dienstrooster_notification
-      WHERE person_id = ?
+      WHERE person_id = ? AND gesloten_op IS NULL
     `;
     const params_list: any[] = [personId];
 
@@ -69,9 +72,11 @@ export async function GET(
 
     const notifications = db.prepare(query).all(...params_list) as any[];
 
-    // Count unread
+    // Count unread - dismissed notifications don't count, same as the list above
     const unreadCount = db
-      .prepare('SELECT COUNT(*) as count FROM dienstrooster_notification WHERE person_id = ? AND gelezen = 0')
+      .prepare(
+        'SELECT COUNT(*) as count FROM dienstrooster_notification WHERE person_id = ? AND gelezen = 0 AND gesloten_op IS NULL'
+      )
       .get(personId) as any;
 
     return NextResponse.json({

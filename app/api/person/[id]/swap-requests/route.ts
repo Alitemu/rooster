@@ -38,17 +38,19 @@ export async function GET(
     // Build query
     let query = `
       SELECT
-        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op,
+        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op, sr.opmerkingen,
         sr.aanvrager_person_id, ap.codenaam as aanvrager_codenaam,
         sr.respondent_person_id, rp.codenaam as respondent_codenaam,
         sr.aangeboden_slot_id, sr.gevraagde_slot_id,
-        aos.datum as aangeboden_datum, aos.shift_type_id as aangeboden_type,
-        gvs.datum as gevraagde_datum, gvs.shift_type_id as gevraagde_type
+        aos.datum as aangeboden_datum, ast.teller as aangeboden_type,
+        gvs.datum as gevraagde_datum, gst.teller as gevraagde_type
       FROM dienstrooster_swap_request sr
       JOIN dienstrooster_person ap ON sr.aanvrager_person_id = ap.id
       JOIN dienstrooster_person rp ON sr.respondent_person_id = rp.id
       JOIN dienstrooster_shift_slot aos ON sr.aangeboden_slot_id = aos.id
+      JOIN dienstrooster_shift_type ast ON aos.shift_type_id = ast.id
       JOIN dienstrooster_shift_slot gvs ON sr.gevraagde_slot_id = gvs.id
+      JOIN dienstrooster_shift_type gst ON gvs.shift_type_id = gst.id
       WHERE sr.aanvrager_person_id = ? OR sr.respondent_person_id = ?
     `;
     const params_list: any[] = [personId, personId];

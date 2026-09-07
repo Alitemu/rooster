@@ -22,6 +22,7 @@ interface SwapRequest {
   aangeboden_type: string;
   gevraagde_datum: string;
   gevraagde_type: string;
+  opmerkingen: string | null;
 }
 
 interface Props {
@@ -220,6 +221,12 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                       </span>
                     </div>
                   </div>
+
+                  {swap.opmerkingen && (
+                    <p className="text-sm text-neutral-700 italic mb-2">
+                      &ldquo;{swap.opmerkingen}&rdquo;
+                    </p>
+                  )}
 
                   <p className="text-xs text-neutral-500">
                     {new Date(swap.aangemaakt_op).toLocaleDateString()}

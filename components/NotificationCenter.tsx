@@ -77,6 +77,24 @@ export function NotificationCenter({ personId, periodId }: Props) {
     }
   };
 
+  const handleDismiss = async (notifId: string) => {
+    try {
+      const res = await fetch(`/api/person/${personId}/notifications/${notifId}/dismiss`, {
+        method: 'POST',
+      });
+
+      if (res.ok) {
+        const dismissed = notifications.find((n) => n.id === notifId);
+        setNotifications(notifications.filter((n) => n.id !== notifId));
+        if (dismissed && !dismissed.gelezen) {
+          setUnreadCount((count) => Math.max(0, count - 1));
+        }
+      }
+    } catch (err) {
+      console.error('Failed to dismiss notification:', err);
+    }
+  };
+
   const typeNames: Record<string, string> = {
     ROSTER_GEREED: '📋 Rooster gereed',
     TOEWIJZING: '📅 Toewijzing gemaakt',
@@ -185,14 +203,22 @@ export function NotificationCenter({ personId, periodId }: Props) {
                 </p>
               </div>
 
-              {!notif.gelezen && (
+              <div className="flex flex-col gap-2 items-end">
+                {!notif.gelezen && (
+                  <button
+                    onClick={() => handleMarkRead(notif.id)}
+                    className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    Markeer als gelezen
+                  </button>
+                )}
                 <button
-                  onClick={() => handleMarkRead(notif.id)}
-                  className="px-3 py-1 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  onClick={() => handleDismiss(notif.id)}
+                  className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-700 hover:bg-neutral-300 transition-colors"
                 >
-                  Markeer als gelezen
+                  Verbergen
                 </button>
-              )}
+              </div>
             </div>
           </div>
         ))}
