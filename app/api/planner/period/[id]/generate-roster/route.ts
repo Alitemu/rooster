@@ -285,40 +285,71 @@ export async function POST(
       );
     }
 
-    // Clear this period's previous solver attempt (a regenerate replaces
-    // it) - but never touch MANUAL/OVERRIDE rows, and the slots they cover
-    // were already excluded from the solver's input above, so there's no
-    // conflict when inserting the fresh results below.
-    clearSolverAssignments(periodId);
+    // The solver call above is async and yields the event loop, so a second
+    // "generate roster" request (double-click, two tabs) can reach this
+    // point concurrently with the same pre-fetch period.status/row_version
+    // in hand. Re-check both, atomically with the writes below, and bail
+    // out if either moved since we read them - otherwise this request's
+    // clearSolverAssignments() would silently wipe the other request's
+    // freshly-inserted SOLVER rows.
+    const applyGeneratedRoster = db.transaction(() => {
+      const current = db
+        .prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?')
+        .get(periodId) as { status: string; row_version: number };
 
-    // Store assignments using raw SQL
-    let assignmentCount = 0;
-    const insertStmt = db.prepare(
-      `INSERT INTO dienstrooster_assignment
-       (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    );
+      if (current.status !== period.status || current.row_version !== period.row_version) {
+        return { conflict: true, assignmentCount: 0 };
+      }
 
-    for (const assign of solverOutput.assignments) {
-      insertStmt.run(
-        uuid(),
-        periodId,
-        assign.person_id,
-        assign.slot_id,
-        'SOLVER',
-        1,
-        now
+      // Clear this period's previous solver attempt (a regenerate replaces
+      // it) - but never touch MANUAL/OVERRIDE rows, and the slots they cover
+      // were already excluded from the solver's input above, so there's no
+      // conflict when inserting the fresh results below.
+      clearSolverAssignments(periodId);
+
+      // Store assignments using raw SQL
+      let assignmentCount = 0;
+      const insertStmt = db.prepare(
+        `INSERT INTO dienstrooster_assignment
+         (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
       );
-      assignmentCount++;
-    }
 
-    // Update period status to GEGENEREERD (matches the PeriodStatus enum -
-    // publish and manual-assign both gate on this exact value)
-    db.prepare(
-      `UPDATE dienstrooster_schedule_period
-       SET status = ?, row_version = row_version + 1
-       WHERE id = ?`
-    ).run('GEGENEREERD', periodId);
+      for (const assign of solverOutput.assignments) {
+        insertStmt.run(
+          uuid(),
+          periodId,
+          assign.person_id,
+          assign.slot_id,
+          'SOLVER',
+          1,
+          now
+        );
+        assignmentCount++;
+      }
+
+      // Update period status to GEGENEREERD (matches the PeriodStatus enum -
+      // publish and manual-assign both gate on this exact value)
+      db.prepare(
+        `UPDATE dienstrooster_schedule_period
+         SET status = ?, row_version = row_version + 1
+         WHERE id = ?`
+      ).run('GEGENEREERD', periodId);
+
+      return { conflict: false, assignmentCount };
+    });
+
+    const { conflict, assignmentCount } = applyGeneratedRoster();
+
+    if (conflict) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Deze periode is ondertussen door een andere actie gewijzigd. Ververs de pagina en probeer opnieuw.',
+        },
+        { status: 409 }
+      );
+    }
 
     // Enrich the solver's bare slot IDs with what the planner actually
     // needs to see to fill a gap by hand: date and shift type.

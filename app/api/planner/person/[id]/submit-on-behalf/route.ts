@@ -86,7 +86,7 @@ export async function POST(
     if (existing) {
       const updateStmt = db.prepare(`
         UPDATE dienstrooster_submission
-        SET status = 'BEVESTIGD', ingediend_op = ?
+        SET status = 'BEVESTIGD', ingediend_op = ?, row_version = row_version + 1
         WHERE person_id = ? AND schedule_period_id = ?
       `);
 
@@ -94,8 +94,8 @@ export async function POST(
     } else {
       const insertStmt = db.prepare(`
         INSERT INTO dienstrooster_submission
-          (id, person_id, schedule_period_id, status, ingediend_op)
-        VALUES (?, ?, ?, 'BEVESTIGD', ?)
+          (id, person_id, schedule_period_id, status, ingediend_op, row_version)
+        VALUES (?, ?, ?, 'BEVESTIGD', ?, 1)
       `);
 
       insertStmt.run(crypto.randomUUID(), personId, body.period_id, now);

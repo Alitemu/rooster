@@ -71,6 +71,15 @@ export async function POST(
       );
     }
 
+    // Same rule as reassign and delete: a published roster is what staff
+    // already see, so an unexplained change to it isn't acceptable.
+    if (period.status === 'GEPUBLICEERD' && !reason) {
+      return NextResponse.json(
+        { success: false, error: 'Een reden is verplicht bij het wijzigen van een gepubliceerd rooster' },
+        { status: 400 }
+      );
+    }
+
     // Verify person exists
     const person = db
       .prepare('SELECT * FROM dienstrooster_person WHERE id = ?')

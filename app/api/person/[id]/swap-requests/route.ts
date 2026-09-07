@@ -138,6 +138,37 @@ export async function POST(
       );
     }
 
+    // A swap trades one shift for an equivalent one - trading across
+    // counters (e.g. an avonddienst for a weekenddienst) silently shifts
+    // both people's per-counter fairness away from what the solver
+    // computed, with nothing here to account for it. An unequal trade like
+    // that still has a path: the planner's manual saldo-correcties, which
+    // record the resulting counter/counter delta explicitly.
+    const offeredTeller = db
+      .prepare(
+        `SELECT st.teller FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(offered_slot_id) as { teller: string } | undefined;
+    const requestedTeller = db
+      .prepare(
+        `SELECT st.teller FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(requested_slot_id) as { teller: string } | undefined;
+
+    if (offeredTeller?.teller !== requestedTeller?.teller) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Je kunt alleen ruilen met hetzelfde diensttype (bijv. avond voor avond). Vraag de planner om een ongelijke ruil handmatig te verwerken.',
+        },
+        { status: 400 }
+      );
+    }
+
     // Create swap request
     const swapId = uuid();
     db.prepare(

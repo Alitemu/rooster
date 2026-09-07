@@ -113,10 +113,9 @@ export async function PATCH(
       ...(body.bandFeestdag !== undefined ? { bandFeestdag: body.bandFeestdag } : {}),
     };
 
-    db.prepare('UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ? WHERE id = ?').run(
-      JSON.stringify(updated),
-      id
-    );
+    db.prepare(
+      'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, row_version = row_version + 1 WHERE id = ?'
+    ).run(JSON.stringify(updated), id);
 
     const response: ApiSuccessResponse<{ ruleset: Record<string, unknown> }> = {
       success: true,

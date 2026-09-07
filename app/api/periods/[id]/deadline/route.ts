@@ -97,10 +97,9 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
 
-    db.prepare('UPDATE dienstrooster_schedule_period SET deadline = ? WHERE id = ?').run(
-      body.deadline,
-      id
-    );
+    db.prepare(
+      'UPDATE dienstrooster_schedule_period SET deadline = ?, row_version = row_version + 1 WHERE id = ?'
+    ).run(body.deadline, id);
 
     const response: ApiSuccessResponse<{ deadline: string }> = {
       success: true,

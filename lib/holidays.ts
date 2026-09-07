@@ -161,9 +161,12 @@ export function getWeekRange(isoYear: number, isoWeek: number): [string, string]
   const jan4 = new Date(isoYear, 0, 4);
   const start = new Date(jan4);
 
-  // Find Monday of week 1
+  // Find Monday of week 1 - same Sunday special-case as roundToMonday:
+  // getDay() returns 0 for Sunday, and going "back to Monday" from a
+  // Sunday means going back 6 days, not forward 1.
   const dayOfWeek = jan4.getDay();
-  start.setDate(jan4.getDate() - dayOfWeek + 1);
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+  start.setDate(jan4.getDate() - daysSinceMonday);
 
   // Move to the target week
   start.setDate(start.getDate() + (isoWeek - 1) * 7);

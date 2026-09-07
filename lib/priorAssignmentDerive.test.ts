@@ -54,13 +54,19 @@ describe('Prior Assignment Derivation', () => {
       expect(diffDays).toBe(41);
     });
 
-    it('returns same date for 0-week lookback', () => {
+    it('returns a well-formed empty range for 0-week lookback', () => {
       const [start, end] = calculatePriorAssignmentRange('2027-09-04', 0);
 
-      // With 0 weeks, we should get... actually this is edge case
-      // Let's just verify it doesn't crash
-      expect(start).toBeDefined();
       expect(end).toBe('2027-09-04');
+      // No lookback at all must mean an empty range, not an inverted one -
+      // start has to land strictly after end (exactly one day after, not
+      // an arbitrary earlier date), so the range is unambiguously empty
+      // rather than merely "start > end" by some other, confusing amount.
+      expect(start).toBe('2027-09-05');
+      expect(parseISO(start).getTime()).toBeGreaterThan(parseISO(end).getTime());
+
+      // And it must actually behave as empty downstream.
+      expect(generateSkeletonPriorAssignments(start, end)).toHaveLength(0);
     });
 
     it('handles year boundary correctly', () => {

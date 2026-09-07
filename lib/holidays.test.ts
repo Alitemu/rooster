@@ -123,6 +123,16 @@ describe('holidays.ts', () => {
       expect(end2).toBe('2024-01-14');
     });
 
+    it('should return the correct week 1 when Jan 4 falls on a Sunday', () => {
+      // 2026-01-04 is a Sunday, so week 1 of 2026 starts the Monday
+      // *before* it (2025-12-29), not the Monday after (2026-01-05) - a
+      // naive `jan4 - dayOfWeek + 1` computes the latter and is off by a
+      // full week for every year this happens (2015, 2026, 2032, ...).
+      const [start, end] = getWeekRange(2026, 1);
+      expect(start).toBe('2025-12-29');
+      expect(end).toBe('2026-01-04');
+    });
+
     it('should count weeks in year correctly', () => {
       // Most years have 52 weeks
       const weeks2024 = getWeeksInYear(2024);

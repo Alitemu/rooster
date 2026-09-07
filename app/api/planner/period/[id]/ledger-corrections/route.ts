@@ -47,8 +47,8 @@ export async function POST(
     const corrections = body.corrections || [];
 
     const period = db
-      .prepare('SELECT id, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(periodId) as { id: string; pool_id: string } | undefined;
+      .prepare('SELECT id, pool_id, status FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(periodId) as { id: string; pool_id: string; status: string } | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
@@ -56,6 +56,22 @@ export async function POST(
         error: { code: 'PERIOD_NOT_FOUND', message: `Period ${periodId} not found` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // Per CLAUDE.md, a correction targets "the next un-generated period" -
+    // once a roster has been generated (or published) its balances are
+    // already baked in, and a correction landing invisibly after that point
+    // would drift the saldo shown to that person out of sync with the
+    // roster nobody re-solved for it.
+    if (['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'INVALID_STATUS',
+          message: `Correcties kunnen niet meer toegepast worden op een periode in status ${period.status}`,
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
     }
 
     for (const c of corrections) {

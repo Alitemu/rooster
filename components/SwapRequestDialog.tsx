@@ -109,6 +109,17 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   const getOfferedSlot = () => assignments.find(a => a.slot_id === offeredSlotId);
   const getRequestedSlot = () => otherAssignments.find(a => a.slot_id === requestedSlotId);
 
+  // A swap trades one shift for an equivalent one - the backend rejects a
+  // cross-counter pair outright (an unequal trade like avond-voor-weekend
+  // goes through the planner's manual saldo-correcties instead, which
+  // records the resulting delta explicitly), so only offer same-teller
+  // options here rather than letting someone pick a mismatch and then
+  // explain why it was rejected.
+  const offeredTeller = getOfferedSlot()?.teller;
+  const eligibleRequestedAssignments = offeredTeller
+    ? otherAssignments.filter((a) => a.teller === offeredTeller)
+    : otherAssignments;
+
   const shiftTypeNames: Record<string, string> = {
     AVOND: 'Avond',
     WEEKEND: 'Weekend',
@@ -151,7 +162,14 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                 <select
                   name="offered-slot"
                   value={offeredSlotId}
-                  onChange={(e) => setOfferedSlotId(e.target.value)}
+                  onChange={(e) => {
+                    setOfferedSlotId(e.target.value);
+                    // Changing the offered slot can change its teller,
+                    // which may make the already-picked requested slot an
+                    // invalid (cross-counter) pair - clear it rather than
+                    // silently carry a stale, now-mismatched selection.
+                    setRequestedSlotId('');
+                  }}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
                   <option value="">Kies een dienst</option>
@@ -172,20 +190,26 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   name="requested-slot"
                   value={requestedSlotId}
                   onChange={(e) => setRequestedSlotId(e.target.value)}
+                  disabled={!offeredSlotId}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
                   <option value="">Kies een dienst</option>
-                  {otherAssignments.length === 0 && (
+                  {offeredSlotId && eligibleRequestedAssignments.length === 0 && (
                     <option value="" disabled>
-                      Geen andere diensten beschikbaar
+                      Geen andere {shiftTypeNames[offeredTeller ?? '']}diensten beschikbaar
                     </option>
                   )}
-                  {otherAssignments.map((a) => (
+                  {eligibleRequestedAssignments.map((a) => (
                     <option key={a.slot_id} value={a.slot_id}>
                       {a.codenaam}: {a.datum} - {shiftTypeNames[a.teller]}
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-neutral-500 mt-1">
+                  {offeredSlotId
+                    ? `Je kunt alleen ruilen met hetzelfde diensttype (${shiftTypeNames[offeredTeller ?? '']})`
+                    : 'Kies eerst een dienst die je aanbiedt'}
+                </p>
               </div>
 
               {/* Preview */}

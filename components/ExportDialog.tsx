@@ -35,14 +35,16 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [editedSubject, setEditedSubject] = useState('');
   const [editedBody, setEditedBody] = useState('');
+  const [remindersLoaded, setRemindersLoaded] = useState(false);
 
   useEffect(() => {
-    if (exportType === 'reminders') {
-      loadReminders();
+    if (exportType !== 'reminders') {
+      setRemindersLoaded(false);
     }
   }, [exportType]);
 
   const loadReminders = async () => {
+    setRemindersLoaded(true);
     setLoading(true);
     try {
       const res = await fetch(`/api/exports/reminders/${periodId}`);
@@ -171,6 +173,13 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                 Kolommen: Naam, Persoonlijke link, Deadline
               </p>
             </div>
+            <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
+              <p className="text-sm text-amber-900">
+                Downloaden maakt voor iedereen een nieuwe persoonlijke link aan. Een link die je
+                al eerder verstuurde, werkt daarna niet meer - alleen de link in dit nieuwe
+                bestand werkt nog.
+              </p>
+            </div>
 
             <div className="flex gap-3">
               <button
@@ -224,7 +233,23 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
               <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>
             )}
 
-            {loading ? (
+            {!remindersLoaded ? (
+              <>
+                <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
+                  <p className="text-sm text-amber-900">
+                    Dit maakt voor iedereen die nog niet heeft bevestigd een nieuwe persoonlijke link aan.
+                    Een eerder verstuurde link voor deze mensen werkt daarna niet meer - stuur dus altijd
+                    de nieuwe link mee, niet de oude.
+                  </p>
+                </div>
+                <button
+                  onClick={loadReminders}
+                  className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors mb-3"
+                >
+                  Herinneringen genereren
+                </button>
+              </>
+            ) : loading ? (
               <p className="text-center text-neutral-600">Herinneringen laden...</p>
             ) : reminders.length === 0 ? (
               <div className="bg-green-50 border border-green-200 rounded p-4 mb-6">

@@ -50,9 +50,24 @@ export function calculatePriorAssignmentRange(
   weeksToLookBack: number
 ): [string, string] {
   // previousPeriodEndDate should be a Sunday
-  const endDateParsed = parseISO(previousPeriodEndDate);
+
+  // weeksToLookBack is legitimately 0 (calculatePriorAssignmentWeeks(1)
+  // returns exactly that) - there's no lookback at all, so the range must
+  // come out empty. An inclusive [start, end] tuple can't represent a
+  // zero-length range with start <= end, so this returns start = end + 1
+  // day instead - still ordered "forward" rather than genuinely inverted,
+  // and generateSkeletonPriorAssignments' `while (start <= end)` loop
+  // below correctly produces zero entries for it. Handled explicitly
+  // rather than left to fall out of the day-count arithmetic, so it can't
+  // be mistaken for an off-by-one bug in that formula.
+  if (weeksToLookBack <= 0) {
+    const dayAfter = parseISO(previousPeriodEndDate);
+    dayAfter.setDate(dayAfter.getDate() + 1);
+    return [dateToISO(dayAfter), previousPeriodEndDate];
+  }
 
   // Go back weeksToLookBack weeks from the end date
+  const endDateParsed = parseISO(previousPeriodEndDate);
   const startDateParsed = new Date(endDateParsed);
   startDateParsed.setDate(startDateParsed.getDate() - (weeksToLookBack * 7 - 1));
 
