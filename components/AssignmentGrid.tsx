@@ -56,6 +56,13 @@ interface Props {
 export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
+  // loadError means the table itself couldn't be fetched - nothing to show
+  // instead of the full-page error. error is for an inline action failure
+  // (remove/reassign/eligible-people) and is shown as a dismissible banner
+  // above the still-visible table, since a rejected action (e.g. "reason
+  // required for a published period") isn't a reason to hide everything
+  // else the planner was looking at.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -76,7 +83,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
 
   const loadAssignments = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
 
     try {
       let url = `/api/planner/period/${periodId}/assignments?page=${page}`;
@@ -90,7 +97,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       setAssignments(data.data.assignments);
       setTotalPages(data.data.pagination.total_pages);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden van toewijzingen mislukt');
+      setLoadError(err instanceof Error ? err.message : 'Laden van toewijzingen mislukt');
     } finally {
       setLoading(false);
     }
@@ -216,16 +223,28 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     );
   }
 
-  if (error) {
+  if (loadError) {
     return (
       <div className="card p-8 bg-red-50 border border-red-200">
-        <p className="text-red-700">{error}</p>
+        <p className="text-red-700">{loadError}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="card p-3 bg-red-50 border border-red-200 flex items-start justify-between gap-3">
+          <p className="text-red-700 text-sm">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-700 hover:text-red-900 text-sm font-medium shrink-0"
+          >
+            Sluiten
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="card p-4 bg-neutral-50">
         <div className="grid grid-cols-2 gap-4">
