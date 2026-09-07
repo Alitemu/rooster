@@ -232,6 +232,18 @@ export async function POST(
         distribution_mode: (config.distributionMode as string) || 'GELIJK',
         soft_block_penalty:
           typeof config.softBlockPenalty === 'number' ? config.softBlockPenalty : 1.0,
+        band_deviation_penalty: Array.isArray(config.bandDeviationPenalty)
+          ? (config.bandDeviationPenalty as number[])
+          : [5.0],
+        band_deviation_multiplier:
+          typeof config.bandDeviationMultiplier === 'number' ? config.bandDeviationMultiplier : 1.0,
+        // Only enforced when a period's ruleset explicitly set it - unlike
+        // window_weeks this is a brand new rule, not a replacement for an
+        // existing default, so an unconfigured period must see no change.
+        holiday_spread_weeks:
+          typeof config.holidaySpreadWithinPeriod === 'number'
+            ? Math.round(config.holidaySpreadWithinPeriod)
+            : 0,
       },
       balances,
       active_people: people.length,

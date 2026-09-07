@@ -41,7 +41,10 @@ class RosterSolver:
         prior_assignments: Optional[list[dict]] = None,
         soft_block_penalty: float = 1.0,
         distribution_mode: str = 'GELIJK',
-        participation_factors: Optional[dict[str, float]] = None
+        participation_factors: Optional[dict[str, float]] = None,
+        band_deviation_penalty: Optional[list[float]] = None,
+        band_deviation_multiplier: float = 1.0,
+        holiday_spread_weeks: int = 0
     ) -> dict:
         """
         Build the CP-SAT model with all constraints and objectives.
@@ -83,6 +86,11 @@ class RosterSolver:
             assignment_vars, slots, prior_assignments or [], window_weeks
         )
 
+        logger.info("Adding holiday spread constraints")
+        constraint_builder.add_holiday_spread_constraints(
+            assignment_vars, people, slots, holiday_spread_weeks
+        )
+
         logger.info("Adding blocking absolute constraints")
         constraint_builder.add_blocking_absolute_constraints(
             assignment_vars, blocked_slots
@@ -109,7 +117,7 @@ class RosterSolver:
 
         logger.info("Adding band slack objective")
         band_slack_cost = objective_builder.add_band_slack_objective(
-            band_slack_vars, weight=5.0
+            band_slack_vars, penalty_tiers=band_deviation_penalty, multiplier=band_deviation_multiplier
         )
 
         logger.info("Adding soft preference objective")
@@ -251,7 +259,10 @@ class RosterSolver:
         prior_assignments: Optional[list[dict]] = None,
         soft_block_penalty: float = 1.0,
         distribution_mode: str = 'GELIJK',
-        participation_factors: Optional[dict[str, float]] = None
+        participation_factors: Optional[dict[str, float]] = None,
+        band_deviation_penalty: Optional[list[float]] = None,
+        band_deviation_multiplier: float = 1.0,
+        holiday_spread_weeks: int = 0
     ) -> dict:
         """
         End-to-end: build model, solve, extract assignments.
@@ -264,7 +275,9 @@ class RosterSolver:
                 people, slots, blocked_slots, soft_slots, {},
                 band_ranges, balances, window_weeks, preferred_slots,
                 prior_assignments, soft_block_penalty,
-                distribution_mode, participation_factors
+                distribution_mode, participation_factors,
+                band_deviation_penalty, band_deviation_multiplier,
+                holiday_spread_weeks
             )
 
             # Solve

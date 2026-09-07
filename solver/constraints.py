@@ -126,6 +126,69 @@ class ConstraintBuilder:
                     self.model.Add(sum(window_vars) <= 1)
 
     # ========================================================================
+    # Holiday spread: no two FEESTDAG shifts too close together for one
+    # person, within this period
+    # ========================================================================
+
+    def add_holiday_spread_constraints(
+        self,
+        assignment_vars: dict[tuple[str, str], cp_model.IntVar],
+        people: list[str],
+        slots: list[dict],
+        holiday_spread_weeks: int
+    ):
+        """
+        Constraint: at most one FEESTDAG assignment in any run of
+        `holiday_spread_weeks` consecutive weeks, for the same person.
+
+        A hard, FEESTDAG-only counterpart to add_window_constraints, and
+        deliberately independent of it - window_weeks is allowed to be 0
+        (no minimum gap at all, a valid planner choice), and this still
+        holds even then. In practice a well-staffed pool basically never
+        needs this - fair distribution already spreads the (usually
+        handful of) FEESTDAG slots across different people - but nothing
+        upstream actually guarantees it for an edge case (a small pool, or
+        two FEESTDAG slots close together in the calendar), so this exists
+        as that guarantee rather than an assumption.
+
+        holidaySpreadWithinPeriod (RulesetConfig) has no accompanying
+        penalty field, unlike the soft band settings - it mirrors
+        window_weeks in being a hard rule, not a cost to weigh against
+        others.
+        """
+        self.violations.setdefault('holiday_spread', 0)
+
+        if holiday_spread_weeks <= 1:
+            return  # No minimum spread required
+
+        feestdag_slots = [s for s in slots if s.get('shift_type_name') == 'FEESTDAG']
+
+        week_slots: dict[int, list[dict]] = {}
+        for slot in feestdag_slots:
+            week = _week_ordinal(slot['datum'])
+            week_slots.setdefault(week, []).append(slot)
+
+        for person_id in people:
+            for week in sorted(week_slots.keys()):
+                week_vars = [
+                    assignment_vars.get((person_id, slot['id']))
+                    for slot in week_slots[week]
+                    if (person_id, slot['id']) in assignment_vars
+                ]
+                if not week_vars:
+                    continue
+
+                window_vars = []
+                for check_week in range(week, week + holiday_spread_weeks):
+                    if check_week in week_slots:
+                        for slot in week_slots[check_week]:
+                            if (person_id, slot['id']) in assignment_vars:
+                                window_vars.append(assignment_vars[(person_id, slot['id'])])
+
+                if window_vars:
+                    self.model.Add(sum(window_vars) <= 1)
+
+    # ========================================================================
     # Window Rule carry-over: respect shifts from just before this period
     # ========================================================================
 

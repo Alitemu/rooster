@@ -198,21 +198,56 @@ class ObjectiveBuilder:
     def add_band_slack_objective(
         self,
         band_slack_vars: dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]],
-        weight: float = 5.0
+        penalty_tiers: Optional[list[float]] = None,
+        multiplier: float = 1.0,
+        max_tiers: int = 8
     ):
         """
         Objective: Minimize how far anyone's assignment count strays
-        outside their target band.
+        outside their target band - at an escalating, cumulative price per
+        extra unit of deviation (bandDeviationPenalty/bandDeviationMultiplier
+        in RulesetConfig), so the solver spreads a shortage across several
+        people (1 over each) rather than concentrating it on one (3+ over).
 
-        Weighted above ordinary preference/imbalance costs (so the solver
-        prefers a clean roster when one exists) but far below shortfall
-        (so stretching someone's band is always preferred over leaving a
-        shift uncovered).
+        The Nth unit of deviation (1-indexed) costs penalty_tiers[N-1] once
+        N is within the configured tiers; beyond that it costs
+        penalty_tiers[-1] * multiplier**(N - len(penalty_tiers)). Cost is
+        cumulative - 3 units of deviation with tiers [10, 40, 160] costs
+        10 + 40 + 160 = 210, not just 160 - so the first unit stays cheap
+        and each further one gets markedly more expensive. The default
+        (a flat [5.0] tier with multiplier 1.0) reproduces the old fixed
+        weight=5.0-per-unit behaviour exactly, so a period whose ruleset
+        never set bandDeviationPenalty behaves exactly as before this
+        existed.
+
+        CP-SAT's objective has to stay linear, so "cost grows with each
+        unit" can't be a single multiply the way a flat weight can. Instead
+        this reifies max_tiers boolean "deviation has reached at least N"
+        indicators per person/counter (deviation being under+over from
+        add_band_constraints) and prices each one at its own tier - capped
+        at max_tiers deep, since a tier that far out (each 4x the last) is
+        already so expensive it can never be the cheaper option; not
+        instantiating it just keeps the model smaller.
         """
-        slack_cost = (
-            weight * sum(u + o for u, o in band_slack_vars.values())
-            if band_slack_vars else 0
-        )
+        if not band_slack_vars:
+            self.objective_terms['band_slack'] = 0
+            return 0
+
+        penalty_tiers = penalty_tiers or [5.0]
+
+        def tier_cost(level: int) -> float:
+            if level <= len(penalty_tiers):
+                return penalty_tiers[level - 1]
+            return penalty_tiers[-1] * (multiplier ** (level - len(penalty_tiers)))
+
+        slack_cost = 0
+        for (person_id, counter), (under, over) in band_slack_vars.items():
+            deviation = under + over
+            for level in range(1, max_tiers + 1):
+                at_least = self.model.NewBoolVar(f'band_dev_{person_id}_{counter}_ge_{level}')
+                self.model.Add(deviation >= level).OnlyEnforceIf(at_least)
+                self.model.Add(deviation < level).OnlyEnforceIf(at_least.Not())
+                slack_cost += tier_cost(level) * at_least
 
         self.objective_terms['band_slack'] = slack_cost
         return slack_cost

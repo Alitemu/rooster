@@ -54,7 +54,8 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
 
 def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None,
           preferred=None, prior=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
-          participation_factors=None):
+          participation_factors=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
+          holiday_spread_weeks=0):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -72,6 +73,9 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         soft_block_penalty=soft_block_penalty,
         distribution_mode=distribution_mode,
         participation_factors=participation_factors,
+        band_deviation_penalty=band_deviation_penalty,
+        band_deviation_multiplier=band_deviation_multiplier,
+        holiday_spread_weeks=holiday_spread_weeks,
     )
 
 
@@ -409,16 +413,19 @@ def test_naar_rato_scales_a_part_timers_band_by_their_participation_factor():
     person's target should be roughly half of a full-timer's, while
     'GELIJK' (the default) holds everyone to the same target regardless.
 
-    6 AVOND slots, 3 people, band [2,2] (a tight target of 2 each - exactly
-    enough for a 2/2/2 split). p3 has a participation factor of 0.5.
+    First half - GELIJK: 6 AVOND slots, 3 people, band [2,2] (a tight
+    target of 2 each - exactly enough for a 2/2/2 split). p3 has a
+    participation factor of 0.5, which GELIJK must ignore.
 
-    - Under GELIJK, the factor is ignored: p3 gets the same target as
-      everyone else, so a 2/2/2 split remains optimal.
-    - Under NAAR_RATO, p3's actual band becomes [1,1] (round(2*0.5)). With
-      only 5 target shifts now spoken for across 6 slots, someone has to
-      absorb the 6th - cheaper to stretch a full-timer 1 over their band
-      (band-slack cost) than leave a slot uncovered (shortfall cost), so
-      p3 should end up with exactly 1.
+    Second half - NAAR_RATO: same band and slots, but p1 is given a +1
+    ledger balance (actual band [3,3]) so that p1=3, p2=2, p3=1 is the
+    *unique* zero-cost allocation once p3's own band is scaled to [1,1] -
+    every other split needs band slack or imbalance slack somewhere and
+    costs strictly more. That avoids relying on how CP-SAT breaks a tie
+    between two equally-cheap allocations (an earlier version of this test
+    asserted an outcome that was actually a perfect tie between "p3 absorbs
+    the extra shift" and "a full-timer does", and started flipping once
+    unrelated model changes shifted the solver's internal tie-break).
     """
     slots = make_slots(6)
     people = ['p1', 'p2', 'p3']
@@ -433,9 +440,139 @@ def test_naar_rato_scales_a_part_timers_band_by_their_participation_factor():
         'GELIJK must ignore the participation factor - p3 should get the same target as everyone else'
     )
 
-    naar_rato = solve(people, slots, window_weeks=2, band=band, distribution_mode='NAAR_RATO',
-                       participation_factors={'p3': 0.5})
-    assert count_for(naar_rato, 'p3') == 1, (
-        f"NAAR_RATO should scale p3's target down to 1, got {count_for(naar_rato, 'p3')}"
+    balances = {
+        'p1': {'AVOND': 1, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p2': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p3': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
+    }
+    naar_rato = solve(people, slots, window_weeks=2, band=band, balances=balances,
+                       distribution_mode='NAAR_RATO', participation_factors={'p3': 0.5})
+    counts = {p: count_for(naar_rato, p) for p in people}
+    assert counts == {'p1': 3, 'p2': 2, 'p3': 1}, (
+        f"expected the unique zero-slack split (p1=3, p2=2, p3=1 - p3's band scaled to [1,1]), got {counts}"
     )
-    assert len(naar_rato['assignments']) == 6, 'all 6 slots should still end up covered'
+
+
+# ---------------------------------------------------------------------------
+# BAND DEVIATION: escalating, cumulative bandDeviationPenalty
+# ---------------------------------------------------------------------------
+
+def test_band_deviation_penalty_defaults_to_the_old_flat_weight():
+    """
+    A period whose ruleset never set bandDeviationPenalty must solve
+    exactly as it did before this setting existed - band_deviation_penalty
+    defaults to None, which add_band_slack_objective treats as the flat
+    [5.0] tier this replaced.
+
+    2 people, 1 slot, band [0,0] (nobody "should" take it, but leaving it
+    empty costs far more - shortfall dominates). Whoever takes it ends up
+    exactly 1 over their band: 1 unit of band-slack costs weight(5.0) * 1,
+    plus the (unrelated, untouched-by-this-change) band-imbalance term's
+    own 0.5 for being 1 off its own target of 0 - 5.5 total, exactly what
+    this fixture already cost before bandDeviationPenalty existed.
+    """
+    slots = make_slots(1)
+    people = ['p1', 'p2']
+    band = {'AVOND': [0, 0], 'WEEKEND': [0, 0], 'FEESTDAG': [0, 0]}
+    result = solve(people, slots, window_weeks=1, band=band)
+
+    assert result['success']
+    assert len(result['assignments']) == 1
+    assert result['diagnostics']['total_cost'] == 5.5
+
+
+def test_band_deviation_penalty_spreads_a_shortage_instead_of_concentrating_it():
+    """
+    With an escalating, cumulative penalty ([10, 40, 160], ×4 beyond that),
+    2 units of deviation cost 10+40=50 when concentrated on one person, but
+    only 10+10=20 when spread one-each across two people - so the solver
+    should never let one person absorb more than their fair share of a
+    shortage when spreading it is an option.
+
+    4 people, band [1,1] (everyone wants exactly 1), 6 slots - 2 more than
+    the 4 "exact fit" targets, so 2 units of deviation are unavoidable
+    somewhere. Under the old flat weight, concentrating both units on one
+    person costs exactly the same as spreading them (2*5.0 either way) - a
+    real tie, which is the point of this setting: it breaks that tie in
+    favour of spreading.
+    """
+    slots = make_slots(6)
+    people = ['p1', 'p2', 'p3', 'p4']
+    band = {'AVOND': [1, 1], 'WEEKEND': [1, 1], 'FEESTDAG': [1, 1]}
+
+    result = solve(people, slots, window_weeks=1, band=band,
+                    band_deviation_penalty=[10.0, 40.0, 160.0], band_deviation_multiplier=4.0)
+
+    assert result['success']
+    counts = {}
+    for a in result['assignments']:
+        counts[a['person_id']] = counts.get(a['person_id'], 0) + 1
+
+    assert max(counts.values()) <= 2, (
+        f'no single person should absorb both extra shifts when spreading them is cheaper: {counts}'
+    )
+    over_band = sum(1 for c in counts.values() if c > 1)
+    assert over_band == 2, f'the 2 extra shifts should land on 2 different people, not concentrated: {counts}'
+
+
+# ---------------------------------------------------------------------------
+# HOLIDAY SPREAD: holidaySpreadWithinPeriod - independent of window_weeks
+# ---------------------------------------------------------------------------
+
+def test_holiday_spread_blocks_two_feestdag_shifts_even_when_window_weeks_is_off():
+    """
+    holidaySpreadWithinPeriod is a hard, FEESTDAG-only rule that has to
+    hold even when the general window rule doesn't - window_weeks=0 is a
+    valid planner choice ("no minimum gap at all") that switches the window
+    rule off entirely, and this must not quietly ride along with it.
+
+    Only p1 exists, two FEESTDAG slots 2 weeks apart, holiday_spread_weeks
+    set to 4 (a stricter gap than the 2 weeks between them). Since the only
+    person available can't legally take both, one has to stay unfilled -
+    a wide-open band and window_weeks=0 mean nothing else stops the solver
+    from double-booking p1 except this rule.
+    """
+    feestdagen = make_slots(3, teller='FEESTDAG')
+    two_weeks_apart = [feestdagen[0], feestdagen[2]]  # week 1 and week 3
+
+    result = solve(['p1'], two_weeks_apart, window_weeks=0, holiday_spread_weeks=4)
+
+    assert len(result['assignments']) == 1, (
+        f"p1 should be blocked from taking both FEESTDAG slots, got {result['assignments']}"
+    )
+
+
+def test_holiday_spread_off_by_default_leaves_window_weeks_zero_unaffected():
+    """
+    The flip side of the above: with holiday_spread_weeks left at its
+    default (0, unconfigured), window_weeks=0 really does mean no gap
+    requirement at all, FEESTDAG included - this is a new, opt-in rule
+    that must never activate itself.
+    """
+    feestdagen = make_slots(3, teller='FEESTDAG')
+    two_weeks_apart = [feestdagen[0], feestdagen[2]]
+
+    result = solve(['p1'], two_weeks_apart, window_weeks=0)  # holiday_spread_weeks defaults to 0
+
+    assert len(result['assignments']) == 2, (
+        f'with no holiday spread configured, p1 should be able to take both: {result["assignments"]}'
+    )
+
+
+def test_holiday_spread_only_constrains_feestdag_pairs():
+    """
+    The rule is FEESTDAG-specific - it must not block a FEESTDAG shift
+    sitting close to an AVOND shift for the same person, only two FEESTDAG
+    shifts close to each other.
+    """
+    # Built by hand rather than two separate make_slots() calls: each call
+    # numbers its slot ids from its own w=0, so two 1-week calls would both
+    # produce 'slot-w1-0' and collide in assignment_vars.
+    base = make_slots(2, teller='AVOND')
+    avond, feestdag = base[0], dict(base[1], id='feestdag-w2-0', shift_type_name='FEESTDAG')
+
+    result = solve(['p1'], [avond, feestdag], window_weeks=0, holiday_spread_weeks=10)
+
+    assert len(result['assignments']) == 2, (
+        f'an AVOND + FEESTDAG pair should never be blocked by holiday spread: {result["assignments"]}'
+    )

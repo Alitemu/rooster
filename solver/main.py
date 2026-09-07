@@ -86,6 +86,14 @@ class RuleSet(BaseModel):
     band_feestdag: list[int] = [7, 8]
     distribution_mode: str = "GELIJK"
     soft_block_penalty: float = 1.0
+    # Cumulative, escalating cost per unit a person strays outside their
+    # band - see objective.add_band_slack_objective. Default reproduces
+    # the flat weight=5.0-per-unit behaviour this replaced.
+    band_deviation_penalty: list[float] = [5.0]
+    band_deviation_multiplier: float = 1.0
+    # Hard minimum weeks between two FEESTDAG shifts for the same person,
+    # independent of window_weeks. 0 (default) = no such rule.
+    holiday_spread_weeks: int = 0
 
 
 class SolverInput(BaseModel):
@@ -222,7 +230,10 @@ async def solve_roster(request: SolverInput):
             prior_assignments=[p.dict() for p in request.prior_assignments],
             soft_block_penalty=request.rules.soft_block_penalty,
             distribution_mode=request.rules.distribution_mode,
-            participation_factors=request.participation_factors
+            participation_factors=request.participation_factors,
+            band_deviation_penalty=request.rules.band_deviation_penalty,
+            band_deviation_multiplier=request.rules.band_deviation_multiplier,
+            holiday_spread_weeks=request.rules.holiday_spread_weeks
         )
 
         if not result['success']:
