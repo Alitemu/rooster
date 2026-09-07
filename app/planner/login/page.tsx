@@ -179,9 +179,9 @@ function PlannerLoginForm() {
       if (!res.ok) {
         if (data.error?.code === 'TOTP_REQUIRED') {
           setTotpRequired(true);
-          setError('Enter your authentication code');
+          setError('Vul je authenticatiecode in');
         } else {
-          setError(data.error?.message || 'Login failed');
+          setError(data.error?.message || 'Inloggen mislukt');
         }
         setLoading(false);
         return;
@@ -190,7 +190,7 @@ function PlannerLoginForm() {
       router.push(redirectTo);
       router.refresh();
     } catch {
-      setError('Login failed. Please try again.');
+      setError('Inloggen mislukt. Probeer het opnieuw.');
       setLoading(false);
     }
   };
