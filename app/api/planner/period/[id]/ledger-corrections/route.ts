@@ -4,12 +4,11 @@
  *
  * Body: { corrections: [{ person_id, type, reden, aantal }] }
  *
- * `type` is either a plain counter (AVOND/WEEKEND/FEESTDAG - one ledger
- * row, delta = aantal) or one of the two unequal-swap types, which write
- * *two* rows for the same person in one go: RUIL_AVOND_VOOR_WEEKEND gives
- * AVOND +aantal and WEEKEND -aantal (they gave up an avonddienst and got a
- * weekenddienst instead, so a future period owes them one more avond and
- * one fewer weekend); RUIL_WEEKEND_VOOR_AVOND is the mirror.
+ * `type` is a plain counter (AVOND/WEEKEND/FEESTDAG) - one ledger row per
+ * correction, delta = aantal. An unequal ruil is two of these (e.g. AVOND
+ * +1 and WEEKEND -1 for the same person) sent as two separate corrections
+ * in the same batch - the wizard splits it into its two halves before
+ * submitting, so this route only ever needs to write single rows.
  *
  * Every correction targets *this* period (geldt_voor_periode_id) - per
  * CLAUDE.md, corrections target the next un-generated period, and that's
@@ -22,7 +21,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
-type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG' | 'RUIL_AVOND_VOOR_WEEKEND' | 'RUIL_WEEKEND_VOOR_AVOND';
+type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
 
 interface CorrectionInput {
   person_id: string;
@@ -67,7 +66,7 @@ export async function POST(
         };
         return NextResponse.json(response, { status: 400 });
       }
-      if (!PLAIN_TELLERS.has(c.type) && c.type !== 'RUIL_AVOND_VOOR_WEEKEND' && c.type !== 'RUIL_WEEKEND_VOOR_AVOND') {
+      if (!PLAIN_TELLERS.has(c.type)) {
         const response: ApiErrorResponse = {
           success: false,
           error: { code: 'INVALID_TYPE', message: `Onbekend correctietype: ${c.type}` },
@@ -84,31 +83,20 @@ export async function POST(
     );
 
     const applyAll = db.transaction((items: CorrectionInput[]) => {
-      let inserted = 0;
       for (const c of items) {
-        const rows: Array<{ teller: string; delta: number }> =
-          c.type === 'RUIL_AVOND_VOOR_WEEKEND'
-            ? [{ teller: 'AVOND', delta: c.aantal }, { teller: 'WEEKEND', delta: -c.aantal }]
-            : c.type === 'RUIL_WEEKEND_VOOR_AVOND'
-              ? [{ teller: 'WEEKEND', delta: c.aantal }, { teller: 'AVOND', delta: -c.aantal }]
-              : [{ teller: c.type, delta: c.aantal }];
-
-        for (const row of rows) {
-          insertLedger.run(
-            crypto.randomUUID(),
-            c.person_id,
-            period.pool_id,
-            row.teller,
-            periodId,
-            row.delta,
-            c.reden,
-            auth!.userId,
-            now
-          );
-          inserted++;
-        }
+        insertLedger.run(
+          crypto.randomUUID(),
+          c.person_id,
+          period.pool_id,
+          c.type,
+          periodId,
+          c.aantal,
+          c.reden,
+          auth!.userId,
+          now
+        );
       }
-      return inserted;
+      return items.length;
     });
 
     const inserted = applyAll(corrections);

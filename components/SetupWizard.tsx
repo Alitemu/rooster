@@ -539,18 +539,47 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
     const member = staffMembers.find((m) => m.person_id === correctionForm.personId);
     if (!member) return;
+    const aantal = correctionForm.aantal as number;
 
-    setCorrections((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        personId: correctionForm.personId,
-        codenaam: member.codenaam,
-        type: correctionSelectedReason.type,
-        reden: correctionSelectedReason.label,
-        aantal: correctionForm.aantal as number,
-      },
-    ]);
+    // An ongelijke ruil touches two counters at once - show it as its two
+    // halves right away, each with the mirrored reden and the opposite
+    // counter/aantal, instead of one row that hides the second half.
+    if (correctionSelectedReason.type === 'RUIL_AVOND_VOOR_WEEKEND' || correctionSelectedReason.type === 'RUIL_WEEKEND_VOOR_AVOND') {
+      const mirror = CORRECTION_REASONS_BY_TOP_LEVEL.RUIL.find((r) => r.type !== correctionSelectedReason.type)!;
+      const eersteType: CorrectionType = correctionSelectedReason.type === 'RUIL_AVOND_VOOR_WEEKEND' ? 'AVOND' : 'WEEKEND';
+      const tweedeType: CorrectionType = eersteType === 'AVOND' ? 'WEEKEND' : 'AVOND';
+      setCorrections((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          personId: correctionForm.personId,
+          codenaam: member.codenaam,
+          type: eersteType,
+          reden: correctionSelectedReason.label,
+          aantal,
+        },
+        {
+          id: crypto.randomUUID(),
+          personId: correctionForm.personId,
+          codenaam: member.codenaam,
+          type: tweedeType,
+          reden: mirror.label,
+          aantal: -aantal,
+        },
+      ]);
+    } else {
+      setCorrections((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          personId: correctionForm.personId,
+          codenaam: member.codenaam,
+          type: correctionSelectedReason.type,
+          reden: correctionSelectedReason.label,
+          aantal,
+        },
+      ]);
+    }
     setError(null);
     applyReasonDefault(correctionForm.topLevel, correctionForm.reasonIndex);
   };
