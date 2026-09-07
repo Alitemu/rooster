@@ -444,9 +444,17 @@ export default function PersonalLinkPage() {
             Je voorkeuren zijn succesvol ingediend.
           </p>
           <p className="text-sm text-green-700">
-            Je kunt dit venster sluiten. De roosteraar genereert het rooster op basis van alle
-            ingediende voorkeuren.
+            Je kunt dit venster sluiten - maar je kunt ook nog iets aanpassen: zolang de deadline
+            ({new Date(period.deadline).toLocaleString()}) niet verstreken is, tellen je laatste
+            wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet
+            opnieuw in te dienen.
           </p>
+          <button
+            onClick={() => setCurrentStep('calendar')}
+            className="px-4 py-2 rounded font-medium bg-white border border-green-300 text-green-900 hover:bg-green-100 transition-colors"
+          >
+            Voorkeuren aanpassen
+          </button>
         </div>
       )}
     </div>
