@@ -38,7 +38,8 @@ class RosterSolver:
         balances: dict[str, dict[str, int]],
         window_weeks: int = 2,
         preferred_slots: Optional[dict[tuple[str, str], float]] = None,
-        prior_assignments: Optional[list[dict]] = None
+        prior_assignments: Optional[list[dict]] = None,
+        soft_block_penalty: float = 1.0
     ) -> dict:
         """
         Build the CP-SAT model with all constraints and objectives.
@@ -110,7 +111,7 @@ class RosterSolver:
 
         logger.info("Adding soft preference objective")
         soft_cost = objective_builder.add_soft_preference_objective(
-            assignment_vars, soft_slots, weight=1.0
+            assignment_vars, soft_slots, weight=soft_block_penalty
         )
 
         logger.info("Adding band imbalance objective")
@@ -243,7 +244,8 @@ class RosterSolver:
         balances: dict[str, dict[str, int]],
         window_weeks: int = 2,
         preferred_slots: Optional[dict[tuple[str, str], float]] = None,
-        prior_assignments: Optional[list[dict]] = None
+        prior_assignments: Optional[list[dict]] = None,
+        soft_block_penalty: float = 1.0
     ) -> dict:
         """
         End-to-end: build model, solve, extract assignments.
@@ -255,7 +257,7 @@ class RosterSolver:
             model_data = self.build_model(
                 people, slots, blocked_slots, soft_slots, {},
                 band_ranges, balances, window_weeks, preferred_slots,
-                prior_assignments
+                prior_assignments, soft_block_penalty
             )
 
             # Solve

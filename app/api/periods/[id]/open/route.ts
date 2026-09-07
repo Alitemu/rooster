@@ -17,12 +17,20 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
+interface BlockBudgetPerTeller {
+  AVOND: { maxFraction: number };
+  WEEKEND: { maxFraction: number };
+  FEESTDAG: { maxFraction: number };
+}
+
 interface RulesetConfig {
   windowWeeks: number;
   bandAvond: [number, number];
   bandWeekend: [number, number];
   bandFeestdag: [number, number];
   distributionMode: string;
+  blockBudget?: BlockBudgetPerTeller & { parttimeExempt: boolean };
+  softBlockBudget?: BlockBudgetPerTeller;
 }
 
 interface OpenPeriodRequest {

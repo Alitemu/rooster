@@ -54,6 +54,15 @@ interface DistributionConfig {
   factors: Record<string, number>;
 }
 
+interface BlockBudgetConfig {
+  // Percentage (0-100) of a counter's total slots one person may block.
+  // 100 = no limit, the default - matches the app's behaviour before this
+  // setting existed.
+  hardPercent: number;
+  softPercent: number;
+  parttimeExempt: boolean;
+}
+
 interface BalanceRow {
   codenaam: string;
   AVOND_delta: number;
@@ -103,6 +112,11 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
     mode: 'GELIJK',
     factors: {},
+  });
+  const [blockBudgetConfig, setBlockBudgetConfig] = useState<BlockBudgetConfig>({
+    hardPercent: 100,
+    softPercent: 100,
+    parttimeExempt: true,
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [holidayRows, setHolidayRows] = useState<HolidayRow[]>([]);
@@ -415,6 +429,17 @@ export function SetupWizard({ period, onComplete }: Props) {
             bandWeekend: [windowConfig.band_min.WEEKEND, windowConfig.band_max.WEEKEND],
             bandFeestdag: [windowConfig.band_min.FEESTDAG, windowConfig.band_max.FEESTDAG],
             distributionMode: distributionConfig.mode,
+            blockBudget: {
+              AVOND: { maxFraction: blockBudgetConfig.hardPercent / 100 },
+              WEEKEND: { maxFraction: blockBudgetConfig.hardPercent / 100 },
+              FEESTDAG: { maxFraction: blockBudgetConfig.hardPercent / 100 },
+              parttimeExempt: blockBudgetConfig.parttimeExempt,
+            },
+            softBlockBudget: {
+              AVOND: { maxFraction: blockBudgetConfig.softPercent / 100 },
+              WEEKEND: { maxFraction: blockBudgetConfig.softPercent / 100 },
+              FEESTDAG: { maxFraction: blockBudgetConfig.softPercent / 100 },
+            },
           },
         }),
       });
@@ -880,6 +905,63 @@ export function SetupWizard({ period, onComplete }: Props) {
                   </div>
                 ))}
               </div>
+            </div>
+
+            <div>
+              <h3 className="font-semibold mb-1">Blokkadebudget</h3>
+              <p className="text-xs text-neutral-600 mb-3">
+                Begrens hoeveel procent van de diensten één persoon mag blokkeren of als &quot;liever
+                niet&quot; mag opgeven. Op 100% zit er geen limiet op - de deelnemer kan dan net als
+                voorheen zoveel dagen markeren als gewenst.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium mb-2">
+                    Geblokkeerd (max % van de diensten)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={blockBudgetConfig.hardPercent}
+                    onChange={(e) =>
+                      setBlockBudgetConfig({
+                        ...blockBudgetConfig,
+                        hardPercent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
+                      })
+                    }
+                    className="w-full px-2 py-1 border rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-2">
+                    Liever niet (max % van de diensten)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={blockBudgetConfig.softPercent}
+                    onChange={(e) =>
+                      setBlockBudgetConfig({
+                        ...blockBudgetConfig,
+                        softPercent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
+                      })
+                    }
+                    className="w-full px-2 py-1 border rounded text-sm"
+                  />
+                </div>
+              </div>
+              <label className="flex items-center gap-2 mt-3 text-xs text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={blockBudgetConfig.parttimeExempt}
+                  onChange={(e) =>
+                    setBlockBudgetConfig({ ...blockBudgetConfig, parttimeExempt: e.target.checked })
+                  }
+                />
+                Parttime-vrije dagen tellen niet mee voor het budget
+              </label>
             </div>
           </div>
         )}

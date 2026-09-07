@@ -223,6 +223,8 @@ export async function POST(
         band_weekend: bands.WEEKEND,
         band_feestdag: bands.FEESTDAG,
         distribution_mode: (config.distributionMode as string) || 'GELIJK',
+        soft_block_penalty:
+          typeof config.softBlockPenalty === 'number' ? config.softBlockPenalty : 1.0,
       },
       balances,
       active_people: people.length,

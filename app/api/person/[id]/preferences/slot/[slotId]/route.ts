@@ -11,6 +11,8 @@ import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/a
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
+import { checkBlockBudget } from '@/lib/blockBudget';
+import type { Teller } from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 export async function PATCH(
@@ -42,13 +44,23 @@ export async function PATCH(
 
     // Verify slot exists and its period still accepts preference changes
     const slotStmt = db.prepare(
-      `SELECT s.id, s.period_id, sp.status as period_status, sp.deadline as period_deadline
+      `SELECT s.id, s.period_id, sp.status as period_status, sp.deadline as period_deadline,
+              sp.bevroren_ruleset_json, sp.pool_id, st.teller
        FROM dienstrooster_shift_slot s
        JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
        WHERE s.id = ?`
     );
     const slot = slotStmt.get(slotId) as
-      | { id: string; period_id: string; period_status: string; period_deadline: string }
+      | {
+          id: string;
+          period_id: string;
+          period_status: string;
+          period_deadline: string;
+          bevroren_ruleset_json: string | null;
+          pool_id: string;
+          teller: Teller;
+        }
       | undefined;
     if (!slot) {
       const response: ApiErrorResponse = {
@@ -65,6 +77,27 @@ export async function PATCH(
         error: { code: gate.code!, message: gate.message! },
       };
       return NextResponse.json(response, { status: 403 });
+    }
+
+    // Only ABSOLUUT/LIEVER_NIET count against a block budget - VOORKEUR is a
+    // positive preference, not a block, and clearing (level === null) only
+    // ever frees up room.
+    if (level === 'ABSOLUUT' || level === 'LIEVER_NIET') {
+      const budgetCheck = checkBlockBudget({
+        period: { bevroren_ruleset_json: slot.bevroren_ruleset_json, pool_id: slot.pool_id },
+        periodId: slot.period_id,
+        personId: id,
+        teller: slot.teller,
+        level,
+        excludeSlotId: slotId,
+      });
+      if (!budgetCheck.allowed) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'BLOCK_BUDGET_EXCEEDED', message: budgetCheck.message! },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
     }
 
     if (level === null) {

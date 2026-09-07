@@ -85,6 +85,7 @@ class RuleSet(BaseModel):
     band_weekend: list[int] = [7, 8]
     band_feestdag: list[int] = [7, 8]
     distribution_mode: str = "GELIJK"
+    soft_block_penalty: float = 1.0
 
 
 class SolverInput(BaseModel):
@@ -214,7 +215,8 @@ async def solve_roster(request: SolverInput):
             balances=request.balances,
             window_weeks=request.rules.window_weeks,
             preferred_slots=preferred_slots,
-            prior_assignments=[p.dict() for p in request.prior_assignments]
+            prior_assignments=[p.dict() for p in request.prior_assignments],
+            soft_block_penalty=request.rules.soft_block_penalty
         )
 
         if not result['success']:

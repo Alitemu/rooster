@@ -52,7 +52,8 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
     return slots
 
 
-def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None, preferred=None, prior=None):
+def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None,
+          preferred=None, prior=None, soft_block_penalty=1.0):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -67,6 +68,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         window_weeks=window_weeks,
         preferred_slots=preferred or {},
         prior_assignments=prior or [],
+        soft_block_penalty=soft_block_penalty,
     )
 
 
@@ -344,4 +346,50 @@ def test_preference_is_honoured_when_choice_is_otherwise_tied():
     assigned = [a['person_id'] for a in result['assignments']]
     assert assigned == ['p1'], (
         f'expected the preferred person p1 to get the sole shift, got {assigned}'
+    )
+
+
+# ---------------------------------------------------------------------------
+# SOFT BLOCKING: LIEVER_NIET weight (softBlockPenalty)
+# ---------------------------------------------------------------------------
+
+def test_soft_block_penalty_weight_controls_whether_it_is_honoured():
+    """
+    softBlockPenalty (RulesetConfig) is the objective weight on LIEVER_NIET
+    violations - it has to actually reach the solver's objective, not just
+    sit in the ruleset JSON. This proves it does, by picking a scenario
+    where honouring p1's LIEVER_NIET costs something real (band imbalance)
+    and showing the outcome flips depending on the weight.
+
+    One slot, band [1,1] on AVOND. p1's balance is untouched (actual band
+    [1,1]: not getting the shift costs 1 unit of band-under slack). p2's
+    balance is -1 (actual band [0,0]: getting the shift costs 1 unit of
+    band-over slack). Assigning p1 costs zero band slack; assigning p2
+    instead costs band slack on both (5.0 weight each = 10.0 total). p1 has
+    marked the slot LIEVER_NIET, costing `soft_block_penalty * 1.0`.
+
+    - Low penalty (1.0 < 10.0): cheaper to just take the band-optimal
+      assignment and pay the small soft-block cost - p1 gets the shift.
+    - High penalty (20.0 > 10.0): now cheaper to eat the band slack than
+      violate p1's preference - p2 gets the shift instead.
+    """
+    slots = make_slots(1)
+    people = ['p1', 'p2']
+    band = {'AVOND': [1, 1], 'WEEKEND': [1, 1], 'FEESTDAG': [1, 1]}
+    balances = {
+        'p1': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p2': {'AVOND': -1, 'WEEKEND': 0, 'FEESTDAG': 0},
+    }
+    soft = {('p1', slots[0]['id']): 1.0}
+
+    low = solve(people, slots, window_weeks=1, band=band, balances=balances, soft=soft,
+                soft_block_penalty=1.0)
+    assert [a['person_id'] for a in low['assignments']] == ['p1'], (
+        'at a low penalty, the band-optimal assignment should win despite the LIEVER_NIET mark'
+    )
+
+    high = solve(people, slots, window_weeks=1, band=band, balances=balances, soft=soft,
+                 soft_block_penalty=20.0)
+    assert [a['person_id'] for a in high['assignments']] == ['p2'], (
+        'at a high penalty, avoiding the LIEVER_NIET slot should win even at the cost of band imbalance'
     )
