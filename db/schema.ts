@@ -38,7 +38,14 @@ export const personAccessLink = sqliteTable(
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
     ingetrokken_op: text('ingetrokken_op'),
     laatst_gebruikt_op: text('laatst_gebruikt_op'),
-  }
+  },
+  (table) => ({
+    // Backs the revocation check lib/auth-context.ts runs on every
+    // DEELNEMER request (WHERE person_id = ? AND ingetrokken_op IS NULL) -
+    // without it, that check is a full table scan on every participant
+    // request, on the hot auth path.
+    personIdx: index('person_access_link_person_idx').on(table.person_id),
+  })
 );
 
 // ============================================================================

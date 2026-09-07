@@ -83,6 +83,9 @@ async function createTables() {
       laatst_gebruikt_op TEXT
     );
 
+    CREATE INDEX IF NOT EXISTS person_access_link_person_idx
+      ON dienstrooster_person_access_link(person_id);
+
     CREATE TABLE IF NOT EXISTS dienstrooster_pool (
       id TEXT PRIMARY KEY,
       naam TEXT NOT NULL,
