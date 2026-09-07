@@ -31,7 +31,7 @@ export async function POST(
 
     if (!notification) {
       return NextResponse.json(
-        { success: false, error: 'Notification not found' },
+        { success: false, error: { code: 'NOTIFICATION_NOT_FOUND', message: `Notification ${notifId} not found` } },
         { status: 404 }
       );
     }

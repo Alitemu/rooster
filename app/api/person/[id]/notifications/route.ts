@@ -35,7 +35,7 @@ export async function GET(
 
     if (!person) {
       return NextResponse.json(
-        { success: false, error: 'Person not found' },
+        { success: false, error: { code: 'PERSON_NOT_FOUND', message: `Person ${personId} not found` } },
         { status: 404 }
       );
     }
