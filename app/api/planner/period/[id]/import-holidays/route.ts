@@ -52,6 +52,16 @@ export async function POST(
           continue;
         }
 
+        // The client (SetupWizard.tsx) only warns on a bad year, it never
+        // blocks submission - this is the actual system boundary where a
+        // typo'd/garbage year (0, 9999, a parse failure that fell back to
+        // 0) must be rejected before it pollutes holiday-rotation-fairness
+        // history for good.
+        if (!Number.isInteger(row.year) || row.year < 2000 || row.year > 2100) {
+          errors.push(`Ongeldig jaartal voor ${row.codenaam}: ${row.year}`);
+          continue;
+        }
+
         const person = db
           .prepare('SELECT id FROM dienstrooster_person WHERE codenaam = ?')
           .get(row.codenaam) as { id: string } | undefined;

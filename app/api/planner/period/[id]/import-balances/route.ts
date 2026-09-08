@@ -41,7 +41,7 @@ export async function POST(
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Period ${periodId} not found` },
+        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -49,6 +49,23 @@ export async function POST(
     const now = new Date().toISOString();
     const errors: string[] = [];
     let imported = 0;
+
+    // A duplicate codenaam within the same import becomes two separate
+    // BEGINSALDO ledger entries that both count toward the balance (no
+    // unique constraint on ledger_entry to catch this) - the client
+    // (SetupWizard.tsx) already warns "beide rijen worden bij elkaar
+    // opgeteld" for this exact case, but a caller that bypasses the
+    // client got no signal at all. Still sums (that IS the intended
+    // behaviour for a genuine multi-row correction), just reports it.
+    const codenaamCounts = new Map<string, number>();
+    for (const row of rows) {
+      codenaamCounts.set(row.codenaam, (codenaamCounts.get(row.codenaam) ?? 0) + 1);
+    }
+    for (const [codenaam, count] of codenaamCounts) {
+      if (count > 1) {
+        errors.push(`"${codenaam}" komt ${count}x voor in dit bestand - de aantallen worden bij elkaar opgeteld`);
+      }
+    }
 
     const insertLedger = db.prepare(
       `INSERT INTO dienstrooster_ledger_entry
@@ -70,6 +87,16 @@ export async function POST(
         for (const counter of COUNTERS) {
           const delta = row[`${counter}_delta` as keyof BalanceRow] as number | undefined;
           if (!delta) continue;
+
+          // SetupWizard.tsx's client parser already guarantees an
+          // integer, but this route is the actual system boundary - a
+          // direct API call bypassing the client could send a non-integer
+          // (e.g. a fraction or a string that survived JSON parsing) with
+          // nothing catching it before it reaches ledger_entry.delta.
+          if (!Number.isInteger(delta)) {
+            errors.push(`Ongeldig aantal voor ${row.codenaam} (${counter}): ${delta} is geen geheel getal`);
+            continue;
+          }
 
           insertLedger.run(
             crypto.randomUUID(),
