@@ -37,7 +37,7 @@ export async function GET(
     if (!assignment) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'ASSIGNMENT_NOT_FOUND', message: 'Assignment not found' },
+        error: { code: 'ASSIGNMENT_NOT_FOUND', message: 'Toewijzing niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

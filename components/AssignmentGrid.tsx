@@ -120,7 +120,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         }
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Verwijderen van toewijzing mislukt');
+      if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Verwijderen van toewijzing mislukt');
 
       setConfirmingId(null);
       setReason('');
@@ -146,7 +146,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         `/api/planner/period/${periodId}/assignments/${assignmentId}/eligible-people`
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ophalen van beschikbare collega\'s mislukt');
+      if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Ophalen van beschikbare collega\'s mislukt');
       setEligiblePeople(data.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ophalen van beschikbare collega\'s mislukt');
@@ -170,7 +170,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         }
       );
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Wisselen van toewijzing mislukt');
+      if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Wisselen van toewijzing mislukt');
       if (data.data?.warning) setWarning(data.data.warning.message);
 
       setReassigningId(null);

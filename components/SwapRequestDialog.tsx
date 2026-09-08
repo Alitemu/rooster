@@ -28,6 +28,12 @@ interface Props {
   onSuccess?: () => void;
 }
 
+// Rest of the app formats dates via toLocaleDateString('nl-NL') rather than
+// showing the raw YYYY-MM-DD - kept consistent here too.
+function formatDatum(datum: string): string {
+  return new Date(datum).toLocaleDateString('nl-NL');
+}
+
 export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSuccess }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [otherAssignments, setOtherAssignments] = useState<OtherAssignment[]>([]);
@@ -105,7 +111,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Aanmaken van ruilverzoek mislukt');
+        throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Aanmaken van ruilverzoek mislukt');
       }
 
       if (onSuccess) onSuccess();
@@ -186,7 +192,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   <option value="">Kies een dienst</option>
                   {assignments.map((a) => (
                     <option key={a.slot_id} value={a.slot_id}>
-                      {a.datum} - {shiftTypeNames[a.teller]}
+                      {formatDatum(a.datum)} - {shiftTypeNames[a.teller]}
                     </option>
                   ))}
                 </select>
@@ -212,7 +218,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   )}
                   {eligibleRequestedAssignments.map((a) => (
                     <option key={a.slot_id} value={a.slot_id}>
-                      {a.codenaam}: {a.datum} - {shiftTypeNames[a.teller]}
+                      {a.codenaam}: {formatDatum(a.datum)} - {shiftTypeNames[a.teller]}
                     </option>
                   ))}
                 </select>
@@ -229,10 +235,10 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   <h3 className="font-semibold text-sm text-blue-900 mb-2">Voorbeeld van de ruil</h3>
                   <div className="space-y-1 text-sm text-blue-800">
                     <p>
-                      Je biedt aan: <span className="font-semibold">{getOfferedSlot()?.datum}</span>
+                      Je biedt aan: <span className="font-semibold">{getOfferedSlot() && formatDatum(getOfferedSlot()!.datum)}</span>
                     </p>
                     <p>
-                      Je ontvangt: <span className="font-semibold">{getRequestedSlot()?.datum}</span>
+                      Je ontvangt: <span className="font-semibold">{getRequestedSlot() && formatDatum(getRequestedSlot()!.datum)}</span>
                     </p>
                   </div>
                 </div>
