@@ -47,7 +47,7 @@ export async function POST(
     const { id } = params;
 
     const period = db
-      .prepare('SELECT id, start_datum, eind_datum, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
+      .prepare('SELECT id, status, start_datum, eind_datum, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
       .get(id) as any;
 
     if (!period) {
@@ -56,6 +56,20 @@ export async function POST(
         error: { code: 'PERIOD_NOT_FOUND', message: `Period ${id} not found` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // CONCEPT is excluded: only /api/periods/[id]/open rounds a period's
+    // dates to Monday/Sunday before persisting them, and a CONCEPT
+    // period's start_datum/eind_datum could still be whatever the
+    // planner typed - generating slots straight from them would silently
+    // skip that rounding, same reasoning as generate-roster's status
+    // whitelist.
+    if (period.status === 'CONCEPT') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_STATUS', message: 'Diensten kunnen niet gegenereerd worden vóórdat de periode geopend is' },
+      };
+      return NextResponse.json(response, { status: 400 });
     }
 
     const result = persistSlotsForPeriod(id, period.pool_id, period.start_datum, period.eind_datum);
