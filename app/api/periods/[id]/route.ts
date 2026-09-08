@@ -83,7 +83,7 @@ export async function GET(
         success: false,
         error: {
           code: 'PERIOD_NOT_FOUND',
-          message: `Period with ID ${id} not found`,
+          message: `Periode met ID ${id} niet gevonden`,
         },
       };
       return NextResponse.json(response, { status: 404 });

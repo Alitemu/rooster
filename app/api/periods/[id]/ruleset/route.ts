@@ -59,7 +59,7 @@ export async function PATCH(
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Period ${id} not found` },
+        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }

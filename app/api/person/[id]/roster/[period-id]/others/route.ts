@@ -30,7 +30,7 @@ export async function GET(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
       );
     }

@@ -44,7 +44,7 @@ export async function GET(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -56,7 +56,7 @@ export async function GET(
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Period ${periodId} not found` },
+        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }

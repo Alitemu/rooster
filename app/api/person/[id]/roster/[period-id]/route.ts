@@ -31,7 +31,7 @@ export async function GET(
 
     if (!person) {
       return NextResponse.json(
-        { success: false, error: 'Person not found' },
+        { success: false, error: 'Persoon niet gevonden' },
         { status: 404 }
       );
     }
@@ -43,7 +43,7 @@ export async function GET(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
       );
     }

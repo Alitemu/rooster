@@ -73,7 +73,7 @@ export async function POST(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -84,7 +84,7 @@ export async function POST(
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Period ${period_id} not found` },
+        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${period_id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }

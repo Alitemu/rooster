@@ -61,7 +61,7 @@ export async function GET(
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Period ${id} not found` },
+        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -216,7 +216,7 @@ export async function PATCH(
           success: false,
           error: {
             code: 'PERSON_NOT_FOUND',
-            message: `Person with codenaam ${person_codenaam} not found`,
+            message: `Persoon met codenaam ${person_codenaam} niet gevonden`,
           },
         };
         return NextResponse.json(response, { status: 404 });
