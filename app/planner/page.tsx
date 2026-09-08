@@ -68,6 +68,10 @@ export default function PlannerHomePage() {
   const [showCreate, setShowCreate] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` (which is scoped to the create-form panel and
+  // invisible when that panel is closed) - a failed loadData() needs to be
+  // visible on the main page itself, not silently leave the periods list empty.
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     naam: '',
@@ -85,17 +89,35 @@ export default function PlannerHomePage() {
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const [purgingPeriod, setPurgingPeriod] = useState<TrashedPeriod | null>(null);
   const [purgeError, setPurgeError] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [periodsRes, poolsRes, trashRes] = await Promise.all([
         fetch('/api/periods'),
         fetch('/api/planner/pools'),
         fetch('/api/periods/trash'),
       ]);
+
+      // middleware.ts only checks that a session cookie is present, not
+      // that it's still valid (Edge Runtime can't verify the HMAC) - an
+      // expired or revoked session reaches this page and gets 401s here
+      // instead. Without this check, periodsData.data etc. end up
+      // undefined and the planner sees a misleading "no periods yet"
+      // empty state instead of being sent back to log in.
+      if (periodsRes.status === 401 || poolsRes.status === 401 || trashRes.status === 401) {
+        router.push(`/planner/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+        return;
+      }
+
+      if (!periodsRes.ok || !poolsRes.ok || !trashRes.ok) {
+        throw new Error('Laden van periodes mislukt');
+      }
+
       const periodsData = await periodsRes.json();
       const poolsData = await poolsRes.json();
       const trashData = await trashRes.json();
@@ -106,7 +128,7 @@ export default function PlannerHomePage() {
         setForm((f) => ({ ...f, pool_id: poolsData.data[0].id }));
       }
     } catch {
-      setError('Laden van periodes mislukt');
+      setLoadError('Laden van periodes mislukt');
     } finally {
       setLoading(false);
     }
@@ -156,12 +178,16 @@ export default function PlannerHomePage() {
 
   const handleRestore = async (id: string) => {
     setTrashActionBusy(id);
+    setRestoreError(null);
     try {
       const res = await fetch(`/api/periods/${id}/restore`, { method: 'POST' });
-      if (!res.ok) throw new Error();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Herstellen mislukt');
       await loadData();
-    } catch {
+      await loadTrash();
+    } catch (err) {
       // Leave it in the trash list - the planner can retry
+      setRestoreError(err instanceof Error ? err.message : 'Herstellen mislukt');
     } finally {
       setTrashActionBusy(null);
     }
@@ -314,14 +340,22 @@ export default function PlannerHomePage() {
         </div>
       )}
 
+      {loadError && (
+        <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">
+          {loadError}
+        </div>
+      )}
+
       {loading ? (
         <div className="card p-8 text-center text-neutral-600">Periodes laden...</div>
       ) : periods.length === 0 ? (
-        <div className="card p-8 text-center text-neutral-600">
-          Nog geen periodes. Maak er een aan om te beginnen.
-        </div>
+        !loadError && (
+          <div className="card p-8 text-center text-neutral-600">
+            Nog geen periodes. Maak er een aan om te beginnen.
+          </div>
+        )
       ) : (
-        <div className="card overflow-hidden">
+        <div className="card overflow-x-auto">
           <table className="w-full">
             <thead className="bg-neutral-100">
               <tr>
@@ -371,6 +405,8 @@ export default function PlannerHomePage() {
               verdwijnen.
             </p>
           </div>
+
+          {restoreError && <p className="text-sm text-red-600">{restoreError}</p>}
 
           {trashLoading ? (
             <p className="text-sm text-neutral-600">Prullenbak laden...</p>
