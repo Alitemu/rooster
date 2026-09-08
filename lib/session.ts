@@ -67,8 +67,16 @@ function loadOrCreatePersistedSecret(): string {
     fs.writeFileSync(file, generated, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
     return generated;
   } catch {
-    const raced = fs.readFileSync(file, 'utf8').trim();
-    if (raced.length >= 32) return raced;
+    // Reaches here for a genuine write failure too (e.g. the database
+    // directory doesn't exist yet), not just the intended "another worker
+    // won the wx race" case - that read would then also throw (ENOENT),
+    // which must not escape uncaught here and skip the clean error below.
+    try {
+      const raced = fs.readFileSync(file, 'utf8').trim();
+      if (raced.length >= 32) return raced;
+    } catch {
+      // fall through to the error below
+    }
     throw new Error(`Could not create a session secret at ${file}`);
   }
 }
