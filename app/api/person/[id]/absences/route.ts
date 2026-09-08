@@ -12,6 +12,9 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForAbsence } from '@/lib/absenceSync';
+import { getOpenPeriodsForPerson } from '@/lib/parttimeSync';
+import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface Absence {
@@ -162,6 +165,22 @@ export async function POST(
     );
 
     syncAvailabilityForAbsence(absenceId);
+
+    // Registering an absence generates ABSOLUUT rows exactly like a manual
+    // calendar block does (see lib/absenceSync.ts), so it must be tracked
+    // the same way: mark the submission as genuinely started (see
+    // lib/submissionStatus.ts's doc comment - without this, someone who
+    // only submits an absence stays "Niet begonnen" on the planner
+    // dashboard, indistinguishable from someone who never opened the
+    // link), and back up the resulting preference state.
+    for (const periodId of getOpenPeriodsForPerson(id)) {
+      markSubmissionStarted(id, periodId);
+      try {
+        writePreferencesBackup(id, periodId);
+      } catch (backupError) {
+        console.error('preferences-backup-write-failed', backupError);
+      }
+    }
 
     const createdAbsence: Absence = {
       id: absenceId,

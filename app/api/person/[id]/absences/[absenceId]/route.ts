@@ -10,6 +10,9 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForAbsence, removeAbsenceAvailability } from '@/lib/absenceSync';
+import { getOpenPeriodsForPerson } from '@/lib/parttimeSync';
+import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateAbsenceRequest {
@@ -99,6 +102,17 @@ export async function PATCH(
     updateStmt.run(...values);
 
     syncAvailabilityForAbsence(absenceId);
+
+    // Same as the create route: an edit still changes what's blocked, so
+    // it must be tracked as a genuinely-started submission and backed up.
+    for (const periodId of getOpenPeriodsForPerson(id)) {
+      markSubmissionStarted(id, periodId);
+      try {
+        writePreferencesBackup(id, periodId);
+      } catch (backupError) {
+        console.error('preferences-backup-write-failed', backupError);
+      }
+    }
 
     const response: ApiSuccessResponse<{ updated: boolean }> = {
       success: true,
