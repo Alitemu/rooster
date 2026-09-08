@@ -73,6 +73,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const [rulesetLoading, setRulesetLoading] = useState(false);
   const [ruleset, setRuleset] = useState<RulesetConfig | null>(null);
   const [rulesetError, setRulesetError] = useState<string | null>(null);
+  const [rulesetRowVersion, setRulesetRowVersion] = useState<number | null>(null);
   // Not a hard rule - a planner can always generate early, e.g. once it's
   // clear stragglers won't respond in time. This just makes "generating
   // before everyone's had a chance to answer" a visible choice rather than
@@ -100,6 +101,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           bandWeekend: Array.isArray(parsed.bandWeekend) ? parsed.bandWeekend : [2, 3],
           bandFeestdag: Array.isArray(parsed.bandFeestdag) ? parsed.bandFeestdag : [1, 2],
         });
+        setRulesetRowVersion(
+          typeof data?.data?.row_version === 'number' ? data.data.row_version : null
+        );
 
         const deadline = data?.data?.deadline;
         if (!deadline || new Date(deadline) < new Date()) {
@@ -144,11 +148,14 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         const rulesetRes = await fetch(`/api/periods/${periodId}/ruleset`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(ruleset),
+          body: JSON.stringify({ ...ruleset, rowVersion: rulesetRowVersion ?? undefined }),
         });
+        const rulesetData = await rulesetRes.json();
         if (!rulesetRes.ok) {
-          const data = await rulesetRes.json();
-          throw new Error(data.error?.message || 'Opslaan van venster/streefbereik mislukt');
+          throw new Error(rulesetData.error?.message || 'Opslaan van venster/streefbereik mislukt');
+        }
+        if (typeof rulesetData?.data?.row_version === 'number') {
+          setRulesetRowVersion(rulesetData.data.row_version);
         }
       }
 

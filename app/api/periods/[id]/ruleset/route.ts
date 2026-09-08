@@ -27,6 +27,7 @@ interface UpdateRulesetRequest {
   bandAvond?: [number, number];
   bandWeekend?: [number, number];
   bandFeestdag?: [number, number];
+  rowVersion?: number;
 }
 
 function isValidBand(band: unknown): band is [number, number] {
@@ -52,8 +53,8 @@ export async function PATCH(
     const body = (await parseJsonBody(req)) as UpdateRulesetRequest;
 
     const period = db
-      .prepare('SELECT id, status, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(id) as { id: string; status: string; bevroren_ruleset_json: string | null } | undefined;
+      .prepare('SELECT id, status, bevroren_ruleset_json, row_version FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(id) as { id: string; status: string; bevroren_ruleset_json: string | null; row_version: number } | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
@@ -96,6 +97,17 @@ export async function PATCH(
       }
     }
 
+    if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'ROW_VERSION_CONFLICT',
+          message: 'Deze periode is intussen door iemand anders aangepast. Laad de pagina opnieuw en probeer het nog eens.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
+    }
+
     let config: Record<string, unknown> = {};
     if (period.bevroren_ruleset_json) {
       try {
@@ -113,13 +125,28 @@ export async function PATCH(
       ...(body.bandFeestdag !== undefined ? { bandFeestdag: body.bandFeestdag } : {}),
     };
 
-    db.prepare(
-      'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, row_version = row_version + 1 WHERE id = ?'
-    ).run(JSON.stringify(updated), id);
+    // A period already sitting on a generated roster (GEGENEREERD) must go
+    // back to OPEN when its ruleset changes - otherwise the existing
+    // assignments (made under the old window/band) could reach
+    // GEPUBLICEERD without ever being regenerated against the new one.
+    // OPEN is exactly the status generate-roster already accepts and
+    // re-promotes to GEGENEREERD on its own next run, so this doesn't
+    // block the normal "adjust, then regenerate" flow this route exists
+    // for - it just removes the gap where a planner could adjust and then
+    // skip regenerating.
+    if (period.status === 'GEGENEREERD') {
+      db.prepare(
+        'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, status = ?, row_version = row_version + 1 WHERE id = ?'
+      ).run(JSON.stringify(updated), 'OPEN', id);
+    } else {
+      db.prepare(
+        'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, row_version = row_version + 1 WHERE id = ?'
+      ).run(JSON.stringify(updated), id);
+    }
 
-    const response: ApiSuccessResponse<{ ruleset: Record<string, unknown> }> = {
+    const response: ApiSuccessResponse<{ ruleset: Record<string, unknown>; row_version: number }> = {
       success: true,
-      data: { ruleset: updated },
+      data: { ruleset: updated, row_version: period.row_version + 1 },
     };
     return NextResponse.json(response);
   } catch (error) {
