@@ -88,8 +88,15 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
   // The template body has the first person's own link baked in - swap it
   // for each recipient's own link so editing the surrounding text doesn't
   // break their personal link.
+  const templateLink = reminders[0]?.personal_link;
+  // If a planner edits the textarea so heavily that the exact link string
+  // no longer appears, split/join below silently no-ops and every
+  // recipient's mailto body would keep person 0's link instead of their
+  // own - checked once per render so the UI can warn instead of letting
+  // that happen unnoticed.
+  const linkPlaceholderIntact = !templateLink || editedBody.includes(templateLink);
+
   const mailtoFor = (reminder: ReminderTemplate): string => {
-    const templateLink = reminders[0]?.personal_link;
     const body = templateLink
       ? editedBody.split(templateLink).join(reminder.personal_link)
       : editedBody;
@@ -301,9 +308,16 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                     rows={8}
                     className="w-full px-3 py-2 border rounded text-sm font-mono"
                   />
-                  <p className="text-xs text-neutral-500 italic">
-                    Wijzigingen gelden voor elke herinnering hieronder - ieders eigen persoonlijke link blijft intact.
-                  </p>
+                  {linkPlaceholderIntact ? (
+                    <p className="text-xs text-neutral-500 italic">
+                      Wijzigingen gelden voor elke herinnering hieronder - ieders eigen persoonlijke link blijft intact.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-red-700 font-medium">
+                      ⚠️ De persoonlijke link is uit de tekst verdwenen - iedereen zou nu dezelfde (verkeerde) link
+                      krijgen. Zet de link terug in de tekst voordat je een mail verstuurt.
+                    </p>
+                  )}
                 </div>
 
                 <p className="text-sm text-neutral-600 mb-4">
@@ -314,8 +328,16 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
                   {reminders.map((reminder) => (
                     <a
                       key={reminder.person_id}
-                      href={mailtoFor(reminder)}
-                      className="block p-3 border rounded hover:bg-blue-50 transition-colors"
+                      href={linkPlaceholderIntact ? mailtoFor(reminder) : undefined}
+                      aria-disabled={!linkPlaceholderIntact}
+                      onClick={(e) => {
+                        if (!linkPlaceholderIntact) e.preventDefault();
+                      }}
+                      className={`block p-3 border rounded transition-colors ${
+                        linkPlaceholderIntact
+                          ? 'hover:bg-blue-50 cursor-pointer'
+                          : 'opacity-50 cursor-not-allowed'
+                      }`}
                     >
                       <p className="font-medium text-neutral-900">{reminder.codenaam}</p>
                       <p className="text-xs text-neutral-600">
