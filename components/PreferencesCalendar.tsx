@@ -241,29 +241,38 @@ export function PreferencesCalendar({
   // so this is only ever called for slots the participant can actually edit.
   const applyPreferenceLevel = useCallback(
     (datum: string, teller: string, next: BlockLevel) => {
+      // The slot_id for a given (datum, teller) is static lookup data, not
+      // something this update mutates, so it's safe to read from the
+      // outer `preferences` state here rather than from inside the
+      // updater below. Keeping the network call and other side effects
+      // out of the setPreferences updater matters because React can (and
+      // in Strict Mode dev does) invoke an updater function more than
+      // once per update to check for impurities - a side effect inside it
+      // would fire that many times.
+      const slot = preferences.get(datum)?.slots.get(teller);
+      if (!slot) {
+        console.error('Slot not found for', datum, teller);
+        return;
+      }
+
       setHighlightDatum(datum);
       setPreferences((prev) => {
         const dayPref = prev.get(datum);
-        const slot = dayPref?.slots.get(teller);
-
-        if (!slot) {
-          console.error('Slot not found for', datum, teller);
-          return prev;
-        }
+        const prevSlot = dayPref?.slots.get(teller);
+        if (!prevSlot) return prev;
 
         const updated = new Map(prev);
         const updatedSlots = new Map(dayPref!.slots);
-        updatedSlots.set(teller, { slot_id: slot.slot_id, level: next, source: next ? 'MANUAL' : null });
+        updatedSlots.set(teller, { slot_id: prevSlot.slot_id, level: next, source: next ? 'MANUAL' : null });
         updated.set(datum, { datum, slots: updatedSlots });
-
-        setHasChanged(true);
-        onPreferencesChange?.(true);
-        savePreference(slot.slot_id, next);
-
         return updated;
       });
+
+      setHasChanged(true);
+      onPreferencesChange?.(true);
+      savePreference(slot.slot_id, next);
     },
-    [savePreference, onPreferencesChange]
+    [preferences, savePreference, onPreferencesChange]
   );
 
   // Left click: cycle null → VOORKEUR → LIEVER_NIET → ABSOLUUT → null
