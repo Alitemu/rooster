@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
 import { PartTimeCheckStep } from '@/components/PartTimeCheckStep';
@@ -96,6 +96,14 @@ export default function PersonalLinkPage() {
   const [parttimeConfirmed, setParttimeConfirmed] = useState(false);
   const [_preferencesChanged, setPreferencesChanged] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // Nothing on this page reacts to a coverage update, but a fresh inline
+  // `() => {}` on every render would still change PreferencesCalendar's
+  // `onCoverageUpdate` prop identity each time, re-firing its coverage
+  // fetch effect on every unrelated parent re-render instead of only when
+  // personId/periodId actually change (see that effect's useCallback
+  // deps). A stable no-op avoids that.
+  const noopCoverageUpdate = useCallback(() => {}, []);
 
   // Verify token and load person data
   useEffect(() => {
@@ -256,6 +264,16 @@ export default function PersonalLinkPage() {
   // same way. Viewing what was entered is never blocked, only changing it.
   const deadlinePassed = period.status !== 'GEPUBLICEERD' && new Date() > new Date(period.deadline);
 
+  // The sync from preferences/absences/deeltijd into the solver's input
+  // only runs while a period is OPEN (lib/absenceSync.ts, lib/parttimeSync.ts)
+  // - once a roster has been generated, a change saved here is stored but
+  // has no effect on the already-generated roster until the planner
+  // regenerates it by hand. Distinct from deadlinePassed: the deadline may
+  // still be in the future, so the form stays editable, but a save here
+  // would otherwise look like it "took" with no indication that it hasn't
+  // actually reached the roster yet.
+  const rosterAlreadyGenerated = period.status === 'GEGENEREERD';
+
   return (
     <div className="container-main py-8 space-y-6">
       {/* Header */}
@@ -291,6 +309,15 @@ export default function PersonalLinkPage() {
           <p className="text-sm text-amber-900">
             ⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt
             ingevuld, maar wijzigen kan niet meer.
+          </p>
+        </div>
+      )}
+
+      {!deadlinePassed && rosterAlreadyGenerated && (
+        <div className="card p-4 bg-amber-50 border border-amber-200">
+          <p className="text-sm text-amber-900">
+            ⚠️ Het rooster voor deze periode is al gegenereerd. Wijzigingen die je nu opslaat,
+            worden bewaard, maar tellen pas mee als de planner het rooster opnieuw genereert.
           </p>
         </div>
       )}
@@ -429,7 +456,7 @@ export default function PersonalLinkPage() {
             periodId={period.id}
             readOnly={deadlinePassed}
             onPreferencesChange={setPreferencesChanged}
-            onCoverageUpdate={() => {}}
+            onCoverageUpdate={noopCoverageUpdate}
           />
           <div className="flex gap-3">
             <button
