@@ -133,6 +133,7 @@ export function PreferencesCalendar({
   const [coverage, setCoverage] = useState<Map<string, CoverageInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [hasChanged, setHasChanged] = useState(false);
   const [highlightDatum, setHighlightDatum] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -211,10 +212,16 @@ export function PreferencesCalendar({
     if (tightest) setHighlightDatum(tightest.datum);
   }, [coverage, highlightDatum]);
 
-  // Debounced save
+  // Debounced save. The calendar already applied this change optimistically
+  // (see applyPreferenceLevel) before this runs - on failure `rollback`
+  // puts that one slot back to what it was, since otherwise a rejected
+  // change (e.g. BLOCK_BUDGET_EXCEEDED) left the calendar showing a state
+  // that was never actually saved, with no indication anything went wrong
+  // until the next full reload silently reverted it.
   const savePreference = useCallback(
-    async (slotId: string, level: BlockLevel) => {
+    async (slotId: string, level: BlockLevel, rollback: () => void) => {
       setIsSaving(true);
+      setSaveError(null);
       try {
         const res = await fetch(`/api/person/${personId}/preferences/slot/${slotId}`, {
           method: 'PATCH',
@@ -222,10 +229,14 @@ export function PreferencesCalendar({
           body: JSON.stringify({ level }),
         });
 
-        if (!res.ok) throw new Error('Failed to save preference');
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new Error(data?.error?.message || 'Opslaan van voorkeur mislukt');
+        }
         await fetchCoverage();
       } catch (error) {
-        console.error('Failed to save preference:', error);
+        rollback();
+        setSaveError(error instanceof Error ? error.message : 'Opslaan van voorkeur mislukt');
       } finally {
         setIsSaving(false);
       }
@@ -254,23 +265,29 @@ export function PreferencesCalendar({
         console.error('Slot not found for', datum, teller);
         return;
       }
+      const previousLevel = slot.level;
+      const previousSource = slot.source;
+
+      const setSlotTo = (level: BlockLevel, source: string | null) => {
+        setPreferences((prev) => {
+          const dayPref = prev.get(datum);
+          const prevSlot = dayPref?.slots.get(teller);
+          if (!prevSlot) return prev;
+
+          const updated = new Map(prev);
+          const updatedSlots = new Map(dayPref!.slots);
+          updatedSlots.set(teller, { slot_id: prevSlot.slot_id, level, source });
+          updated.set(datum, { datum, slots: updatedSlots });
+          return updated;
+        });
+      };
 
       setHighlightDatum(datum);
-      setPreferences((prev) => {
-        const dayPref = prev.get(datum);
-        const prevSlot = dayPref?.slots.get(teller);
-        if (!prevSlot) return prev;
-
-        const updated = new Map(prev);
-        const updatedSlots = new Map(dayPref!.slots);
-        updatedSlots.set(teller, { slot_id: prevSlot.slot_id, level: next, source: next ? 'MANUAL' : null });
-        updated.set(datum, { datum, slots: updatedSlots });
-        return updated;
-      });
+      setSlotTo(next, next ? 'MANUAL' : null);
 
       setHasChanged(true);
       onPreferencesChange?.(true);
-      savePreference(slot.slot_id, next);
+      savePreference(slot.slot_id, next, () => setSlotTo(previousLevel, previousSource));
     },
     [preferences, savePreference, onPreferencesChange]
   );
@@ -610,6 +627,11 @@ export function PreferencesCalendar({
       {isSaving && (
         <div className="sticky bottom-0 p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
           Voorkeuren opslaan...
+        </div>
+      )}
+      {saveError && !isSaving && (
+        <div className="sticky bottom-0 p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
+          {saveError} - de laatste wijziging is niet opgeslagen en teruggezet.
         </div>
       )}
 
