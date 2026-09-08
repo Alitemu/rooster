@@ -87,7 +87,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
 
     try {
       let url = `/api/planner/period/${periodId}/assignments?page=${page}`;
-      if (filterPerson) url += `&person_id=${filterPerson}`;
+      if (filterPerson) url += `&codenaam=${encodeURIComponent(filterPerson)}`;
       if (filterShiftType) url += `&shift_type=${filterShiftType}`;
 
       const res = await fetch(url);

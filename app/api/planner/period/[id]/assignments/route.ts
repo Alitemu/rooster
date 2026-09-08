@@ -23,6 +23,7 @@ export async function GET(
     const periodId = params.id;
     const searchParams = request.nextUrl.searchParams;
     const personId = searchParams.get('person_id');
+    const codenaam = searchParams.get('codenaam');
     const shiftType = searchParams.get('shift_type');
     const page = parseInt(searchParams.get('page') || '1');
     const pageSize = parseInt(searchParams.get('page_size') || '50');
@@ -34,7 +35,7 @@ export async function GET(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
       );
     }
@@ -64,6 +65,14 @@ export async function GET(
     if (personId) {
       query += ' AND a.person_id = ?';
       params_list.push(personId);
+    }
+
+    // Free-text filter used by the "Filter op codenaam" input - a
+    // partial, case-insensitive match, since the planner types as they
+    // go rather than picking from a known id.
+    if (codenaam) {
+      query += ' AND p.codenaam LIKE ?';
+      params_list.push(`%${codenaam}%`);
     }
 
     if (shiftType) {
