@@ -40,12 +40,17 @@ export async function POST(
       );
     }
 
-    // GEGENEREERD is included so a planner can regenerate - e.g. after
-    // manually filling some gaps and wanting the solver to take another
-    // pass at the rest, or after a preference changed. GEPUBLICEERD stays
-    // excluded: regenerating after publish would silently invalidate a
-    // roster staff have already been told about.
-    if (!['CONCEPT', 'OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
+    // CONCEPT is deliberately excluded: only /api/periods/[id]/open
+    // transitions CONCEPT -> OPEN, and that's also the only place that
+    // rounds dates to Monday/Sunday, checks for active staff, and applies
+    // carry-over from the previous published period - generating straight
+    // from CONCEPT would silently skip all three. GEGENEREERD is included
+    // so a planner can regenerate - e.g. after manually filling some gaps
+    // and wanting the solver to take another pass at the rest, or after a
+    // preference changed. GEPUBLICEERD stays excluded: regenerating after
+    // publish would silently invalidate a roster staff have already been
+    // told about.
+    if (!['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       return NextResponse.json(
         { success: false, error: `Rooster kan niet gegenereerd worden vanuit status ${period.status}` },
         { status: 400 }
@@ -88,7 +93,7 @@ export async function POST(
 
     if (allSlots.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No slots found. Generate slots first.' },
+        { success: false, error: 'Geen diensten gevonden. Genereer eerst de diensten voor deze periode.' },
         { status: 400 }
       );
     }
@@ -127,7 +132,7 @@ export async function POST(
 
     if (people.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'No active pool members' },
+        { success: false, error: 'Geen actieve poolleden voor deze periode' },
         { status: 400 }
       );
     }
@@ -275,8 +280,12 @@ export async function POST(
 
     if (!solverResponse.ok) {
       const error = await solverResponse.text();
+      // Never forward the solver's raw response (stack traces, internal
+      // exception text) to the client - log it server-side and return a
+      // generic, client-safe Dutch message instead, per CLAUDE.md.
+      console.error('[generate-roster] solver error', error);
       return NextResponse.json(
-        { success: false, error: `Solver error: ${error}` },
+        { success: false, error: 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.' },
         { status: 500 }
       );
     }

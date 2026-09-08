@@ -95,7 +95,7 @@ export async function PATCH(
         success: false,
         error: {
           code: 'INCOMPLETE',
-          message: `Prior assignments are incomplete: ${entryCount} of ${expectedCount} entries filled in`,
+          message: `Overloopgegevens zijn nog niet compleet: ${entryCount} van ${expectedCount} regels ingevuld`,
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -103,7 +103,7 @@ export async function PATCH(
 
     const now = new Date().toISOString();
     db.prepare(
-      'UPDATE dienstrooster_schedule_period SET overloop_bevestigd_op = ? WHERE id = ?'
+      'UPDATE dienstrooster_schedule_period SET overloop_bevestigd_op = ?, row_version = row_version + 1 WHERE id = ?'
     ).run(now, id);
 
     const response: ApiSuccessResponse<{ confirmed_op: string }> = {
