@@ -64,10 +64,17 @@ class ObjectiveBuilder:
         cost when assigned, it subtracts one - the more a person's stated
         preferences are honoured, the lower the total objective.
 
-        Weighted below band_imbalance (0.5) on purpose: when two people
-        want the same day, fairness and coverage still decide first, and a
-        preference only tips the balance between choices that were already
-        equally good on every other term.
+        Weighted below band_imbalance (0.5) on purpose: for a single
+        VOORKEUR slot, this only tips the balance between choices that were
+        already equally good on every other term - fairness and coverage
+        still decide first. That guarantee is per-slot, not global: the
+        reward is additive, so a person with several honoured preferences
+        in the same solve can accumulate more than 0.5 in total
+        (2+ x 0.3), which can outweigh a single unit of band_imbalance. Not
+        a bug - band_slack's own tiered pricing (band_deviation_penalty,
+        default a flat 5.0/unit) still dominates in practice - but the
+        0.3 weight alone does not, by itself, cap total influence across
+        multiple preferences the way it caps a single one.
         """
         reward = 0
 

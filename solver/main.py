@@ -147,9 +147,22 @@ class RuleSet(BaseModel):
 
     @field_validator('band_deviation_penalty')
     @classmethod
-    def _penalty_tiers_are_nonnegative(cls, value: list[float]) -> list[float]:
-        if any(tier < 0 for tier in value):
-            raise ValueError('band_deviation_penalty tiers must be >= 0')
+    def _penalty_tiers_are_positive(cls, value: list[float]) -> list[float]:
+        # Zero (not just negative) must be rejected too: the documented
+        # weight hierarchy is shortfall > band_slack > soft_blocking >
+        # preferred (VOORKEUR), with the latter two hardcoded in solver.py
+        # at 1.0 and 0.3 - a tier of 0 (or an empty list, silently replaced
+        # by the [5.0] default deeper in objective.py) makes that specific
+        # unit of band deviation genuinely free, and since tier_cost()
+        # extrapolates every tier beyond the configured ones from the last
+        # one, a trailing 0 makes ALL further deviation free too. That lets
+        # a ruleset config alone - no code change - turn off the fairness
+        # enforcement the solver exists for while leaving VOORKEUR's
+        # hardcoded reward untouched, silently inverting the hierarchy.
+        if not value:
+            raise ValueError('band_deviation_penalty must not be empty')
+        if any(tier <= 0 for tier in value):
+            raise ValueError('band_deviation_penalty tiers must all be > 0')
         return value
 
 

@@ -46,6 +46,26 @@ def test_negative_band_deviation_penalty_tier_is_rejected():
         RuleSet(band_deviation_penalty=[5.0, -1.0])
 
 
+def test_zero_band_deviation_penalty_tier_is_rejected():
+    """A tier of exactly 0 (not just negative) would make that unit of band
+    deviation free - and since tier_cost() extrapolates every tier beyond
+    the configured list from the last one, a trailing 0 makes ALL further
+    deviation free too, silently disabling the fairness enforcement the
+    solver exists for while VOORKEUR's hardcoded 0.3 reward stays active -
+    inverting the documented shortfall > band_slack > soft > preferred
+    weight hierarchy via ruleset config alone, no code change needed."""
+    with pytest.raises(ValidationError):
+        RuleSet(band_deviation_penalty=[0.0])
+
+
+def test_empty_band_deviation_penalty_is_rejected():
+    """An empty list used to be silently replaced by the [5.0] default
+    deeper in objective.py's `penalty_tiers or [5.0]` - accepted here but
+    not doing what was explicitly asked for."""
+    with pytest.raises(ValidationError):
+        RuleSet(band_deviation_penalty=[])
+
+
 def test_band_deviation_multiplier_below_one_is_rejected():
     """multiplier<1 makes tiers beyond the configured list de-escalate
     instead of escalate, undoing the tiered pricing's whole point."""
