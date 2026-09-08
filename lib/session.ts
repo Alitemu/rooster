@@ -20,7 +20,6 @@ export interface PersonSessionPayload {
 export interface StaffSessionPayload {
   kind: 'staff';
   personId: string;
-  role: 'ADMIN' | 'PLANNER';
 }
 
 export type SessionPayload = PersonSessionPayload | StaffSessionPayload;

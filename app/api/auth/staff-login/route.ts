@@ -99,7 +99,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     setSessionCookie(
       response,
-      { kind: 'staff', personId: person.id, role: person.rol },
+      { kind: 'staff', personId: person.id },
       STAFF_SESSION_MAX_AGE_SECONDS
     );
 
