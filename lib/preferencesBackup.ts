@@ -97,7 +97,15 @@ export function writePreferencesBackup(personId: string, periodId: string): stri
 
   const codenaamSlug = slugify(person.codenaam);
   const periodSlug = slugify(period.naam);
-  const prefix = `${codenaamSlug}__${periodSlug}__`;
+  // The dedup prefix (used both to write and, below, to delete this
+  // person+period's previous file) has to be built from period.id, which
+  // is always unique - dienstrooster_schedule_period.naam has no
+  // uniqueness constraint, so two different periods with the same or
+  // similarly-slugifying name used to share a prefix, and saving a
+  // backup for one would silently delete the other's file. periodSlug is
+  // still folded into the filename (after the id) purely so a human
+  // browsing the backups folder can recognize the period by name.
+  const prefix = `${codenaamSlug}__${periodId}__`;
 
   // Remove this person+period's previous backup(s) before writing the new
   // one, so a change always leaves exactly one, current file behind.
@@ -107,7 +115,7 @@ export function writePreferencesBackup(personId: string, periodId: string): stri
     }
   }
 
-  const filePath = path.join(BACKUP_DIR, `${prefix}${timestampForFilename(now)}.csv`);
+  const filePath = path.join(BACKUP_DIR, `${prefix}${periodSlug}__${timestampForFilename(now)}.csv`);
   fs.writeFileSync(filePath, csvLines.join('\n') + '\n', 'utf-8');
 
   return filePath;
