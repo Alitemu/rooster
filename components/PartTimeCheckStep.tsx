@@ -67,20 +67,28 @@ export function PartTimeCheckStep({
   const [blockedElsewhereDays, setBlockedElsewhereDays] = useState<BlockedElsewhereDay[]>([]);
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadGeneratedDays = async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         const res = await fetch(
           `/api/person/${personId}/parttime-patterns/generated-days?period_id=${periodId}`
         );
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || 'Ophalen van deeltijddagen mislukt');
         setGeneratedDays(data.data?.generated_days || []);
         setBlockedElsewhereDays(data.data?.blocked_elsewhere_days || []);
-      } catch {
+      } catch (err) {
+        // A reset to empty lists here used to read as "je hebt geen
+        // deeltijddagen deze periode" even though the fetch itself
+        // failed - that let a participant confirm days that were never
+        // actually verified. Surface the failure instead of hiding it.
         setGeneratedDays([]);
         setBlockedElsewhereDays([]);
+        setLoadError(err instanceof Error ? err.message : 'Ophalen van deeltijddagen mislukt');
       } finally {
         setLoading(false);
       }
@@ -128,7 +136,13 @@ export function PartTimeCheckStep({
         </div>
       )}
 
-      {generatedDays.length === 0 && blockedElsewhereDays.length === 0 && (
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 rounded p-3">
+          <p className="text-sm text-red-800">⚠️ {loadError} - de dagen hieronder zijn niet betrouwbaar.</p>
+        </div>
+      )}
+
+      {!loadError && generatedDays.length === 0 && blockedElsewhereDays.length === 0 && (
         <p className="text-sm text-neutral-600">
           {patterns.length === 0
             ? 'Geen deeltijdpatronen ingesteld.'
@@ -248,13 +262,14 @@ export function PartTimeCheckStep({
           actually anything to check, so "geen deeltijdpatroon" doesn't have
           to be confirmed with a sentence about checking a calendar that's
           empty. */}
-      <label className="flex items-start gap-3 cursor-pointer">
+      <label className={`flex items-start gap-3 ${loadError ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
         <input
           type="checkbox"
           checked={confirmed}
+          disabled={!!loadError}
           onChange={(e) => setConfirmed(e.target.checked)}
           className="mt-1 h-5 w-5 rounded border-neutral-300 text-blue-600
-                     focus:ring-blue-500 cursor-pointer"
+                     focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
         />
         <span className="text-sm text-neutral-700">
           {patterns.length === 0 ? (

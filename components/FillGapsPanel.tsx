@@ -74,13 +74,24 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
   const [assigning, setAssigning] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
+  // A failed load used to leave `slots` at null forever, and the render
+  // below returns null for that case - the whole panel (including any
+  // "N diensten nog niet ingevuld" warning) would silently vanish, so a
+  // planner could publish an actually-incomplete roster without ever
+  // seeing that. loadError is tracked separately so a failure always
+  // renders something.
   const load = useCallback(async () => {
-    const res = await fetch(`/api/planner/period/${periodId}/unfilled-slots`);
-    const data = await res.json();
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/planner/period/${periodId}/unfilled-slots`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Laden van openstaande diensten mislukt');
+      setLoadError(null);
       setSlots(data.data);
       if (data.data.length === 0 && onAllFilled) onAllFilled();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Laden van openstaande diensten mislukt');
     }
   }, [periodId, onAllFilled]);
 
@@ -112,6 +123,20 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
       setAssigning(null);
     }
   };
+
+  if (loadError) {
+    return (
+      <div className="card p-4 bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+        <p className="text-sm text-red-800">⚠️ {loadError}</p>
+        <button
+          onClick={() => load()}
+          className="shrink-0 px-3 py-1.5 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+        >
+          Opnieuw proberen
+        </button>
+      </div>
+    );
+  }
 
   if (slots === null) {
     return null;
