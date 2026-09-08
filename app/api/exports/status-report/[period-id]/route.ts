@@ -19,6 +19,13 @@ function csvField(value: string | number | null): string {
   return `"${String(value ?? '').replace(/"/g, '""')}"`;
 }
 
+// period.naam is free-text, planner-entered with no character restriction -
+// embedded in a quoted Content-Disposition filename below, so a `"` would
+// break out of the quoted string and a CR/LF could corrupt the header.
+function sanitizeFilenamePart(value: string): string {
+  return value.replace(/[\r\n"\\]/g, '_');
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { 'period-id': string } }
@@ -103,7 +110,7 @@ export async function GET(
     return new NextResponse(csvContent, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="status_report_${period.naam.replace(/ /g, '_')}.csv"`,
+        'Content-Disposition': `attachment; filename="status_report_${sanitizeFilenamePart(period.naam.replace(/ /g, '_'))}.csv"`,
       },
     });
   } catch (error) {
