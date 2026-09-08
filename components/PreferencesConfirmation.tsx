@@ -66,7 +66,8 @@ export function PreferencesConfirmation({
       });
 
       if (!res.ok) {
-        throw new Error('Indienen van voorkeuren mislukt');
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error?.message || 'Indienen van voorkeuren mislukt');
       }
 
       onSubmit?.(true);
