@@ -58,16 +58,20 @@ export async function POST(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // CONCEPT is excluded: only /api/periods/[id]/open rounds a period's
-    // dates to Monday/Sunday before persisting them, and a CONCEPT
-    // period's start_datum/eind_datum could still be whatever the
-    // planner typed - generating slots straight from them would silently
-    // skip that rounding, same reasoning as generate-roster's status
-    // whitelist.
-    if (period.status === 'CONCEPT') {
+    // Whitelist, not a CONCEPT-only blacklist - matches the convention
+    // every sibling route uses (manual-assign, reassign, delete,
+    // generate-roster), so a future status value is excluded by default
+    // instead of silently admitted. CONCEPT is excluded because only
+    // /api/periods/[id]/open rounds a period's dates to Monday/Sunday
+    // before persisting them - generating slots straight from a CONCEPT
+    // period's still-unrounded dates would silently skip that. GEPUBLICEERD
+    // is excluded for the same reason generate-roster excludes it:
+    // regenerating slots for an already-published roster shouldn't happen
+    // silently.
+    if (!['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_STATUS', message: 'Diensten kunnen niet gegenereerd worden vóórdat de periode geopend is' },
+        error: { code: 'INVALID_STATUS', message: `Diensten kunnen niet gegenereerd worden vanuit status ${period.status}` },
       };
       return NextResponse.json(response, { status: 400 });
     }
