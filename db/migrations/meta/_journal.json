@@ -64,6 +64,13 @@
       "when": 1788800300000,
       "tag": "0008_schedule_period_status_check",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "5",
+      "when": 1788800400000,
+      "tag": "0009_shift_slot_audit_log_check",
+      "breakpoints": true
     }
   ]
 }

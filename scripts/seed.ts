@@ -89,9 +89,11 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS dienstrooster_pool (
       id TEXT PRIMARY KEY,
       naam TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'ACHTERWACHT',
+      type TEXT NOT NULL DEFAULT 'ACHTERWACHT'
+        CHECK(type IN ('ACHTERWACHT', 'NEURO', 'KINDER', 'INTERVENTIE', 'AIOS')),
       ruleset_id TEXT NOT NULL,
-      verdeelmodus TEXT NOT NULL DEFAULT 'GELIJK',
+      verdeelmodus TEXT NOT NULL DEFAULT 'GELIJK'
+        CHECK(verdeelmodus IN ('GELIJK', 'NAAR_RATO')),
       actief INTEGER NOT NULL DEFAULT 1,
       aangemaakt_op TEXT NOT NULL
     );
@@ -181,7 +183,8 @@ async function createTables() {
       weekend_id TEXT,
       is_feestdag INTEGER NOT NULL DEFAULT 0,
       feestdag_naam TEXT,
-      feestdag_groep TEXT,
+      feestdag_groep TEXT
+        CHECK(feestdag_groep IN ('NIEUWJAAR', 'PASEN', 'KONINGSDAG', 'BEVRIJDINGSDAG', 'HEMELVAART', 'PINKSTEREN', 'KERST')),
       benodigd_aantal_personen INTEGER NOT NULL DEFAULT 1,
       shift_block_id TEXT
     );
@@ -209,9 +212,11 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS dienstrooster_holiday_history (
       id TEXT PRIMARY KEY,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
-      feestdag_groep TEXT NOT NULL,
+      feestdag_groep TEXT NOT NULL
+        CHECK(feestdag_groep IN ('NIEUWJAAR', 'PASEN', 'KONINGSDAG', 'BEVRIJDINGSDAG', 'HEMELVAART', 'PINKSTEREN', 'KERST')),
       jaar INTEGER NOT NULL,
       bron TEXT NOT NULL
+        CHECK(bron IN ('SYSTEEM', 'IMPORT', 'HANDMATIG'))
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS holiday_history_uniq
@@ -268,7 +273,8 @@ async function createTables() {
       actor_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       entiteit TEXT NOT NULL,
       entiteit_id TEXT NOT NULL,
-      actie TEXT NOT NULL,
+      actie TEXT NOT NULL
+        CHECK(actie IN ('CREATE', 'UPDATE', 'DELETE', 'PUBLISH', 'IMPORT', 'GENERATE_ROSTER', 'MANUAL_ASSIGN', 'CANCEL', 'REJECT', 'APPROVE')),
       oud_json TEXT,
       nieuw_json TEXT,
       tijdstip TEXT NOT NULL
@@ -301,7 +307,8 @@ async function createTables() {
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       van_datum TEXT NOT NULL,
       tot_datum TEXT NOT NULL,
-      soort TEXT NOT NULL,
+      soort TEXT NOT NULL
+        CHECK(soort IN ('VAKANTIE', 'ZIEK', 'VERLOF', 'OVERIG')),
       notitie TEXT,
       aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
       aangemaakt_op TEXT NOT NULL

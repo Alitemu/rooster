@@ -383,8 +383,13 @@ export const auditLog = sqliteTable(
     actor_id: text('actor_id').notNull().references(() => person.id),
     entiteit: text('entiteit').notNull(), // Table name
     entiteit_id: text('entiteit_id').notNull(), // Record ID
+    // The full set of values every route actually inserts - broader than
+    // the original 5-value CRUD-ish set (CREATE/UPDATE/DELETE/PUBLISH/
+    // IMPORT still cover generic entity changes; GENERATE_ROSTER,
+    // MANUAL_ASSIGN, CANCEL, REJECT, APPROVE are the more specific
+    // actions several routes log instead of a generic CREATE/UPDATE).
     actie: text('actie', {
-      enum: ['CREATE', 'UPDATE', 'DELETE', 'PUBLISH', 'IMPORT'],
+      enum: ['CREATE', 'UPDATE', 'DELETE', 'PUBLISH', 'IMPORT', 'GENERATE_ROSTER', 'MANUAL_ASSIGN', 'CANCEL', 'REJECT', 'APPROVE'],
     }).notNull(),
     oud_json: text('oud_json'), // Previous state
     nieuw_json: text('nieuw_json'), // New state
