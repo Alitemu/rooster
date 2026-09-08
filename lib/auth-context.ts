@@ -28,6 +28,17 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
   if (!session) return null;
 
   if (session.kind === 'staff') {
+    // A staff session cookie is self-contained and good for up to 12
+    // hours - without re-checking here, deactivating an ADMIN/PLANNER
+    // account would only block a *future* login, while a session issued
+    // just before deactivation kept full access until it naturally
+    // expired. Mirrors the same re-check already done below for a
+    // person session's revoked-link case.
+    const stillActive = db
+      .prepare(`SELECT 1 FROM dienstrooster_person WHERE id = ? AND actief = 1`)
+      .get(session.personId);
+    if (!stillActive) return null;
+
     return {
       userId: session.personId,
       role: session.role,

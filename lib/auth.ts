@@ -43,6 +43,18 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 /**
+ * A fixed bcrypt hash that never matches any real password. A login route
+ * that skips bcrypt.compare entirely when the account lookup itself
+ * failed (unknown codenaam, deactivated account, no password set)
+ * responds measurably faster than the real-password path - comparing
+ * against this dummy hash in that case keeps the timing close to a real
+ * attempt, closing the side-channel that would otherwise let a caller
+ * distinguish "this codenaam exists" from "it doesn't" purely by
+ * response time.
+ */
+export const DUMMY_PASSWORD_HASH = bcrypt.hashSync('dummy-password-for-timing-safety', 12);
+
+/**
  * Generate TOTP secret for 2FA setup
  * Returns secret and QR code data URL
  */
@@ -59,16 +71,39 @@ export function generateTOTPSecret(name: string, issuer: string = 'Dienstrooster
   };
 }
 
+// Per-secret last-accepted time-step, so a TOTP code (or one intercepted
+// in transit) can't be replayed again within its own ±2-window validity
+// - same threat model as a reused password, but a code is only 6 digits
+// and the window deliberately tolerates clock drift, so without this a
+// captured code stays usable for up to ~2.5 minutes. In-memory only:
+// this app runs as a single process (see lib/rateLimit.ts for the same
+// reasoning), and losing this on a restart just re-opens a ~2.5 minute
+// window rather than anything worse.
+const lastUsedTotpStep = new Map<string, number>();
+
 /**
- * Verify a TOTP code
+ * Verify a TOTP code, rejecting a code from a time-step already consumed
+ * by an earlier successful verification for this secret.
  */
 export function verifyTOTPCode(secret: string, code: string): boolean {
-  return speakeasy.totp.verify({
+  const result = speakeasy.totp.verifyDelta({
     secret,
     encoding: 'base32',
     token: code,
     window: 2, // Allow ±2 time windows (30-second windows)
   });
+  if (!result) return false;
+
+  const currentStep = Math.floor(Date.now() / 1000 / 30);
+  const usedStep = currentStep + result.delta;
+
+  const lastUsed = lastUsedTotpStep.get(secret);
+  if (lastUsed !== undefined && usedStep <= lastUsed) {
+    return false;
+  }
+
+  lastUsedTotpStep.set(secret, usedStep);
+  return true;
 }
 
 /**
