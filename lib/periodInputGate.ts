@@ -26,7 +26,7 @@ export function checkPeriodAcceptsInput(period: PeriodForInputGate, now: Date = 
     return {
       allowed: false,
       code: 'PERIOD_NOT_OPEN',
-      message: `Preferences are read-only once the period is ${period.status}`,
+      message: `Voorkeuren zijn alleen-lezen zodra de periode in status ${period.status} staat`,
     };
   }
 
