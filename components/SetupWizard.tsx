@@ -999,7 +999,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             {staffLoading ? (
               <div className="border rounded p-4 text-sm text-neutral-600 text-center">Personeel laden...</div>
             ) : (
-              <div className="border rounded overflow-hidden">
+              <div className="border rounded overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-neutral-100">
                     <tr>
