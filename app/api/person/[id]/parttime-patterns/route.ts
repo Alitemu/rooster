@@ -132,8 +132,20 @@ export async function POST(
         success: false,
         error: {
           code: 'INVALID_FREQUENTIE',
-          message: `Invalid frequentie: ${frequentie}`,
+          message: `Onbekende frequentie: ${frequentie}`,
         },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // Same check AbsenceManager's create route already does - a reversed
+    // range is silently accepted otherwise (it just matches zero days, so
+    // nothing crashes), inconsistent with the sibling feature and
+    // confusing for a planner/participant who mistyped the two dates.
+    if (geldig_vanaf > geldig_tot) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_RANGE', message: '"Vanaf" moet vóór of op "tot en met" liggen' },
       };
       return NextResponse.json(response, { status: 400 });
     }

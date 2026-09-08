@@ -63,7 +63,7 @@ export async function PATCH(
     if (!pattern) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PATTERN_NOT_FOUND', message: `Pattern ${patternId} not found` },
+        error: { code: 'PATTERN_NOT_FOUND', message: `Patroon ${patternId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -90,6 +90,18 @@ export async function PATCH(
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'NO_UPDATES', message: 'Geen velden om bij te werken' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // Same check the create route enforces - a reversed range is
+    // otherwise silently accepted (it just matches zero days).
+    const newVanaf = updates.geldig_vanaf ?? pattern.geldig_vanaf;
+    const newTot = updates.geldig_tot ?? pattern.geldig_tot;
+    if (newVanaf > newTot) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_RANGE', message: '"Vanaf" moet vóór of op "tot en met" liggen' },
       };
       return NextResponse.json(response, { status: 400 });
     }
