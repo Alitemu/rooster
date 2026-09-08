@@ -43,6 +43,17 @@ function daysBeforeDeadlineFromOverride(override: string | null, deadline: strin
   return Math.ceil(msRemaining / (1000 * 60 * 60 * 24));
 }
 
+// The "urgent" milestone is configurable per period (dienstrooster_reminder_
+// schedule) and isn't necessarily "1 day out" - a planner can set the last
+// milestone at, say, 3 days. Hardcoding "morgen" in the urgent subject line
+// was factually wrong whenever the milestone that actually fired wasn't
+// exactly 1 day before the deadline.
+function relativeDeadlineWording(daysBeforeDeadline: number): string {
+  if (daysBeforeDeadline <= 0) return 'vandaag';
+  if (daysBeforeDeadline === 1) return 'morgen';
+  return `over ${daysBeforeDeadline} dagen`;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { 'period-id': string } }
@@ -123,7 +134,7 @@ export async function GET(
 
       const subject =
         urgency === 'urgent'
-          ? `DRINGEND: voorkeuren voor ${period.naam} moeten morgen binnen zijn`
+          ? `DRINGEND: voorkeuren voor ${period.naam} moeten ${relativeDeadlineWording(daysBeforeDeadline)} binnen zijn`
           : urgency === 'moderate'
             ? `Herinnering: voorkeuren voor ${period.naam} moeten binnenkort binnen zijn`
             : `Herinnering: voorkeuren voor ${period.naam} nog niet ontvangen`;
