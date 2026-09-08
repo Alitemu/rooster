@@ -123,7 +123,8 @@ async function createTables() {
       start_datum TEXT NOT NULL,
       eind_datum TEXT NOT NULL,
       deadline TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'CONCEPT',
+      status TEXT NOT NULL DEFAULT 'CONCEPT'
+        CHECK(status IN ('CONCEPT', 'OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD')),
       bevroren_ruleset_json TEXT,
       overloop_bevestigd_op TEXT,
       gepubliceerd_op TEXT,
