@@ -103,6 +103,11 @@ interface CorrectionReasonOption {
 // of 2) than a real correction, so it gets flagged without blocking entry.
 const CORRECTION_AANTAL_WARNING_THRESHOLD = 3;
 
+const DISTRIBUTION_MODE_LABELS: Record<string, string> = {
+  GELIJK: 'Gelijk',
+  NAAR_RATO: 'Naar rato',
+};
+
 const CORRECTION_TOP_LEVEL_LABELS: Record<CorrectionTopLevel, string> = {
   RUIL: 'Ongelijke ruil',
   AVOND: 'Avonddienst',
@@ -222,7 +227,9 @@ export function SetupWizard({ period, onComplete }: Props) {
     parttimeExempt: true,
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
+  const [balanceParseWarnings, setBalanceParseWarnings] = useState<string[]>([]);
   const [holidayRows, setHolidayRows] = useState<HolidayRow[]>([]);
+  const [holidayParseWarnings, setHolidayParseWarnings] = useState<string[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [correctionFormOpen, setCorrectionFormOpen] = useState(false);
   const [correctionForm, setCorrectionForm] = useState({
@@ -249,7 +256,10 @@ export function SetupWizard({ period, onComplete }: Props) {
     const loadCapacity = async () => {
       setCapacityLoading(true);
       try {
-        const params = new URLSearchParams({ window_weeks: String(windowConfig.windowWeeks) });
+        const params = new URLSearchParams({
+          window_weeks: String(windowConfig.windowWeeks),
+          distribution_mode: distributionConfig.mode,
+        });
         if (periodData.start_datum) params.set('start_datum', periodData.start_datum);
         if (periodData.eind_datum) params.set('eind_datum', periodData.eind_datum);
 
@@ -281,7 +291,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
     loadCapacity();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched]);
+  }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
 
   // Membership is_active is purely date-range-based (geldig_vanaf/tot
   // overlapping the period), so "activating" someone for this period just
@@ -513,34 +523,111 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
   };
 
+  // A plain split(',') cuts a quoted field containing a comma (e.g. a
+  // codenaam or note exported from Excel as `"foo, bar"`) into two cells,
+  // silently misaligning every column after it. This handles the common
+  // double-quote CSV convention (a "" inside a quoted field is a literal
+  // quote) without pulling in a full CSV library for what's still a
+  // simple, few-column import.
   const parseCsv = (text: string): string[][] => {
-    return text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0)
-      .map((line) => line.split(',').map((cell) => cell.trim()));
+    const rows: string[][] = [];
+    for (const rawLine of text.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line) continue;
+      const cells: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+        if (inQuotes) {
+          if (char === '"') {
+            if (line[i + 1] === '"') {
+              current += '"';
+              i++;
+            } else {
+              inQuotes = false;
+            }
+          } else {
+            current += char;
+          }
+        } else if (char === '"') {
+          inQuotes = true;
+        } else if (char === ',') {
+          cells.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      cells.push(current.trim());
+      rows.push(cells);
+    }
+    return rows;
+  };
+
+  // A missing cell means "no delta" (0) - intentional and silent. A cell
+  // that's present but not a whole number (a typo like "N/A" or "1O") used
+  // to fall into the exact same `|| 0` bucket as a real, deliberate zero,
+  // with no way to tell them apart. This keeps the same fallback but
+  // reports which rows hit it, so a typo is visible instead of silently
+  // importing as nothing happened.
+  const parseOptionalInt = (cell: string | undefined): { value: number; invalid: boolean } => {
+    const trimmed = (cell ?? '').trim();
+    if (trimmed === '') return { value: 0, invalid: false };
+    const parsed = Number(trimmed);
+    if (!Number.isInteger(parsed)) return { value: 0, invalid: true };
+    return { value: parsed, invalid: false };
   };
 
   const handleBalancesFile = async (file: File) => {
     const text = await file.text();
     const [, ...dataLines] = parseCsv(text); // skip header row
-    const rows: BalanceRow[] = dataLines.map(([codenaam, avond, weekend]) => ({
-      codenaam,
-      AVOND_delta: parseInt(avond) || 0,
-      WEEKEND_delta: parseInt(weekend) || 0,
-    }));
+    const warnings: string[] = [];
+    const seenCodenamen = new Set<string>();
+    const rows: BalanceRow[] = [];
+    dataLines.forEach(([codenaam, avond, weekend], i) => {
+      const rowNum = i + 2; // header is row 1
+      if (!codenaam) return;
+      if (seenCodenamen.has(codenaam)) {
+        warnings.push(`Rij ${rowNum}: codenaam "${codenaam}" komt meerdere keren voor - beide rijen worden bij elkaar opgeteld`);
+      }
+      seenCodenamen.add(codenaam);
+      const avondParsed = parseOptionalInt(avond);
+      const weekendParsed = parseOptionalInt(weekend);
+      if (avondParsed.invalid) {
+        warnings.push(`Rij ${rowNum} (${codenaam}): avondwaarde "${avond}" is geen geheel getal, als 0 verwerkt`);
+      }
+      if (weekendParsed.invalid) {
+        warnings.push(`Rij ${rowNum} (${codenaam}): weekendwaarde "${weekend}" is geen geheel getal, als 0 verwerkt`);
+      }
+      rows.push({ codenaam, AVOND_delta: avondParsed.value, WEEKEND_delta: weekendParsed.value });
+    });
     setBalanceRows(rows);
+    setBalanceParseWarnings(warnings);
   };
 
   const handleHolidaysFile = async (file: File) => {
     const text = await file.text();
     const [, ...dataLines] = parseCsv(text); // skip header row
-    const rows: HolidayRow[] = dataLines.map(([codenaam, holiday_group, year]) => ({
-      codenaam,
-      holiday_group,
-      year: parseInt(year) || 0,
-    }));
+    const warnings: string[] = [];
+    const seen = new Set<string>();
+    const rows: HolidayRow[] = [];
+    dataLines.forEach(([codenaam, holiday_group, year], i) => {
+      const rowNum = i + 2;
+      if (!codenaam) return;
+      const dedupeKey = `${codenaam}|${holiday_group}|${year}`;
+      if (seen.has(dedupeKey)) {
+        warnings.push(`Rij ${rowNum}: "${codenaam}" / ${holiday_group} / ${year} komt al eerder voor in dit bestand`);
+      }
+      seen.add(dedupeKey);
+      const yearParsed = parseOptionalInt(year);
+      if (yearParsed.invalid || yearParsed.value === 0) {
+        warnings.push(`Rij ${rowNum} (${codenaam}): jaartal "${year}" is geen geldig geheel getal`);
+      }
+      rows.push({ codenaam, holiday_group, year: yearParsed.value });
+    });
     setHolidayRows(rows);
+    setHolidayParseWarnings(warnings);
   };
 
   const correctionReasonOptions = CORRECTION_REASONS_BY_TOP_LEVEL[correctionForm.topLevel];
@@ -667,20 +754,44 @@ export function SetupWizard({ period, onComplete }: Props) {
         }).catch(() => null);
       }
 
+      const importWarnings: string[] = [];
+
       if (balanceRows.length > 0) {
-        await fetch(`/api/planner/period/${period.id}/import-balances`, {
+        const balancesRes = await fetch(`/api/planner/period/${period.id}/import-balances`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rows: balanceRows }),
         }).catch(() => null);
+        if (!balancesRes || !balancesRes.ok) {
+          importWarnings.push('Importeren van beginsaldi is volledig mislukt.');
+        } else {
+          const balancesData = await balancesRes.json().catch(() => null);
+          const rowErrors: string[] = balancesData?.data?.errors || [];
+          if (rowErrors.length > 0) {
+            importWarnings.push(
+              `${rowErrors.length} rij(en) in de beginsaldi zijn overgeslagen: ${rowErrors.join('; ')}`
+            );
+          }
+        }
       }
 
       if (holidayRows.length > 0) {
-        await fetch(`/api/planner/period/${period.id}/import-holidays`, {
+        const holidaysRes = await fetch(`/api/planner/period/${period.id}/import-holidays`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rows: holidayRows }),
         }).catch(() => null);
+        if (!holidaysRes || !holidaysRes.ok) {
+          importWarnings.push('Importeren van feestdaghistorie is volledig mislukt.');
+        } else {
+          const holidaysData = await holidaysRes.json().catch(() => null);
+          const rowErrors: string[] = holidaysData?.data?.errors || [];
+          if (rowErrors.length > 0) {
+            importWarnings.push(
+              `${rowErrors.length} rij(en) in de feestdaghistorie zijn overgeslagen: ${rowErrors.join('; ')}`
+            );
+          }
+        }
       }
 
       let correctionsFailed = false;
@@ -705,7 +816,8 @@ export function SetupWizard({ period, onComplete }: Props) {
           `${openData.data.slots_generated} diensten gegenereerd, ${toLink.length} uitnodigingen verstuurd.` +
           (correctionsFailed
             ? ' Let op: de handmatige correcties zijn niet opgeslagen. Noteer ze en laat de beheerder ze alsnog verwerken.'
-            : '')
+            : '') +
+          (importWarnings.length > 0 ? ` Let op: ${importWarnings.join(' ')}` : '')
       );
       onComplete?.();
     } catch (err) {
@@ -962,7 +1074,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                             ) : member.deelnamefactor < 1 ? (
                               `${Math.round(member.deelnamefactor * 100)}%`
                             ) : (
-                              'Fulltime'
+                              'Voltijd'
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">
@@ -1275,7 +1387,9 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div className="bg-neutral-50 p-3 rounded text-xs text-neutral-600">
-              <p className="font-medium mb-1">Gekozen strategie: {distributionConfig.mode}</p>
+              <p className="font-medium mb-1">
+                Gekozen strategie: {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}
+              </p>
               <p>
                 {distributionConfig.mode === 'GELIJK' &&
                   'Iedereen krijgt hetzelfde streefbereik, ongeacht deeltijdfactor.'}
@@ -1325,6 +1439,20 @@ export function SetupWizard({ period, onComplete }: Props) {
                     </li>
                   ))}
                   {balanceRows.length > 5 && <li>...en {balanceRows.length - 5} meer</li>}
+                </ul>
+              </div>
+            )}
+
+            {balanceParseWarnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+                <p className="font-medium">Let op bij het inlezen van dit bestand:</p>
+                <ul className="text-xs mt-1 space-y-0.5 list-disc pl-4">
+                  {balanceParseWarnings.slice(0, 10).map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                  {balanceParseWarnings.length > 10 && (
+                    <li>...en {balanceParseWarnings.length - 10} meer</li>
+                  )}
                 </ul>
               </div>
             )}
@@ -1380,6 +1508,20 @@ export function SetupWizard({ period, onComplete }: Props) {
                     </li>
                   ))}
                   {holidayRows.length > 5 && <li>...en {holidayRows.length - 5} meer</li>}
+                </ul>
+              </div>
+            )}
+
+            {holidayParseWarnings.length > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
+                <p className="font-medium">Let op bij het inlezen van dit bestand:</p>
+                <ul className="text-xs mt-1 space-y-0.5 list-disc pl-4">
+                  {holidayParseWarnings.slice(0, 10).map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                  {holidayParseWarnings.length > 10 && (
+                    <li>...en {holidayParseWarnings.length - 10} meer</li>
+                  )}
                 </ul>
               </div>
             )}
@@ -1547,7 +1689,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Venster:</strong> {windowConfig.windowWeeks} weken
                 </p>
                 <p>
-                  <strong>Verdeling:</strong> {distributionConfig.mode}
+                  <strong>Verdeling:</strong> {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}
                 </p>
                 <p>
                   <strong>Correcties:</strong> {corrections.length} klaar om toe te passen

@@ -87,6 +87,7 @@ export default function SetupPage() {
       </div>
 
       <SetupWizard
+        key={period.id}
         period={period}
         onComplete={() => {
           // Redirect to period dashboard
