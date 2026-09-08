@@ -45,6 +45,16 @@ function createPerson(rol: 'DEELNEMER' | 'PLANNER' = 'DEELNEMER'): string {
   return personId;
 }
 
+// Covers the fixed period date range every createPeriod() call below uses
+// (2027-01-04 to 2027-01-17) - the route now checks that a correction's
+// person_id is actually a pool member for the period being corrected.
+function createMembership(poolId: string, personId: string): void {
+  db.prepare(
+    `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
+     VALUES (?, ?, ?, 1, '2000-01-01', '2100-01-01')`
+  ).run(crypto.randomUUID(), personId, poolId);
+}
+
 function createPeriod(poolId: string, status: string): string {
   const periodId = crypto.randomUUID();
   db.prepare(
@@ -57,7 +67,7 @@ function createPeriod(poolId: string, status: string): string {
 }
 
 function plannerCookie(plannerId: string): string {
-  const token = createSessionToken({ kind: 'staff', personId: plannerId, role: 'PLANNER' }, STAFF_SESSION_MAX_AGE_SECONDS);
+  const token = createSessionToken({ kind: 'staff', personId: plannerId }, STAFF_SESSION_MAX_AGE_SECONDS);
   return `${SESSION_COOKIE_NAME}=${token}`;
 }
 
@@ -85,6 +95,12 @@ afterEach(() => {
     const periodId = createdPeriodIds.pop()!;
     db.prepare('DELETE FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
+  }
+  // Must run before deleting persons/pools below - pool_membership has no
+  // ON DELETE cascade from either FK, and foreign_keys=ON would otherwise
+  // reject deleting a person or pool a membership row still references.
+  for (const poolId of createdPoolIds) {
+    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(poolId);
   }
   while (createdPersonIds.length > 0) {
     db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(createdPersonIds.pop()!);
@@ -175,6 +191,23 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
     expect(ledgerRows(periodId)).toHaveLength(0);
   });
 
+  it('rejects a correction for a person who is not a pool member for this period', async () => {
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const periodId = createPeriod(poolId, 'CONCEPT');
+    const person = createPerson(); // deliberately no createMembership() call
+
+    const res = await POST(
+      postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden: 'Test', aantal: 1 }] }, plannerCookie(planner)),
+      { params: { id: periodId } }
+    );
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error.code).toBe('PERSON_NOT_IN_POOL');
+    expect(ledgerRows(periodId)).toHaveLength(0);
+  });
+
   it('applies nothing from the batch if any single correction in it is invalid', async () => {
     // Proves the batch is all-or-nothing: a valid first row must not be
     // written just because an invalid second row is rejected afterward.
@@ -183,6 +216,8 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
     const periodId = createPeriod(poolId, 'CONCEPT');
     const personA = createPerson();
     const personB = createPerson();
+    createMembership(poolId, personA);
+    createMembership(poolId, personB);
 
     const res = await POST(
       postRequest(
@@ -207,6 +242,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
     const planner = createPerson('PLANNER');
     const periodId = createPeriod(poolId, 'CONCEPT');
     const person = createPerson();
+    createMembership(poolId, person);
 
     const res = await POST(
       postRequest(
@@ -238,6 +274,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
     const planner = createPerson('PLANNER');
     const periodId = createPeriod(poolId, 'CONCEPT');
     const person = createPerson();
+    createMembership(poolId, person);
 
     const res = await POST(
       postRequest(

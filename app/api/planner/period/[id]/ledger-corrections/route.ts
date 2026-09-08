@@ -47,13 +47,15 @@ export async function POST(
     const corrections = body.corrections || [];
 
     const period = db
-      .prepare('SELECT id, pool_id, status FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(periodId) as { id: string; pool_id: string; status: string } | undefined;
+      .prepare('SELECT id, pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(periodId) as
+      | { id: string; pool_id: string; status: string; start_datum: string; eind_datum: string }
+      | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Period ${periodId} not found` },
+        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -74,6 +76,20 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
+    // Same "who belongs to this period" convention every other route uses
+    // (publish, dashboard, generate-roster, exports): membership must cover
+    // the period's own date range, and the person must still be active.
+    // Without this, a person_id from a different pool (or a stale/typo'd
+    // one) silently gets a correction booked against a period they have no
+    // connection to, with no error to catch the mistake.
+    const memberStmt = db.prepare(
+      `SELECT 1 FROM dienstrooster_pool_membership pm
+       JOIN dienstrooster_person p ON p.id = pm.person_id
+       WHERE pm.person_id = ? AND pm.pool_id = ?
+         AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
+         AND p.actief = 1`
+    );
+
     for (const c of corrections) {
       if (!c.person_id || !c.reden || !Number.isInteger(c.aantal) || c.aantal === 0) {
         const response: ApiErrorResponse = {
@@ -86,6 +102,17 @@ export async function POST(
         const response: ApiErrorResponse = {
           success: false,
           error: { code: 'INVALID_TYPE', message: `Onbekend correctietype: ${c.type}` },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+      const isMember = memberStmt.get(c.person_id, period.pool_id, period.eind_datum, period.start_datum);
+      if (!isMember) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'PERSON_NOT_IN_POOL',
+            message: `Persoon ${c.person_id} is geen lid van deze pool voor deze periode`,
+          },
         };
         return NextResponse.json(response, { status: 400 });
       }
