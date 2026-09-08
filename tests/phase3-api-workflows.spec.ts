@@ -440,7 +440,11 @@ describe('Phase 3 API Workflows', () => {
         planner,
         'assignment',
         assignmentId,
-        'OVERRIDE',
+        // 'UPDATE' matches the actie value real assignment-override routes
+        // log (see reassign/route.ts) - 'OVERRIDE' is a valid bron/edit_type
+        // value but was never a real actie value, so it fails the actie
+        // CHECK constraint (db/migrations/0009_shift_slot_audit_log_check.sql).
+        'UPDATE',
         JSON.stringify({ bron: 'SOLVER' }),
         JSON.stringify({ bron: 'OVERRIDE', reason })
       );
