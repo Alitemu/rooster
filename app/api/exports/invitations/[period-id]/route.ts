@@ -16,6 +16,14 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiErrorResponse } from '@/types';
 
+// codenaam is free-text, planner-entered with no character restriction -
+// without escaping, an embedded `"` breaks the CSV structure when opened
+// in Excel/Numbers, which can shift columns and pair the wrong personal
+// link with the wrong name in a mail-merge.
+function csvField(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { 'period-id': string } }
@@ -83,7 +91,7 @@ export async function GET(
       ...links.map((link) => {
         const personalLink = `${baseUrl}/person/${link.token}`;
         const deadline = new Date(period.deadline).toLocaleString('nl-NL');
-        return `"${link.codenaam}","${personalLink}","${deadline}"`;
+        return [csvField(link.codenaam), csvField(personalLink), csvField(deadline)].join(',');
       }),
     ];
 

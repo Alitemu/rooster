@@ -12,6 +12,13 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiErrorResponse } from '@/types';
 
+// codenaam is free-text, planner-entered with no character restriction -
+// without escaping, an embedded `"` breaks the CSV structure when opened
+// in Excel/Numbers and can shift columns.
+function csvField(value: string | number | null): string {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { 'period-id': string } }
@@ -56,8 +63,10 @@ export async function GET(
           SELECT DISTINCT pm.person_id
           FROM dienstrooster_pool_membership pm
           JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
+          JOIN dienstrooster_person p2 ON p2.id = pm.person_id
           WHERE pm.pool_id = sp2.pool_id
             AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum
+            AND p2.actief = 1
         )
         ORDER BY p.codenaam ASC`
       )
@@ -79,7 +88,13 @@ export async function GET(
       'Codenaam,Status,Ingediend op,Geblokkeerde dagen,Heeft deeltijdpatroon',
       ...rows.map(
         (r) =>
-          `"${r.codenaam}","${statusLabels[r.status] || r.status}","${r.submitted_at || ''}",${r.blocked_days_count},"${r.has_parttime_patterns}"`
+          [
+            csvField(r.codenaam),
+            csvField(statusLabels[r.status] || r.status),
+            csvField(r.submitted_at || ''),
+            r.blocked_days_count,
+            csvField(r.has_parttime_patterns),
+          ].join(',')
       ),
     ];
 
