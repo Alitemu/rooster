@@ -183,8 +183,9 @@ export default function PlannerHomePage() {
       const res = await fetch(`/api/periods/${id}/restore`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Herstellen mislukt');
+      // loadData() already re-fetches /api/periods/trash itself - the
+      // separate loadTrash() call here was a redundant extra fetch.
       await loadData();
-      await loadTrash();
     } catch (err) {
       // Leave it in the trash list - the planner can retry
       setRestoreError(err instanceof Error ? err.message : 'Herstellen mislukt');
