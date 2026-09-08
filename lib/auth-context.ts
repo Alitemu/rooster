@@ -34,14 +34,21 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
     // just before deactivation kept full access until it naturally
     // expired. Mirrors the same re-check already done below for a
     // person session's revoked-link case.
-    const stillActive = db
-      .prepare(`SELECT 1 FROM dienstrooster_person WHERE id = ? AND actief = 1`)
-      .get(session.personId);
-    if (!stillActive) return null;
+    //
+    // Reads the live role too, not just whether the account is still
+    // active: there's no role-mutation endpoint today, so session.role and
+    // the database can't actually drift yet, but returning the live value
+    // here (the same query, no extra cost) means that stays true even
+    // after one is added, instead of a role downgrade only taking effect
+    // once the 12-hour cookie naturally expires.
+    const current = db
+      .prepare(`SELECT rol FROM dienstrooster_person WHERE id = ? AND actief = 1`)
+      .get(session.personId) as { rol: 'ADMIN' | 'PLANNER' | 'DEELNEMER' } | undefined;
+    if (!current) return null;
 
     return {
       userId: session.personId,
-      role: session.role,
+      role: current.rol as 'ADMIN' | 'PLANNER',
       timestamp: new Date().toISOString(),
     };
   }
