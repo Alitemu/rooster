@@ -6,9 +6,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { verifyPassword, isValidTOTPFormat, verifyTOTPCode } from '@/lib/auth';
+import { verifyPassword, isValidTOTPFormat, verifyTOTPCode, DUMMY_PASSWORD_HASH } from '@/lib/auth';
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { checkRateLimit, getClientIp, rateLimitedResponseBody } from '@/lib/rateLimit';
 
 interface StaffLoginRequest {
   codenaam: string;
@@ -16,8 +17,18 @@ interface StaffLoginRequest {
   totpCode?: string;
 }
 
+// 10 attempts per 15 minutes per client IP - enough for a human who
+// fumbles a password or TOTP code a few times, tight enough that
+// brute-forcing either is impractical.
+const MAX_ATTEMPTS = 10;
+
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
+    const rateLimit = checkRateLimit(`staff-login:${getClientIp(req)}`, MAX_ATTEMPTS);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
+    }
+
     const body = await parseJsonBody<StaffLoginRequest>(req);
     const { codenaam, password, totpCode } = body;
 
@@ -52,6 +63,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       | undefined;
 
     if (!person || !person.actief || !person.wachtwoord_hash) {
+      // Pay the same bcrypt.compare cost as the real-account path so an
+      // unknown/deactivated codenaam can't be distinguished from a wrong
+      // password purely by how fast the response comes back.
+      await verifyPassword(password, DUMMY_PASSWORD_HASH);
       return invalidCredentials();
     }
 

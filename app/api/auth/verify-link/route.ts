@@ -9,7 +9,14 @@ import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
 import { setSessionCookie, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { internalErrorResponse } from '@/lib/api-errors';
+import { checkRateLimit, getClientIp, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+
+// A personal-link token is the only access control a participant has, so
+// guessing one is the more dangerous brute-force target here - a bigger
+// allowance than staff-login (30 vs 10 per window) still makes guessing a
+// long random token infeasible while tolerating a mistyped/partial paste.
+const MAX_ATTEMPTS = 30;
 
 interface VerifyLinkResponse {
   person_id: string;
@@ -24,6 +31,11 @@ interface VerifyLinkResponse {
  */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
+    const rateLimit = checkRateLimit(`verify-link:${getClientIp(req)}`, MAX_ATTEMPTS);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
+    }
+
     const { searchParams } = new URL(req.url);
     const token = searchParams.get('token');
 
