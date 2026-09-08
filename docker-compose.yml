@@ -52,6 +52,10 @@ services:
       # yet. Left unset (the default), docker-entrypoint.sh's claim-password
       # step is skipped entirely.
       SEED_PLANNER_PASSWORD: "${SEED_PLANNER_PASSWORD:-}"
+      # Off by default - see .env.example. lib/notifications.ts reads this
+      # directly from the process environment, so leaving it out here means
+      # it's stuck at "disabled" no matter what a deployment's .env says.
+      NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
     volumes:
       - db_data:/data
     networks:
