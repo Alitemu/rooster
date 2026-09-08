@@ -13,6 +13,7 @@ import { generateTOTPSecret } from '@/lib/auth';
 import { getAuthContextFromRequest } from '@/lib/auth-context';
 import { signPayload } from '@/lib/session';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { checkRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 
 export interface TotpSetupPayload {
   kind: 'totp-setup';
@@ -21,12 +22,18 @@ export interface TotpSetupPayload {
 }
 
 const SETUP_TOKEN_MAX_AGE_SECONDS = 60 * 10;
+const MAX_ATTEMPTS = 10;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(request);
     if (!auth || (auth.role !== 'ADMIN' && auth.role !== 'PLANNER')) {
       return unauthorizedResponse();
+    }
+
+    const rateLimit = checkRateLimit(`totp-setup:${auth.userId}`, MAX_ATTEMPTS);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
 
     const person = db
