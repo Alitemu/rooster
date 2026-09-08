@@ -10,9 +10,10 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForAbsence, removeAbsenceAvailability } from '@/lib/absenceSync';
-import { getOpenPeriodsForPerson } from '@/lib/parttimeSync';
+import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods } from '@/lib/parttimeSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateAbsenceRequest {
@@ -44,7 +45,7 @@ export async function PATCH(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -59,7 +60,7 @@ export async function PATCH(
     if (!absence) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'ABSENCE_NOT_FOUND', message: `Absence ${absenceId} not found` },
+        error: { code: 'ABSENCE_NOT_FOUND', message: `Afwezigheid ${absenceId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -114,9 +115,13 @@ export async function PATCH(
       }
     }
 
-    const response: ApiSuccessResponse<{ updated: boolean }> = {
+    const warning = buildDeadlinePassedWarning(
+      findDeadlinePassedOverlappingPeriods(id, newVanDatum, newTotDatum)
+    );
+
+    const response: ApiSuccessResponse<{ updated: boolean; warning?: string }> = {
       success: true,
-      data: { updated: true },
+      data: { updated: true, ...(warning ? { warning } : {}) },
     };
 
     return NextResponse.json(response);
@@ -145,7 +150,7 @@ export async function DELETE(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -161,7 +166,7 @@ export async function DELETE(
     if (!absence) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'ABSENCE_NOT_FOUND', message: `Absence ${absenceId} not found` },
+        error: { code: 'ABSENCE_NOT_FOUND', message: `Afwezigheid ${absenceId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }

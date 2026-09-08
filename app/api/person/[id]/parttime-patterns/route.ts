@@ -11,9 +11,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
-import { syncAvailabilityForPattern, getOpenPeriodsForPerson, PARTTIME_WEEKDAGEN } from '@/lib/parttimeSync';
+import {
+  syncAvailabilityForPattern,
+  getOpenPeriodsForPerson,
+  findDeadlinePassedOverlappingPeriods,
+  PARTTIME_WEEKDAGEN,
+} from '@/lib/parttimeSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ParttimePattern {
@@ -51,7 +57,7 @@ export async function GET(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -156,7 +162,7 @@ export async function POST(
     if (!person) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -203,9 +209,19 @@ export async function POST(
       geldig_tot,
     };
 
-    const response: ApiSuccessResponse<ParttimePattern & { availability_generated: number }> = {
+    const warning = buildDeadlinePassedWarning(
+      findDeadlinePassedOverlappingPeriods(id, geldig_vanaf, geldig_tot)
+    );
+
+    const response: ApiSuccessResponse<
+      ParttimePattern & { availability_generated: number; warning?: string }
+    > = {
       success: true,
-      data: { ...createdPattern, availability_generated: syncResult.inserted },
+      data: {
+        ...createdPattern,
+        availability_generated: syncResult.inserted,
+        ...(warning ? { warning } : {}),
+      },
     };
 
     return NextResponse.json(response, { status: 201 });

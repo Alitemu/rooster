@@ -57,6 +57,7 @@ export function AbsenceManager({
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const refresh = async () => {
     const res = await fetch(`/api/person/${personId}/absences`);
@@ -86,6 +87,7 @@ export function AbsenceManager({
   const handleSubmit = async () => {
     setSaving(true);
     setError(null);
+    setWarning(null);
     try {
       const url = editingId
         ? `/api/person/${personId}/absences/${editingId}`
@@ -97,6 +99,7 @@ export function AbsenceManager({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Opslaan van afwezigheid mislukt');
+      if (data.data?.warning) setWarning(data.data.warning);
 
       cancelEdit();
       await refresh();
@@ -139,6 +142,9 @@ export function AbsenceManager({
 
       {error && (
         <div className="p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>
+      )}
+      {warning && (
+        <div className="p-3 rounded bg-amber-50 border border-amber-200 text-sm text-amber-900">{warning}</div>
       )}
 
       {absences.length > 0 && (

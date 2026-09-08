@@ -12,9 +12,10 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForAbsence } from '@/lib/absenceSync';
-import { getOpenPeriodsForPerson } from '@/lib/parttimeSync';
+import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods } from '@/lib/parttimeSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface Absence {
@@ -52,7 +53,7 @@ export async function GET(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -120,7 +121,7 @@ export async function POST(
         success: false,
         error: {
           code: 'INVALID_SOORT',
-          message: `Invalid soort: ${soort}`,
+          message: `Onbekend soort: ${soort}`,
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -140,7 +141,7 @@ export async function POST(
     if (!person) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -190,9 +191,13 @@ export async function POST(
       notitie,
     };
 
-    const response: ApiSuccessResponse<Absence> = {
+    const warning = buildDeadlinePassedWarning(
+      findDeadlinePassedOverlappingPeriods(id, van_datum, tot_datum)
+    );
+
+    const response: ApiSuccessResponse<Absence & { warning?: string }> = {
       success: true,
-      data: createdAbsence,
+      data: { ...createdAbsence, ...(warning ? { warning } : {}) },
     };
 
     return NextResponse.json(response, { status: 201 });

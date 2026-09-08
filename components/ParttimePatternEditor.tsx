@@ -74,12 +74,20 @@ export function ParttimePatternEditor({
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const refresh = async () => {
-    const res = await fetch(`/api/person/${personId}/parttime-patterns`);
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/person/${personId}/parttime-patterns`);
+      if (!res.ok) throw new Error();
       const data = await res.json();
       onPatternsChange(data.data);
+    } catch {
+      // The mutation itself already succeeded (this only re-fetches the
+      // list afterwards) - without surfacing this, a save/delete that
+      // worked looks like it silently did nothing, since the list the
+      // participant sees never updates.
+      setError('Wijziging opgeslagen, maar de lijst kon niet worden vernieuwd. Ververs de pagina.');
     }
   };
 
@@ -103,6 +111,7 @@ export function ParttimePatternEditor({
   const handleSubmit = async () => {
     setSaving(true);
     setError(null);
+    setWarning(null);
     try {
       const url = editingId
         ? `/api/person/${personId}/parttime-patterns/${editingId}`
@@ -114,6 +123,7 @@ export function ParttimePatternEditor({
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Opslaan van deeltijdpatroon mislukt');
+      if (data.data?.warning) setWarning(data.data.warning);
 
       cancelEdit();
       await refresh();
@@ -155,6 +165,9 @@ export function ParttimePatternEditor({
 
       {error && (
         <div className="p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>
+      )}
+      {warning && (
+        <div className="p-3 rounded bg-amber-50 border border-amber-200 text-sm text-amber-900">{warning}</div>
       )}
 
       {patterns.length > 0 && (

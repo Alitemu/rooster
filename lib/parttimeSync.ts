@@ -245,6 +245,36 @@ export function getOpenPeriodsForPerson(personId: string, now: Date = new Date()
 }
 
 /**
+ * Periods this person belongs to, overlapping [vanDatum, totDatum], that
+ * are still OPEN but whose deadline has already passed - exactly the
+ * periods getOpenPeriodsForPerson excludes. An absence or part-time
+ * pattern submitted here still gets saved (it may well apply to a future,
+ * not-yet-generated period too), but syncAvailabilityForAbsence /
+ * syncAvailabilityForPattern silently skip these periods - without
+ * surfacing that, the participant sees "saved" with no indication that it
+ * does not actually apply to a period whose input window already closed.
+ */
+export function findDeadlinePassedOverlappingPeriods(
+  personId: string,
+  vanDatum: string,
+  totDatum: string,
+  now: Date = new Date()
+): Array<{ id: string; naam: string }> {
+  return db
+    .prepare(
+      `SELECT sp.id, sp.naam
+       FROM dienstrooster_schedule_period sp
+       JOIN dienstrooster_pool_membership pm ON pm.pool_id = sp.pool_id
+       WHERE pm.person_id = ?
+         AND sp.status = 'OPEN'
+         AND sp.deadline < ?
+         AND sp.start_datum <= ? AND sp.eind_datum >= ?
+         AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum`
+    )
+    .all(personId, now.toISOString(), totDatum, vanDatum) as Array<{ id: string; naam: string }>;
+}
+
+/**
  * Reconciles one pattern's availability rows across every OPEN period the
  * pattern's person currently belongs to. Idempotent - safe to call after
  * every pattern create/update.

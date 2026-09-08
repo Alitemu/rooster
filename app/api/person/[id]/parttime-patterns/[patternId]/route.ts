@@ -13,10 +13,12 @@ import {
   syncAvailabilityForPattern,
   removePatternAvailability,
   getOpenPeriodsForPerson,
+  findDeadlinePassedOverlappingPeriods,
   PARTTIME_WEEKDAGEN,
 } from '@/lib/parttimeSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePatternRequest {
@@ -48,7 +50,7 @@ export async function PATCH(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -132,9 +134,15 @@ export async function PATCH(
       }
     }
 
-    const response: ApiSuccessResponse<{ updated: boolean; availability_generated: number }> = {
+    const warning = buildDeadlinePassedWarning(findDeadlinePassedOverlappingPeriods(id, newVanaf, newTot));
+
+    const response: ApiSuccessResponse<{
+      updated: boolean;
+      availability_generated: number;
+      warning?: string;
+    }> = {
       success: true,
-      data: { updated: true, availability_generated: syncResult.inserted },
+      data: { updated: true, availability_generated: syncResult.inserted, ...(warning ? { warning } : {}) },
     };
 
     return NextResponse.json(response);
@@ -175,7 +183,7 @@ export async function DELETE(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Person ${id} not found` },
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -198,7 +206,7 @@ export async function DELETE(
     if (result.changes === 0) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PATTERN_NOT_FOUND', message: `Pattern ${patternId} not found` },
+        error: { code: 'PATTERN_NOT_FOUND', message: `Patroon ${patternId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }

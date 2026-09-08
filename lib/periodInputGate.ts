@@ -21,6 +21,21 @@ export interface InputGateResult {
   message?: string;
 }
 
+/**
+ * Builds the Dutch warning shown when an absence/part-time pattern was
+ * saved but overlaps one or more periods whose deadline has already
+ * passed - those periods' sync silently excludes it (see
+ * lib/parttimeSync.ts's findDeadlinePassedOverlappingPeriods), so without
+ * this the participant has no way to tell that apart from "it worked".
+ */
+export function buildDeadlinePassedWarning(periods: Array<{ naam: string }>): string | undefined {
+  if (periods.length === 0) return undefined;
+  const namen = periods.map((p) => `"${p.naam}"`).join(', ');
+  return periods.length === 1
+    ? `Let op: voor periode ${namen} is de deadline al verstreken - dit is daar niet in verwerkt.`
+    : `Let op: voor de periodes ${namen} is de deadline al verstreken - dit is daar niet in verwerkt.`;
+}
+
 export function checkPeriodAcceptsInput(period: PeriodForInputGate, now: Date = new Date()): InputGateResult {
   if (period.status !== 'OPEN') {
     return {
