@@ -56,7 +56,7 @@ export async function GET(
     const periodId = params['period-id'];
 
     // Get period info
-    const periodStmt = db.prepare('SELECT naam, deadline FROM dienstrooster_schedule_period WHERE id = ?');
+    const periodStmt = db.prepare('SELECT naam, deadline, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?');
     const period = periodStmt.get(periodId) as any;
 
     if (!period) {
@@ -70,14 +70,20 @@ export async function GET(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // People in this period who have not confirmed their preferences yet
+    // People in this period who have not confirmed their preferences yet -
+    // membership must actually cover this period's own date range, same
+    // filter every other "who belongs to this period" query uses (publish,
+    // dashboard, progress, status-report, invitations export). Without it,
+    // someone whose membership already ended (or hasn't started yet) still
+    // got a reminder and a freshly issued personal link.
     const outstandingStmt = db.prepare(`
       SELECT p.id as person_id, p.codenaam
       FROM dienstrooster_person p
       JOIN dienstrooster_pool_membership pm ON pm.person_id = p.id
       JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id AND sp.id = ?
       LEFT JOIN dienstrooster_submission s ON s.person_id = p.id AND s.schedule_period_id = ?
-      WHERE s.status IS NULL OR s.status != 'BEVESTIGD'
+      WHERE (s.status IS NULL OR s.status != 'BEVESTIGD')
+        AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum
       ORDER BY p.codenaam ASC
     `);
     const outstanding = outstandingStmt.all(periodId, periodId) as Array<{

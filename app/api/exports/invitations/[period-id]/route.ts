@@ -29,7 +29,7 @@ export async function GET(
     const periodId = params['period-id'];
 
     // Get period info
-    const periodStmt = db.prepare('SELECT naam, deadline, pool_id FROM dienstrooster_schedule_period WHERE id = ?');
+    const periodStmt = db.prepare('SELECT naam, deadline, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?');
     const period = periodStmt.get(periodId) as any;
 
     if (!period) {
@@ -43,15 +43,19 @@ export async function GET(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Get active pool members for this period
+    // Get pool members whose membership window actually covers this period -
+    // same date-range filter every other "who belongs to this period" query
+    // uses (publish, dashboard, progress, status-report). Without it, someone
+    // whose membership already ended (or hasn't started yet) still got a
+    // freshly issued, valid personal link for a period they have no part in.
     const membersStmt = db.prepare(`
       SELECT DISTINCT p.id, p.codenaam
       FROM dienstrooster_pool_membership pm
       JOIN dienstrooster_person p ON p.id = pm.person_id
-      WHERE pm.pool_id = ?
+      WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
       ORDER BY p.codenaam ASC
     `);
-    const members = membersStmt.all(period.pool_id) as Array<{ id: string; codenaam: string }>;
+    const members = membersStmt.all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
 
     const revokeStmt = db.prepare(`
       UPDATE dienstrooster_person_access_link
