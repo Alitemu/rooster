@@ -121,6 +121,38 @@ export async function GET(
     const membersRow = membersStmt.get(id) as any;
     const activeParticipants = membersRow?.count || 0;
 
+    // Under NAAR_RATO, the solver scales each person's max shifts by their
+    // own deelnamefactor (constraints.add_band_constraints) rather than
+    // counting everyone as a full head - so "capacity OK" here must use the
+    // same scaled total, or this check can pass while the solver still ends
+    // up short. distribution_mode mirrors windowWeeks/dates above: the
+    // wizard sends the mode the planner is currently choosing (step 4),
+    // which may still be ahead of what's frozen on the period.
+    const distributionModeOverride = req.nextUrl.searchParams.get('distribution_mode');
+    const distributionMode = distributionModeOverride === 'NAAR_RATO' ? 'NAAR_RATO' : 'GELIJK';
+
+    let effectiveParticipants = activeParticipants;
+    if (distributionMode === 'NAAR_RATO') {
+      const factorsStmt = db.prepare(`
+        SELECT DISTINCT pm.person_id, pm.deelnamefactor
+        FROM dienstrooster_pool_membership pm
+        JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+        WHERE sp.id = ?
+          AND pm.geldig_vanaf <= sp.eind_datum
+          AND pm.geldig_tot >= sp.start_datum
+      `);
+      const factorRows = factorsStmt.all(id) as Array<{ person_id: string; deelnamefactor: number }>;
+      // A person could theoretically have more than one overlapping
+      // membership row within the same period; take their highest factor
+      // rather than double-counting them via SUM over duplicate rows.
+      const bestFactorByPerson = new Map<string, number>();
+      for (const row of factorRows) {
+        const current = bestFactorByPerson.get(row.person_id) ?? 0;
+        bestFactorByPerson.set(row.person_id, Math.max(current, row.deelnamefactor ?? 1));
+      }
+      effectiveParticipants = [...bestFactorByPerson.values()].reduce((sum, f) => sum + f, 0);
+    }
+
     const startDate = new Date(period.start_datum);
     const endDate = new Date(period.eind_datum);
     const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
@@ -139,7 +171,8 @@ export async function GET(
       weeks,
       windowWeeks,
       activeParticipants,
-      requiredSlots
+      requiredSlots,
+      effectiveParticipants
     );
 
     // A realistic starting point for the "Streefbereik" (band) inputs the

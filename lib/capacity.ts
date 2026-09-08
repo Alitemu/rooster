@@ -33,15 +33,26 @@ export interface CapacityCheckResult {
  *   max_per_person = floor(num_weeks / windowWeeks)
  *   pool_capacity = active_participants * max_per_person
  *   Check: pool_capacity >= total_slots
+ *
+ * effectiveParticipants overrides the headcount used for the pool_capacity
+ * multiplication only (activeParticipants keeps being reported as-is, and
+ * still drives checkDistinctPeople separately - a part-timer still counts
+ * as one distinct person available to cover a window). Pass the sum of
+ * everyone's deelnamefactor here under NAAR_RATO, where each person's
+ * actual max is scaled by their participation factor rather than everyone
+ * counting as a full head - otherwise this check can say "capacity OK"
+ * while the solver (which does scale per person, see
+ * constraints.add_band_constraints) ends up short.
  */
 export function checkTotalCapacity(
   numWeeks: number,
   windowWeeks: number,
   activeParticipants: number,
-  totalSlots: number
+  totalSlots: number,
+  effectiveParticipants: number = activeParticipants
 ): CapacityCheckResult['totalCapacity'] {
   const maxPerPerson = Math.floor(numWeeks / windowWeeks);
-  const poolCapacity = activeParticipants * maxPerPerson;
+  const poolCapacity = Math.floor(effectiveParticipants * maxPerPerson);
   const passed = poolCapacity >= totalSlots;
 
   let message = '';
@@ -102,9 +113,10 @@ export function checkCapacity(
   numWeeks: number,
   windowWeeks: number,
   activeParticipants: number,
-  totalSlots: number
+  totalSlots: number,
+  effectiveParticipants: number = activeParticipants
 ): CapacityCheckResult {
-  const totalCapacity = checkTotalCapacity(numWeeks, windowWeeks, activeParticipants, totalSlots);
+  const totalCapacity = checkTotalCapacity(numWeeks, windowWeeks, activeParticipants, totalSlots, effectiveParticipants);
   const distinctPeople = checkDistinctPeople(windowWeeks, activeParticipants);
 
   return {

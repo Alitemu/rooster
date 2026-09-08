@@ -34,6 +34,26 @@ describe('checkTotalCapacity', () => {
     expect(result.maxPerPerson).toBe(4);
     expect(result.passed).toBe(false); // capacity=4 < 5 needed
   });
+
+  it('uses effectiveParticipants (the NAAR_RATO-scaled headcount) for pool capacity when given, not the raw count', () => {
+    // 4 people, but under NAAR_RATO each is only 0.5 deelnamefactor -
+    // effectiveParticipants=2. maxPerPerson=floor(10/2)=5, so scaled
+    // capacity is 2*5=10, not the unscaled 4*5=20 - the same period that
+    // "passes" at raw headcount must correctly fail once scaled, matching
+    // what the solver (which does scale per person) will actually deliver.
+    const unscaled = checkTotalCapacity(10, 2, 4, 15);
+    expect(unscaled.passed).toBe(true); // 4*5=20 >= 15
+
+    const scaled = checkTotalCapacity(10, 2, 4, 15, 2);
+    expect(scaled.poolCapacity).toBe(10);
+    expect(scaled.passed).toBe(false); // 2*5=10 < 15
+  });
+
+  it('defaults effectiveParticipants to activeParticipants when omitted, unchanged from before this parameter existed', () => {
+    const withDefault = checkTotalCapacity(10, 2, 4, 20);
+    const explicit = checkTotalCapacity(10, 2, 4, 20, 4);
+    expect(withDefault).toEqual(explicit);
+  });
 });
 
 describe('checkDistinctPeople', () => {
