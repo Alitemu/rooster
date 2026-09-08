@@ -9,7 +9,7 @@
 
 export type Role = 'ADMIN' | 'PLANNER' | 'DEELNEMER';
 export type CounterType = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
-export type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET';
+export type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 export type BlockSource = 'ZELF' | 'PARTTIME' | 'BEHEERDER';
 export type PeriodStatus = 'CONCEPT' | 'OPEN' | 'GESLOTEN' | 'GEGENEREERD' | 'GEPUBLICEERD';
 export type DistributionMode = 'GELIJK' | 'NAAR_RATO';
@@ -19,7 +19,17 @@ export type AbsenceType = 'VAKANTIE' | 'ZIEK' | 'VERLOF' | 'OVERIG';
 export type LedgerCategory = 'CARRY_OVER' | 'CORRECTIE' | 'BEGINSALDO';
 export type ImportType = 'BEGINSALDI' | 'FEESTDAG_HISTORIE';
 export type HolidayGroup = 'NIEUWJAAR' | 'PASEN' | 'KONINGSDAG' | 'BEVRIJDINGSDAG' | 'HEMELVAART' | 'PINKSTEREN' | 'KERST';
-export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'PUBLISH' | 'IMPORT';
+export type AuditAction =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'PUBLISH'
+  | 'IMPORT'
+  | 'GENERATE_ROSTER'
+  | 'MANUAL_ASSIGN'
+  | 'CANCEL'
+  | 'REJECT'
+  | 'APPROVE';
 
 // Database Models
 export interface Person {
@@ -70,8 +80,11 @@ export interface SchedulePeriod {
   status: PeriodStatus;
   bevroren_ruleset_json?: string | null;
   overloop_bevestigd_op?: string | null;
+  gepubliceerd_op?: string | null;
+  gepubliceerd_door_person_id?: string | null;
   row_version: number;
   aangemaakt_op: string;
+  verwijderd_op?: string | null;
 }
 
 export interface ShiftSlot {

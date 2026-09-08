@@ -25,10 +25,16 @@ const TELLER_LABELS: Record<Teller, string> = {
   FEESTDAG: 'feestdagdiensten',
 };
 
-const LEVEL_MESSAGES: Record<'ABSOLUUT' | 'LIEVER_NIET', (max: number, teller: string) => string> = {
+// Keyed on the full BlockLevel type, not just the two levels checkBlockBudget
+// is currently called with (ABSOLUUT/LIEVER_NIET - see the preferences slot
+// route's `if` guard before calling this), so a future caller that also
+// budgets VOORKEUR can't hit a missing key and call `undefined(...)`.
+const LEVEL_MESSAGES: Record<BlockLevel, (max: number, teller: string) => string> = {
   ABSOLUUT: (max, teller) => `Je hebt het maximum van ${max} geblokkeerde ${teller} voor deze periode al bereikt.`,
   LIEVER_NIET: (max, teller) =>
     `Je hebt het maximum van ${max} "liever niet"-voorkeuren voor ${teller} voor deze periode al bereikt.`,
+  VOORKEUR: (max, teller) =>
+    `Je hebt het maximum van ${max} voorkeuren voor ${teller} voor deze periode al bereikt.`,
 };
 
 interface TellerFraction {
