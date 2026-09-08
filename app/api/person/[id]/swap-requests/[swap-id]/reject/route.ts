@@ -18,6 +18,8 @@ const TELLER_LABELS: Record<string, string> = {
   FEESTDAG: 'feestdagdienst',
 };
 
+class SwapAlreadyHandledError extends Error {}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string; 'swap-id': string } }
@@ -92,11 +94,15 @@ export async function POST(
     // Updating the request status and logging the notification/audit trail
     // together - see approve/route.ts's identical reasoning.
     const rejectTx = db.transaction(() => {
-      db.prepare(
+      const swapUpdate = db.prepare(
         `UPDATE dienstrooster_swap_request
          SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?, opmerkingen = ?
-         WHERE id = ?`
+         WHERE id = ? AND status = 'PENDING'`
       ).run('AFGEWEZEN', now, personId, reason || null, swapId);
+
+      if (swapUpdate.changes === 0) {
+        throw new SwapAlreadyHandledError();
+      }
 
       if (rendered) {
         insertNotification({
@@ -134,6 +140,12 @@ export async function POST(
       },
     });
   } catch (error) {
+    if (error instanceof SwapAlreadyHandledError) {
+      return NextResponse.json(
+        { success: false, error: 'Dit ruilverzoek is inmiddels al afgehandeld' },
+        { status: 409 }
+      );
+    }
     return internalErrorResponse('swap-reject', error);
   }
 }

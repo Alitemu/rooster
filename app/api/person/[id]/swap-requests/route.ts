@@ -171,25 +171,11 @@ export async function POST(
 
     // Create swap request
     const swapId = uuid();
-    db.prepare(
-      `INSERT INTO dienstrooster_swap_request
-       (id, periode_id, aanvrager_person_id, aangeboden_slot_id, gevraagde_slot_id,
-        respondent_person_id, status, opmerkingen, aangemaakt_op, row_version)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      swapId,
-      period_id,
-      personId,
-      offered_slot_id,
-      requested_slot_id,
-      respondentAssignment.person_id,
-      'PENDING',
-      notes || null,
-      now,
-      1
-    );
 
-    // Create notification for respondent
+    // Notification content only needs read-only lookups, so those stay
+    // outside the transaction - only the actual writes (the request row
+    // and its notification) need to succeed together, so a crash between
+    // them can't leave a swap request with no notification sent for it.
     const aanvrager = db
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
       .get(personId) as { codenaam: string } | undefined;
@@ -219,15 +205,37 @@ export async function POST(
       details,
       link: '',
     });
-    if (rendered) {
-      insertNotification({
-        personId: respondentAssignment.person_id,
-        periodId: period_id as string,
-        type: 'RUILVERZOEK',
-        onderwerp: rendered.onderwerp,
-        inhoud: rendered.inhoud,
-      });
-    }
+
+    const createTx = db.transaction(() => {
+      db.prepare(
+        `INSERT INTO dienstrooster_swap_request
+         (id, periode_id, aanvrager_person_id, aangeboden_slot_id, gevraagde_slot_id,
+          respondent_person_id, status, opmerkingen, aangemaakt_op, row_version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        swapId,
+        period_id,
+        personId,
+        offered_slot_id,
+        requested_slot_id,
+        respondentAssignment.person_id,
+        'PENDING',
+        notes || null,
+        now,
+        1
+      );
+
+      if (rendered) {
+        insertNotification({
+          personId: respondentAssignment.person_id,
+          periodId: period_id as string,
+          type: 'RUILVERZOEK',
+          onderwerp: rendered.onderwerp,
+          inhoud: rendered.inhoud,
+        });
+      }
+    });
+    createTx();
 
     return NextResponse.json({
       success: true,

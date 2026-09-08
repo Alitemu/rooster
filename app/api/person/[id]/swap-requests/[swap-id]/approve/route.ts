@@ -19,6 +19,8 @@ const TELLER_LABELS: Record<string, string> = {
   FEESTDAG: 'feestdagdienst',
 };
 
+class SwapAlreadyHandledError extends Error {}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string; 'swap-id': string } }
@@ -143,11 +145,19 @@ export async function POST(
         'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
       ).run(requesterAssignment.person_id, 'MANUAL', respondentAssignment.id);
 
-      db.prepare(
+      // WHERE status='PENDING' makes this the actual guard against a
+      // double-approve race, not just the earlier SELECT-based check
+      // (harmless today under single-threaded, no-await execution, but a
+      // latent gap if this ever runs with multiple workers).
+      const swapUpdate = db.prepare(
         `UPDATE dienstrooster_swap_request
          SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?
-         WHERE id = ?`
+         WHERE id = ? AND status = 'PENDING'`
       ).run('GOEDGEKEURD', now, personId, swapId);
+
+      if (swapUpdate.changes === 0) {
+        throw new SwapAlreadyHandledError();
+      }
 
       if (rendered) {
         insertNotification({
@@ -185,6 +195,12 @@ export async function POST(
       },
     });
   } catch (error) {
+    if (error instanceof SwapAlreadyHandledError) {
+      return NextResponse.json(
+        { success: false, error: 'Dit ruilverzoek is inmiddels al afgehandeld' },
+        { status: 409 }
+      );
+    }
     return internalErrorResponse('swap-approve', error);
   }
 }
