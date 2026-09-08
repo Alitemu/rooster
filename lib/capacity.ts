@@ -11,8 +11,12 @@
 export interface CapacityCheckResult {
   totalCapacity: {
     passed: boolean;
-    maxPerPerson: number;
-    poolCapacity: number;
+    // null = no per-person cap applies (windowWeeks === 0) - not the
+    // literal Infinity that floor(numWeeks / 0) would produce, which
+    // JSON.stringify silently turns into null anyway on the wire, making
+    // "unlimited" indistinguishable from "missing" to any caller.
+    maxPerPerson: number | null;
+    poolCapacity: number | null;
     slotsNeeded: number;
     message: string;
   };
@@ -51,6 +55,21 @@ export function checkTotalCapacity(
   totalSlots: number,
   effectiveParticipants: number = activeParticipants
 ): CapacityCheckResult['totalCapacity'] {
+  // windowWeeks === 0 means "no minimum spacing between shifts" (a valid
+  // planner choice - see app/api/periods/[id]/capacity/route.ts) - there is
+  // then no meaningful per-person cap to compute (one person could in
+  // principle cover every slot), so this can never be the binding
+  // constraint.
+  if (windowWeeks === 0) {
+    return {
+      passed: true,
+      maxPerPerson: null,
+      poolCapacity: null,
+      slotsNeeded: totalSlots,
+      message: `Geen limiet per persoon bij een venster van 0 weken - altijd voldoende capaciteit voor ${totalSlots} diensten.`,
+    };
+  }
+
   const maxPerPerson = Math.floor(numWeeks / windowWeeks);
   const poolCapacity = Math.floor(effectiveParticipants * maxPerPerson);
   const passed = poolCapacity >= totalSlots;

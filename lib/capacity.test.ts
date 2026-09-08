@@ -27,6 +27,18 @@ describe('checkTotalCapacity', () => {
     expect(oneShort.passed).toBe(false);
   });
 
+  it('treats windowWeeks=0 as no per-person cap instead of dividing by zero', () => {
+    // floor(numWeeks / 0) is Infinity, which JSON.stringify silently turns
+    // into null on the wire - indistinguishable from "missing" instead of
+    // an honest "no cap applies". windowWeeks=0 is a valid planner choice
+    // (no minimum spacing between shifts), so this must always pass with
+    // an explicit null, never a numeric value derived from the division.
+    const result = checkTotalCapacity(10, 0, 4, 1_000_000);
+    expect(result.passed).toBe(true);
+    expect(result.maxPerPerson).toBeNull();
+    expect(result.poolCapacity).toBeNull();
+  });
+
   it('floors maxPerPerson rather than rounding, so a partial window buys nobody an extra shift', () => {
     // floor(9/2) = 4, not 4.5 rounded up to 5 - a person can't work a
     // fractional shift for a leftover half-window.

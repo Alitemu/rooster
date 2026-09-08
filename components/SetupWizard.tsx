@@ -19,7 +19,7 @@ type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corre
 
 interface CapacityCheckResult {
   valid: boolean;
-  total_capacity: { satisfied: boolean; pool_capacity: number; required_slots: number };
+  total_capacity: { satisfied: boolean; pool_capacity: number | null; required_slots: number };
   distinct_people: { satisfied: boolean; required_people: number; active_participants: number };
   message: string;
   suggested_band: { AVOND: [number, number]; WEEKEND: [number, number]; FEESTDAG: [number, number] };
@@ -1242,7 +1242,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                       {capacityCheck.distinct_people.satisfied ? '✓' : '✗'}
                     </li>
                     <li>
-                      • Totale capaciteit: {capacityCheck.total_capacity.pool_capacity} diensten beschikbaar voor{' '}
+                      • Totale capaciteit: {capacityCheck.total_capacity.pool_capacity ?? 'onbeperkt'} diensten beschikbaar voor{' '}
                       {capacityCheck.total_capacity.required_slots} benodigd{' '}
                       {capacityCheck.total_capacity.satisfied ? '✓' : '✗'}
                     </li>

@@ -18,7 +18,7 @@ interface CapacityCheckResult {
   valid: boolean;
   total_capacity: {
     satisfied: boolean;
-    pool_capacity: number;
+    pool_capacity: number | null; // null = no per-person cap (windowWeeks 0)
     required_slots: number;
   };
   distinct_people: {
@@ -67,7 +67,7 @@ export async function GET(
         success: false,
         error: {
           code: 'PERIOD_NOT_FOUND',
-          message: `Period ${id} not found`,
+          message: `Periode ${id} niet gevonden`,
         },
       };
       return NextResponse.json(response, { status: 404 });
