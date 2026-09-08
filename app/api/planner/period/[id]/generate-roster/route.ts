@@ -73,7 +73,7 @@ export async function POST(
         return NextResponse.json(
           {
             success: false,
-            error: 'Prior assignments must be confirmed before generating the roster',
+            error: 'Overloopgegevens moeten eerst bevestigd worden voordat het rooster gegenereerd kan worden',
           },
           { status: 400 }
         );

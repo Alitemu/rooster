@@ -129,7 +129,7 @@ export async function POST(
     if (!pool) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'POOL_NOT_FOUND', message: `Pool ${poolId} not found` },
+        error: { code: 'POOL_NOT_FOUND', message: `Pool ${poolId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }

@@ -53,7 +53,7 @@ export async function PATCH(
     if (!membership) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'MEMBERSHIP_NOT_FOUND', message: `Membership ${membershipId} not found` },
+        error: { code: 'MEMBERSHIP_NOT_FOUND', message: `Lidmaatschap ${membershipId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -134,7 +134,7 @@ export async function DELETE(
     if (!membership) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'MEMBERSHIP_NOT_FOUND', message: `Membership ${membershipId} not found` },
+        error: { code: 'MEMBERSHIP_NOT_FOUND', message: `Lidmaatschap ${membershipId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }

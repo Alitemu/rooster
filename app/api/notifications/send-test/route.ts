@@ -40,7 +40,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!rendered) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'TEMPLATE_NOT_FOUND', message: `No template configured for ${sleutel}` },
+        error: { code: 'TEMPLATE_NOT_FOUND', message: `Geen sjabloon geconfigureerd voor ${sleutel}` },
       };
       return NextResponse.json(response, { status: 404 });
     }

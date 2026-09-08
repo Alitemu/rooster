@@ -31,13 +31,16 @@ export async function POST(
 
     if (!notification) {
       return NextResponse.json(
-        { success: false, error: { code: 'NOTIFICATION_NOT_FOUND', message: `Notification ${notifId} not found` } },
+        { success: false, error: { code: 'NOTIFICATION_NOT_FOUND', message: `Melding ${notifId} niet gevonden` } },
         { status: 404 }
       );
     }
 
+    // Idempotent on repeat calls: only set gesloten_op the first time, so
+    // a second dismiss (e.g. a double-click) doesn't overwrite the real
+    // original dismiss timestamp with a later one.
     db.prepare(
-      'UPDATE dienstrooster_notification SET gesloten_op = ? WHERE id = ?'
+      'UPDATE dienstrooster_notification SET gesloten_op = ? WHERE id = ? AND gesloten_op IS NULL'
     ).run(new Date().toISOString(), notifId);
 
     return NextResponse.json({

@@ -57,7 +57,7 @@ export async function POST(
       return NextResponse.json(
         {
           success: false,
-          error: `Roster is not ready to publish: ${check.issues.join('; ')}`,
+          error: `Rooster is nog niet klaar om te publiceren: ${check.issues.join('; ')}`,
           data: { issues: check.issues, checks: check.checks },
         },
         { status: 400 }
