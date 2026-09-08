@@ -45,10 +45,24 @@ export function checkRateLimit(
   return { allowed: true, retryAfterSeconds: 0 };
 }
 
-/** Best-effort client identifier for rate-limiting keys. */
+/**
+ * Client identifier for rate-limiting keys.
+ *
+ * Deliberately reads ONLY `X-Real-IP`, which the Caddyfile sets with
+ * `header_up X-Real-IP {http.request.remote.host}` - `header_up` (no `+`)
+ * replaces rather than appends, so this value is always Caddy's own view
+ * of the connecting peer, never something a client can forge by sending
+ * its own X-Real-IP header. `X-Forwarded-For` is NOT used here: Caddy's
+ * reverse_proxy appends to that header rather than replacing it, so a
+ * client-supplied entry stays present ahead of Caddy's own - trusting it
+ * (e.g. taking the first entry) would let every request claim a fresh IP
+ * and fully defeat rate limiting. In local dev (no Caddy in front),
+ * neither header is present and every request shares the 'unknown'
+ * bucket - fine, since Caddy is the only production entry point.
+ */
 export function getClientIp(req: { headers: { get(name: string): string | null } }): string {
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
+  const realIp = req.headers.get('x-real-ip');
+  if (realIp) return realIp.trim();
   return 'unknown';
 }
 

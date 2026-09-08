@@ -49,7 +49,17 @@ https://:{$APP_PORT:8010} {
 	tls internal {
 		on_demand
 	}
-	reverse_proxy web:3000
+	# header_up (without +) replaces rather than appends, so this always
+	# overwrites any X-Real-IP a client sent with Caddy's own view of the
+	# connecting peer - the app's rate limiter (lib/rateLimit.ts) trusts
+	# this header specifically because a client can never forge it here.
+	# X-Forwarded-For is deliberately NOT used for that purpose: Caddy's
+	# reverse_proxy appends to it rather than replacing it, so a
+	# client-supplied value stays present ahead of Caddy's own entry and
+	# would let every request claim a fresh IP, defeating rate limiting.
+	reverse_proxy web:3000 {
+		header_up X-Real-IP {http.request.remote.host}
+	}
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
