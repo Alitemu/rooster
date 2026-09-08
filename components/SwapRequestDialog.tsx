@@ -41,6 +41,17 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   useEffect(() => {
     if (!isOpen) return;
 
+    // This component never unmounts between opens (isOpen just toggles
+    // its own rendering), so without an explicit reset a selection from a
+    // previous, cancelled session stays in state - the <select> visually
+    // falls back to its placeholder once the reloaded roster no longer
+    // contains that slot id, but "Verzoek versturen" stayed enabled on
+    // the stale id underneath.
+    setOfferedSlotId('');
+    setRequestedSlotId('');
+    setNotes('');
+    setError(null);
+
     const loadAssignments = async () => {
       setLoading(true);
       setError(null);
