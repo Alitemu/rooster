@@ -157,6 +157,21 @@ export async function PATCH(
     const info = db.prepare(sql).run(...sqlParams);
 
     if (info.changes === 0) {
+      // Two distinct reasons the UPDATE could match nothing: the row was
+      // deleted between the SELECT above and this write (possible even
+      // without a supplied rowVersion, since that path has no WHERE
+      // row_version clause to fail on), or a genuine version conflict.
+      // Reporting the wrong one as "someone else edited this" would be
+      // misleading when the real cause is that the period is simply gone.
+      const stillExists = db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(id);
+      if (!stillExists) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+        };
+        return NextResponse.json(response, { status: 404 });
+      }
+
       const response: ApiErrorResponse = {
         success: false,
         error: {
@@ -167,9 +182,16 @@ export async function PATCH(
       return NextResponse.json(response, { status: 409 });
     }
 
+    // Re-read rather than compute (period.row_version + 1) - when
+    // rowVersion was omitted, the UPDATE has no version guard, so the
+    // pre-fetch value could already be stale by the time this responds.
+    const freshRowVersion = (
+      db.prepare('SELECT row_version FROM dienstrooster_schedule_period WHERE id = ?').get(id) as { row_version: number }
+    ).row_version;
+
     const response: ApiSuccessResponse<{ ruleset: Record<string, unknown>; row_version: number }> = {
       success: true,
-      data: { ruleset: updated, row_version: period.row_version + 1 },
+      data: { ruleset: updated, row_version: freshRowVersion },
     };
     return NextResponse.json(response);
   } catch (error) {

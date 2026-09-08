@@ -125,6 +125,17 @@ export async function PATCH(
     const info = db.prepare(sql).run(...sqlParams);
 
     if (info.changes === 0) {
+      // Distinguish "the row was deleted in the meantime" from a genuine
+      // version conflict - see ruleset/route.ts for the same reasoning.
+      const stillExists = db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(id);
+      if (!stillExists) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+        };
+        return NextResponse.json(response, { status: 404 });
+      }
+
       const response: ApiErrorResponse = {
         success: false,
         error: {
@@ -135,9 +146,16 @@ export async function PATCH(
       return NextResponse.json(response, { status: 409 });
     }
 
+    // Re-read rather than compute (period.row_version + 1) - when
+    // rowVersion was omitted, the UPDATE has no version guard, so the
+    // pre-fetch value could already be stale by the time this responds.
+    const freshRowVersion = (
+      db.prepare('SELECT row_version FROM dienstrooster_schedule_period WHERE id = ?').get(id) as { row_version: number }
+    ).row_version;
+
     const response: ApiSuccessResponse<{ deadline: string; row_version: number }> = {
       success: true,
-      data: { deadline: body.deadline, row_version: period.row_version + 1 },
+      data: { deadline: body.deadline, row_version: freshRowVersion },
     };
     return NextResponse.json(response);
   } catch (error) {
