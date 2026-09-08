@@ -116,6 +116,15 @@ class RuleSet(BaseModel):
     # band - see objective.add_band_slack_objective. Default reproduces
     # the flat weight=5.0-per-unit behaviour this replaced. Each tier must
     # be non-negative for the same reason as soft_block_penalty above.
+    #
+    # Deliberately not capped below the shortfall weight (1000.0 in
+    # solver.py) - a planner who sets aggressive tiers here (e.g.
+    # [10, 40, 160, 640, 2560]) can reach a level where the solver prefers
+    # leaving a slot unfilled over stretching one person's band further,
+    # which sits above the shortfall weight. Raised and decided during
+    # review: that's accepted, not a bug - a planner who wants "coverage
+    # always wins, no matter how extreme the deviation" achieves that by
+    # not configuring tiers that high, not because the solver enforces it.
     band_deviation_penalty: list[float] = [5.0]
     # >=1 so tiers beyond the configured list only ever escalate
     # (penalty_tiers[-1] * multiplier**extra_levels) rather than silently
