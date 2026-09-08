@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
-import { hashToken, hashPassword } from '../lib/auth';
+import { hashToken, hashPassword, validatePasswordStrength } from '../lib/auth';
 import { generateSlotsForPeriod } from '../lib/slotGeneration';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +28,34 @@ const __dirname = path.dirname(__filename);
 // any point in its git history) knows this password. It controls the
 // entire roster for every participant, not just the account itself.
 const DEFAULT_TEST_PASSWORD = 'Password123!';
+
+/**
+ * Resolve which password the freshly-created planner account gets: the
+ * gitignored SEED_PLANNER_PASSWORD override if one is set and valid,
+ * otherwise the git-committed default above.
+ *
+ * This must happen here, at creation time, rather than relying on
+ * scripts/claim-password.ts to apply the override afterwards -
+ * docker-entrypoint.sh runs this seed before that script, and this insert
+ * always sets a non-NULL wachtwoord_hash, so claim-password's "only touch
+ * an account with wachtwoord_hash IS NULL" guard would always find the
+ * account already claimed and silently skip, making the documented
+ * .env.example override permanently ineffective.
+ */
+async function resolvePlannerPassword(): Promise<{ hash: string; usedOverride: boolean }> {
+  const override = process.env.SEED_PLANNER_PASSWORD;
+  if (!override) return { hash: await hashPassword(DEFAULT_TEST_PASSWORD), usedOverride: false };
+
+  const errors = validatePasswordStrength(override);
+  if (errors.length > 0) {
+    console.warn(
+      `SEED_PLANNER_PASSWORD voldoet niet aan de eisen (${errors.join(', ')}) - standaardwachtwoord gebruikt.`
+    );
+    return { hash: await hashPassword(DEFAULT_TEST_PASSWORD), usedOverride: false };
+  }
+
+  return { hash: await hashPassword(override), usedOverride: true };
+}
 
 /**
  * Resolve the database the same way db/client.ts does.
@@ -493,12 +521,12 @@ async function seed() {
     // kept as a second account with nothing distinct to do.
     console.log('Creating planner user...');
     const plannerId = uuid();
-    const defaultPasswordHash = await hashPassword(DEFAULT_TEST_PASSWORD);
+    const { hash: plannerPasswordHash, usedOverride: plannerPasswordFromEnv } = await resolvePlannerPassword();
 
     db.prepare(`
       INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(plannerId, 'planner', 'PLANNER', 1, defaultPasswordHash, now);
+    `).run(plannerId, 'planner', 'PLANNER', 1, plannerPasswordHash, now);
 
     // 2. Create 31 staff members
     console.log('Creating 31 staff members...');
@@ -929,7 +957,11 @@ async function seed() {
 
     console.log('\n✅ Seed completed successfully!');
     console.log(`\nUsers created:`);
-    console.log(`  - Planner: planner / password: ${DEFAULT_TEST_PASSWORD} (change before real use - see DEFAULT_TEST_PASSWORD in this file)`);
+    console.log(
+      plannerPasswordFromEnv
+        ? `  - Planner: planner / password: (set from SEED_PLANNER_PASSWORD)`
+        : `  - Planner: planner / password: ${DEFAULT_TEST_PASSWORD} (change before real use - see DEFAULT_TEST_PASSWORD in this file)`
+    );
     console.log(`  - Staff: Persoon-01 through Persoon-31 (personal access links)`);
     console.log(`\nPool: Achterwacht (31 members)`);
     console.log(`Period: 2027-1 (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);
