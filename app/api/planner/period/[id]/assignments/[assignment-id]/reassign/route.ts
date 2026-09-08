@@ -65,6 +65,19 @@ export async function POST(
       );
     }
 
+    // Same whitelist as manual-assign - a reassign is only meaningful
+    // once a roster actually exists (GEGENEREERD/GEPUBLICEERD). Without
+    // this, an assignment left over after a ruleset edit demotes the
+    // period back to OPEN (see ruleset/route.ts) could still be
+    // reassigned while the period nominally sits in an input-collection
+    // status the UI presents as "not yet rostered".
+    if (!['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
+      return NextResponse.json(
+        { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
+        { status: 400 }
+      );
+    }
+
     const assignment = db
       .prepare('SELECT * FROM dienstrooster_assignment WHERE id = ? AND schedule_version_id = ?')
       .get(assignmentId, periodId) as any;
