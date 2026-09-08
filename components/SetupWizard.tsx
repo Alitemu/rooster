@@ -550,7 +550,11 @@ export function SetupWizard({ period, onComplete }: Props) {
           } else {
             current += char;
           }
-        } else if (char === '"') {
+        } else if (char === '"' && current === '') {
+          // Only a quote at the very start of a cell opens quoted mode
+          // (RFC 4180) - a stray `"` typed mid-field (e.g. `Persoon"05`)
+          // must stay a literal character, not swallow the next comma as
+          // part of the "quoted" text and silently merge two columns.
           inQuotes = true;
         } else if (char === ',') {
           cells.push(current.trim());
