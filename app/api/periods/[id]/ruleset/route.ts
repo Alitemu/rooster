@@ -134,14 +134,37 @@ export async function PATCH(
     // block the normal "adjust, then regenerate" flow this route exists
     // for - it just removes the gap where a planner could adjust and then
     // skip regenerating.
+    let sql: string;
+    const sqlParams: unknown[] = [JSON.stringify(updated)];
     if (period.status === 'GEGENEREERD') {
-      db.prepare(
-        'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, status = ?, row_version = row_version + 1 WHERE id = ?'
-      ).run(JSON.stringify(updated), 'OPEN', id);
+      sql = 'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, status = ?, row_version = row_version + 1 WHERE id = ?';
+      sqlParams.push('OPEN', id);
     } else {
-      db.prepare(
-        'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, row_version = row_version + 1 WHERE id = ?'
-      ).run(JSON.stringify(updated), id);
+      sql = 'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, row_version = row_version + 1 WHERE id = ?';
+      sqlParams.push(id);
+    }
+
+    // When the caller supplies rowVersion, fold it into the UPDATE's own
+    // WHERE clause rather than only comparing it in the SELECT above - a
+    // second planner's write landing in the gap between that SELECT and
+    // this UPDATE would otherwise slip through unnoticed (a TOCTOU race),
+    // silently overwriting their change instead of reporting a conflict.
+    if (body.rowVersion !== undefined) {
+      sql += ' AND row_version = ?';
+      sqlParams.push(body.rowVersion);
+    }
+
+    const info = db.prepare(sql).run(...sqlParams);
+
+    if (info.changes === 0) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'ROW_VERSION_CONFLICT',
+          message: 'Deze periode is intussen door iemand anders aangepast. Laad de pagina opnieuw en probeer het nog eens.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     const response: ApiSuccessResponse<{ ruleset: Record<string, unknown>; row_version: number }> = {

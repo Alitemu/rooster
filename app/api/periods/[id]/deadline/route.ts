@@ -18,6 +18,7 @@ import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateDeadlineRequest {
   deadline: string;
+  rowVersion?: number;
 }
 
 export async function PATCH(
@@ -42,8 +43,8 @@ export async function PATCH(
     }
 
     const period = db
-      .prepare('SELECT id, status, start_datum FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(id) as { id: string; status: string; start_datum: string } | undefined;
+      .prepare('SELECT id, status, start_datum, row_version FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(id) as { id: string; status: string; start_datum: string; row_version: number } | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
@@ -97,13 +98,46 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
 
-    db.prepare(
-      'UPDATE dienstrooster_schedule_period SET deadline = ?, row_version = row_version + 1 WHERE id = ?'
-    ).run(body.deadline, id);
+    // Optimistic locking, same as ruleset/route.ts - without this, two
+    // planners editing the deadline and the ruleset concurrently got
+    // inconsistent conflict protection depending on which route they hit.
+    if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'ROW_VERSION_CONFLICT',
+          message: 'Deze periode is intussen door iemand anders aangepast. Laad de pagina opnieuw en probeer het nog eens.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
+    }
 
-    const response: ApiSuccessResponse<{ deadline: string }> = {
+    let sql = 'UPDATE dienstrooster_schedule_period SET deadline = ?, row_version = row_version + 1 WHERE id = ?';
+    const sqlParams: unknown[] = [body.deadline, id];
+    // Folding rowVersion into the UPDATE's own WHERE clause (rather than
+    // only comparing it above) closes the race window between that check
+    // and this write - see ruleset/route.ts for the same reasoning.
+    if (body.rowVersion !== undefined) {
+      sql += ' AND row_version = ?';
+      sqlParams.push(body.rowVersion);
+    }
+
+    const info = db.prepare(sql).run(...sqlParams);
+
+    if (info.changes === 0) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'ROW_VERSION_CONFLICT',
+          message: 'Deze periode is intussen door iemand anders aangepast. Laad de pagina opnieuw en probeer het nog eens.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
+    }
+
+    const response: ApiSuccessResponse<{ deadline: string; row_version: number }> = {
       success: true,
-      data: { deadline: body.deadline },
+      data: { deadline: body.deadline, row_version: period.row_version + 1 },
     };
     return NextResponse.json(response);
   } catch (error) {
