@@ -265,6 +265,24 @@ async def solve_roster(request: SolverInput):
                 elif pref.blocking_level == "VOORKEUR":
                     preferred_slots[(person_id, pref.slot_id)] = 1.0
 
+        # Under NAAR_RATO, constraints.add_band_constraints and
+        # objective.add_band_slack_objective both silently fall back to
+        # factor=1.0 (full-time) for anyone missing from
+        # participation_factors via `factors.get(person_id, 1.0)` - that's
+        # a reasonable default to keep the solve from failing outright,
+        # but it defeats the whole point of NAAR_RATO for that person with
+        # no signal anywhere that it happened. Surface it in the logs so a
+        # data-drift bug (a caller forgetting to send someone's factor)
+        # doesn't go completely unnoticed.
+        if request.rules.distribution_mode == 'NAAR_RATO':
+            missing_factors = [p for p in request.people if p not in request.participation_factors]
+            if missing_factors:
+                logger.warning(
+                    f"NAAR_RATO active but {len(missing_factors)} of {len(request.people)} "
+                    f"people have no participation_factors entry - defaulting to 1.0 "
+                    f"(full-time) for: {missing_factors}"
+                )
+
         # Build band ranges
         band_ranges = {
             'AVOND': request.rules.band_avond,
