@@ -198,6 +198,12 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     OVERRIDE: 'bg-purple-100 text-purple-800',
   };
 
+  const sourceNames: Record<string, string> = {
+    SOLVER: 'Solver',
+    MANUAL: 'Handmatig',
+    OVERRIDE: 'Overschreven',
+  };
+
   // Feestdag always wins over weekend for a given date (a slot's teller is
   // already assigned that way at generation time - see
   // lib/slotPersistence.ts - so this just mirrors it), so checking teller
@@ -303,7 +309,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                   <td className="px-3 py-2">{dienstTypeLabel(a)}</td>
                   <td className="px-3 py-2">
                     <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${sourceColors[a.bron] || 'bg-neutral-100'}`}>
-                      {a.bron}
+                      {sourceNames[a.bron] || a.bron}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-center">

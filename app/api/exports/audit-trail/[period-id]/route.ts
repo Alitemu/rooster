@@ -36,13 +36,13 @@ const EDIT_TYPE_LABELS: Record<string, string> = {
   HANDMATIG_TOEWIJZEN: 'Toegewezen',
   HANDMATIG_VERWIJDEREN: 'Verwijderd',
   RUIL: 'Geruild',
-  OVERRIDE: 'Overruled',
+  OVERRIDE: 'Overschreven',
 };
 
 const OVERRIDE_LABELS: Record<string, string> = {
-  BLOCKED_OVERRIDE: 'Geblokkeerde dag overruled',
-  PARTTIME_OVERRIDE: 'Parttime-vrije dag overruled',
-  WINDOW_OVERRIDE: 'Vensterregel overruled',
+  BLOCKED_OVERRIDE: 'Geblokkeerde dag overschreven',
+  PARTTIME_OVERRIDE: 'Parttime-vrije dag overschreven',
+  WINDOW_OVERRIDE: 'Vensterregel overschreven',
 };
 
 interface Row {
