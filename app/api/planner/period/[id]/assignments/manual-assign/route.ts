@@ -165,36 +165,40 @@ export async function POST(
       });
     }
 
-    // Create assignment
+    // Create assignment. Wrapped with the audit-log insert below in one
+    // transaction - a crash between the two used to be able to leave an
+    // assignment with no audit trail for it.
     const assignmentId = uuid();
-    db.prepare(
-      `INSERT INTO dienstrooster_assignment
-       (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(assignmentId, periodId, person_id, slot_id, 'MANUAL', 1, now);
+    db.transaction(() => {
+      db.prepare(
+        `INSERT INTO dienstrooster_assignment
+         (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(assignmentId, periodId, person_id, slot_id, 'MANUAL', 1, now);
 
-    // Log audit entry - includes the override reason (if any) so a
-    // deliberate overrule of a block/parttime-day/window-conflict is
-    // visible in the audit trail, not just at the moment it happened.
-    db.prepare(
-      `INSERT INTO dienstrooster_audit_log
-       (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      uuid(),
-      actorId,
-      'assignment',
-      assignmentId,
-      'MANUAL_ASSIGN',
-      null,
-      JSON.stringify({
-        person_id,
-        slot_id,
-        reason: reason || null,
-        override: warning ? { code: warning.code } : null,
-      }),
-      now
-    );
+      // Log audit entry - includes the override reason (if any) so a
+      // deliberate overrule of a block/parttime-day/window-conflict is
+      // visible in the audit trail, not just at the moment it happened.
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log
+         (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        uuid(),
+        actorId,
+        'assignment',
+        assignmentId,
+        'MANUAL_ASSIGN',
+        null,
+        JSON.stringify({
+          person_id,
+          slot_id,
+          reason: reason || null,
+          override: warning ? { code: warning.code } : null,
+        }),
+        now
+      );
+    })();
 
     // Prepared for when there's a way to reach the participant outside the
     // app - see lib/notifications.ts. A no-op today (NOTIFICATIONS_ENABLED
