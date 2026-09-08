@@ -160,7 +160,6 @@ class SolverInput(BaseModel):
     people: list[str]
     rules: RuleSet
     balances: dict[str, dict[str, int]]
-    active_people: int
     prior_assignments: list[PriorAssignment] = []
     # person_id -> pool_membership.deelnamefactor (e.g. 0.5 for half-time).
     # Only consulted when rules.distribution_mode == "NAAR_RATO" - see
@@ -234,7 +233,6 @@ async def solve_roster(request: SolverInput):
     - people: List of person IDs
     - rules: Window weeks, band ranges, distribution mode
     - balances: Current balance per person per counter
-    - active_people: Number of active pool members
     - prior_assignments: Confirmed tail of the previous period, so the
       window rule carries over across the period boundary
 

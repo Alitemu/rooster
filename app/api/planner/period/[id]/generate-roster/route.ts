@@ -262,7 +262,6 @@ export async function POST(
             : 0,
       },
       balances,
-      active_people: people.length,
       prior_assignments: priorAssignmentRows.map((r) => ({
         person_id: r.person_id,
         datum: r.datum,
