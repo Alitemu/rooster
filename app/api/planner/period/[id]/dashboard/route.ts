@@ -31,6 +31,7 @@ interface DashboardData {
   status: string;
   submission_stats: SubmissionStats;
   large_imbalances: ImbalanceItem[];
+  large_balance_threshold: number;
   total_staff: number;
   staff_with_parttime: number;
 }
@@ -148,6 +149,7 @@ export async function GET(
           confirmed: stats.confirmed || 0,
         },
         large_imbalances: imbalances,
+        large_balance_threshold: largeBalanceThreshold,
         total_staff: totalStaff?.count || 0,
         staff_with_parttime: parttimeCount?.count || 0,
       },

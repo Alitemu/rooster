@@ -47,6 +47,7 @@ interface DashboardData {
     confirmed: number;
   };
   large_imbalances: ImbalanceItem[];
+  large_balance_threshold: number;
   total_staff: number;
   staff_with_parttime: number;
 }
@@ -155,9 +156,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     totalSubmissions > 0 ? Math.round((stats.confirmed / totalSubmissions) * 100) : 0;
 
   const counterDisplayName: Record<string, string> = {
-    AVOND: 'Avond',
-    WEEKEND: 'Weekend',
-    FEESTDAG: 'Feestdag',
+    AVOND: 'avonddienst',
+    WEEKEND: 'weekenddienst',
+    FEESTDAG: 'feestdagdienst',
   };
 
   return (
@@ -195,7 +196,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       {/* Large Imbalances */}
       {dashboard.large_imbalances.length > 0 && (
         <div className="card p-6 bg-amber-50 border border-amber-200">
-          <h3 className="font-bold text-lg mb-3">⚠️ Grote verschillen (≥2 diensten verschil)</h3>
+          <h3 className="font-bold text-lg mb-3">
+            ⚠️ Grote verschillen (≥{dashboard.large_balance_threshold} diensten verschil)
+          </h3>
           <div className="space-y-2">
             {dashboard.large_imbalances.slice(0, 8).map((item) => (
               <div key={`${item.person_id}-${item.counter}`} className="flex justify-between text-sm">
