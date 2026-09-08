@@ -35,7 +35,7 @@ export async function POST(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
       );
     }
@@ -47,7 +47,7 @@ export async function POST(
     // roster staff have already been told about.
     if (!['CONCEPT', 'OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Cannot generate roster for period in ${period.status} status` },
+        { success: false, error: `Rooster kan niet gegenereerd worden vanuit status ${period.status}` },
         { status: 400 }
       );
     }

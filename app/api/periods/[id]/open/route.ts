@@ -42,6 +42,15 @@ interface OpenPeriodRequest {
   ruleset: RulesetConfig;
 }
 
+function isValidBand(band: unknown): band is [number, number] {
+  return (
+    Array.isArray(band) &&
+    band.length === 2 &&
+    band.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0) &&
+    band[0] <= band[1]
+  );
+}
+
 interface OpenPeriodResponse {
   period_id: string;
   status: string;
@@ -125,6 +134,20 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
+    for (const [key, band] of [
+      ['bandAvond', ruleset.bandAvond],
+      ['bandWeekend', ruleset.bandWeekend],
+      ['bandFeestdag', ruleset.bandFeestdag],
+    ] as const) {
+      if (!isValidBand(band)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'INVALID_BAND', message: `${key}: min en max moeten getallen zijn (min <= max, min >= 0)` },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
+
     const period = db
       .prepare('SELECT id, pool_id, status FROM dienstrooster_schedule_period WHERE id = ?')
       .get(id) as { id: string; pool_id: string; status: string } | undefined;
@@ -140,7 +163,7 @@ export async function POST(
     if (period.status !== 'CONCEPT') {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_STATUS', message: `Cannot open period in ${period.status} status` },
+        error: { code: 'INVALID_STATUS', message: `Periode kan niet geopend worden vanuit status ${period.status}` },
       };
       return NextResponse.json(response, { status: 400 });
     }

@@ -35,14 +35,14 @@ export async function POST(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
       );
     }
 
     if (period.status !== 'GEGENEREERD') {
       return NextResponse.json(
-        { success: false, error: `Cannot publish period in ${period.status} status` },
+        { success: false, error: `Periode kan niet gepubliceerd worden vanuit status ${period.status}` },
         { status: 400 }
       );
     }

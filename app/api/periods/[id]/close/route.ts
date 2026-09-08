@@ -38,7 +38,7 @@ export async function POST(
     if (period.status !== 'OPEN') {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_STATUS', message: `Cannot close period in ${period.status} status` },
+        error: { code: 'INVALID_STATUS', message: `Periode kan niet gesloten worden vanuit status ${period.status}` },
       };
       return NextResponse.json(response, { status: 400 });
     }
