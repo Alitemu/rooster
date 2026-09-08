@@ -34,6 +34,10 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
   const [swapRequests, setSwapRequests] = useState<SwapRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` (the initial-load failure, which replaces the
+  // whole panel below) - an approve/reject/cancel failure must not hide
+  // the filter and the rest of the list, just report itself.
+  const [actionError, setActionError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState('PENDING');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -68,7 +72,25 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
+  // Updates the swap's status in place rather than always removing it from
+  // the list - removing unconditionally was only correct while filtering
+  // on PENDING; with "Alle statussen" (or any filter that still matches
+  // the new status) the row used to just vanish instead of showing its new
+  // badge. The list itself is fetched pre-filtered by ?status=, so a swap
+  // whose new status no longer matches the active filter is dropped here
+  // to stay consistent with what a fresh reload would show.
+  const updateSwapStatus = (swapId: string, newStatus: string) => {
+    setSwapRequests((prev) => {
+      const updated = prev.map((s) => (s.id === swapId ? { ...s, status: newStatus } : s));
+      if (filterStatus && filterStatus !== newStatus) {
+        return updated.filter((s) => s.id !== swapId);
+      }
+      return updated;
+    });
+  };
+
   const handleApprove = async (swapId: string) => {
+    setActionError(null);
     try {
       const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/approve`, {
         method: 'POST',
@@ -79,14 +101,15 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         throw new Error(data?.error || 'Goedkeuren van ruil mislukt');
       }
 
-      setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
+      updateSwapStatus(swapId, 'GOEDGEKEURD');
       showSuccess('Ruil goedgekeurd');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Goedkeuren van ruil mislukt');
+      setActionError(err instanceof Error ? err.message : 'Goedkeuren van ruil mislukt');
     }
   };
 
   const handleReject = async (swapId: string, reason?: string) => {
+    setActionError(null);
     try {
       const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/reject`, {
         method: 'POST',
@@ -99,16 +122,17 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         throw new Error(data?.error || 'Weigeren van ruil mislukt');
       }
 
-      setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
+      updateSwapStatus(swapId, 'AFGEWEZEN');
       setRejectingId(null);
       setRejectionReason('');
       showSuccess('Ruil geweigerd');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Weigeren van ruil mislukt');
+      setActionError(err instanceof Error ? err.message : 'Weigeren van ruil mislukt');
     }
   };
 
   const handleCancel = async (swapId: string) => {
+    setActionError(null);
     try {
       const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/cancel`, {
         method: 'POST',
@@ -119,10 +143,10 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         throw new Error(data?.error || 'Intrekken van ruilverzoek mislukt');
       }
 
-      setSwapRequests(swapRequests.filter((s) => s.id !== swapId));
+      updateSwapStatus(swapId, 'INGETROKKEN');
       showSuccess('Ruilverzoek ingetrokken');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Intrekken van ruilverzoek mislukt');
+      setActionError(err instanceof Error ? err.message : 'Intrekken van ruilverzoek mislukt');
     }
   };
 
@@ -167,6 +191,18 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
       {successMessage && (
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
           {successMessage}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start justify-between gap-3">
+          <p className="text-sm text-red-700">{actionError}</p>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-red-700 hover:text-red-900 text-sm font-medium shrink-0"
+          >
+            Sluiten
+          </button>
         </div>
       )}
 
