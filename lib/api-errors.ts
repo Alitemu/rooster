@@ -47,20 +47,20 @@ export function internalErrorResponse(context: string, error: unknown, status = 
   return NextResponse.json(
     {
       success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Something went wrong. Please try again.' },
+      error: { code: 'INTERNAL_ERROR', message: 'Er is iets misgegaan. Probeer het opnieuw.' },
     },
     { status }
   );
 }
 
-export function unauthorizedResponse(message = 'Authentication required'): NextResponse {
+export function unauthorizedResponse(message = 'Authenticatie vereist'): NextResponse {
   return NextResponse.json(
     { success: false, error: { code: 'UNAUTHORIZED', message } },
     { status: 401 }
   );
 }
 
-export function forbiddenResponse(message = 'Not allowed'): NextResponse {
+export function forbiddenResponse(message = 'Niet toegestaan'): NextResponse {
   return NextResponse.json(
     { success: false, error: { code: 'FORBIDDEN', message } },
     { status: 403 }
