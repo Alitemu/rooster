@@ -32,6 +32,20 @@ import {
   type Teller,
 } from '@/lib/rosterBands';
 
+// Singular/plural Dutch labels for the ledger_entry.reden text below -
+// CLAUDE.md requires user-facing balance text in words ("1 avonddienst
+// minder"), never raw numbers or English.
+const TELLER_LABEL_SINGULAR: Record<Teller, string> = {
+  AVOND: 'avonddienst',
+  WEEKEND: 'weekenddienst',
+  FEESTDAG: 'feestdagdienst',
+};
+const TELLER_LABEL_PLURAL: Record<Teller, string> = {
+  AVOND: 'avonddiensten',
+  WEEKEND: 'weekenddiensten',
+  FEESTDAG: 'feestdagdiensten',
+};
+
 export interface CarryOverEntry {
   person_id: string;
   teller: Teller;
@@ -199,9 +213,12 @@ export function applyCarryOverForPeriod(periodId: string, actorId: string): numb
     for (const entry of entries) {
       const shortfall = entry.delta > 0;
       const amount = Math.abs(entry.delta);
-      const reden =
-        `${amount} ${shortfall ? 'to make up from' : 'too many in'} the previous period ` +
-        `(${entry.actual} of ${entry.target})`;
+      const label = amount === 1 ? TELLER_LABEL_SINGULAR[entry.teller] : TELLER_LABEL_PLURAL[entry.teller];
+      // Dutch, in words, no raw numbers beyond the count itself (CLAUDE.md
+      // bans showing the underlying band/target-vs-actual ratio directly).
+      const reden = shortfall
+        ? `${amount} ${label} in te halen van vorige periode`
+        : `${amount} ${label} te veel gehad in vorige periode`;
 
       insert.run(
         crypto.randomUUID(),
