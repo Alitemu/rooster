@@ -35,8 +35,21 @@ export async function DELETE(
 
     if (!period) {
       return NextResponse.json(
-        { success: false, error: 'Period not found' },
+        { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
+      );
+    }
+
+    // Same whitelist as manual-assign/reassign - removing an assignment
+    // is only meaningful once a roster actually exists. Without this, an
+    // assignment left over after a ruleset edit demotes the period back
+    // to OPEN (see ruleset/route.ts) could still be deleted while the
+    // period nominally sits in an input-collection status the UI
+    // presents as "not yet rostered".
+    if (!['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
+      return NextResponse.json(
+        { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
+        { status: 400 }
       );
     }
 
@@ -47,7 +60,7 @@ export async function DELETE(
 
     if (!assignment) {
       return NextResponse.json(
-        { success: false, error: 'Assignment not found' },
+        { success: false, error: 'Toewijzing niet gevonden' },
         { status: 404 }
       );
     }
@@ -63,48 +76,55 @@ export async function DELETE(
       return NextResponse.json(
         {
           success: false,
-          error: 'A reason is required when changing a published roster',
+          error: 'Een reden is verplicht bij het wijzigen van een gepubliceerd rooster',
         },
         { status: 400 }
       );
     }
 
-    // Log edit entry before deletion
-    db.prepare(
-      `INSERT INTO dienstrooster_assignment_edit
-       (id, toewijzing_id, periode_id, person_id, slot_id, edit_type, reden, bewerkt_door_person_id, aangemaakt_op, row_version)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      uuid(),
-      assignmentId,
-      periodId,
-      assignment.person_id,
-      assignment.slot_id,
-      'HANDMATIG_VERWIJDEREN',
-      reason || null,
-      actorId,
-      now,
-      1
-    );
+    // A crash between these three writes would leave the audit trail
+    // inconsistent with what actually happened (e.g. an edit-log row
+    // claiming a removal that never took effect) - wrap them as one unit,
+    // matching how reassign/route.ts already handles its analogous
+    // multi-step edit.
+    db.transaction(() => {
+      // Log edit entry before deletion
+      db.prepare(
+        `INSERT INTO dienstrooster_assignment_edit
+         (id, toewijzing_id, periode_id, person_id, slot_id, edit_type, reden, bewerkt_door_person_id, aangemaakt_op, row_version)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        uuid(),
+        assignmentId,
+        periodId,
+        assignment.person_id,
+        assignment.slot_id,
+        'HANDMATIG_VERWIJDEREN',
+        reason || null,
+        actorId,
+        now,
+        1
+      );
 
-    // Delete assignment
-    db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(assignmentId);
+      // Delete assignment
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(assignmentId);
 
-    // Log audit entry
-    db.prepare(
-      `INSERT INTO dienstrooster_audit_log
-       (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      uuid(),
-      actorId,
-      'assignment',
-      assignmentId,
-      'DELETE',
-      JSON.stringify(assignment),
-      null,
-      now
-    );
+      // Log audit entry
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log
+         (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(
+        uuid(),
+        actorId,
+        'assignment',
+        assignmentId,
+        'DELETE',
+        JSON.stringify(assignment),
+        null,
+        now
+      );
+    })();
 
     return NextResponse.json({
       success: true,
