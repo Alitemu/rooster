@@ -67,7 +67,7 @@ function logAudit(actorId: string, periodId: string, actie: string, oud: object,
  */
 export function softDeletePeriod(periodId: string, actorId: string): void {
   const period = getPeriod(periodId);
-  if (!period) throw new PeriodTrashError(`Period ${periodId} not found`, 'NOT_FOUND');
+  if (!period) throw new PeriodTrashError(`Periode ${periodId} niet gevonden`, 'NOT_FOUND');
   if (period.verwijderd_op) throw new PeriodTrashError('Periode staat al in de prullenbak', 'ALREADY_DELETED');
 
   const now = new Date().toISOString();
@@ -81,7 +81,7 @@ export function softDeletePeriod(periodId: string, actorId: string): void {
  */
 export function restorePeriod(periodId: string, actorId: string): void {
   const period = getPeriod(periodId);
-  if (!period) throw new PeriodTrashError(`Period ${periodId} not found`, 'NOT_FOUND');
+  if (!period) throw new PeriodTrashError(`Periode ${periodId} niet gevonden`, 'NOT_FOUND');
   if (!period.verwijderd_op) throw new PeriodTrashError('Periode staat niet in de prullenbak', 'NOT_DELETED');
 
   db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = NULL WHERE id = ?').run(periodId);
@@ -133,7 +133,7 @@ function cascadeDeletePeriod(periodId: string): void {
  */
 export function purgePeriodNow(periodId: string, actorId: string): void {
   const period = getPeriod(periodId);
-  if (!period) throw new PeriodTrashError(`Period ${periodId} not found`, 'NOT_FOUND');
+  if (!period) throw new PeriodTrashError(`Periode ${periodId} niet gevonden`, 'NOT_FOUND');
   if (!period.verwijderd_op) throw new PeriodTrashError('Periode staat niet in de prullenbak', 'NOT_DELETED');
 
   const run = db.transaction(() => {
