@@ -112,8 +112,10 @@ export async function POST(
     // non-deterministically by whichever row SQLite happens to return last.
     const poolMembersRaw = db
       .prepare(
-        `SELECT person_id, deelnamefactor FROM dienstrooster_pool_membership
-         WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+        `SELECT pm.person_id, pm.deelnamefactor
+         FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
       )
       .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
 

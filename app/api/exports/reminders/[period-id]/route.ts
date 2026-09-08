@@ -84,6 +84,7 @@ export async function GET(
       LEFT JOIN dienstrooster_submission s ON s.person_id = p.id AND s.schedule_period_id = ?
       WHERE (s.status IS NULL OR s.status != 'BEVESTIGD')
         AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum
+        AND p.actief = 1
       ORDER BY p.codenaam ASC
     `);
     const outstanding = outstandingStmt.all(periodId, periodId) as Array<{

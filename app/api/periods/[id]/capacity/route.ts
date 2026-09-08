@@ -113,9 +113,11 @@ export async function GET(
       SELECT COUNT(DISTINCT pm.person_id) as count
       FROM dienstrooster_pool_membership pm
       JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+      JOIN dienstrooster_person p ON p.id = pm.person_id
       WHERE sp.id = ?
         AND pm.geldig_vanaf <= sp.eind_datum
         AND pm.geldig_tot >= sp.start_datum
+        AND p.actief = 1
     `);
 
     const membersRow = membersStmt.get(id) as any;
@@ -137,9 +139,11 @@ export async function GET(
         SELECT DISTINCT pm.person_id, pm.deelnamefactor
         FROM dienstrooster_pool_membership pm
         JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+        JOIN dienstrooster_person p ON p.id = pm.person_id
         WHERE sp.id = ?
           AND pm.geldig_vanaf <= sp.eind_datum
           AND pm.geldig_tot >= sp.start_datum
+          AND p.actief = 1
       `);
       const factorRows = factorsStmt.all(id) as Array<{ person_id: string; deelnamefactor: number }>;
       // A person could theoretically have more than one overlapping
