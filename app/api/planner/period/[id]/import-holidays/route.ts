@@ -48,7 +48,7 @@ export async function POST(
     const importAll = db.transaction((importRows: HolidayRow[]) => {
       for (const row of importRows) {
         if (!VALID_GROUPS.has(row.holiday_group)) {
-          errors.push(`Unknown holiday group: ${row.holiday_group}`);
+          errors.push(`Onbekende feestdaggroep: ${row.holiday_group}`);
           continue;
         }
 
@@ -57,7 +57,7 @@ export async function POST(
           .get(row.codenaam) as { id: string } | undefined;
 
         if (!person) {
-          errors.push(`Unknown codenaam: ${row.codenaam}`);
+          errors.push(`Onbekende codenaam: ${row.codenaam}`);
           continue;
         }
 

@@ -63,7 +63,7 @@ export async function POST(
           .get(row.codenaam) as { id: string } | undefined;
 
         if (!person) {
-          errors.push(`Unknown codenaam: ${row.codenaam}`);
+          errors.push(`Onbekende codenaam: ${row.codenaam}`);
           continue;
         }
 
@@ -78,7 +78,7 @@ export async function POST(
             counter,
             periodId,
             delta,
-            'Imported initial balance',
+            'Geïmporteerd beginsaldo',
             auth!.userId,
             now
           );
