@@ -1,22 +1,30 @@
 /**
- * Optional automated first-run password claim for ADMIN/PLANNER, driven by
- * the SEED_ADMIN_PASSWORD / SEED_PLANNER_PASSWORD env vars (see
- * .env.example).
+ * Optional automated first-run password claim for the PLANNER account,
+ * driven by the SEED_PLANNER_PASSWORD env var (see .env.example).
  *
- * Exists so an operator who wants to skip the interactive /planner/login
- * "first run" form can do so via their own .env instead - which is
- * gitignored, so the password itself never enters this repo. That's the
- * same reason scripts/seed.ts and app/api/auth/first-run-setup/route.ts
- * never set a password directly: a fixed password checked into git is a
- * real credential, not a placeholder.
+ * scripts/seed.ts already applies SEED_PLANNER_PASSWORD directly when it
+ * creates the planner account (SEED_ON_START=true path), so this script's
+ * main remaining use is a deployment with SEED_ON_START=false - where the
+ * planner account exists with no password yet (created some other way)
+ * and this lets an operator set it from .env instead of the interactive
+ * /planner/login "first run" form - which is gitignored, so the password
+ * itself never enters this repo. That's the same reason
+ * app/api/auth/first-run-setup/route.ts never sets a password directly: a
+ * fixed password checked into git is a real credential, not a placeholder.
  *
  * Idempotent and safe to run on every boot: only ever touches an account
  * whose wachtwoord_hash is still NULL - the same guarantee
  * first-run-setup/route.ts gives interactively. Once a password is set
- * (this way, or through the form), this script can't touch that account
- * again.
+ * (this way, or through the form, or by scripts/seed.ts), this script
+ * can't touch that account again.
  *
- * Usage: tsx scripts/claim-password.ts <CODENAAM> <password>
+ * Usage: tsx scripts/claim-password.ts <CODENAAM> [password]
+ *
+ * The password can be passed as a second argument, or omitted and read
+ * from SEED_PLANNER_PASSWORD instead - the latter is what
+ * docker-entrypoint.sh uses, since a CLI argument is visible to any other
+ * process on the host via `ps aux` for as long as this process runs, while
+ * an environment variable is not.
  */
 
 import Database from 'better-sqlite3';
@@ -40,10 +48,11 @@ function resolveDbPath(): string {
 }
 
 async function main() {
-  const [codenaam, password] = process.argv.slice(2);
+  const [codenaam, argPassword] = process.argv.slice(2);
+  const password = argPassword || process.env.SEED_PLANNER_PASSWORD;
 
   if (!codenaam || !password) {
-    console.error('Usage: tsx scripts/claim-password.ts <CODENAAM> <password>');
+    console.error('Usage: tsx scripts/claim-password.ts <CODENAAM> [password] (or set SEED_PLANNER_PASSWORD)');
     process.exit(1);
   }
 

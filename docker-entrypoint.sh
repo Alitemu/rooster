@@ -16,7 +16,11 @@ fi
 # .env.example. Idempotent (only ever touches an account with no password
 # yet), so safe to leave set across restarts.
 if [ -n "$SEED_PLANNER_PASSWORD" ]; then
-  npx tsx scripts/claim-password.ts planner "$SEED_PLANNER_PASSWORD" || echo "planner password claim failed - continuing startup."
+  # Password comes from the SEED_PLANNER_PASSWORD env var already in this
+  # process's environment, not a CLI argument - an argument would be
+  # visible to any other process on the host via `ps aux` for as long as
+  # this command runs.
+  npx tsx scripts/claim-password.ts planner || echo "planner password claim failed - continuing startup."
 fi
 
 exec npm start
