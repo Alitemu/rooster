@@ -265,6 +265,21 @@ def test_understaffed_period_returns_partial_roster_not_nothing():
     assert assigned + unfilled == len(slots)
 
 
+def test_capacity_violations_are_reported_not_always_zero():
+    """
+    diagnostics.violations['capacity'] used to stay at its build-time 0
+    forever - the count is only known after solving, from the shortfall
+    variables' solved values, which solve() never read back. A short-staffed
+    period would report 0 capacity violations even with real gaps.
+    """
+    slots = make_slots(10)
+    result = solve(['p1'], slots, window_weeks=5)
+
+    unfilled = len(result['diagnostics']['unfilled_slots'])
+    assert unfilled > 0, 'fixture must actually produce a shortfall to test against'
+    assert result['diagnostics']['violations']['capacity'] == unfilled
+
+
 def test_shortfall_is_preferred_over_breaking_a_hard_rule():
     """Leaving a slot open must cost less than violating the window rule."""
     slots = make_slots(4)
@@ -294,6 +309,20 @@ def test_band_is_stretched_rather_than_leaving_a_slot_empty():
         f'expected the band to stretch to cover all 3 slots, got {assigned} '
         f'assigned and {len(result["diagnostics"]["unfilled_slots"])} unfilled'
     )
+
+
+def test_band_limit_violations_are_reported_not_always_zero():
+    """
+    diagnostics.violations['band_limit'] used to stay at its build-time 0
+    forever, for the same reason as the capacity counter above - band slack
+    is only known after solving. A person stretched outside their band
+    should be counted, not silently reported as 0 overtredingen.
+    """
+    slots = make_slots(3)
+    result = solve(['p1'], slots, window_weeks=1, band={'AVOND': [0, 1], 'WEEKEND': [0, 1], 'FEESTDAG': [0, 1]})
+
+    assert len(result['assignments']) == 3
+    assert result['diagnostics']['violations']['band_limit'] >= 1
 
 
 def test_a_large_negative_balance_correction_does_not_make_the_whole_model_infeasible():

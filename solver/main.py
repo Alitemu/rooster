@@ -11,7 +11,7 @@ import os
 import time
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
 from datetime import datetime
 
@@ -62,7 +62,12 @@ class Slot(BaseModel):
     iso_week: int
     shift_type_id: str
     shift_type_name: str  # AVOND, WEEKEND, FEESTDAG
-    benodigd_aantal_personen: int = 1
+    # Must be >=1: constraints.add_capacity_constraints builds
+    # `NewIntVar(0, required, ...)`, an invalid (empty) domain for
+    # required<=0 that CP-SAT raises on - previously reached that raise and
+    # was swallowed by generate_roster's broad except into a generic
+    # 'ERROR' status instead of a clean 422 at the API boundary.
+    benodigd_aantal_personen: int = Field(default=1, ge=1)
     is_feestdag: bool = False
     feestdag_groep: Optional[str] = None
 
@@ -88,25 +93,55 @@ class PriorAssignment(BaseModel):
 
 
 class RuleSet(BaseModel):
-    window_weeks: int = 2
+    window_weeks: int = Field(default=2, ge=0)
     # A fixed 2-tuple rather than list[int]: constraints.py always does
     # `base_min, base_max = band_ranges.get(counter, [7, 8])`, and a
     # wrong-length list used to reach that unpack and crash with a raw
     # Python ValueError, caught by generate_roster's broad except as a
     # generic solver ERROR instead of a clean 422 at the API boundary.
+    #
+    # Each tuple must be (min, max) with 0 <= min <= max - a reversed pair
+    # (e.g. accidentally sending (9, 7)) used to be accepted silently and
+    # would give every person simultaneous under- and over-band slack in
+    # add_band_constraints, doubling their deviation cost for no reason
+    # instead of erroring.
     band_avond: tuple[int, int] = (7, 8)
     band_weekend: tuple[int, int] = (7, 8)
     band_feestdag: tuple[int, int] = (7, 8)
     distribution_mode: Literal['GELIJK', 'NAAR_RATO'] = "GELIJK"
-    soft_block_penalty: float = 1.0
+    # A negative value would turn the LIEVER_NIET penalty into a reward,
+    # actively steering the solver towards a blocked-but-not-ABSOLUUT slot.
+    soft_block_penalty: float = Field(default=1.0, ge=0)
     # Cumulative, escalating cost per unit a person strays outside their
     # band - see objective.add_band_slack_objective. Default reproduces
-    # the flat weight=5.0-per-unit behaviour this replaced.
+    # the flat weight=5.0-per-unit behaviour this replaced. Each tier must
+    # be non-negative for the same reason as soft_block_penalty above.
     band_deviation_penalty: list[float] = [5.0]
-    band_deviation_multiplier: float = 1.0
+    # >=1 so tiers beyond the configured list only ever escalate
+    # (penalty_tiers[-1] * multiplier**extra_levels) rather than silently
+    # de-escalating for multiplier<1, which would undo the whole point of
+    # tiered, spread-the-shortage-don't-concentrate-it pricing.
+    band_deviation_multiplier: float = Field(default=1.0, ge=1.0)
     # Hard minimum weeks between two FEESTDAG shifts for the same person,
     # independent of window_weeks. 0 (default) = no such rule.
-    holiday_spread_weeks: int = 0
+    holiday_spread_weeks: int = Field(default=0, ge=0)
+
+    @field_validator('band_avond', 'band_weekend', 'band_feestdag')
+    @classmethod
+    def _band_is_ordered_and_nonnegative(cls, value: tuple[int, int]) -> tuple[int, int]:
+        low, high = value
+        if low < 0 or high < 0:
+            raise ValueError('band values must be >= 0')
+        if low > high:
+            raise ValueError('band min must be <= band max')
+        return value
+
+    @field_validator('band_deviation_penalty')
+    @classmethod
+    def _penalty_tiers_are_nonnegative(cls, value: list[float]) -> list[float]:
+        if any(tier < 0 for tier in value):
+            raise ValueError('band_deviation_penalty tiers must be >= 0')
+        return value
 
 
 class SolverInput(BaseModel):

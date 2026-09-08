@@ -33,7 +33,6 @@ class RosterSolver:
         slots: list[dict],
         blocked_slots: set[tuple[str, str]],
         soft_slots: dict[tuple[str, str], float],
-        capacity_required: dict[str, int],
         band_ranges: dict[str, tuple[int, int]],
         balances: dict[str, dict[str, int]],
         window_weeks: int = 2,
@@ -152,6 +151,7 @@ class RosterSolver:
             'model': self.model,
             'assignment_vars': assignment_vars,
             'shortfall_vars': shortfall_vars,
+            'band_slack_vars': band_slack_vars,
             'constraints_builder': constraint_builder,
             'objective_builder': objective_builder
         }
@@ -231,6 +231,26 @@ class RosterSolver:
             cp_model.MODEL_INVALID: "MODEL_INVALID"
         }
 
+        # window_rule, blocking_absolute and holiday_spread are hard
+        # constraints (unconditional model.Add()s) - a solution reported as
+        # OPTIMAL/FEASIBLE can never violate them, so the build-time 0 from
+        # get_violations_summary() is already correct for those. capacity
+        # and band_limit are soft (shortfall/under/over slack variables),
+        # so their real counts only exist after solving - they used to stay
+        # at their build-time 0 forever, which made the planner's
+        # "Overtredingen" panel always show 0 even when slots were left
+        # short or people pushed outside their band.
+        violations = model_data['constraints_builder'].get_violations_summary()
+        if self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            violations['capacity'] = len(unfilled_slots)
+
+            band_slack_vars = model_data.get('band_slack_vars', {})
+            band_violations = 0
+            for under_var, over_var in band_slack_vars.values():
+                if self.solver.Value(under_var) > 0 or self.solver.Value(over_var) > 0:
+                    band_violations += 1
+            violations['band_limit'] = band_violations
+
         return {
             'success': self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE],
             'status': status_map.get(self.status, "UNKNOWN"),
@@ -238,7 +258,7 @@ class RosterSolver:
             'unfilled_slots': unfilled_slots,
             'objective_value': self.solver.ObjectiveValue() if self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE] else None,
             'time_seconds': elapsed,
-            'violations': model_data['constraints_builder'].get_violations_summary()
+            'violations': violations
         }
 
     # ========================================================================
@@ -272,7 +292,7 @@ class RosterSolver:
         try:
             # Build
             model_data = self.build_model(
-                people, slots, blocked_slots, soft_slots, {},
+                people, slots, blocked_slots, soft_slots,
                 band_ranges, balances, window_weeks, preferred_slots,
                 prior_assignments, soft_block_penalty,
                 distribution_mode, participation_factors,
