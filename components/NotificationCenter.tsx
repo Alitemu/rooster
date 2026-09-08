@@ -30,6 +30,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [filterType, setFilterType] = useState('');
   const [unreadOnly, setUnreadOnly] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadNotifications = async () => {
@@ -59,6 +60,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
   }, [personId, periodId, filterType, unreadOnly]);
 
   const handleMarkRead = async (notifId: string) => {
+    setActionError(null);
     try {
       const res = await fetch(`/api/person/${personId}/notifications/${notifId}/read`, {
         method: 'POST',
@@ -71,13 +73,19 @@ export function NotificationCenter({ personId, periodId }: Props) {
           )
         );
         setUnreadCount((count) => Math.max(0, count - 1));
+      } else {
+        // A click that appears to do nothing looks like a broken button,
+        // not a failed request - both branches used to only console.error.
+        const data = await res.json().catch(() => null);
+        setActionError(data?.error?.message || 'Markeren als gelezen mislukt');
       }
     } catch (err) {
-      console.error('Failed to mark notification as read:', err);
+      setActionError(err instanceof Error ? err.message : 'Markeren als gelezen mislukt');
     }
   };
 
   const handleDismiss = async (notifId: string) => {
+    setActionError(null);
     try {
       const res = await fetch(`/api/person/${personId}/notifications/${notifId}/dismiss`, {
         method: 'POST',
@@ -89,9 +97,12 @@ export function NotificationCenter({ personId, periodId }: Props) {
         if (dismissed && !dismissed.gelezen) {
           setUnreadCount((count) => Math.max(0, count - 1));
         }
+      } else {
+        const data = await res.json().catch(() => null);
+        setActionError(data?.error?.message || 'Sluiten van melding mislukt');
       }
     } catch (err) {
-      console.error('Failed to dismiss notification:', err);
+      setActionError(err instanceof Error ? err.message : 'Sluiten van melding mislukt');
     }
   };
 
@@ -133,6 +144,18 @@ export function NotificationCenter({ personId, periodId }: Props) {
 
   return (
     <div className="space-y-4">
+      {actionError && (
+        <div className="card p-3 bg-red-50 border border-red-200 flex items-start justify-between gap-3">
+          <p className="text-red-700 text-sm">{actionError}</p>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-red-700 hover:text-red-900 text-sm font-medium shrink-0"
+          >
+            Sluiten
+          </button>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="card p-4 bg-neutral-50 flex gap-4 items-center flex-wrap">
         <span className="text-sm font-medium text-neutral-700">
@@ -150,7 +173,9 @@ export function NotificationCenter({ personId, periodId }: Props) {
           <option value="TOEWIJZING">Toewijzing gemaakt</option>
           <option value="RUILVERZOEK">Ruilverzoek</option>
           <option value="RUIL_GOEDGEKEURD">Ruil goedgekeurd</option>
+          <option value="RUIL_AFGEWEZEN">Ruil geweigerd</option>
           <option value="PUBLICATIE_BERICHT">Publicatiebericht</option>
+          <option value="BLOCK_OVERRIDDEN">Voorkeur overschreven</option>
         </select>
 
         <label className="flex items-center gap-2 text-sm">
