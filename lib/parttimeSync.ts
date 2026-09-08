@@ -310,9 +310,11 @@ export function syncAvailabilityForPeriod(periodId: string): { inserted: number;
       `SELECT DISTINCT pp.id, pp.person_id, pp.weekdag, pp.frequentie, pp.geldig_vanaf, pp.geldig_tot
        FROM dienstrooster_parttime_pattern pp
        JOIN dienstrooster_pool_membership pm ON pm.person_id = pp.person_id
+       JOIN dienstrooster_person p ON p.id = pp.person_id
        WHERE pm.pool_id = ?
          AND pp.geldig_vanaf <= ? AND pp.geldig_tot >= ?
-         AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?`
+         AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
+         AND p.actief = 1`
     )
     .all(period.pool_id, period.eind_datum, period.start_datum, period.eind_datum, period.start_datum) as ParttimePatternRow[];
 

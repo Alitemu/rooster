@@ -173,9 +173,11 @@ export function syncAvailabilityForPeriod(periodId: string): { inserted: number;
       `SELECT DISTINCT ab.id, ab.person_id, ab.van_datum, ab.tot_datum
        FROM dienstrooster_absence ab
        JOIN dienstrooster_pool_membership pm ON pm.person_id = ab.person_id
+       JOIN dienstrooster_person p ON p.id = ab.person_id
        WHERE pm.pool_id = ?
          AND ab.van_datum <= ? AND ab.tot_datum >= ?
-         AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?`
+         AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
+         AND p.actief = 1`
     )
     .all(period.pool_id, period.eind_datum, period.start_datum, period.eind_datum, period.start_datum) as AbsenceRow[];
 

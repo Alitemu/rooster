@@ -277,5 +277,21 @@ describe('absenceSync', () => {
       expect(result.inserted).toBe(0);
       expect(result.absencesProcessed).toBe(0);
     });
+
+    it('skips absences belonging to an inactive (actief=0) person', () => {
+      // Same "who belongs to this period" convention as
+      // capacity/generate-roster/exports (see lib/carryOver.ts,
+      // lib/rosterGaps.ts, lib/publicationCheck.ts) - a person who left
+      // the ward but still has an overlapping pool_membership row must
+      // not keep generating ABSENCE rows on every backfill.
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+      const absenceId = createAbsence(fixture.personId, '2027-01-05', '2027-01-05');
+      db.prepare('DELETE FROM dienstrooster_availability WHERE bron_absence_id = ?').run(absenceId);
+      db.prepare('UPDATE dienstrooster_person SET actief = 0 WHERE id = ?').run(fixture.personId);
+
+      const result = syncAvailabilityForPeriod(fixture.periodId);
+      expect(result.inserted).toBe(0);
+      expect(result.absencesProcessed).toBe(0);
+    });
   });
 });

@@ -8,6 +8,7 @@ import {
   findBlockedElsewhereDays,
   syncAvailabilityForPattern,
   removePatternAvailability,
+  syncAvailabilityForPeriod,
   type PatternRule,
 } from '@/lib/parttimeSync';
 
@@ -374,6 +375,34 @@ describe('parttimeSync', () => {
       const result = syncAvailabilityForPattern(patternId);
 
       expect(result.inserted).toBe(0);
+    });
+  });
+
+  describe('syncAvailabilityForPeriod', () => {
+    it('skips patterns belonging to an inactive (actief=0) person', () => {
+      // A person who left the ward but whose old pool_membership row still
+      // overlaps this period must not keep generating PARTTIME rows on
+      // every backfill - same "who belongs to this period" convention as
+      // capacity/generate-roster/exports (see lib/carryOver.ts,
+      // lib/rosterGaps.ts, lib/publicationCheck.ts).
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+      createPattern(fixture.personId, 'MA', 'ELKE_WEEK', '2027-01-01', '2027-12-31');
+      db.prepare('UPDATE dienstrooster_person SET actief = 0 WHERE id = ?').run(fixture.personId);
+
+      const result = syncAvailabilityForPeriod(fixture.periodId);
+
+      expect(result.patternsProcessed).toBe(0);
+      expect(result.inserted).toBe(0);
+    });
+
+    it('still backfills an active person\'s pattern the same way', () => {
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+      createPattern(fixture.personId, 'MA', 'ELKE_WEEK', '2027-01-01', '2027-12-31');
+
+      const result = syncAvailabilityForPeriod(fixture.periodId);
+
+      expect(result.patternsProcessed).toBe(1);
+      expect(result.inserted).toBe(1);
     });
   });
 
