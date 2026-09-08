@@ -79,6 +79,17 @@ export default function PersonalLinkPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Separate from `error` (which means "the link itself is invalid/expired"
+  // and shows advice to that effect) - a mid-flow data fetch failing after
+  // the link was already verified is a different situation, and showing
+  // "your link may have expired" for a transient server error would send
+  // the participant chasing a new link they don't actually need.
+  const [dataLoadWarning, setDataLoadWarning] = useState<string | null>(null);
+  // Whether `error` (if set) means the link itself is bad, vs. a later
+  // fetch in the same flow failing after the link was already verified -
+  // only the former should tell the participant their link may have
+  // expired.
+  const [isLinkError, setIsLinkError] = useState(true);
   const [currentStep, setCurrentStep] = useState<Step>('parttime');
   const [personId, setPersonId] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period | null>(null);
@@ -119,6 +130,7 @@ export default function PersonalLinkPage() {
         const { person_id, period_id } = data.data;
 
         setPersonId(person_id);
+        setIsLinkError(false);
 
         // Fetch period details
         const periodRes = await fetch(`/api/periods/${period_id}`);
@@ -155,7 +167,19 @@ export default function PersonalLinkPage() {
                   date_str: new Date(a.datum).toLocaleDateString('nl-NL'),
                 }));
               setSoftBlockViolations(violations);
+            } else {
+              // Not fatal for the roster view itself, but "liever niet"
+              // violations silently staying empty here would look
+              // identical to "no violations" - the participant has no way
+              // to tell those apart, so say so explicitly instead.
+              setDataLoadWarning(
+                'Kon niet controleren of er diensten zijn toegewezen op dagen die je liever niet wilde werken.'
+              );
             }
+          } else {
+            // The roster is the entire point of this step - without it
+            // there is nothing useful left to show, so this is fatal.
+            throw new Error('Kon je rooster niet laden. Probeer de pagina te vernieuwen.');
           }
         } else {
           // Fetch part-time patterns and absences for preference entry
@@ -163,13 +187,28 @@ export default function PersonalLinkPage() {
             fetch(`/api/person/${person_id}/parttime-patterns`),
             fetch(`/api/person/${person_id}/absences`),
           ]);
+          const failedParts: string[] = [];
           if (patternsRes.ok) {
             const patternsData = await patternsRes.json();
             setPatterns(patternsData.data);
+          } else {
+            failedParts.push('je eerder opgegeven deeltijdpatroon');
           }
           if (absencesRes.ok) {
             const absencesData = await absencesRes.json();
             setAbsences(absencesData.data);
+          } else {
+            failedParts.push('je eerder opgegeven afwezigheden');
+          }
+          if (failedParts.length > 0) {
+            // These pre-fill an existing state rather than being required
+            // to proceed, so this shouldn't block the flow - but silently
+            // leaving them empty would look identical to "nothing was ever
+            // saved" and risk the participant re-entering (or skipping)
+            // something that was already there.
+            setDataLoadWarning(
+              `Kon ${failedParts.join(' en ')} niet laden - mogelijk niet up-to-date hieronder. Probeer de pagina te vernieuwen.`
+            );
           }
         }
 
@@ -237,12 +276,16 @@ export default function PersonalLinkPage() {
     return (
       <div className="container-main py-12">
         <div className="card p-8">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Toegangsfout</h1>
+          <h1 className="text-2xl font-bold text-red-600 mb-4">
+            {isLinkError ? 'Toegangsfout' : 'Laden mislukt'}
+          </h1>
           <p className="text-neutral-700 mb-6">{error}</p>
-          <p className="text-sm text-neutral-600">
-            Controleer of de URL volledig en juist is als je deze link via e-mail hebt gekregen.
-            De link kan verlopen zijn. Neem contact op met de roosteraar voor een nieuwe link.
-          </p>
+          {isLinkError && (
+            <p className="text-sm text-neutral-600">
+              Controleer of de URL volledig en juist is als je deze link via e-mail hebt gekregen.
+              De link kan verlopen zijn. Neem contact op met de roosteraar voor een nieuwe link.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -276,6 +319,12 @@ export default function PersonalLinkPage() {
 
   return (
     <div className="container-main py-8 space-y-6">
+      {dataLoadWarning && (
+        <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">
+          {dataLoadWarning}
+        </div>
+      )}
+
       {/* Header */}
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
         {/* Stacks on narrow screens; side by side the button cannot shrink

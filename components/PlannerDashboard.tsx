@@ -115,10 +115,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
         throw new Error(data.error?.message || 'Indienen mislukt');
       }
 
-      // Reload progress
-      const progRes = await fetch(`/api/planner/period/${periodId}/progress`);
-      const progData = await progRes.json();
-      setProgress(progData.data);
+      // Reload the full dashboard (not just progress) - the top-level
+      // stats (bevestigd-telling, large_imbalances) are stale otherwise
+      // until a manual page reload, and loadData() already has the
+      // res.ok-checked fetch this used to duplicate without one.
+      await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Indienen mislukt');
     } finally {
