@@ -224,7 +224,7 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [blockBudgetConfig, setBlockBudgetConfig] = useState<BlockBudgetConfig>({
     hardPercent: 100,
     softPercent: 100,
-    parttimeExempt: true,
+    parttimeExempt: false,
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [balanceParseWarnings, setBalanceParseWarnings] = useState<string[]>([]);
@@ -757,6 +757,7 @@ export function SetupWizard({ period, onComplete }: Props) {
               AVOND: { maxFraction: blockBudgetConfig.softPercent / 100 },
               WEEKEND: { maxFraction: blockBudgetConfig.softPercent / 100 },
               FEESTDAG: { maxFraction: blockBudgetConfig.softPercent / 100 },
+              parttimeExempt: blockBudgetConfig.parttimeExempt,
             },
           },
         }),
@@ -1390,6 +1391,14 @@ export function SetupWizard({ period, onComplete }: Props) {
                 />
                 Parttime-vrije dagen tellen niet mee voor het budget
               </label>
+              <p className="text-xs text-neutral-500 mt-1">
+                Het percentage hierboven wordt altijd berekend over het totaal aantal diensten in
+                de hele periode, niet over iemands persoonlijke (lagere) aantal werkdagen. Met dit
+                vinkje uit telt een automatisch geblokkeerde parttime-dag gewoon mee als een
+                geblokkeerde dag, zoals elke andere. Met dit vinkje aan telt die dag niet mee en
+                komt hij dus bovenop het budget - iemand met een parttime-dag kan dan in totaal
+                meer dagen blokkeren dan een fulltimer met hetzelfde percentage.
+              </p>
             </div>
           </div>
         )}

@@ -167,6 +167,7 @@ export interface RulesetConfig {
     AVOND: { maxFraction: number };
     WEEKEND: { maxFraction: number };
     FEESTDAG: { maxFraction: number };
+    parttimeExempt?: boolean;
   };
   softBlockPenalty: number;
   softBlockPenaltyPerPriorViolation: number;

@@ -31,7 +31,7 @@ interface RulesetConfig {
   bandFeestdag: [number, number];
   distributionMode: string;
   blockBudget?: BlockBudgetPerTeller & { parttimeExempt: boolean };
-  softBlockBudget?: BlockBudgetPerTeller;
+  softBlockBudget?: BlockBudgetPerTeller & { parttimeExempt?: boolean };
 }
 
 interface OpenPeriodRequest {
