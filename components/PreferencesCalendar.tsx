@@ -426,15 +426,23 @@ export function PreferencesCalendar({
   return (
     <div className="space-y-4">
       {/* Blocked-days counters */}
+      <p className="text-xs text-neutral-500">
+        Hoeveel diensten je per type al geblokkeerd hebt, van het maximum dat voor jou geldt (je
+        blokkadebudget) - kom je hier tegen een grens aan, dan kun je voor dat diensttype geen dag
+        meer als &quot;geblokkeerd&quot; markeren.
+      </p>
       <div className="flex gap-3 flex-wrap">
         {shiftCounters.map((counter) => {
           const totals = counterTotals.get(counter)!;
           const pct = totals.total > 0 ? Math.round((totals.blocked / totals.total) * 100) : 0;
           return (
             <div key={counter} className="flex-1 min-w-[180px] border border-neutral-200 rounded-lg p-3 bg-white">
-              <div className="flex justify-between items-baseline text-xs text-neutral-600">
-                <span>{COUNTER_LABEL[counter] || counter} geblokkeerd</span>
-                <span className="font-mono">{totals.blocked} van {totals.total}</span>
+              {/* Stacked (not side-by-side) so a long label like
+                  "Feestdagdiensten geblokkeerd" always has room to wrap
+                  instead of pushing the count past the box's right edge. */}
+              <div className="text-xs text-neutral-600">
+                <div>{COUNTER_LABEL[counter] || counter} geblokkeerd</div>
+                <div className="font-mono">{totals.blocked} van {totals.total}</div>
               </div>
               <div className="text-lg font-semibold tracking-tight mt-0.5 mb-1.5">{pct}%</div>
               <div className="coverage-bar">
