@@ -71,3 +71,7 @@ test-results/
 # Generated session signing key (created beside the database when
 # SESSION_SECRET is unset). Never commit or bake into an image.
 .session_secret
+
+# First-run setup token hash (see lib/setupToken.ts) - created beside the
+# database whenever a seeded planner account still needs its password set.
+.setup_token_hash

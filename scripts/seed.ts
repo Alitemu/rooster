@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
 import { hashToken, hashPassword, validatePasswordStrength } from '../lib/auth';
 import { generateSlotsForPeriod } from '../lib/slotGeneration';
+import { createSetupToken } from '../lib/setupToken';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -528,6 +529,14 @@ async function seed() {
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(plannerId, 'planner', 'PLANNER', 1, plannerPasswordHash, now);
 
+    // Only when the account still needs the interactive /planner/login
+    // "first run" form - SEED_PLANNER_PASSWORD already claimed it above,
+    // so there is nothing left that a setup token would need to guard.
+    let setupToken: string | null = null;
+    if (!plannerPasswordFromEnv) {
+      setupToken = createSetupToken();
+    }
+
     // 2. Create 31 staff members
     console.log('Creating 31 staff members...');
     const staffIds: string[] = [];
@@ -962,6 +971,14 @@ async function seed() {
         ? `  - Planner: planner / password: (set from SEED_PLANNER_PASSWORD)`
         : `  - Planner: planner / password: ${DEFAULT_TEST_PASSWORD} (change before real use - see DEFAULT_TEST_PASSWORD in this file)`
     );
+    if (setupToken) {
+      console.log(
+        `  - Setup-token voor /planner/login's eerste-keer-formulier: ${setupToken}\n` +
+          `    (nodig om via de interactieve login-pagina zelf een wachtwoord in te stellen -\n` +
+          `    alleen hier in de log zichtbaar, nooit over HTTP. Voorkomt dat iemand anders dan\n` +
+          `    jij het beheerdersaccount claimt voordat jij dat doet.)`
+      );
+    }
     console.log(`  - Staff: Persoon-01 through Persoon-31 (personal access links)`);
     console.log(`\nPool: Achterwacht (31 members)`);
     console.log(`Period: 2027-1 (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);

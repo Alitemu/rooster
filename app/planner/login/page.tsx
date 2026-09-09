@@ -51,16 +51,27 @@ function PlannerLoginGate() {
 }
 
 function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () => void }) {
+  const [setupToken, setSetupToken] = useState('');
   const [passwords, setPasswords] = useState<Record<string, string>>({});
   const [confirms, setConfirms] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Accounts already successfully claimed in a previous, partially-failed
+  // submit - without tracking this, a retry re-sent every account from the
+  // top, including ones already claimed. Since a claim is one-time
+  // (wachtwoord_hash IS NULL), that account's account now correctly
+  // returns "not available", but the wizard then reported *that* account
+  // as the problem instead of the one that actually still needs fixing,
+  // and had no way to reach the remaining accounts at all.
+  const [succeeded, setSucceeded] = useState<Set<string>>(new Set());
+
+  const remaining = pending.filter((codenaam) => !succeeded.has(codenaam));
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    for (const codenaam of pending) {
+    for (const codenaam of remaining) {
       if ((passwords[codenaam] || '') !== (confirms[codenaam] || '')) {
         setError(`Wachtwoorden voor ${codenaam} komen niet overeen`);
         return;
@@ -69,11 +80,11 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
 
     setLoading(true);
     try {
-      for (const codenaam of pending) {
+      for (const codenaam of remaining) {
         const res = await fetch('/api/auth/first-run-setup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ codenaam, password: passwords[codenaam] || '' }),
+          body: JSON.stringify({ codenaam, password: passwords[codenaam] || '', setup_token: setupToken }),
         });
         const data = await res.json();
         if (!res.ok) {
@@ -81,6 +92,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
           setLoading(false);
           return;
         }
+        setSucceeded((prev) => new Set(prev).add(codenaam));
       }
       onDone();
     } catch {
@@ -100,7 +112,27 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
           </p>
 
           <form onSubmit={handleSubmit}>
-            {pending.map((codenaam) => (
+            <div className="form-group mb-4">
+              <label className="label" htmlFor="setup-token">
+                Setup-token
+              </label>
+              <input
+                id="setup-token"
+                className="input w-full"
+                type="text"
+                autoComplete="off"
+                value={setupToken}
+                onChange={(e) => setSetupToken(e.target.value)}
+                required
+              />
+              <p className="text-xs text-neutral-500 mt-1">
+                Te vinden in de serverlogs (bijv. `docker compose logs web`) bij het aanmaken van de
+                database - nooit hierin getypt door iemand anders dan degene met toegang tot de
+                server.
+              </p>
+            </div>
+
+            {remaining.map((codenaam) => (
               <fieldset key={codenaam} className="mb-4">
                 <legend className="label mb-2">{codenaam}</legend>
                 <div className="form-group">
