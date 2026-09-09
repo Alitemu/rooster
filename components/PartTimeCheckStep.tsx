@@ -258,7 +258,17 @@ export function PartTimeCheckStep({
                   {group.weeks.map((week, weekIdx) => {
                     return (
                       <tr key={`week-${weekIdx}`}>
-                        <td className="week-number text-center align-middle">{week.isoWeek}</td>
+                        {/* The shared .week-number class (app/globals.css) sets
+                            `display: block`, which makes `vertical-align`
+                            a no-op - centering it needs its own flex box
+                            instead. Done with Tailwind's `!` (important)
+                            overrides scoped to this one <td>, not by editing
+                            .week-number itself, since that class is shared
+                            with PreferencesCalendar.tsx's week-number column,
+                            which should keep its current (top-aligned) look. */}
+                        <td className="week-number !flex !items-center !justify-center h-11 text-center">
+                          {week.isoWeek}
+                        </td>
                         {week.days.map((datum, dayIdx) => {
                           if (datum === null) {
                             return <td key={`blank-${weekIdx}-${dayIdx}`} className="p-0" />;
