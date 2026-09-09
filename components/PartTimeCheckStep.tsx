@@ -195,6 +195,10 @@ export function PartTimeCheckStep({
           Deeltijddag rond de jaarwisseling
         </span>
         <span className="flex items-center gap-1.5">
+          <i className="calendar-cell-absence inline-block w-5 h-4 rounded" />
+          Afwezigheid
+        </span>
+        <span className="flex items-center gap-1.5">
           <i className="calendar-cell-blocked-elsewhere inline-block w-5 h-4 rounded" />
           Al geblokkeerd om een andere reden
         </span>
@@ -226,6 +230,7 @@ export function PartTimeCheckStep({
                           }
                           const generated = byDate.get(datum);
                           const blockedElsewhere = !generated ? blockedElsewhereByDate.get(datum) : undefined;
+                          const isAbsence = blockedElsewhere?.source === 'ABSENCE';
                           return (
                             <td key={datum} className="align-top p-0">
                               <div
@@ -233,13 +238,17 @@ export function PartTimeCheckStep({
                                   ${generated
                                     ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-amber-400' : ''}`
                                     : blockedElsewhere
-                                      ? 'calendar-cell-blocked-elsewhere'
+                                      ? isAbsence
+                                        ? 'calendar-cell-absence'
+                                        : 'calendar-cell-blocked-elsewhere'
                                       : 'border-neutral-200 bg-white text-neutral-900'}`}
                                 title={
                                   generated
                                     ? 'Deeltijddag (automatisch geblokkeerd)'
                                     : blockedElsewhere
-                                      ? 'Deze dag is al om een andere reden geblokkeerd - je patroon hoeft hier niets te doen'
+                                      ? isAbsence
+                                        ? 'Deze dag valt binnen een geregistreerde afwezigheid - je patroon hoeft hier niets te doen'
+                                        : 'Deze dag is al om een andere reden geblokkeerd - je patroon hoeft hier niets te doen'
                                       : undefined
                                 }
                               >
