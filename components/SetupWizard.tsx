@@ -1004,6 +1004,11 @@ export function SetupWizard({ period, onComplete }: Props) {
               <p className="text-xs text-neutral-600 mt-1">
                 Personeel moet vóór dit tijdstip hun voorkeuren indienen
               </p>
+              <p className="text-xs text-neutral-500 mt-1">
+                Let op: 00:00 uur is het begin van die dag, dus dezelfde middernacht als het einde
+                van de dag ervoor. Wil je de hele laatste dag nog meenemen, kies dan 00:00 op de
+                dág erna (of 23:59 op de laatste dag zelf).
+              </p>
             </div>
           </div>
         )}

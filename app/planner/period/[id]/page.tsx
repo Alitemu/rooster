@@ -182,6 +182,11 @@ export default function PlannerPeriodPage() {
                 >
                   Annuleren
                 </button>
+                <p className="w-full text-xs text-neutral-500">
+                  Let op: 00:00 uur is het begin van die dag, dus dezelfde middernacht als het
+                  einde van de dag ervoor. Wil je de hele laatste dag nog meenemen, kies dan 00:00
+                  op de dág erna (of 23:59 op de laatste dag zelf).
+                </p>
                 {deadlineError && <p className="w-full text-xs text-red-600">{deadlineError}</p>}
               </div>
             ) : (
