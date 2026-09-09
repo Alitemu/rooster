@@ -250,10 +250,18 @@ export function SetupWizard({ period, onComplete }: Props) {
   // (e.g. from changing the window) must not silently overwrite it.
   const [bandTouched, setBandTouched] = useState(false);
 
+  // Guards against a slower, older request (e.g. from before the planner
+  // adjusted windowWeeks or distributionMode again) resolving after a
+  // newer one and overwriting it with stale capacity numbers - each call
+  // to loadCapacity() claims the latest ticket, and only that ticket's
+  // response is allowed to update state.
+  const capacityRequestRef = useRef(0);
+
   useEffect(() => {
     if (currentStep !== 'window' || !period?.id) return;
 
     const loadCapacity = async () => {
+      const ticket = ++capacityRequestRef.current;
       setCapacityLoading(true);
       try {
         const params = new URLSearchParams({
@@ -264,7 +272,10 @@ export function SetupWizard({ period, onComplete }: Props) {
         if (periodData.eind_datum) params.set('eind_datum', periodData.eind_datum);
 
         const res = await fetch(`/api/periods/${period.id}/capacity?${params.toString()}`);
+        if (!res.ok) throw new Error('Capaciteitscheck mislukt');
         const data = await res.json();
+        if (ticket !== capacityRequestRef.current) return; // superseded by a newer request
+
         const result: CapacityCheckResult | null = data.success ? data.data : null;
         setCapacityCheck(result);
         if (result?.suggested_band && !bandTouched) {
@@ -283,9 +294,9 @@ export function SetupWizard({ period, onComplete }: Props) {
           }));
         }
       } catch {
-        setCapacityCheck(null);
+        if (ticket === capacityRequestRef.current) setCapacityCheck(null);
       } finally {
-        setCapacityLoading(false);
+        if (ticket === capacityRequestRef.current) setCapacityLoading(false);
       }
     };
 
@@ -437,6 +448,10 @@ export function SetupWizard({ period, onComplete }: Props) {
       setStaffError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
       return;
     }
+    if (Number.isNaN(newMember.deelnamefactor)) {
+      setStaffError('Deelnamefactor is verplicht');
+      return;
+    }
     setAddingMember(true);
     setStaffError(null);
     try {
@@ -464,6 +479,10 @@ export function SetupWizard({ period, onComplete }: Props) {
   };
 
   const handleSaveMembership = async (membershipId: string) => {
+    if (Number.isNaN(editDates.deelnamefactor)) {
+      setStaffError('Deelnamefactor is verplicht');
+      return;
+    }
     setSavingMembership(true);
     setStaffError(null);
     try {
@@ -750,15 +769,22 @@ export function SetupWizard({ period, onComplete }: Props) {
       // an invitation never goes to (or skips) someone differently than who
       // actually ends up eligible for the roster.
       const toLink = staffMembers.filter((m) => m.is_active && !m.access_link);
+      let linksSent = 0;
       for (const member of toLink) {
-        await fetch(`/api/planner/period/${period.id}/staff-links`, {
+        const linkRes = await fetch(`/api/planner/period/${period.id}/staff-links`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ person_id: member.person_id }),
         }).catch(() => null);
+        if (linkRes && linkRes.ok) linksSent++;
       }
 
       const importWarnings: string[] = [];
+      if (linksSent < toLink.length) {
+        importWarnings.push(
+          `Slechts ${linksSent} van ${toLink.length} uitnodigingen zijn daadwerkelijk aangemaakt.`
+        );
+      }
 
       if (balanceRows.length > 0) {
         const balancesRes = await fetch(`/api/planner/period/${period.id}/import-balances`, {
@@ -817,7 +843,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
       setOpenResult(
         `Periode geopend (${openData.data.start_datum} t/m ${openData.data.eind_datum}): ` +
-          `${openData.data.slots_generated} diensten gegenereerd, ${toLink.length} uitnodigingen verstuurd.` +
+          `${openData.data.slots_generated} diensten gegenereerd, ${linksSent} uitnodigingen verstuurd.` +
           (correctionsFailed
             ? ' Let op: de handmatige correcties zijn niet opgeslagen. Noteer ze en laat de beheerder ze alsnog verwerken.'
             : '') +
@@ -1211,7 +1237,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                 max="8"
                 value={windowConfig.windowWeeks}
                 onChange={(e) =>
-                  setWindowConfig({ ...windowConfig, windowWeeks: parseInt(e.target.value) })
+                  setWindowConfig({ ...windowConfig, windowWeeks: parseInt(e.target.value) || 0 })
                 }
                 className="w-full px-3 py-2 border rounded"
               />
@@ -1274,7 +1300,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                             ...windowConfig,
                             band_min: {
                               ...windowConfig.band_min,
-                              [counter]: parseInt(e.target.value),
+                              [counter]: parseInt(e.target.value) || 0,
                             },
                           });
                         }}
@@ -1291,7 +1317,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                             ...windowConfig,
                             band_max: {
                               ...windowConfig.band_max,
-                              [counter]: parseInt(e.target.value),
+                              [counter]: parseInt(e.target.value) || 0,
                             },
                           });
                         }}
