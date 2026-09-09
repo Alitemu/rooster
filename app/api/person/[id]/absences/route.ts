@@ -26,6 +26,12 @@ interface Absence {
   notitie?: string;
   blocked_days_in_period?: number;
   total_days_in_period?: number;
+  // Every date within [van_datum, tot_datum] that has a shift slot in the
+  // given period, and the subset of those actually confirmed blocked by
+  // this absence - lets the UI draw a real day-by-day calendar instead of
+  // just a count, so a participant can see, not just read, that it worked.
+  slot_dates?: string[];
+  blocked_dates?: string[];
 }
 
 interface CreateAbsenceRequest {
@@ -60,15 +66,17 @@ export async function GET(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // A participant checking "did my absence actually register" needs proof
-    // it really blocked shifts, not just an echo of the dates they typed -
-    // optionally (when the caller knows which period it's viewing) count how
-    // many of the period's shift-days within the absence's range are
-    // genuinely covered by an ABSENCE-sourced availability row this absence
-    // owns, against how many such days exist at all. The two normally
-    // match; a gap is real and informative (e.g. a day the participant
-    // separately, deliberately blocked manually - see absenceSync.ts's
-    // "never overwrite a MANUAL row" rule - not a sign of failure.
+    // A participant checking "did my absence actually register" needs to
+    // SEE proof it really blocked shifts, not just read a count or an echo
+    // of the dates they typed - optionally (when the caller knows which
+    // period it's viewing) return, per absence, every date within its range
+    // that has a shift slot in that period, and the subset of those genuinely
+    // covered by an ABSENCE-sourced availability row this absence owns. The
+    // two normally match exactly; a gap is real and informative (e.g. a day
+    // the participant separately, deliberately blocked manually - see
+    // absenceSync.ts's "never overwrite a MANUAL row" rule - not a sign of
+    // failure) and lets the UI draw a day-by-day calendar instead of a
+    // single trust-me count.
     const periodId = req.nextUrl.searchParams.get('period_id');
 
     const stmt = db.prepare(
@@ -76,11 +84,11 @@ export async function GET(
         ? `
       SELECT
         a.id, a.van_datum, a.tot_datum, a.soort, a.notitie,
-        (SELECT COUNT(DISTINCT s.datum) FROM dienstrooster_shift_slot s
-           WHERE s.period_id = ? AND s.datum >= a.van_datum AND s.datum <= a.tot_datum) as total_days_in_period,
-        (SELECT COUNT(DISTINCT s.datum) FROM dienstrooster_availability av
+        (SELECT GROUP_CONCAT(DISTINCT s.datum) FROM dienstrooster_shift_slot s
+           WHERE s.period_id = ? AND s.datum >= a.van_datum AND s.datum <= a.tot_datum) as slot_dates_csv,
+        (SELECT GROUP_CONCAT(DISTINCT s.datum) FROM dienstrooster_availability av
            JOIN dienstrooster_shift_slot s ON s.id = av.slot_id
-           WHERE av.bron_absence_id = a.id AND s.period_id = ?) as blocked_days_in_period
+           WHERE av.bron_absence_id = a.id AND s.period_id = ?) as blocked_dates_csv
       FROM dienstrooster_absence a
       WHERE a.person_id = ?
       ORDER BY a.van_datum DESC
@@ -93,7 +101,23 @@ export async function GET(
     `
     );
 
-    const absences = (periodId ? stmt.all(periodId, periodId, id) : stmt.all(id)) as Absence[];
+    const rows = (
+      periodId ? stmt.all(periodId, periodId, id) : stmt.all(id)
+    ) as Array<Absence & { slot_dates_csv?: string | null; blocked_dates_csv?: string | null }>;
+
+    const absences: Absence[] = rows.map((row) => {
+      const { slot_dates_csv, blocked_dates_csv, ...absence } = row;
+      if (!periodId) return absence;
+      const slot_dates = slot_dates_csv ? slot_dates_csv.split(',') : [];
+      const blocked_dates = blocked_dates_csv ? blocked_dates_csv.split(',') : [];
+      return {
+        ...absence,
+        slot_dates,
+        blocked_dates,
+        total_days_in_period: slot_dates.length,
+        blocked_days_in_period: blocked_dates.length,
+      };
+    });
 
     const response: ApiSuccessResponse<Absence[]> = {
       success: true,

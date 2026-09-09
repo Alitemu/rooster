@@ -22,6 +22,8 @@ export interface Absence {
   // Only present when the caller passes periodId - see Props below.
   blocked_days_in_period?: number;
   total_days_in_period?: number;
+  slot_dates?: string[];
+  blocked_dates?: string[];
 }
 
 interface Props {
@@ -296,3 +298,4 @@ export function AbsenceManager({
     </div>
   );
 }
+

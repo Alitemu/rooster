@@ -19,7 +19,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { parseISO } from '@/lib/holidays';
+import { parseISO, dateToISO } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 
 interface ParttimePattern {
@@ -28,6 +28,26 @@ interface ParttimePattern {
   frequentie: string;
   geldig_vanaf: string;
   geldig_tot: string;
+}
+
+interface AbsenceRange {
+  van_datum: string;
+  tot_datum: string;
+}
+
+// Every date the absence sync (lib/absenceSync.ts) actually blocks -
+// inclusive of both ends, same rule matchSlotsToAbsence uses server-side -
+// computed client-side so this calendar can show the full absence
+// regardless of whether any given day also happens to match the pattern.
+function datesInRange(vanDatum: string, totDatum: string): Set<string> {
+  const dates = new Set<string>();
+  const cursor = parseISO(vanDatum);
+  const end = parseISO(totDatum);
+  while (cursor <= end) {
+    dates.add(dateToISO(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
 }
 
 interface GeneratedDay {
@@ -51,6 +71,7 @@ interface Props {
   periodEnd: string;
   periodStatus?: string;
   patterns: ParttimePattern[];
+  absences: AbsenceRange[];
   onConfirm?: (confirmed: boolean) => void;
 }
 
@@ -61,6 +82,7 @@ export function PartTimeCheckStep({
   periodEnd,
   periodStatus,
   patterns,
+  absences,
   onConfirm,
 }: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
@@ -108,6 +130,19 @@ export function PartTimeCheckStep({
   const byDate = new Map(generatedDays.map((d) => [d.datum, d]));
   const blockedElsewhereByDate = new Map(blockedElsewhereDays.map((d) => [d.datum, d]));
   const boundaryDays = generatedDays.filter((d) => d.is_year_boundary);
+  const absenceDates = new Set<string>();
+  for (const absence of absences) {
+    for (const datum of datesInRange(absence.van_datum, absence.tot_datum)) {
+      absenceDates.add(datum);
+    }
+  }
+  // Only the absence days the two pattern-derived lists above don't already
+  // account for - counting all of absenceDates here would double-count a
+  // day that also happens to be a pattern day (already in generatedDays or
+  // blockedElsewhereDays).
+  const absenceOnlyCount = [...absenceDates].filter(
+    (d) => !byDate.has(d) && !blockedElsewhereByDate.has(d)
+  ).length;
 
   const startDate = parseISO(periodStart);
   const endDate = parseISO(periodEnd);
@@ -121,14 +156,8 @@ export function PartTimeCheckStep({
       <div>
         <h3 className="font-bold text-lg mb-1">Deeltijddagen controleren</h3>
         <p className="text-sm text-neutral-600">
-          De gearceerde dagen zijn automatisch geblokkeerd op basis van je deeltijdpatroon. Loop de
-          maanden door en controleer of dat op de juiste weekdag staat.
-        </p>
-        <p className="text-sm text-neutral-500 mt-1">
-          Let op: hieronder zie je alleen de dagen die bij je deeltijdpatroon horen (bv. elke
-          maandag) - niet elke dag van een afwezigheid. Een afwezigheid die op zo'n patroondag valt
-          zie je hier wel rood terug, maar voor het volledige overzicht van je afwezigheid (elke
-          dag) ga je naar het tabblad &quot;Voorkeuren&quot;.
+          De gearceerde dagen zijn automatisch geblokkeerd op basis van je deeltijdpatroon of een
+          geregistreerde afwezigheid. Loop de maanden door en controleer of dat klopt.
         </p>
       </div>
 
@@ -148,10 +177,10 @@ export function PartTimeCheckStep({
         </div>
       )}
 
-      {!loadError && generatedDays.length === 0 && blockedElsewhereDays.length === 0 && (
+      {!loadError && generatedDays.length === 0 && blockedElsewhereDays.length === 0 && absenceDates.size === 0 && (
         <p className="text-sm text-neutral-600">
           {patterns.length === 0
-            ? 'Geen deeltijdpatronen ingesteld.'
+            ? 'Geen deeltijdpatronen of afwezigheid ingesteld.'
             : 'Er vallen geen deeltijddagen binnen deze periode.'}
         </p>
       )}
@@ -236,26 +265,33 @@ export function PartTimeCheckStep({
                           }
                           const generated = byDate.get(datum);
                           const blockedElsewhere = !generated ? blockedElsewhereByDate.get(datum) : undefined;
-                          const isAbsence = blockedElsewhere?.source === 'ABSENCE';
+                          const isAbsenceElsewhere = blockedElsewhere?.source === 'ABSENCE';
+                          // A day the pattern doesn't touch at all (so
+                          // neither of the two checks above ever see it),
+                          // but that still falls within a registered
+                          // absence's date range - the whole point of this
+                          // fix, see the "in dezelfde kalender" request.
+                          const isAbsenceOnly = !generated && !blockedElsewhere && absenceDates.has(datum);
+                          const isAbsence = isAbsenceElsewhere || isAbsenceOnly;
                           return (
                             <td key={datum} className="align-top p-0">
                               <div
                                 className={`h-11 rounded-lg border flex items-start justify-center pt-1 text-xs font-semibold tabular-nums
                                   ${generated
                                     ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-amber-400' : ''}`
-                                    : blockedElsewhere
-                                      ? isAbsence
-                                        ? 'calendar-cell-absence'
-                                        : 'calendar-cell-blocked-elsewhere'
-                                      : 'border-neutral-200 bg-white text-neutral-900'}`}
+                                    : isAbsence
+                                      ? 'calendar-cell-absence'
+                                      : blockedElsewhere
+                                        ? 'calendar-cell-blocked-elsewhere'
+                                        : 'border-neutral-200 bg-white text-neutral-900'}`}
                                 title={
                                   generated
                                     ? 'Deeltijddag (automatisch geblokkeerd)'
-                                    : blockedElsewhere
-                                      ? isAbsence
-                                        ? 'Deze dag valt binnen een geregistreerde afwezigheid - je patroon hoeft hier niets te doen'
-                                        : 'Deze dag is al om een andere reden geblokkeerd - je patroon hoeft hier niets te doen'
-                                      : undefined
+                                    : isAbsence
+                                      ? 'Deze dag valt binnen een geregistreerde afwezigheid'
+                                      : blockedElsewhere
+                                        ? 'Deze dag is al om een andere reden geblokkeerd - je patroon hoeft hier niets te doen'
+                                        : undefined
                                 }
                               >
                                 {parseISO(datum).getDate()}
@@ -300,7 +336,8 @@ export function PartTimeCheckStep({
 
       {/* Summary */}
       <div className="text-xs text-neutral-500 italic">
-        Totaal: {generatedDays.length} dagen
+        Totaal: {generatedDays.length} deeltijddagen
+        {absenceOnlyCount > 0 && <> • {absenceOnlyCount} afwezigheidsdagen</>}
         {boundaryDays.length > 0 && <> • Jaarwisseling: {boundaryDays.length} dagen</>}
         {blockedElsewhereDays.length > 0 && <> • Al elders geblokkeerd: {blockedElsewhereDays.length} dagen</>}
       </div>

@@ -495,6 +495,7 @@ export default function PersonalLinkPage() {
             periodEnd={period.eind_datum}
             periodStatus={period.status}
             patterns={patterns}
+            absences={absences}
             onConfirm={setParttimeConfirmed}
           />
           <button
