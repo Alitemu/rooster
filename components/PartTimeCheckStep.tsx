@@ -273,10 +273,10 @@ export function PartTimeCheckStep({
         />
         <span className="text-sm text-neutral-700">
           {patterns.length === 0 ? (
-            'Ik heb geen deeltijddagen - ik werk het volledige rooster.'
+            'Ik heb geen deeltijddagen - ik werk het volledige rooster. Ik heb mijn afwezigheid hierboven gecontroleerd en bevestig dat die klopt.'
           ) : (
             <>
-              Ik heb de deeltijddagen hierboven gecontroleerd en bevestig dat ze kloppen.
+              Ik heb de deeltijddagen en de afwezigheid hierboven gecontroleerd en bevestig dat ze kloppen.
               Ik begrijp dat weeknummers kunnen verschillen bij weken rond de jaarwisseling.
             </>
           )}
