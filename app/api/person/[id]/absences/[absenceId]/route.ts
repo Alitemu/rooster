@@ -65,6 +65,22 @@ export async function PATCH(
       return NextResponse.json(response, { status: 404 });
     }
 
+    // ZIEK/VERLOF stay valid at the database level (see
+    // db/migrations/0010_absence_soort_congres.sql) so an absence someone
+    // already registered under one of those keeps working untouched, but
+    // aren't offered as a choice for changing soort going forward -
+    // CONGRES replaces them.
+    if (body.soort) {
+      const validSoorten = ['VAKANTIE', 'CONGRES', 'OVERIG'];
+      if (!validSoorten.includes(body.soort)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'INVALID_SOORT', message: `Onbekend soort: ${body.soort}` },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
+
     // Update fields
     const updates: Record<string, any> = {};
     if (body.van_datum) updates.van_datum = body.van_datum;

@@ -161,7 +161,11 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
-    const validSoorten = ['VAKANTIE', 'ZIEK', 'VERLOF', 'OVERIG'];
+    // ZIEK/VERLOF stay valid at the database level (see
+    // db/migrations/0010_absence_soort_congres.sql) so existing
+    // registrations keep working, but are no longer offered as a choice
+    // for a new absence - CONGRES replaces them going forward.
+    const validSoorten = ['VAKANTIE', 'CONGRES', 'OVERIG'];
     if (!validSoorten.includes(soort)) {
       const response: ApiErrorResponse = {
         success: false,

@@ -71,6 +71,13 @@
       "when": 1788800400000,
       "tag": "0009_shift_slot_audit_log_check",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1788800500000,
+      "tag": "0010_absence_soort_congres",
+      "breakpoints": true
     }
   ]
 }

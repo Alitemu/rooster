@@ -96,7 +96,7 @@ export const absence = sqliteTable(
     van_datum: text('van_datum').notNull(), // ISO date
     tot_datum: text('tot_datum').notNull(), // ISO date
     soort: text('soort', {
-      enum: ['VAKANTIE', 'ZIEK', 'VERLOF', 'OVERIG'],
+      enum: ['VAKANTIE', 'ZIEK', 'VERLOF', 'CONGRES', 'OVERIG'],
     }).notNull(),
     notitie: text('notitie'), // Optional, no sensitive data allowed
     aangemaakt_door: text('aangemaakt_door').notNull().references(() => person.id),

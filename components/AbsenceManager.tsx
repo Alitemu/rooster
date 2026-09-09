@@ -12,6 +12,7 @@
  */
 
 import { useState } from 'react';
+import { addDays } from '@/lib/holidays';
 
 export interface Absence {
   id: string;
@@ -42,12 +43,18 @@ interface Props {
   onAbsencesChange: (absences: Absence[]) => void;
 }
 
+// Full label map so an existing absence registered under a now-retired
+// soort (ZIEK/VERLOF) still displays a proper Dutch label instead of the
+// raw code - see SOORT_OPTIONS below for what a participant can newly pick.
 const SOORT_LABEL: Record<string, string> = {
   VAKANTIE: 'Vakantie',
   ZIEK: 'Ziek',
   VERLOF: 'Verlof',
+  CONGRES: 'Congres/cursus',
   OVERIG: 'Overig',
 };
+
+const SOORT_OPTIONS = ['VAKANTIE', 'CONGRES', 'OVERIG'];
 
 const emptyForm = (defaultVanaf: string, defaultTot: string) => ({
   van_datum: defaultVanaf,
@@ -236,8 +243,8 @@ export function AbsenceManager({
                 onChange={(e) => setForm({ ...form, soort: e.target.value })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
               >
-                {Object.entries(SOORT_LABEL).map(([code, label]) => (
-                  <option key={code} value={code}>{label}</option>
+                {SOORT_OPTIONS.map((code) => (
+                  <option key={code} value={code}>{SOORT_LABEL[code]}</option>
                 ))}
               </select>
             </div>
@@ -246,7 +253,19 @@ export function AbsenceManager({
               <input
                 type="date"
                 value={form.van_datum}
-                onChange={(e) => setForm({ ...form, van_datum: e.target.value })}
+                onChange={(e) => {
+                  const van_datum = e.target.value;
+                  // Most absences are 1-3 weeks - jump "tot en met" to the
+                  // day right after "van" so there's a sensible nearby
+                  // default to adjust from, instead of leaving it wherever
+                  // it was (often forcing the participant to click through
+                  // several months in the date picker to reach it). Only
+                  // for a brand-new absence - nudging "van" while editing
+                  // an existing one must not silently shrink its already-set
+                  // range down to a single day.
+                  const tot_datum = van_datum && !editingId ? addDays(van_datum, 1) : form.tot_datum;
+                  setForm({ ...form, van_datum, tot_datum });
+                }}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
               />
             </div>
