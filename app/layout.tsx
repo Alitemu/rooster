@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
+import { AppHeader } from '@/components/AppHeader';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -25,7 +26,7 @@ export default function RootLayout({
         <div className="min-h-screen flex flex-col">
           <header className="bg-primary-600 text-white shadow-md">
             <div className="max-w-7xl mx-auto px-4 py-4">
-              <h1 className="text-2xl font-bold">Dienstrooster</h1>
+              <AppHeader />
             </div>
           </header>
           <main className="flex-1">
