@@ -1,1 +1,1 @@
-CREATE INDEX `person_access_link_person_idx` ON `dienstrooster_person_access_link` (`person_id`);
+CREATE INDEX IF NOT EXISTS `person_access_link_person_idx` ON `dienstrooster_person_access_link` (`person_id`);
