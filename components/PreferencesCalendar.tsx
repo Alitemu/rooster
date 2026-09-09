@@ -470,7 +470,7 @@ export function PreferencesCalendar({
           Parttime dag
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="calendar-cell-absence inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AFW</i>
+          <i className="calendar-cell-absence inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AF</i>
           Afwezigheid
         </span>
         <span className="flex items-center gap-1.5">
@@ -558,7 +558,11 @@ export function PreferencesCalendar({
                                   const autoSource = slot.source === 'PARTTIME' || slot.source === 'ABSENCE' ? slot.source : null;
 
                                   if (autoSource) {
-                                    const label = autoSource === 'PARTTIME' ? 'PT' : 'AFW';
+                                    // Kept to 2 characters, same as the manual toggle's
+                                    // counter-letter + glyph pattern below - at the enlarged
+                                    // 20px font a longer label (e.g. the old "A·AFW") overflows
+                                    // this narrow day-column cell into the next day.
+                                    const label = autoSource === 'PARTTIME' ? 'PT' : 'AF';
                                     const explanation =
                                       autoSource === 'PARTTIME'
                                         ? 'parttime dag (automatisch geblokkeerd)'
@@ -568,11 +572,11 @@ export function PreferencesCalendar({
                                     return (
                                       <div
                                         key={`${datum}-${counter}`}
-                                        className={`${cellClass} w-full h-5 rounded text-[10px] font-semibold
+                                        className={`${cellClass} w-full h-8 rounded text-[20px] leading-none font-semibold
                                           flex items-center justify-center cursor-not-allowed`}
                                         title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
                                       >
-                                        {counter[0]}·{label}
+                                        {label}
                                       </div>
                                     );
                                   }
@@ -591,7 +595,7 @@ export function PreferencesCalendar({
                                       onClick={() => handleTogglePreference(datum, counter)}
                                       onContextMenu={(e) => handleContextMenu(e, datum, counter)}
                                       disabled={isSaving || readOnly}
-                                      className={`w-full h-5 rounded text-[10px] font-semibold transition-all
+                                      className={`w-full h-8 rounded text-[20px] leading-none font-semibold transition-all
                                         ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
                                       title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'} (rechtsklik voor opties)`}
                                     >
