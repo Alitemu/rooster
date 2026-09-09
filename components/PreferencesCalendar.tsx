@@ -470,7 +470,7 @@ export function PreferencesCalendar({
           Parttime dag
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="calendar-cell-parttime inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AFW</i>
+          <i className="calendar-cell-absence inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AFW</i>
           Afwezigheid
         </span>
         <span className="flex items-center gap-1.5">
@@ -563,11 +563,13 @@ export function PreferencesCalendar({
                                       autoSource === 'PARTTIME'
                                         ? 'parttime dag (automatisch geblokkeerd)'
                                         : 'afwezigheid (automatisch geblokkeerd)';
+                                    const cellClass =
+                                      autoSource === 'PARTTIME' ? 'calendar-cell-parttime' : 'calendar-cell-absence';
                                     return (
                                       <div
                                         key={`${datum}-${counter}`}
-                                        className="calendar-cell-parttime w-full h-5 rounded text-[10px] font-semibold
-                                          flex items-center justify-center cursor-not-allowed"
+                                        className={`${cellClass} w-full h-5 rounded text-[10px] font-semibold
+                                          flex items-center justify-center cursor-not-allowed`}
                                         title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
                                       >
                                         {counter[0]}·{label}

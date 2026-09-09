@@ -106,6 +106,26 @@
   }
 }
 
+/* A registered absence (vacation/sick leave/leave) - its own light-red
+   look, distinct from both .calendar-cell-blocked (a manual block, no
+   hatch) and .calendar-cell-parttime (blue), so a participant can tell at
+   a glance which of the three locked/blocked states a cell is in. */
+.calendar-cell-absence {
+  @apply bg-red-100 border-red-300 text-red-900;
+}
+
+@supports (background-image: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0, 0, 0, 0.05) 10px, rgba(0, 0, 0, 0.05) 20px)) {
+  .calendar-cell-absence {
+    background-image: repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 10px,
+      rgba(0, 0, 0, 0.05) 10px,
+      rgba(0, 0, 0, 0.05) 20px
+    );
+  }
+}
+
 /* A day a part-time pattern would otherwise cover, but that's already
    blocked under a different source (an imported historical blockade, an
    absence, ...) - reconcilePatternForPeriod deliberately leaves those
