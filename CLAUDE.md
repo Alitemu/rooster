@@ -254,8 +254,14 @@ Show live in settings screen with interpretation in plain Dutch/English.
 - `solver` - Python FastAPI (healthcheck only, no public ports)
 
 **Volumes:**
-- `db_data` - SQLite database file
-- `caddy_data` - TLS certificate cache
+- `web`'s `/data` - SQLite database file and the preferences CSV backups
+  (`lib/preferencesBackup.ts`). Bind-mounted to `./data` next to
+  `docker-compose.yml` by default (override with `DATA_DIR` in `.env`) -
+  deliberately a plain host folder rather than a Docker-managed named
+  volume, so a NAS's own file manager (e.g. Synology File Station) can
+  browse it directly instead of needing Docker's hidden volume storage.
+- `caddy_data` - TLS certificate cache (still a regular named volume - not
+  something an operator needs to browse directly)
 
 **Networking:**
 - All services on internal bridge network

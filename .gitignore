@@ -50,6 +50,12 @@ yarn-error.log*
 /backups/
 *backup*
 
+# Docker Compose's default DATA_DIR bind mount (database + preferences CSV
+# backups) - see docker-compose.yml and .env.example. Real, per-deployment
+# data that must never end up in the repo, even accidentally with a custom
+# DATA_DIR left at its default relative path.
+/data/
+
 # Caddy
 caddy_data/
 

@@ -174,8 +174,8 @@ withRetry(() => db.pragma('foreign_keys = ON'));
 
 // Resolved absolute path to the SQLite file - exported so anything that
 // needs to write beside the database (e.g. lib/preferencesBackup.ts) uses
-// the exact same directory in both local dev and the Docker db_data
-// volume, without re-deriving DATABASE_URL parsing itself.
+// the exact same directory in both local dev and the Docker Compose
+// DATA_DIR bind mount, without re-deriving DATABASE_URL parsing itself.
 export const dbFilePath = filePath;
 
 export { db };

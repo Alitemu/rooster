@@ -36,14 +36,14 @@ services:
       DATABASE_URL: "file:/data/rooster.db"
       SOLVER_URL: "http://solver:8000"
       # Creates the ADMIN/PLANNER accounts and demo data on first boot of a
-      # fresh db_data volume - see .env.example. Neither account gets a
+      # fresh DATA_DIR - see .env.example. Neither account gets a
       # password from seeding; /planner/login walks you through setting
       # one the first time it's opened. Safe to leave set across
       # restarts/reinstalls: no-ops once seeded. Set SEED_ON_START=false
       # in .env to turn this off for a deployment with real staff.
       SEED_ON_START: "${SEED_ON_START:-true}"
       # Optional. Left empty the app generates one on first start and keeps
-      # it in the db_data volume, so sessions survive restarts. Set it here
+      # it in DATA_DIR, so sessions survive restarts. Set it here
       # (or in .env) to pin your own: openssl rand -hex 32
       SESSION_SECRET: "${SESSION_SECRET:-}"
       BASE_URL: "${BASE_URL:-https://localhost:${APP_PORT:-8010}}"
@@ -57,7 +57,14 @@ services:
       # it's stuck at "disabled" no matter what a deployment's .env says.
       NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
     volumes:
-      - db_data:/data
+      # A bind mount to a plain folder next to this file (default ./data),
+      # not a Docker-managed named volume - so the database and the
+      # preferences CSV backups (lib/preferencesBackup.ts, under
+      # data/backups/preferences/) show up as ordinary files/folders in
+      # whatever file manager already browses this host (e.g. Synology's
+      # File Station), instead of living inside Docker's own hidden
+      # volume storage. Override DATA_DIR in .env to point elsewhere.
+      - ${DATA_DIR:-./data}:/data
     networks:
       - internal
     restart: unless-stopped
@@ -87,5 +94,4 @@ networks:
     driver: bridge
 
 volumes:
-  db_data:
   caddy_data:

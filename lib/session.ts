@@ -30,7 +30,8 @@ export const STAFF_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12; // 12 hours
 
 /**
  * Where to keep a generated secret: beside the database, because that is
- * the one directory guaranteed to be a persistent volume (db_data:/data).
+ * the one directory guaranteed to persist across restarts (Docker Compose
+ * bind-mounts DATA_DIR, default ./data, to /data).
  * Storing it there means sessions survive a container restart; putting it
  * anywhere else in the image would log everyone out on every deploy.
  */

@@ -197,8 +197,8 @@ caddy:8010 ──→ web:3000 ──→ solver:8000
 - Web: Next.js + SQLite (WAL mode)
 - Solver: Python FastAPI (healthcheck only in Phase 0)
 
-`SEED_ON_START` defaults to `true`: the first time the `db_data` volume is
-empty, it auto-creates the planner account (codenaam `planner`, password
+`SEED_ON_START` defaults to `true`: the first time `DATA_DIR` (see
+`.env.example`) is empty, it auto-creates the planner account (codenaam `planner`, password
 `Password123!` - see `DEFAULT_TEST_PASSWORD` in `scripts/seed.ts`) and demo
 data. Safe to leave on across restarts and reinstalls, since it only acts
 once on a genuinely fresh database. Set `SEED_ON_START=false` in `.env` for

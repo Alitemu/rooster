@@ -4,8 +4,11 @@
  * On every preference-affecting change (a manual toggle in the calendar, a
  * part-time pattern taking effect, ...), writes a full snapshot of that
  * person's set preferences for a period to a CSV file next to the SQLite
- * database - the same db_data volume Docker already persists, so the
- * backup survives restarts exactly like the database does. Each write
+ * database - the same DATA_DIR bind mount Docker Compose already persists
+ * (see docker-compose.yml), so the backup survives restarts exactly like
+ * the database does, and is browsable as a plain file on the host (e.g.
+ * via Synology File Station) rather than hidden inside Docker's own
+ * volume storage. Each write
  * replaces the previous file for that person+period (deleted, then a new
  * one written with the current timestamp in its name), so there is always
  * exactly one file per person per period, never a growing pile of them.

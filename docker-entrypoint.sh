@@ -3,8 +3,23 @@
 # in .env.example. `npm run seed` is idempotent (scripts/seed.ts refuses to
 # touch a database that already has a planner account unless told --reset),
 # so leaving this on across restarts and reinstalls is safe: it only ever
-# does something the first time a fresh db_data volume boots.
+# does something the first time a fresh DATA_DIR boots.
 set -e
+
+# The image starts this container as root (no USER in the Dockerfile)
+# specifically so this can happen first: DATA_DIR is a bind mount (see
+# docker-compose.yml), and unlike a Docker-managed named volume, Docker
+# does not chown a freshly-created bind-mount host directory to match the
+# image's user - a brand new DATA_DIR shows up here owned by root, which
+# the app (running as the unprivileged `node` user below) couldn't write
+# rooster.db or the preferences CSV backups into. Fixed once per boot,
+# then everything else - including the rest of this script - runs as
+# `node` via su-exec, never as root.
+if [ "$(id -u)" = "0" ]; then
+  mkdir -p /data
+  chown -R node:node /data
+  exec su-exec node "$0" "$@"
+fi
 
 if [ "$SEED_ON_START" = "true" ]; then
   echo "SEED_ON_START=true - running database seed..."
