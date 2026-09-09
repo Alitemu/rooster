@@ -253,10 +253,11 @@ export function PreferencesCalendar({
 
   // Set a slot to a specific level - shared by the click-to-cycle handler
   // and the right-click menu, which picks a level directly instead of
-  // cycling through them. Slots generated from a part-time pattern
-  // (source === 'PARTTIME') are locked - see the day-cell rendering below,
-  // which never wires either of those to their button in the first place,
-  // so this is only ever called for slots the participant can actually edit.
+  // cycling through them. Slots generated from a part-time pattern or a
+  // registered absence (source === 'PARTTIME' / 'ABSENCE') are locked - see
+  // the day-cell rendering below, which never wires either of those to
+  // their button in the first place, so this is only ever called for slots
+  // the participant can actually edit.
   const applyPreferenceLevel = useCallback(
     (datum: string, teller: string, next: BlockLevel) => {
       // The slot_id for a given (datum, teller) is static lookup data, not
@@ -469,6 +470,10 @@ export function PreferencesCalendar({
           Parttime dag
         </span>
         <span className="flex items-center gap-1.5">
+          <i className="calendar-cell-parttime inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AFW</i>
+          Afwezigheid
+        </span>
+        <span className="flex items-center gap-1.5">
           <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">A</i>
           Avonddienst
         </span>
@@ -545,17 +550,27 @@ export function PreferencesCalendar({
                                   if (!slot) return null;
 
                                   const level = slot.level;
-                                  const isParttime = slot.source === 'PARTTIME';
+                                  // Both sources are auto-generated blocks the person didn't set
+                                  // by clicking this calendar - a part-time pattern or a
+                                  // registered absence - so they share the same locked,
+                                  // visually-distinct treatment rather than looking like (and
+                                  // being editable as) a plain manual "geblokkeerd" cell.
+                                  const autoSource = slot.source === 'PARTTIME' || slot.source === 'ABSENCE' ? slot.source : null;
 
-                                  if (isParttime) {
+                                  if (autoSource) {
+                                    const label = autoSource === 'PARTTIME' ? 'PT' : 'AFW';
+                                    const explanation =
+                                      autoSource === 'PARTTIME'
+                                        ? 'parttime dag (automatisch geblokkeerd)'
+                                        : 'afwezigheid (automatisch geblokkeerd)';
                                     return (
                                       <div
                                         key={`${datum}-${counter}`}
                                         className="calendar-cell-parttime w-full h-5 rounded text-[10px] font-semibold
                                           flex items-center justify-center cursor-not-allowed"
-                                        title={`${COUNTER_LABEL[counter] || counter}: parttime dag (automatisch geblokkeerd)`}
+                                        title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
                                       >
-                                        {counter[0]}·PT
+                                        {counter[0]}·{label}
                                       </div>
                                     );
                                   }

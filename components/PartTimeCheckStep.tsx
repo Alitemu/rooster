@@ -277,7 +277,7 @@ export function PartTimeCheckStep({
           ) : (
             <>
               Ik heb de deeltijddagen hierboven gecontroleerd en bevestig dat ze kloppen.
-              Ik begrijp dat weeknummers kunnen verschillen bij werken rond de jaarwisseling.
+              Ik begrijp dat weeknummers kunnen verschillen bij weken rond de jaarwisseling.
             </>
           )}
         </span>
