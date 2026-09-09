@@ -258,7 +258,7 @@ export function PartTimeCheckStep({
                   {group.weeks.map((week, weekIdx) => {
                     return (
                       <tr key={`week-${weekIdx}`}>
-                        <td className="week-number text-center align-top pt-2">{week.isoWeek}</td>
+                        <td className="week-number text-center align-middle">{week.isoWeek}</td>
                         {week.days.map((datum, dayIdx) => {
                           if (datum === null) {
                             return <td key={`blank-${weekIdx}-${dayIdx}`} className="p-0" />;
@@ -276,7 +276,7 @@ export function PartTimeCheckStep({
                           return (
                             <td key={datum} className="align-top p-0">
                               <div
-                                className={`h-11 rounded-lg border flex items-start justify-center pt-1 text-xs font-semibold tabular-nums
+                                className={`h-11 rounded-lg border flex items-center justify-center text-xs font-semibold tabular-nums
                                   ${generated
                                     ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-red-500' : ''}`
                                     : isAbsence
