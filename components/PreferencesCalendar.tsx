@@ -552,15 +552,20 @@ export function PreferencesCalendar({
                         const soleEditableCounter =
                           editableCounters.length === 1 ? editableCounters[0] : null;
 
+                        // Left-clicking a day only points the pinned
+                        // bezettingsmelding at the bottom of the page at
+                        // this day - it must NOT also cycle the
+                        // preference, which stays reserved for a precise
+                        // click on the counter's own letter/glyph button
+                        // (or a right-click anywhere in the cell, handled
+                        // below). A click landing on that button still
+                        // does both: its own onClick cycles the level,
+                        // which itself calls setHighlightDatum (see
+                        // applyPreferenceLevel) - this handler only needs
+                        // to cover clicks elsewhere in the cell.
                         const handleCellClick = (e: React.MouseEvent) => {
-                          // A click on a button (the counter toggle, or the
-                          // "heel weekend blokkeren" shortcut) already ran
-                          // that button's own onClick - without this guard
-                          // it would bubble here and fire a second,
-                          // conflicting action on every click.
                           if ((e.target as HTMLElement).closest('button')) return;
-                          if (!soleEditableCounter) return;
-                          handleTogglePreference(datum, soleEditableCounter);
+                          setHighlightDatum(datum);
                         };
                         const handleCellContextMenu = (e: React.MouseEvent) => {
                           if ((e.target as HTMLElement).closest('button')) return;
@@ -574,7 +579,7 @@ export function PreferencesCalendar({
                               onClick={handleCellClick}
                               onContextMenu={handleCellContextMenu}
                               className={`relative min-h-[92px] rounded-lg border p-1.5 pt-1
-                                ${soleEditableCounter && !isSaving && !readOnly ? 'cursor-pointer' : ''}
+                                ${!isSaving && !readOnly ? 'cursor-pointer' : ''}
                                 ${holiday ? 'holiday-slot' : isWeekendDay ? 'weekend-slot' : 'border-neutral-200 bg-white'}`}
                             >
                               {/* Day number and tag (holiday name, or "za"/"zo")
