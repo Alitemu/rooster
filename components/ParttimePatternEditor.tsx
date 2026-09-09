@@ -93,6 +93,7 @@ export function ParttimePatternEditor({
 
   const startEdit = (pattern: ParttimePattern) => {
     setError(null);
+    setWarning(null);
     setEditingId(pattern.id);
     setForm({
       weekdag: pattern.weekdag,
@@ -137,6 +138,7 @@ export function ParttimePatternEditor({
   const handleDelete = async (patternId: string) => {
     setRemovingId(patternId);
     setError(null);
+    setWarning(null);
     try {
       const res = await fetch(`/api/person/${personId}/parttime-patterns/${patternId}`, {
         method: 'DELETE',
@@ -272,7 +274,10 @@ export function ParttimePatternEditor({
           </button>
           {editingId && (
             <button
-              onClick={cancelEdit}
+              onClick={() => {
+                cancelEdit();
+                setWarning(null);
+              }}
               className="px-4 py-2 rounded font-medium text-sm bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
               Annuleren

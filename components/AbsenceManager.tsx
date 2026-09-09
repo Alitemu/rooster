@@ -69,6 +69,7 @@ export function AbsenceManager({
 
   const startEdit = (absence: Absence) => {
     setError(null);
+    setWarning(null);
     setEditingId(absence.id);
     setForm({
       van_datum: absence.van_datum,
@@ -113,6 +114,7 @@ export function AbsenceManager({
   const handleDelete = async (absenceId: string) => {
     setRemovingId(absenceId);
     setError(null);
+    setWarning(null);
     try {
       const res = await fetch(`/api/person/${personId}/absences/${absenceId}`, {
         method: 'DELETE',
@@ -249,7 +251,10 @@ export function AbsenceManager({
             </button>
             {editingId && (
               <button
-                onClick={cancelEdit}
+                onClick={() => {
+                  cancelEdit();
+                  setWarning(null);
+                }}
                 className="px-4 py-2 rounded font-medium text-sm bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
               >
                 Annuleren

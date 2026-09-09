@@ -236,12 +236,19 @@ export function PreferencesCalendar({
         await fetchCoverage();
       } catch (error) {
         rollback();
+        // The optimistic change was just reverted, so there's nothing left
+        // unsaved - without this, the red "niet opgeslagen" banner below
+        // and the green "opgeslagen" banner would both want to render at
+        // once (hasChanged was set to true optimistically before this call
+        // even started).
+        setHasChanged(false);
+        onPreferencesChange?.(false);
         setSaveError(error instanceof Error ? error.message : 'Opslaan van voorkeur mislukt');
       } finally {
         setIsSaving(false);
       }
     },
-    [personId, fetchCoverage]
+    [personId, fetchCoverage, onPreferencesChange]
   );
 
   // Set a slot to a specific level - shared by the click-to-cycle handler
