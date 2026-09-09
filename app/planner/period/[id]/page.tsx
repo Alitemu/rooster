@@ -34,6 +34,7 @@ export default function PlannerPeriodPage() {
   const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const [closeConfirmArmed, setCloseConfirmArmed] = useState(false);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState('');
@@ -92,6 +93,13 @@ export default function PlannerPeriodPage() {
   };
 
   const handleClosePeriod = async () => {
+    if (!closeConfirmArmed) {
+      // First click arms the confirmation instead of closing immediately -
+      // closing a period is not reversible from this screen.
+      setCloseConfirmArmed(true);
+      return;
+    }
+    setCloseConfirmArmed(false);
     setClosing(true);
     setCloseError(null);
     try {
@@ -253,8 +261,16 @@ export default function PlannerPeriodPage() {
               disabled={closing}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
             >
-              {closing ? 'Bezig met sluiten...' : '🔒 Periode sluiten'}
+              {closing ? 'Bezig met sluiten...' : closeConfirmArmed ? 'Zeker weten? Nogmaals klikken' : '🔒 Periode sluiten'}
             </button>
+            {closeConfirmArmed && (
+              <button
+                onClick={() => setCloseConfirmArmed(false)}
+                className="px-4 py-2 rounded font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
+              >
+                Annuleren
+              </button>
+            )}
           </div>
           {closeError && <p className="text-sm text-red-600">{closeError}</p>}
         </div>
@@ -301,6 +317,7 @@ export default function PlannerPeriodPage() {
         periodName={period.naam}
         isOpen={reminderDialogOpen}
         onClose={() => setReminderDialogOpen(false)}
+        initialType="reminders"
       />
 
       <RosterGenerationDialog

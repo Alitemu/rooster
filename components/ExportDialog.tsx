@@ -26,10 +26,11 @@ interface Props {
   periodName: string;
   isOpen: boolean;
   onClose: () => void;
+  initialType?: ExportType;
 }
 
-export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
-  const [exportType, setExportType] = useState<ExportType>(null);
+export function ExportDialog({ periodId, periodName, isOpen, onClose, initialType = null }: Props) {
+  const [exportType, setExportType] = useState<ExportType>(initialType);
   const [reminders, setReminders] = useState<ReminderTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
   // it was open.
   useEffect(() => {
     if (isOpen) {
-      setExportType(null);
+      setExportType(initialType);
       setReminders([]);
       setLoading(false);
       setError(null);
@@ -61,7 +62,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose }: Props) {
       setRemindersLoaded(false);
       setRemindersLoadFailed(false);
     }
-  }, [isOpen, periodId]);
+  }, [isOpen, periodId, initialType]);
 
   const loadReminders = async () => {
     setRemindersLoaded(true);
