@@ -88,12 +88,33 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
        (id, person_id, slot_id, blocking_level, source, bron_absence_id, aangemaakt_op)
        VALUES (?, ?, ?, 'ABSOLUUT', 'ABSENCE', ?, ?)`
     );
+    // A part-time pattern's block is a standing weekly rule with no date
+    // of its own; a registered absence is the more specific, more
+    // informative reason for that particular day. Re-tagging the slot
+    // (instead of leaving it looking like an ordinary recurring pattern
+    // day) is what makes a vacation that happens to fall on a pattern day
+    // actually show up as a vacation - without it, the day stays blocked
+    // either way, but the participant sees no sign their absence was ever
+    // registered. bron_pattern_id is cleared so the pattern's own
+    // reconcile no longer treats this slot as one of its own (it would
+    // otherwise delete this now-ABSENCE row the next time the pattern is
+    // edited, since the slot would look "stale" from the pattern's side).
+    const takeOverStmt = db.prepare(
+      `UPDATE dienstrooster_availability
+       SET source = 'ABSENCE', bron_absence_id = ?, bron_pattern_id = NULL
+       WHERE person_id = ? AND slot_id = ?`
+    );
     const now = new Date().toISOString();
 
     for (const slotId of toCheck) {
       const existing = existingStmt.get(absence.person_id, slotId) as { source: string } | undefined;
       if (existing) {
-        skippedManualConflicts++;
+        if (existing.source === 'PARTTIME') {
+          takeOverStmt.run(absence.id, absence.person_id, slotId);
+          inserted++;
+        } else {
+          skippedManualConflicts++;
+        }
         continue;
       }
       insertStmt.run(crypto.randomUUID(), absence.person_id, slotId, absence.id, now);

@@ -113,6 +113,10 @@ afterEach(() => {
       `DELETE FROM dienstrooster_absence WHERE person_id IN
        (SELECT person_id FROM dienstrooster_pool_membership WHERE pool_id = ?)`
     ).run(period.pool_id);
+    db.prepare(
+      `DELETE FROM dienstrooster_parttime_pattern WHERE person_id IN
+       (SELECT person_id FROM dienstrooster_pool_membership WHERE pool_id = ?)`
+    ).run(period.pool_id);
     db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(period.pool_id);
@@ -179,6 +183,37 @@ describe('absenceSync', () => {
         .get(slot.id) as { source: string; bron_absence_id: string | null };
       expect(row.source).toBe('MANUAL');
       expect(row.bron_absence_id).toBeNull();
+    });
+
+    it('takes over a PARTTIME-sourced slot instead of skipping it, since a registered absence is the more specific reason - and clears bron_pattern_id so the pattern cannot later delete it as stale', () => {
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+      const slot = db
+        .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-05'`)
+        .get(fixture.periodId) as { id: string };
+      const patternId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO dienstrooster_parttime_pattern
+           (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+         VALUES (?, ?, 'DI', 'ELKE_WEEK', '2027-01-01', '2027-12-31', ?, datetime('now'))`
+      ).run(patternId, fixture.personId, fixture.personId);
+
+      db.prepare(
+        `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, bron_pattern_id, aangemaakt_op)
+         VALUES (?, ?, ?, 'ABSOLUUT', 'PARTTIME', ?, datetime('now'))`
+      ).run(crypto.randomUUID(), fixture.personId, slot.id, patternId);
+
+      const absenceId = createAbsence(fixture.personId, '2027-01-05', '2027-01-05');
+      const result = syncAvailabilityForAbsence(absenceId);
+
+      expect(result.inserted).toBe(1);
+      expect(result.skippedManualConflicts).toBe(0);
+
+      const row = db
+        .prepare('SELECT source, bron_absence_id, bron_pattern_id FROM dienstrooster_availability WHERE slot_id = ?')
+        .get(slot.id) as { source: string; bron_absence_id: string | null; bron_pattern_id: string | null };
+      expect(row.source).toBe('ABSENCE');
+      expect(row.bron_absence_id).toBe(absenceId);
+      expect(row.bron_pattern_id).toBeNull();
     });
 
     it('shortening an absence date range removes the now-out-of-range rows', () => {
