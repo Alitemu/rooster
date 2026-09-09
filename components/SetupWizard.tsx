@@ -1758,7 +1758,7 @@ export function SetupWizard({ period, onComplete }: Props) {
               <p className="font-semibold text-amber-900 mb-2">⚠️ Voordat je opent</p>
               <ul className="text-sm text-amber-800 space-y-1 ml-4">
                 <li>✓ Periodedata en deadline zijn correct</li>
-                <li>✓ Al het personeel is uitgenodigd</li>
+                <li>✓ Personeel is toegevoegd</li>
                 <li>✓ Venster- en budgetinstellingen zijn geschikt</li>
                 <li>✓ Beginsaldi (indien van toepassing) zijn geïmporteerd</li>
               </ul>
