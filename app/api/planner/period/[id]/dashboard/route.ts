@@ -77,7 +77,8 @@ export async function GET(
         COUNT(CASE WHEN s.status = 'BEVESTIGD' THEN 1 END) as confirmed
       FROM dienstrooster_person p
       LEFT JOIN dienstrooster_submission s ON p.id = s.person_id AND s.schedule_period_id = ?
-      WHERE p.id IN (
+      WHERE p.actief = 1
+        AND p.id IN (
         SELECT DISTINCT person_id
         FROM dienstrooster_pool_membership pm
         JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
@@ -101,18 +102,27 @@ export async function GET(
       JOIN dienstrooster_person p ON p.id = le.person_id
       JOIN dienstrooster_schedule_period sp ON le.geldt_voor_periode_id = sp.id
       WHERE le.geldt_voor_periode_id = ?
+        AND p.actief = 1
+        AND p.id IN (
+          SELECT DISTINCT pm.person_id
+          FROM dienstrooster_pool_membership pm
+          JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
+          WHERE pm.pool_id = sp2.pool_id
+            AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum
+        )
       GROUP BY p.id, le.teller
       HAVING ABS(delta) >= ?
       ORDER BY ABS(delta) DESC
     `);
 
-    const imbalances = imbalancesStmt.all(periodId, largeBalanceThreshold) as ImbalanceItem[];
+    const imbalances = imbalancesStmt.all(periodId, periodId, largeBalanceThreshold) as ImbalanceItem[];
 
     // Get staff with parttime patterns
     const parttimeStmt = db.prepare(`
       SELECT COUNT(DISTINCT p.id) as count
       FROM dienstrooster_person p
-      WHERE p.id IN (
+      WHERE p.actief = 1
+      AND p.id IN (
         SELECT DISTINCT person_id FROM dienstrooster_parttime_pattern
       )
       AND p.id IN (
@@ -130,6 +140,7 @@ export async function GET(
     const totalStaffStmt = db.prepare(`
       SELECT COUNT(DISTINCT pm.person_id) as count
       FROM dienstrooster_pool_membership pm
+      JOIN dienstrooster_person p ON p.id = pm.person_id AND p.actief = 1
       JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?
       WHERE pm.pool_id = sp2.pool_id
         AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum

@@ -58,7 +58,8 @@ export async function GET(
         END as has_absences
       FROM dienstrooster_person p
       LEFT JOIN dienstrooster_submission s ON p.id = s.person_id AND s.schedule_period_id = ?
-      WHERE p.id IN (
+      WHERE p.actief = 1
+        AND p.id IN (
         SELECT DISTINCT pm.person_id
         FROM dienstrooster_pool_membership pm
         JOIN dienstrooster_schedule_period sp2 ON sp2.id = ?

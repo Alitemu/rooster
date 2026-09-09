@@ -90,16 +90,40 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
-    // Check if person exists
-    const personStmt = db.prepare('SELECT id, codenaam FROM dienstrooster_person WHERE id = ?');
-    const person = personStmt.get(body.person_id) as any;
+    const period = db
+      .prepare('SELECT id, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(periodId) as { id: string; pool_id: string; start_datum: string; eind_datum: string } | undefined;
+
+    if (!period) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
+      };
+      return NextResponse.json(response, { status: 404 });
+    }
+
+    // Must actually be a pool member for this period, not just exist
+    // somewhere in dienstrooster_person - otherwise a toegangslink (and
+    // the period access it grants) could be created for someone with no
+    // real connection to this period/pool.
+    const person = db
+      .prepare(
+        `SELECT p.id, p.codenaam FROM dienstrooster_person p
+         JOIN dienstrooster_pool_membership pm ON pm.person_id = p.id
+         WHERE p.id = ? AND pm.pool_id = ?
+           AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
+           AND p.actief = 1`
+      )
+      .get(body.person_id, period.pool_id, period.eind_datum, period.start_datum) as
+      | { id: string; codenaam: string }
+      | undefined;
 
     if (!person) {
       const response: ApiErrorResponse = {
         success: false,
         error: {
           code: 'PERSON_NOT_FOUND',
-          message: 'Persoon niet gevonden',
+          message: 'Persoon niet gevonden, niet actief, of geen lid van deze pool voor deze periode',
         },
       };
       return NextResponse.json(response, { status: 404 });

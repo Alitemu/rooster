@@ -35,8 +35,10 @@ export async function POST(
     const rows = body.rows || [];
 
     const period = db
-      .prepare('SELECT id, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(periodId) as { id: string; pool_id: string } | undefined;
+      .prepare('SELECT id, pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(periodId) as
+      | { id: string; pool_id: string; status: string; start_datum: string; eind_datum: string }
+      | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
@@ -44,6 +46,21 @@ export async function POST(
         error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // Same rule ledger-corrections enforces: once a roster exists, its
+    // balances are already baked in - an import landing invisibly after
+    // that point would drift the saldo shown to a person out of sync with
+    // the roster nobody re-solved for it.
+    if (['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'INVALID_STATUS',
+          message: `Beginsaldi kunnen niet meer geïmporteerd worden voor een periode in status ${period.status}`,
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
     }
 
     const now = new Date().toISOString();
@@ -75,9 +92,23 @@ export async function POST(
 
     const importAll = db.transaction((importRows: BalanceRow[]) => {
       for (const row of importRows) {
+        // Same "hoort bij deze periode" convention every other route uses:
+        // membership must cover the period's own date range, and the
+        // person must still be active - without this, a codenaam that
+        // exists but isn't (or no longer is) in this pool for this period
+        // silently gets a BEGINSALDO entry nowhere in the UI shows as
+        // belonging to a real pool member.
         const person = db
-          .prepare('SELECT id FROM dienstrooster_person WHERE codenaam = ?')
-          .get(row.codenaam) as { id: string } | undefined;
+          .prepare(
+            `SELECT p.id FROM dienstrooster_person p
+             JOIN dienstrooster_pool_membership pm ON pm.person_id = p.id
+             WHERE p.codenaam = ? AND pm.pool_id = ?
+               AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
+               AND p.actief = 1`
+          )
+          .get(row.codenaam, period.pool_id, period.eind_datum, period.start_datum) as
+          | { id: string }
+          | undefined;
 
         if (!person) {
           errors.push(`Onbekende codenaam: ${row.codenaam}`);

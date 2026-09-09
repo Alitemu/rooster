@@ -70,7 +70,7 @@ export async function POST(
       .prepare(
         `SELECT DISTINCT pm.person_id, p.codenaam FROM dienstrooster_pool_membership pm
          JOIN dienstrooster_person p ON p.id = pm.person_id
-         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?`
+         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
       )
       .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
 

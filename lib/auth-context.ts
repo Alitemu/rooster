@@ -61,10 +61,16 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
   // least one still-valid link for this person, not the specific one that
   // was used to log in - revoking access means losing it entirely, not
   // just that one link.
+  //
+  // Also rechecks actief, mirroring the staff-session recheck above -
+  // there's no UI/route today that deactivates a DEELNEMER, so this can't
+  // actually diverge from the link check yet, but it means a future one
+  // doesn't silently leave an already-issued 30-day session valid.
   const stillValid = db
     .prepare(
-      `SELECT 1 FROM dienstrooster_person_access_link
-       WHERE person_id = ? AND ingetrokken_op IS NULL LIMIT 1`
+      `SELECT 1 FROM dienstrooster_person_access_link pal
+       JOIN dienstrooster_person p ON p.id = pal.person_id
+       WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1 LIMIT 1`
     )
     .get(session.personId);
   if (!stillValid) return null;
