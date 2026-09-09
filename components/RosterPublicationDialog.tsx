@@ -77,7 +77,7 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Publiceren van rooster mislukt');
+        throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Publiceren van rooster mislukt');
       }
 
       if (onSuccess) onSuccess();

@@ -166,7 +166,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || 'Genereren van rooster mislukt');
+        throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Genereren van rooster mislukt');
       }
 
       const data = await res.json();

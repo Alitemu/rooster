@@ -86,7 +86,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
     try {
       const res = await fetch(`/api/planner/period/${periodId}/unfilled-slots`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Laden van openstaande diensten mislukt');
+      if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Laden van openstaande diensten mislukt');
       setLoadError(null);
       setSlots(data.data);
       if (data.data.length === 0 && onAllFilled) onAllFilled();
@@ -113,7 +113,7 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
         body: JSON.stringify({ person_id: personId, slot_id: slotId, reason: 'Handmatig aangevuld' }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Toewijzen mislukt');
+      if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Toewijzen mislukt');
       if (data.data?.warning) setWarning(data.data.warning.message);
 
       await load();
