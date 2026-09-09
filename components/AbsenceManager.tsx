@@ -19,10 +19,20 @@ export interface Absence {
   tot_datum: string;
   soort: string;
   notitie?: string | null;
+  // Only present when the caller passes periodId - see Props below.
+  blocked_days_in_period?: number;
+  total_days_in_period?: number;
 }
 
 interface Props {
   personId: string;
+  // Optional so this component still works for any future caller that
+  // doesn't have one period in view. When present, each absence row shows
+  // a real, DB-backed confirmation ("X van de Y dagen geblokkeerd in deze
+  // periode") instead of just echoing back the dates the participant
+  // typed - proof the absence actually blocked shifts, not just that it
+  // saved.
+  periodId?: string;
   absences: Absence[];
   defaultVanaf: string;
   defaultTot: string;
@@ -46,6 +56,7 @@ const emptyForm = (defaultVanaf: string, defaultTot: string) => ({
 
 export function AbsenceManager({
   personId,
+  periodId,
   absences,
   defaultVanaf,
   defaultTot,
@@ -60,7 +71,10 @@ export function AbsenceManager({
   const [warning, setWarning] = useState<string | null>(null);
 
   const refresh = async () => {
-    const res = await fetch(`/api/person/${personId}/absences`);
+    const url = periodId
+      ? `/api/person/${personId}/absences?period_id=${periodId}`
+      : `/api/person/${personId}/absences`;
+    const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
       onAbsencesChange(data.data);
@@ -162,6 +176,22 @@ export function AbsenceManager({
                   {a.van_datum} t/m {a.tot_datum}
                 </span>
                 {a.notitie && <span className="text-neutral-600 text-xs block sm:inline sm:ml-2">{a.notitie}</span>}
+                {typeof a.total_days_in_period === 'number' && (
+                  a.total_days_in_period === 0 ? (
+                    <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
+                      (buiten deze periode)
+                    </span>
+                  ) : a.blocked_days_in_period === a.total_days_in_period ? (
+                    <span className="text-green-700 text-xs font-medium block sm:inline sm:ml-2">
+                      ✓ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen geblokkeerd in deze periode
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 text-xs font-medium block sm:inline sm:ml-2">
+                      ⚠ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen geblokkeerd in deze
+                      periode - de rest was al om een andere reden geblokkeerd
+                    </span>
+                  )
+                )}
               </div>
               {!readOnly && (
                 <div className="flex gap-3 shrink-0">

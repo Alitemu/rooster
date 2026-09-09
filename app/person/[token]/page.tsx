@@ -185,7 +185,7 @@ export default function PersonalLinkPage() {
           // Fetch part-time patterns and absences for preference entry
           const [patternsRes, absencesRes] = await Promise.all([
             fetch(`/api/person/${person_id}/parttime-patterns`),
-            fetch(`/api/person/${person_id}/absences`),
+            fetch(`/api/person/${person_id}/absences?period_id=${period_id}`),
           ]);
           const failedParts: string[] = [];
           if (patternsRes.ok) {
@@ -468,6 +468,7 @@ export default function PersonalLinkPage() {
           />
           <AbsenceManager
             personId={personId}
+            periodId={period.id}
             absences={absences}
             defaultVanaf={period.start_datum}
             defaultTot={period.eind_datum}

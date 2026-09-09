@@ -24,6 +24,8 @@ interface Absence {
   tot_datum: string;
   soort: string;
   notitie?: string;
+  blocked_days_in_period?: number;
+  total_days_in_period?: number;
 }
 
 interface CreateAbsenceRequest {
@@ -58,20 +60,40 @@ export async function GET(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Fetch absences
-    const stmt = db.prepare(`
+    // A participant checking "did my absence actually register" needs proof
+    // it really blocked shifts, not just an echo of the dates they typed -
+    // optionally (when the caller knows which period it's viewing) count how
+    // many of the period's shift-days within the absence's range are
+    // genuinely covered by an ABSENCE-sourced availability row this absence
+    // owns, against how many such days exist at all. The two normally
+    // match; a gap is real and informative (e.g. a day the participant
+    // separately, deliberately blocked manually - see absenceSync.ts's
+    // "never overwrite a MANUAL row" rule - not a sign of failure.
+    const periodId = req.nextUrl.searchParams.get('period_id');
+
+    const stmt = db.prepare(
+      periodId
+        ? `
       SELECT
-        id,
-        van_datum,
-        tot_datum,
-        soort,
-        notitie
+        a.id, a.van_datum, a.tot_datum, a.soort, a.notitie,
+        (SELECT COUNT(DISTINCT s.datum) FROM dienstrooster_shift_slot s
+           WHERE s.period_id = ? AND s.datum >= a.van_datum AND s.datum <= a.tot_datum) as total_days_in_period,
+        (SELECT COUNT(DISTINCT s.datum) FROM dienstrooster_availability av
+           JOIN dienstrooster_shift_slot s ON s.id = av.slot_id
+           WHERE av.bron_absence_id = a.id AND s.period_id = ?) as blocked_days_in_period
+      FROM dienstrooster_absence a
+      WHERE a.person_id = ?
+      ORDER BY a.van_datum DESC
+    `
+        : `
+      SELECT id, van_datum, tot_datum, soort, notitie
       FROM dienstrooster_absence
       WHERE person_id = ?
       ORDER BY van_datum DESC
-    `);
+    `
+    );
 
-    const absences = stmt.all(id) as Absence[];
+    const absences = (periodId ? stmt.all(periodId, periodId, id) : stmt.all(id)) as Absence[];
 
     const response: ApiSuccessResponse<Absence[]> = {
       success: true,
