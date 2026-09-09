@@ -201,7 +201,7 @@ export function PartTimeCheckStep({
         <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
           <p className="text-sm text-amber-900 font-medium">
             ⚠️ {boundaryDays.length} deeltijddag{boundaryDays.length === 1 ? '' : 'en'} val
-            {boundaryDays.length === 1 ? 't' : 'len'} rond de jaarwisseling (geel omrand hieronder) -
+            {boundaryDays.length === 1 ? 't' : 'len'} rond de jaarwisseling (rood omrand hieronder) -
             controleer die extra goed. Je hebt een patroon met &quot;even&quot; of &quot;oneven weken&quot;,
             en weeknummers maken daar een sprong: rond de jaarwisseling kan &quot;om de week&quot; een dag
             opleveren die je niet had verwacht.
@@ -226,7 +226,7 @@ export function PartTimeCheckStep({
           Deeltijddag (automatisch geblokkeerd)
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="calendar-cell-parttime inline-block w-5 h-4 rounded ring-2 ring-amber-400" />
+          <i className="calendar-cell-parttime inline-block w-5 h-4 rounded ring-2 ring-red-500" />
           Deeltijddag rond de jaarwisseling
         </span>
         <span className="flex items-center gap-1.5">
@@ -278,7 +278,7 @@ export function PartTimeCheckStep({
                               <div
                                 className={`h-11 rounded-lg border flex items-start justify-center pt-1 text-xs font-semibold tabular-nums
                                   ${generated
-                                    ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-amber-400' : ''}`
+                                    ? `calendar-cell-parttime ${generated.is_year_boundary ? 'ring-2 ring-red-500' : ''}`
                                     : isAbsence
                                       ? 'calendar-cell-absence'
                                       : blockedElsewhere
