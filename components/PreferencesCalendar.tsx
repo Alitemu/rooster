@@ -535,18 +535,60 @@ export function PreferencesCalendar({
                         const tag = holiday ? holiday.name : WEEKDAY_TAG[dayIdx];
                         const ratio = cov && cov.total_in_pool > 0 ? cov.available / cov.total_in_pool : 1;
 
+                        // The counter this day's cell should act on when the
+                        // click/right-click lands somewhere other than the
+                        // counter button itself (day number, tag, coverage
+                        // bar, padding) - only when exactly one editable
+                        // (non-locked) counter is showing, matching the
+                        // "most days show only one counter row" assumption
+                        // already relied on elsewhere in this file. With two
+                        // or more, which one a stray click "means" is
+                        // genuinely ambiguous, so only the counters' own
+                        // buttons stay clickable in that case.
+                        const editableCounters = shiftCounters.filter((c) => {
+                          const s = dayPref?.slots.get(c);
+                          return s && s.source !== 'PARTTIME' && s.source !== 'ABSENCE';
+                        });
+                        const soleEditableCounter =
+                          editableCounters.length === 1 ? editableCounters[0] : null;
+
+                        const handleCellClick = (e: React.MouseEvent) => {
+                          // A click on a button (the counter toggle, or the
+                          // "heel weekend blokkeren" shortcut) already ran
+                          // that button's own onClick - without this guard
+                          // it would bubble here and fire a second,
+                          // conflicting action on every click.
+                          if ((e.target as HTMLElement).closest('button')) return;
+                          if (!soleEditableCounter) return;
+                          handleTogglePreference(datum, soleEditableCounter);
+                        };
+                        const handleCellContextMenu = (e: React.MouseEvent) => {
+                          if ((e.target as HTMLElement).closest('button')) return;
+                          if (!soleEditableCounter) return;
+                          handleContextMenu(e, datum, soleEditableCounter);
+                        };
+
                         return (
                           <td key={datum} className="align-top p-0">
                             <div
+                              onClick={handleCellClick}
+                              onContextMenu={handleCellContextMenu}
                               className={`relative min-h-[92px] rounded-lg border p-1.5 pt-1
+                                ${soleEditableCounter && !isSaving && !readOnly ? 'cursor-pointer' : ''}
                                 ${holiday ? 'holiday-slot' : isWeekendDay ? 'weekend-slot' : 'border-neutral-200 bg-white'}`}
                             >
-                              <div className="flex items-start justify-between gap-1">
+                              {/* Day number and tag (holiday name, or "za"/"zo")
+                                  stacked - not side by side - so a holiday name
+                                  (much longer than "za"/"zo") isn't squeezed
+                                  right-aligned into a 46px sliver next to the
+                                  day number and cut off; left-aligned on its
+                                  own line it gets the cell's full width. */}
+                              <div className="flex flex-col items-start gap-0.5">
                                 <span className="text-xs font-semibold tabular-nums">
                                   {parseISO(datum).getDate()}
                                 </span>
                                 {tag && (
-                                  <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate max-w-[46px]" title={tag}>
+                                  <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate w-full text-left" title={tag}>
                                     {tag}
                                   </span>
                                 )}
@@ -652,28 +694,35 @@ export function PreferencesCalendar({
         </div>
       ))}
 
-      {/* Coverage notice - reacts to the last day you touched */}
-      {highlightCov && (
-        <div className="text-sm p-3 rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-700">
-          {coverageNoteText(highlightCov)}
-        </div>
-      )}
-
-      {/* Save status */}
-      {isSaving && (
-        <div className="sticky bottom-0 p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
-          Voorkeuren opslaan...
-        </div>
-      )}
-      {saveError && !isSaving && (
-        <div className="sticky bottom-0 p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
-          {saveError} - de laatste wijziging is niet opgeslagen en teruggezet.
-        </div>
-      )}
-
-      {hasChanged && !isSaving && (
-        <div className="sticky bottom-0 p-2 bg-green-50 border-t border-green-200 text-sm text-green-700">
-          Voorkeuren opgeslagen
+      {/* Coverage notice + save status - grouped into one sticky footer so
+          both stay visible while scrolled up editing earlier in the
+          calendar, instead of the coverage notice scrolling out of view
+          the moment you're no longer at the bottom of the page. Stacked in
+          one sticky container (rather than each having its own
+          `sticky bottom-0`) so they don't render on top of each other when
+          both are showing at once. */}
+      {(highlightCov || isSaving || saveError || hasChanged) && (
+        <div className="sticky bottom-0 z-10 flex flex-col">
+          {highlightCov && (
+            <div className="text-sm p-3 bg-neutral-50 border-t border-neutral-200 text-neutral-700">
+              {coverageNoteText(highlightCov)}
+            </div>
+          )}
+          {isSaving && (
+            <div className="p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
+              Voorkeuren opslaan...
+            </div>
+          )}
+          {saveError && !isSaving && (
+            <div className="p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
+              {saveError} - de laatste wijziging is niet opgeslagen en teruggezet.
+            </div>
+          )}
+          {hasChanged && !isSaving && (
+            <div className="p-2 bg-green-50 border-t border-green-200 text-sm text-green-700">
+              Voorkeuren opgeslagen
+            </div>
+          )}
         </div>
       )}
 
