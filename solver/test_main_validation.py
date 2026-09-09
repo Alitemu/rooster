@@ -14,7 +14,7 @@ Run: pytest solver/ -v
 import pytest
 from pydantic import ValidationError
 
-from main import RuleSet, Slot
+from main import RuleSet, Slot, SolverInput
 
 
 def test_reversed_band_is_rejected():
@@ -64,6 +64,27 @@ def test_empty_band_deviation_penalty_is_rejected():
     not doing what was explicitly asked for."""
     with pytest.raises(ValidationError):
         RuleSet(band_deviation_penalty=[])
+
+
+def test_duplicate_slot_id_is_rejected():
+    """
+    constraints.py/objective.py key every assignment variable and
+    capacity/band constraint on slot.id - two slot records sharing an id
+    (e.g. a caller-side query bug) would otherwise silently overwrite each
+    other's assignment variable and double-count that assignment in
+    capacity/band totals, instead of erroring cleanly at the boundary.
+    """
+    duplicate = Slot(id='slot-1', datum='2027-01-04', iso_jaar=2027, iso_week=1,
+                      shift_type_id='st-1', shift_type_name='AVOND')
+    with pytest.raises(ValidationError):
+        SolverInput(
+            period_id='p1',
+            slots=[duplicate, duplicate.model_copy()],
+            person_preferences={},
+            people=['person-1'],
+            rules=RuleSet(),
+            balances={},
+        )
 
 
 def test_band_deviation_multiplier_below_one_is_rejected():

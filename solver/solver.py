@@ -87,7 +87,7 @@ class RosterSolver:
 
         logger.info("Adding holiday spread constraints")
         constraint_builder.add_holiday_spread_constraints(
-            assignment_vars, people, slots, holiday_spread_weeks
+            assignment_vars, people, slots, holiday_spread_weeks, prior_assignments or []
         )
 
         logger.info("Adding blocking absolute constraints")

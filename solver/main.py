@@ -86,10 +86,14 @@ class PriorAssignment(BaseModel):
     A shift that already happened just before this period started - the
     confirmed tail of the previous period (dienstrooster_prior_assignment).
     Lets the window rule see across the period boundary instead of
-    resetting at week 1 of every new period.
+    resetting at week 1 of every new period. `teller` additionally lets
+    add_holiday_spread_constraints see a FEESTDAG shift that happened just
+    before the period started, the same way window_weeks already does for
+    any counter via add_prior_assignment_constraints.
     """
     person_id: str
     datum: str  # YYYY-MM-DD
+    teller: str  # AVOND, WEEKEND, or FEESTDAG
 
 
 class RuleSet(BaseModel):
@@ -178,6 +182,25 @@ class SolverInput(BaseModel):
     # Only consulted when rules.distribution_mode == "NAAR_RATO" - see
     # constraints.add_band_constraints.
     participation_factors: dict[str, float] = {}
+
+    @field_validator('slots')
+    @classmethod
+    def _slot_ids_are_unique(cls, value: list[Slot]) -> list[Slot]:
+        # constraints.py/objective.py key every assignment variable and
+        # capacity/band constraint on slot.id - a caller-side bug that
+        # sends the same slot twice (e.g. a duplicated row from the
+        # Next.js query) would otherwise silently produce a wrong model
+        # rather than a clean error: the second record's assignment
+        # variable overwrites the first's, a capacity constraint gets
+        # added twice for the same variable, and band/imbalance totals
+        # double-count that one assignment - never a crash, just a
+        # quietly wrong roster.
+        seen = set()
+        for slot in value:
+            if slot.id in seen:
+                raise ValueError(f'duplicate slot id: {slot.id}')
+            seen.add(slot.id)
+        return value
 
 
 class Assignment(BaseModel):
@@ -331,12 +354,24 @@ async def solve_roster(request: SolverInput):
         elapsed = time.time() - start_time
         logger.info(f"Solve completed: {len(assignments)} assignments in {elapsed:.2f}s")
 
+        # Unconditionally "Generated N assignments" used to read as a
+        # success message even when result['success'] was False (e.g.
+        # INFEASIBLE, or UNKNOWN after the 30s time_limit) - "Generated 0
+        # assignments in 0.03s" looks like nothing went wrong. The Next.js
+        # side (generate-roster/route.ts) forwards this message as-is on
+        # the failure path, so it's the only text the planner ever sees.
+        message = (
+            f"Generated {len(assignments)} assignments in {elapsed:.2f}s"
+            if result['success']
+            else f"Solve did not succeed (status: {diagnostics.solver_status}) after {elapsed:.2f}s"
+        )
+
         return SolverOutput(
             success=result['success'],
             period_id=request.period_id,
             assignments=assignments,
             diagnostics=diagnostics,
-            message=f"Generated {len(assignments)} assignments in {elapsed:.2f}s"
+            message=message
         )
 
     except Exception as e:

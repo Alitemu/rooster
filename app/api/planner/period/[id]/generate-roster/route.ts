@@ -216,10 +216,10 @@ export async function POST(
     // nothing actionable and are excluded.
     const priorAssignmentRows = db
       .prepare(
-        `SELECT person_id, datum FROM dienstrooster_prior_assignment
+        `SELECT person_id, datum, teller FROM dienstrooster_prior_assignment
          WHERE period_id = ? AND person_id IS NOT NULL`
       )
-      .all(periodId) as Array<{ person_id: string; datum: string }>;
+      .all(periodId) as Array<{ person_id: string; datum: string; teller: string }>;
 
     // Build solver request
     const solverInput = {
@@ -265,6 +265,7 @@ export async function POST(
       prior_assignments: priorAssignmentRows.map((r) => ({
         person_id: r.person_id,
         datum: r.datum,
+        teller: r.teller,
       })),
       participation_factors: participationFactors,
     };
@@ -298,10 +299,19 @@ export async function POST(
       // all is possible without breaking a hard rule (ABSOLUUT block,
       // window rule), or the solver genuinely errored. A real business
       // outcome, not a server fault, so 422 rather than 500.
-      return NextResponse.json(
-        { success: false, error: solverOutput.message || 'Solver failed' },
-        { status: 422 }
-      );
+      //
+      // solverOutput.message is English and, for a genuine failure, was
+      // never actually a useful explanation ("Solve did not succeed
+      // (status: INFEASIBLE)") - never forward it directly, per CLAUDE.md.
+      const status = solverOutput.diagnostics?.solver_status;
+      const statusExplanation: Record<string, string> = {
+        INFEASIBLE: 'Er is geen enkele geldige indeling mogelijk binnen de harde regels (bijv. geblokkeerde dagen of het minimumvenster tussen diensten). Versoepel de instellingen of vraag deelnemers hun blokkades te herzien.',
+        UNKNOWN: 'De solver kon binnen de tijdslimiet geen oplossing vinden. Probeer het opnieuw, of versoepel de instellingen als dit blijft gebeuren.',
+        ERROR: 'Er is een onverwachte fout opgetreden in de solver.',
+      };
+      const message = statusExplanation[status] || 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.';
+
+      return NextResponse.json({ success: false, error: message }, { status: 422 });
     }
 
     // The solver call above is async and yields the event loop, so a second

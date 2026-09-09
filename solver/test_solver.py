@@ -503,6 +503,33 @@ def test_naar_rato_scales_a_part_timers_band_by_their_participation_factor():
     )
 
 
+def test_naar_rato_scaling_keeps_band_width_at_least_one():
+    """
+    Rounding both bounds the same way can collapse a part-timer's scaled
+    band to width 0 (factor=0.5 on [7,8]: round(3.5)=4, round(4.0)=4 ->
+    [4,4]) while a full-timer keeps width 2 - a systematic, non-
+    proportional penalty against part-timers, who'd then pay band-slack
+    cost for the ordinary variation a full-timer gets for free.
+    floor(min)/ceil(max) keeps width >=1: factor=0.5 on [7,8] ->
+    floor(3.5)=3, ceil(4.0)=4 -> [3,4].
+
+    Only p1 exists with 3 AVOND slots on offer - all 3 must fit inside the
+    scaled [3,4] band with zero band-slack.
+    """
+    slots = make_slots(3)
+    band = {'AVOND': [7, 8], 'WEEKEND': [7, 8], 'FEESTDAG': [7, 8]}
+
+    result = solve(['p1'], slots, window_weeks=0, band=band,
+                    distribution_mode='NAAR_RATO', participation_factors={'p1': 0.5})
+
+    assert len(result['assignments']) == 3, (
+        f"p1 should take all 3 available slots (inside the scaled [3,4] band): {result['assignments']}"
+    )
+    assert result['diagnostics']['violations'].get('band_limit', 0) == 0, (
+        f"3 shifts should fit inside p1's scaled band [3,4] with no band-slack: {result['diagnostics']}"
+    )
+
+
 # ---------------------------------------------------------------------------
 # BAND DEVIATION: escalating, cumulative bandDeviationPenalty
 # ---------------------------------------------------------------------------
@@ -664,4 +691,40 @@ def test_holiday_spread_only_constrains_feestdag_pairs():
 
     assert len(result['assignments']) == 2, (
         f'an AVOND + FEESTDAG pair should never be blocked by holiday spread: {result["assignments"]}'
+    )
+
+
+def test_holiday_spread_blocks_a_feestdag_slot_too_close_to_a_prior_period_feestdag_shift():
+    """
+    prior_assignments carries a FEESTDAG shift from just before this period
+    started - without threading it into add_holiday_spread_constraints,
+    someone who worked a FEESTDAG shift right at the end of the previous
+    period could be handed another one at the very start of this one,
+    since this rule otherwise only ever saw this period's own slots. This
+    mirrors add_prior_assignment_constraints' carry-over for window_weeks,
+    but scoped to FEESTDAG and holiday_spread_weeks. window_weeks=0 (off)
+    isolates this from the general window rule.
+    """
+    slots = make_slots(1, teller='FEESTDAG', start_year=2027, start_week=3)  # week 3, 2027
+    prior = [{'person_id': 'p1', 'datum': '2027-01-04', 'teller': 'FEESTDAG'}]  # p1 worked week 1, 2027
+
+    result = solve(['p1'], slots, window_weeks=0, holiday_spread_weeks=4, prior=prior)
+
+    assert result['assignments'] == [], (
+        f"holiday spread ignored the previous period's FEESTDAG carry-over: {result['assignments']}"
+    )
+
+
+def test_holiday_spread_prior_carry_over_ignores_non_feestdag_shifts():
+    """
+    The prior-assignment carry-over above must stay FEESTDAG-specific too:
+    a prior AVOND shift must never block a new period's FEESTDAG slot.
+    """
+    slots = make_slots(1, teller='FEESTDAG', start_year=2027, start_week=3)
+    prior = [{'person_id': 'p1', 'datum': '2027-01-04', 'teller': 'AVOND'}]
+
+    result = solve(['p1'], slots, window_weeks=0, holiday_spread_weeks=4, prior=prior)
+
+    assert len(result['assignments']) == 1, (
+        f'a prior AVOND shift must not block a FEESTDAG slot via holiday spread: {result["assignments"]}'
     )

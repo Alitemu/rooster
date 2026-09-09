@@ -10,6 +10,7 @@ Implements hard constraints for roster generation:
 6. Holiday rotation (fair distribution across group)
 """
 
+import math
 from datetime import date, timedelta
 from typing import Optional
 
@@ -135,7 +136,8 @@ class ConstraintBuilder:
         assignment_vars: dict[tuple[str, str], cp_model.IntVar],
         people: list[str],
         slots: list[dict],
-        holiday_spread_weeks: int
+        holiday_spread_weeks: int,
+        prior_assignments: Optional[list[dict]] = None
     ):
         """
         Constraint: at most one FEESTDAG assignment in any run of
@@ -155,6 +157,15 @@ class ConstraintBuilder:
         penalty field, unlike the soft band settings - it mirrors
         window_weeks in being a hard rule, not a cost to weigh against
         others.
+
+        prior_assignments carries a FEESTDAG shift from just before this
+        period started (dienstrooster_prior_assignment, confirmed via the
+        Prior Assignments screen) as a fixed fact, the same way
+        add_prior_assignment_constraints does for window_weeks - without
+        this, someone who worked a FEESTDAG shift right at the end of the
+        previous period could be handed another one at the very start of
+        this one, since this constraint only ever saw this period's own
+        slots otherwise.
         """
         self.violations.setdefault('holiday_spread', 0)
 
@@ -187,6 +198,19 @@ class ConstraintBuilder:
 
                 if window_vars:
                     self.model.Add(sum(window_vars) <= 1)
+
+        for prior in (prior_assignments or []):
+            if prior.get('teller') != 'FEESTDAG':
+                continue
+            person_id = prior['person_id']
+            prior_week = _week_ordinal(prior['datum'])
+
+            for slot in feestdag_slots:
+                key = (person_id, slot['id'])
+                if key not in assignment_vars:
+                    continue
+                if abs(_week_ordinal(slot['datum']) - prior_week) < holiday_spread_weeks:
+                    self.model.Add(assignment_vars[key] == 0)
 
     # ========================================================================
     # Window Rule carry-over: respect shifts from just before this period
@@ -350,9 +374,18 @@ class ConstraintBuilder:
                 base_min, base_max = band_ranges.get(counter, [7, 8])
 
                 if distribution_mode == 'NAAR_RATO':
+                    # floor/ceil, not round for both: rounding both the
+                    # same way can collapse the scaled band to width 0
+                    # (e.g. factor=0.5 on [7,8] -> round(3.5)=4,
+                    # round(4.0)=4 -> [4,4]) while a full-time person keeps
+                    # width >=1 - a systematic, non-proportional penalty
+                    # against part-timers, who'd then pay band-slack cost
+                    # for the ordinary variation a full-timer gets for
+                    # free. floor(min)/ceil(max) keeps width >=1 whenever
+                    # the un-scaled band already had one.
                     factor = factors.get(person_id, 1.0)
-                    base_min = round(base_min * factor)
-                    base_max = max(base_min, round(base_max * factor))
+                    base_min = math.floor(base_min * factor)
+                    base_max = max(base_min, math.ceil(base_max * factor))
 
                 # Get person's balance for this counter
                 delta = balances.get(person_id, {}).get(counter, 0)

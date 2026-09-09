@@ -10,6 +10,7 @@ Rewards (subtracts from the total):
 4. VOORKEUR (preferred) assignments
 """
 
+import math
 from typing import Optional
 
 from ortools.sat.python import cp_model
@@ -134,9 +135,15 @@ class ObjectiveBuilder:
                 base_min, base_max = band_ranges.get(counter, [7, 8])
 
                 if distribution_mode == 'NAAR_RATO':
+                    # floor/ceil, not round - must stay in lockstep with
+                    # constraints.py's add_band_constraints (same reasoning
+                    # there: rounding both bounds the same way can collapse
+                    # the scaled band to width 0, e.g. factor=0.5 on [7,8]
+                    # -> round(3.5)=4, round(4.0)=4 -> [4,4], a
+                    # non-proportional penalty against part-timers).
                     factor = factors.get(person_id, 1.0)
-                    base_min = round(base_min * factor)
-                    base_max = max(base_min, round(base_max * factor))
+                    base_min = math.floor(base_min * factor)
+                    base_max = max(base_min, math.ceil(base_max * factor))
 
                 delta = balances.get(person_id, {}).get(counter, 0)
 
