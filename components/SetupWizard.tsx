@@ -1353,12 +1353,20 @@ export function SetupWizard({ period, onComplete }: Props) {
                     min="0"
                     max="100"
                     value={blockBudgetConfig.hardPercent}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      // Ignore an empty/invalid intermediate value (e.g. while
+                      // the planner selects-all and retypes) rather than
+                      // coercing it to 0 - 0% means "no one may block
+                      // anything", so silently committing that while someone
+                      // is mid-edit would lock out ABSOLUUT for the whole
+                      // period the moment they tab away or submit.
+                      const parsed = parseInt(e.target.value);
+                      if (Number.isNaN(parsed)) return;
                       setBlockBudgetConfig({
                         ...blockBudgetConfig,
-                        hardPercent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
-                      })
-                    }
+                        hardPercent: Math.min(100, Math.max(0, parsed)),
+                      });
+                    }}
                     className="w-full px-2 py-1 border rounded text-sm"
                   />
                 </div>
@@ -1371,12 +1379,14 @@ export function SetupWizard({ period, onComplete }: Props) {
                     min="0"
                     max="100"
                     value={blockBudgetConfig.softPercent}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      const parsed = parseInt(e.target.value);
+                      if (Number.isNaN(parsed)) return;
                       setBlockBudgetConfig({
                         ...blockBudgetConfig,
-                        softPercent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)),
-                      })
-                    }
+                        softPercent: Math.min(100, Math.max(0, parsed)),
+                      });
+                    }}
                     className="w-full px-2 py-1 border rounded text-sm"
                   />
                 </div>

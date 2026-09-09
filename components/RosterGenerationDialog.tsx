@@ -16,6 +16,41 @@ interface RulesetConfig {
   bandFeestdag: [number, number];
 }
 
+// Percent form for editing (matches SetupWizard's own Blokkadebudget step,
+// and like it applies one percentage across all three tellers) - converted
+// to/from the 0-1 maxFraction the ruleset JSON and blockBudget.ts actually
+// store. Absent (no budget configured) reads back as 100% - "no limit".
+interface BlockBudgetConfig {
+  hardPercent: number;
+  softPercent: number;
+  parttimeExempt: boolean;
+}
+
+// Reads just the AVOND fraction back as a percentage - blockBudget.ts stores
+// one maxFraction per teller, but the wizard only ever writes the same
+// value to all three, so AVOND stands in for "the" configured percentage.
+function percentFromBudget(budget: unknown): number {
+  if (!budget || typeof budget !== 'object') return 100;
+  const avond = (budget as Record<string, unknown>).AVOND as { maxFraction?: unknown } | undefined;
+  return avond && typeof avond.maxFraction === 'number' ? Math.round(avond.maxFraction * 100) : 100;
+}
+
+function parttimeExemptFromBudget(budget: unknown): boolean {
+  if (!budget || typeof budget !== 'object') return true;
+  const value = (budget as Record<string, unknown>).parttimeExempt;
+  return typeof value === 'boolean' ? value : true;
+}
+
+function budgetPayload(percent: number, parttimeExempt: boolean) {
+  const maxFraction = Math.min(100, Math.max(0, percent)) / 100;
+  return {
+    AVOND: { maxFraction },
+    WEEKEND: { maxFraction },
+    FEESTDAG: { maxFraction },
+    parttimeExempt,
+  };
+}
+
 const COUNTER_LABEL: Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', string> = {
   AVOND: 'Avond',
   WEEKEND: 'Weekend',
@@ -72,6 +107,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const [error, setError] = useState<string | null>(null);
   const [rulesetLoading, setRulesetLoading] = useState(false);
   const [ruleset, setRuleset] = useState<RulesetConfig | null>(null);
+  const [blockBudgetConfig, setBlockBudgetConfig] = useState<BlockBudgetConfig | null>(null);
   const [rulesetError, setRulesetError] = useState<string | null>(null);
   const [rulesetRowVersion, setRulesetRowVersion] = useState<number | null>(null);
   // Not a hard rule - a planner can always generate early, e.g. once it's
@@ -100,6 +136,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           bandAvond: Array.isArray(parsed.bandAvond) ? parsed.bandAvond : [7, 8],
           bandWeekend: Array.isArray(parsed.bandWeekend) ? parsed.bandWeekend : [2, 3],
           bandFeestdag: Array.isArray(parsed.bandFeestdag) ? parsed.bandFeestdag : [1, 2],
+        });
+        setBlockBudgetConfig({
+          hardPercent: percentFromBudget(parsed.blockBudget),
+          softPercent: percentFromBudget(parsed.softBlockBudget),
+          parttimeExempt: parttimeExemptFromBudget(parsed.blockBudget ?? parsed.softBlockBudget),
         });
         setRulesetRowVersion(
           typeof data?.data?.row_version === 'number' ? data.data.row_version : null
@@ -148,7 +189,16 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         const rulesetRes = await fetch(`/api/periods/${periodId}/ruleset`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...ruleset, rowVersion: rulesetRowVersion ?? undefined }),
+          body: JSON.stringify({
+            ...ruleset,
+            ...(blockBudgetConfig
+              ? {
+                  blockBudget: budgetPayload(blockBudgetConfig.hardPercent, blockBudgetConfig.parttimeExempt),
+                  softBlockBudget: budgetPayload(blockBudgetConfig.softPercent, blockBudgetConfig.parttimeExempt),
+                }
+              : {}),
+            rowVersion: rulesetRowVersion ?? undefined,
+          }),
         });
         const rulesetData = await rulesetRes.json();
         if (!rulesetRes.ok) {
@@ -288,6 +338,71 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         );
                       })}
                     </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold text-neutral-800 mb-1">Blokkadebudget</h3>
+                <p className="text-xs text-neutral-500 mb-3">
+                  Begrens hoeveel procent van de diensten één persoon mag blokkeren of als
+                  &quot;liever niet&quot; mag opgeven. Op 100% zit er geen limiet op.
+                </p>
+
+                {blockBudgetConfig && (
+                  <div className="space-y-3 bg-neutral-50 border border-neutral-200 rounded p-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600 mb-1">
+                          Geblokkeerd (max %)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={blockBudgetConfig.hardPercent}
+                          onChange={(e) => {
+                            const parsed = parseInt(e.target.value);
+                            if (Number.isNaN(parsed)) return;
+                            setBlockBudgetConfig({
+                              ...blockBudgetConfig,
+                              hardPercent: Math.min(100, Math.max(0, parsed)),
+                            });
+                          }}
+                          className="w-full px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-600 mb-1">
+                          Liever niet (max %)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={blockBudgetConfig.softPercent}
+                          onChange={(e) => {
+                            const parsed = parseInt(e.target.value);
+                            if (Number.isNaN(parsed)) return;
+                            setBlockBudgetConfig({
+                              ...blockBudgetConfig,
+                              softPercent: Math.min(100, Math.max(0, parsed)),
+                            });
+                          }}
+                          className="w-full px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-neutral-700">
+                      <input
+                        type="checkbox"
+                        checked={blockBudgetConfig.parttimeExempt}
+                        onChange={(e) =>
+                          setBlockBudgetConfig({ ...blockBudgetConfig, parttimeExempt: e.target.checked })
+                        }
+                      />
+                      Parttime-vrije dagen tellen niet mee voor het budget
+                    </label>
                   </div>
                 )}
               </div>

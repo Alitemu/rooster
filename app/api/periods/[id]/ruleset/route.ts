@@ -1,19 +1,23 @@
 /**
- * PATCH /api/periods/[id]/ruleset - Adjust a period's frozen window/band
- * settings
+ * PATCH /api/periods/[id]/ruleset - Adjust a period's frozen window/band and
+ * blokkadebudget settings
  *
  * The ruleset is frozen onto the period as JSON when it's opened
  * (bevroren_ruleset_json), specifically so later edits to the pool's
  * default ruleset can't retroactively change an already-open period. But
  * that freeze also meant a planner regenerating the roster always got the
- * exact same window/band back with no way to see or change them - a
- * regenerate with nothing adjusted just reproduces the same result.
+ * exact same window/band/budget back with no way to see or change them - a
+ * regenerate with nothing adjusted just reproduces the same result, and a
+ * budget that was set (or, via a since-fixed SetupWizard input bug, ended up
+ * set) too restrictively for this period had no way back except editing the
+ * database directly.
  *
- * This lets a planner update window/band on the frozen ruleset itself
- * (distributionMode and anything else already stored is left alone),
- * right before a (re)generate - the same statuses generate-roster accepts,
- * minus CONCEPT (which has no frozen ruleset yet - that's set via
- * POST .../open instead) and GEPUBLICEERD (frozen for good once published).
+ * This lets a planner update window/band/blockBudget/softBlockBudget on the
+ * frozen ruleset itself (distributionMode and anything else already stored
+ * is left alone), right before a (re)generate - the same statuses
+ * generate-roster accepts, minus CONCEPT (which has no frozen ruleset yet -
+ * that's set via POST .../open instead) and GEPUBLICEERD (frozen for good
+ * once published).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,11 +26,20 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
+interface BlockBudgetPerTeller {
+  AVOND: { maxFraction: number };
+  WEEKEND: { maxFraction: number };
+  FEESTDAG: { maxFraction: number };
+  parttimeExempt: boolean;
+}
+
 interface UpdateRulesetRequest {
   windowWeeks?: number;
   bandAvond?: [number, number];
   bandWeekend?: [number, number];
   bandFeestdag?: [number, number];
+  blockBudget?: BlockBudgetPerTeller;
+  softBlockBudget?: BlockBudgetPerTeller;
   rowVersion?: number;
 }
 
@@ -37,6 +50,32 @@ function isValidBand(band: unknown): band is [number, number] {
     band.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0) &&
     band[0] <= band[1]
   );
+}
+
+// A budget frozen at 0 (or any value below what's already blocked) is a
+// legitimate, if severe, planner choice - "no one may block any AVOND
+// shift" - but the SetupWizard has no way to load an existing period's
+// value back in, so every regenerate silently reset it to the wizard's
+// own default. This exists so a planner can actually see and correct a
+// budget that's wrong, on a period that's already open, without touching
+// the database directly - the same reason the window/band fields above
+// are editable here.
+function isValidBudget(budget: unknown): budget is BlockBudgetPerTeller {
+  if (!budget || typeof budget !== 'object') return false;
+  const b = budget as Record<string, unknown>;
+  for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG'] as const) {
+    const entry = b[teller] as { maxFraction?: unknown } | undefined;
+    if (
+      !entry ||
+      typeof entry.maxFraction !== 'number' ||
+      !Number.isFinite(entry.maxFraction) ||
+      entry.maxFraction < 0 ||
+      entry.maxFraction > 1
+    ) {
+      return false;
+    }
+  }
+  return typeof b.parttimeExempt === 'boolean';
 }
 
 export async function PATCH(
@@ -97,6 +136,22 @@ export async function PATCH(
       }
     }
 
+    for (const [key, budget] of [
+      ['blockBudget', body.blockBudget],
+      ['softBlockBudget', body.softBlockBudget],
+    ] as const) {
+      if (budget !== undefined && !isValidBudget(budget)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'INVALID_BUDGET',
+            message: `${key}: percentage per teller moet tussen 0 en 100 liggen`,
+          },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
+
     if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {
       const response: ApiErrorResponse = {
         success: false,
@@ -123,6 +178,8 @@ export async function PATCH(
       ...(body.bandAvond !== undefined ? { bandAvond: body.bandAvond } : {}),
       ...(body.bandWeekend !== undefined ? { bandWeekend: body.bandWeekend } : {}),
       ...(body.bandFeestdag !== undefined ? { bandFeestdag: body.bandFeestdag } : {}),
+      ...(body.blockBudget !== undefined ? { blockBudget: body.blockBudget } : {}),
+      ...(body.softBlockBudget !== undefined ? { softBlockBudget: body.softBlockBudget } : {}),
     };
 
     // A period already sitting on a generated roster (GEGENEREERD) must go
