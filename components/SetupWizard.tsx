@@ -1285,8 +1285,8 @@ export function SetupWizard({ period, onComplete }: Props) {
             <div>
               <h3 className="font-semibold mb-1">Streefbereik</h3>
               <p className="text-xs text-neutral-600 mb-3">
-                Voorstel op basis van dit rooster en het aantal mensen. Pas het gerust aan, maar
-                een ruimer bereik dan hier voorgesteld is voor deze periode niet haalbaar.
+                Voorstel op basis van dit rooster en het aantal mensen. Pas het gerust ruimer aan,
+                maar een smaller bereik dan hier voorgesteld is voor deze periode niet haalbaar.
               </p>
               <div className="grid grid-cols-2 gap-4">
                 {['AVOND', 'WEEKEND', 'FEESTDAG'].map((counter) => (
