@@ -63,7 +63,11 @@ services:
       # data/backups/preferences/) show up as ordinary files/folders in
       # whatever file manager already browses this host (e.g. Synology's
       # File Station), instead of living inside Docker's own hidden
-      # volume storage. Override DATA_DIR in .env to point elsewhere.
+      # volume storage. Override DATA_DIR in .env to point elsewhere - but
+      # a custom path must already exist as a real folder before the first
+      # `docker compose up` (unlike the default ./data, which ships
+      # pre-created via the git-tracked data/.gitkeep), since a bind mount
+      # needs somewhere on the host to actually attach to.
       - ${DATA_DIR:-./data}:/data
     networks:
       - internal

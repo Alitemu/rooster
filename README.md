@@ -197,6 +197,16 @@ caddy:8010 ──→ web:3000 ──→ solver:8000
 - Web: Next.js + SQLite (WAL mode)
 - Solver: Python FastAPI (healthcheck only in Phase 0)
 
+The database and preferences CSV backups live in `DATA_DIR` (default
+`./data`, next to `docker-compose.yml`), bind-mounted into the container -
+a plain folder rather than a Docker-managed volume, so it's browsable in
+an ordinary file manager (e.g. Synology File Station). The default
+`./data` ships pre-created (empty, via the git-tracked `data/.gitkeep`) so
+a fresh clone always has it - a bind mount needs its host folder to
+already exist, unlike a named volume. If you override `DATA_DIR` to a
+custom path, create that folder yourself before the first
+`docker compose up`.
+
 `SEED_ON_START` defaults to `true`: the first time `DATA_DIR` (see
 `.env.example`) is empty, it auto-creates the planner account (codenaam `planner`, password
 `Password123!` - see `DEFAULT_TEST_PASSWORD` in `scripts/seed.ts`) and demo

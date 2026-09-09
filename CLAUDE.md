@@ -260,6 +260,11 @@ Show live in settings screen with interpretation in plain Dutch/English.
   deliberately a plain host folder rather than a Docker-managed named
   volume, so a NAS's own file manager (e.g. Synology File Station) can
   browse it directly instead of needing Docker's hidden volume storage.
+  Ships as an empty, git-tracked folder (`data/.gitkeep`) precisely so a
+  fresh clone always has it: a bind mount's host directory has to already
+  exist, unlike a named volume, which Docker creates on demand. A custom
+  `DATA_DIR` doesn't get this for free - create it once, manually, before
+  the first `docker compose up`.
 - `caddy_data` - TLS certificate cache (still a regular named volume - not
   something an operator needs to browse directly)
 

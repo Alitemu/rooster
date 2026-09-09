@@ -52,9 +52,15 @@ yarn-error.log*
 
 # Docker Compose's default DATA_DIR bind mount (database + preferences CSV
 # backups) - see docker-compose.yml and .env.example. Real, per-deployment
-# data that must never end up in the repo, even accidentally with a custom
-# DATA_DIR left at its default relative path.
-/data/
+# data that must never end up in the repo. The folder itself stays tracked
+# (data/.gitkeep) rather than ignored outright - Docker Compose needs this
+# host directory to already exist before it can bind-mount it, and a fresh
+# `git clone`/pull is the only "deployment setup" step every install goes
+# through, so that's what has to guarantee it exists, not the container
+# (docker-entrypoint.sh's own mkdir runs after the mount already happened,
+# too late to help if the host side was missing).
+/data/*
+!/data/.gitkeep
 
 # Caddy
 caddy_data/
