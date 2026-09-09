@@ -37,7 +37,7 @@ interface Absence {
 interface CreateAbsenceRequest {
   van_datum: string; // ISO date
   tot_datum: string; // ISO date
-  soort: string; // VAKANTIE, ZIEK, VERLOF, OVERIG
+  soort: string; // VAKANTIE, CONGRES, OVERIG
   notitie?: string;
 }
 
@@ -161,10 +161,6 @@ export async function POST(
       return NextResponse.json(response, { status: 400 });
     }
 
-    // ZIEK/VERLOF stay valid at the database level (see
-    // db/migrations/0010_absence_soort_congres.sql) so existing
-    // registrations keep working, but are no longer offered as a choice
-    // for a new absence - CONGRES replaces them going forward.
     const validSoorten = ['VAKANTIE', 'CONGRES', 'OVERIG'];
     if (!validSoorten.includes(soort)) {
       const response: ApiErrorResponse = {

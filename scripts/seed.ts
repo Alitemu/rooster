@@ -337,7 +337,7 @@ async function createTables() {
       van_datum TEXT NOT NULL,
       tot_datum TEXT NOT NULL,
       soort TEXT NOT NULL
-        CHECK(soort IN ('VAKANTIE', 'ZIEK', 'VERLOF', 'CONGRES', 'OVERIG')),
+        CHECK(soort IN ('VAKANTIE', 'CONGRES', 'OVERIG')),
       notitie TEXT,
       aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
       aangemaakt_op TEXT NOT NULL

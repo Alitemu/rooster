@@ -3,7 +3,7 @@ CREATE TABLE `__new_dienstrooster_absence` (
 	`person_id` text NOT NULL,
 	`van_datum` text NOT NULL,
 	`tot_datum` text NOT NULL,
-	`soort` text NOT NULL CHECK(`soort` IN ('VAKANTIE', 'ZIEK', 'VERLOF', 'CONGRES', 'OVERIG')),
+	`soort` text NOT NULL CHECK(`soort` IN ('VAKANTIE', 'CONGRES', 'OVERIG')),
 	`notitie` text,
 	`aangemaakt_door` text NOT NULL,
 	`aangemaakt_op` text NOT NULL,
