@@ -94,7 +94,7 @@ const GLYPH: Record<Exclude<BlockLevel, null>, string> = {
 // checked and left available, or never looked at at all.
 const AVAILABLE_GLYPH = '✓';
 
-const WEEKDAY_TAG = ['', '', '', '', '', 'za', 'zo']; // index 5/6 = Saturday/Sunday
+const WEEKDAY_TAG = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo']; // index 0-6 = Monday..Sunday
 
 function coverageBarClass(ratio: number): string {
   if (ratio < 0.3) return 'coverage-critical';
