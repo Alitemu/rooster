@@ -12,6 +12,8 @@ import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { checkBlockBudget } from '@/lib/blockBudget';
+import { syncPatternsForPerson } from '@/lib/parttimeSync';
+import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import type { Teller } from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -106,6 +108,11 @@ export async function PATCH(
         id,
         slotId
       );
+      // The cleared slot might be one a part-time pattern or an absence
+      // would otherwise cover but was skipped for when this manual block
+      // got there first - see syncPatternsForPerson's doc comment.
+      syncPatternsForPerson(id);
+      syncAbsencesForPerson(id);
     } else {
       const existing = db
         .prepare(`SELECT id FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?`)

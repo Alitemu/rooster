@@ -142,6 +142,31 @@ export function syncAvailabilityForAbsence(absenceId: string): SyncResult {
 }
 
 /**
+ * Reconciles every one of a person's own absences - the absence-side
+ * counterpart to lib/parttimeSync.ts's syncPatternsForPerson. Clearing a
+ * MANUAL block (or anything else) can free up a slot a still-registered
+ * absence would otherwise cover but was skipped for when that block got
+ * there first; nothing else re-runs the absence side of that
+ * reconciliation, so without this the slot is left with no availability
+ * row at all even though the absence still nominally applies to it.
+ */
+export function syncAbsencesForPerson(personId: string): SyncResult {
+  const absences = db
+    .prepare('SELECT id, person_id, van_datum, tot_datum FROM dienstrooster_absence WHERE person_id = ?')
+    .all(personId) as AbsenceRow[];
+
+  const result: SyncResult = { inserted: 0, deleted: 0, skippedManualConflicts: 0, periodsAffected: [] };
+  for (const absence of absences) {
+    const absenceResult = syncAvailabilityForAbsence(absence.id);
+    result.inserted += absenceResult.inserted;
+    result.deleted += absenceResult.deleted;
+    result.skippedManualConflicts += absenceResult.skippedManualConflicts;
+    result.periodsAffected.push(...absenceResult.periodsAffected);
+  }
+  return result;
+}
+
+/**
  * Hard-removes every availability row this absence generated, in every
  * period regardless of status. Must run before deleting the absence row
  * itself - bron_absence_id has no ON DELETE clause and foreign_keys=ON.

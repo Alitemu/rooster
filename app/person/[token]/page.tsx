@@ -472,10 +472,22 @@ export default function PersonalLinkPage() {
             defaultVanaf={period.start_datum}
             defaultTot={period.eind_datum}
             readOnly={deadlinePassed}
-            onAbsencesChange={setAbsences}
+            onAbsencesChange={(next) => {
+              setAbsences(next);
+              // Same reasoning as onPatternsChange below - an added, edited,
+              // or removed absence can change which days PartTimeCheckStep
+              // shows as "blocked elsewhere" (source=ABSENCE), so it must
+              // both re-fetch (via the key below) and lose its stale
+              // confirmation rather than silently keep showing what was
+              // true before this edit.
+              setParttimeConfirmed(false);
+            }}
           />
           <PartTimeCheckStep
-            key={patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(',')}
+            key={[
+              patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(','),
+              absences.map((a) => `${a.id}:${a.van_datum}:${a.tot_datum}`).join(','),
+            ].join('|')}
             personId={personId}
             periodId={period.id}
             periodStart={period.start_datum}

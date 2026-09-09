@@ -310,6 +310,35 @@ export function syncAvailabilityForPattern(patternId: string): SyncResult {
 }
 
 /**
+ * Reconciles every one of a person's own patterns. reconcilePatternForPeriod
+ * never overwrites a slot some other source (an absence, a manual block)
+ * already owns - which means shrinking or deleting an absence that used to
+ * "win" a slot from a pattern doesn't automatically let the pattern reclaim
+ * it, since nothing else re-runs the pattern side of that reconciliation.
+ * Without this, such a slot is left with no availability row at all: not
+ * blocked by the (now-gone) absence, and not reclaimed by the pattern that
+ * should still cover it - silently unblocked. Called after every absence
+ * update/delete for exactly that reason (a new absence can only ever claim
+ * currently-free slots, never un-claim ones a pattern already holds, so
+ * creating one doesn't need this).
+ */
+export function syncPatternsForPerson(personId: string): SyncResult {
+  const patterns = db
+    .prepare(`SELECT id FROM dienstrooster_parttime_pattern WHERE person_id = ?`)
+    .all(personId) as Array<{ id: string }>;
+
+  const result: SyncResult = { inserted: 0, deleted: 0, skippedManualConflicts: 0, periodsAffected: [] };
+  for (const pattern of patterns) {
+    const patternResult = syncAvailabilityForPattern(pattern.id);
+    result.inserted += patternResult.inserted;
+    result.deleted += patternResult.deleted;
+    result.skippedManualConflicts += patternResult.skippedManualConflicts;
+    result.periodsAffected.push(...patternResult.periodsAffected);
+  }
+  return result;
+}
+
+/**
  * Hard-removes every availability row this pattern generated, in every
  * period regardless of status. Must run before deleting the pattern row
  * itself - bron_pattern_id has no ON DELETE clause and foreign_keys=ON.
