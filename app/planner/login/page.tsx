@@ -243,6 +243,9 @@ function PlannerLoginForm() {
                 className="input w-full"
                 type="text"
                 autoComplete="username"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={codenaam}
                 onChange={(e) => setCodenaam(e.target.value)}
                 required
