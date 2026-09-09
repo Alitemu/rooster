@@ -124,6 +124,12 @@ export function PartTimeCheckStep({
           De gearceerde dagen zijn automatisch geblokkeerd op basis van je deeltijdpatroon. Loop de
           maanden door en controleer of dat op de juiste weekdag staat.
         </p>
+        <p className="text-sm text-neutral-500 mt-1">
+          Let op: hieronder zie je alleen de dagen die bij je deeltijdpatroon horen (bv. elke
+          maandag) - niet elke dag van een afwezigheid. Een afwezigheid die op zo'n patroondag valt
+          zie je hier wel rood terug, maar voor het volledige overzicht van je afwezigheid (elke
+          dag) ga je naar het tabblad &quot;Voorkeuren&quot;.
+        </p>
       </div>
 
       {periodStatus === 'CONCEPT' && patterns.length > 0 && (
