@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { SetupWizard } from '@/components/SetupWizard';
 
@@ -86,14 +86,19 @@ export default function SetupPage() {
         <p className="text-neutral-600">Stel een nieuwe roosterperiode in en open deze</p>
       </div>
 
-      <SetupWizard
-        key={period.id}
-        period={period}
-        onComplete={() => {
-          // Redirect to period dashboard
-          window.location.href = `/planner/period/${periodId}`;
-        }}
-      />
+      {/* SetupWizard reads/writes the `stap` URL query param (useSearchParams)
+          to make the browser's back button step through the wizard instead
+          of leaving the page - that hook requires a Suspense boundary. */}
+      <Suspense fallback={<div className="card p-8 text-center text-neutral-600">Wizard laden...</div>}>
+        <SetupWizard
+          key={period.id}
+          period={period}
+          onComplete={() => {
+            // Redirect to period dashboard
+            window.location.href = `/planner/period/${periodId}`;
+          }}
+        />
+      </Suspense>
     </div>
   );
 }

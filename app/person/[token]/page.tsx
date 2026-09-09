@@ -7,8 +7,8 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
 import { PartTimeCheckStep } from '@/components/PartTimeCheckStep';
 import { ParttimePatternEditor } from '@/components/ParttimePatternEditor';
@@ -18,6 +18,11 @@ import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
 
 type Step = 'calendar' | 'parttime' | 'confirmation' | 'submitted' | 'roster';
+
+const STEP_IDS: Step[] = ['calendar', 'parttime', 'confirmation', 'submitted', 'roster'];
+function isStep(value: string | null): value is Step {
+  return !!value && (STEP_IDS as string[]).includes(value);
+}
 
 interface Period {
   id: string;
@@ -73,9 +78,12 @@ interface SoftBlockViolation {
   date_str: string;
 }
 
-export default function PersonalLinkPage() {
+function PersonalLinkPageContent() {
   const params = useParams();
   const token = params.token as string;
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +98,42 @@ export default function PersonalLinkPage() {
   // only the former should tell the participant their link may have
   // expired.
   const [isLinkError, setIsLinkError] = useState(true);
-  const [currentStep, setCurrentStep] = useState<Step>('parttime');
+  // The browser's back/forward buttons only step between wizard steps
+  // (instead of leaving the page entirely, which is what plain useState
+  // did before) when each step change is an actual browser-history entry.
+  // Syncing `currentStep` to a `stap` URL query param does that:
+  // setCurrentStep pushes a new entry on every user-driven step change,
+  // and the effect below reacts when the URL moves the other way (via
+  // back/forward) by updating currentStep to match.
+  const [currentStep, setCurrentStepState] = useState<Step>(() => {
+    const urlStep = searchParams.get('stap');
+    return isStep(urlStep) ? urlStep : 'parttime';
+  });
+
+  useEffect(() => {
+    const urlStep = searchParams.get('stap');
+    const resolved: Step = isStep(urlStep) ? urlStep : 'parttime';
+    setCurrentStepState((prev) => (prev === resolved ? prev : resolved));
+  }, [searchParams]);
+
+  const setCurrentStep = (step: Step) => {
+    setCurrentStepState(step);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('stap', step);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  // Only for the one-time correction right after the period turns out to
+  // be published (see the token-verification effect below) - that isn't a
+  // step the participant navigated to, so it replaces the current history
+  // entry instead of adding a new one a back press would land on and show
+  // a stale deeltijd/voorkeuren step for an already-published period.
+  const replaceCurrentStep = (step: Step) => {
+    setCurrentStepState(step);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('stap', step);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
   const [personId, setPersonId] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period | null>(null);
   const [patterns, setPatterns] = useState<ParttimePattern[]>([]);
@@ -150,7 +193,7 @@ export default function PersonalLinkPage() {
           if (rosterRes.ok) {
             const rosterInfo = await rosterRes.json();
             setRosterData(rosterInfo.data);
-            setCurrentStep('roster');
+            replaceCurrentStep('roster');
 
             if (preferencesRes.ok) {
               const preferencesInfo = await preferencesRes.json();
@@ -583,5 +626,24 @@ export default function PersonalLinkPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// PersonalLinkPageContent reads/writes the `stap` URL query param
+// (useSearchParams) so the browser's back button steps through the wizard
+// instead of leaving the page - that hook requires a Suspense boundary.
+export default function PersonalLinkPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="container-main py-12">
+          <div className="card p-8 text-center">
+            <p className="text-lg text-neutral-600">Laden...</p>
+          </div>
+        </div>
+      }
+    >
+      <PersonalLinkPageContent />
+    </Suspense>
   );
 }

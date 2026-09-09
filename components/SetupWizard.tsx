@@ -14,8 +14,26 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'holidays' | 'confirm';
+
+// Used only to validate/parse the `stap` URL query param below - the
+// `steps` array further down (with labels/titles for the tab bar) is the
+// one source of truth for display, this is just the bare id list.
+const STEP_IDS: Step[] = [
+  'period',
+  'staff',
+  'window',
+  'distribution',
+  'balances',
+  'corrections',
+  'holidays',
+  'confirm',
+];
+function isStep(value: string | null): value is Step {
+  return !!value && (STEP_IDS as string[]).includes(value);
+}
 
 interface CapacityCheckResult {
   valid: boolean;
@@ -189,7 +207,33 @@ interface Props {
 }
 
 export function SetupWizard({ period, onComplete }: Props) {
-  const [currentStep, setCurrentStep] = useState<Step>('period');
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // The browser's back/forward buttons only step between wizard steps
+  // (instead of leaving the setup page entirely) when each step change is
+  // an actual browser-history entry. Syncing `currentStep` to a `stap` URL
+  // query param does that: setCurrentStep below pushes a new entry on
+  // every step change, and the effect after it reacts to the URL moving
+  // (via back/forward) by updating currentStep to match.
+  const [currentStep, setCurrentStepState] = useState<Step>(() => {
+    const urlStep = searchParams.get('stap');
+    return isStep(urlStep) ? urlStep : 'period';
+  });
+
+  useEffect(() => {
+    const urlStep = searchParams.get('stap');
+    const resolved: Step = isStep(urlStep) ? urlStep : 'period';
+    setCurrentStepState((prev) => (prev === resolved ? prev : resolved));
+  }, [searchParams]);
+
+  const setCurrentStep = (step: Step) => {
+    setCurrentStepState(step);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('stap', step);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
   const [periodData, setPeriodData] = useState<PeriodData>({
     naam: period?.naam || '',
     start_datum: period?.start_datum || '',
