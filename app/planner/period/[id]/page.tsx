@@ -317,6 +317,16 @@ export default function PlannerPeriodPage() {
         </a>
       )}
 
+      {/* Adding pool members has no period-status restriction server-side; GEPUBLICEERD stays excluded since its ruleset is frozen. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status) && (
+        <a
+          href={`/planner/setup/${periodId}?stap=staff`}
+          className="inline-block ml-3 px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+        >
+          👥 Personeel beheren
+        </a>
+      )}
+
       <ExportDialog
         periodId={periodId}
         periodName={period.naam}
