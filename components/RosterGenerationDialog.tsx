@@ -239,6 +239,17 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     onClose();
   };
 
+  // Without this the body behind the dialog keeps scrolling on mobile
+  // instead of the dialog's own content area.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -246,11 +257,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       role="dialog"
       aria-modal="true"
       aria-label="Rooster genereren"
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-full flex flex-col">
         {/* Header */}
-        <div className="border-b p-6">
+        <div className="border-b p-6 flex-shrink-0">
           <h2 className="text-xl font-bold">Rooster genereren</h2>
           <p className="text-sm text-neutral-600 mt-1">
             Dit start de solver om personeel aan diensten toe te wijzen
@@ -258,7 +269,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-6 overflow-y-auto min-h-0">
           {!result && !error && (
             <div className="space-y-4">
               {notReadyWarning && (
@@ -533,7 +544,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         </div>
 
         {/* Footer */}
-        <div className="border-t p-6 flex gap-3">
+        <div className="border-t p-6 flex gap-3 flex-shrink-0">
           {!result && !error && (
             <>
               <button
