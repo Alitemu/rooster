@@ -182,6 +182,15 @@ class SolverInput(BaseModel):
     # Only consulted when rules.distribution_mode == "NAAR_RATO" - see
     # constraints.add_band_constraints.
     participation_factors: dict[str, float] = {}
+    # How long CP-SAT may search before returning its best-so-far solution.
+    # Default matches the "standaard" duration offered in the roster
+    # generation dialog; a planner can ask for a longer search (5, then 10
+    # minutes) when a first attempt comes back FEASIBLE rather than
+    # OPTIMAL. Capped at 600s (10 minutes) - beyond that the dialog itself
+    # has no further "try longer" option, and an unbounded value would let
+    # a single request pin the solver indefinitely (see generate-roster
+    # route/RosterGenerationDialog for the rest of that design tradeoff).
+    time_limit_seconds: int = Field(default=120, ge=1, le=600)
 
     @field_validator('slots')
     @classmethod
@@ -325,7 +334,7 @@ async def solve_roster(request: SolverInput):
         }
 
         # Run solver
-        solver = RosterSolver(time_limit_seconds=30)
+        solver = RosterSolver(time_limit_seconds=request.time_limit_seconds)
         result = solver.generate_roster(
             period_id=request.period_id,
             people=request.people,
@@ -356,7 +365,7 @@ async def solve_roster(request: SolverInput):
 
         # Unconditionally "Generated N assignments" used to read as a
         # success message even when result['success'] was False (e.g.
-        # INFEASIBLE, or UNKNOWN after the 30s time_limit) - "Generated 0
+        # INFEASIBLE, or UNKNOWN after the time_limit) - "Generated 0
         # assignments in 0.03s" looks like nothing went wrong. The Next.js
         # side (generate-roster/route.ts) forwards this message as-is on
         # the failure path, so it's the only text the planner ever sees.

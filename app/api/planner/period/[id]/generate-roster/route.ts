@@ -28,6 +28,37 @@ export async function POST(
     const periodId = params.id;
     const now = dateToISO(new Date());
 
+    // Optional body: { time_limit_seconds } lets the planner ask for a
+    // longer CP-SAT search after a first attempt comes back FEASIBLE
+    // rather than OPTIMAL (see RosterGenerationDialog's "langer proberen"
+    // option). No body at all (the common case) falls back to the
+    // solver's own default. Clamped to the same [1, 600] range the solver
+    // enforces so an out-of-range value fails fast here with a clear
+    // message instead of a generic solver error.
+    let timeLimitSeconds: number | undefined;
+    const rawBody = await request.text();
+    if (rawBody) {
+      let parsedBody: unknown;
+      try {
+        parsedBody = JSON.parse(rawBody);
+      } catch {
+        return NextResponse.json(
+          { success: false, error: 'Ongeldige aanvraag' },
+          { status: 400 }
+        );
+      }
+      const candidate = (parsedBody as { time_limit_seconds?: unknown })?.time_limit_seconds;
+      if (candidate !== undefined) {
+        if (typeof candidate !== 'number' || !Number.isInteger(candidate) || candidate < 1 || candidate > 600) {
+          return NextResponse.json(
+            { success: false, error: 'Tijdslimiet moet een geheel getal tussen 1 en 600 seconden zijn' },
+            { status: 400 }
+          );
+        }
+        timeLimitSeconds = candidate;
+      }
+    }
+
     // Fetch period
     const period = db
       .prepare('SELECT * FROM dienstrooster_schedule_period WHERE id = ?')
@@ -268,6 +299,7 @@ export async function POST(
         teller: r.teller,
       })),
       participation_factors: participationFactors,
+      ...(timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}),
     };
 
     // Call solver service

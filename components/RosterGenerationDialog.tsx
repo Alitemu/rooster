@@ -52,6 +52,12 @@ function budgetPayload(percent: number, parttimeExempt: boolean) {
   };
 }
 
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds} seconden`;
+  const minutes = Math.round(seconds / 60);
+  return `${minutes} ${minutes === 1 ? 'minuut' : 'minuten'}`;
+}
+
 const COUNTER_LABEL: Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', string> = {
   AVOND: 'Avond',
   WEEKEND: 'Weekend',
@@ -116,6 +122,13 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // before everyone's had a chance to answer" a visible choice rather than
   // something that quietly happens by clicking the same button as always.
   const [notReadyWarning, setNotReadyWarning] = useState<string | null>(null);
+  // null = the solver's own default (120s) was used. Tracks the limit of
+  // the most recently *completed* attempt, so the "langer proberen" option
+  // below can offer the next step up (120s -> 300s -> 600s) rather than
+  // repeating one already tried. Separate from the in-flight limit so the
+  // loading message can name it before the result comes back.
+  const [lastTimeLimitSeconds, setLastTimeLimitSeconds] = useState<number | null>(null);
+  const [pendingTimeLimitSeconds, setPendingTimeLimitSeconds] = useState<number | null>(null);
 
   // Load the period's current frozen window/band every time the dialog
   // opens - it's otherwise invisible once a period leaves the setup
@@ -180,10 +193,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     };
   }, [isOpen, periodId]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (timeLimitSeconds?: number) => {
     setLoading(true);
     setError(null);
     setResult(null);
+    setPendingTimeLimitSeconds(timeLimitSeconds ?? null);
 
     try {
       if (ruleset) {
@@ -213,6 +227,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       const res = await fetch(`/api/planner/period/${periodId}/generate-roster`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}
+        ),
       });
 
       if (!res.ok) {
@@ -222,6 +239,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
 
       const data = await res.json();
       setResult(data.data);
+      setLastTimeLimitSeconds(timeLimitSeconds ?? null);
 
       if (onSuccess) {
         onSuccess();
@@ -237,10 +255,20 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     setResult(null);
     setError(null);
     setNotReadyWarning(null);
+    setLastTimeLimitSeconds(null);
+    setPendingTimeLimitSeconds(null);
     onClose();
   };
 
   useBodyScrollLock(isOpen);
+
+  // The step-up offered after a FEASIBLE result: 120s (the default, tracked
+  // as null) -> 300s -> 600s -> no further offer. Matches the two extra
+  // steps the planner asked for (5, then 10 minutes) rather than an
+  // open-ended doubling that would eventually make "langer proberen" itself
+  // an unbounded wait.
+  const nextTimeLimitSeconds =
+    lastTimeLimitSeconds === null ? 300 : lastTimeLimitSeconds === 300 ? 600 : null;
 
   if (!isOpen) return null;
 
@@ -420,8 +448,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <li>Overtredingen van de venster-regel minimaliseren</li>
               </ul>
               <p className="text-xs text-neutral-500 pt-2">
-                De solver draait maximaal 30 seconden. Bij het bereiken van de tijdslimiet kan een
-                suboptimale oplossing worden teruggegeven.
+                De solver draait maximaal 2 minuten. Bij het bereiken van de tijdslimiet kan een
+                suboptimale oplossing worden teruggegeven - je kunt daarna alsnog langer laten
+                doorzoeken.
               </p>
             </div>
           )}
@@ -457,7 +486,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 Rooster genereren...
               </p>
               <p className="text-xs text-center text-neutral-500">
-                Dit kan tot 30 seconden duren
+                Dit kan tot {formatDuration(pendingTimeLimitSeconds ?? 120)} duren
               </p>
             </div>
           )}
@@ -524,6 +553,23 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                   </div>
                 )}
               </div>
+
+              {result.solver_status === 'FEASIBLE' && nextTimeLimitSeconds !== null && (
+                <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                  <p className="text-sm text-blue-900">
+                    De solver had nog niet bewezen dat dit de best mogelijke oplossing is toen de
+                    tijd om was. Langer laten zoeken kan een beter (eerlijker of vollediger) rooster
+                    opleveren, maar is geen garantie.
+                  </p>
+                  <button
+                    onClick={() => handleGenerate(nextTimeLimitSeconds)}
+                    disabled={loading}
+                    className="mt-3 w-full px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
+                  >
+                    {formatDuration(nextTimeLimitSeconds)} langer proberen
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -547,7 +593,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 Annuleren
               </button>
               <button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate()}
                 disabled={loading}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
@@ -559,7 +605,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           {result && !error && (
             <>
               <button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate()}
                 disabled={loading}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
@@ -577,7 +623,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           {error && (
             <>
               <button
-                onClick={handleGenerate}
+                onClick={() => handleGenerate()}
                 disabled={loading}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
