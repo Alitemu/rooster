@@ -14,6 +14,7 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBands';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
+import { createRosterGenerationJob, completeRosterGenerationJob, failRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 
 export async function POST(
   request: NextRequest,
@@ -169,6 +170,50 @@ export async function POST(
       );
     }
 
+    // Everything from here on is the slow part - the solver call itself can
+    // legitimately run for minutes (up to 600s plus model-build overhead).
+    // That must not sit inside this request/response cycle: a phone's
+    // browser can suspend a backgrounded tab's network activity (screen
+    // lock, app switch) and a home router's NAT table can silently drop a
+    // long-idle-looking connection, either of which previously surfaced to
+    // the client as a bare, untranslated "Failed to fetch" with no way to
+    // know whether the work actually finished server-side. So: create a job,
+    // kick off the slow work WITHOUT awaiting it (it keeps running on the
+    // server after this response is sent - see rosterGenerationJobs.ts for
+    // why that's safe for this single-process deployment), and let the
+    // client poll ./generate-roster/status instead of holding one request
+    // open. Each poll is cheap and short, so a dropped one just means "ask
+    // again in a moment" rather than losing the whole generation.
+    const jobId = createRosterGenerationJob(periodId);
+    runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, poolMembers, people }).catch(
+      (error) => {
+        // runGeneration reports its own failures via failRosterGenerationJob;
+        // this only catches a genuinely unexpected throw that slipped past
+        // that, so a job never gets stuck at RUNNING forever.
+        console.error('[generate-roster] unhandled error in background job', error);
+        failRosterGenerationJob(jobId, 'Er is iets misgegaan. Probeer het opnieuw.');
+      }
+    );
+
+    return NextResponse.json({ success: true, data: { job_id: jobId } });
+  } catch (error) {
+    return internalErrorResponse('generate-roster', error);
+  }
+}
+
+async function runGeneration(args: {
+  jobId: string;
+  periodId: string;
+  actorId: string;
+  now: string;
+  timeLimitSeconds: number | undefined;
+  period: any;
+  slots: any[];
+  poolMembers: any[];
+  people: string[];
+}): Promise<void> {
+  const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, poolMembers, people } = args;
+  try {
     // Only consulted by the solver when distribution_mode is NAAR_RATO -
     // see lib/rosterBands's resolveRulesetConfig / the RuleSet comment.
     const participationFactors: Record<string, number> = {};
@@ -331,10 +376,12 @@ export async function POST(
       // exception text) to the client - log it server-side and return a
       // generic, client-safe Dutch message instead, per CLAUDE.md.
       console.error('[generate-roster] solver error', error);
-      return NextResponse.json(
-        { success: false, error: 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.' },
-        { status: 500 }
+      failRosterGenerationJob(
+        jobId,
+        'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.',
+        500
       );
+      return;
     }
 
     const solverOutput = await solverResponse.json();
@@ -358,7 +405,8 @@ export async function POST(
       };
       const message = statusExplanation[status] || 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.';
 
-      return NextResponse.json({ success: false, error: message }, { status: 422 });
+      failRosterGenerationJob(jobId, message, 422);
+      return;
     }
 
     // The solver call above is async and yields the event loop, so a second
@@ -427,13 +475,12 @@ export async function POST(
     const { conflict, assignmentCount, rowVersion } = applyGeneratedRoster();
 
     if (conflict) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Deze periode is ondertussen door een andere actie gewijzigd. Ververs de pagina en probeer opnieuw.',
-        },
-        { status: 409 }
+      failRosterGenerationJob(
+        jobId,
+        'Deze periode is ondertussen door een andere actie gewijzigd. Ververs de pagina en probeer opnieuw.',
+        409
       );
+      return;
     }
 
     // Enrich the solver's bare slot IDs with what the planner actually
@@ -472,28 +519,26 @@ export async function POST(
       now
     );
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        assignments_created: assignmentCount,
-        unfilled_slots: unfilledSlots,
-        fully_covered: unfilledSlots.length === 0,
-        cost: solverOutput.diagnostics.total_cost,
-        violations: solverOutput.diagnostics.violations,
-        time_seconds: solverOutput.diagnostics.time_seconds,
-        solver_status: solverOutput.diagnostics.solver_status,
-        // So the caller (RosterGenerationDialog) can track the period's
-        // real current row_version - this handler bumps it once more on
-        // top of any ruleset PATCH the dialog already did, so the
-        // dialog's own pre-generate value is stale the moment this
-        // response lands. Without this, a second generate in the same
-        // dialog session (regenerate, or "langer proberen") sends a
-        // version that's already one behind and gets rejected with a
-        // conflict that has nothing to do with anyone else editing it.
-        row_version: rowVersion,
-      },
+    completeRosterGenerationJob(jobId, {
+      assignments_created: assignmentCount,
+      unfilled_slots: unfilledSlots,
+      fully_covered: unfilledSlots.length === 0,
+      cost: solverOutput.diagnostics.total_cost,
+      violations: solverOutput.diagnostics.violations,
+      time_seconds: solverOutput.diagnostics.time_seconds,
+      solver_status: solverOutput.diagnostics.solver_status,
+      // So the caller (RosterGenerationDialog) can track the period's
+      // real current row_version - this handler bumps it once more on
+      // top of any ruleset PATCH the dialog already did, so the
+      // dialog's own pre-generate value is stale the moment this
+      // response lands. Without this, a second generate in the same
+      // dialog session (regenerate, or "langer proberen") sends a
+      // version that's already one behind and gets rejected with a
+      // conflict that has nothing to do with anyone else editing it.
+      row_version: rowVersion,
     });
   } catch (error) {
-    return internalErrorResponse('generate-roster', error);
+    console.error('[generate-roster]', error);
+    failRosterGenerationJob(jobId, 'Er is iets misgegaan. Probeer het opnieuw.');
   }
 }

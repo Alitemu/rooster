@@ -7,9 +7,33 @@
  * and displaying results (assignments, cost, violations, time).
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+
+// Native fetch() throws a plain TypeError with a browser-specific, English,
+// technical message ("Failed to fetch", "NetworkError when attempting to
+// fetch resource.", "Load failed" on Safari) when a request never got a
+// response at all - never show that raw string to a planner, per
+// CLAUDE.md's Dutch-only UI text rule.
+function toDutchErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof TypeError) {
+    return 'Geen verbinding met de server. Controleer je internetverbinding en probeer het opnieuw.';
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
+const POLL_INTERVAL_MS = 2000;
+// A dropped poll just means "ask again in a moment" - the generation itself
+// keeps running server-side regardless (see lib/rosterGenerationJobs.ts).
+// Only give up after several consecutive failures, so a brief mobile
+// network hiccup (screen lock, wifi/cellular handoff) doesn't surface as a
+// false failure the way the old single long-lived request did.
+const MAX_CONSECUTIVE_POLL_FAILURES = 8;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface RulesetConfig {
   windowWeeks: number;
@@ -103,6 +127,19 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // loading message can name it before the result comes back.
   const [lastTimeLimitSeconds, setLastTimeLimitSeconds] = useState<number | null>(null);
   const [pendingTimeLimitSeconds, setPendingTimeLimitSeconds] = useState<number | null>(null);
+  // True while polling is retrying after a network-level failure (not an
+  // application error) - shown so a planner sees *why* the wait continues
+  // instead of the dialog looking frozen during a brief connection hiccup.
+  const [reconnecting, setReconnecting] = useState(false);
+  // Stops an in-flight poll loop from touching state after the dialog is
+  // closed or a fresh handleGenerate() call starts a new one.
+  const pollCancelledRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      pollCancelledRef.current = true;
+    };
+  }, []);
 
   // Load the period's current frozen window/band every time the dialog
   // opens - it's otherwise invisible once a period leaves the setup
@@ -164,10 +201,88 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     };
   }, [isOpen, periodId]);
 
+  // Polls .../generate-roster/status until the background job (started by
+  // handleGenerate below) finishes - see lib/rosterGenerationJobs.ts for
+  // why generation itself doesn't run inside one long request anymore. A
+  // poll that fails at the network level (not a real 4xx/5xx from the
+  // server) is retried rather than treated as the generation having
+  // failed: the job keeps running server-side either way, so losing one
+  // poll is harmless as long as a later one gets through.
+  const pollJobStatus = async (jobId: string, timeLimitSeconds?: number) => {
+    let consecutiveFailures = 0;
+
+    while (!pollCancelledRef.current) {
+      await sleep(POLL_INTERVAL_MS);
+      if (pollCancelledRef.current) return;
+
+      let res: Response;
+      try {
+        res = await fetch(
+          `/api/planner/period/${periodId}/generate-roster/status?job_id=${encodeURIComponent(jobId)}`
+        );
+      } catch (err) {
+        consecutiveFailures++;
+        setReconnecting(true);
+        if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
+          if (!pollCancelledRef.current) {
+            setError(toDutchErrorMessage(err, 'Status ophalen mislukt'));
+            setLoading(false);
+            setReconnecting(false);
+          }
+          return;
+        }
+        continue;
+      }
+
+      if (pollCancelledRef.current) return;
+      consecutiveFailures = 0;
+      setReconnecting(false);
+
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok || !data?.success) {
+        setError(
+          (typeof data?.error === 'string' ? data.error : data?.error?.message) ||
+            'Genereren van rooster mislukt'
+        );
+        setLoading(false);
+        return;
+      }
+
+      const job = data.data;
+      if (job.status === 'RUNNING') continue;
+
+      if (job.status === 'DONE') {
+        setResult(job.result);
+        setLastTimeLimitSeconds(timeLimitSeconds ?? null);
+        // generate-roster bumps row_version once more on top of any PATCH
+        // in handleGenerate below (it moves the period to/through
+        // GEGENEREERD) - without this, the *next* PATCH or generate call in
+        // this same dialog session (a second "opnieuw genereren", or
+        // "langer proberen") would submit a version that's already one
+        // behind and get rejected as a conflict that was actually just
+        // this same request.
+        if (typeof job.result?.row_version === 'number') {
+          setRulesetRowVersion(job.result.row_version);
+        }
+        setLoading(false);
+        if (onSuccess) onSuccess();
+        return;
+      }
+
+      // job.status === 'ERROR'
+      setError(job.error?.message || 'Genereren van rooster mislukt');
+      setLoading(false);
+      return;
+    }
+  };
+
   const handleGenerate = async (timeLimitSeconds?: number) => {
+    pollCancelledRef.current = false;
     setLoading(true);
     setError(null);
     setResult(null);
+    setReconnecting(false);
     setPendingTimeLimitSeconds(timeLimitSeconds ?? null);
 
     try {
@@ -196,6 +311,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         setOriginalRuleset(ruleset);
       }
 
+      // Fast call: just registers the job and returns its id - the actual
+      // solve happens server-side afterwards (see generate-roster/route.ts
+      // and lib/rosterGenerationJobs.ts). pollJobStatus below finds out how
+      // it went via short, resilient polls instead of one long request.
       const res = await fetch(`/api/planner/period/${periodId}/generate-roster`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -210,34 +329,28 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       }
 
       const data = await res.json();
-      setResult(data.data);
-      setLastTimeLimitSeconds(timeLimitSeconds ?? null);
-      // generate-roster bumps row_version once more on top of any PATCH
-      // above (it moves the period to/through GEGENEREERD) - without this,
-      // the *next* PATCH or generate call in this same dialog session (a
-      // second "opnieuw genereren", or "langer proberen") would submit a
-      // version that's already one behind and get rejected as a conflict
-      // that was actually just this same request.
-      if (typeof data?.data?.row_version === 'number') {
-        setRulesetRowVersion(data.data.row_version);
+      const jobId = data?.data?.job_id;
+      if (typeof jobId !== 'string') {
+        throw new Error('Genereren van rooster mislukt');
       }
 
-      if (onSuccess) {
-        onSuccess();
-      }
+      await pollJobStatus(jobId, timeLimitSeconds);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Genereren van rooster mislukt');
-    } finally {
-      setLoading(false);
+      if (!pollCancelledRef.current) {
+        setError(toDutchErrorMessage(err, 'Genereren van rooster mislukt'));
+        setLoading(false);
+      }
     }
   };
 
   const handleClose = () => {
+    pollCancelledRef.current = true;
     setResult(null);
     setError(null);
     setNotReadyWarning(null);
     setLastTimeLimitSeconds(null);
     setPendingTimeLimitSeconds(null);
+    setReconnecting(false);
     onClose();
   };
 
@@ -421,9 +534,16 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
               <p className="text-center text-sm text-neutral-600">
                 Rooster genereren...
               </p>
-              <p className="text-xs text-center text-neutral-500">
-                Dit kan tot {formatDuration(pendingTimeLimitSeconds ?? 120)} duren
-              </p>
+              {reconnecting ? (
+                <p className="text-xs text-center text-amber-700">
+                  Verbinding onderbroken, opnieuw verbinden... Het genereren loopt gewoon door.
+                </p>
+              ) : (
+                <p className="text-xs text-center text-neutral-500">
+                  Dit kan tot {formatDuration(pendingTimeLimitSeconds ?? 120)} duren - je kunt dit
+                  scherm open laten staan of later terugkomen.
+                </p>
+              )}
             </div>
           )}
 
