@@ -46,7 +46,13 @@ services:
       # it in DATA_DIR, so sessions survive restarts. Set it here
       # (or in .env) to pin your own: openssl rand -hex 32
       SESSION_SECRET: "${SESSION_SECRET:-}"
-      BASE_URL: "${BASE_URL:-https://localhost:${APP_PORT:-8010}}"
+      # Left empty (the default), the app auto-detects the address from
+      # each request's own Host header - see lib/baseUrl.ts. Set BASE_URL
+      # in .env only to pin one fixed address regardless of how the app is
+      # reached. A hardcoded localhost fallback here would defeat that
+      # auto-detection by always giving the app *something*, even when the
+      # operator never set BASE_URL themselves.
+      BASE_URL: "${BASE_URL:-}"
       # Optional override for the seeded planner account's password - see
       # .env.example. Only has an effect on an account with no password
       # yet. Left unset (the default), docker-entrypoint.sh's claim-password

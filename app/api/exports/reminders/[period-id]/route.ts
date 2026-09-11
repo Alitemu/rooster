@@ -21,6 +21,7 @@ import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { getActiveReminderMilestones, resolveReminderUrgency } from '@/lib/reminderSchedule';
+import { resolveBaseUrl } from '@/lib/baseUrl';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ReminderTemplate {
@@ -114,7 +115,7 @@ export async function GET(
       VALUES (?, ?, ?, ?, ?)
     `);
 
-    const baseUrl = process.env.BASE_URL || 'https://localhost:8010';
+    const baseUrl = resolveBaseUrl(req);
     const now = new Date().toISOString();
 
     const daysBeforeDeadline = daysBeforeDeadlineFromOverride(

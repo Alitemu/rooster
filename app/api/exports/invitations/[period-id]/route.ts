@@ -14,6 +14,7 @@ import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { resolveBaseUrl } from '@/lib/baseUrl';
 import type { ApiErrorResponse } from '@/types';
 
 // codenaam is free-text, planner-entered with no character restriction -
@@ -92,7 +93,7 @@ export async function GET(
     });
 
     // Build CSV content
-    const baseUrl = process.env.BASE_URL || 'https://localhost:8010';
+    const baseUrl = resolveBaseUrl(req);
     const csvLines: string[] = [
       'Naam,Persoonlijke link,Deadline',
       ...links.map((link) => {
