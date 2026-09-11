@@ -307,10 +307,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           <div className="flex gap-3 flex-wrap">
             <button
               onClick={() => setRosterDialogOpen(true)}
-              disabled={dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD'}
+              disabled={dashboard.status === 'GEPUBLICEERD'}
+              title={
+                dashboard.status === 'GEPUBLICEERD'
+                  ? 'Een gepubliceerd rooster is bevroren en kan niet meer opnieuw gegenereerd worden'
+                  : undefined
+              }
               className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
             >
-              🚀 Rooster genereren met solver
+              {dashboard.status === 'GEGENEREERD' ? '🔄 Rooster opnieuw genereren met solver' : '🚀 Rooster genereren met solver'}
             </button>
             {dashboard.status === 'GEGENEREERD' && (
               <button
