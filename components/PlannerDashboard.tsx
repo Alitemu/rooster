@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { ExportDialog } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
 import { AssignmentGrid } from './AssignmentGrid';
+import { AssignmentCalendar } from './AssignmentCalendar';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
 
 interface PersonProgress {
@@ -74,6 +75,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
   const [publicationDialogOpen, setPublicationDialogOpen] = useState(false);
   const [showAssignments, setShowAssignments] = useState(false);
+  const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar'>('list');
 
   const loadData = async () => {
     try {
@@ -344,17 +346,47 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       {/* Assignments */}
       {(dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD') && (
         <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h3 className="font-bold text-lg">Toewijzingen</h3>
-            <button
-              onClick={() => setShowAssignments(!showAssignments)}
-              className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-            >
-              {showAssignments ? 'Verbergen' : 'Tonen'}
-            </button>
+            <div className="flex items-center gap-2">
+              {showAssignments && (
+                <div className="inline-flex rounded overflow-hidden border border-neutral-300">
+                  <button
+                    onClick={() => setAssignmentsView('list')}
+                    className={`px-3 py-1 text-sm font-medium transition-colors ${
+                      assignmentsView === 'list'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-neutral-700 hover:bg-neutral-100'
+                    }`}
+                  >
+                    📋 Lijst
+                  </button>
+                  <button
+                    onClick={() => setAssignmentsView('calendar')}
+                    className={`px-3 py-1 text-sm font-medium transition-colors border-l border-neutral-300 ${
+                      assignmentsView === 'calendar'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-neutral-700 hover:bg-neutral-100'
+                    }`}
+                  >
+                    📅 Kalender
+                  </button>
+                </div>
+              )}
+              <button
+                onClick={() => setShowAssignments(!showAssignments)}
+                className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+              >
+                {showAssignments ? 'Verbergen' : 'Tonen'}
+              </button>
+            </div>
           </div>
           {showAssignments && (
-            <AssignmentGrid periodId={periodId} periodStatus={dashboard.status} />
+            assignmentsView === 'list' ? (
+              <AssignmentGrid periodId={periodId} periodStatus={dashboard.status} />
+            ) : (
+              <AssignmentCalendar periodId={periodId} />
+            )
           )}
         </div>
       )}
