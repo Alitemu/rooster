@@ -196,13 +196,57 @@ describe('rosterGaps', () => {
       expect(gap!.eligible_people.find((p) => p.id === f.personIds[1])?.category).toBe('BESCHIKBAAR');
     });
 
-    it('still offers someone who only marked the slot as prefer-not', () => {
+    it('still offers someone who only marked the slot as prefer-not, flagged as LIEVER_NIET', () => {
       const f = createFixture(3, '2027-01-04', '2027-01-10');
       blockSlot(f.personIds[0], f.slotIds[0], 'LIEVER_NIET');
 
       const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === f.slotIds[0]);
 
-      expect(gap!.eligible_people.map((p) => p.id)).toContain(f.personIds[0]);
+      const person = gap!.eligible_people.find((p) => p.id === f.personIds[0]);
+      expect(person).toBeDefined();
+      expect(person?.category).toBe('LIEVER_NIET');
+    });
+
+    it('flags someone who marked the slot as VOORKEUR distinctly from plain availability', () => {
+      const f = createFixture(3, '2027-01-04', '2027-01-10');
+      db.prepare(
+        `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+         VALUES (?, ?, ?, 'VOORKEUR', 'MANUAL', datetime('now'))`
+      ).run(crypto.randomUUID(), f.personIds[0], f.slotIds[0]);
+
+      const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === f.slotIds[0]);
+
+      const preferredPerson = gap!.eligible_people.find((p) => p.id === f.personIds[0]);
+      expect(preferredPerson?.category).toBe('VOORKEUR');
+      const untouchedPerson = gap!.eligible_people.find((p) => p.id === f.personIds[1]);
+      expect(untouchedPerson?.category).toBe('BESCHIKBAAR');
+    });
+
+    it('a window conflict still outranks a stated VOORKEUR for the same day', () => {
+      const f = createFixture(2, '2027-01-04', '2027-01-24'); // weeks 1-4
+      db.prepare(
+        `UPDATE dienstrooster_ruleset SET config_json = '{"windowWeeks":2}' WHERE id =
+         (SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?)`
+      ).run(f.poolId);
+      const week2Slot = f.slotIds.find(
+        (id) =>
+          (db.prepare('SELECT iso_week FROM dienstrooster_shift_slot WHERE id = ?').get(id) as any)
+            .iso_week === 2
+      )!;
+      const week3Slot = f.slotIds.find(
+        (id) =>
+          (db.prepare('SELECT iso_week FROM dienstrooster_shift_slot WHERE id = ?').get(id) as any)
+            .iso_week === 3
+      )!;
+      assign(f.periodId, f.personIds[0], week2Slot, 'MANUAL');
+      db.prepare(
+        `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+         VALUES (?, ?, ?, 'VOORKEUR', 'MANUAL', datetime('now'))`
+      ).run(crypto.randomUUID(), f.personIds[0], week3Slot);
+
+      const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === week3Slot);
+
+      expect(gap!.eligible_people.find((p) => p.id === f.personIds[0])?.category).toBe('VENSTERBLOK');
     });
 
     it('returns nothing once every slot is covered', () => {
@@ -304,15 +348,15 @@ describe('rosterGaps', () => {
   });
 
   describe('category counts always add up to the whole pool', () => {
-    // The four categories (BESCHIKBAAR/VENSTERBLOK/PARTTIME/GEBLOKKEERD)
-    // must be a strict partition of the pool for a given slot - every
-    // eligible person in exactly one bucket, nobody dropped, nobody
-    // counted twice. categorize() in lib/rosterGaps.ts is an if/else-if
-    // chain, which should guarantee this by construction; this test is
-    // the actual proof, run across several different days so a bug tied
-    // to one particular week (e.g. the window-rule edge cases) can't slip
-    // through unnoticed.
-    it('holds for a mix of available, window-conflicted, part-time-blocked and blocked people, on multiple different days', () => {
+    // The six categories (BESCHIKBAAR/VOORKEUR/LIEVER_NIET/VENSTERBLOK/
+    // PARTTIME/GEBLOKKEERD) must be a strict partition of the pool for a
+    // given slot - every eligible person in exactly one bucket, nobody
+    // dropped, nobody counted twice. categorize() in lib/rosterGaps.ts is
+    // an if/else-if chain, which should guarantee this by construction;
+    // this test is the actual proof, run across several different days so
+    // a bug tied to one particular week (e.g. the window-rule edge cases)
+    // can't slip through unnoticed.
+    it('holds for a mix of available, preferred, prefer-not, window-conflicted, part-time-blocked and blocked people, on multiple different days', () => {
       const personCount = 10;
       const f = createFixture(personCount, '2027-01-04', '2027-02-14'); // 6 weeks
       db.prepare(
@@ -345,7 +389,17 @@ describe('rosterGaps', () => {
         `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
          VALUES (?, ?, ?, 'ABSOLUUT', 'PARTTIME', datetime('now'))`
       ).run(crypto.randomUUID(), f.personIds[5], slotForWeek(3));
-      // p6-p9 stay untouched -> BESCHIKBAAR
+      // p6: marked LIEVER_NIET on the week-3 target slot
+      db.prepare(
+        `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+         VALUES (?, ?, ?, 'LIEVER_NIET', 'MANUAL', datetime('now'))`
+      ).run(crypto.randomUUID(), f.personIds[6], slotForWeek(3));
+      // p7: marked VOORKEUR on the week-3 target slot
+      db.prepare(
+        `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+         VALUES (?, ?, ?, 'VOORKEUR', 'MANUAL', datetime('now'))`
+      ).run(crypto.randomUUID(), f.personIds[7], slotForWeek(3));
+      // p8-p9 stay untouched -> BESCHIKBAAR
 
       // Check the partition on the week-3 target slot itself, and on two
       // other, otherwise-unrelated days (week 1 and week 5) so this isn't
@@ -355,9 +409,16 @@ describe('rosterGaps', () => {
         const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === slotId);
         expect(gap, `week ${week} slot should be unfilled`).toBeDefined();
 
-        const byCategory = { BESCHIKBAAR: 0, VENSTERBLOK: 0, PARTTIME: 0, GEBLOKKEERD: 0 };
+        const byCategory = {
+          BESCHIKBAAR: 0,
+          VOORKEUR: 0,
+          LIEVER_NIET: 0,
+          VENSTERBLOK: 0,
+          PARTTIME: 0,
+          GEBLOKKEERD: 0,
+        };
         for (const p of gap!.eligible_people) byCategory[p.category]++;
-        const total = byCategory.BESCHIKBAAR + byCategory.VENSTERBLOK + byCategory.PARTTIME + byCategory.GEBLOKKEERD;
+        const total = Object.values(byCategory).reduce((sum, n) => sum + n, 0);
 
         expect(gap!.eligible_people).toHaveLength(personCount);
         expect(total, `week ${week}: category counts should sum to the whole pool`).toBe(personCount);
@@ -373,11 +434,16 @@ describe('rosterGaps', () => {
       const week3Slot = slotForWeek(3);
       const eligible = getEligiblePeopleForSlot(f.periodId, week3Slot, f.personIds[6]);
       expect(eligible).toHaveLength(personCount - 1);
-      const byCategory2 = { BESCHIKBAAR: 0, VENSTERBLOK: 0, PARTTIME: 0, GEBLOKKEERD: 0 };
+      const byCategory2 = {
+        BESCHIKBAAR: 0,
+        VOORKEUR: 0,
+        LIEVER_NIET: 0,
+        VENSTERBLOK: 0,
+        PARTTIME: 0,
+        GEBLOKKEERD: 0,
+      };
       for (const p of eligible) byCategory2[p.category]++;
-      expect(
-        byCategory2.BESCHIKBAAR + byCategory2.VENSTERBLOK + byCategory2.PARTTIME + byCategory2.GEBLOKKEERD
-      ).toBe(personCount - 1);
+      expect(Object.values(byCategory2).reduce((sum, n) => sum + n, 0)).toBe(personCount - 1);
     });
   });
 });

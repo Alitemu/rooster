@@ -22,7 +22,9 @@ interface Assignment {
   bron: string;
 }
 
-type EligibilityCategory = 'BESCHIKBAAR' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
+// Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
+// comment there for why a person can only ever be in one of these.
+type EligibilityCategory = 'BESCHIKBAAR' | 'VOORKEUR' | 'LIEVER_NIET' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
 
 interface EligiblePerson {
   id: string;
@@ -30,11 +32,21 @@ interface EligiblePerson {
   category: EligibilityCategory;
 }
 
-// Display order for the grouped menu, and the group headings.
-const CATEGORY_ORDER: EligibilityCategory[] = ['BESCHIKBAAR', 'VENSTERBLOK', 'PARTTIME', 'GEBLOKKEERD'];
+// Display order for the grouped menu, and the group headings - best
+// candidates first (VOORKEUR), most cautionary last (GEBLOKKEERD).
+const CATEGORY_ORDER: EligibilityCategory[] = [
+  'VOORKEUR',
+  'BESCHIKBAAR',
+  'LIEVER_NIET',
+  'VENSTERBLOK',
+  'PARTTIME',
+  'GEBLOKKEERD',
+];
 
 const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
+  VOORKEUR: 'Heeft voorkeur voor deze dag',
   BESCHIKBAAR: 'Beschikbaar',
+  LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
   PARTTIME: 'Part-time dag',
   GEBLOKKEERD: 'Geblokkeerd',

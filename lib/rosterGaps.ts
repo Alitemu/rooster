@@ -17,21 +17,34 @@ import { getWindowConflictingPersonIds } from '@/lib/windowRule';
 
 /**
  * Why a candidate needs a second look before being picked - never a
- * reason to exclude them (see getEligiblePeopleForSlot below). Ordered
- * roughly from "just informational" to "an explicit signal from the
- * person themselves":
- *  - BESCHIKBAAR: no conflict at all.
- *  - VENSTERBLOK: would violate the window rule (derived from their other
- *    assignments in this period - see lib/windowRule.ts).
+ * reason to exclude them (see getEligiblePeopleForSlot below). A person
+ * can only be in one category; the priority order below (checked
+ * top-to-bottom, first match wins) is what makes that a strict partition
+ * rather than something that could match more than one bucket:
+ *  - GEBLOKKEERD: blocked this exact day themselves (ABSOLUUT block from
+ *    a manual entry or imported absence) - the strongest, most direct
+ *    signal, so it's checked first.
  *  - PARTTIME: this is a part-time-free day for them (ABSOLUUT block
- *    sourced from a part-time pattern).
- *  - GEBLOKKEERD: they blocked this exact day themselves (ABSOLUUT block
- *    from a manual entry or imported absence).
- * A person can only be in one category: an ABSOLUUT block on the slot
- * itself outranks a window conflict derived from other slots, since it's
- * the more direct, more specific signal.
+ *    sourced from a part-time pattern) - same strength as GEBLOKKEERD,
+ *    just a different reason worth surfacing separately.
+ *  - VENSTERBLOK: would violate the window rule (derived from their other
+ *    assignments in this period - see lib/windowRule.ts) - a real
+ *    correctness concern, so it still outranks a same-slot preference:
+ *    someone who said VOORKEUR for this day but already has a shift
+ *    inside the window is still shown as window-conflicted, not VOORKEUR.
+ *  - LIEVER_NIET: asked not to work this exact day (soft preference, not
+ *    a hard block - still fully assignable).
+ *  - VOORKEUR: asked to work this exact day - a positive signal, ranked
+ *    above the plain "no signal at all" default so it stands out.
+ *  - BESCHIKBAAR: no conflict and no stated preference either way.
  */
-export type EligibilityCategory = 'BESCHIKBAAR' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
+export type EligibilityCategory =
+  | 'BESCHIKBAAR'
+  | 'VOORKEUR'
+  | 'LIEVER_NIET'
+  | 'VENSTERBLOK'
+  | 'PARTTIME'
+  | 'GEBLOKKEERD';
 
 export interface EligiblePerson {
   id: string;
@@ -50,10 +63,16 @@ export interface UnfilledSlot {
   eligible_people: EligiblePerson[];
 }
 
-function categorize(blockedSource: string | undefined, windowConflict: boolean): EligibilityCategory {
-  if (blockedSource === 'PARTTIME') return 'PARTTIME';
-  if (blockedSource) return 'GEBLOKKEERD';
+function categorize(
+  slotPreference: { level: string; source: string } | undefined,
+  windowConflict: boolean
+): EligibilityCategory {
+  if (slotPreference?.level === 'ABSOLUUT') {
+    return slotPreference.source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD';
+  }
   if (windowConflict) return 'VENSTERBLOK';
+  if (slotPreference?.level === 'LIEVER_NIET') return 'LIEVER_NIET';
+  if (slotPreference?.level === 'VOORKEUR') return 'VOORKEUR';
   return 'BESCHIKBAAR';
 }
 
@@ -136,15 +155,15 @@ export function getEligiblePeopleForSlot(
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
 
-  const blockedSource = new Map(
+  const slotPreference = new Map(
     (
       db
         .prepare(
-          `SELECT person_id, source FROM dienstrooster_availability
-           WHERE blocking_level = 'ABSOLUUT' AND slot_id = ?`
+          `SELECT person_id, blocking_level as level, source FROM dienstrooster_availability
+           WHERE blocking_level IS NOT NULL AND slot_id = ?`
         )
-        .all(slotId) as Array<{ person_id: string; source: string }>
-    ).map((r) => [r.person_id, r.source])
+        .all(slotId) as Array<{ person_id: string; level: string; source: string }>
+    ).map((r) => [r.person_id, { level: r.level, source: r.source }])
   );
 
   const windowWeeks = getWindowWeeks(period);
@@ -156,7 +175,7 @@ export function getEligiblePeopleForSlot(
     .filter((p) => p.id !== excludePersonId)
     .map((p) => ({
       ...p,
-      category: categorize(blockedSource.get(p.id), windowConflicting.has(p.id)),
+      category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
     }));
 }
 
@@ -216,23 +235,23 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
 
   const gapSlotIds = gaps.map((g) => g.id);
   const placeholders = gapSlotIds.map(() => '?').join(',');
-  const blockedRows = db
+  const preferenceRows = db
     .prepare(
-      `SELECT person_id, slot_id, source FROM dienstrooster_availability
-       WHERE blocking_level = 'ABSOLUUT' AND slot_id IN (${placeholders})`
+      `SELECT person_id, slot_id, blocking_level as level, source FROM dienstrooster_availability
+       WHERE blocking_level IS NOT NULL AND slot_id IN (${placeholders})`
     )
-    .all(...gapSlotIds) as Array<{ person_id: string; slot_id: string; source: string }>;
+    .all(...gapSlotIds) as Array<{ person_id: string; slot_id: string; level: string; source: string }>;
 
-  const blockedBySlot = new Map<string, Map<string, string>>();
-  for (const row of blockedRows) {
-    if (!blockedBySlot.has(row.slot_id)) blockedBySlot.set(row.slot_id, new Map());
-    blockedBySlot.get(row.slot_id)!.set(row.person_id, row.source);
+  const preferenceBySlot = new Map<string, Map<string, { level: string; source: string }>>();
+  for (const row of preferenceRows) {
+    if (!preferenceBySlot.has(row.slot_id)) preferenceBySlot.set(row.slot_id, new Map());
+    preferenceBySlot.get(row.slot_id)!.set(row.person_id, { level: row.level, source: row.source });
   }
 
   const windowWeeks = getWindowWeeks(period);
 
   return gaps.map((slot) => {
-    const blockedSource = blockedBySlot.get(slot.id) ?? new Map<string, string>();
+    const slotPreference = preferenceBySlot.get(slot.id) ?? new Map<string, { level: string; source: string }>();
     const windowConflicting = getWindowConflictingPersonIds(
       periodId,
       slot.iso_jaar,
@@ -251,7 +270,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       shortfall: required - slot.assigned_count,
       eligible_people: poolMembers.map((p) => ({
         ...p,
-        category: categorize(blockedSource.get(p.id), windowConflicting.has(p.id)),
+        category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
       })),
     };
   });

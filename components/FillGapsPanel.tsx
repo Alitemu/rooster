@@ -5,16 +5,29 @@
  *
  * Shows shift slots the solver couldn't fully cover (capacity/band limits
  * are soft constraints - see solver/constraints.py) and lets the planner
- * assign someone to each one by hand, in consultation with the person on
- * duty. Calls the same manual-assign endpoint used for any manual
- * override - everyone in the pool is offered, grouped by category so a
- * blocked or window-conflicted person is never hidden, just clearly
- * marked before the planner picks them.
+ * stage someone for each one, in consultation with the person on duty,
+ * before committing anything. Picking someone in the dropdown only stages
+ * a draft choice (kept in this browser's localStorage so it survives a
+ * reload or coming back later) - the day stays listed as unfilled, and
+ * nothing is actually assigned until "Alle toewijzingen toepassen" is
+ * clicked. That matters here specifically because filling a gap by hand
+ * often means waiting on a colleague's answer ("would you take this
+ * blocked day after all?") before it's final - an immediate per-row
+ * commit made a wrong click impossible to casually reconsider, and made
+ * the day vanish from the list the moment you picked someone, which is
+ * the opposite of what a planner reviewing several gaps at once wants.
+ *
+ * Calls the same manual-assign endpoint used for any manual override -
+ * everyone in the pool is offered, grouped by category so a blocked,
+ * window-conflicted, or preference-marked person is never hidden, just
+ * clearly marked before the planner picks them.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-type EligibilityCategory = 'BESCHIKBAAR' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
+// Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
+// comment there for why a person can only ever be in one of these.
+type EligibilityCategory = 'BESCHIKBAAR' | 'VOORKEUR' | 'LIEVER_NIET' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
 
 interface EligiblePerson {
   id: string;
@@ -44,11 +57,21 @@ const TELLER_LABELS: Record<string, string> = {
   FEESTDAG: 'Feestdag',
 };
 
-// Display order for the grouped menu, and the group headings.
-const CATEGORY_ORDER: EligibilityCategory[] = ['BESCHIKBAAR', 'VENSTERBLOK', 'PARTTIME', 'GEBLOKKEERD'];
+// Display order for the grouped menu, and the group headings - best
+// candidates first (VOORKEUR), most cautionary last (GEBLOKKEERD).
+const CATEGORY_ORDER: EligibilityCategory[] = [
+  'VOORKEUR',
+  'BESCHIKBAAR',
+  'LIEVER_NIET',
+  'VENSTERBLOK',
+  'PARTTIME',
+  'GEBLOKKEERD',
+];
 
 const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
+  VOORKEUR: 'Heeft voorkeur voor deze dag',
   BESCHIKBAAR: 'Beschikbaar',
+  LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
   PARTTIME: 'Part-time dag',
   GEBLOKKEERD: 'Geblokkeerd',
@@ -56,7 +79,9 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
 
 // Short note shown next to a selected non-available person.
 const CATEGORY_NOTES: Record<EligibilityCategory, string> = {
+  VOORKEUR: 'heeft aangegeven deze dag te willen werken',
   BESCHIKBAAR: '',
+  LIEVER_NIET: 'heeft aangegeven liever niet op deze dag te werken',
   VENSTERBLOK: 'heeft al een dienst binnen het venster',
   PARTTIME: 'heeft parttime-vrij op deze dag',
   GEBLOKKEERD: 'heeft deze dag geblokkeerd',
@@ -68,13 +93,56 @@ function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, 
   ).filter(([, group]) => group.length > 0);
 }
 
+function draftStorageKey(periodId: string): string {
+  return `dienstrooster-fillgaps-draft-${periodId}`;
+}
+
 export function FillGapsPanel({ periodId, onAllFilled }: Props) {
   const [slots, setSlots] = useState<UnfilledSlot[] | null>(null);
+  // slot_id -> staged (not yet applied) person_id.
   const [selection, setSelection] = useState<Record<string, string>>({});
-  const [assigning, setAssigning] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Restore any draft left over from a previous visit - before the first
+  // load() below runs, so its "drop selections for slots no longer open"
+  // pruning (see load()) still applies to whatever gets restored here.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftStorageKey(periodId));
+      if (raw) setSelection(JSON.parse(raw));
+    } catch {
+      // Corrupt or unavailable storage - start with an empty draft rather
+      // than fail the whole panel over it.
+    }
+  }, [periodId]);
+
+  // Keep the draft in localStorage in sync - a planner closing the tab
+  // mid-review (e.g. to go check with someone) must not lose their
+  // in-progress picks.
+  //
+  // The restore effect above runs first on mount, but the setSelection it
+  // calls doesn't take effect until the next render - this effect's own
+  // closure still sees the pre-restore (empty) `selection` on that very
+  // first run. Writing then would immediately clobber the draft this same
+  // mount is in the middle of restoring, before it's even rendered once.
+  // Skipping exactly the first run avoids that; the second run (triggered
+  // once the restored `selection` actually lands) persists the real value.
+  const skippedFirstPersist = useRef(false);
+  useEffect(() => {
+    if (!skippedFirstPersist.current) {
+      skippedFirstPersist.current = true;
+      return;
+    }
+    try {
+      localStorage.setItem(draftStorageKey(periodId), JSON.stringify(selection));
+    } catch {
+      // Unavailable (private browsing, quota) - selections still work for
+      // this page load, they just won't survive a reload.
+    }
+  }, [periodId, selection]);
 
   // A failed load used to leave `slots` at null forever, and the render
   // below returns null for that case - the whole panel (including any
@@ -89,6 +157,19 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Laden van openstaande diensten mislukt');
       setLoadError(null);
       setSlots(data.data);
+
+      // Drop staged picks for slots that are no longer open - filled by
+      // someone else meanwhile, or just applied - so the draft never
+      // offers to (re-)apply a slot that doesn't need it anymore.
+      const stillOpen = new Set((data.data as UnfilledSlot[]).map((s) => s.slot_id));
+      setSelection((prev) => {
+        const next: Record<string, string> = {};
+        for (const [slotId, personId] of Object.entries(prev)) {
+          if (stillOpen.has(slotId)) next[slotId] = personId;
+        }
+        return next;
+      });
+
       if (data.data.length === 0 && onAllFilled) onAllFilled();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Laden van openstaande diensten mislukt');
@@ -99,29 +180,51 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
     load();
   }, [load]);
 
-  const handleAssign = async (slotId: string) => {
-    const personId = selection[slotId];
-    if (!personId) return;
+  const stagedCount = Object.keys(selection).length;
 
-    setAssigning(slotId);
+  const handleApplyAll = async () => {
+    const entries = Object.entries(selection);
+    if (entries.length === 0) return;
+
+    setApplying(true);
     setError(null);
     setWarning(null);
-    try {
-      const res = await fetch(`/api/planner/period/${periodId}/assignments/manual-assign`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ person_id: personId, slot_id: slotId, reason: 'Handmatig aangevuld' }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Toewijzen mislukt');
-      if (data.data?.warning) setWarning(data.data.warning.message);
 
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Toewijzen mislukt');
-    } finally {
-      setAssigning(null);
+    const failures: string[] = [];
+    const warnings: string[] = [];
+
+    for (const [slotId, personId] of entries) {
+      try {
+        const res = await fetch(`/api/planner/period/${periodId}/assignments/manual-assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ person_id: personId, slot_id: slotId, reason: 'Handmatig aangevuld' }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Toewijzen mislukt');
+        if (data.data?.warning) warnings.push(data.data.warning.message);
+      } catch (err) {
+        const slot = slots?.find((s) => s.slot_id === slotId);
+        const label = slot
+          ? `${new Date(slot.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} (${TELLER_LABELS[slot.teller] || slot.teller})`
+          : slotId;
+        failures.push(`${label}: ${err instanceof Error ? err.message : 'Toewijzen mislukt'}`);
+      }
     }
+
+    if (warnings.length > 0) setWarning(warnings.join(' · '));
+    if (failures.length > 0) {
+      setError(
+        `${failures.length} van de ${entries.length} toewijzingen zijn niet gelukt - de rest is toegepast. ${failures.join('; ')}`
+      );
+    }
+
+    // Reloading re-derives `slots` from the database and (via load()'s own
+    // pruning) drops every staged pick that got applied successfully -
+    // only picks for slots still open (including any that just failed)
+    // survive, so a retry doesn't need to be redone from scratch.
+    await load();
+    setApplying(false);
   };
 
   if (loadError) {
@@ -158,8 +261,9 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
         ⚠️ {slots.length} dienst{slots.length === 1 ? '' : 'en'} nog niet ingevuld
       </h3>
       <p className="text-sm text-amber-800 mb-4">
-        De solver kon hiervoor niemand vinden binnen de ingestelde grenzen. Vul ze zelf in,
-        in overleg met wie beschikbaar is.
+        De solver kon hiervoor niemand vinden binnen de ingestelde grenzen. Kies hieronder rustig
+        iemand per dienst - dit wordt pas echt toegewezen zodra je op &quot;Alle toewijzingen
+        toepassen&quot; klikt, dus je kunt gerust wachten op een reactie voordat je doorgaat.
       </p>
 
       {error && (
@@ -181,7 +285,9 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
           return (
             <div
               key={slot.slot_id}
-              className="flex items-center justify-between gap-3 p-3 rounded bg-white border border-amber-200"
+              className={`flex items-center justify-between gap-3 p-3 rounded bg-white border ${
+                selectedPerson ? 'border-green-300' : 'border-amber-200'
+              }`}
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-neutral-900">
@@ -207,11 +313,24 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
                   <span className="text-xs text-red-600">Niemand in de pool beschikbaar</span>
                 ) : (
                   <>
+                    {selectedPerson && (
+                      <span className="text-xs text-green-700 font-medium" title="Klaar om toe te passen">
+                        ✓ Klaar
+                      </span>
+                    )}
                     <select
                       className="text-sm border border-neutral-300 rounded px-2 py-1"
                       value={selection[slot.slot_id] || ''}
+                      disabled={applying}
                       onChange={(e) =>
-                        setSelection((prev) => ({ ...prev, [slot.slot_id]: e.target.value }))
+                        setSelection((prev) => {
+                          if (!e.target.value) {
+                            const next = { ...prev };
+                            delete next[slot.slot_id];
+                            return next;
+                          }
+                          return { ...prev, [slot.slot_id]: e.target.value };
+                        })
                       }
                     >
                       <option value="">Kies iemand…</option>
@@ -228,19 +347,27 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
                         </optgroup>
                       ))}
                     </select>
-                    <button
-                      onClick={() => handleAssign(slot.slot_id)}
-                      disabled={!selection[slot.slot_id] || assigning === slot.slot_id}
-                      className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 transition-colors"
-                    >
-                      {assigning === slot.slot_id ? 'Bezig…' : 'Toewijzen'}
-                    </button>
                   </>
                 )}
               </div>
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-4 pt-4 border-t border-amber-200 flex items-center justify-between gap-3">
+        <p className="text-xs text-amber-800">
+          {stagedCount === 0
+            ? 'Nog geen keuzes gemaakt.'
+            : `${stagedCount} van de ${slots.length} klaar om toe te passen.`}
+        </p>
+        <button
+          onClick={handleApplyAll}
+          disabled={stagedCount === 0 || applying}
+          className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 transition-colors"
+        >
+          {applying ? 'Bezig…' : `Alle toewijzingen toepassen${stagedCount > 0 ? ` (${stagedCount})` : ''}`}
+        </button>
       </div>
     </div>
   );
