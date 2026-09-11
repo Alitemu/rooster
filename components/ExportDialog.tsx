@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 type ExportType = 'invitations' | 'reminders' | 'audit-trail' | null;
 
@@ -146,6 +147,8 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
     }
   };
 
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
@@ -153,9 +156,9 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
       role="dialog"
       aria-modal="true"
       aria-label="Exporteren"
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
     >
-      <div className="card p-6 max-w-2xl w-full mx-4 max-h-96 overflow-y-auto">
+      <div className="card p-6 max-w-2xl w-full max-h-full overflow-y-auto">
         {!exportType ? (
           <>
             <h2 className="text-2xl font-bold mb-4">Exporteren en communicatie</h2>

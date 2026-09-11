@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 interface RulesetConfig {
   windowWeeks: number;
@@ -239,16 +240,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     onClose();
   };
 
-  // Without this the body behind the dialog keeps scrolling on mobile
-  // instead of the dialog's own content area.
-  useEffect(() => {
-    if (!isOpen) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [isOpen]);
+  useBodyScrollLock(isOpen);
 
   if (!isOpen) return null;
 

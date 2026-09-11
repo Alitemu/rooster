@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 interface Period {
   id: string;
@@ -92,6 +93,8 @@ export default function PlannerHomePage() {
   const [restoreError, setRestoreError] = useState<string | null>(null);
   const [purgingPeriod, setPurgingPeriod] = useState<TrashedPeriod | null>(null);
   const [purgeError, setPurgeError] = useState<string | null>(null);
+
+  useBodyScrollLock(!!deletingPeriod || !!purgingPeriod);
 
   const loadData = async () => {
     setLoading(true);
@@ -458,9 +461,9 @@ export default function PlannerHomePage() {
           role="dialog"
           aria-modal="true"
           aria-label="Periode verwijderen"
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         >
-          <div className="card p-6 max-w-md w-full mx-4">
+          <div className="card p-6 max-w-md w-full max-h-full overflow-y-auto">
             <h2 className="text-xl font-bold mb-2">Periode verwijderen?</h2>
             <p className="text-sm text-neutral-700 mb-3">
               &quot;{deletingPeriod.naam}&quot; wordt naar de prullenbak verplaatst.
@@ -502,9 +505,9 @@ export default function PlannerHomePage() {
           role="dialog"
           aria-modal="true"
           aria-label="Periode definitief verwijderen"
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         >
-          <div className="card p-6 max-w-md w-full mx-4">
+          <div className="card p-6 max-w-md w-full max-h-full overflow-y-auto">
             <h2 className="text-xl font-bold mb-2 text-red-700">Definitief verwijderen?</h2>
             <p className="text-sm text-neutral-700 mb-3">
               &quot;{purgingPeriod.naam}&quot; en alle bijbehorende gegevens (voorkeuren,

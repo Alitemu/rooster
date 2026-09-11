@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 interface Assignment {
   id: string;
@@ -143,6 +144,8 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     FEESTDAG: 'Feestdag',
   };
 
+  useBodyScrollLock(isOpen);
+
   if (!isOpen) return null;
 
   return (
@@ -150,11 +153,11 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
       role="dialog"
       aria-modal="true"
       aria-label="Ruilverzoek indienen"
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-full flex flex-col">
         {/* Header */}
-        <div className="border-b p-6">
+        <div className="border-b p-6 flex-shrink-0">
           <h2 className="text-xl font-bold">Ruilverzoek indienen</h2>
           <p className="text-sm text-neutral-600 mt-1">
             Kies een dienst die je wilt afstaan en een die je wilt ontvangen
@@ -162,7 +165,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto min-h-0">
           {loading && (
             <div className="text-center py-8">
               <p className="text-neutral-600">Je diensten laden...</p>
@@ -269,7 +272,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
         </div>
 
         {/* Footer */}
-        <div className="border-t p-6 flex gap-3">
+        <div className="border-t p-6 flex gap-3 flex-shrink-0">
           <button
             onClick={onClose}
             disabled={submitting}
