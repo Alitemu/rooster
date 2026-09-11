@@ -178,6 +178,13 @@ const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReas
   FEESTDAG: [
     {
       type: 'FEESTDAG',
+      label: 'Last minute feestdag overgenomen',
+      defaultAantal: -2,
+      explain: (n) =>
+        `Heeft vorige periode last minute een feestdagdienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} feestdagdienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
+    },
+    {
+      type: 'FEESTDAG',
       label: 'Overig',
       defaultAantal: null,
       explain: (n) => `Handmatige correctie: feestdag wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
@@ -1722,13 +1729,14 @@ export function SetupWizard({ period, onComplete }: Props) {
                             setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : -Math.abs(f.aantal) }));
                           }}
                           aria-pressed={correctionAantalSign === -1}
-                          className={`px-3 py-2 text-sm font-bold transition-colors ${
+                          aria-label="Minder diensten"
+                          className={`w-12 py-2 text-lg font-bold transition-colors ${
                             correctionAantalSign === -1
                               ? 'bg-red-600 text-white'
                               : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                           }`}
                         >
-                          − minder
+                          −
                         </button>
                         <button
                           type="button"
@@ -1737,13 +1745,14 @@ export function SetupWizard({ period, onComplete }: Props) {
                             setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : Math.abs(f.aantal) }));
                           }}
                           aria-pressed={correctionAantalSign === 1}
-                          className={`px-3 py-2 text-sm font-bold border-l transition-colors ${
+                          aria-label="Meer diensten"
+                          className={`w-12 py-2 text-lg font-bold border-l transition-colors ${
                             correctionAantalSign === 1
                               ? 'bg-green-600 text-white'
                               : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                           }`}
                         >
-                          + meer
+                          +
                         </button>
                       </div>
                       <input
