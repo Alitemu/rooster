@@ -9,11 +9,12 @@ Phase 2: Constraint implementation and solver execution
 import logging
 import os
 import time
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Setup logging - LOG_LEVEL (docker-compose.yml / .env.example) picks the
 # verbosity; an unset or unrecognised value falls back to INFO rather than
@@ -25,11 +26,30 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown logging - replaces the deprecated @app.on_event
+    decorators (removed in newer FastAPI/Starlette) with the lifespan
+    context manager they were replaced by."""
+    logger.info("=" * 60)
+    logger.info("Dienstrooster Solver Service Starting")
+    logger.info("=" * 60)
+    logger.info("Version: 1.0.0")
+    logger.info("Endpoints:")
+    logger.info("  - GET  /health       (health check)")
+    logger.info("  - POST /solve        (generate roster)")
+    logger.info("=" * 60)
+    yield
+    logger.info("Dienstrooster Solver Service shutting down")
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Dienstrooster Solver",
     description="CP-SAT Solver for fair shift roster generation",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
 )
 
 # CORS middleware - this service is only ever called server-to-server by the
@@ -52,7 +72,7 @@ class HealthResponse(BaseModel):
     status: str = "ok"
     service: str = "solver"
     version: str = "1.0.0"
-    timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class Slot(BaseModel):
@@ -338,14 +358,14 @@ async def solve_roster(request: SolverInput):
         result = solver.generate_roster(
             period_id=request.period_id,
             people=request.people,
-            slots=[s.dict() for s in request.slots],
+            slots=[s.model_dump() for s in request.slots],
             blocked_slots=blocked_slots,
             soft_slots=soft_slots,
             band_ranges=band_ranges,
             balances=request.balances,
             window_weeks=request.rules.window_weeks,
             preferred_slots=preferred_slots,
-            prior_assignments=[p.dict() for p in request.prior_assignments],
+            prior_assignments=[p.model_dump() for p in request.prior_assignments],
             soft_block_penalty=request.rules.soft_block_penalty,
             distribution_mode=request.rules.distribution_mode,
             participation_factors=request.participation_factors,
@@ -391,27 +411,8 @@ async def solve_roster(request: SolverInput):
         )
 
 
-# ============================================================================
-# Startup/Shutdown
-# ============================================================================
-
-@app.on_event("startup")
-async def startup_event():
-    logger.info("=" * 60)
-    logger.info("Dienstrooster Solver Service Starting")
-    logger.info("=" * 60)
-    logger.info("Version: 1.0.0")
-    logger.info("Status: Infrastructure ready, solver implementation in progress")
-    logger.info("Endpoints:")
-    logger.info("  - GET  /health       (health check)")
-    logger.info("  - POST /solve        (generate roster)")
-    logger.info("=" * 60)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info("Dienstrooster Solver Service shutting down")
-
+# Startup/shutdown logging lives in the `lifespan` context manager near the
+# top of this file, next to the `app = FastAPI(...)` call it's attached to.
 
 if __name__ == "__main__":
     import uvicorn

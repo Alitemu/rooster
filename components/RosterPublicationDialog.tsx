@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { useDialogDismiss } from '@/lib/useDialogDismiss';
 
 interface ValidationCheck {
   slots_filled: boolean;
@@ -91,6 +92,8 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
   };
 
   useBodyScrollLock(isOpen);
+  // Mirrors the Sluiten button below (disabled={publishing}).
+  const dismissBackdrop = useDialogDismiss(isOpen, onClose, !publishing);
 
   if (!isOpen) return null;
 
@@ -99,6 +102,7 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
       role="dialog"
       aria-modal="true"
       aria-label="Rooster publiceren"
+      onClick={dismissBackdrop}
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
     >
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-full flex flex-col">

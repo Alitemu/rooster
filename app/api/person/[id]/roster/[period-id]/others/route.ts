@@ -37,7 +37,7 @@ export async function GET(
 
     if (period.status !== 'GEPUBLICEERD') {
       return NextResponse.json(
-        { success: false, error: 'Roster not yet published' },
+        { success: false, error: 'Rooster is nog niet gepubliceerd' },
         { status: 403 }
       );
     }

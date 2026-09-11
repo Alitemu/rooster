@@ -79,6 +79,11 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filterPerson, setFilterPerson] = useState('');
+  // What loadAssignments actually queries with - updated from filterPerson
+  // 300ms after the last keystroke, so typing a codenaam doesn't fire one
+  // fetch per character. filterPerson itself stays bound to the input so
+  // typing feels instant; only the network request is delayed.
+  const [debouncedFilterPerson, setDebouncedFilterPerson] = useState('');
   const [filterShiftType, setFilterShiftType] = useState('');
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   const [reason, setReason] = useState('');
@@ -93,13 +98,18 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
 
   const isPublished = periodStatus === 'GEPUBLICEERD';
 
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedFilterPerson(filterPerson), 300);
+    return () => clearTimeout(timer);
+  }, [filterPerson]);
+
   const loadAssignments = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
 
     try {
       let url = `/api/planner/period/${periodId}/assignments?page=${page}`;
-      if (filterPerson) url += `&codenaam=${encodeURIComponent(filterPerson)}`;
+      if (debouncedFilterPerson) url += `&codenaam=${encodeURIComponent(debouncedFilterPerson)}`;
       if (filterShiftType) url += `&shift_type=${filterShiftType}`;
 
       const res = await fetch(url);
@@ -113,7 +123,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [periodId, page, filterPerson, filterShiftType]);
+  }, [periodId, page, debouncedFilterPerson, filterShiftType]);
 
   useEffect(() => {
     loadAssignments();
@@ -315,7 +325,9 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             <tbody className="divide-y">
               {assignments.map((a) => (
                 <tr key={a.id} className={rowBackground(a)}>
-                  <td className="px-3 py-2 font-medium">{a.datum}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {new Date(a.datum).toLocaleDateString('nl-NL')}
+                  </td>
                   <td className="px-3 py-2 text-neutral-600">W{a.iso_week}</td>
                   <td className="px-3 py-2">{a.codenaam}</td>
                   <td className="px-3 py-2">{dienstTypeLabel(a)}</td>

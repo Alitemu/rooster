@@ -61,13 +61,20 @@ export async function GET(
       return NextResponse.json(response, { status: 404 });
     }
 
+    // p.actief = 1: matches every other "who's really in this period"
+    // query (generate-roster, capacity, publish, ...) - without it, a
+    // deactivated person still on the books padded the denominator here,
+    // so the coverage percentage a participant sees could never actually
+    // reach 100% even once everyone who could still respond had.
     const poolSizeStmt = db.prepare(`
       SELECT COUNT(DISTINCT pm.person_id) as count
       FROM dienstrooster_pool_membership pm
       JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+      JOIN dienstrooster_person p ON p.id = pm.person_id
       WHERE sp.id = ?
         AND pm.geldig_vanaf <= sp.eind_datum
         AND pm.geldig_tot >= sp.start_datum
+        AND p.actief = 1
     `);
 
     const poolSizeRow = poolSizeStmt.get(periodId) as any;

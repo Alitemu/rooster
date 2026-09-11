@@ -335,6 +335,81 @@ describe('runPublicationCheck', () => {
     expect(withExtra.valid).toBe(true);
   });
 
+  it('scales the target band by deelnamefactor under NAAR_RATO, not the flat full-time band', () => {
+    // Regression: this check used to always compare everyone against the
+    // flat, full-time band regardless of distribution_mode - see
+    // solver/constraints.py's own NAAR_RATO scaling, which this must
+    // match exactly. A part-timer correctly given precisely the number of
+    // shifts the solver was told to give them (floor/ceil of the base
+    // band times their deelnamefactor) used to be flagged as a band
+    // violation on every single publish attempt.
+    const ctx = createPool(1, { bandAvond: [4, 4], distributionMode: 'NAAR_RATO' });
+
+    // A second, part-time person - createPool always uses the schema's
+    // default deelnamefactor (1.0), so this one is added directly.
+    const partTimeId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
+       VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`
+    ).run(partTimeId, `Test-parttime-${partTimeId.slice(0, 8)}`);
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot, deelnamefactor)
+       VALUES (?, ?, ?, '2020-01-01', '2030-12-31', 0.5)`
+    ).run(crypto.randomUUID(), partTimeId, ctx.poolId);
+
+    const { period, slotIds } = createPeriod(ctx, START, END, {
+      bandAvond: [4, 4],
+      distributionMode: 'NAAR_RATO',
+    });
+
+    // Full-timer gets exactly the base band (4). Part-timer gets exactly
+    // their NAAR_RATO-scaled band: floor(4*0.5)=2, max(2, ceil(4*0.5))=2
+    // -> [2, 2].
+    assign(period.id, ctx.personIds[0], slotIds[0]);
+    assign(period.id, ctx.personIds[0], slotIds[1]);
+    assign(period.id, ctx.personIds[0], slotIds[2]);
+    assign(period.id, ctx.personIds[0], slotIds[3]);
+    assign(period.id, partTimeId, slotIds[4]);
+    assign(period.id, partTimeId, slotIds[5]);
+
+    const result = runPublicationCheck(period);
+
+    expect(result.checks.band_compliance).toBe(true);
+  });
+
+  it('still catches a part-timer outside their own NAAR_RATO-scaled band', () => {
+    // The other half of the regression test above: scaling must not
+    // become "part-timers are never checked" - someone who took 4 shifts
+    // against a scaled band of [2, 2] is still over, by exactly as much
+    // as a full-timer taking 6 against [4, 4] would be.
+    const ctx = createPool(1, { bandAvond: [4, 4], distributionMode: 'NAAR_RATO' });
+
+    const partTimeId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
+       VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`
+    ).run(partTimeId, `Test-parttime-${partTimeId.slice(0, 8)}`);
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot, deelnamefactor)
+       VALUES (?, ?, ?, '2020-01-01', '2030-12-31', 0.5)`
+    ).run(crypto.randomUUID(), partTimeId, ctx.poolId);
+
+    const { period, slotIds } = createPeriod(ctx, START, END, {
+      bandAvond: [4, 4],
+      distributionMode: 'NAAR_RATO',
+    });
+
+    // Part-timer's scaled band is [2, 2]; give them 4, double their max.
+    assign(period.id, partTimeId, slotIds[0]);
+    assign(period.id, partTimeId, slotIds[1]);
+    assign(period.id, partTimeId, slotIds[2]);
+    assign(period.id, partTimeId, slotIds[3]);
+
+    const result = runPublicationCheck(period);
+
+    expect(result.checks.band_compliance).toBe(false);
+  });
+
   it('accepts a fully manual roster - the source of an assignment is irrelevant', () => {
     // Gaps the solver could not fill are filled by hand, so a published
     // roster may legitimately contain no SOLVER rows at all.

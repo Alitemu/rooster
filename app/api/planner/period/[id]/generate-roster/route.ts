@@ -13,6 +13,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBands';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
+import { postJson } from '@/lib/solverClient';
 
 export async function POST(
   request: NextRequest,
@@ -302,13 +303,27 @@ export async function POST(
       ...(timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}),
     };
 
-    // Call solver service
+    // Call solver service. Not fetch(): see lib/solverClient.ts for why -
+    // in short, undici's default 300s headers timeout sits below the 600s
+    // a planner can legitimately ask the solver to run for.
+    //
+    // The extra 5 minutes on top of the requested search time is
+    // deliberately generous, not a tight estimate: CP-SAT's
+    // max_time_in_seconds only bounds the *search* - building the model
+    // itself (one variable per person×slot, plus every window/band/
+    // holiday constraint, all in a Python loop - see solver/solver.py's
+    // build_model) is unbounded by that parameter and scales with pool
+    // and period size. Verified live against this app's own seed data
+    // (31 people, 22 weeks): a real solve overran a 30s-over-limit
+    // buffer and got killed here mid-response even though the solver had
+    // actually finished and answered successfully - a slow-but-legitimate
+    // solve must never be mistaken for a dead connection.
     const solverUrl = process.env.SOLVER_URL || 'http://solver:8000';
-    const solverResponse = await fetch(`${solverUrl}/solve`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(solverInput),
-    });
+    const solverResponse = await postJson(
+      `${solverUrl}/solve`,
+      solverInput,
+      (timeLimitSeconds ?? 120) * 1000 + 300_000
+    );
 
     if (!solverResponse.ok) {
       const error = await solverResponse.text();
@@ -359,7 +374,7 @@ export async function POST(
         .get(periodId) as { status: string; row_version: number };
 
       if (current.status !== period.status || current.row_version !== period.row_version) {
-        return { conflict: true, assignmentCount: 0 };
+        return { conflict: true, assignmentCount: 0, rowVersion: current.row_version };
       }
 
       // Clear this period's previous solver attempt (a regenerate replaces
@@ -397,10 +412,19 @@ export async function POST(
          WHERE id = ?`
       ).run('GEGENEREERD', periodId);
 
-      return { conflict: false, assignmentCount };
+      // Re-read rather than compute (period.row_version + 1): this is the
+      // value the client needs to hand back on its *next* call (a
+      // regenerate, or "langer proberen" after a FEASIBLE result) so that
+      // call's own optimistic-lock check doesn't spuriously 409 against a
+      // version this same request already moved past.
+      const updated = db
+        .prepare('SELECT row_version FROM dienstrooster_schedule_period WHERE id = ?')
+        .get(periodId) as { row_version: number };
+
+      return { conflict: false, assignmentCount, rowVersion: updated.row_version };
     });
 
-    const { conflict, assignmentCount } = applyGeneratedRoster();
+    const { conflict, assignmentCount, rowVersion } = applyGeneratedRoster();
 
     if (conflict) {
       return NextResponse.json(
@@ -458,6 +482,15 @@ export async function POST(
         violations: solverOutput.diagnostics.violations,
         time_seconds: solverOutput.diagnostics.time_seconds,
         solver_status: solverOutput.diagnostics.solver_status,
+        // So the caller (RosterGenerationDialog) can track the period's
+        // real current row_version - this handler bumps it once more on
+        // top of any ruleset PATCH the dialog already did, so the
+        // dialog's own pre-generate value is stale the moment this
+        // response lands. Without this, a second generate in the same
+        // dialog session (regenerate, or "langer proberen") sends a
+        // version that's already one behind and gets rejected with a
+        // conflict that has nothing to do with anyone else editing it.
+        row_version: rowVersion,
       },
     });
   } catch (error) {

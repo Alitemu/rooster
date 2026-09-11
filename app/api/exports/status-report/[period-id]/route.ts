@@ -10,21 +10,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { csvField, sanitizeFilenamePart } from '@/lib/csv';
 import type { ApiErrorResponse } from '@/types';
-
-// codenaam is free-text, planner-entered with no character restriction -
-// without escaping, an embedded `"` breaks the CSV structure when opened
-// in Excel/Numbers and can shift columns.
-function csvField(value: string | number | null): string {
-  return `"${String(value ?? '').replace(/"/g, '""')}"`;
-}
-
-// period.naam is free-text, planner-entered with no character restriction -
-// embedded in a quoted Content-Disposition filename below, so a `"` would
-// break out of the quoted string and a CR/LF could corrupt the header.
-function sanitizeFilenamePart(value: string): string {
-  return value.replace(/[\r\n"\\]/g, '_');
-}
 
 export async function GET(
   req: NextRequest,

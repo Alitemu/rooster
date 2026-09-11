@@ -132,6 +132,14 @@ export function PreferencesCalendar({
   const [preferences, setPreferences] = useState<Map<string, DayPreference>>(new Map());
   const [coverage, setCoverage] = useState<Map<string, CoverageInfo>>(new Map());
   const [loading, setLoading] = useState(true);
+  // Separate from saveError (an inline save failure with the calendar
+  // still shown) - this means the calendar itself never rendered, which
+  // used to fall through to the same "Geen datums beschikbaar" empty
+  // state as a period with no slots at all. Indistinguishable from that
+  // genuinely-empty case, with no way to retry, was exactly the silent
+  // failure already fixed elsewhere for FillGapsPanel/PartTimeCheckStep -
+  // this component had the same gap.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasChanged, setHasChanged] = useState(false);
@@ -139,40 +147,41 @@ export function PreferencesCalendar({
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
 
   // Fetch initial preferences
-  useEffect(() => {
-    const fetchPreferences = async () => {
-      try {
-        const res = await fetch(`/api/person/${personId}/preferences/${periodId}`);
-        if (!res.ok) throw new Error('Failed to fetch preferences');
+  const fetchPreferences = useCallback(async () => {
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/person/${personId}/preferences/${periodId}`);
+      if (!res.ok) throw new Error('Ophalen van voorkeuren mislukt');
 
-        const data = await res.json();
-        const prefs = new Map<string, DayPreference>();
+      const data = await res.json();
+      const prefs = new Map<string, DayPreference>();
 
-        for (const slot of data.data.preferences) {
-          const key = slot.datum;
-          if (!prefs.has(key)) {
-            prefs.set(key, {
-              datum: key,
-              slots: new Map(),
-            });
-          }
-          prefs.get(key)!.slots.set(slot.teller, {
-            slot_id: slot.slot_id,
-            level: slot.blocking_level,
-            source: slot.source,
+      for (const slot of data.data.preferences) {
+        const key = slot.datum;
+        if (!prefs.has(key)) {
+          prefs.set(key, {
+            datum: key,
+            slots: new Map(),
           });
         }
-
-        setPreferences(prefs);
-      } catch (error) {
-        console.error('Failed to load preferences:', error);
-      } finally {
-        setLoading(false);
+        prefs.get(key)!.slots.set(slot.teller, {
+          slot_id: slot.slot_id,
+          level: slot.blocking_level,
+          source: slot.source,
+        });
       }
-    };
 
-    fetchPreferences();
+      setPreferences(prefs);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Ophalen van voorkeuren mislukt');
+    } finally {
+      setLoading(false);
+    }
   }, [personId, periodId]);
+
+  useEffect(() => {
+    fetchPreferences();
+  }, [fetchPreferences]);
 
   // Fetch coverage. Also called again after every save (see savePreference)
   // - without that, the bars, day cells, and the notice below the calendar
@@ -391,6 +400,23 @@ export function PreferencesCalendar({
 
   if (loading) {
     return <div className="p-4 text-center">Voorkeuren laden...</div>;
+  }
+
+  if (loadError) {
+    return (
+      <div className="p-4 bg-red-50 border border-red-200 rounded text-center">
+        <p className="text-sm text-red-700 mb-2">⚠️ {loadError}</p>
+        <button
+          onClick={() => {
+            setLoading(true);
+            fetchPreferences();
+          }}
+          className="px-3 py-1.5 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+        >
+          Opnieuw proberen
+        </button>
+      </div>
+    );
   }
 
   // Generate calendar grid, one true calendar month per group - a month

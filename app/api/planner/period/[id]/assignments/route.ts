@@ -25,8 +25,21 @@ export async function GET(
     const personId = searchParams.get('person_id');
     const codenaam = searchParams.get('codenaam');
     const shiftType = searchParams.get('shift_type');
-    const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('page_size') || '50');
+
+    // An invalid/missing value (?page=abc -> NaN, or omitted) must fall
+    // back to a sane default rather than reach the SQL LIMIT/OFFSET
+    // binding below as NaN, which better-sqlite3 rejects with a raw 500.
+    // Upper-bounded at 5000 - well above any realistic page size, but
+    // enough headroom for AssignmentCalendar's own one-shot
+    // ?page_size=5000 fetch of a whole period at once - so a client can't
+    // force an unbounded query by asking for an arbitrarily large page.
+    const parsePositiveInt = (raw: string | null, fallback: number, max: number): number => {
+      const n = raw === null ? NaN : parseInt(raw, 10);
+      if (!Number.isFinite(n) || n < 1) return fallback;
+      return Math.min(n, max);
+    };
+    const page = parsePositiveInt(searchParams.get('page'), 1, Number.MAX_SAFE_INTEGER);
+    const pageSize = parsePositiveInt(searchParams.get('page_size'), 50, 5000);
 
     // Verify period exists
     const period = db

@@ -13,7 +13,7 @@
  * - Generate roster button
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { ExportDialog } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
@@ -70,13 +70,31 @@ interface Props {
    * regenerate" staleness problem but live outside this component.
    */
   onRosterChanged?: () => void;
+  /**
+   * Bumped by the page whenever something outside this component changed
+   * the roster's assignments - specifically FillGapsPanel applying staged
+   * picks. This dashboard's own AssignmentGrid/AssignmentCalendar (and the
+   * imbalance/staff-status numbers above them) otherwise have no way to
+   * find out: they only ever see the same unchanging periodId. Any value
+   * change triggers a reload; the value itself is otherwise meaningless.
+   */
+  refreshSignal?: number;
 }
 
-export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }: Props) {
+export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, refreshSignal }: Props) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [progress, setProgress] = useState<PersonProgress[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // loadError means the dashboard itself couldn't be fetched at all - fatal,
+  // nothing else on this component can render meaningfully without it.
+  // actionError is for an inline action failing (submit-on-behalf) with the
+  // dashboard already showing - same split, and the same reasoning, as
+  // AssignmentGrid's loadError/error: a rejected action isn't a reason to
+  // blank out everything else the planner was looking at, and a planner
+  // who fixes the underlying issue needs a way to dismiss it and try again
+  // without a full page reload.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
@@ -102,16 +120,17 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
       const dashData = await dashRes.json();
       const progData = await progRes.json();
 
+      setLoadError(null);
       setDashboard(dashData.data);
       setProgress(progData.data);
       setLoading(false);
-      // Any dashboard reload - mount, submit-on-behalf, or the roster
-      // dialog's own onSuccess - also means the assignments list/calendar
-      // could be stale, so remount them together with it rather than
-      // tracking each trigger separately.
+      // Any dashboard reload - mount, submit-on-behalf, refreshSignal, or
+      // the roster dialog's own onSuccess - also means the assignments
+      // list/calendar could be stale, so remount them together with it
+      // rather than tracking each trigger separately.
       setAssignmentsRefreshKey((k) => k + 1);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden van dashboard mislukt');
+      setLoadError(err instanceof Error ? err.message : 'Laden van dashboard mislukt');
       setLoading(false);
     }
   };
@@ -120,8 +139,22 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
     loadData();
   }, [periodId]);
 
+  // Skips the first run the same way FillGapsPanel's persist effect does -
+  // refreshSignal starts at whatever the page initialized it to, and that
+  // initial value must not trigger a second, redundant load on mount.
+  const skippedFirstRefreshSignal = useRef(false);
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    if (!skippedFirstRefreshSignal.current) {
+      skippedFirstRefreshSignal.current = true;
+      return;
+    }
+    loadData();
+  }, [refreshSignal]);
+
   const handleSubmitOnBehalf = async (personId: string) => {
     setSubmittingFor(personId);
+    setActionError(null);
     try {
       const res = await fetch(`/api/planner/person/${personId}/submit-on-behalf`, {
         method: 'POST',
@@ -142,7 +175,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
       // res.ok-checked fetch this used to duplicate without one.
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Indienen mislukt');
+      setActionError(err instanceof Error ? err.message : 'Indienen mislukt');
     } finally {
       setSubmittingFor(null);
     }
@@ -156,10 +189,16 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
     );
   }
 
-  if (error) {
+  if (loadError) {
     return (
-      <div className="card p-8 bg-red-50 border border-red-200">
-        <p className="text-red-700">{error}</p>
+      <div className="card p-8 bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+        <p className="text-red-700">{loadError}</p>
+        <button
+          onClick={loadData}
+          className="shrink-0 px-3 py-1.5 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+        >
+          Opnieuw proberen
+        </button>
       </div>
     );
   }
@@ -185,6 +224,18 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
 
   return (
     <div className="space-y-6">
+      {actionError && (
+        <div className="card p-3 bg-red-50 border border-red-200 flex items-start justify-between gap-3">
+          <p className="text-red-700 text-sm">{actionError}</p>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-red-700 hover:text-red-900 text-sm font-medium shrink-0"
+          >
+            Sluiten
+          </button>
+        </div>
+      )}
+
       {/* Submission Progress Summary */}
       <div className="card p-6">
         <h3 className="font-bold text-lg mb-4">Voortgang indiening</h3>
@@ -406,7 +457,21 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
           </div>
           {showAssignments && (
             assignmentsView === 'list' ? (
-              <AssignmentGrid key={assignmentsRefreshKey} periodId={periodId} periodStatus={dashboard.status} />
+              <AssignmentGrid
+                key={assignmentsRefreshKey}
+                periodId={periodId}
+                periodStatus={dashboard.status}
+                onChanged={() => {
+                  // A reassign/remove here can open (or close) a gap -
+                  // FillGapsPanel lives outside this component and has no
+                  // other way to find out (see onRosterChanged's own
+                  // docstring). loadData() also refreshes this dashboard's
+                  // own imbalance/staff-status numbers, which a reassign
+                  // can change too.
+                  loadData();
+                  onRosterChanged?.();
+                }}
+              />
             ) : (
               <AssignmentCalendar key={assignmentsRefreshKey} periodId={periodId} />
             )

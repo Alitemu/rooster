@@ -49,6 +49,14 @@ interface UnfilledSlot {
 interface Props {
   periodId: string;
   onAllFilled?: () => void;
+  /**
+   * Called after handleApplyAll successfully applies at least one staged
+   * pick - even a partial apply (some slots still open afterward, so
+   * onAllFilled doesn't fire) changes what's actually assigned. The
+   * assignments list/calendar living in PlannerDashboard have no other way
+   * to notice, since they only ever see the same unchanging periodId.
+   */
+  onAssignmentsChanged?: () => void;
 }
 
 const TELLER_LABELS: Record<string, string> = {
@@ -97,7 +105,7 @@ function draftStorageKey(periodId: string): string {
   return `dienstrooster-fillgaps-draft-${periodId}`;
 }
 
-export function FillGapsPanel({ periodId, onAllFilled }: Props) {
+export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: Props) {
   const [slots, setSlots] = useState<UnfilledSlot[] | null>(null);
   // slot_id -> staged (not yet applied) person_id.
   const [selection, setSelection] = useState<Record<string, string>>({});
@@ -217,6 +225,15 @@ export function FillGapsPanel({ periodId, onAllFilled }: Props) {
       setError(
         `${failures.length} van de ${entries.length} toewijzingen zijn niet gelukt - de rest is toegepast. ${failures.join('; ')}`
       );
+    }
+
+    // At least one of the staged picks actually landed - the planner
+    // dashboard's assignments list/calendar (and its imbalance numbers)
+    // are now stale and have no other way to find out (see
+    // onAssignmentsChanged's own docstring). Skipped when every single one
+    // failed, since nothing actually changed in that case.
+    if (failures.length < entries.length) {
+      onAssignmentsChanged?.();
     }
 
     // Reloading re-derives `slots` from the database and (via load()'s own

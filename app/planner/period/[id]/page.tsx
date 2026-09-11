@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { ExportDialog } from '@/components/ExportDialog';
@@ -44,6 +44,24 @@ export default function PlannerPeriodPage() {
   // regenerate), so without this signal it would keep showing the previous
   // roster's unfilled slots.
   const [rosterVersion, setRosterVersion] = useState(0);
+  // The reverse signal: bumped whenever FillGapsPanel (also here, on the
+  // page) applies staged assignments. PlannerDashboard's own assignments
+  // list/calendar and imbalance numbers otherwise have no way to notice -
+  // they only ever see the same unchanging periodId, same reasoning as
+  // rosterVersion above but in the other direction.
+  const [assignmentsVersion, setAssignmentsVersion] = useState(0);
+  // Stable across renders - FillGapsPanel's own load() is a useCallback
+  // depending on [periodId, onAllFilled], re-run by its useEffect whenever
+  // that identity changes. A fresh inline arrow function here would give
+  // onAllFilled a new identity on every render this causes (bumping
+  // assignmentsVersion IS a render), which would re-run load(), which -
+  // finding the same zero unfilled slots again - calls onAllFilled again:
+  // an infinite fetch loop (the same class of bug useCoverageUpdate's
+  // no-op fix addressed on PreferencesCalendar). useCallback with an empty
+  // dependency array keeps the identity fixed, breaking that cycle.
+  const handleAssignmentsChanged = useCallback(() => {
+    setAssignmentsVersion((v) => v + 1);
+  }, []);
 
   const loadPeriod = async () => {
     try {
@@ -295,7 +313,12 @@ export default function PlannerPeriodPage() {
       )}
 
       {(period.status === 'GEGENEREERD' || period.status === 'GEPUBLICEERD') && (
-        <FillGapsPanel key={rosterVersion} periodId={periodId} />
+        <FillGapsPanel
+          key={rosterVersion}
+          periodId={periodId}
+          onAssignmentsChanged={handleAssignmentsChanged}
+          onAllFilled={handleAssignmentsChanged}
+        />
       )}
 
       {period.status !== 'CONCEPT' && (
@@ -330,6 +353,7 @@ export default function PlannerPeriodPage() {
         periodId={periodId}
         onPeriodChanged={loadPeriod}
         onRosterChanged={() => setRosterVersion((v) => v + 1)}
+        refreshSignal={assignmentsVersion}
       />
     </div>
   );

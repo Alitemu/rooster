@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { csvField, sanitizeFilenamePart } from '@/lib/csv';
 import type { ApiErrorResponse } from '@/types';
 
 const TELLER_LABELS: Record<string, string> = {
@@ -54,17 +55,6 @@ interface Row {
   reden: string | null;
   overrule: string | null;
   door: string;
-}
-
-function csvField(value: string | null): string {
-  return `"${(value ?? '').replace(/"/g, '""')}"`;
-}
-
-// period.naam is free-text, planner-entered with no character restriction -
-// embedded in a quoted Content-Disposition filename below, so a `"` would
-// break out of the quoted string and a CR/LF could corrupt the header.
-function sanitizeFilenamePart(value: string): string {
-  return value.replace(/[\r\n"\\]/g, '_');
 }
 
 function extractOverride(nieuwJson: string | null): string | null {

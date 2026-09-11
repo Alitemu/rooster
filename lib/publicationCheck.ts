@@ -18,7 +18,9 @@ import {
   countSlotsByTeller,
   resolveBands,
   resolveRulesetConfig,
+  type Band,
   type BandsByTeller,
+  type Teller,
 } from '@/lib/rosterBands';
 
 export interface PublicationCheckResult {
@@ -80,17 +82,36 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // total against a single band mixes three unrelated quotas.
   const members = db
     .prepare(
-      `SELECT p.id FROM dienstrooster_pool_membership pm
+      `SELECT p.id, pm.deelnamefactor FROM dienstrooster_pool_membership pm
        JOIN dienstrooster_person p ON p.id = pm.person_id
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
     )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string }>;
+    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{
+    id: string;
+    deelnamefactor: number;
+  }>;
 
-  const bands = resolveBands(
-    resolveRulesetConfig(period),
-    countSlotsByTeller(periodId),
-    members.length
-  );
+  const config = resolveRulesetConfig(period);
+  const bands = resolveBands(config, countSlotsByTeller(periodId), members.length);
+
+  // Under NAAR_RATO, the solver (constraints.add_band_constraints) doesn't
+  // hold a part-timer to the same band as everyone else - it scales
+  // base_min/base_max by their deelnamefactor first (floor/ceil, so a
+  // band's width never collapses to 0 the way rounding both ends the same
+  // way can). This check used to always compare against the flat,
+  // full-time `bands` regardless of distribution_mode, so under NAAR_RATO
+  // it flagged *every* part-timer as "outside their band" - a roster the
+  // solver built correctly could never pass this gate, and the message
+  // it showed (adjust the band, or manually move people) couldn't
+  // actually fix that, since the real target per person was never wrong.
+  const naarRato = config.distributionMode === 'NAAR_RATO';
+  const scaledBand = (teller: Teller, factor: number): Band => {
+    const [baseMin, baseMax] = bands[teller];
+    if (!naarRato) return [baseMin, baseMax];
+    const scaledMin = Math.floor(baseMin * factor);
+    const scaledMax = Math.max(scaledMin, Math.ceil(baseMax * factor));
+    return [scaledMin, scaledMax];
+  };
 
   const perPerson = db
     .prepare(
@@ -124,10 +145,10 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   for (const member of members) {
     for (const teller of TELLERS) {
       const key = `${member.id}|${teller}`;
-      const [baseMin, baseMax] = bands[teller];
+      const [min, max] = scaledBand(teller, member.deelnamefactor);
       const delta = deltas.get(key) || 0;
       const count = counts.get(key) || 0;
-      if (count < baseMin + delta || count > baseMax + delta) bandViolations++;
+      if (count < min + delta || count > max + delta) bandViolations++;
     }
   }
 
@@ -136,8 +157,9 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
       `${bandViolations}x valt een persoon buiten het streefbereik voor een diensttype ` +
         `(avond ${bands.AVOND[0]}-${bands.AVOND[1]}, ` +
         `weekend ${bands.WEEKEND[0]}-${bands.WEEKEND[1]}, ` +
-        `feestdag ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]}). ` +
-        `Pas het streefbereik aan bij de instellingen van deze periode, of wissel handmatig ` +
+        `feestdag ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]}` +
+        (naarRato ? ' - bij naar-rato-verdeling geschaald naar ieders deelnamefactor' : '') +
+        `). Pas het streefbereik aan bij de instellingen van deze periode, of wissel handmatig ` +
         `wie welke dienst draait, en genereer daarna opnieuw`
     );
   }

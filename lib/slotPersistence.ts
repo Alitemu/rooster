@@ -25,6 +25,15 @@ export interface PersistSlotsError {
 
 const REQUIRED_TELLERS = ['AVOND', 'WEEKEND', 'FEESTDAG'] as const;
 
+// CLAUDE.md: all user-facing text is Dutch. Both error messages below
+// reach the planner as-is (open/route.ts and generate-slots/route.ts pass
+// `message` straight through to the client).
+const TELLER_LABELS: Record<(typeof REQUIRED_TELLERS)[number], string> = {
+  AVOND: 'avonddienst',
+  WEEKEND: 'weekenddienst',
+  FEESTDAG: 'feestdagdienst',
+};
+
 /**
  * Idempotent: if the period already has slots, returns their existing
  * counts instead of inserting duplicates.
@@ -62,7 +71,7 @@ export function persistSlotsForPeriod(
     .all(poolId) as Array<{ id: string; teller: string }>;
 
   if (shiftRows.length === 0) {
-    return { success: false, code: 'NO_SHIFT_TYPES', message: 'No shift types defined for this pool' };
+    return { success: false, code: 'NO_SHIFT_TYPES', message: 'Voor deze pool zijn geen diensttypes ingesteld' };
   }
 
   // One shift_type id per counter (a pool may have more than one row per
@@ -81,7 +90,7 @@ export function persistSlotsForPeriod(
     return {
       success: false,
       code: 'MISSING_SHIFT_TYPES',
-      message: `Pool is missing shift types for: ${missingTellers.join(', ')}`,
+      message: `Voor deze pool ontbreken diensttypes voor: ${missingTellers.map((t) => TELLER_LABELS[t]).join(', ')}`,
     };
   }
 

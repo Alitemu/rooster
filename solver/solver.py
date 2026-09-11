@@ -17,7 +17,11 @@ logger = logging.getLogger(__name__)
 class RosterSolver:
     """Main solver orchestrator"""
 
-    def __init__(self, time_limit_seconds: int = 30):
+    # Matches SolverInput.time_limit_seconds' own default in main.py - the
+    # only two real callers (main.py, test_solver.py) always pass this
+    # explicitly, so this default is purely documentation for anyone
+    # instantiating RosterSolver() bare, but it's worth keeping it truthful.
+    def __init__(self, time_limit_seconds: int = 120):
         self.time_limit_seconds = time_limit_seconds
         self.model = None
         self.solver = None

@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { useDialogDismiss } from '@/lib/useDialogDismiss';
 
 interface Period {
   id: string;
@@ -95,6 +96,13 @@ export default function PlannerHomePage() {
   const [purgeError, setPurgeError] = useState<string | null>(null);
 
   useBodyScrollLock(!!deletingPeriod || !!purgingPeriod);
+  // Mirrors each dialog's own Annuleren button disable condition below.
+  const dismissDeleteBackdrop = useDialogDismiss(!!deletingPeriod, () => setDeletingPeriod(null), !deleteBusy);
+  const dismissPurgeBackdrop = useDialogDismiss(
+    !!purgingPeriod,
+    () => setPurgingPeriod(null),
+    !(purgingPeriod !== null && trashActionBusy === purgingPeriod.id)
+  );
 
   const loadData = async () => {
     setLoading(true);
@@ -461,6 +469,7 @@ export default function PlannerHomePage() {
           role="dialog"
           aria-modal="true"
           aria-label="Periode verwijderen"
+          onClick={dismissDeleteBackdrop}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         >
           <div className="card p-6 max-w-md w-full max-h-full overflow-y-auto">
@@ -505,6 +514,7 @@ export default function PlannerHomePage() {
           role="dialog"
           aria-modal="true"
           aria-label="Periode definitief verwijderen"
+          onClick={dismissPurgeBackdrop}
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         >
           <div className="card p-6 max-w-md w-full max-h-full overflow-y-auto">

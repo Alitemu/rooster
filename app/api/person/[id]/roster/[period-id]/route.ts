@@ -50,7 +50,7 @@ export async function GET(
 
     if (period.status !== 'GEPUBLICEERD') {
       return NextResponse.json(
-        { success: false, error: 'Roster not yet published' },
+        { success: false, error: 'Rooster is nog niet gepubliceerd' },
         { status: 403 }
       );
     }
@@ -63,6 +63,7 @@ export async function GET(
           a.id,
           a.slot_id,
           s.datum,
+          s.iso_jaar,
           s.iso_week,
           s.shift_type_id,
           st.teller,
@@ -115,8 +116,9 @@ export async function GET(
     const slotCountByTeller = countSlotsByTeller(periodId);
     const activePeople = db
       .prepare(
-        `SELECT COUNT(*) as count FROM dienstrooster_pool_membership
-         WHERE pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+        `SELECT COUNT(*) as count FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
       )
       .get(period.pool_id, period.eind_datum, period.start_datum) as { count: number };
     const baseBands = resolveBands(config, slotCountByTeller, activePeople.count);
@@ -139,8 +141,14 @@ export async function GET(
     };
     for (const teller of TELLERS) {
       const [baseMin, baseMax] = baseBands[teller];
-      const scaledMin = naarRato ? Math.round(baseMin * factor) : baseMin;
-      const scaledMax = naarRato ? Math.max(scaledMin, Math.round(baseMax * factor)) : baseMax;
+      // floor(min)/ceil(max), not round for both - matches
+      // solver/constraints.py's own NAAR_RATO scaling exactly (see the
+      // comment there): rounding both ends the same way can collapse a
+      // part-timer's band to zero width while a full-timer keeps >=1, and
+      // this number is shown to the participant as the actual promise the
+      // solver was building toward, so it must be the same number.
+      const scaledMin = naarRato ? Math.floor(baseMin * factor) : baseMin;
+      const scaledMax = naarRato ? Math.max(scaledMin, Math.ceil(baseMax * factor)) : baseMax;
       const delta = balances[teller];
       targetBands[teller] = { min: scaledMin + delta, max: scaledMax + delta };
     }

@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { useDialogDismiss } from '@/lib/useDialogDismiss';
 
 interface Assignment {
   id: string;
@@ -145,11 +146,14 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   };
 
   useBodyScrollLock(isOpen);
+  // Mirrors the Annuleren button below (disabled={submitting}).
+  const dismissBackdrop = useDialogDismiss(isOpen, onClose, !submitting);
 
   if (!isOpen) return null;
 
   return (
     <div
+      onClick={dismissBackdrop}
       role="dialog"
       aria-modal="true"
       aria-label="Ruilverzoek indienen"

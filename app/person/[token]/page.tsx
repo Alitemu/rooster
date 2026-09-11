@@ -40,6 +40,7 @@ interface RosterData {
     id: string;
     slot_id: string;
     datum: string;
+    iso_jaar: number;
     iso_week: number;
     shift_type_id: string;
     teller: string;
@@ -147,6 +148,14 @@ function PersonalLinkPageContent() {
   });
   const [voorkeurDays, setVoorkeurDays] = useState<VoorkeurDaysSummary>({ total: 0 });
   const [softBlockViolations, setSoftBlockViolations] = useState<SoftBlockViolation[]>([]);
+  // Separate from softBlockViolations (LIEVER_NIET, a soft preference) -
+  // this is an ABSOLUUT block the planner knowingly overrode by hand (see
+  // manual-assign's `warning`/BLOCKED_OVERRIDE). That's a materially
+  // different situation for the participant ("this was supposed to be
+  // impossible for me") and used to be entirely invisible here: this
+  // effect only ever checked for LIEVER_NIET, so an overruled hard block
+  // rendered identically to any other ordinary assigned shift.
+  const [blockedOverrideViolations, setBlockedOverrideViolations] = useState<SoftBlockViolation[]>([]);
   const [parttimeConfirmed, setParttimeConfirmed] = useState(false);
   const [_preferencesChanged, setPreferencesChanged] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -197,26 +206,44 @@ function PersonalLinkPageContent() {
 
             if (preferencesRes.ok) {
               const preferencesInfo = await preferencesRes.json();
+              const preferences = preferencesInfo.data.preferences as Array<{
+                slot_id: string;
+                blocking_level: string | null;
+                source: string;
+              }>;
               const lieverNietSlotIds = new Set(
-                preferencesInfo.data.preferences
-                  .filter((p: { blocking_level: string | null }) => p.blocking_level === 'LIEVER_NIET')
-                  .map((p: { slot_id: string }) => p.slot_id)
+                preferences.filter((p) => p.blocking_level === 'LIEVER_NIET').map((p) => p.slot_id)
               );
-              const violations: SoftBlockViolation[] = rosterInfo.data.assignments
-                .filter((a: { slot_id: string }) => lieverNietSlotIds.has(a.slot_id))
-                .map((a: { datum: string; teller: string }) => ({
-                  datum: a.datum,
-                  teller: a.teller,
-                  date_str: new Date(a.datum).toLocaleDateString('nl-NL'),
-                }));
-              setSoftBlockViolations(violations);
+              // Includes both a manually-set block and a part-time-derived
+              // one - either way, the day was supposed to be off-limits,
+              // and the planner made a deliberate exception (see
+              // manual-assign's BLOCKED_OVERRIDE/PARTTIME_OVERRIDE).
+              const absoluutSlotIds = new Set(
+                preferences.filter((p) => p.blocking_level === 'ABSOLUUT').map((p) => p.slot_id)
+              );
+              const toViolations = (a: { datum: string; teller: string }): SoftBlockViolation => ({
+                datum: a.datum,
+                teller: a.teller,
+                date_str: new Date(a.datum).toLocaleDateString('nl-NL'),
+              });
+              const assignments = rosterInfo.data.assignments as Array<{
+                slot_id: string;
+                datum: string;
+                teller: string;
+              }>;
+              setSoftBlockViolations(
+                assignments.filter((a) => lieverNietSlotIds.has(a.slot_id)).map(toViolations)
+              );
+              setBlockedOverrideViolations(
+                assignments.filter((a) => absoluutSlotIds.has(a.slot_id)).map(toViolations)
+              );
             } else {
-              // Not fatal for the roster view itself, but "liever niet"
-              // violations silently staying empty here would look
-              // identical to "no violations" - the participant has no way
-              // to tell those apart, so say so explicitly instead.
+              // Not fatal for the roster view itself, but both violation
+              // lists silently staying empty here would look identical to
+              // "no violations" - the participant has no way to tell those
+              // apart, so say so explicitly instead.
               setDataLoadWarning(
-                'Kon niet controleren of er diensten zijn toegewezen op dagen die je liever niet wilde werken.'
+                'Kon niet controleren of er diensten zijn toegewezen op dagen die je geblokkeerd had of liever niet wilde werken.'
               );
             }
           } else {
@@ -458,6 +485,7 @@ function PersonalLinkPageContent() {
           periodId={period.id}
           assignedShifts={rosterData.assignments.map((a) => ({
             datum: a.datum,
+            iso_jaar: a.iso_jaar,
             iso_week: a.iso_week,
             teller: a.teller,
           }))}
@@ -485,6 +513,7 @@ function PersonalLinkPageContent() {
             },
           ]}
           softBlockViolations={softBlockViolations}
+          blockedOverrideViolations={blockedOverrideViolations}
         />
       )}
 

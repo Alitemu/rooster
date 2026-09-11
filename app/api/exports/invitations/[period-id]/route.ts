@@ -15,22 +15,8 @@ import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
+import { csvField, sanitizeFilenamePart } from '@/lib/csv';
 import type { ApiErrorResponse } from '@/types';
-
-// codenaam is free-text, planner-entered with no character restriction -
-// without escaping, an embedded `"` breaks the CSV structure when opened
-// in Excel/Numbers, which can shift columns and pair the wrong personal
-// link with the wrong name in a mail-merge.
-function csvField(value: string): string {
-  return `"${value.replace(/"/g, '""')}"`;
-}
-
-// period.naam is free-text, planner-entered with no character restriction -
-// embedded in a quoted Content-Disposition filename below, so a `"` would
-// break out of the quoted string and a CR/LF could corrupt the header.
-function sanitizeFilenamePart(value: string): string {
-  return value.replace(/[\r\n"\\]/g, '_');
-}
 
 export async function GET(
   req: NextRequest,

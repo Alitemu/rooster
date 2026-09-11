@@ -17,6 +17,7 @@ import { SwapManagementPanel } from './SwapManagementPanel';
 
 interface AssignedShift {
   datum: string;
+  iso_jaar: number;
   iso_week: number;
   teller: string; // AVOND, WEEKEND, FEESTDAG
 }
@@ -41,6 +42,17 @@ interface Props {
   assignedShifts: AssignedShift[];
   balances: BalanceDisplay[];
   softBlockViolations?: SoftBlockViolation[];
+  // A hard block (ABSOLUUT) the planner knowingly overrode by hand - a
+  // materially different situation from softBlockViolations (LIEVER_NIET,
+  // never a hard rule to begin with), so shown as its own, more urgent
+  // notice rather than folded into the same list.
+  blockedOverrideViolations?: SoftBlockViolation[];
+}
+
+interface WeekGroup {
+  isoJaar: number;
+  isoWeek: number;
+  shifts: string[];
 }
 
 export function PersonalRosterView({
@@ -49,22 +61,28 @@ export function PersonalRosterView({
   assignedShifts,
   balances,
   softBlockViolations = [],
+  blockedOverrideViolations = [],
 }: Props) {
-  const [weekView, setWeekView] = useState<Map<string, string[]>>(new Map());
+  const [weekView, setWeekView] = useState<Map<string, WeekGroup>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [showSwapManagement, setShowSwapManagement] = useState(false);
   const [swapSuccessMessage, setSwapSuccessMessage] = useState(false);
 
-  // Group shifts by ISO week
+  // Group shifts by ISO week - keyed on (iso_jaar, iso_week) together, not
+  // iso_week alone: a period spanning a year boundary (e.g. October to
+  // March) reuses week numbers 1-12 from the new year right after week
+  // 40-52 of the old one, so week alone can't tell two different weeks
+  // apart or sort them correctly (a plain numeric sort put January before
+  // December).
   useEffect(() => {
-    const grouped = new Map<string, string[]>();
+    const grouped = new Map<string, WeekGroup>();
 
     for (const shift of assignedShifts) {
-      const key = `${shift.iso_week}`;
+      const key = `${shift.iso_jaar}-${shift.iso_week}`;
       if (!grouped.has(key)) {
-        grouped.set(key, []);
+        grouped.set(key, { isoJaar: shift.iso_jaar, isoWeek: shift.iso_week, shifts: [] });
       }
-      grouped.get(key)!.push(`${shift.datum}/${shift.teller}`);
+      grouped.get(key)!.shifts.push(`${shift.datum}/${shift.teller}`);
     }
 
     setWeekView(grouped);
@@ -95,6 +113,9 @@ export function PersonalRosterView({
 
   const softBlockSet = new Set(
     softBlockViolations.map((v) => `${v.datum}/${v.teller}`)
+  );
+  const blockedOverrideSet = new Set(
+    blockedOverrideViolations.map((v) => `${v.datum}/${v.teller}`)
   );
 
   return (
@@ -129,6 +150,38 @@ export function PersonalRosterView({
         </div>
       </div>
 
+      {/* Overruled hard-block warning - shown before the softer "liever
+          niet" notice below since this is the more urgent of the two: it
+          was supposed to be impossible, and the planner made a deliberate
+          exception (see manual-assign's BLOCKED_OVERRIDE/PARTTIME_OVERRIDE). */}
+      {blockedOverrideViolations.length > 0 && (
+        <div className="card p-4 bg-red-50 border-2 border-red-300">
+          <div className="flex gap-3">
+            <span className="text-xl">🚫</span>
+            <div>
+              <p className="font-semibold text-red-900">
+                Ingedeeld op een dag die je had geblokkeerd
+              </p>
+              <p className="text-sm text-red-800 mt-1">
+                De roosteraar heeft je bewust ingedeeld op {blockedOverrideViolations.length}{' '}
+                dag(en) die je had geblokkeerd. Neem contact op met de roosteraar als dit niet
+                klopt.
+              </p>
+              <ul className="text-sm text-red-800 mt-2 space-y-1">
+                {blockedOverrideViolations.slice(0, 5).map((v) => (
+                  <li key={`${v.datum}-${v.teller}`}>
+                    • {v.date_str} ({counterDisplayName[v.teller]})
+                  </li>
+                ))}
+                {blockedOverrideViolations.length > 5 && (
+                  <li>• ... en {blockedOverrideViolations.length - 5} meer</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Soft-block violations warning */}
       {softBlockViolations.length > 0 && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
@@ -161,28 +214,32 @@ export function PersonalRosterView({
       <div className="card p-6">
         <h3 className="font-bold text-lg mb-4">Diensten per week</h3>
         <div className="space-y-4">
-          {Array.from(weekView.entries())
-            .sort((a, b) => parseInt(a[0]) - parseInt(b[0]))
-            .map(([week, shifts]) => (
-              <div key={week} className="border-b pb-4 last:border-b-0">
-                <h4 className="font-semibold text-neutral-800 mb-2">Week {week}</h4>
+          {Array.from(weekView.values())
+            .sort((a, b) => a.isoJaar * 100 + a.isoWeek - (b.isoJaar * 100 + b.isoWeek))
+            .map((group) => (
+              <div key={`${group.isoJaar}-${group.isoWeek}`} className="border-b pb-4 last:border-b-0">
+                <h4 className="font-semibold text-neutral-800 mb-2">Week {group.isoWeek}</h4>
                 <div className="grid grid-cols-7 gap-2">
-                  {shifts.map((shift) => {
+                  {group.shifts.map((shift) => {
                     const [datum, teller] = shift.split('/');
                     const date = parseISO(datum);
                     const dayName = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'][
                       date.getDay()
                     ];
+                    const isBlockedOverride = blockedOverrideSet.has(shift);
                     const isSoftBlocked = softBlockSet.has(shift);
 
                     return (
                       <div
                         key={shift}
                         className={`p-2 rounded text-center text-xs ${
-                          isSoftBlocked
-                            ? 'bg-amber-100 border border-amber-300'
-                            : 'bg-blue-100 border border-blue-300'
+                          isBlockedOverride
+                            ? 'bg-red-100 border-2 border-red-400'
+                            : isSoftBlocked
+                              ? 'bg-amber-100 border border-amber-300'
+                              : 'bg-blue-100 border border-blue-300'
                         }`}
+                        title={isBlockedOverride ? 'Geblokkeerde dag toch toegewezen' : undefined}
                       >
                         <div className="font-bold text-neutral-900">
                           {dayName} {date.getDate()}

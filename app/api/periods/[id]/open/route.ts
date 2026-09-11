@@ -171,11 +171,18 @@ export async function POST(
     // A period with nobody active to fill it isn't a mistake the planner
     // would want to discover only after publishing an empty roster - same
     // overlap check the pool-members list and the capacity check already
-    // use for "active in this period".
+    // use for "active in this period". Also requires p.actief = 1, same as
+    // every other "who's really available for this period" query
+    // (generate-roster, capacity, publish, ...) - a deactivated person
+    // with a still-open-ended membership window used to count here even
+    // though nothing else in the app would ever actually schedule them,
+    // so this check could pass while generate-roster's own "geen actieve
+    // poolleden" check then failed right after opening.
     const activeStaffCount = db
       .prepare(
-        `SELECT COUNT(*) as count FROM dienstrooster_pool_membership
-         WHERE pool_id = ? AND geldig_vanaf <= ? AND (geldig_tot IS NULL OR geldig_tot >= ?)`
+        `SELECT COUNT(*) as count FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
       )
       .get(period.pool_id, eind_datum, start_datum) as { count: number };
 

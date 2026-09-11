@@ -9,6 +9,7 @@
 
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { useDialogDismiss } from '@/lib/useDialogDismiss';
 
 interface RulesetConfig {
   windowWeeks: number;
@@ -79,6 +80,15 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const [error, setError] = useState<string | null>(null);
   const [rulesetLoading, setRulesetLoading] = useState(false);
   const [ruleset, setRuleset] = useState<RulesetConfig | null>(null);
+  // The last value actually confirmed to be on the server - either just
+  // loaded, or just PATCHed. Compared against `ruleset` in handleGenerate
+  // so a plain "opnieuw genereren"/"langer proberen" click (nothing
+  // edited) can skip the PATCH entirely: that PATCH unconditionally
+  // demotes a GEGENEREERD period back to OPEN (see ruleset/route.ts) even
+  // when nothing actually changed, which briefly hides the very
+  // assignments/gap-filling UI this dialog's result is about to report on
+  // if the generate call after it fails for any reason.
+  const [originalRuleset, setOriginalRuleset] = useState<RulesetConfig | null>(null);
   const [rulesetError, setRulesetError] = useState<string | null>(null);
   const [rulesetRowVersion, setRulesetRowVersion] = useState<number | null>(null);
   // Not a hard rule - a planner can always generate early, e.g. once it's
@@ -109,12 +119,14 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         if (cancelled) return;
         const raw = data?.data?.bevroren_ruleset_json;
         const parsed = raw ? JSON.parse(raw) : {};
-        setRuleset({
+        const loaded: RulesetConfig = {
           windowWeeks: typeof parsed.windowWeeks === 'number' ? parsed.windowWeeks : 2,
           bandAvond: Array.isArray(parsed.bandAvond) ? parsed.bandAvond : [7, 8],
           bandWeekend: Array.isArray(parsed.bandWeekend) ? parsed.bandWeekend : [2, 3],
           bandFeestdag: Array.isArray(parsed.bandFeestdag) ? parsed.bandFeestdag : [1, 2],
-        });
+        };
+        setRuleset(loaded);
+        setOriginalRuleset(loaded);
         setRulesetRowVersion(
           typeof data?.data?.row_version === 'number' ? data.data.row_version : null
         );
@@ -159,7 +171,13 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     setPendingTimeLimitSeconds(timeLimitSeconds ?? null);
 
     try {
-      if (ruleset) {
+      // Only send the PATCH when the fields actually differ from what's
+      // already on the server - see originalRuleset's comment. This is
+      // what makes "opnieuw genereren" and "langer proberen" (which call
+      // this with the same `ruleset` every time, since the fields are
+      // hidden once a result exists) not demote-then-repromote the period
+      // on every single click.
+      if (ruleset && JSON.stringify(ruleset) !== JSON.stringify(originalRuleset)) {
         const rulesetRes = await fetch(`/api/periods/${periodId}/ruleset`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -175,6 +193,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         if (typeof rulesetData?.data?.row_version === 'number') {
           setRulesetRowVersion(rulesetData.data.row_version);
         }
+        setOriginalRuleset(ruleset);
       }
 
       const res = await fetch(`/api/planner/period/${periodId}/generate-roster`, {
@@ -193,6 +212,15 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       const data = await res.json();
       setResult(data.data);
       setLastTimeLimitSeconds(timeLimitSeconds ?? null);
+      // generate-roster bumps row_version once more on top of any PATCH
+      // above (it moves the period to/through GEGENEREERD) - without this,
+      // the *next* PATCH or generate call in this same dialog session (a
+      // second "opnieuw genereren", or "langer proberen") would submit a
+      // version that's already one behind and get rejected as a conflict
+      // that was actually just this same request.
+      if (typeof data?.data?.row_version === 'number') {
+        setRulesetRowVersion(data.data.row_version);
+      }
 
       if (onSuccess) {
         onSuccess();
@@ -214,6 +242,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   };
 
   useBodyScrollLock(isOpen);
+  // Same condition as the Annuleren button below (disabled={loading}) -
+  // Escape/backdrop-click must not be able to dismiss the dialog mid-solve
+  // and leave the generate call's result with nowhere to land.
+  const dismissBackdrop = useDialogDismiss(isOpen, handleClose, !loading);
 
   // The step-up offered after a FEASIBLE result: 120s (the default, tracked
   // as null) -> 300s -> 600s -> no further offer. Matches the two extra
@@ -223,6 +255,16 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const nextTimeLimitSeconds =
     lastTimeLimitSeconds === null ? 300 : lastTimeLimitSeconds === 300 ? 600 : null;
 
+  // Catches the mistake client-side before a round trip - the server
+  // rejects the same thing (ruleset/route.ts's isValidBand), but with the
+  // fields sitting right there it's better to point at exactly which one
+  // is wrong than to send it off and get a generic error back.
+  const bandInvalid =
+    !!ruleset &&
+    (ruleset.bandAvond[0] > ruleset.bandAvond[1] ||
+      ruleset.bandWeekend[0] > ruleset.bandWeekend[1] ||
+      ruleset.bandFeestdag[0] > ruleset.bandFeestdag[1]);
+
   if (!isOpen) return null;
 
   return (
@@ -230,6 +272,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       role="dialog"
       aria-modal="true"
       aria-label="Rooster genereren"
+      onClick={dismissBackdrop}
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
     >
       <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-full flex flex-col">
@@ -322,6 +365,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         );
                       })}
                     </div>
+                    {bandInvalid && (
+                      <p className="text-xs text-red-600">
+                        Min mag niet groter zijn dan max - controleer de streefbereiken hierboven.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
@@ -482,7 +530,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
               </button>
               <button
                 onClick={() => handleGenerate()}
-                disabled={loading}
+                disabled={loading || bandInvalid}
+                title={bandInvalid ? 'Los eerst de ongeldige streefbereiken hierboven op' : undefined}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
                 {loading ? 'Bezig met genereren...' : 'Genereren'}
@@ -494,7 +543,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
             <>
               <button
                 onClick={() => handleGenerate()}
-                disabled={loading}
+                disabled={loading || bandInvalid}
+                title={bandInvalid ? 'Los eerst de ongeldige streefbereiken hierboven op' : undefined}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
                 {loading ? 'Opnieuw genereren...' : 'Opnieuw genereren'}
