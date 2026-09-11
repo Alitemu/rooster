@@ -371,11 +371,19 @@ export function SetupWizard({ period, onComplete }: Props) {
       return Object.keys(patch).length > 0 ? patch : null;
     }
     // Deactivate: end the membership just before this period starts, or if
-    // it was due to start during/after this period, push the start past it.
-    if (member.geldig_vanaf <= start_datum) {
+    // it started on/after this period's start (nothing "before" to
+    // preserve), push the start past it instead.
+    if (member.geldig_vanaf < start_datum) {
       return { geldig_tot: addDays(start_datum, -1) };
     }
-    return { geldig_vanaf: addDays(eind_datum, 1) };
+    const newVanaf = addDays(eind_datum, 1);
+    const patch: { geldig_vanaf?: string; geldig_tot?: string } = { geldig_vanaf: newVanaf };
+    // geldig_tot may already sit at eind_datum (e.g. set by the activation
+    // patch above) - without this it would end up before the new vanaf.
+    if (member.geldig_tot && member.geldig_tot < newVanaf) {
+      patch.geldig_tot = newVanaf;
+    }
+    return patch;
   };
 
   const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }) =>
