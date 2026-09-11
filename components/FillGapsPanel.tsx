@@ -3,9 +3,14 @@
 /**
  * Fill Gaps Panel
  *
- * Shows shift slots the solver couldn't fully cover (capacity/band limits
- * are soft constraints - see solver/constraints.py) and lets the planner
- * stage someone for each one, in consultation with the person on duty,
+ * Shows shift slots nobody is assigned to yet - either because the solver
+ * hasn't run for this period at all (a planner can pre-fill strong
+ * preferences, e.g. a holiday, before generating - see
+ * generate-roster/route.ts's manual_assignments handling for why the
+ * solver then respects them), or because it ran but couldn't fully cover
+ * them (capacity/band limits are soft constraints - see
+ * solver/constraints.py). Either way lets the planner stage someone for
+ * each one, in consultation with the person on duty,
  * before committing anything. Picking someone in the dropdown only stages
  * a draft choice (kept in this browser's localStorage so it survives a
  * reload or coming back later) - the day stays listed as unfilled, and
@@ -278,9 +283,11 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
         ⚠️ {slots.length} dienst{slots.length === 1 ? '' : 'en'} nog niet ingevuld
       </h3>
       <p className="text-sm text-amber-800 mb-4">
-        De solver kon hiervoor niemand vinden binnen de ingestelde grenzen. Kies hieronder rustig
-        iemand per dienst - dit wordt pas echt toegewezen zodra je op &quot;Alle toewijzingen
-        toepassen&quot; klikt, dus je kunt gerust wachten op een reactie voordat je doorgaat.
+        Deze diensten hebben nog niemand toegewezen - bijvoorbeeld omdat de solver nog niet is
+        gedraaid, of omdat er binnen de ingestelde grenzen niemand beschikbaar was. Kies hieronder
+        rustig iemand per dienst - dit wordt pas echt toegewezen zodra je op &quot;Alle
+        toewijzingen toepassen&quot; klikt, dus je kunt gerust wachten op een reactie voordat je
+        doorgaat.
       </p>
 
       {error && (

@@ -52,6 +52,7 @@ interface DashboardData {
   large_balance_threshold: number;
   total_staff: number;
   staff_with_parttime: number;
+  assignment_count: number;
 }
 
 interface Props {
@@ -222,6 +223,28 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
     FEESTDAG: 'feestdagdienst',
   };
 
+  // Once GEGENEREERD/GEPUBLICEERD, the solver has run - status alone
+  // already answers "how is this roster filled". Before that, the only
+  // possible source is a planner's own manual pre-fill (see
+  // generate-roster/route.ts's manual_assignments handling for why doing
+  // that before generating is safe: the solver respects it).
+  const isGenerated = dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD';
+  const rosterFillState: 'LEEG' | 'HANDMATIG_DEELS' | 'AUTOMATISCH' = isGenerated
+    ? 'AUTOMATISCH'
+    : dashboard.assignment_count > 0
+      ? 'HANDMATIG_DEELS'
+      : 'LEEG';
+  const rosterHeading: Record<typeof rosterFillState, string> = {
+    LEEG: 'Dienstrooster (nog niet ingevuld)',
+    HANDMATIG_DEELS: 'Dienstrooster (handmatig deels ingevuld)',
+    AUTOMATISCH: 'Dienstrooster (automatisch ingevuld)',
+  };
+  const generateButtonLabel: Record<typeof rosterFillState, string> = {
+    LEEG: '🚀 Rooster genereren met solver',
+    HANDMATIG_DEELS: '🚀 Rooster aanvullen met solver',
+    AUTOMATISCH: '🔄 Rooster opnieuw genereren met solver',
+  };
+
   return (
     <div className="space-y-6">
       {actionError && (
@@ -384,7 +407,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
               }
               className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
             >
-              {dashboard.status === 'GEGENEREERD' ? '🔄 Rooster opnieuw genereren met solver' : '🚀 Rooster genereren met solver'}
+              {generateButtonLabel[rosterFillState]}
             </button>
             {dashboard.status === 'GEGENEREERD' && (
               <button
@@ -417,11 +440,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
         </div>
       </div>
 
-      {/* Assignments */}
-      {(dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD') && (
+      {/* Assignments - visible from OPEN onward (not just after the solver
+          has run) so a planner can pre-fill strong preferences by hand
+          before generating; CONCEPT stays excluded since no shift_slot
+          rows exist yet at that point. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <h3 className="font-bold text-lg">Toewijzingen</h3>
+            <h3 className="font-bold text-lg">{rosterHeading[rosterFillState]}</h3>
             <div className="flex items-center gap-2">
               {showAssignments && (
                 <div className="inline-flex rounded overflow-hidden border border-neutral-300">
@@ -473,7 +499,19 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
                 }}
               />
             ) : (
-              <AssignmentCalendar key={assignmentsRefreshKey} periodId={periodId} />
+              <AssignmentCalendar
+                key={assignmentsRefreshKey}
+                periodId={periodId}
+                periodStatus={dashboard.status}
+                onChanged={() => {
+                  // Same reasoning as AssignmentGrid's onChanged above - a
+                  // right-click assign/reassign/remove here can open or
+                  // close a gap FillGapsPanel needs to know about, and can
+                  // change this dashboard's own imbalance/staff numbers.
+                  loadData();
+                  onRosterChanged?.();
+                }}
+              />
             )
           )}
         </div>

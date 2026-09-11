@@ -53,7 +53,7 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
 
 
 def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None,
-          preferred=None, prior=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
+          preferred=None, prior=None, manual=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
           participation_factors=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
           holiday_spread_weeks=0):
     """Run the full pipeline with wide-open bands unless told otherwise."""
@@ -70,6 +70,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         window_weeks=window_weeks,
         preferred_slots=preferred or {},
         prior_assignments=prior or [],
+        manual_assignments=manual or [],
         soft_block_penalty=soft_block_penalty,
         distribution_mode=distribution_mode,
         participation_factors=participation_factors,
@@ -728,3 +729,74 @@ def test_holiday_spread_prior_carry_over_ignores_non_feestdag_shifts():
     assert len(result['assignments']) == 1, (
         f'a prior AVOND shift must not block a FEESTDAG slot via holiday spread: {result["assignments"]}'
     )
+
+
+def test_window_rule_respects_a_manual_assignment_within_this_period():
+    """
+    A planner can manually pre-fill a slot (e.g. a strong holiday
+    preference) before the solver ever runs. generate-roster/route.ts
+    excludes that slot from `slots` so the solver can't double-fill it,
+    but the solver still has to know the person is already committed on
+    that date for the window rule - otherwise it could hand them another
+    shift right next to one they're already working. manual_assignments
+    is exactly this: one slot a single week after a manual assignment,
+    windowWeeks=2 - the only candidate must be left unassigned rather than
+    double-booked within the window, the same way prior_assignments
+    (the previous *period's* tail) already works.
+    """
+    slots = make_slots(1, start_year=2027, start_week=2)  # lone slot in week 2, 2027
+    manual = [{'person_id': 'p1', 'datum': '2027-01-04', 'teller': 'AVOND'}]  # p1 already has a manual shift week 1
+
+    result = solve(['p1'], slots, window_weeks=2, manual=manual)
+
+    assert result['assignments'] == [], (
+        f"window rule ignored a within-period manual assignment: {result['assignments']}"
+    )
+    assert len(result['diagnostics']['unfilled_slots']) == 1
+
+
+def test_band_target_is_reduced_by_an_existing_manual_assignment():
+    """
+    If a person already has a manually-assigned AVOND shift this period
+    before the solver runs, the solver's own decisions must target the
+    *remaining* band, not the full one on top of it - otherwise it would
+    independently chase the full target too, and the real total (manual +
+    solver) would blow straight past the configured band without that ever
+    showing up as a violation (the solver's own band-slack bookkeeping
+    only ever sees its own decisions, never the manual one).
+
+    Two people, base band [1,1], two AVOND slots. p1 has one manual AVOND
+    shift already; p2 has a +1 AVOND ledger balance instead (same
+    mechanism band-wise, just via the other existing input) so their
+    *effective* targets become p1=[0,0] (1 base - 1 already assigned) and
+    p2=[2,2] (1 base + 1 delta). With those targets, p1=0/p2=2 is the
+    *unique* zero-slack split of the 2 slots (both other splits - 1/1 and
+    2/0 - cost strictly more, see the arithmetic below), so this isn't a
+    tie CP-SAT could break either way by chance - it's the one clearly
+    cheapest answer, and only reachable if the manual assignment actually
+    reduced p1's target the way it's meant to:
+      - (p1=0, p2=2): p1 exact (0 slack), p2 exact (0 slack) -> total 0
+      - (p1=1, p2=1): p1 +1 over, p2 -1 under -> total 2
+      - (p1=2, p2=0): p1 +2 over, p2 -2 under -> total 4
+    """
+    slots = make_slots(2, teller='AVOND', start_year=2027, start_week=3)
+    # A full two ISO weeks before the earliest slot - well outside
+    # window_weeks=1, so this only tests the band, not the window rule.
+    manual = [{'person_id': 'p1', 'datum': '2027-01-04', 'teller': 'AVOND'}]
+    balances = {
+        'p1': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p2': {'AVOND': 1, 'WEEKEND': 0, 'FEESTDAG': 0},
+    }
+
+    result = solve(
+        ['p1', 'p2'], slots, window_weeks=1,
+        band={'AVOND': [1, 1], 'WEEKEND': [0, len(slots)], 'FEESTDAG': [0, len(slots)]},
+        balances=balances, manual=manual,
+    )
+
+    counts = {p: sum(1 for a in result['assignments'] if a['person_id'] == p) for p in ['p1', 'p2']}
+    assert counts == {'p1': 0, 'p2': 2}, (
+        f"expected the unique zero-slack split (p1=0 - target already met by the manual "
+        f"assignment, p2=2), got {counts}"
+    )
+    assert result['diagnostics']['violations']['band_limit'] == 0

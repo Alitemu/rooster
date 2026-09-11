@@ -198,6 +198,19 @@ class SolverInput(BaseModel):
     rules: RuleSet
     balances: dict[str, dict[str, int]]
     prior_assignments: list[PriorAssignment] = []
+    # Shifts a planner already assigned by hand *within* this period,
+    # before this solve ran (e.g. a strong preference for a holiday, locked
+    # in while the period was still OPEN). Reuses PriorAssignment's shape
+    # (person_id/datum/teller) but is kept as a separate field on purpose:
+    # prior_assignments specifically means "before this period" (the
+    # previous period's tail); this means "within this period, already
+    # fixed". The slots these refer to are never in `slots` above (the
+    # caller excludes them so this solve can't double-fill them), so
+    # without this field the solver would have no way to know they exist -
+    # see solver.py's build_model for how both lists feed the window/
+    # holiday-spread constraints, and constraints.add_band_constraints for
+    # how this one alone also tightens the remaining band target.
+    manual_assignments: list[PriorAssignment] = []
     # person_id -> pool_membership.deelnamefactor (e.g. 0.5 for half-time).
     # Only consulted when rules.distribution_mode == "NAAR_RATO" - see
     # constraints.add_band_constraints.
@@ -300,6 +313,9 @@ async def solve_roster(request: SolverInput):
     - balances: Current balance per person per counter
     - prior_assignments: Confirmed tail of the previous period, so the
       window rule carries over across the period boundary
+    - manual_assignments: Shifts already assigned by hand within this
+      period, before this solve - respected by the window rule and the
+      band target the same way prior_assignments are
 
     Returns:
     - assignments: List of person-slot pairings
@@ -366,6 +382,7 @@ async def solve_roster(request: SolverInput):
             window_weeks=request.rules.window_weeks,
             preferred_slots=preferred_slots,
             prior_assignments=[p.model_dump() for p in request.prior_assignments],
+            manual_assignments=[p.model_dump() for p in request.manual_assignments],
             soft_block_penalty=request.rules.soft_block_penalty,
             distribution_mode=request.rules.distribution_mode,
             participation_factors=request.participation_factors,

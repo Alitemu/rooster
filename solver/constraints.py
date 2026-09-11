@@ -337,13 +337,23 @@ class ConstraintBuilder:
         balances: dict[str, dict[str, int]],  # person -> { counter: delta }
         counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
         distribution_mode: str = 'GELIJK',
-        participation_factors: Optional[dict[str, float]] = None
+        participation_factors: Optional[dict[str, float]] = None,
+        already_assigned: Optional[dict[str, dict[str, int]]] = None
     ) -> dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]]:
         """
         Constraint: Each person must have assignments in band range per counter.
 
         Band is adjusted by ledger balance:
         actual_band = [base_min + delta, base_max + delta]
+
+        already_assigned (person -> {counter: count}) further reduces both
+        ends by however many of that counter the person already has within
+        THIS period from a manual pre-fill before the solver ran (see
+        main.py's manual_assignments) - those slots are never in `slots`
+        here (the caller excludes them from the solve entirely), so without
+        this the solver would independently chase the *full* band on top of
+        a shift the person already has, blowing right past the target
+        instead of completing it.
 
         With distribution_mode='NAAR_RATO', base_min/base_max are first
         scaled by the person's participation_factors entry (their
@@ -389,8 +399,9 @@ class ConstraintBuilder:
 
                 # Get person's balance for this counter
                 delta = balances.get(person_id, {}).get(counter, 0)
-                actual_min = base_min + delta
-                actual_max = base_max + delta
+                already = already_assigned.get(person_id, {}).get(counter, 0) if already_assigned else 0
+                actual_min = base_min + delta - already
+                actual_max = base_max + delta - already
 
                 # Slots matching this counter
                 counter_vars = [

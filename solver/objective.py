@@ -102,7 +102,8 @@ class ObjectiveBuilder:
         weight: float = 0.5,
         counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
         distribution_mode: str = 'GELIJK',
-        participation_factors: Optional[dict[str, float]] = None
+        participation_factors: Optional[dict[str, float]] = None,
+        already_assigned: Optional[dict[str, dict[str, int]]] = None
     ):
         """
         Objective: Prefer assignments toward middle of band range.
@@ -119,13 +120,17 @@ class ObjectiveBuilder:
         nothing. Workload came out visibly lopsided (1/2/3 shifts across
         three interchangeable people) while the code claimed to balance it.
 
-        distribution_mode/participation_factors mirror
+        distribution_mode/participation_factors/already_assigned all mirror
         constraints.add_band_constraints exactly - this term has to pull
         toward the *same* scaled middle that term constrains against, or a
         part-timer's target here would silently disagree with their actual
         band there, and this (much smaller) weight would just get
         overruled by the band-slack term picking whichever allocation this
-        one didn't prefer.
+        one didn't prefer. Without the already_assigned offset specifically,
+        this term would keep pulling toward the *full* band's middle even
+        for someone who already has a manually pre-filled shift this period,
+        fighting against the (correctly offset) hard constraint instead of
+        agreeing with it.
         """
         imbalance_cost = 0
         factors = participation_factors or {}
@@ -146,9 +151,10 @@ class ObjectiveBuilder:
                     base_max = max(base_min, math.ceil(base_max * factor))
 
                 delta = balances.get(person_id, {}).get(counter, 0)
+                already = already_assigned.get(person_id, {}).get(counter, 0) if already_assigned else 0
 
-                actual_min = base_min + delta
-                actual_max = base_max + delta
+                actual_min = base_min + delta - already
+                actual_max = base_max + delta - already
                 # Integer target - CP-SAT variable bounds must be integers
                 target = (actual_min + actual_max) // 2
 

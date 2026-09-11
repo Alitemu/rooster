@@ -65,13 +65,10 @@ export async function POST(
       );
     }
 
-    // Same whitelist as manual-assign - a reassign is only meaningful
-    // once a roster actually exists (GEGENEREERD/GEPUBLICEERD). Without
-    // this, an assignment left over after a ruleset edit demotes the
-    // period back to OPEN (see ruleset/route.ts) could still be
-    // reassigned while the period nominally sits in an input-collection
-    // status the UI presents as "not yet rostered".
-    if (!['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
+    // Same whitelist as manual-assign - CONCEPT excluded (no slots yet),
+    // OPEN/GESLOTEN included so a manually pre-filled slot can still be
+    // swapped to someone else before the solver ever runs.
+    if (!['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
       return NextResponse.json(
         { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
         { status: 400 }

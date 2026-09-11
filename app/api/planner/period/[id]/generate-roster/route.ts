@@ -298,6 +298,29 @@ async function runGeneration(args: {
       )
       .all(periodId) as Array<{ person_id: string; datum: string; teller: string }>;
 
+    // Shifts a planner already filled in by hand *within* this period,
+    // before the solver ran (e.g. a strong preference for a holiday). These
+    // slots are already excluded from `slots` above so the solver can't
+    // double-fill them, but without this the solver would otherwise have no
+    // idea they exist - it could still hand the same person another shift
+    // right next to one they're already committed to (window rule), or
+    // independently chase their *full* band target on top of the one they
+    // already have (streefbereik). Sent as a separate field from
+    // `prior_assignments` - that one specifically means "before this
+    // period" (the previous period's tail); this is "within this period,
+    // already fixed" - see solver/main.py's SolverInput for how both feed
+    // the same window/holiday-spread logic, and constraints.py's
+    // add_band_constraints for how this one alone also tightens the band.
+    const manualAssignmentRows = db
+      .prepare(
+        `SELECT a.person_id, s.datum, st.teller
+         FROM dienstrooster_assignment a
+         JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE a.schedule_version_id = ? AND a.bron IN ('MANUAL', 'OVERRIDE')`
+      )
+      .all(periodId) as Array<{ person_id: string; datum: string; teller: string }>;
+
     // Build solver request
     const solverInput = {
       period_id: periodId,
@@ -340,6 +363,11 @@ async function runGeneration(args: {
       },
       balances,
       prior_assignments: priorAssignmentRows.map((r) => ({
+        person_id: r.person_id,
+        datum: r.datum,
+        teller: r.teller,
+      })),
+      manual_assignments: manualAssignmentRows.map((r) => ({
         person_id: r.person_id,
         datum: r.datum,
         teller: r.teller,

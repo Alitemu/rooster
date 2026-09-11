@@ -42,6 +42,7 @@ class RosterSolver:
         window_weeks: int = 2,
         preferred_slots: Optional[dict[tuple[str, str], float]] = None,
         prior_assignments: Optional[list[dict]] = None,
+        manual_assignments: Optional[list[dict]] = None,
         soft_block_penalty: float = 1.0,
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
@@ -84,15 +85,33 @@ class RosterSolver:
             assignment_vars, people, slots, window_weeks
         )
 
+        # prior_assignments (before this period) and manual_assignments
+        # (already fixed within this period, before this solve - see
+        # main.py's SolverInput) are both "immovable facts the window rule
+        # must respect", just with different sources - concatenating them
+        # here has the same effect as calling either constraint function
+        # once per list, since each fact is applied independently.
+        fixed_assignments = (prior_assignments or []) + (manual_assignments or [])
+
         logger.info("Adding prior-period window carry-over constraints")
         constraint_builder.add_prior_assignment_constraints(
-            assignment_vars, slots, prior_assignments or [], window_weeks
+            assignment_vars, slots, fixed_assignments, window_weeks
         )
 
         logger.info("Adding holiday spread constraints")
         constraint_builder.add_holiday_spread_constraints(
-            assignment_vars, people, slots, holiday_spread_weeks, prior_assignments or []
+            assignment_vars, people, slots, holiday_spread_weeks, fixed_assignments
         )
+
+        # Per-person/counter counts of manual_assignments only (not
+        # prior_assignments, which are from a previous period and don't
+        # count toward *this* period's band target) - passed to the band
+        # constraint/objective below so they target the remaining shots
+        # only, not the full band on top of what's already assigned.
+        already_assigned: dict[str, dict[str, int]] = {}
+        for fact in (manual_assignments or []):
+            person_counts = already_assigned.setdefault(fact['person_id'], {})
+            person_counts[fact['teller']] = person_counts.get(fact['teller'], 0) + 1
 
         logger.info("Adding blocking absolute constraints")
         constraint_builder.add_blocking_absolute_constraints(
@@ -107,7 +126,8 @@ class RosterSolver:
         logger.info("Adding band limit constraints")
         band_slack_vars = constraint_builder.add_band_constraints(
             assignment_vars, people, slots, band_ranges, balances,
-            distribution_mode=distribution_mode, participation_factors=participation_factors
+            distribution_mode=distribution_mode, participation_factors=participation_factors,
+            already_assigned=already_assigned
         )
 
         # Add objectives
@@ -131,7 +151,8 @@ class RosterSolver:
         logger.info("Adding band imbalance objective")
         imbalance_cost = objective_builder.add_band_imbalance_objective(
             assignment_vars, people, slots, band_ranges, balances, weight=0.5,
-            distribution_mode=distribution_mode, participation_factors=participation_factors
+            distribution_mode=distribution_mode, participation_factors=participation_factors,
+            already_assigned=already_assigned
         )
 
         logger.info("Adding preference reward objective")
@@ -281,6 +302,7 @@ class RosterSolver:
         window_weeks: int = 2,
         preferred_slots: Optional[dict[tuple[str, str], float]] = None,
         prior_assignments: Optional[list[dict]] = None,
+        manual_assignments: Optional[list[dict]] = None,
         soft_block_penalty: float = 1.0,
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
@@ -298,7 +320,7 @@ class RosterSolver:
             model_data = self.build_model(
                 people, slots, blocked_slots, soft_slots,
                 band_ranges, balances, window_weeks, preferred_slots,
-                prior_assignments, soft_block_penalty,
+                prior_assignments, manual_assignments, soft_block_penalty,
                 distribution_mode, participation_factors,
                 band_deviation_penalty, band_deviation_multiplier,
                 holiday_spread_weeks

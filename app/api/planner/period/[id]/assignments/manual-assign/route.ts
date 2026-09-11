@@ -64,7 +64,13 @@ export async function POST(
       );
     }
 
-    if (!['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
+    // CONCEPT is excluded - shift_slot rows don't exist yet at that point
+    // (they're created when the period opens). OPEN/GESLOTEN are included
+    // deliberately: a planner should be able to lock in a strong preference
+    // (e.g. a holiday) by hand before the solver ever runs, so the solver
+    // sees it as a fixed fact instead of it needing to be corrected
+    // afterward - see generate-roster/route.ts's manual_assignments handling.
+    if (!['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
       return NextResponse.json(
         { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
         { status: 400 }

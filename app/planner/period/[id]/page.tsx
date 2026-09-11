@@ -312,7 +312,7 @@ export default function PlannerPeriodPage() {
         </div>
       )}
 
-      {(period.status === 'GEGENEREERD' || period.status === 'GEPUBLICEERD') && (
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status) && (
         <FillGapsPanel
           key={rosterVersion}
           periodId={periodId}

@@ -34,6 +34,12 @@ interface DashboardData {
   large_balance_threshold: number;
   total_staff: number;
   staff_with_parttime: number;
+  // How many dienstrooster_assignment rows this period already has -
+  // drives the "Dienstrooster (nog niet ingevuld / handmatig deels
+  // ingevuld / automatisch ingevuld)" heading and the generate button's
+  // label before the period reaches GEGENEREERD (once it has, status
+  // alone already answers that question).
+  assignment_count: number;
 }
 
 export async function GET(
@@ -148,6 +154,11 @@ export async function GET(
 
     const totalStaff = totalStaffStmt.get(periodId) as any;
 
+    const assignmentCountStmt = db.prepare(
+      'SELECT COUNT(*) as count FROM dienstrooster_assignment WHERE schedule_version_id = ?'
+    );
+    const assignmentCount = assignmentCountStmt.get(periodId) as any;
+
     const response: ApiSuccessResponse<DashboardData> = {
       success: true,
       data: {
@@ -163,6 +174,7 @@ export async function GET(
         large_balance_threshold: largeBalanceThreshold,
         total_staff: totalStaff?.count || 0,
         staff_with_parttime: parttimeCount?.count || 0,
+        assignment_count: assignmentCount?.count || 0,
       },
     };
 

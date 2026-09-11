@@ -40,13 +40,10 @@ export async function DELETE(
       );
     }
 
-    // Same whitelist as manual-assign/reassign - removing an assignment
-    // is only meaningful once a roster actually exists. Without this, an
-    // assignment left over after a ruleset edit demotes the period back
-    // to OPEN (see ruleset/route.ts) could still be deleted while the
-    // period nominally sits in an input-collection status the UI
-    // presents as "not yet rostered".
-    if (!['GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
+    // Same whitelist as manual-assign/reassign - CONCEPT excluded (no
+    // slots yet), OPEN/GESLOTEN included so a manual pre-fill can still be
+    // undone before the solver ever runs.
+    if (!['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
       return NextResponse.json(
         { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
         { status: 400 }
