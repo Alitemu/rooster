@@ -19,6 +19,7 @@ import { ExportDialog } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
 import { AssignmentGrid } from './AssignmentGrid';
 import { AssignmentCalendar } from './AssignmentCalendar';
+import { StaffingOverview } from './StaffingOverview';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
 
 interface PersonProgress {
@@ -107,7 +108,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
   // they'd keep showing the previous roster until an unrelated prop change
   // happened to remount them.
   const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
-  const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar'>('list');
+  const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar' | 'dienstdoende'>('list');
 
   const loadData = async () => {
     try {
@@ -471,6 +472,16 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
                   >
                     📅 Kalender
                   </button>
+                  <button
+                    onClick={() => setAssignmentsView('dienstdoende')}
+                    className={`px-3 py-1 text-sm font-medium transition-colors border-l border-neutral-300 ${
+                      assignmentsView === 'dienstdoende'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-neutral-700 hover:bg-neutral-100'
+                    }`}
+                  >
+                    🧑‍⚕️ Dienstdoende
+                  </button>
                 </div>
               )}
               <button
@@ -498,7 +509,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
                   onRosterChanged?.();
                 }}
               />
-            ) : (
+            ) : assignmentsView === 'calendar' ? (
               <AssignmentCalendar
                 key={assignmentsRefreshKey}
                 periodId={periodId}
@@ -512,6 +523,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
                   onRosterChanged?.();
                 }}
               />
+            ) : (
+              <StaffingOverview key={assignmentsRefreshKey} periodId={periodId} />
             )
           )}
         </div>
