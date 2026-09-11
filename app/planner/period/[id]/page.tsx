@@ -10,7 +10,6 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { ExportDialog } from '@/components/ExportDialog';
-import { RosterGenerationDialog } from '@/components/RosterGenerationDialog';
 import { FillGapsPanel } from '@/components/FillGapsPanel';
 
 interface Period {
@@ -35,11 +34,16 @@ export default function PlannerPeriodPage() {
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeConfirmArmed, setCloseConfirmArmed] = useState(false);
-  const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
+  // Bumped whenever PlannerDashboard's "rooster genereren met solver" dialog
+  // (re)generates a roster - FillGapsPanel lives here, on the page, and its
+  // own fetch effect only depends on periodId (never changes across a
+  // regenerate), so without this signal it would keep showing the previous
+  // roster's unfilled slots.
+  const [rosterVersion, setRosterVersion] = useState(0);
 
   const loadPeriod = async () => {
     try {
@@ -283,29 +287,15 @@ export default function PlannerPeriodPage() {
 
       {period.status === 'GESLOTEN' && (
         <div className="card p-4 bg-blue-50 border border-blue-200">
-          <p className="text-sm text-blue-900 mb-3">
-            Deze periode is gesloten voor nieuwe indieningen. Klaar om het rooster te genereren.
+          <p className="text-sm text-blue-900">
+            Deze periode is gesloten voor nieuwe indieningen. Klaar om het rooster te genereren
+            via &quot;Rooster genereren met solver&quot; hieronder.
           </p>
-          <button
-            onClick={() => setGenerateDialogOpen(true)}
-            className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            🤖 Rooster genereren
-          </button>
         </div>
       )}
 
       {(period.status === 'GEGENEREERD' || period.status === 'GEPUBLICEERD') && (
-        <FillGapsPanel periodId={periodId} />
-      )}
-
-      {period.status === 'GEGENEREERD' && (
-        <button
-          onClick={() => setGenerateDialogOpen(true)}
-          className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-        >
-          🔄 Rooster opnieuw genereren
-        </button>
+        <FillGapsPanel key={rosterVersion} periodId={periodId} />
       )}
 
       {period.status !== 'CONCEPT' && (
@@ -335,15 +325,12 @@ export default function PlannerPeriodPage() {
         initialType="reminders"
       />
 
-      <RosterGenerationDialog
-        periodId={periodId}
-        isOpen={generateDialogOpen}
-        onClose={() => setGenerateDialogOpen(false)}
-        onSuccess={loadPeriod}
-      />
-
       {/* Dashboard */}
-      <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} />
+      <PlannerDashboard
+        periodId={periodId}
+        onPeriodChanged={loadPeriod}
+        onRosterChanged={() => setRosterVersion((v) => v + 1)}
+      />
     </div>
   );
 }

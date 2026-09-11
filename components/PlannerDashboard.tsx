@@ -63,9 +63,16 @@ interface Props {
    * until a manual reload - you publish and the badge still says "Generated".
    */
   onPeriodChanged?: () => void;
+  /**
+   * Called when this dashboard's "rooster genereren met solver" dialog
+   * (re)generates a roster - for page-level pieces (e.g. FillGapsPanel)
+   * that have the same "only knows about periodId, so never notices a
+   * regenerate" staleness problem but live outside this component.
+   */
+  onRosterChanged?: () => void;
 }
 
-export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
+export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }: Props) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [progress, setProgress] = useState<PersonProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +82,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
   const [publicationDialogOpen, setPublicationDialogOpen] = useState(false);
   const [showAssignments, setShowAssignments] = useState(false);
+  // Forces AssignmentGrid/AssignmentCalendar to remount (and so refetch)
+  // after any roster (re)generation - their own fetch effects only depend
+  // on periodId, which never changes across a regenerate, so without this
+  // they'd keep showing the previous roster until an unrelated prop change
+  // happened to remount them.
+  const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
   const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar'>('list');
 
   const loadData = async () => {
@@ -92,6 +105,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       setDashboard(dashData.data);
       setProgress(progData.data);
       setLoading(false);
+      // Any dashboard reload - mount, submit-on-behalf, or the roster
+      // dialog's own onSuccess - also means the assignments list/calendar
+      // could be stale, so remount them together with it rather than
+      // tracking each trigger separately.
+      setAssignmentsRefreshKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Laden van dashboard mislukt');
       setLoading(false);
@@ -388,9 +406,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           </div>
           {showAssignments && (
             assignmentsView === 'list' ? (
-              <AssignmentGrid periodId={periodId} periodStatus={dashboard.status} />
+              <AssignmentGrid key={assignmentsRefreshKey} periodId={periodId} periodStatus={dashboard.status} />
             ) : (
-              <AssignmentCalendar periodId={periodId} />
+              <AssignmentCalendar key={assignmentsRefreshKey} periodId={periodId} />
             )
           )}
         </div>
@@ -402,9 +420,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
         isOpen={rosterDialogOpen}
         onClose={() => setRosterDialogOpen(false)}
         onSuccess={() => {
-          setRosterDialogOpen(false);
-          // Reload dashboard data
+          // Deliberately does NOT close the dialog - it switches to its own
+          // result view (assignments created, solver status, cost) that the
+          // planner needs to actually see; closing here immediately would
+          // hide that report until they reopened the dialog. The dialog's
+          // own "Sluiten" button is how they dismiss it once they've seen it.
           loadData();
+          onPeriodChanged?.();
+          onRosterChanged?.();
         }}
       />
 
