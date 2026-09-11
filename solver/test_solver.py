@@ -54,7 +54,7 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
 
 def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None,
           preferred=None, prior=None, manual=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
-          participation_factors=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
+          participation_factors=None, coverage=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
           holiday_spread_weeks=0):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
@@ -74,6 +74,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         soft_block_penalty=soft_block_penalty,
         distribution_mode=distribution_mode,
         participation_factors=participation_factors,
+        coverage_factors=coverage,
         band_deviation_penalty=band_deviation_penalty,
         band_deviation_multiplier=band_deviation_multiplier,
         holiday_spread_weeks=holiday_spread_weeks,
@@ -528,6 +529,115 @@ def test_naar_rato_scaling_keeps_band_width_at_least_one():
     )
     assert result['diagnostics']['violations'].get('band_limit', 0) == 0, (
         f"3 shifts should fit inside p1's scaled band [3,4] with no band-slack: {result['diagnostics']}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# COVERAGE FACTOR: automatic band scaling for mid-period joiners/leavers
+# ---------------------------------------------------------------------------
+
+def test_coverage_factor_scales_the_band_even_under_gelijk():
+    """
+    Unlike participation_factors (only consulted under NAAR_RATO),
+    coverage_factors must scale the band unconditionally - someone whose
+    pool membership only covers part of the period is a structural fact,
+    not a fairness policy choice, so even 'GELIJK' (the default
+    distribution_mode) must apply it.
+
+    Same fixture and reasoning as
+    test_naar_rato_scales_a_part_timers_band_by_their_participation_factor:
+    6 AVOND slots, 3 people, band [2,2]. p3's coverage_factor of 0.5 scales
+    their band to [1,1]. p1 is given a +1 ledger balance (actual band
+    [3,3]) so that p1=3, p2=2, p3=1 is the *unique* zero-cost allocation -
+    every other split needs band slack or imbalance slack somewhere and
+    costs strictly more.
+    """
+    slots = make_slots(6)
+    people = ['p1', 'p2', 'p3']
+    band = {'AVOND': [2, 2], 'WEEKEND': [2, 2], 'FEESTDAG': [2, 2]}
+
+    def count_for(result, person):
+        return sum(1 for a in result['assignments'] if a['person_id'] == person)
+
+    balances = {
+        'p1': {'AVOND': 1, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p2': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p3': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
+    }
+    result = solve(people, slots, window_weeks=2, band=band, balances=balances,
+                   coverage=({'p3': 0.5}))
+    counts = {p: count_for(result, p) for p in people}
+    assert counts == {'p1': 3, 'p2': 2, 'p3': 1}, (
+        f"expected the unique zero-slack split (p1=3, p2=2, p3=1 - p3's band scaled to [1,1]) "
+        f"under the default GELIJK mode, got {counts}"
+    )
+
+
+def test_coverage_factor_of_one_is_a_no_op():
+    """
+    Regression guard: a coverage_factor of 1.0 (full presence, the common
+    case for anyone whose membership already spans the whole period) must
+    produce an identical outcome to sending no coverage_factors entry at
+    all - whatever that baseline outcome is (band [7,8] against only 3
+    available slots is deliberately understaffed here, so both runs are
+    expected to show the *same* band_limit violation - the point isn't
+    that it's zero, it's that 1.0 changes nothing about it).
+    """
+    slots = make_slots(3)
+    band = {'AVOND': [7, 8], 'WEEKEND': [7, 8], 'FEESTDAG': [7, 8]}
+
+    baseline = solve(['p1'], slots, window_weeks=0, band=band)
+    with_factor = solve(['p1'], slots, window_weeks=0, band=band, coverage={'p1': 1.0})
+
+    assert len(with_factor['assignments']) == len(baseline['assignments']) == 3, (
+        f"a 1.0 coverage factor must not change how many slots p1 takes: "
+        f"baseline={baseline['assignments']}, with_factor={with_factor['assignments']}"
+    )
+    assert (
+        with_factor['diagnostics']['violations'].get('band_limit', 0)
+        == baseline['diagnostics']['violations'].get('band_limit', 0)
+    ), (
+        f"a 1.0 coverage factor must not change band_limit violations: "
+        f"baseline={baseline['diagnostics']}, with_factor={with_factor['diagnostics']}"
+    )
+
+
+def test_coverage_factor_and_naar_rato_participation_factor_combine_multiplicatively():
+    """
+    A person can be both a manually-set part-timer (deelnamefactor, only
+    applied under NAAR_RATO) AND a mid-period joiner (coverage_factor,
+    always applied) at the same time - the two must multiply, not
+    override each other. constraints.add_band_constraints applies
+    coverage first, then NAAR_RATO's participation_factors on top of the
+    already-scaled band.
+
+    p1: full-time, full coverage - band stays [4,4].
+    p2: deelnamefactor 0.5 AND coverage_factor 0.5 - band [4,4] -> coverage
+        scales to [2,2] -> participation scales that to [1,1] (a quarter
+        of the base, not a half).
+
+    5 AVOND slots total = exactly p1's target (4) + p2's target (1), so
+    the zero-slack split (p1=4, p2=1) is the unique cheapest solution -
+    any other split must cost band slack on a tight width-1 band.
+    """
+    slots = make_slots(5)
+    people = ['p1', 'p2']
+    band = {'AVOND': [4, 4], 'WEEKEND': [4, 4], 'FEESTDAG': [4, 4]}
+
+    def count_for(result, person):
+        return sum(1 for a in result['assignments'] if a['person_id'] == person)
+
+    result = solve(people, slots, window_weeks=0, band=band,
+                    distribution_mode='NAAR_RATO',
+                    participation_factors={'p2': 0.5},
+                    coverage={'p2': 0.5})
+    counts = {p: count_for(result, p) for p in people}
+    assert counts == {'p1': 4, 'p2': 1}, (
+        f"expected p2's band to be scaled by coverage (0.5) and participation (0.5) "
+        f"multiplicatively to a quarter of the base [4,4] -> [1,1], got {counts}"
+    )
+    assert result['diagnostics']['violations'].get('band_limit', 0) == 0, (
+        f"the 4/1 split exactly matches both scaled bands with zero slack: {result['diagnostics']}"
     )
 
 

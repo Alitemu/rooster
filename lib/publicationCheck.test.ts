@@ -410,6 +410,72 @@ describe('runPublicationCheck', () => {
     expect(result.checks.band_compliance).toBe(false);
   });
 
+  it('scales the target band by coverage for a mid-period joiner, even under GELIJK', () => {
+    // Regression guard for the coverage-factor feature: someone whose pool
+    // membership only covers part of the period (joined/left mid-period)
+    // must be judged against a proportionally smaller band - and unlike
+    // deelnamefactor/NAAR_RATO, this has to hold even under the default
+    // 'GELIJK' distribution mode, since coverage reflects a structural
+    // fact (partial presence), not a fairness policy choice.
+    const ctx = createPool(1, { bandAvond: [4, 4] });
+
+    // Joins exactly halfway through the period (14 of 28 days) -> coverage 0.5.
+    const partialId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
+       VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`
+    ).run(partialId, `Test-partial-${partialId.slice(0, 8)}`);
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, '2027-01-18', '2027-01-31')`
+    ).run(crypto.randomUUID(), partialId, ctx.poolId);
+
+    const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4] });
+
+    // Full-timer gets exactly the base band (4). Mid-period joiner gets
+    // exactly their coverage-scaled band: floor(4*0.5)=2, max(2,
+    // ceil(4*0.5))=2 -> [2, 2].
+    assign(period.id, ctx.personIds[0], slotIds[0]);
+    assign(period.id, ctx.personIds[0], slotIds[1]);
+    assign(period.id, ctx.personIds[0], slotIds[2]);
+    assign(period.id, ctx.personIds[0], slotIds[3]);
+    assign(period.id, partialId, slotIds[4]);
+    assign(period.id, partialId, slotIds[5]);
+
+    const result = runPublicationCheck(period);
+
+    expect(result.checks.band_compliance).toBe(true);
+  });
+
+  it('still catches a coverage-scaled mid-period joiner outside their own band', () => {
+    // The other half of the regression above: coverage scaling must not
+    // become "partial members are never checked" - someone who took 4
+    // shifts against a coverage-scaled band of [2, 2] is still over.
+    const ctx = createPool(1, { bandAvond: [4, 4] });
+
+    const partialId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
+       VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`
+    ).run(partialId, `Test-partial-${partialId.slice(0, 8)}`);
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, '2027-01-18', '2027-01-31')`
+    ).run(crypto.randomUUID(), partialId, ctx.poolId);
+
+    const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4] });
+
+    // Coverage-scaled band is [2, 2]; give them 4, double their max.
+    assign(period.id, partialId, slotIds[0]);
+    assign(period.id, partialId, slotIds[1]);
+    assign(period.id, partialId, slotIds[2]);
+    assign(period.id, partialId, slotIds[3]);
+
+    const result = runPublicationCheck(period);
+
+    expect(result.checks.band_compliance).toBe(false);
+  });
+
   it('accepts a fully manual roster - the source of an assignment is irrelevant', () => {
     // Gaps the solver could not fill are filled by hand, so a published
     // roster may legitimately contain no SOLVER rows at all.

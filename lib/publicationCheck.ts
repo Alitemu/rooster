@@ -22,6 +22,7 @@ import {
   type BandsByTeller,
   type Teller,
 } from '@/lib/rosterBands';
+import { computeCoverageFactor } from '@/lib/coverageFactor';
 
 export interface PublicationCheckResult {
   valid: boolean;
@@ -82,13 +83,15 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // total against a single band mixes three unrelated quotas.
   const members = db
     .prepare(
-      `SELECT p.id, pm.deelnamefactor FROM dienstrooster_pool_membership pm
+      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
        JOIN dienstrooster_person p ON p.id = pm.person_id
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{
     id: string;
     deelnamefactor: number;
+    geldig_vanaf: string;
+    geldig_tot: string;
   }>;
 
   const config = resolveRulesetConfig(period);
@@ -105,12 +108,29 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // it showed (adjust the band, or manually move people) couldn't
   // actually fix that, since the real target per person was never wrong.
   const naarRato = config.distributionMode === 'NAAR_RATO';
-  const scaledBand = (teller: Teller, factor: number): Band => {
+  const scaledBand = (teller: Teller, member: { deelnamefactor: number; geldig_vanaf: string; geldig_tot: string }): Band => {
     const [baseMin, baseMax] = bands[teller];
-    if (!naarRato) return [baseMin, baseMax];
-    const scaledMin = Math.floor(baseMin * factor);
-    const scaledMax = Math.max(scaledMin, Math.ceil(baseMax * factor));
-    return [scaledMin, scaledMax];
+
+    // Coverage scaling is unconditional (same as
+    // constraints.add_band_constraints' coverage_factors) - a mid-period
+    // joiner/leaver is a structural fact, not a NAAR_RATO-gated policy
+    // choice, and must be applied first so the two scalings stay
+    // multiplicative in exactly the same order the solver used.
+    const coverageFactor = computeCoverageFactor(
+      member.geldig_vanaf,
+      member.geldig_tot,
+      period.start_datum,
+      period.eind_datum
+    );
+    let min = Math.floor(baseMin * coverageFactor);
+    let max = Math.max(min, Math.ceil(baseMax * coverageFactor));
+
+    if (naarRato) {
+      min = Math.floor(min * member.deelnamefactor);
+      max = Math.max(min, Math.ceil(max * member.deelnamefactor));
+    }
+
+    return [min, max];
   };
 
   const perPerson = db
@@ -142,10 +162,14 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // Everyone in the pool, not just people who already have an assignment -
   // somebody scheduled zero times is exactly what a band's lower bound is for.
   let bandViolations = 0;
+  let anyPartialCoverage = false;
   for (const member of members) {
+    if (computeCoverageFactor(member.geldig_vanaf, member.geldig_tot, period.start_datum, period.eind_datum) < 1) {
+      anyPartialCoverage = true;
+    }
     for (const teller of TELLERS) {
       const key = `${member.id}|${teller}`;
-      const [min, max] = scaledBand(teller, member.deelnamefactor);
+      const [min, max] = scaledBand(teller, member);
       const delta = deltas.get(key) || 0;
       const count = counts.get(key) || 0;
       if (count < min + delta || count > max + delta) bandViolations++;
@@ -153,12 +177,17 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   }
 
   if (bandViolations > 0) {
+    const scalingNotes = [
+      anyPartialCoverage ? 'voor wie een deel van de periode meedraait automatisch verlaagd naar rato' : null,
+      naarRato ? 'bij naar-rato-verdeling geschaald naar ieders deelnamefactor' : null,
+    ].filter((note): note is string => note !== null);
+
     issues.push(
       `${bandViolations}x valt een persoon buiten het streefbereik voor een diensttype ` +
         `(avond ${bands.AVOND[0]}-${bands.AVOND[1]}, ` +
         `weekend ${bands.WEEKEND[0]}-${bands.WEEKEND[1]}, ` +
         `feestdag ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]}` +
-        (naarRato ? ' - bij naar-rato-verdeling geschaald naar ieders deelnamefactor' : '') +
+        (scalingNotes.length > 0 ? ` - ${scalingNotes.join(', en ')}` : '') +
         `). Pas het streefbereik aan bij de instellingen van deze periode, of wissel handmatig ` +
         `wie welke dienst draait, en genereer daarna opnieuw`
     );

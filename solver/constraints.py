@@ -338,6 +338,7 @@ class ConstraintBuilder:
         counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
+        coverage_factors: Optional[dict[str, float]] = None,
         already_assigned: Optional[dict[str, dict[str, int]]] = None
     ) -> dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]]:
         """
@@ -364,6 +365,16 @@ class ConstraintBuilder:
         entirely, on purpose: everyone gets the same target regardless of
         participation.
 
+        coverage_factors is unconditional and always applied first,
+        regardless of distribution_mode: it's the fraction of *this
+        period* actually covered by the person's pool membership window
+        (geldig_vanaf/geldig_tot), for someone who joined or left
+        mid-period. That's a structural fact, not a fairness policy choice
+        like participation_factors/NAAR_RATO - a full-time GELIJK
+        participant present the whole period is unaffected (factor 1.0),
+        but a mid-period joiner gets a proportionally smaller target even
+        under 'GELIJK'.
+
         Soft via under/over slack rather than a hard range: when there
         genuinely aren't enough people to cover every slot within
         everyone's target band, the solver should prefer stretching
@@ -378,10 +389,18 @@ class ConstraintBuilder:
         self.violations['band_limit'] = 0
         band_slack_vars: dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]] = {}
         factors = participation_factors or {}
+        coverage = coverage_factors or {}
 
         for person_id in people:
             for counter in counters:
                 base_min, base_max = band_ranges.get(counter, [7, 8])
+
+                # Always applied, regardless of distribution_mode - see
+                # coverage_factors in the docstring above. Same floor/ceil
+                # min-width-1 protection as the NAAR_RATO scaling below.
+                coverage_factor = coverage.get(person_id, 1.0)
+                base_min = math.floor(base_min * coverage_factor)
+                base_max = max(base_min, math.ceil(base_max * coverage_factor))
 
                 if distribution_mode == 'NAAR_RATO':
                     # floor/ceil, not round for both: rounding both the

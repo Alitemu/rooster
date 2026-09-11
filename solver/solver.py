@@ -46,6 +46,7 @@ class RosterSolver:
         soft_block_penalty: float = 1.0,
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
+        coverage_factors: Optional[dict[str, float]] = None,
         band_deviation_penalty: Optional[list[float]] = None,
         band_deviation_multiplier: float = 1.0,
         holiday_spread_weeks: int = 0
@@ -127,7 +128,7 @@ class RosterSolver:
         band_slack_vars = constraint_builder.add_band_constraints(
             assignment_vars, people, slots, band_ranges, balances,
             distribution_mode=distribution_mode, participation_factors=participation_factors,
-            already_assigned=already_assigned
+            coverage_factors=coverage_factors, already_assigned=already_assigned
         )
 
         # Add objectives
@@ -152,7 +153,7 @@ class RosterSolver:
         imbalance_cost = objective_builder.add_band_imbalance_objective(
             assignment_vars, people, slots, band_ranges, balances, weight=0.5,
             distribution_mode=distribution_mode, participation_factors=participation_factors,
-            already_assigned=already_assigned
+            coverage_factors=coverage_factors, already_assigned=already_assigned
         )
 
         logger.info("Adding preference reward objective")
@@ -306,6 +307,7 @@ class RosterSolver:
         soft_block_penalty: float = 1.0,
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
+        coverage_factors: Optional[dict[str, float]] = None,
         band_deviation_penalty: Optional[list[float]] = None,
         band_deviation_multiplier: float = 1.0,
         holiday_spread_weeks: int = 0
@@ -321,7 +323,7 @@ class RosterSolver:
                 people, slots, blocked_slots, soft_slots,
                 band_ranges, balances, window_weeks, preferred_slots,
                 prior_assignments, manual_assignments, soft_block_penalty,
-                distribution_mode, participation_factors,
+                distribution_mode, participation_factors, coverage_factors,
                 band_deviation_penalty, band_deviation_multiplier,
                 holiday_spread_weeks
             )

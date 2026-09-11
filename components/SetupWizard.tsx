@@ -15,6 +15,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { computeCoverageFactor } from '@/lib/coverageFactor';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'holidays' | 'confirm';
 
@@ -1176,10 +1177,30 @@ export function SetupWizard({ period, onComplete }: Props) {
                                 }
                                 className="px-2 py-1 border rounded text-sm w-20"
                               />
-                            ) : member.deelnamefactor < 1 ? (
-                              `${Math.round(member.deelnamefactor * 100)}%`
                             ) : (
-                              'Voltijd'
+                              <>
+                                {member.deelnamefactor < 1
+                                  ? `${Math.round(member.deelnamefactor * 100)}%`
+                                  : 'Voltijd'}
+                                {periodData.start_datum &&
+                                  periodData.eind_datum &&
+                                  (() => {
+                                    const coverage = computeCoverageFactor(
+                                      member.geldig_vanaf,
+                                      member.geldig_tot,
+                                      periodData.start_datum,
+                                      periodData.eind_datum
+                                    );
+                                    if (coverage >= 1) return null;
+                                    return (
+                                      <div className="mt-1 text-xs text-neutral-500">
+                                        ≈{Math.round(coverage * 100)}% van deze periode aanwezig →
+                                        streefaantal wordt hierdoor automatisch verlaagd, los van de
+                                        deelnamefactor hierboven.
+                                      </div>
+                                    );
+                                  })()}
+                              </>
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">

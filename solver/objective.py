@@ -103,6 +103,7 @@ class ObjectiveBuilder:
         counters: list[str] = ['AVOND', 'WEEKEND', 'FEESTDAG'],
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
+        coverage_factors: Optional[dict[str, float]] = None,
         already_assigned: Optional[dict[str, dict[str, int]]] = None
     ):
         """
@@ -120,24 +121,32 @@ class ObjectiveBuilder:
         nothing. Workload came out visibly lopsided (1/2/3 shifts across
         three interchangeable people) while the code claimed to balance it.
 
-        distribution_mode/participation_factors/already_assigned all mirror
-        constraints.add_band_constraints exactly - this term has to pull
-        toward the *same* scaled middle that term constrains against, or a
-        part-timer's target here would silently disagree with their actual
-        band there, and this (much smaller) weight would just get
-        overruled by the band-slack term picking whichever allocation this
-        one didn't prefer. Without the already_assigned offset specifically,
-        this term would keep pulling toward the *full* band's middle even
-        for someone who already has a manually pre-filled shift this period,
-        fighting against the (correctly offset) hard constraint instead of
-        agreeing with it.
+        distribution_mode/participation_factors/coverage_factors/
+        already_assigned all mirror constraints.add_band_constraints
+        exactly - this term has to pull toward the *same* scaled middle
+        that term constrains against, or a part-timer's target here would
+        silently disagree with their actual band there, and this (much
+        smaller) weight would just get overruled by the band-slack term
+        picking whichever allocation this one didn't prefer. Without the
+        already_assigned offset specifically, this term would keep pulling
+        toward the *full* band's middle even for someone who already has a
+        manually pre-filled shift this period, fighting against the
+        (correctly offset) hard constraint instead of agreeing with it.
         """
         imbalance_cost = 0
         factors = participation_factors or {}
+        coverage = coverage_factors or {}
 
         for person_id in people:
             for counter in counters:
                 base_min, base_max = band_ranges.get(counter, [7, 8])
+
+                # Always applied, regardless of distribution_mode - see
+                # constraints.add_band_constraints' coverage_factors
+                # docstring. Must stay in lockstep with that copy.
+                coverage_factor = coverage.get(person_id, 1.0)
+                base_min = math.floor(base_min * coverage_factor)
+                base_max = max(base_min, math.ceil(base_max * coverage_factor))
 
                 if distribution_mode == 'NAAR_RATO':
                     # floor/ceil, not round - must stay in lockstep with

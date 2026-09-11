@@ -215,6 +215,14 @@ class SolverInput(BaseModel):
     # Only consulted when rules.distribution_mode == "NAAR_RATO" - see
     # constraints.add_band_constraints.
     participation_factors: dict[str, float] = {}
+    # person_id -> fraction of this period actually covered by their pool
+    # membership window (e.g. 0.25 for someone who joined 3/4 of the way
+    # through). Unlike participation_factors, this is ALWAYS applied
+    # regardless of distribution_mode - it reflects a structural fact
+    # (partial presence), not a fairness policy choice. See
+    # lib/coverageFactor.ts (Next.js side) and
+    # constraints.add_band_constraints for the scaling itself.
+    coverage_factors: dict[str, float] = {}
     # How long CP-SAT may search before returning its best-so-far solution.
     # Default matches the "standaard" duration offered in the roster
     # generation dialog; a planner can ask for a longer search (5, then 10
@@ -386,6 +394,7 @@ async def solve_roster(request: SolverInput):
             soft_block_penalty=request.rules.soft_block_penalty,
             distribution_mode=request.rules.distribution_mode,
             participation_factors=request.participation_factors,
+            coverage_factors=request.coverage_factors,
             band_deviation_penalty=request.rules.band_deviation_penalty,
             band_deviation_multiplier=request.rules.band_deviation_multiplier,
             holiday_spread_weeks=request.rules.holiday_spread_weeks

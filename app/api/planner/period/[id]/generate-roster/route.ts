@@ -12,6 +12,7 @@ import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBands';
+import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
 import { createRosterGenerationJob, completeRosterGenerationJob, failRosterGenerationJob } from '@/lib/rosterGenerationJobs';
@@ -150,7 +151,7 @@ export async function POST(
     // non-deterministically by whichever row SQLite happens to return last.
     const poolMembersRaw = db
       .prepare(
-        `SELECT pm.person_id, pm.deelnamefactor
+        `SELECT pm.person_id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
          FROM dienstrooster_pool_membership pm
          JOIN dienstrooster_person p ON p.id = pm.person_id
          WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
@@ -219,6 +220,20 @@ async function runGeneration(args: {
     const participationFactors: Record<string, number> = {};
     for (const m of poolMembers) {
       participationFactors[m.person_id] = m.deelnamefactor;
+    }
+
+    // Unlike participationFactors, this applies regardless of
+    // distribution_mode: someone whose membership only partly covers this
+    // period (started or stopped mid-period) is a structural fact, not a
+    // fairness policy choice like deelnamefactor - see lib/coverageFactor.ts.
+    const coverageFactors: Record<string, number> = {};
+    for (const m of poolMembers) {
+      coverageFactors[m.person_id] = computeCoverageFactor(
+        m.geldig_vanaf,
+        m.geldig_tot,
+        period.start_datum,
+        period.eind_datum
+      );
     }
 
     // Build parameterized placeholders for SQL IN clauses
@@ -373,6 +388,7 @@ async function runGeneration(args: {
         teller: r.teller,
       })),
       participation_factors: participationFactors,
+      coverage_factors: coverageFactors,
       ...(timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}),
     };
 
