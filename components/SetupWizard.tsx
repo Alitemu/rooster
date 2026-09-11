@@ -282,6 +282,13 @@ export function SetupWizard({ period, onComplete }: Props) {
     reasonIndex: 0,
     aantal: (CORRECTION_REASONS_BY_TOP_LEVEL.AVOND[0].defaultAantal ?? '') as number | '',
   });
+  // Sign is a separate toggle rather than typed into the number field: most
+  // mobile on-screen numeric keypads (including iOS/Android for
+  // type="number") have no minus key, making a negative "aantal" impossible
+  // to enter on a phone otherwise.
+  const [correctionAantalSign, setCorrectionAantalSign] = useState<1 | -1>(
+    (CORRECTION_REASONS_BY_TOP_LEVEL.AVOND[0].defaultAantal ?? 0) < 0 ? -1 : 1
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openResult, setOpenResult] = useState<string | null>(null);
@@ -710,6 +717,9 @@ export function SetupWizard({ period, onComplete }: Props) {
 
   const applyReasonDefault = (topLevel: CorrectionTopLevel, reasonIndex: number) => {
     const reason = CORRECTION_REASONS_BY_TOP_LEVEL[topLevel][reasonIndex];
+    if (reason.defaultAantal !== null) {
+      setCorrectionAantalSign(reason.defaultAantal < 0 ? -1 : 1);
+    }
     setCorrectionForm((f) => ({
       ...f,
       topLevel,
@@ -1703,18 +1713,59 @@ export function SetupWizard({ period, onComplete }: Props) {
 
                   <div>
                     <label className="block text-xs font-medium text-neutral-600 mb-1">Aantal</label>
-                    <input
-                      type="number"
-                      value={correctionForm.aantal}
-                      onChange={(e) =>
-                        setCorrectionForm((f) => ({
-                          ...f,
-                          aantal: e.target.value === '' ? '' : parseInt(e.target.value),
-                        }))
-                      }
-                      placeholder={correctionSelectedReason.defaultAantal === null ? 'Zelf invullen' : undefined}
-                      className="w-full px-2 py-2 border rounded text-sm"
-                    />
+                    <div className="flex gap-2">
+                      <div className="flex rounded border overflow-hidden shrink-0" role="group" aria-label="Meer of minder diensten">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCorrectionAantalSign(-1);
+                            setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : -Math.abs(f.aantal) }));
+                          }}
+                          aria-pressed={correctionAantalSign === -1}
+                          className={`px-3 py-2 text-sm font-bold transition-colors ${
+                            correctionAantalSign === -1
+                              ? 'bg-red-600 text-white'
+                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                          }`}
+                        >
+                          − minder
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCorrectionAantalSign(1);
+                            setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : Math.abs(f.aantal) }));
+                          }}
+                          aria-pressed={correctionAantalSign === 1}
+                          className={`px-3 py-2 text-sm font-bold border-l transition-colors ${
+                            correctionAantalSign === 1
+                              ? 'bg-green-600 text-white'
+                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
+                          }`}
+                        >
+                          + meer
+                        </button>
+                      </div>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min="0"
+                        value={correctionForm.aantal === '' ? '' : Math.abs(correctionForm.aantal)}
+                        onChange={(e) => {
+                          if (e.target.value === '') {
+                            setCorrectionForm((f) => ({ ...f, aantal: '' }));
+                            return;
+                          }
+                          const magnitude = Math.abs(parseInt(e.target.value, 10));
+                          setCorrectionForm((f) => ({
+                            ...f,
+                            aantal: Number.isNaN(magnitude) ? '' : correctionAantalSign * magnitude,
+                          }));
+                        }}
+                        placeholder={correctionSelectedReason.defaultAantal === null ? 'Zelf invullen' : undefined}
+                        className="w-full px-2 py-2 border rounded text-sm"
+                      />
+                    </div>
                   </div>
                 </div>
 
