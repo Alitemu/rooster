@@ -55,7 +55,8 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
 def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, balances=None,
           preferred=None, prior=None, manual=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
           participation_factors=None, coverage=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
-          holiday_spread_weeks=0):
+          holiday_spread_weeks=0, shortfall_weight=1000.0, band_imbalance_weight=0.5,
+          preference_reward_weight=0.3):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -78,6 +79,9 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         band_deviation_penalty=band_deviation_penalty,
         band_deviation_multiplier=band_deviation_multiplier,
         holiday_spread_weeks=holiday_spread_weeks,
+        shortfall_weight=shortfall_weight,
+        band_imbalance_weight=band_imbalance_weight,
+        preference_reward_weight=preference_reward_weight,
     )
 
 
@@ -483,6 +487,126 @@ def test_soft_block_penalty_weight_controls_whether_it_is_honoured():
                  soft_block_penalty=20.0)
     assert [a['person_id'] for a in high['assignments']] == ['p2'], (
         'at a high penalty, avoiding the LIEVER_NIET slot should win even at the cost of band imbalance'
+    )
+
+
+# ---------------------------------------------------------------------------
+# CONFIGURABLE WEIGHTS: shortfall_weight, band_imbalance_weight,
+# preference_reward_weight actually reach the objective
+# ---------------------------------------------------------------------------
+
+def test_shortfall_weight_controls_whether_an_unfilled_slot_beats_a_disliked_one():
+    """
+    shortfall_weight (RulesetConfig) is the objective weight on a
+    completely unfilled slot - it has to actually reach the solver's
+    objective when a planner configures it, not just sit in the ruleset
+    JSON as the hardcoded 1000.0 it used to always be.
+
+    One slot, one person, marked LIEVER_NIET by that same person
+    (soft_block_penalty fixed at 10.0). Assigning them costs 10.0 (soft
+    block) + 0.5 (band imbalance, the default weight - see the wide
+    default band's own middle of 0) = 10.5 total. Leaving it unfilled
+    costs exactly shortfall_weight.
+
+    - High shortfall_weight (1000.0, the default): 10.5 < 1000 - cheaper
+      to assign despite the LIEVER_NIET mark.
+    - Low shortfall_weight (5.0): 10.5 > 5.0 - now cheaper to leave the
+      slot unfilled than to honour it against the person's own wishes.
+    """
+    slots = make_slots(1)
+    soft = {('p1', slots[0]['id']): 1.0}
+
+    high = solve(['p1'], slots, window_weeks=1, soft=soft, soft_block_penalty=10.0,
+                 shortfall_weight=1000.0)
+    assert len(high['assignments']) == 1, (
+        'at a high shortfall_weight, filling the slot should win despite the LIEVER_NIET mark'
+    )
+
+    low = solve(['p1'], slots, window_weeks=1, soft=soft, soft_block_penalty=10.0,
+                shortfall_weight=5.0)
+    assert len(low['assignments']) == 0, (
+        'at a low shortfall_weight, leaving the slot unfilled should win over honouring it against a preference'
+    )
+    assert len(low['diagnostics']['unfilled_slots']) == 1
+
+
+def test_band_imbalance_weight_controls_whether_fairness_beats_a_preference():
+    """
+    band_imbalance_weight (RulesetConfig) is the pull-toward-the-band-
+    middle weight - it has to actually reach the solver's objective when
+    configured, not just sit in the ruleset JSON as the hardcoded 0.5 it
+    used to always be.
+
+    2 people, 2 slots, wide band [0,2] (mid=1 - a 1/1 split costs 0
+    imbalance). p1 has a VOORKEUR mark on *both* slots, worth
+    preference_reward_weight each. Taking both slots (2/0, imbalance
+    deviation of 1 on each side = 2 units) earns p1 twice the reward
+    instead of once, but costs 2 * band_imbalance_weight in fairness:
+
+    - High band_imbalance_weight (0.5, the default): 2*0.5=1.0 > the
+      extra 1*preference_reward_weight(0.3) gained by grabbing the second
+      slot - the fair 1/1 split wins.
+    - Low band_imbalance_weight (0.05): 2*0.05=0.1 < 0.3 - now cheaper to
+      let p1 take both and sacrifice the even split.
+    """
+    slots = make_slots(2)
+    people = ['p1', 'p2']
+    band = {'AVOND': [0, 2], 'WEEKEND': [0, 2], 'FEESTDAG': [0, 2]}
+    preferred = {('p1', slots[0]['id']): 1.0, ('p1', slots[1]['id']): 1.0}
+
+    def count_for(result, person):
+        return sum(1 for a in result['assignments'] if a['person_id'] == person)
+
+    fair = solve(people, slots, window_weeks=1, band=band, preferred=preferred,
+                 band_imbalance_weight=0.5)
+    assert count_for(fair, 'p1') == 1 and count_for(fair, 'p2') == 1, (
+        f"at a high band_imbalance_weight, the even split should win despite p1's double preference: "
+        f"{[a['person_id'] for a in fair['assignments']]}"
+    )
+
+    unfair = solve(people, slots, window_weeks=1, band=band, preferred=preferred,
+                   band_imbalance_weight=0.05)
+    assert count_for(unfair, 'p1') == 2 and count_for(unfair, 'p2') == 0, (
+        f"at a low band_imbalance_weight, honouring both of p1's preferences should win over the even split: "
+        f"{[a['person_id'] for a in unfair['assignments']]}"
+    )
+
+
+def test_preference_reward_weight_controls_whether_a_preference_beats_fairness():
+    """
+    preference_reward_weight (RulesetConfig) is the VOORKEUR reward - it
+    has to actually reach the solver's objective when configured, not
+    just sit in the ruleset JSON as the hardcoded 0.3 it used to always
+    be. Mirrors the band_imbalance_weight test above exactly, sweeping
+    the other side of the same trade-off (band_imbalance_weight fixed at
+    its default 0.5, so grabbing both preferred slots costs 2*0.5=1.0 in
+    fairness):
+
+    - Low preference_reward_weight (0.3, the default): 1*0.3=0.3 < the
+      1.0 fairness cost of grabbing the second slot - the even split wins.
+    - High preference_reward_weight (2.0): 1*2.0=2.0 > 1.0 - now cheaper
+      to let p1 take both and sacrifice the even split.
+    """
+    slots = make_slots(2)
+    people = ['p1', 'p2']
+    band = {'AVOND': [0, 2], 'WEEKEND': [0, 2], 'FEESTDAG': [0, 2]}
+    preferred = {('p1', slots[0]['id']): 1.0, ('p1', slots[1]['id']): 1.0}
+
+    def count_for(result, person):
+        return sum(1 for a in result['assignments'] if a['person_id'] == person)
+
+    fair = solve(people, slots, window_weeks=1, band=band, preferred=preferred,
+                 preference_reward_weight=0.3)
+    assert count_for(fair, 'p1') == 1 and count_for(fair, 'p2') == 1, (
+        f"at a low preference_reward_weight, the even split should win despite p1's double preference: "
+        f"{[a['person_id'] for a in fair['assignments']]}"
+    )
+
+    unfair = solve(people, slots, window_weeks=1, band=band, preferred=preferred,
+                   preference_reward_weight=2.0)
+    assert count_for(unfair, 'p1') == 2 and count_for(unfair, 'p2') == 0, (
+        f"at a high preference_reward_weight, honouring both of p1's preferences should win over the even split: "
+        f"{[a['person_id'] for a in unfair['assignments']]}"
     )
 
 

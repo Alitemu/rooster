@@ -40,7 +40,26 @@ interface RulesetConfig {
   bandAvond: [number, number];
   bandWeekend: [number, number];
   bandFeestdag: [number, number];
+  // "Geavanceerde instellingen" - the solver's objective weights. Mirrors
+  // solver/main.py's RuleSet defaults exactly (see the DEFAULT_* constants
+  // below), so a period whose ruleset never set these behaves identically
+  // to before this panel existed.
+  softBlockPenalty: number;
+  bandDeviationPenalty: number[];
+  bandDeviationMultiplier: number;
+  shortfallWeight: number;
+  bandImbalanceWeight: number;
+  preferenceRewardWeight: number;
 }
+
+// Matches solver/main.py's RuleSet field defaults - the "Standaardinstellingen
+// herstellen" button in the advanced panel resets to exactly these.
+const DEFAULT_SOFT_BLOCK_PENALTY = 1.0;
+const DEFAULT_BAND_DEVIATION_PENALTY = [5.0];
+const DEFAULT_BAND_DEVIATION_MULTIPLIER = 1.0;
+const DEFAULT_SHORTFALL_WEIGHT = 1000.0;
+const DEFAULT_BAND_IMBALANCE_WEIGHT = 0.5;
+const DEFAULT_PREFERENCE_REWARD_WEIGHT = 0.3;
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds} seconden`;
@@ -115,6 +134,18 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   const [originalRuleset, setOriginalRuleset] = useState<RulesetConfig | null>(null);
   const [rulesetError, setRulesetError] = useState<string | null>(null);
   const [rulesetRowVersion, setRulesetRowVersion] = useState<number | null>(null);
+  // "Geavanceerde instellingen" collapsed by default - most planners never
+  // need to touch these, so they stay out of the way of the ordinary
+  // venster/streefbereik flow above.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  // bandDeviationPenalty is a comma-separated list, edited as free text so
+  // a planner can type "5, 20, " mid-edit without every keystroke needing
+  // to already parse into a valid, non-empty number array - the same
+  // reasoning as bandInvalid below, just for a field that can't be a
+  // plain <input type="number">.
+  const [bandDeviationPenaltyText, setBandDeviationPenaltyText] = useState(
+    DEFAULT_BAND_DEVIATION_PENALTY.join(', ')
+  );
   // Not a hard rule - a planner can always generate early, e.g. once it's
   // clear stragglers won't respond in time. This just makes "generating
   // before everyone's had a chance to answer" a visible choice rather than
@@ -161,9 +192,27 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           bandAvond: Array.isArray(parsed.bandAvond) ? parsed.bandAvond : [7, 8],
           bandWeekend: Array.isArray(parsed.bandWeekend) ? parsed.bandWeekend : [2, 3],
           bandFeestdag: Array.isArray(parsed.bandFeestdag) ? parsed.bandFeestdag : [1, 2],
+          softBlockPenalty:
+            typeof parsed.softBlockPenalty === 'number' ? parsed.softBlockPenalty : DEFAULT_SOFT_BLOCK_PENALTY,
+          bandDeviationPenalty: Array.isArray(parsed.bandDeviationPenalty)
+            ? parsed.bandDeviationPenalty
+            : DEFAULT_BAND_DEVIATION_PENALTY,
+          bandDeviationMultiplier:
+            typeof parsed.bandDeviationMultiplier === 'number'
+              ? parsed.bandDeviationMultiplier
+              : DEFAULT_BAND_DEVIATION_MULTIPLIER,
+          shortfallWeight:
+            typeof parsed.shortfallWeight === 'number' ? parsed.shortfallWeight : DEFAULT_SHORTFALL_WEIGHT,
+          bandImbalanceWeight:
+            typeof parsed.bandImbalanceWeight === 'number' ? parsed.bandImbalanceWeight : DEFAULT_BAND_IMBALANCE_WEIGHT,
+          preferenceRewardWeight:
+            typeof parsed.preferenceRewardWeight === 'number'
+              ? parsed.preferenceRewardWeight
+              : DEFAULT_PREFERENCE_REWARD_WEIGHT,
         };
         setRuleset(loaded);
         setOriginalRuleset(loaded);
+        setBandDeviationPenaltyText(loaded.bandDeviationPenalty.join(', '));
         setRulesetRowVersion(
           typeof data?.data?.row_version === 'number' ? data.data.row_version : null
         );
@@ -378,6 +427,46 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       ruleset.bandWeekend[0] > ruleset.bandWeekend[1] ||
       ruleset.bandFeestdag[0] > ruleset.bandFeestdag[1]);
 
+  // Same reasoning as bandInvalid above, for the one advanced field that
+  // isn't a plain number input - parsed the same permissive way the
+  // onChange handler below does, so this always reflects exactly what
+  // would be sent.
+  const parsedBandDeviationPenalty = bandDeviationPenaltyText
+    .split(',')
+    .map((s) => parseFloat(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  const tiersInvalid = parsedBandDeviationPenalty.length === 0;
+  const formInvalid = bandInvalid || tiersInvalid;
+
+  const handleBandDeviationPenaltyChange = (text: string) => {
+    setBandDeviationPenaltyText(text);
+    const parsed = text
+      .split(',')
+      .map((s) => parseFloat(s.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    // Only commit a non-empty parse into `ruleset` - an in-progress edit
+    // (a trailing comma, a half-typed number) keeps the last valid value
+    // there so handleGenerate always has something sendable, while
+    // tiersInvalid above still flags the *displayed* text as incomplete.
+    if (parsed.length > 0 && ruleset) {
+      setRuleset({ ...ruleset, bandDeviationPenalty: parsed });
+    }
+  };
+
+  const handleResetAdvancedDefaults = () => {
+    if (!ruleset) return;
+    setRuleset({
+      ...ruleset,
+      softBlockPenalty: DEFAULT_SOFT_BLOCK_PENALTY,
+      bandDeviationPenalty: DEFAULT_BAND_DEVIATION_PENALTY,
+      bandDeviationMultiplier: DEFAULT_BAND_DEVIATION_MULTIPLIER,
+      shortfallWeight: DEFAULT_SHORTFALL_WEIGHT,
+      bandImbalanceWeight: DEFAULT_BAND_IMBALANCE_WEIGHT,
+      preferenceRewardWeight: DEFAULT_PREFERENCE_REWARD_WEIGHT,
+    });
+    setBandDeviationPenaltyText(DEFAULT_BAND_DEVIATION_PENALTY.join(', '));
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -483,6 +572,166 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         Min mag niet groter zijn dan max - controleer de streefbereiken hierboven.
                       </p>
                     )}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <h3 className="text-sm font-semibold text-neutral-800">Geavanceerde instellingen</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                  >
+                    {showAdvanced ? 'Verbergen' : 'Tonen'}
+                  </button>
+                </div>
+
+                {showAdvanced && ruleset && (
+                  <div className="space-y-4 bg-neutral-50 border border-neutral-200 rounded p-3">
+                    <p className="text-xs text-neutral-500">
+                      Dit zijn de punten waarmee de solver bepaalt hoe hij diensten verdeelt: hoe
+                      hoger het getal, hoe zwaarder die actie meetelt. De standaardinstellingen
+                      werken voor vrijwel elke periode goed - pas dit alleen aan als je weet wat je
+                      doet.
+                    </p>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-0.5">
+                        Lege dienst
+                      </label>
+                      <p className="text-xs text-neutral-500 mb-1">
+                        Straf voor een dienst waar helemaal niemand aan wordt toegewezen. Dit is
+                        verreweg de zwaarste straf, zodat de solver bijna altijd liever iemand
+                        toewijst dan een dienst leeg te laten.
+                      </p>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="1"
+                        value={ruleset.shortfallWeight}
+                        onChange={(e) =>
+                          setRuleset({ ...ruleset, shortfallWeight: parseFloat(e.target.value) || 0 })
+                        }
+                        className="w-28 px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-0.5">
+                        Buiten streefbereik (oplopende straf)
+                      </label>
+                      <p className="text-xs text-neutral-500 mb-1">
+                        Straf per dienst die iemand onder hun streefaantal blijft: de eerste,
+                        komma-gescheiden waarde geldt voor de eerste dienst eronder, de tweede voor
+                        de tweede, enzovoort - zo wordt een tekort liever over meerdere mensen
+                        gespreid dan bij één persoon neergelegd. Komt iemand juist boven hun
+                        streefaantal, dan telt bovenop deze waarde ook altijd de volledige straf
+                        voor "Lege dienst" mee - zo blijft een dienst leeglaten altijd goedkoper dan
+                        iemand over hun streefbereik heen duwen.
+                      </p>
+                      <input
+                        type="text"
+                        value={bandDeviationPenaltyText}
+                        onChange={(e) => handleBandDeviationPenaltyChange(e.target.value)}
+                        placeholder="bijv. 5, 20, 80"
+                        className="w-full px-2 py-1 border rounded text-sm"
+                      />
+                      {tiersInvalid && (
+                        <p className="text-xs text-red-600 mt-1">
+                          Vul minstens één getal groter dan 0 in, gescheiden door komma&apos;s.
+                        </p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-0.5">
+                        Vermenigvuldigingsfactor extra tredes
+                      </label>
+                      <p className="text-xs text-neutral-500 mb-1">
+                        Hoeveel duurder elke volgende dienst wordt zodra de hierboven ingevulde
+                        trappen op zijn (bijvoorbeeld 4 = elke stap daarna 4x zo duur als de vorige).
+                      </p>
+                      <input
+                        type="number"
+                        min="1"
+                        step="0.1"
+                        value={ruleset.bandDeviationMultiplier}
+                        onChange={(e) =>
+                          setRuleset({ ...ruleset, bandDeviationMultiplier: parseFloat(e.target.value) || 1 })
+                        }
+                        className="w-28 px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-0.5">
+                        Liever-niet-voorkeur genegeerd
+                      </label>
+                      <p className="text-xs text-neutral-500 mb-1">
+                        Straf wanneer iemand toch wordt ingedeeld op een dag die diegene als
+                        &quot;liever niet&quot; heeft gemarkeerd.
+                      </p>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={ruleset.softBlockPenalty}
+                        onChange={(e) =>
+                          setRuleset({ ...ruleset, softBlockPenalty: parseFloat(e.target.value) || 0 })
+                        }
+                        className="w-28 px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-0.5">
+                        Ongelijke verdeling
+                      </label>
+                      <p className="text-xs text-neutral-500 mb-1">
+                        Hoe sterk de solver naar een gelijke verdeling rond het midden van het
+                        streefbereik trekt, voor mensen die toch al binnen hun bereik vallen.
+                      </p>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={ruleset.bandImbalanceWeight}
+                        onChange={(e) =>
+                          setRuleset({ ...ruleset, bandImbalanceWeight: parseFloat(e.target.value) || 0 })
+                        }
+                        className="w-28 px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-0.5">
+                        Voorkeur gehonoreerd
+                      </label>
+                      <p className="text-xs text-neutral-500 mb-1">
+                        Beloning wanneer iemand wordt ingedeeld op een dag die diegene als
+                        &quot;voorkeur&quot; heeft gemarkeerd.
+                      </p>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={ruleset.preferenceRewardWeight}
+                        onChange={(e) =>
+                          setRuleset({ ...ruleset, preferenceRewardWeight: parseFloat(e.target.value) || 0 })
+                        }
+                        className="w-28 px-2 py-1 border rounded text-sm"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleResetAdvancedDefaults}
+                      className="text-xs font-medium text-neutral-600 hover:text-neutral-900 underline"
+                    >
+                      Standaardinstellingen herstellen
+                    </button>
                   </div>
                 )}
               </div>
@@ -650,8 +899,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
               </button>
               <button
                 onClick={() => handleGenerate()}
-                disabled={loading || bandInvalid}
-                title={bandInvalid ? 'Los eerst de ongeldige streefbereiken hierboven op' : undefined}
+                disabled={loading || formInvalid}
+                title={formInvalid ? 'Los eerst de ongeldige instellingen hierboven op' : undefined}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
                 {loading ? 'Bezig met genereren...' : 'Genereren'}
@@ -663,8 +912,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
             <>
               <button
                 onClick={() => handleGenerate()}
-                disabled={loading || bandInvalid}
-                title={bandInvalid ? 'Los eerst de ongeldige streefbereiken hierboven op' : undefined}
+                disabled={loading || formInvalid}
+                title={formInvalid ? 'Los eerst de ongeldige instellingen hierboven op' : undefined}
                 className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
               >
                 {loading ? 'Opnieuw genereren...' : 'Opnieuw genereren'}

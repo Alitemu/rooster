@@ -176,4 +176,9 @@ export interface RulesetConfig {
   bandDeviationPenalty: number[];
   bandDeviationMultiplier: number;
   holidaySpreadWithinPeriod: number;
+  // Solver objective weights - see solver/main.py's RuleSet for the
+  // matching Python defaults these mirror (1000.0 / 0.5 / 0.3).
+  shortfallWeight: number;
+  bandImbalanceWeight: number;
+  preferenceRewardWeight: number;
 }

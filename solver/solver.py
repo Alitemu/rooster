@@ -49,7 +49,10 @@ class RosterSolver:
         coverage_factors: Optional[dict[str, float]] = None,
         band_deviation_penalty: Optional[list[float]] = None,
         band_deviation_multiplier: float = 1.0,
-        holiday_spread_weeks: int = 0
+        holiday_spread_weeks: int = 0,
+        shortfall_weight: float = 1000.0,
+        band_imbalance_weight: float = 0.5,
+        preference_reward_weight: float = 0.3
     ) -> dict:
         """
         Build the CP-SAT model with all constraints and objectives.
@@ -134,23 +137,21 @@ class RosterSolver:
         # Add objectives
         objective_builder = ObjectiveBuilder(self.model)
 
-        # Shared between these two calls on purpose: add_band_slack_objective's
-        # `over` term prices every unit at shortfall_weight + its own tier,
-        # specifically so exceeding anyone's streefwaarde can never be
-        # cheaper than leaving a slot unfilled instead - see that
-        # function's docstring. If this value ever changes, the same value
-        # must go to both calls.
-        SHORTFALL_WEIGHT = 1000.0
-
+        # shortfall_weight is shared between these two calls on purpose:
+        # add_band_slack_objective's `over` term prices every unit at
+        # shortfall_weight + its own tier, specifically so exceeding
+        # anyone's streefwaarde can never be cheaper than leaving a slot
+        # unfilled instead - see that function's docstring. Whatever value
+        # a planner configures, the same value must go to both calls.
         logger.info("Adding shortfall objective")
         shortfall_cost = objective_builder.add_shortfall_objective(
-            shortfall_vars, weight=SHORTFALL_WEIGHT
+            shortfall_vars, weight=shortfall_weight
         )
 
         logger.info("Adding band slack objective")
         band_slack_cost = objective_builder.add_band_slack_objective(
             band_slack_vars, penalty_tiers=band_deviation_penalty, multiplier=band_deviation_multiplier,
-            shortfall_weight=SHORTFALL_WEIGHT
+            shortfall_weight=shortfall_weight
         )
 
         logger.info("Adding soft preference objective")
@@ -160,14 +161,14 @@ class RosterSolver:
 
         logger.info("Adding band imbalance objective")
         imbalance_cost = objective_builder.add_band_imbalance_objective(
-            assignment_vars, people, slots, band_ranges, balances, weight=0.5,
+            assignment_vars, people, slots, band_ranges, balances, weight=band_imbalance_weight,
             distribution_mode=distribution_mode, participation_factors=participation_factors,
             coverage_factors=coverage_factors, already_assigned=already_assigned
         )
 
         logger.info("Adding preference reward objective")
         preference_reward_cost = objective_builder.add_preference_reward_objective(
-            assignment_vars, preferred_slots or {}, weight=0.3
+            assignment_vars, preferred_slots or {}, weight=preference_reward_weight
         )
 
         logger.info("Building combined objective")
@@ -319,7 +320,10 @@ class RosterSolver:
         coverage_factors: Optional[dict[str, float]] = None,
         band_deviation_penalty: Optional[list[float]] = None,
         band_deviation_multiplier: float = 1.0,
-        holiday_spread_weeks: int = 0
+        holiday_spread_weeks: int = 0,
+        shortfall_weight: float = 1000.0,
+        band_imbalance_weight: float = 0.5,
+        preference_reward_weight: float = 0.3
     ) -> dict:
         """
         End-to-end: build model, solve, extract assignments.
@@ -334,7 +338,8 @@ class RosterSolver:
                 prior_assignments, manual_assignments, soft_block_penalty,
                 distribution_mode, participation_factors, coverage_factors,
                 band_deviation_penalty, band_deviation_multiplier,
-                holiday_spread_weeks
+                holiday_spread_weeks, shortfall_weight, band_imbalance_weight,
+                preference_reward_weight
             )
 
             # Solve

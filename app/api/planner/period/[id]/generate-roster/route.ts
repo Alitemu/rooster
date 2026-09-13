@@ -375,6 +375,14 @@ async function runGeneration(args: {
           typeof config.holidaySpreadWithinPeriod === 'number'
             ? Math.round(config.holidaySpreadWithinPeriod)
             : 0,
+        // Solver objective weights - see solver/main.py's RuleSet for the
+        // matching Python defaults these fall back to (1000.0 / 0.5 / 0.3).
+        shortfall_weight:
+          typeof config.shortfallWeight === 'number' ? config.shortfallWeight : 1000.0,
+        band_imbalance_weight:
+          typeof config.bandImbalanceWeight === 'number' ? config.bandImbalanceWeight : 0.5,
+        preference_reward_weight:
+          typeof config.preferenceRewardWeight === 'number' ? config.preferenceRewardWeight : 0.3,
       },
       balances,
       prior_assignments: priorAssignmentRows.map((r) => ({

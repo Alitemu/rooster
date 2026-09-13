@@ -1,6 +1,7 @@
 /**
- * PATCH /api/periods/[id]/ruleset - Adjust a period's frozen window/band and
- * blokkadebudget settings
+ * PATCH /api/periods/[id]/ruleset - Adjust a period's frozen window/band,
+ * blokkadebudget, and solver objective-weight ("Geavanceerde instellingen")
+ * settings
  *
  * The ruleset is frozen onto the period as JSON when it's opened
  * (bevroren_ruleset_json), specifically so later edits to the pool's
@@ -12,12 +13,14 @@
  * set) too restrictively for this period had no way back except editing the
  * database directly.
  *
- * This lets a planner update window/band/blockBudget/softBlockBudget on the
- * frozen ruleset itself (distributionMode and anything else already stored
- * is left alone), right before a (re)generate - the same statuses
- * generate-roster accepts, minus CONCEPT (which has no frozen ruleset yet -
- * that's set via POST .../open instead) and GEPUBLICEERD (frozen for good
- * once published).
+ * This lets a planner update window/band/blockBudget/softBlockBudget and the
+ * solver's objective weights (softBlockPenalty, bandDeviationPenalty,
+ * bandDeviationMultiplier, shortfallWeight, bandImbalanceWeight,
+ * preferenceRewardWeight) on the frozen ruleset itself (distributionMode
+ * and anything else already stored is left alone), right before a
+ * (re)generate - the same statuses generate-roster accepts, minus CONCEPT
+ * (which has no frozen ruleset yet - that's set via POST .../open instead)
+ * and GEPUBLICEERD (frozen for good once published).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -40,6 +43,12 @@ interface UpdateRulesetRequest {
   bandFeestdag?: [number, number];
   blockBudget?: BlockBudgetPerTeller;
   softBlockBudget?: BlockBudgetPerTeller;
+  softBlockPenalty?: number;
+  bandDeviationPenalty?: number[];
+  bandDeviationMultiplier?: number;
+  shortfallWeight?: number;
+  bandImbalanceWeight?: number;
+  preferenceRewardWeight?: number;
   rowVersion?: number;
 }
 
@@ -152,6 +161,87 @@ export async function PATCH(
       }
     }
 
+    // Solver objective weights ("Geavanceerde instellingen" in
+    // RosterGenerationDialog) - mirrors the validation solver/main.py's
+    // RuleSet itself enforces, so a bad value is caught here with a Dutch
+    // message rather than surfacing as a raw 422 from the solver later.
+    if (
+      body.softBlockPenalty !== undefined &&
+      (typeof body.softBlockPenalty !== 'number' || !Number.isFinite(body.softBlockPenalty) || body.softBlockPenalty < 0)
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_WEIGHT', message: '"Liever niet genegeerd" moet 0 of hoger zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (body.bandDeviationPenalty !== undefined) {
+      const tiers = body.bandDeviationPenalty;
+      const valid =
+        Array.isArray(tiers) &&
+        tiers.length > 0 &&
+        tiers.every((t) => typeof t === 'number' && Number.isFinite(t) && t > 0);
+      if (!valid) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'INVALID_WEIGHT',
+            message: '"Buiten streefbereik (trappen)" moet minstens één getal groter dan 0 bevatten',
+          },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
+
+    if (
+      body.bandDeviationMultiplier !== undefined &&
+      (typeof body.bandDeviationMultiplier !== 'number' ||
+        !Number.isFinite(body.bandDeviationMultiplier) ||
+        body.bandDeviationMultiplier < 1)
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_WEIGHT', message: '"Vermenigvuldigingsfactor" moet 1 of hoger zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (
+      body.shortfallWeight !== undefined &&
+      (typeof body.shortfallWeight !== 'number' || !Number.isFinite(body.shortfallWeight) || body.shortfallWeight <= 0)
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_WEIGHT', message: '"Lege dienst" moet groter dan 0 zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (
+      body.bandImbalanceWeight !== undefined &&
+      (typeof body.bandImbalanceWeight !== 'number' || !Number.isFinite(body.bandImbalanceWeight) || body.bandImbalanceWeight < 0)
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_WEIGHT', message: '"Ongelijke verdeling" moet 0 of hoger zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (
+      body.preferenceRewardWeight !== undefined &&
+      (typeof body.preferenceRewardWeight !== 'number' ||
+        !Number.isFinite(body.preferenceRewardWeight) ||
+        body.preferenceRewardWeight < 0)
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_WEIGHT', message: '"Voorkeur gehonoreerd" moet 0 of hoger zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {
       const response: ApiErrorResponse = {
         success: false,
@@ -180,6 +270,12 @@ export async function PATCH(
       ...(body.bandFeestdag !== undefined ? { bandFeestdag: body.bandFeestdag } : {}),
       ...(body.blockBudget !== undefined ? { blockBudget: body.blockBudget } : {}),
       ...(body.softBlockBudget !== undefined ? { softBlockBudget: body.softBlockBudget } : {}),
+      ...(body.softBlockPenalty !== undefined ? { softBlockPenalty: body.softBlockPenalty } : {}),
+      ...(body.bandDeviationPenalty !== undefined ? { bandDeviationPenalty: body.bandDeviationPenalty } : {}),
+      ...(body.bandDeviationMultiplier !== undefined ? { bandDeviationMultiplier: body.bandDeviationMultiplier } : {}),
+      ...(body.shortfallWeight !== undefined ? { shortfallWeight: body.shortfallWeight } : {}),
+      ...(body.bandImbalanceWeight !== undefined ? { bandImbalanceWeight: body.bandImbalanceWeight } : {}),
+      ...(body.preferenceRewardWeight !== undefined ? { preferenceRewardWeight: body.preferenceRewardWeight } : {}),
     };
 
     // A period already sitting on a generated roster (GEGENEREERD) must go

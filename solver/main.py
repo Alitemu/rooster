@@ -162,6 +162,24 @@ class RuleSet(BaseModel):
     # Hard minimum weeks between two FEESTDAG shifts for the same person,
     # independent of window_weeks. 0 (default) = no such rule.
     holiday_spread_weeks: int = Field(default=0, ge=0)
+    # Cost of one completely unfilled slot - see
+    # objective.add_shortfall_objective. The dominant term by default (far
+    # above everything else below), and the anchor add_band_slack_objective's
+    # `over` term is priced against: whatever this is set to, exceeding
+    # someone's band maximum always costs strictly more, by construction.
+    shortfall_weight: float = Field(default=1000.0, gt=0)
+    # Pull-toward-the-middle-of-the-band weight - see
+    # objective.add_band_imbalance_objective. Much smaller than
+    # band_deviation_penalty on purpose: it only ever breaks ties between
+    # choices the hard/soft band constraints already found equally
+    # acceptable, nudging the *fairest* of them rather than overriding
+    # what those already decided.
+    band_imbalance_weight: float = Field(default=0.5, ge=0)
+    # Reward (subtracted from the cost) for honouring a VOORKEUR mark -
+    # see objective.add_preference_reward_objective. Smaller than
+    # band_imbalance_weight by default so a stated preference only tips an
+    # otherwise-tied choice rather than outweighing fairness.
+    preference_reward_weight: float = Field(default=0.3, ge=0)
 
     @field_validator('band_avond', 'band_weekend', 'band_feestdag')
     @classmethod
@@ -177,16 +195,16 @@ class RuleSet(BaseModel):
     @classmethod
     def _penalty_tiers_are_positive(cls, value: list[float]) -> list[float]:
         # Zero (not just negative) must be rejected too: the documented
-        # weight hierarchy is shortfall > band_slack > soft_blocking >
-        # preferred (VOORKEUR), with the latter two hardcoded in solver.py
-        # at 1.0 and 0.3 - a tier of 0 (or an empty list, silently replaced
-        # by the [5.0] default deeper in objective.py) makes that specific
-        # unit of band deviation genuinely free, and since tier_cost()
-        # extrapolates every tier beyond the configured ones from the last
-        # one, a trailing 0 makes ALL further deviation free too. That lets
-        # a ruleset config alone - no code change - turn off the fairness
-        # enforcement the solver exists for while leaving VOORKEUR's
-        # hardcoded reward untouched, silently inverting the hierarchy.
+        # weight hierarchy, by default, is shortfall > band_slack >
+        # soft_blocking > preferred (VOORKEUR) - a tier of 0 (or an empty
+        # list, silently replaced by the [5.0] default deeper in
+        # objective.py) makes that specific unit of band deviation
+        # genuinely free, and since tier_cost() extrapolates every tier
+        # beyond the configured ones from the last one, a trailing 0 makes
+        # ALL further deviation free too. That lets a ruleset config
+        # alone - no code change - turn off the fairness enforcement the
+        # solver exists for while leaving VOORKEUR's reward untouched,
+        # silently inverting the hierarchy.
         if not value:
             raise ValueError('band_deviation_penalty must not be empty')
         if any(tier <= 0 for tier in value):
@@ -401,7 +419,10 @@ async def solve_roster(request: SolverInput):
             coverage_factors=request.coverage_factors,
             band_deviation_penalty=request.rules.band_deviation_penalty,
             band_deviation_multiplier=request.rules.band_deviation_multiplier,
-            holiday_spread_weeks=request.rules.holiday_spread_weeks
+            holiday_spread_weeks=request.rules.holiday_spread_weeks,
+            shortfall_weight=request.rules.shortfall_weight,
+            band_imbalance_weight=request.rules.band_imbalance_weight,
+            preference_reward_weight=request.rules.preference_reward_weight
         )
 
         if not result['success']:
