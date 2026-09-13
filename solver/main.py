@@ -137,18 +137,22 @@ class RuleSet(BaseModel):
     # actively steering the solver towards a blocked-but-not-ABSOLUUT slot.
     soft_block_penalty: float = Field(default=1.0, ge=0)
     # Cumulative, escalating cost per unit a person strays outside their
-    # band - see objective.add_band_slack_objective. Default reproduces
-    # the flat weight=5.0-per-unit behaviour this replaced. Each tier must
-    # be non-negative for the same reason as soft_block_penalty above.
+    # band - see objective.add_band_slack_objective. This only ever tunes
+    # the *falling-short-of-the-minimum* side and how sharply concentrated
+    # overage on the *maximum* side escalates; the default reproduces the
+    # flat weight=5.0-per-unit behaviour this replaced. Each tier must be
+    # non-negative for the same reason as soft_block_penalty above.
     #
-    # Deliberately not capped below the shortfall weight (1000.0 in
-    # solver.py) - a planner who sets aggressive tiers here (e.g.
-    # [10, 40, 160, 640, 2560]) can reach a level where the solver prefers
-    # leaving a slot unfilled over stretching one person's band further,
-    # which sits above the shortfall weight. Raised and decided during
-    # review: that's accepted, not a bug - a planner who wants "coverage
-    # always wins, no matter how extreme the deviation" achieves that by
-    # not configuring tiers that high, not because the solver enforces it.
+    # Exceeding someone's band maximum is unconditionally priced at
+    # shortfall_weight (1000.0 in solver.py) *plus* this tier, regardless
+    # of what a planner sets here - so going even one shift over anyone's
+    # streefwaarde can never be cheaper than leaving a slot unfilled
+    # instead. This supersedes an earlier decision to leave that
+    # uncapped and let a planner reach the same guarantee only by
+    # configuring aggressive-enough tiers themselves; raised again and
+    # changed to hold unconditionally - "eerlijk verdelen, koste wat
+    # kost" - see add_band_slack_objective's docstring for the exact
+    # pricing.
     band_deviation_penalty: list[float] = [5.0]
     # >=1 so tiers beyond the configured list only ever escalate
     # (penalty_tiers[-1] * multiplier**extra_levels) rather than silently

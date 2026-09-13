@@ -375,14 +375,17 @@ class ConstraintBuilder:
         but a mid-period joiner gets a proportionally smaller target even
         under 'GELIJK'.
 
-        Soft via under/over slack rather than a hard range: when there
-        genuinely aren't enough people to cover every slot within
-        everyone's target band, the solver should prefer stretching
-        someone slightly beyond their band over leaving a shift
-        completely uncovered - that mirrors how a planner would actually
-        resolve this by hand. Slack is penalized in the objective (see
-        objective.py), moderately - more than ordinary preference costs,
-        but far less than leaving a slot unfilled.
+        Soft via under/over slack rather than a hard range - a hard range
+        could make the whole model infeasible outright when demand and
+        supply don't line up exactly. Both directions are penalized in the
+        objective (see objective.py's add_band_slack_objective), but
+        asymmetrically: falling short of the minimum costs less than
+        leaving a slot unfilled (so the solver still prefers assigning
+        someone under-target over an empty shift), while exceeding the
+        maximum costs *more* than leaving a slot unfilled - "eerlijk
+        verdelen, koste wat kost": nobody is pushed past their
+        streefwaarde just to cover a shift; an uncovered shift is left for
+        the planner to resolve by hand instead.
 
         Returns: dict[(person_id, counter), (under IntVar, over IntVar)]
         """

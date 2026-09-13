@@ -5,9 +5,13 @@ Minimizes:
 1. LIEVER_NIET (soft blocking) violations
 2. Band imbalance (assignment count vs target)
 3. Holiday rotation inequality
+4. Unfilled slot capacity (shortfall) - and, priced to always cost more
+   than any single unit of that, exceeding anyone's own band maximum
+   (see add_band_slack_objective) - so a shift is left unfilled rather
+   than pushed onto someone already at their streefwaarde.
 
 Rewards (subtracts from the total):
-4. VOORKEUR (preferred) assignments
+5. VOORKEUR (preferred) assignments
 """
 
 import math
@@ -216,10 +220,14 @@ class ObjectiveBuilder:
         """
         Objective: Minimize unfilled slot capacity.
 
-        Weighted far above every other term so the solver only leaves a
-        slot short when no assignment exists that wouldn't break a hard
-        rule (ABSOLUUT block, window rule) - preference/balance costs
-        never win out over actually covering a shift.
+        Weighted far above ordinary preference/balance costs (LIEVER_NIET,
+        band imbalance, falling short of a band minimum) so those never
+        win out over actually covering a shift. The one deliberate
+        exception is exceeding someone's band *maximum*
+        (add_band_slack_objective's `over` term), which is priced at
+        `this weight + a tier cost` per unit specifically so it can
+        never win out over leaving a slot unfilled instead - see that
+        function's docstring.
         """
         shortfall_cost = weight * sum(shortfall_vars.values()) if shortfall_vars else 0
 
@@ -235,34 +243,50 @@ class ObjectiveBuilder:
         band_slack_vars: dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]],
         penalty_tiers: Optional[list[float]] = None,
         multiplier: float = 1.0,
-        max_tiers: int = 8
+        max_tiers: int = 8,
+        shortfall_weight: float = 1000.0
     ):
         """
         Objective: Minimize how far anyone's assignment count strays
-        outside their target band - at an escalating, cumulative price per
-        extra unit of deviation (bandDeviationPenalty/bandDeviationMultiplier
-        in RulesetConfig), so the solver spreads a shortage across several
-        people (1 over each) rather than concentrating it on one (3+ over).
+        outside their target band - `under` (short of the minimum) and
+        `over` (past the maximum) priced asymmetrically on purpose, not as
+        one combined "deviation" the way this used to work.
 
-        The Nth unit of deviation (1-indexed) costs penalty_tiers[N-1] once
-        N is within the configured tiers; beyond that it costs
-        penalty_tiers[-1] * multiplier**(N - len(penalty_tiers)). Cost is
-        cumulative - 3 units of deviation with tiers [10, 40, 160] costs
-        10 + 40 + 160 = 210, not just 160 - so the first unit stays cheap
-        and each further one gets markedly more expensive. The default
-        (a flat [5.0] tier with multiplier 1.0) reproduces the old fixed
-        weight=5.0-per-unit behaviour exactly, so a period whose ruleset
-        never set bandDeviationPenalty behaves exactly as before this
-        existed.
+        `under` is priced with an escalating, cumulative tier per extra
+        unit (bandDeviationPenalty/bandDeviationMultiplier in
+        RulesetConfig), exactly as before: the Nth unit (1-indexed) costs
+        penalty_tiers[N-1] once N is within the configured tiers, beyond
+        that penalty_tiers[-1] * multiplier**(N - len(penalty_tiers)),
+        cumulatively (3 units with tiers [10, 40, 160] costs 10+40+160=210,
+        not just 160) - so a shortage spreads across several people (1
+        short each) rather than concentrating on one (3+ short).
+
+        `over` uses the *same* tier for the escalation, but every unit
+        additionally costs `shortfall_weight` on top. That floor is
+        deliberate, not just a big default: add_shortfall_objective
+        already prices one empty slot at exactly `shortfall_weight`, and
+        the whole point of this asymmetry is that giving anyone even a
+        single shift past their streefwaarde must never be the cheaper
+        choice next to leaving a slot unfilled instead - "eerlijk
+        verdelen en binnen het streefbereik blijven, koste wat kost" has
+        to hold regardless of what a planner sets bandDeviationPenalty to,
+        not just under its default. (This supersedes an earlier decision
+        to leave `over` uncapped below the shortfall weight and let a
+        planner reach that point only via aggressive tiers - raised again
+        and changed to a hard guarantee.) A planner's tiers still control
+        how much *more* expensive concentrating overage on one person is
+        than spreading it across several, exactly as for `under` - they
+        just can no longer make going over cheaper than an empty shift.
 
         CP-SAT's objective has to stay linear, so "cost grows with each
-        unit" can't be a single multiply the way a flat weight can. Instead
-        this reifies max_tiers boolean "deviation has reached at least N"
-        indicators per person/counter (deviation being under+over from
-        add_band_constraints) and prices each one at its own tier - capped
-        at max_tiers deep, since a tier that far out (each 4x the last) is
-        already so expensive it can never be the cheaper option; not
-        instantiating it just keeps the model smaller.
+        unit" can't be a single multiply the way a flat weight can.
+        Instead this reifies max_tiers boolean "at least N units" (of
+        `under`, and separately of `over`) indicators per person/counter
+        and prices each at its own tier - capped at max_tiers deep, since
+        a tier that far out (each 4x the last, plus - for `over` - already
+        `shortfall_weight` each) is already so expensive it can never be
+        the cheaper option; not instantiating it just keeps the model
+        smaller.
         """
         if not band_slack_vars:
             self.objective_terms['band_slack'] = 0
@@ -277,26 +301,30 @@ class ObjectiveBuilder:
 
         slack_cost = 0
         for (person_id, counter), (under, over) in band_slack_vars.items():
-            deviation = under + over
             for level in range(1, max_tiers + 1):
-                at_least = self.model.NewBoolVar(f'band_dev_{person_id}_{counter}_ge_{level}')
-                self.model.Add(deviation >= level).OnlyEnforceIf(at_least)
-                self.model.Add(deviation < level).OnlyEnforceIf(at_least.Not())
-                slack_cost += tier_cost(level) * at_least
+                under_at_least = self.model.NewBoolVar(f'band_under_{person_id}_{counter}_ge_{level}')
+                self.model.Add(under >= level).OnlyEnforceIf(under_at_least)
+                self.model.Add(under < level).OnlyEnforceIf(under_at_least.Not())
+                slack_cost += tier_cost(level) * under_at_least
+
+                over_at_least = self.model.NewBoolVar(f'band_over_{person_id}_{counter}_ge_{level}')
+                self.model.Add(over >= level).OnlyEnforceIf(over_at_least)
+                self.model.Add(over < level).OnlyEnforceIf(over_at_least.Not())
+                slack_cost += (shortfall_weight + tier_cost(level)) * over_at_least
 
             # Deviation beyond max_tiers must keep getting more expensive,
-            # not become free: without this, nothing prices the difference
-            # between a deviation of exactly max_tiers and one far beyond
-            # it, since no reified "at least" boolean exists past max_tiers.
-            # `excess` only needs a lower bound (>= deviation - max_tiers)
-            # because minimizing the objective already pushes it down to
-            # exactly max(0, deviation - max_tiers) - CP-SAT's standard
-            # idiom for a max(0, x) term. The domain's upper bound is a
-            # generous cap, not a real constraint: deviation can never
-            # realistically approach it.
-            excess = self.model.NewIntVar(0, 100_000, f'band_dev_{person_id}_{counter}_excess')
-            self.model.Add(excess >= deviation - max_tiers)
-            slack_cost += tier_cost(max_tiers + 1) * excess
+            # not become free - see the identical reasoning in the loop
+            # above's docstring. `excess` only needs a lower bound (>=
+            # deviation - max_tiers) because minimizing the objective
+            # already pushes it down to exactly max(0, deviation -
+            # max_tiers) - CP-SAT's standard idiom for a max(0, x) term.
+            under_excess = self.model.NewIntVar(0, 100_000, f'band_under_{person_id}_{counter}_excess')
+            self.model.Add(under_excess >= under - max_tiers)
+            slack_cost += tier_cost(max_tiers + 1) * under_excess
+
+            over_excess = self.model.NewIntVar(0, 100_000, f'band_over_{person_id}_{counter}_excess')
+            self.model.Add(over_excess >= over - max_tiers)
+            slack_cost += (shortfall_weight + tier_cost(max_tiers + 1)) * over_excess
 
         self.objective_terms['band_slack'] = slack_cost
         return slack_cost

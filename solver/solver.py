@@ -134,14 +134,23 @@ class RosterSolver:
         # Add objectives
         objective_builder = ObjectiveBuilder(self.model)
 
+        # Shared between these two calls on purpose: add_band_slack_objective's
+        # `over` term prices every unit at shortfall_weight + its own tier,
+        # specifically so exceeding anyone's streefwaarde can never be
+        # cheaper than leaving a slot unfilled instead - see that
+        # function's docstring. If this value ever changes, the same value
+        # must go to both calls.
+        SHORTFALL_WEIGHT = 1000.0
+
         logger.info("Adding shortfall objective")
         shortfall_cost = objective_builder.add_shortfall_objective(
-            shortfall_vars, weight=1000.0
+            shortfall_vars, weight=SHORTFALL_WEIGHT
         )
 
         logger.info("Adding band slack objective")
         band_slack_cost = objective_builder.add_band_slack_objective(
-            band_slack_vars, penalty_tiers=band_deviation_penalty, multiplier=band_deviation_multiplier
+            band_slack_vars, penalty_tiers=band_deviation_penalty, multiplier=band_deviation_multiplier,
+            shortfall_weight=SHORTFALL_WEIGHT
         )
 
         logger.info("Adding soft preference objective")

@@ -293,23 +293,36 @@ def test_shortfall_is_preferred_over_breaking_a_hard_rule():
 
 
 # ---------------------------------------------------------------------------
-# SOFT band: prefer stretching a band over leaving a shift uncovered
+# SOFT band: never exceed a band max, even if that leaves a shift unfilled
 # ---------------------------------------------------------------------------
 
-def test_band_is_stretched_rather_than_leaving_a_slot_empty():
+def test_band_max_is_never_exceeded_even_if_a_slot_stays_unfilled():
     """
-    Band limits are soft. If honouring everyone's band would leave a shift
-    uncovered, the solver should exceed a band instead - that mirrors what
-    a planner does by hand.
+    Band limits are soft, but asymmetrically: falling short of the minimum
+    is cheaper than an unfilled slot (so the solver still prefers assigning
+    someone under-target over leaving a shift empty), while exceeding the
+    maximum is priced *more* than an unfilled slot - "eerlijk verdelen,
+    koste wat kost": nobody is pushed past their streefwaarde just to
+    cover a shift.
+
+    1 person, band capped at 1, but 3 slots on offer. Taking only 1 (the
+    band max) costs 1 unfilled slot (1000) plus a small imbalance cost;
+    taking all 3 would cost 2 units of over-band slack, each priced above
+    1000 on its own - strictly worse. So the solver must stop at exactly 1
+    and leave the other 2 unfilled, the reverse of what used to be
+    "correct" here.
     """
     slots = make_slots(3)
-    # Band caps everyone at 1, but there are 3 slots and 1 person.
     result = solve(['p1'], slots, window_weeks=1, band={'AVOND': [0, 1], 'WEEKEND': [0, 1], 'FEESTDAG': [0, 1]})
 
     assigned = len(result['assignments'])
-    assert assigned == 3, (
-        f'expected the band to stretch to cover all 3 slots, got {assigned} '
-        f'assigned and {len(result["diagnostics"]["unfilled_slots"])} unfilled'
+    assert assigned == 1, (
+        f'expected the solver to stop at the band max (1) and leave the rest unfilled, '
+        f'got {assigned} assigned and {len(result["diagnostics"]["unfilled_slots"])} unfilled'
+    )
+    assert len(result['diagnostics']['unfilled_slots']) == 2
+    assert result['diagnostics']['violations']['band_limit'] == 0, (
+        'taking exactly the band max should trigger no band violation at all'
     )
 
 
@@ -317,13 +330,18 @@ def test_band_limit_violations_are_reported_not_always_zero():
     """
     diagnostics.violations['band_limit'] used to stay at its build-time 0
     forever, for the same reason as the capacity counter above - band slack
-    is only known after solving. A person stretched outside their band
+    is only known after solving. Someone left under their band minimum
     should be counted, not silently reported as 0 overtredingen.
-    """
-    slots = make_slots(3)
-    result = solve(['p1'], slots, window_weeks=1, band={'AVOND': [0, 1], 'WEEKEND': [0, 1], 'FEESTDAG': [0, 1]})
 
-    assert len(result['assignments']) == 3
+    1 person, only 1 slot on offer, but a minimum of 5 - taking the single
+    available slot is still strictly cheaper than leaving it unfilled too
+    (1 unfilled costs 1000; under-band slack costs a few units at most), so
+    the solver takes it and ends up 4 short of its own minimum.
+    """
+    slots = make_slots(1)
+    result = solve(['p1'], slots, window_weeks=1, band={'AVOND': [5, 5], 'WEEKEND': [5, 5], 'FEESTDAG': [5, 5]})
+
+    assert len(result['assignments']) == 1
     assert result['diagnostics']['violations']['band_limit'] >= 1
 
 
@@ -420,24 +438,38 @@ def test_soft_block_penalty_weight_controls_whether_it_is_honoured():
     where honouring p1's LIEVER_NIET costs something real (band imbalance)
     and showing the outcome flips depending on the weight.
 
-    One slot, band [1,1] on AVOND. p1's balance is untouched (actual band
-    [1,1]: not getting the shift costs 1 unit of band-under slack). p2's
-    balance is -1 (actual band [0,0]: getting the shift costs 1 unit of
-    band-over slack). Assigning p1 costs zero band slack; assigning p2
-    instead costs band slack on both (5.0 weight each = 10.0 total). p1 has
-    marked the slot LIEVER_NIET, costing `soft_block_penalty * 1.0`.
+    Bands are shared per counter across everyone (only a ledger delta can
+    shift a specific person's own actual window), so the two people here
+    are told apart by balance, not by different bands - and deliberately
+    kept so *neither* option ever exceeds anyone's band max: exceeding a
+    max now costs more than leaving the slot unfilled outright (see the
+    asymmetric-pricing tests above), which would swamp this comparison and
+    make the slot go unfilled instead of flipping between p1/p2.
 
-    - Low penalty (1.0 < 10.0): cheaper to just take the band-optimal
-      assignment and pay the small soft-block cost - p1 gets the shift.
-    - High penalty (20.0 > 10.0): now cheaper to eat the band slack than
-      violate p1's preference - p2 gets the shift instead.
+    Shared band [0,1] (matches the 1 available slot). p1 has a +1 AVOND
+    balance, shifting their own actual window to [1,2] (target middle 1 -
+    assigning them hits it exactly, costing 0 imbalance; leaving them idle
+    costs 1 unit of the ordinary, cheap band-*under* tier, not the
+    over-band floor - they're never above their own max=2). p2's balance
+    is untouched (window stays [0,1], target middle 0).
+
+    - Assign p1 (p2 idle): 0 (p1 imbalance, dead on target) + 0 (p2 idle,
+      dead on their own target of 0) + soft_block_penalty*1.0 (p1's
+      LIEVER_NIET) = just the penalty.
+    - Assign p2 (p1 idle): 5.0 (p1's band-under, cheap tier) + 0.5 (p1
+      imbalance) + 0.5 (p2 imbalance) = 6.0 flat, no LIEVER_NIET cost.
+
+    - Low penalty (1.0 < 6.0): cheaper to just assign p1 and pay the small
+      soft-block cost.
+    - High penalty (20.0 > 6.0): now cheaper to assign p2 instead and
+      avoid the LIEVER_NIET slot entirely.
     """
     slots = make_slots(1)
     people = ['p1', 'p2']
-    band = {'AVOND': [1, 1], 'WEEKEND': [1, 1], 'FEESTDAG': [1, 1]}
+    band = {'AVOND': [0, 1], 'WEEKEND': [0, 1], 'FEESTDAG': [0, 1]}
     balances = {
-        'p1': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
-        'p2': {'AVOND': -1, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p1': {'AVOND': 1, 'WEEKEND': 0, 'FEESTDAG': 0},
+        'p2': {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0},
     }
     soft = {('p1', slots[0]['id']): 1.0}
 
@@ -645,19 +677,21 @@ def test_coverage_factor_and_naar_rato_participation_factor_combine_multiplicati
 # BAND DEVIATION: escalating, cumulative bandDeviationPenalty
 # ---------------------------------------------------------------------------
 
-def test_band_deviation_penalty_defaults_to_the_old_flat_weight():
+def test_over_band_max_always_costs_more_than_an_unfilled_slot_by_default():
     """
-    A period whose ruleset never set bandDeviationPenalty must solve
-    exactly as it did before this setting existed - band_deviation_penalty
-    defaults to None, which add_band_slack_objective treats as the flat
-    [5.0] tier this replaced.
+    A period whose ruleset never set bandDeviationPenalty still gets the
+    unconditional shortfall_weight floor on `over` - that guarantee isn't
+    itself something a planner's tiers can opt out of by leaving them
+    unset. band_deviation_penalty defaults to None, treated as the flat
+    [5.0] tier; add_band_slack_objective prices the first unit of `over`
+    at shortfall_weight(1000) + 5.0 = 1005.0 regardless.
 
-    2 people, 1 slot, band [0,0] (nobody "should" take it, but leaving it
-    empty costs far more - shortfall dominates). Whoever takes it ends up
-    exactly 1 over their band: 1 unit of band-slack costs weight(5.0) * 1,
-    plus the (unrelated, untouched-by-this-change) band-imbalance term's
-    own 0.5 for being 1 off its own target of 0 - 5.5 total, exactly what
-    this fixture already cost before bandDeviationPenalty existed.
+    2 people, 1 slot, band [0,0] (nobody "should" take it). Leaving it
+    unfilled costs exactly shortfall_weight (1000.0, no band or imbalance
+    cost - both people already sit exactly on their band). Assigning it to
+    either person would cost 1005.0 (over) + 0.5 (imbalance) = 1005.5 -
+    strictly more. So the cheaper, and therefore correct, answer is to
+    leave it unfilled.
     """
     slots = make_slots(1)
     people = ['p1', 'p2']
@@ -665,8 +699,9 @@ def test_band_deviation_penalty_defaults_to_the_old_flat_weight():
     result = solve(people, slots, window_weeks=1, band=band)
 
     assert result['success']
-    assert len(result['assignments']) == 1
-    assert result['diagnostics']['total_cost'] == 5.5
+    assert len(result['assignments']) == 0
+    assert len(result['diagnostics']['unfilled_slots']) == 1
+    assert result['diagnostics']['total_cost'] == 1000.0
 
 
 def test_band_deviation_penalty_spreads_a_shortage_instead_of_concentrating_it():
@@ -677,30 +712,42 @@ def test_band_deviation_penalty_spreads_a_shortage_instead_of_concentrating_it()
     should never let one person absorb more than their fair share of a
     shortage when spreading it is an option.
 
-    4 people, band [1,1] (everyone wants exactly 1), 6 slots - 2 more than
-    the 4 "exact fit" targets, so 2 units of deviation are unavoidable
-    somewhere. Under the old flat weight, concentrating both units on one
-    person costs exactly the same as spreading them (2*5.0 either way) - a
-    real tie, which is the point of this setting: it breaks that tie in
-    favour of spreading.
+    This has to be a *shortage below the minimum* (`under`), not an excess
+    above the maximum: since exceeding anyone's band max now always costs
+    more than an unfilled slot (see the over-vs-shortfall test above), a
+    surplus-of-slots scenario would just leave the surplus unfilled
+    instead of ever distributing it - it wouldn't exercise this tiering at
+    all. Falling short of the minimum is unaffected by that change (there
+    is no "leave it unfilled instead" alternative that helps someone reach
+    their own minimum), so it still isolates the escalating-tier behaviour
+    exactly as before.
+
+    4 people, band [2,2] (everyone wants exactly 2 -> demand 8), but only 6
+    slots - 2 short of that demand, so 2 units of under-band deviation are
+    unavoidable somewhere (leaving any of the 6 slots unfilled instead
+    would only add shortfall cost on top, never help). Concentrating both
+    units on one person (leaving them at 0) costs 10+40=50; spreading them
+    one-each across two people (each at 1, one short of 2) costs 10+10=20 -
+    strictly cheaper, so the solver must spread them.
     """
     slots = make_slots(6)
     people = ['p1', 'p2', 'p3', 'p4']
-    band = {'AVOND': [1, 1], 'WEEKEND': [1, 1], 'FEESTDAG': [1, 1]}
+    band = {'AVOND': [2, 2], 'WEEKEND': [2, 2], 'FEESTDAG': [2, 2]}
 
     result = solve(people, slots, window_weeks=1, band=band,
                     band_deviation_penalty=[10.0, 40.0, 160.0], band_deviation_multiplier=4.0)
 
     assert result['success']
-    counts = {}
+    assert len(result['diagnostics']['unfilled_slots']) == 0, 'all 6 slots should still be filled'
+    counts = {p: 0 for p in people}
     for a in result['assignments']:
-        counts[a['person_id']] = counts.get(a['person_id'], 0) + 1
+        counts[a['person_id']] += 1
 
-    assert max(counts.values()) <= 2, (
-        f'no single person should absorb both extra shifts when spreading them is cheaper: {counts}'
+    assert min(counts.values()) >= 1, (
+        f'no single person should absorb both units of shortage (ending up at 0) when spreading is cheaper: {counts}'
     )
-    over_band = sum(1 for c in counts.values() if c > 1)
-    assert over_band == 2, f'the 2 extra shifts should land on 2 different people, not concentrated: {counts}'
+    under_target = sum(1 for c in counts.values() if c < 2)
+    assert under_target == 2, f'the 2-unit shortage should land on 2 different people, not concentrated: {counts}'
 
 
 def test_band_deviation_penalty_keeps_growing_past_the_reified_tier_cap():
@@ -711,15 +758,26 @@ def test_band_deviation_penalty_keeps_growing_past_the_reified_tier_cap():
     of 8, which defeats the whole point of an *escalating* penalty right
     when a badly understaffed pool needs it most.
 
+    This isolates `under` deviation specifically, via a *positive* ledger
+    delta, not `over`: `over` now carries the extra shortfall_weight floor
+    (see the asymmetric-pricing tests above), which would make this
+    fixture's "shortfall always wins so the person takes all 8 regardless"
+    assumption false - a large enough negative delta can make leaving
+    slots unfilled cheaper than piling more `over` onto an already-over
+    person. `under` has no such interaction (filling a slot always reduces
+    *both* shortfall and under-deviation at once, never trades one against
+    the other), so it stays exactly as straightforward as this test needs.
+
     1 person forced to take all 8 slots of a fixed-size period (nobody
-    else exists, so the huge shortfall weight always wins over any band
-    cost) isolates deviation via the ledger delta alone, not headcount:
-    delta=-8 makes their effective band max 0 (deviation=8); delta=-10
-    makes it -2 (deviation=10). Both scenarios have identical assignment
-    counts and slot counts, so the only things that can move are the
-    band-slack term (this bug) and the band-imbalance term (a separate,
-    already-correct term with a known fixed weight of 0.5) - both track
-    the same 2-unit delta, so the total cost must rise by
+    else exists, so the huge shortfall weight always wins over the
+    unaffected `under` tier cost) isolates deviation via the ledger delta
+    alone, not headcount: delta=+8 makes their effective band minimum 16
+    (deviation=8, exactly at the tier cap); delta=+10 makes it 18
+    (deviation=10, 2 past the cap). Both scenarios have identical
+    assignment counts and slot counts, so the only things that can move
+    are the band-slack term (this bug) and the band-imbalance term (a
+    separate, already-correct term with a known fixed weight of 0.5) -
+    both track the same 2-unit delta, so the total cost must rise by
     tier_cost(9)*2 + 0.5*2 = 5.0*2 + 1.0 = 11.0, not by just the
     imbalance term's 1.0 alone.
     """
@@ -727,9 +785,9 @@ def test_band_deviation_penalty_keeps_growing_past_the_reified_tier_cap():
     band = {'AVOND': [8, 8], 'WEEKEND': [8, 8], 'FEESTDAG': [8, 8]}
 
     at_tier_cap = solve(['p1'], slots, window_weeks=1, band=band,
-                         balances={'p1': {'AVOND': -8, 'WEEKEND': 0, 'FEESTDAG': 0}})
+                         balances={'p1': {'AVOND': 8, 'WEEKEND': 0, 'FEESTDAG': 0}})
     past_tier_cap = solve(['p1'], slots, window_weeks=1, band=band,
-                           balances={'p1': {'AVOND': -10, 'WEEKEND': 0, 'FEESTDAG': 0}})
+                           balances={'p1': {'AVOND': 10, 'WEEKEND': 0, 'FEESTDAG': 0}})
 
     assert at_tier_cap['success'] and past_tier_cap['success']
     assert len(at_tier_cap['assignments']) == 8 and len(past_tier_cap['assignments']) == 8
@@ -880,14 +938,18 @@ def test_band_target_is_reduced_by_an_existing_manual_assignment():
     mechanism band-wise, just via the other existing input) so their
     *effective* targets become p1=[0,0] (1 base - 1 already assigned) and
     p2=[2,2] (1 base + 1 delta). With those targets, p1=0/p2=2 is the
-    *unique* zero-slack split of the 2 slots (both other splits - 1/1 and
-    2/0 - cost strictly more, see the arithmetic below), so this isn't a
-    tie CP-SAT could break either way by chance - it's the one clearly
-    cheapest answer, and only reachable if the manual assignment actually
-    reduced p1's target the way it's meant to:
-      - (p1=0, p2=2): p1 exact (0 slack), p2 exact (0 slack) -> total 0
-      - (p1=1, p2=1): p1 +1 over, p2 -1 under -> total 2
-      - (p1=2, p2=0): p1 +2 over, p2 -2 under -> total 4
+    *unique* zero-slack split of the 2 slots (both other splits cost
+    strictly more, see the arithmetic below), so this isn't a tie CP-SAT
+    could break either way by chance - it's the one clearly cheapest
+    answer, and only reachable if the manual assignment actually reduced
+    p1's target the way it's meant to. The margin is large because p1
+    going even 1 over their (already-met) target now also carries the
+    shortfall_weight floor on top of the ordinary tier (see
+    add_band_slack_objective) - it no longer takes a tie-break, just
+    confirms the same winner as before by an even wider margin:
+      - (p1=0, p2=2): p1 exact (0 slack), p2 exact (0 slack) -> cheapest
+      - (p1=1, p2=1): p1 +1 over (>= 1000), p2 -1 under (a few units)
+      - (p1=2, p2=0): p1 +2 over (>= 2000), p2 -2 under (a few units)
     """
     slots = make_slots(2, teller='AVOND', start_year=2027, start_week=3)
     # A full two ISO weeks before the earliest slot - well outside
