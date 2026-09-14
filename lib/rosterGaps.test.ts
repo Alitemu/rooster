@@ -3,6 +3,7 @@ import { db } from '@/db/client';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import {
   findUnfilledSlots,
+  countUnfilledSlots,
   getManuallyFilledSlotIds,
   clearSolverAssignments,
   getEligiblePeopleForSlot,
@@ -254,6 +255,24 @@ describe('rosterGaps', () => {
       for (const slotId of f.slotIds) assign(f.periodId, f.personIds[0], slotId, 'SOLVER');
 
       expect(findUnfilledSlots(f.periodId)).toEqual([]);
+    });
+  });
+
+  describe('countUnfilledSlots', () => {
+    it('matches the number of slots findUnfilledSlots reports as gaps', () => {
+      const f = createFixture(3, '2027-01-04', '2027-01-10'); // 7 slots
+      assign(f.periodId, f.personIds[0], f.slotIds[0], 'SOLVER');
+      assign(f.periodId, f.personIds[1], f.slotIds[1], 'MANUAL');
+
+      expect(countUnfilledSlots(f.periodId)).toBe(findUnfilledSlots(f.periodId).length);
+      expect(countUnfilledSlots(f.periodId)).toBe(5);
+    });
+
+    it('is zero once every slot is covered', () => {
+      const f = createFixture(1, '2027-01-04', '2027-01-10');
+      for (const slotId of f.slotIds) assign(f.periodId, f.personIds[0], slotId, 'SOLVER');
+
+      expect(countUnfilledSlots(f.periodId)).toBe(0);
     });
   });
 

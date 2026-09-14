@@ -13,7 +13,7 @@
  * - Generate roster button
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ExportDialog } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
@@ -67,23 +67,14 @@ interface Props {
   onPeriodChanged?: () => void;
   /**
    * Called when this dashboard's "rooster genereren met solver" dialog
-   * (re)generates a roster - for page-level pieces (e.g. FillGapsPanel)
+   * (re)generates a roster - for page-level pieces (e.g. FillGapsSummary)
    * that have the same "only knows about periodId, so never notices a
    * regenerate" staleness problem but live outside this component.
    */
   onRosterChanged?: () => void;
-  /**
-   * Bumped by the page whenever something outside this component changed
-   * the roster's assignments - specifically FillGapsPanel applying staged
-   * picks. This dashboard's own AssignmentGrid/AssignmentCalendar (and the
-   * imbalance/staff-status numbers above them) otherwise have no way to
-   * find out: they only ever see the same unchanging periodId. Any value
-   * change triggers a reload; the value itself is otherwise meaningless.
-   */
-  refreshSignal?: number;
 }
 
-export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, refreshSignal }: Props) {
+export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }: Props) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [progress, setProgress] = useState<PersonProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,10 +117,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
       setDashboard(dashData.data);
       setProgress(progData.data);
       setLoading(false);
-      // Any dashboard reload - mount, submit-on-behalf, refreshSignal, or
-      // the roster dialog's own onSuccess - also means the assignments
-      // list/calendar could be stale, so remount them together with it
-      // rather than tracking each trigger separately.
+      // Any dashboard reload - mount, submit-on-behalf, or the roster
+      // dialog's own onSuccess - also means the assignments list/calendar
+      // could be stale, so remount them together with it rather than
+      // tracking each trigger separately.
       setAssignmentsRefreshKey((k) => k + 1);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Laden van dashboard mislukt');
@@ -140,19 +131,6 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged, r
   useEffect(() => {
     loadData();
   }, [periodId]);
-
-  // Skips the first run the same way FillGapsPanel's persist effect does -
-  // refreshSignal starts at whatever the page initialized it to, and that
-  // initial value must not trigger a second, redundant load on mount.
-  const skippedFirstRefreshSignal = useRef(false);
-  useEffect(() => {
-    if (refreshSignal === undefined) return;
-    if (!skippedFirstRefreshSignal.current) {
-      skippedFirstRefreshSignal.current = true;
-      return;
-    }
-    loadData();
-  }, [refreshSignal]);
 
   const handleSubmitOnBehalf = async (personId: string) => {
     setSubmittingFor(personId);

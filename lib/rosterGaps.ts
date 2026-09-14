@@ -184,6 +184,36 @@ export function getEligiblePeopleForSlot(
 }
 
 /**
+ * How many slots are still short of their required headcount - the same
+ * "gap" definition findUnfilledSlots uses, but as a single indexed COUNT
+ * query instead of also computing eligible_people (pool members +
+ * preferences + a window-conflict batch query) for every one of them.
+ *
+ * Exists specifically so the period dashboard can show "N diensten nog
+ * niet ingevuld" as a compact summary + link to the full fill-gaps page,
+ * without paying for the full breakdown just to display a number - a
+ * freshly opened period has every slot in this state (the solver hasn't
+ * run yet), which used to mean computing eligibility for all of them just
+ * to render a page a planner hadn't asked to see yet.
+ */
+export function countUnfilledSlots(periodId: string): number {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) as count FROM (
+         SELECT s.id,
+                s.benodigd_aantal_personen,
+                (SELECT COUNT(*) FROM dienstrooster_assignment a
+                 WHERE a.schedule_version_id = ? AND a.slot_id = s.id) as assigned_count
+         FROM dienstrooster_shift_slot s
+         WHERE s.period_id = ?
+       ) gaps
+       WHERE gaps.assigned_count < COALESCE(gaps.benodigd_aantal_personen, 1)`
+    )
+    .get(periodId, periodId) as { count: number };
+  return row.count;
+}
+
+/**
  * Every slot still short of its required headcount, with the pool members
  * who could take it, each with their `category` - see
  * getEligiblePeopleForSlot above for why nobody is filtered out.
