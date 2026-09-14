@@ -561,6 +561,23 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     }
   };
 
+  // "Opnieuw genereren" used to immediately re-run the solver with
+  // whatever settings were already used - fine while those settings never
+  // changed, but with 4 optimalisatiemethodes now selectable a planner
+  // regularly wants to try a *different* one on a second attempt. This
+  // goes back to the settings screen instead (still pre-filled with the
+  // just-used values, from `ruleset`'s untouched state) so they can adjust
+  // anything before pressing "Genereren" again themselves.
+  const handleBackToSettings = () => {
+    setResult(null);
+    setError(null);
+    // Belonged to the finished attempt being left behind - starting a
+    // fresh one (possibly under a completely different objectiveMode)
+    // shouldn't carry over "langer proberen" step tracking from it.
+    setLastTimeLimitSeconds(null);
+    setPendingTimeLimitSeconds(null);
+  };
+
   const handleResetAdvancedDefaults = () => {
     if (!ruleset) return;
     setRuleset({
@@ -1168,12 +1185,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           {result && !error && (
             <>
               <button
-                onClick={() => handleGenerate()}
-                disabled={loading || formInvalid}
-                title={formInvalid ? 'Los eerst de ongeldige instellingen hierboven op' : undefined}
-                className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
+                onClick={handleBackToSettings}
+                className="flex-1 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
               >
-                {loading ? 'Opnieuw genereren...' : 'Opnieuw genereren'}
+                Instellingen aanpassen
               </button>
               <button
                 onClick={handleClose}
