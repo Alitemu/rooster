@@ -393,6 +393,19 @@ async function runGeneration(args: {
         // between shifts, a valid planner choice) with 2 - only fall back
         // when the value is genuinely absent.
         window_weeks: typeof config.windowWeeks === 'number' ? config.windowWeeks : 2,
+        // Per-teller windows (AVOND on its own, WEEKEND+FEESTDAG pooled
+        // together) - only present on a period opened or regenerated after
+        // this existed. undefined here (the key omitted entirely from the
+        // JSON body) matches solver/main.py's RuleSet default of None for
+        // both, which keeps the plain pooled window_weeks above in effect -
+        // a period frozen before this existed must keep behaving exactly
+        // as it always has.
+        ...(typeof config.windowWeeksAvond === 'number'
+          ? { window_weeks_avond: config.windowWeeksAvond }
+          : {}),
+        ...(typeof config.windowWeeksWeekendFeestdag === 'number'
+          ? { window_weeks_weekend_feestdag: config.windowWeeksWeekendFeestdag }
+          : {}),
         band_avond: bands.AVOND,
         band_weekend: bands.WEEKEND,
         band_feestdag: bands.FEESTDAG,

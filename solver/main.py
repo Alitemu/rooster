@@ -160,6 +160,28 @@ class RuleSet(BaseModel):
     # reproducing the same one every time - see solver.py's
     # RosterSolver.random_seed.
     random_seed: Optional[int] = None
+    # Per-teller window override - both None (default) keeps the single
+    # pooled window_weeks above exactly as it always worked (one shared
+    # window across every teller, a shift of any type excluding a nearby
+    # shift of any type), for the same backward-compat reason
+    # objective_mode defaults to 'weighted': a period frozen before this
+    # existed has neither key in its bevroren_ruleset_json and must not
+    # silently switch behaviour.
+    #
+    # Setting either one instead applies the planner's own explicit rule:
+    # "een weekenddienst kan wel een avonddienst blokkeren en andersom...
+    # het minimum geldt dan voor alle diensten" - AVOND and WEEKEND+FEESTDAG
+    # each keep their own (typically larger) same-type cap, but the
+    # *smaller* of the two windows still applies as a floor between every
+    # pair of shifts regardless of type. The missing one of the pair
+    # defaults to 0 (no restriction for that group's own cap - the floor
+    # is then 0 too, so cross-type is unrestricted as well) rather than
+    # falling back to window_weeks - see solver.py's build_model and
+    # greedy.py's run_greedy_construction, both of which apply this
+    # identically. holiday_spread_weeks (below) is a separate,
+    # already-existing FEESTDAG-only extra rule, untouched by this.
+    window_weeks_avond: Optional[int] = Field(default=None, ge=0)
+    window_weeks_weekend_feestdag: Optional[int] = Field(default=None, ge=0)
     # A negative value would turn the LIEVER_NIET penalty into a reward,
     # actively steering the solver towards a blocked-but-not-ABSOLUUT slot.
     soft_block_penalty: float = Field(default=1.0, ge=0)
@@ -476,7 +498,9 @@ async def solve_roster(request: SolverInput):
             band_imbalance_weight=request.rules.band_imbalance_weight,
             preference_reward_weight=request.rules.preference_reward_weight,
             objective_mode=request.rules.objective_mode,
-            random_seed=request.rules.random_seed
+            random_seed=request.rules.random_seed,
+            window_weeks_avond=request.rules.window_weeks_avond,
+            window_weeks_weekend_feestdag=request.rules.window_weeks_weekend_feestdag
         )
 
         if not result['success']:
@@ -574,6 +598,8 @@ async def solve_roster_greedy(request: GreedySolverInput):
             holiday_spread_weeks=request.rules.holiday_spread_weeks,
             variant=request.variant,
             random_seed=request.rules.random_seed,
+            window_weeks_avond=request.rules.window_weeks_avond,
+            window_weeks_weekend_feestdag=request.rules.window_weeks_weekend_feestdag,
         )
 
         assignments = [Assignment(**a) for a in result['assignments']]

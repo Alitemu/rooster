@@ -50,7 +50,8 @@ class ConstraintBuilder:
         assignment_vars: dict[tuple[str, str], cp_model.IntVar],
         people: list[str],
         slots: list[dict],
-        window_weeks: int
+        window_weeks: int,
+        counters: Optional[list[str]] = None
     ):
         """
         Constraint: at most one assignment in any run of `window_weeks`
@@ -83,15 +84,29 @@ class ConstraintBuilder:
         53) of one year and week 1 of the next - one calendar week apart -
         sail through unchecked, since neither `range(52, 52+window_weeks)`
         nor `range(1, 1+window_weeks)` sees the other side of the boundary.
+
+        counters: None (default) pools every slot together regardless of
+        teller, exactly as before - the only behaviour periods frozen
+        before per-teller windows existed have ever seen. When given, only
+        slots whose shift_type_name is in this list count toward the
+        window for THIS call. solver.py's build_model calls this three
+        times for per-teller windows - once with counters=None at the
+        smaller of the two configured windows (a cross-type floor that
+        still applies between every pair of shifts regardless of type, per
+        the planner's own explicit rule), plus once per group at that
+        group's own, typically larger, same-type-only window - see that
+        function's own comment for the full reasoning.
         """
         self.violations['window_rule'] = 0
 
         if window_weeks <= 1:
             return  # No window constraint for 1-week
 
+        relevant_slots = slots if counters is None else [s for s in slots if s.get('shift_type_name') in counters]
+
         # Build map: week -> list of slots
         week_slots = {}
-        for slot in slots:
+        for slot in relevant_slots:
             week = _week_ordinal(slot['datum'])
             if week not in week_slots:
                 week_slots[week] = []
@@ -220,8 +235,9 @@ class ConstraintBuilder:
         self,
         assignment_vars: dict[tuple[str, str], cp_model.IntVar],
         slots: list[dict],
-        prior_assignments: list[dict],  # [{'person_id': str, 'datum': str}, ...]
-        window_weeks: int
+        prior_assignments: list[dict],  # [{'person_id': str, 'datum': str, 'teller': str}, ...]
+        window_weeks: int,
+        counters: Optional[list[str]] = None
     ):
         """
         Extends the window rule across a period boundary.
@@ -244,15 +260,28 @@ class ConstraintBuilder:
         this period's slots landing too close to it, the same way
         add_window_constraints rules out two of the period's own slots
         landing too close to each other.
+
+        counters: same meaning and same caller pattern as
+        add_window_constraints' own (see its docstring for the full
+        cross-type-floor-plus-per-group reasoning) - None pools everything
+        (a prior fact of any teller blocks any nearby slot, the only
+        behaviour periods frozen before per-teller windows existed have
+        ever seen); given a list, only prior facts whose own teller is in
+        it, and only slots whose shift_type_name is in it, participate in
+        THIS call.
         """
         if window_weeks <= 1 or not prior_assignments:
             return
 
+        relevant_slots = slots if counters is None else [s for s in slots if s.get('shift_type_name') in counters]
+
         for prior in prior_assignments:
+            if counters is not None and prior.get('teller') not in counters:
+                continue
             person_id = prior['person_id']
             prior_week = _week_ordinal(prior['datum'])
 
-            for slot in slots:
+            for slot in relevant_slots:
                 key = (person_id, slot['id'])
                 if key not in assignment_vars:
                     continue

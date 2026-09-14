@@ -25,7 +25,12 @@ interface BlockBudgetPerTeller {
 }
 
 interface RulesetConfig {
+  // Legacy pooled window - SetupWizard now always sends windowWeeksAvond/
+  // windowWeeksWeekendFeestdag below instead (kept here only so an older
+  // caller shape still type-checks; not itself validated, like those two).
   windowWeeks: number;
+  windowWeeksAvond?: number;
+  windowWeeksWeekendFeestdag?: number;
   bandAvond: [number, number];
   bandWeekend: [number, number];
   bandFeestdag: [number, number];

@@ -45,6 +45,8 @@ interface BlockBudgetPerTeller {
 
 interface UpdateRulesetRequest {
   windowWeeks?: number;
+  windowWeeksAvond?: number;
+  windowWeeksWeekendFeestdag?: number;
   bandAvond?: [number, number];
   bandWeekend?: [number, number];
   bandFeestdag?: [number, number];
@@ -139,6 +141,19 @@ export async function PATCH(
         error: { code: 'INVALID_WINDOW', message: 'Venster moet 0 of hoger zijn' },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    for (const [label, value] of [
+      ['Venster (avond)', body.windowWeeksAvond],
+      ['Venster (weekend/feestdag)', body.windowWeeksWeekendFeestdag],
+    ] as const) {
+      if (value !== undefined && (typeof value !== 'number' || value < 0)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'INVALID_WINDOW', message: `"${label}" moet 0 of hoger zijn` },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
     }
 
     for (const [key, band] of [
@@ -315,6 +330,10 @@ export async function PATCH(
     const updated = {
       ...config,
       ...(body.windowWeeks !== undefined ? { windowWeeks: body.windowWeeks } : {}),
+      ...(body.windowWeeksAvond !== undefined ? { windowWeeksAvond: body.windowWeeksAvond } : {}),
+      ...(body.windowWeeksWeekendFeestdag !== undefined
+        ? { windowWeeksWeekendFeestdag: body.windowWeeksWeekendFeestdag }
+        : {}),
       ...(body.bandAvond !== undefined ? { bandAvond: body.bandAvond } : {}),
       ...(body.bandWeekend !== undefined ? { bandWeekend: body.bandWeekend } : {}),
       ...(body.bandFeestdag !== undefined ? { bandFeestdag: body.bandFeestdag } : {}),

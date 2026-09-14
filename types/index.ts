@@ -156,7 +156,24 @@ export interface BalanceDisplay {
 
 // Ruleset Configuration
 export interface RulesetConfig {
+  // Legacy, pooled window (AVOND/WEEKEND/FEESTDAG share one minimum-weeks-
+  // between-shifts rule) - only ever read for a period frozen before
+  // windowWeeksAvond/windowWeeksWeekendFeestdag existed. Every period
+  // opened or regenerated since then carries those two instead; see
+  // generate-roster/route.ts for the fallback.
   windowWeeks: number;
+  // AVOND has its own minimum weeks between shifts; WEEKEND and FEESTDAG
+  // share a second one (not three separate windows) - but a shift of one
+  // type CAN still block a nearby shift of the other: the *smaller* of
+  // the two values applies as a floor between every pair of shifts
+  // regardless of type, on top of each group's own (typically larger)
+  // same-type cap. See solver/constraints.py's add_window_constraints
+  // (counters param) and solver/greedy.py's _window_group/window_ok for
+  // the exact floor-plus-per-group decomposition.
+  // holidaySpreadWithinPeriod below is unrelated - a separate,
+  // FEESTDAG-only extra rule that predates this split.
+  windowWeeksAvond: number;
+  windowWeeksWeekendFeestdag: number;
   blockBudget: {
     AVOND: { maxFraction: number };
     WEEKEND: { maxFraction: number };

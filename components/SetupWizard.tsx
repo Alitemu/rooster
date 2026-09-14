@@ -64,7 +64,15 @@ interface StaffMember {
 }
 
 interface WindowConfig {
-  windowWeeks: number;
+  // AVOND has its own minimum weeks between shifts; WEEKEND and FEESTDAG
+  // share a second one - but a shift of one type CAN still block a nearby
+  // shift of the other: the *smaller* of the two values applies as a
+  // floor between every pair of shifts regardless of type, on top of each
+  // group's own (typically larger) same-type cap. See
+  // solver/constraints.py's add_window_constraints and
+  // solver/greedy.py's window_ok for the exact decomposition.
+  windowWeeksAvond: number;
+  windowWeeksWeekendFeestdag: number;
   band_min: Record<string, number>;
   band_max: Record<string, number>;
 }
@@ -265,7 +273,8 @@ export function SetupWizard({ period, onComplete }: Props) {
   // date the first time this period's staff list is loaded.
   const autoActivatedPeriodRef = useRef<string | null>(null);
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
-    windowWeeks: 2,
+    windowWeeksAvond: 2,
+    windowWeeksWeekendFeestdag: 2,
     band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
     band_max: { AVOND: 8, WEEKEND: 3, FEESTDAG: 2 },
   });
@@ -323,8 +332,15 @@ export function SetupWizard({ period, onComplete }: Props) {
       const ticket = ++capacityRequestRef.current;
       setCapacityLoading(true);
       try {
+        // The live capacity check (CLAUDE.md's floor(weeks/windowWeeks)
+        // formula) only has one windowWeeks slot, not a per-teller one -
+        // AVOND's window is used as the representative value since AVOND
+        // is by far the highest-volume counter this formula is really
+        // about; it's advisory only (a suggested streefbereik), never what
+        // actually governs generation, which always uses both values
+        // correctly (see generate-roster/route.ts).
         const params = new URLSearchParams({
-          window_weeks: String(windowConfig.windowWeeks),
+          window_weeks: String(windowConfig.windowWeeksAvond),
           distribution_mode: distributionConfig.mode,
         });
         if (periodData.start_datum) params.set('start_datum', periodData.start_datum);
@@ -361,7 +377,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
     loadCapacity();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, windowConfig.windowWeeks, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
+  }, [currentStep, windowConfig.windowWeeksAvond, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
 
   // Membership is_active is purely date-range-based (geldig_vanaf/tot
   // overlapping the period), so "activating" someone for this period just
@@ -821,7 +837,12 @@ export function SetupWizard({ period, onComplete }: Props) {
           eind_datum: periodData.eind_datum,
           deadline: periodData.deadline,
           ruleset: {
-            windowWeeks: windowConfig.windowWeeks,
+            // Kept for anything still reading the old singular field (see
+            // open/route.ts's RulesetConfig) - not itself consulted by
+            // generation once the two fields below are present.
+            windowWeeks: windowConfig.windowWeeksAvond,
+            windowWeeksAvond: windowConfig.windowWeeksAvond,
+            windowWeeksWeekendFeestdag: windowConfig.windowWeeksWeekendFeestdag,
             bandAvond: [windowConfig.band_min.AVOND, windowConfig.band_max.AVOND],
             bandWeekend: [windowConfig.band_min.WEEKEND, windowConfig.band_max.WEEKEND],
             bandFeestdag: [windowConfig.band_min.FEESTDAG, windowConfig.band_max.FEESTDAG],
@@ -1343,22 +1364,56 @@ export function SetupWizard({ period, onComplete }: Props) {
         {/* Step 3: Window & Budgets */}
         {currentStep === 'window' && (
           <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Venster (weken tussen diensten)</label>
-              <input
-                type="number"
-                min="0"
-                max="8"
-                value={windowConfig.windowWeeks}
-                onChange={(e) =>
-                  setWindowConfig({ ...windowConfig, windowWeeks: parseInt(e.target.value) || 0 })
-                }
-                className="w-full px-3 py-2 border rounded"
-              />
-              <p className="text-xs text-neutral-600 mt-1">
-                Minimaal aantal weken tussen toewijzingen van hetzelfde diensttype
-              </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Venster avonddiensten (weken)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="8"
+                  value={windowConfig.windowWeeksAvond}
+                  onChange={(e) =>
+                    setWindowConfig({
+                      ...windowConfig,
+                      windowWeeksAvond: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded"
+                />
+                <p className="text-xs text-neutral-600 mt-1">
+                  Minimaal aantal weken tussen twee avonddiensten voor dezelfde persoon
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Venster weekend-/feestdagdiensten (weken)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="8"
+                  value={windowConfig.windowWeeksWeekendFeestdag}
+                  onChange={(e) =>
+                    setWindowConfig({
+                      ...windowConfig,
+                      windowWeeksWeekendFeestdag: parseInt(e.target.value) || 0,
+                    })
+                  }
+                  className="w-full px-3 py-2 border rounded"
+                />
+                <p className="text-xs text-neutral-600 mt-1">
+                  Minimaal aantal weken tussen twee weekend- of feestdagdiensten (samen) voor
+                  dezelfde persoon
+                </p>
+              </div>
             </div>
+            <p className="text-xs text-neutral-500">
+              Het kleinste van deze twee vensters geldt ook tussen een avonddienst en een weekend-
+              of feestdagdienst - een avonddienst kan dus wel een weekenddienst in de buurt
+              blokkeren en andersom, maar nooit strenger dan het kleinste ingestelde venster.
+            </p>
 
             <div
               className={`border rounded p-3 text-sm ${
@@ -1891,7 +1946,8 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_active).length} actief in deze periode
                 </p>
                 <p>
-                  <strong>Venster:</strong> {windowConfig.windowWeeks} weken
+                  <strong>Venster:</strong> avond {windowConfig.windowWeeksAvond} weken · weekend/
+                  feestdag {windowConfig.windowWeeksWeekendFeestdag} weken
                 </p>
                 <p>
                   <strong>Verdeling:</strong> {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}

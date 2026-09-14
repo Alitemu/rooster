@@ -89,7 +89,9 @@ class RosterSolver:
         shortfall_weight: float = 1000.0,
         band_imbalance_weight: float = 0.5,
         preference_reward_weight: float = 0.3,
-        objective_mode: str = 'weighted'
+        objective_mode: str = 'weighted',
+        window_weeks_avond: Optional[int] = None,
+        window_weeks_weekend_feestdag: Optional[int] = None
     ) -> dict:
         """
         Build the CP-SAT model: every constraint always, the combined
@@ -128,11 +130,6 @@ class RosterSolver:
         # Add constraints
         constraint_builder = ConstraintBuilder(self.model)
 
-        logger.info("Adding window constraints")
-        constraint_builder.add_window_constraints(
-            assignment_vars, people, slots, window_weeks
-        )
-
         # prior_assignments (before this period) and manual_assignments
         # (already fixed within this period, before this solve - see
         # main.py's SolverInput) are both "immovable facts the window rule
@@ -141,10 +138,66 @@ class RosterSolver:
         # once per list, since each fact is applied independently.
         fixed_assignments = (prior_assignments or []) + (manual_assignments or [])
 
-        logger.info("Adding prior-period window carry-over constraints")
-        constraint_builder.add_prior_assignment_constraints(
-            assignment_vars, slots, fixed_assignments, window_weeks
-        )
+        # Per-teller windows: None for both (the only state a period frozen
+        # before this existed can ever be in) keeps the single pooled
+        # window_weeks exactly as it always worked - one shared window
+        # across every teller, a shift of any type blocking a nearby shift
+        # of any type.
+        #
+        # Either one set instead applies THREE constraints together, per
+        # the planner's own explicit rule: "een weekenddienst kan wel een
+        # avonddienst blokkeren en andersom... het minimum geldt dan voor
+        # alle diensten" - i.e. AVOND and WEEKEND+FEESTDAG each keep their
+        # own (typically larger) same-type cap, but the *smaller* of the
+        # two windows still applies as a floor between every pair of shifts
+        # regardless of type:
+        #   1. A pooled call at min(window_weeks_avond, window_weeks_weekend_feestdag)
+        #      over ALL slots - the cross-type floor.
+        #   2. An AVOND-only call at window_weeks_avond - only binding when
+        #      that's larger than the floor above (otherwise redundant with
+        #      it, which is harmless).
+        #   3. A WEEKEND+FEESTDAG-only call at window_weeks_weekend_feestdag,
+        #      same reasoning.
+        # holiday_spread_weeks (below) is untouched by any of this - a
+        # separate, already-existing, FEESTDAG-only extra rule layered on
+        # top either way.
+        per_teller_windows = window_weeks_avond is not None or window_weeks_weekend_feestdag is not None
+
+        logger.info(f"Adding window constraints (per_teller_windows={per_teller_windows})")
+        if per_teller_windows:
+            avond_weeks = window_weeks_avond or 0
+            weekend_feestdag_weeks = window_weeks_weekend_feestdag or 0
+            cross_type_floor = min(avond_weeks, weekend_feestdag_weeks)
+
+            constraint_builder.add_window_constraints(
+                assignment_vars, people, slots, cross_type_floor
+            )
+            constraint_builder.add_window_constraints(
+                assignment_vars, people, slots, avond_weeks, counters=['AVOND']
+            )
+            constraint_builder.add_window_constraints(
+                assignment_vars, people, slots, weekend_feestdag_weeks,
+                counters=['WEEKEND', 'FEESTDAG']
+            )
+            logger.info("Adding prior-period window carry-over constraints")
+            constraint_builder.add_prior_assignment_constraints(
+                assignment_vars, slots, fixed_assignments, cross_type_floor
+            )
+            constraint_builder.add_prior_assignment_constraints(
+                assignment_vars, slots, fixed_assignments, avond_weeks, counters=['AVOND']
+            )
+            constraint_builder.add_prior_assignment_constraints(
+                assignment_vars, slots, fixed_assignments, weekend_feestdag_weeks,
+                counters=['WEEKEND', 'FEESTDAG']
+            )
+        else:
+            constraint_builder.add_window_constraints(
+                assignment_vars, people, slots, window_weeks
+            )
+            logger.info("Adding prior-period window carry-over constraints")
+            constraint_builder.add_prior_assignment_constraints(
+                assignment_vars, slots, fixed_assignments, window_weeks
+            )
 
         logger.info("Adding holiday spread constraints")
         constraint_builder.add_holiday_spread_constraints(
@@ -545,7 +598,9 @@ class RosterSolver:
         band_imbalance_weight: float = 0.5,
         preference_reward_weight: float = 0.3,
         objective_mode: str = 'weighted',
-        random_seed: Optional[int] = None
+        random_seed: Optional[int] = None,
+        window_weeks_avond: Optional[int] = None,
+        window_weeks_weekend_feestdag: Optional[int] = None
     ) -> dict:
         """
         End-to-end: build model, solve (weighted or lexicographic per
@@ -556,6 +611,11 @@ class RosterSolver:
         reproduces the same result. Set by the "Herhaalplanner" multi-start
         loop (Next.js) to a different value per attempt so repeated calls
         with otherwise identical input can land on different solutions.
+
+        window_weeks_avond/window_weeks_weekend_feestdag: see build_model's
+        per_teller_windows - both None (default) keeps the single pooled
+        window_weeks, for backward compatibility with periods frozen
+        before this existed.
         """
         logger.info(f"Generating roster for period {period_id} (objective_mode={objective_mode}, random_seed={random_seed})")
         self.random_seed = random_seed
@@ -569,7 +629,9 @@ class RosterSolver:
                 distribution_mode, participation_factors, coverage_factors,
                 band_deviation_penalty, band_deviation_multiplier,
                 holiday_spread_weeks, shortfall_weight, band_imbalance_weight,
-                preference_reward_weight, objective_mode
+                preference_reward_weight, objective_mode,
+                window_weeks_avond=window_weeks_avond,
+                window_weeks_weekend_feestdag=window_weeks_weekend_feestdag
             )
 
             # Solve

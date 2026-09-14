@@ -36,7 +36,8 @@ def make_slots(num_weeks, teller='AVOND', start_year=2027, start_week=1):
 
 def run(people, slots, window_weeks=2, band=None, blocked=None, soft=None, preferred=None,
         prior=None, manual=None, distribution_mode='GELIJK', participation_factors=None,
-        coverage=None, holiday_spread_weeks=0, variant='medewerker', random_seed=1):
+        coverage=None, holiday_spread_weeks=0, variant='medewerker', random_seed=1,
+        window_weeks_avond=None, window_weeks_weekend_feestdag=None):
     wide = {'AVOND': (0, len(slots)), 'WEEKEND': (0, len(slots)), 'FEESTDAG': (0, len(slots))}
     return run_greedy_construction(
         people=people,
@@ -55,6 +56,8 @@ def run(people, slots, window_weeks=2, band=None, blocked=None, soft=None, prefe
         holiday_spread_weeks=holiday_spread_weeks,
         variant=variant,
         random_seed=random_seed,
+        window_weeks_avond=window_weeks_avond,
+        window_weeks_weekend_feestdag=window_weeks_weekend_feestdag,
     )
 
 
@@ -257,4 +260,173 @@ def test_naar_rato_scales_the_band_the_same_way_constraints_py_does():
 
     assert len(result['assignments']) <= 2, (
         f"expected NAAR_RATO to cap a 0.5-factor person's band at 2, got {len(result['assignments'])}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# HARD RULE: per-teller windows (window_weeks_avond / window_weeks_weekend_feestdag)
+# ---------------------------------------------------------------------------
+
+def _mixed_avond_weekend_slots():
+    """One AVOND slot in week 1, one WEEKEND slot in week 2 - see
+    test_solver.py's identical fixture for why (1 week apart, inside a
+    window_weeks=2 gap)."""
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w2 = date.fromisocalendar(2027, 2, 1)
+    return [
+        {
+            'id': 'avond-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-avond',
+            'shift_type_name': 'AVOND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'weekend-w2', 'datum': monday_w2.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 2, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+    ]
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_pooled_window_blocks_across_teller_types(variant):
+    """
+    Baseline / backward-compat: with window_weeks_avond and
+    window_weeks_weekend_feestdag both unset, the window rule must still
+    pool every teller together exactly as before - one person, an AVOND
+    shift in week 1 and a WEEKEND shift in week 2, must not get both.
+    """
+    slots = _mixed_avond_weekend_slots()
+    result = run(['p1'], slots, window_weeks=2, variant=variant)
+
+    assert len(result['assignments']) <= 1, (
+        f"pooled window rule must block the second (cross-teller) assignment, got {result['assignments']}"
+    )
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_per_teller_windows_apply_the_smaller_one_as_a_cross_type_floor(variant):
+    """
+    Hard rule, per the planner's own explicit correction: "een
+    weekenddienst kan wel een avonddienst blokkeren en andersom... het
+    minimum geldt dan voor alle diensten" - AVOND and WEEKEND are NOT fully
+    independent under per-teller windows. The *smaller* of the two
+    configured windows still applies as a floor between every pair of
+    shifts regardless of type. window_weeks_avond=2,
+    window_weeks_weekend_feestdag=4 -> floor is 2. An AVOND shift in week 1
+    and a WEEKEND shift in week 2 (1 week apart, below the floor) must not
+    both be assigned.
+    """
+    slots = _mixed_avond_weekend_slots()
+    result = run(
+        ['p1'], slots, variant=variant,
+        window_weeks_avond=2, window_weeks_weekend_feestdag=4,
+    )
+
+    assert len(result['assignments']) <= 1, (
+        f"cross-type gap (1 week) is below the floor min(2,4)=2, expected only one filled, got {result['assignments']}"
+    )
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_per_teller_windows_cross_type_only_needs_the_floor(variant):
+    """
+    Counterpart: a cross-type gap that clears the floor must be allowed
+    even if it's below the larger group's own same-type window -
+    window_weeks_avond=2, window_weeks_weekend_feestdag=4 (floor=2). An
+    AVOND shift in week 1 and a WEEKEND shift in week 3 (2 weeks apart)
+    must both be assignable, since WEEKEND's stricter 4-week cap only
+    applies between two WEEKEND/FEESTDAG shifts, not across types.
+    """
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w3 = date.fromisocalendar(2027, 3, 1)
+    slots = [
+        {
+            'id': 'avond-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-avond',
+            'shift_type_name': 'AVOND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'weekend-w3', 'datum': monday_w3.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 3, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+    ]
+    result = run(
+        ['p1'], slots, variant=variant,
+        window_weeks_avond=2, window_weeks_weekend_feestdag=4,
+    )
+
+    assert len(result['assignments']) == 2, (
+        f"2-week cross-type gap clears the floor of 2, expected both filled, got {result['assignments']}"
+    )
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_per_teller_windows_still_enforce_the_larger_same_type_window(variant):
+    """
+    The other half of the same scenario: two WEEKEND shifts 2 weeks apart
+    (clearing the cross-type floor) must still be blocked by WEEKEND's own,
+    stricter 4-week same-type cap.
+    """
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w3 = date.fromisocalendar(2027, 3, 1)
+    slots = [
+        {
+            'id': 'weekend-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'weekend-w3', 'datum': monday_w3.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 3, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+    ]
+    result = run(
+        ['p1'], slots, variant=variant,
+        window_weeks_avond=2, window_weeks_weekend_feestdag=4,
+    )
+
+    assert len(result['assignments']) <= 1, (
+        f"2-week gap is below WEEKEND's own 4-week same-type cap, expected only one filled, got {result['assignments']}"
+    )
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_per_teller_windows_still_restrict_within_the_weekend_feestdag_group(variant):
+    """
+    Hard rule: WEEKEND and FEESTDAG are pooled together as one group under
+    per-teller windows, not each given their own window - a WEEKEND shift
+    in week 1 must still block a FEESTDAG shift in week 2 for the same
+    person under window_weeks_weekend_feestdag=2.
+    """
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w2 = date.fromisocalendar(2027, 2, 1)
+    slots = [
+        {
+            'id': 'weekend-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'feestdag-w2', 'datum': monday_w2.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 2, 'shift_type_id': 'st-feestdag',
+            'shift_type_name': 'FEESTDAG', 'benodigd_aantal_personen': 1,
+            'is_feestdag': True, 'feestdag_groep': 'KERST',
+        },
+    ]
+    result = run(
+        ['p1'], slots, variant=variant,
+        window_weeks_avond=1, window_weeks_weekend_feestdag=2,
+    )
+
+    assert len(result['assignments']) <= 1, (
+        f"WEEKEND and FEESTDAG share one window group, expected only one filled, got {result['assignments']}"
     )

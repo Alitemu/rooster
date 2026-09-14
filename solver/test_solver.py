@@ -56,7 +56,8 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
           preferred=None, prior=None, manual=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
           participation_factors=None, coverage=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
           holiday_spread_weeks=0, shortfall_weight=1000.0, band_imbalance_weight=0.5,
-          preference_reward_weight=0.3, objective_mode='weighted', random_seed=None):
+          preference_reward_weight=0.3, objective_mode='weighted', random_seed=None,
+          window_weeks_avond=None, window_weeks_weekend_feestdag=None):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -84,6 +85,8 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         preference_reward_weight=preference_reward_weight,
         objective_mode=objective_mode,
         random_seed=random_seed,
+        window_weeks_avond=window_weeks_avond,
+        window_weeks_weekend_feestdag=window_weeks_weekend_feestdag,
     )
 
 
@@ -1318,3 +1321,176 @@ def test_diagnostics_report_soft_block_violations_and_preference_matches():
     diag = result['diagnostics']
     assert diag['soft_block_violations'] == 1, 'p1 had no alternative, so the LIEVER_NIET mark had to be violated'
     assert diag['preference_matches'] == 1, "p2's VOORKEUR slot should have been honoured"
+
+
+# ---------------------------------------------------------------------------
+# HARD RULE: per-teller windows (window_weeks_avond / window_weeks_weekend_feestdag)
+# ---------------------------------------------------------------------------
+
+def _mixed_avond_weekend_slots():
+    """One AVOND slot in week 1, one WEEKEND slot in week 2 (1 week apart -
+    within a window_weeks=2 gap), for the per-teller-window tests below."""
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w2 = date.fromisocalendar(2027, 2, 1)
+    return [
+        {
+            'id': 'avond-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-avond',
+            'shift_type_name': 'AVOND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'weekend-w2', 'datum': monday_w2.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 2, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+    ]
+
+
+def test_pooled_window_blocks_across_teller_types():
+    """
+    Baseline / backward-compat: with window_weeks_avond and
+    window_weeks_weekend_feestdag both unset (the only state a period
+    frozen before per-teller windows existed can ever be in), the window
+    rule must still pool every teller together exactly as before - one
+    person, an AVOND shift in week 1 and a WEEKEND shift in week 2 (1 week
+    apart, inside a window_weeks=2 gap), must not get both.
+    """
+    slots = _mixed_avond_weekend_slots()
+    result = solve(['p1'], slots, window_weeks=2, objective_mode='lexicographic')
+
+    assert result['success']
+    assert len(result['assignments']) <= 1, (
+        f"pooled window rule must block the second (cross-teller) assignment, got {result['assignments']}"
+    )
+
+
+def test_per_teller_windows_apply_the_smaller_one_as_a_cross_type_floor():
+    """
+    Hard rule, per the planner's own explicit correction: "een
+    weekenddienst kan wel een avonddienst blokkeren en andersom... het
+    minimum geldt dan voor alle diensten" - AVOND and WEEKEND are NOT fully
+    independent under per-teller windows. The *smaller* of the two configured
+    windows still applies as a floor between every pair of shifts regardless
+    of type. window_weeks_avond=2, window_weeks_weekend_feestdag=4 -> floor
+    is 2. An AVOND shift in week 1 and a WEEKEND shift in week 2 (1 week
+    apart, below the floor of 2) must still not both be assigned.
+    """
+    slots = _mixed_avond_weekend_slots()
+    result = solve(
+        ['p1'], slots, objective_mode='lexicographic',
+        window_weeks_avond=2, window_weeks_weekend_feestdag=4,
+    )
+
+    assert result['success']
+    assert len(result['assignments']) <= 1, (
+        f"cross-type gap (1 week) is below the floor min(2,4)=2, expected only one filled, got {result['assignments']}"
+    )
+
+
+def test_per_teller_windows_cross_type_only_needs_the_floor_not_the_larger_windows_own_value():
+    """
+    Counterpart to the floor test above: a cross-type gap that clears the
+    *floor* must be allowed even if it's still below the larger group's own
+    same-type window - window_weeks_avond=2, window_weeks_weekend_feestdag=4
+    (floor=2). An AVOND shift in week 1 and a WEEKEND shift in week 3 (2
+    weeks apart - meets the floor, but is less than WEEKEND's own 4-week
+    same-type cap) must both be assignable, since that stricter 4-week rule
+    only applies *between two WEEKEND/FEESTDAG shifts*, not across types.
+    """
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w3 = date.fromisocalendar(2027, 3, 1)
+    slots = [
+        {
+            'id': 'avond-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-avond',
+            'shift_type_name': 'AVOND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'weekend-w3', 'datum': monday_w3.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 3, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+    ]
+    result = solve(
+        ['p1'], slots, objective_mode='lexicographic',
+        window_weeks_avond=2, window_weeks_weekend_feestdag=4,
+    )
+
+    assert result['success']
+    assert len(result['assignments']) == 2, (
+        f"2-week cross-type gap clears the floor of 2, expected both filled, got {result['assignments']}"
+    )
+
+
+def test_per_teller_windows_still_enforce_the_larger_same_type_window():
+    """
+    The other half of the same scenario: two WEEKEND shifts 2 weeks apart
+    (clearing the cross-type floor of 2) must still be blocked by WEEKEND's
+    own, stricter 4-week same-type cap - the floor only ever loosens
+    cross-type pairs, never the same-type rule itself.
+    """
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w3 = date.fromisocalendar(2027, 3, 1)
+    slots = [
+        {
+            'id': 'weekend-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'weekend-w3', 'datum': monday_w3.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 3, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+    ]
+    result = solve(
+        ['p1'], slots, objective_mode='lexicographic',
+        window_weeks_avond=2, window_weeks_weekend_feestdag=4,
+    )
+
+    assert result['success']
+    assert len(result['assignments']) <= 1, (
+        f"2-week gap is below WEEKEND's own 4-week same-type cap, expected only one filled, got {result['assignments']}"
+    )
+
+
+def test_per_teller_windows_still_restrict_within_the_weekend_feestdag_group():
+    """
+    Hard rule: WEEKEND and FEESTDAG are pooled together as one group under
+    per-teller windows (not each given their own window) - a WEEKEND shift
+    in week 1 must still block a FEESTDAG shift in week 2 for the same
+    person under window_weeks_weekend_feestdag=2, proving the grouping
+    itself (not just the AVOND split) is enforced, not two more
+    independent windows.
+    """
+    monday_w1 = date.fromisocalendar(2027, 1, 1)
+    monday_w2 = date.fromisocalendar(2027, 2, 1)
+    slots = [
+        {
+            'id': 'weekend-w1', 'datum': monday_w1.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 1, 'shift_type_id': 'st-weekend',
+            'shift_type_name': 'WEEKEND', 'benodigd_aantal_personen': 1,
+            'is_feestdag': False, 'feestdag_groep': None,
+        },
+        {
+            'id': 'feestdag-w2', 'datum': monday_w2.isoformat(),
+            'iso_jaar': 2027, 'iso_week': 2, 'shift_type_id': 'st-feestdag',
+            'shift_type_name': 'FEESTDAG', 'benodigd_aantal_personen': 1,
+            'is_feestdag': True, 'feestdag_groep': 'KERST',
+        },
+    ]
+    result = solve(
+        ['p1'], slots, objective_mode='lexicographic',
+        window_weeks_avond=1, window_weeks_weekend_feestdag=2,
+    )
+
+    assert result['success']
+    assert len(result['assignments']) <= 1, (
+        f"WEEKEND and FEESTDAG share one window group, expected only one filled, got {result['assignments']}"
+    )

@@ -96,6 +96,8 @@ def run_greedy_construction(
     holiday_spread_weeks: int = 0,
     variant: Variant = 'medewerker',
     random_seed: Optional[int] = None,
+    window_weeks_avond: Optional[int] = None,
+    window_weeks_weekend_feestdag: Optional[int] = None,
 ) -> dict:
     """
     One construction attempt. Returns the same result shape
@@ -103,6 +105,23 @@ def run_greedy_construction(
     so Next.js can compare a greedy attempt against another, or (in
     principle) against a lexicographic one, with the exact same
     isBetterRoster/isPerfectRoster logic.
+
+    window_weeks_avond/window_weeks_weekend_feestdag: same meaning and
+    same backward-compat default as solver.py's build_model - both None
+    (the only state a period frozen before this existed can ever be in)
+    keeps the single pooled window_weeks exactly as it always worked (one
+    shared window across every teller, a shift of any type excluding a
+    nearby shift of any type).
+
+    Either one set instead applies the planner's own explicit rule: "een
+    weekenddienst kan wel een avonddienst blokkeren en andersom... het
+    minimum geldt dan voor alle diensten" - AVOND and WEEKEND+FEESTDAG each
+    keep their own (typically larger) same-type cap, but the *smaller* of
+    the two windows still applies as a floor between every pair of shifts
+    regardless of type - see _window_group/window_ok below, mirroring
+    solver.py's build_model's three-constraint decomposition (a pooled
+    call at the floor, plus one call per group at its own value) in
+    imperative form.
     """
     start = time.time()
     rng = random.Random(random_seed)
@@ -113,6 +132,15 @@ def run_greedy_construction(
     participation_factors = participation_factors or {}
     coverage_factors = coverage_factors or {}
     counters = ['AVOND', 'WEEKEND', 'FEESTDAG']
+
+    per_teller_windows = window_weeks_avond is not None or window_weeks_weekend_feestdag is not None
+    cross_type_floor = min(window_weeks_avond or 0, window_weeks_weekend_feestdag or 0) if per_teller_windows else 0
+
+    def _window_group(counter: str) -> str:
+        return 'avond' if counter == 'AVOND' else 'weekend_feestdag'
+
+    def _own_window_weeks_for(counter: str) -> int:
+        return (window_weeks_avond or 0) if counter == 'AVOND' else (window_weeks_weekend_feestdag or 0)
 
     # already_assigned: manual pre-fills count toward this period's band
     # target (mirrors solver.py's build_model) - prior_assignments do not,
@@ -130,17 +158,21 @@ def run_greedy_construction(
         p: dict(already_assigned.get(p, {})) for p in people
     }
 
-    # Per-person set of assigned week-ordinals (all counters combined,
-    # matching add_window_constraints' own pooling) - seeded from prior +
-    # manual assignments, the same "immovable facts" solver.py folds in.
-    assigned_weeks: dict[str, set[int]] = {p: set() for p in people}
+    # Per-person set(s) of assigned week-ordinals, seeded from prior +
+    # manual assignments (the same "immovable facts" solver.py folds in).
+    # Every fact populates BOTH a 'pooled' set (all tellers together, used
+    # for the cross-type floor / legacy pooled check) AND its own group's
+    # set (used for that group's own, typically stricter, same-type cap) -
+    # window_ok below decides which of these actually get consulted.
+    assigned_weeks: dict[str, dict[str, set[int]]] = {p: {} for p in people}
     assigned_feestdag_weeks: dict[str, set[int]] = {p: set() for p in people}
     for fact in prior_assignments + manual_assignments:
         pid = fact['person_id']
         if pid not in assigned_weeks:
             continue
         week = _week_ordinal(fact['datum'])
-        assigned_weeks[pid].add(week)
+        assigned_weeks[pid].setdefault('pooled', set()).add(week)
+        assigned_weeks[pid].setdefault(_window_group(fact.get('teller', '')), set()).add(week)
         if fact.get('teller') == 'FEESTDAG':
             assigned_feestdag_weeks[pid].add(week)
 
@@ -155,10 +187,34 @@ def run_greedy_construction(
             distribution_mode=distribution_mode,
         )
 
-    def window_ok(person_id: str, week: int) -> bool:
-        if window_weeks <= 1:
-            return True
-        return all(abs(week - w) >= window_weeks for w in assigned_weeks[person_id])
+    def window_ok(person_id: str, week: int, counter: str) -> bool:
+        if not per_teller_windows:
+            if window_weeks <= 1:
+                return True
+            return all(
+                abs(week - w) >= window_weeks
+                for w in assigned_weeks[person_id].get('pooled', set())
+            )
+
+        # Cross-type floor: the smaller of the two configured windows still
+        # applies between every pair of shifts regardless of type.
+        if cross_type_floor > 1 and any(
+            abs(week - w) < cross_type_floor
+            for w in assigned_weeks[person_id].get('pooled', set())
+        ):
+            return False
+
+        # This teller's own (typically larger) same-type cap.
+        own_weeks = _own_window_weeks_for(counter)
+        if own_weeks > 1:
+            group = _window_group(counter)
+            if any(
+                abs(week - w) < own_weeks
+                for w in assigned_weeks[person_id].get(group, set())
+            ):
+                return False
+
+        return True
 
     def holiday_spread_ok(person_id: str, week: int, is_feestdag: bool) -> bool:
         if not is_feestdag or holiday_spread_weeks <= 1:
@@ -168,7 +224,7 @@ def run_greedy_construction(
     def is_hard_eligible(person_id: str, slot: dict, week: int) -> bool:
         if (person_id, slot['id']) in blocked_slots:
             return False
-        if not window_ok(person_id, week):
+        if not window_ok(person_id, week, slot['shift_type_name']):
             return False
         if not holiday_spread_ok(person_id, week, slot.get('is_feestdag', False)):
             return False
@@ -243,7 +299,8 @@ def run_greedy_construction(
                 counter = slot['shift_type_name']
                 assigned_count[person_id][counter] = assigned_count[person_id].get(counter, 0) + 1
                 week = _week_ordinal(slot['datum'])
-                assigned_weeks[person_id].add(week)
+                assigned_weeks[person_id].setdefault('pooled', set()).add(week)
+                assigned_weeks[person_id].setdefault(_window_group(counter), set()).add(week)
                 if slot.get('is_feestdag'):
                     assigned_feestdag_weeks[person_id].add(week)
                 filled += 1
