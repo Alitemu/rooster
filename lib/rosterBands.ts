@@ -12,6 +12,7 @@
  */
 
 import { db } from '@/db/client';
+import { parseISO } from '@/lib/holidays';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
 export type Band = [number, number];
@@ -87,12 +88,52 @@ export function resolveWindowWeeks(config: Record<string, unknown>): WindowWeeks
 }
 
 /**
+ * Weekday (AVOND-eligible) and weekend-day counts for a date range,
+ * counting every calendar day by its plain weekday - Saturday/Sunday are
+ * WEEKEND, everything else is AVOND - regardless of whether that day is
+ * also a feestdag.
+ *
+ * Exists because feestdagen are few but not zero: a handful of them
+ * landing on what would otherwise be ordinary weekdays/weekend days in a
+ * period is enough to knock an otherwise-exact average (e.g. 180 weekdays
+ * / 12 people = 15) down to something like 14.9, which used to produce a
+ * lower, "unrounder" band than the period's actual weekly structure
+ * intends. The band is meant to reflect that structure, not this year's
+ * particular sprinkling of holidays - see resolveBands' defaultBand below,
+ * which consumes exactly this instead of a feestdag-adjusted slot count
+ * for AVOND/WEEKEND.
+ */
+export function countNominalAvondWeekendDays(
+  startDate: string,
+  endDate: string
+): { AVOND: number; WEEKEND: number } {
+  const start = parseISO(startDate);
+  const end = parseISO(endDate);
+  let avond = 0;
+  let weekend = 0;
+  for (const d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const day = d.getDay();
+    if (day === 0 || day === 6) weekend++;
+    else avond++;
+  }
+  return { AVOND: avond, WEEKEND: weekend };
+}
+
+/**
  * Resolve the [min, max] band per counter for a period.
  *
  * A flat band for every counter is only feasible by coincidence - WEEKEND
  * and FEESTDAG have far fewer slots than AVOND - so when the ruleset
  * doesn't name a band explicitly we derive each counter's own band from
  * its actual average per person.
+ *
+ * The rounding is deliberately not a plain [floor, ceil]: a fractional
+ * average of x,5 or higher means most people are going to end up needing
+ * the higher count anyway, so the band is bumped a further step up
+ * ([floor+2, floor+3]) rather than just to [floor+1, floor+2] - and an
+ * exact whole-number average (fraction 0) still gets a real two-value
+ * band, rounded up ([n, n+1]), instead of collapsing to a single value
+ * [n, n]. Below x,5 the band is the ordinary [floor, ceil].
  */
 export function resolveBands(
   config: Record<string, unknown>,
@@ -100,8 +141,12 @@ export function resolveBands(
   peopleCount: number
 ): BandsByTeller {
   const defaultBand = (teller: Teller): Band => {
-    const avg = slotCountByTeller[teller] / Math.max(peopleCount, 1);
-    return [Math.max(0, Math.floor(avg)), Math.max(0, Math.ceil(avg))];
+    const total = slotCountByTeller[teller];
+    if (total <= 0) return [0, 0];
+    const avg = total / Math.max(peopleCount, 1);
+    const n = Math.floor(avg);
+    const frac = avg - n;
+    return frac < 0.5 ? [n, n + 1] : [n + 2, n + 3];
   };
 
   const configured: Record<Teller, unknown> = {

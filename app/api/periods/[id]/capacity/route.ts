@@ -10,7 +10,7 @@ import { checkCapacity, getCapacityInterpretation } from '@/lib/capacity';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
-import { resolveBands, type Teller, type BandsByTeller } from '@/lib/rosterBands';
+import { resolveBands, countNominalAvondWeekendDays, type Teller, type BandsByTeller } from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CapacityCheckResult {
@@ -217,6 +217,18 @@ export async function GET(
         const teller: Teller = slot.is_feestdag ? 'FEESTDAG' : slot.weekend_id ? 'WEEKEND' : 'AVOND';
         slotCountByTeller[teller]++;
       }
+    }
+    // AVOND/WEEKEND feed the band suggestion on the period's plain weekly
+    // structure (5 weekdays + 2 weekend days), not the feestdag-adjusted
+    // counts above: feestdagen are few, so letting them shave a handful of
+    // slots off AVOND/WEEKEND nudges an otherwise-round average (e.g. 180
+    // weekdays / 12 people = 15) into a fraction, producing a lower band
+    // than the period's actual weekly rhythm intends. FEESTDAG itself is
+    // left as the real (or previewed) holiday count - there's no "nominal"
+    // number of holidays to fall back on.
+    if (period.start_datum && period.eind_datum) {
+      const nominal = countNominalAvondWeekendDays(period.start_datum, period.eind_datum);
+      slotCountByTeller = { ...slotCountByTeller, AVOND: nominal.AVOND, WEEKEND: nominal.WEEKEND };
     }
     const suggestedBand = resolveBands({}, slotCountByTeller, activeParticipants);
 
