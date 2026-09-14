@@ -12,7 +12,7 @@
  */
 
 import { db } from '@/db/client';
-import { resolveRulesetConfig } from '@/lib/rosterBands';
+import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { getWindowConflictingPersonIds } from '@/lib/windowRule';
 
 /**
@@ -76,10 +76,9 @@ function categorize(
   return 'BESCHIKBAAR';
 }
 
-/** Same fallback default (2) generate-roster uses when a ruleset doesn't name windowWeeks. */
-function getWindowWeeks(period: { bevroren_ruleset_json?: string | null; pool_id: string }): number {
-  const config = resolveRulesetConfig(period);
-  return typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
+/** Same resolution generate-roster's solver request uses - see resolveWindowWeeks. */
+function getWindowWeeks(period: { bevroren_ruleset_json?: string | null; pool_id: string }) {
+  return resolveWindowWeeks(resolveRulesetConfig(period));
 }
 
 /**
@@ -144,8 +143,13 @@ export function getEligiblePeopleForSlot(
   if (!period) return [];
 
   const slot = db
-    .prepare('SELECT iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
-    .get(slotId) as { iso_jaar: number; iso_week: number } | undefined;
+    .prepare(
+      `SELECT s.iso_jaar, s.iso_week, st.teller
+       FROM dienstrooster_shift_slot s
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+       WHERE s.id = ?`
+    )
+    .get(slotId) as { iso_jaar: number; iso_week: number; teller: string } | undefined;
 
   const poolMembers = db
     .prepare(
@@ -168,7 +172,7 @@ export function getEligiblePeopleForSlot(
 
   const windowWeeks = getWindowWeeks(period);
   const windowConflicting = slot
-    ? getWindowConflictingPersonIds(periodId, slot.iso_jaar, slot.iso_week, windowWeeks, slotId)
+    ? getWindowConflictingPersonIds(periodId, slot.iso_jaar, slot.iso_week, slot.teller, windowWeeks, slotId)
     : new Set<string>();
 
   return poolMembers
@@ -256,6 +260,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       periodId,
       slot.iso_jaar,
       slot.iso_week,
+      slot.teller,
       windowWeeks,
       slot.id
     );

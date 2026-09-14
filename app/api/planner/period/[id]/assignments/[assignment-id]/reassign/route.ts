@@ -20,7 +20,7 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { resolveRulesetConfig } from '@/lib/rosterBands';
+import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
 
@@ -128,10 +128,15 @@ export async function POST(
     // derived from other slots - matches the category priority in
     // lib/rosterGaps.ts.
     const slot = db
-      .prepare('SELECT datum, iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
-      .get(assignment.slot_id) as { datum: string; iso_jaar: number; iso_week: number };
+      .prepare(
+        `SELECT s.datum, s.iso_jaar, s.iso_week, st.teller
+         FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(assignment.slot_id) as { datum: string; iso_jaar: number; iso_week: number; teller: string };
     const config = resolveRulesetConfig(period);
-    const windowWeeks = typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
+    const windowWeeks = resolveWindowWeeks(config);
     const windowConflict =
       !blocked &&
       personWouldViolateWindowRule(
@@ -139,6 +144,7 @@ export async function POST(
         newPersonId as string,
         slot.iso_jaar,
         slot.iso_week,
+        slot.teller,
         windowWeeks,
         assignment.slot_id
       );
@@ -150,7 +156,7 @@ export async function POST(
       : windowConflict
         ? {
             code: 'WINDOW_OVERRIDE',
-            message: `Let op: deze persoon heeft al een dienst binnen het venster van ${windowWeeks} weken.`,
+            message: `Let op: deze persoon heeft al een dienst binnen het ingestelde venster (avond ${windowWeeks.avond}, weekend/feestdag ${windowWeeks.weekendFeestdag} weken).`,
           }
         : null;
 

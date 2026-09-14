@@ -58,6 +58,34 @@ export function resolveRulesetConfig(period: {
   }
 }
 
+export interface WindowWeeksConfig {
+  avond: number;
+  weekendFeestdag: number;
+}
+
+/**
+ * Resolve a period's window-rule settings, in the exact same shape
+ * regardless of whether it was frozen before or after per-teller windows
+ * existed - a period with only the old pooled `windowWeeks` gets that same
+ * value for both groups (which, per requiredGapWeeks in lib/windowRule.ts,
+ * reproduces the old pooled behaviour exactly: the cross-type floor and
+ * each group's own cap both collapse to the same number).
+ *
+ * Shared by generate-roster/route.ts's solver request AND
+ * lib/windowRule.ts's manual-assign/reassign conflict checks, so both
+ * agree on what "the window" means for a given period - see
+ * solver/constraints.py's add_window_constraints for the full
+ * floor-plus-per-group reasoning this mirrors.
+ */
+export function resolveWindowWeeks(config: Record<string, unknown>): WindowWeeksConfig {
+  const legacy = typeof config.windowWeeks === 'number' ? config.windowWeeks : 2;
+  return {
+    avond: typeof config.windowWeeksAvond === 'number' ? config.windowWeeksAvond : legacy,
+    weekendFeestdag:
+      typeof config.windowWeeksWeekendFeestdag === 'number' ? config.windowWeeksWeekendFeestdag : legacy,
+  };
+}
+
 /**
  * Resolve the [min, max] band per counter for a period.
  *

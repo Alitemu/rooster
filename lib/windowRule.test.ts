@@ -5,7 +5,14 @@ import {
   isoWeeksApart,
   personWouldViolateWindowRule,
   getWindowConflictingPersonIds,
+  requiredGapWeeks,
 } from '@/lib/windowRule';
+import type { WindowWeeksConfig } from '@/lib/rosterBands';
+
+/** A period with only the legacy pooled windowWeeks resolves to equal
+ * avond/weekendFeestdag values (see rosterBands.resolveWindowWeeks) - most
+ * existing tests below use this to reproduce that exact old behaviour. */
+const pooled = (weeks: number): WindowWeeksConfig => ({ avond: weeks, weekendFeestdag: weeks });
 
 /**
  * Window rule conflict detection - informational only (see windowRule.ts).
@@ -153,7 +160,8 @@ describe('personWouldViolateWindowRule', () => {
       f.personIds[0],
       target.iso_jaar,
       target.iso_week,
-      2 // windowWeeks
+      'AVOND',
+      pooled(2)
     );
 
     expect(violates).toBe(true);
@@ -171,7 +179,8 @@ describe('personWouldViolateWindowRule', () => {
       f.personIds[0],
       target.iso_jaar,
       target.iso_week,
-      2 // windowWeeks: week 2 -> week 4 is exactly 2 weeks apart, allowed
+      'AVOND',
+      pooled(2) // week 2 -> week 4 is exactly 2 weeks apart, allowed
     );
 
     expect(violates).toBe(false);
@@ -197,7 +206,8 @@ describe('personWouldViolateWindowRule', () => {
       f.personIds[0],
       target.iso_jaar,
       target.iso_week,
-      2 // windowWeeks
+      'AVOND',
+      pooled(2)
     );
 
     expect(violates).toBe(true);
@@ -211,10 +221,14 @@ describe('personWouldViolateWindowRule', () => {
 
     const target = slotById(week3Slot);
     expect(
-      personWouldViolateWindowRule(f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 0)
+      personWouldViolateWindowRule(
+        f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND', pooled(0)
+      )
     ).toBe(false);
     expect(
-      personWouldViolateWindowRule(f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 1)
+      personWouldViolateWindowRule(
+        f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND', pooled(1)
+      )
     ).toBe(false);
   });
 
@@ -232,7 +246,8 @@ describe('personWouldViolateWindowRule', () => {
         f.personIds[0],
         target.iso_jaar,
         target.iso_week,
-        2,
+        'AVOND',
+        pooled(2),
         slot
       )
     ).toBe(false);
@@ -252,11 +267,97 @@ describe('getWindowConflictingPersonIds', () => {
       f.periodId,
       target.iso_jaar,
       target.iso_week,
-      2
+      'AVOND',
+      pooled(2)
     );
 
     expect(conflicting.has(f.personIds[0])).toBe(true);
     expect(conflicting.has(f.personIds[1])).toBe(false);
     expect(conflicting.has(f.personIds[2])).toBe(false);
+  });
+});
+
+describe('requiredGapWeeks (per-teller windows)', () => {
+  const windows: WindowWeeksConfig = { avond: 2, weekendFeestdag: 4 };
+
+  it('uses the AVOND window between two AVOND shifts', () => {
+    expect(requiredGapWeeks('AVOND', 'AVOND', windows)).toBe(2);
+  });
+
+  it('uses the shared weekendFeestdag window between WEEKEND and FEESTDAG shifts', () => {
+    expect(requiredGapWeeks('WEEKEND', 'FEESTDAG', windows)).toBe(4);
+    expect(requiredGapWeeks('FEESTDAG', 'WEEKEND', windows)).toBe(4);
+  });
+
+  it('uses the smaller of the two as a cross-type floor between AVOND and WEEKEND/FEESTDAG', () => {
+    expect(requiredGapWeeks('AVOND', 'WEEKEND', windows)).toBe(2);
+    expect(requiredGapWeeks('WEEKEND', 'AVOND', windows)).toBe(2);
+    expect(requiredGapWeeks('AVOND', 'FEESTDAG', windows)).toBe(2);
+  });
+
+  it('a period with only the legacy pooled windowWeeks behaves identically regardless of teller', () => {
+    const legacy = pooled(3);
+    expect(requiredGapWeeks('AVOND', 'AVOND', legacy)).toBe(3);
+    expect(requiredGapWeeks('WEEKEND', 'FEESTDAG', legacy)).toBe(3);
+    expect(requiredGapWeeks('AVOND', 'WEEKEND', legacy)).toBe(3);
+  });
+});
+
+describe('personWouldViolateWindowRule (per-teller windows, cross-type floor)', () => {
+  function addShiftType(poolId: string, teller: 'WEEKEND' | 'FEESTDAG'): string {
+    const shiftTypeId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_shift_type (id, pool_id, naam, teller) VALUES (?, ?, ?, ?)`
+    ).run(shiftTypeId, poolId, teller === 'WEEKEND' ? 'Weekend' : 'Feestdag', teller);
+    return shiftTypeId;
+  }
+
+  function addSlot(periodId: string, shiftTypeId: string, datum: string, isoJaar: number, isoWeek: number): string {
+    const id = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_shift_slot
+         (id, period_id, shift_type_id, datum, iso_jaar, iso_week, benodigd_aantal_personen)
+       VALUES (?, ?, ?, ?, ?, ?, 1)`
+    ).run(id, periodId, shiftTypeId, datum, isoJaar, isoWeek);
+    return id;
+  }
+
+  it('a WEEKEND shift can block a nearby AVOND target at the cross-type floor', () => {
+    const f = createFixture(1, '2027-01-04', '2027-01-24'); // weeks 1-4, AVOND slots only
+    const weekendTypeId = addShiftType(f.poolId, 'WEEKEND');
+    // week 2 WEEKEND shift already assigned
+    const weekendSlot = addSlot(f.periodId, weekendTypeId, '2027-01-09', 2027, 2);
+    assign(f.periodId, f.personIds[0], weekendSlot);
+
+    const week3AvondSlot = f.slotIds.find((id) => slotById(id).iso_week === 3)!;
+    const target = slotById(week3AvondSlot);
+
+    // avond=2, weekendFeestdag=4 -> floor=2; week2 WEEKEND to week3 AVOND is
+    // a 1-week gap, below the floor.
+    const violates = personWouldViolateWindowRule(
+      f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND',
+      { avond: 2, weekendFeestdag: 4 }
+    );
+    expect(violates).toBe(true);
+  });
+
+  it('does not apply the larger same-type window across teller types', () => {
+    const f = createFixture(1, '2027-01-04', '2027-02-14'); // weeks 1-6, AVOND slots only
+    const weekendTypeId = addShiftType(f.poolId, 'WEEKEND');
+    // week 1 WEEKEND shift already assigned
+    const weekendSlot = addSlot(f.periodId, weekendTypeId, '2027-01-02', 2027, 1);
+    assign(f.periodId, f.personIds[0], weekendSlot);
+
+    const week3AvondSlot = f.slotIds.find((id) => slotById(id).iso_week === 3)!;
+    const target = slotById(week3AvondSlot);
+
+    // avond=2, weekendFeestdag=4 -> floor=2; week1 WEEKEND to week3 AVOND is
+    // a 2-week gap, clearing the floor - WEEKEND's own stricter 4-week cap
+    // must not apply here, since this pair is cross-type.
+    const violates = personWouldViolateWindowRule(
+      f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND',
+      { avond: 2, weekendFeestdag: 4 }
+    );
+    expect(violates).toBe(false);
   });
 });
