@@ -413,9 +413,18 @@ export function SetupWizard({ period, onComplete }: Props) {
   // and the capacity check already read it directly. Shows every member
   // (not just active ones) so a planner can see who's about to roll off or
   // who hasn't started yet, not just who's currently eligible.
-  const loadStaff = async () => {
+  // `silent` skips the full-table "Personeel laden..." placeholder (see
+  // staffLoading below) - used when refreshing after a single row's own
+  // mutation (toggle active, save, remove, add), which already has its own
+  // per-row/per-action loading state (togglingMembershipId, savingMembership,
+  // removingMembershipId, addingMember). Without this, every checkbox click
+  // blanked and rebuilt the entire table, which felt like the whole page
+  // reloading - especially annoying when toggling several people in a row.
+  // Only the very first load of this step (and a pool/date change) still
+  // shows the placeholder, since there's nothing on screen yet to keep.
+  const loadStaff = async (options?: { silent?: boolean }) => {
     if (!periodData.pool_id) return;
-    setStaffLoading(true);
+    if (!options?.silent) setStaffLoading(true);
     setStaffError(null);
     try {
       const memberParams = new URLSearchParams();
@@ -470,7 +479,7 @@ export function SetupWizard({ period, onComplete }: Props) {
     } catch {
       setStaffError('Laden van personeel mislukt');
     } finally {
-      setStaffLoading(false);
+      if (!options?.silent) setStaffLoading(false);
     }
   };
 
@@ -531,7 +540,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
 
       setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum, deelnamefactor: 1 });
-      await loadStaff();
+      await loadStaff({ silent: true });
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Toevoegen mislukt');
     } finally {
@@ -562,7 +571,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       if (!res.ok) throw new Error(data.error?.message || 'Opslaan mislukt');
 
       setEditingMembershipId(null);
-      await loadStaff();
+      await loadStaff({ silent: true });
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
@@ -584,7 +593,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
 
-      await loadStaff();
+      await loadStaff({ silent: true });
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Verwijderen mislukt');
     } finally {
@@ -601,7 +610,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       const res = await patchMembership(member.id, patch);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Bijwerken mislukt');
-      await loadStaff();
+      await loadStaff({ silent: true });
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Bijwerken mislukt');
     } finally {
