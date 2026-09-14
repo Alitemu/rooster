@@ -183,9 +183,18 @@ export interface RulesetConfig {
   preferenceRewardWeight: number;
   // Which roster-generation approach to use - 'weighted' ("Puntenplanner",
   // the model shortfallWeight/bandImbalanceWeight/preferenceRewardWeight
-  // above tune) or 'lexicographic' ("Prioriteitenplanner", the default for
+  // above tune), 'lexicographic' ("Prioriteitenplanner", the default for
   // new periods - ignores those weights, solves dekking > eerlijkheid >
-  // liever-niet > voorkeur in strict priority order instead). See
-  // solver/solver.py's module docstring for the full comparison.
-  objectiveMode: 'weighted' | 'lexicographic';
+  // liever-niet > voorkeur in strict priority order instead), or
+  // 'multi_start' ("Herhaalplanner" - repeats a 'lexicographic' solve up
+  // to maxAttempts times with a different random seed each time and keeps
+  // the best result; see generate-roster/route.ts's runMultiStart). See
+  // solver/solver.py's module docstring for the weighted/lexicographic
+  // comparison.
+  objectiveMode: 'weighted' | 'lexicographic' | 'multi_start';
+  // Only consulted when objectiveMode is 'multi_start' - how many times to
+  // repeat the solve before giving up and keeping the best found so far
+  // (a planner can also stop it early via the cancel button, or it stops
+  // itself the moment an attempt is "perfect" - see isPerfectRoster).
+  maxAttempts: number;
 }

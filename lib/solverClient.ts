@@ -39,9 +39,29 @@ export interface SimpleJsonResponse {
  * below), not overall request duration - callers should pass a value with
  * headroom above however long the solver itself is allowed to run, so a
  * legitimate long solve is never mistaken for a hung connection.
+ *
+ * `signal`, when passed, lets a caller abort an in-flight request - used by
+ * the "Herhaalplanner" multi-start loop (generate-roster/route.ts) so a
+ * planner's cancel click can interrupt whichever attempt is currently
+ * running server-side instead of only taking effect before the *next* one
+ * starts. Aborting rejects with a distinguishable `AbortError`-named Error
+ * rather than the generic socket error the raw `req.destroy()` call would
+ * otherwise reject with, so callers can tell "the caller cancelled this"
+ * apart from "the connection actually failed".
  */
-export function postJson(url: string, body: unknown, timeoutMs: number): Promise<SimpleJsonResponse> {
+export function postJson(
+  url: string,
+  body: unknown,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<SimpleJsonResponse> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      const err = new Error('Aanvraag geannuleerd');
+      err.name = 'AbortError';
+      reject(err);
+      return;
+    }
     let parsed: URL;
     try {
       parsed = new URL(url);
@@ -87,6 +107,16 @@ export function postJson(url: string, body: unknown, timeoutMs: number): Promise
       req.destroy(new Error('Geen verbinding met de solver (time-out)'));
     });
     req.on('error', reject);
+
+    if (signal) {
+      const onAbort = () => {
+        const err = new Error('Aanvraag geannuleerd');
+        err.name = 'AbortError';
+        req.destroy(err);
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      req.on('close', () => signal.removeEventListener('abort', onAbort));
+    }
 
     req.write(payload);
     req.end();

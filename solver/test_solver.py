@@ -56,7 +56,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
           preferred=None, prior=None, manual=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
           participation_factors=None, coverage=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
           holiday_spread_weeks=0, shortfall_weight=1000.0, band_imbalance_weight=0.5,
-          preference_reward_weight=0.3, objective_mode='weighted'):
+          preference_reward_weight=0.3, objective_mode='weighted', random_seed=None):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -83,6 +83,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         band_imbalance_weight=band_imbalance_weight,
         preference_reward_weight=preference_reward_weight,
         objective_mode=objective_mode,
+        random_seed=random_seed,
     )
 
 
@@ -1232,3 +1233,88 @@ def test_lexicographic_honours_preference_when_choice_is_otherwise_tied():
     assert result['success']
     assigned = [a['person_id'] for a in result['assignments']]
     assert assigned == ['p1'], f'expected the preferred person p1 to get the sole shift, got {assigned}'
+
+
+# ---------------------------------------------------------------------------
+# random_seed / diagnostics fields the "Herhaalplanner" multi-start loop
+# (Next.js) relies on to rank repeated /solve calls against each other
+# ---------------------------------------------------------------------------
+
+def test_random_seed_does_not_change_correctness_of_the_result():
+    """
+    random_seed only ever steers CP-SAT's search, never the model or
+    constraints - it must never let a hard rule slip, regardless of which
+    seed happens to be passed. (Two solves of the *same* seed are not
+    asserted to reproduce the exact same assignment: with the solver's
+    default multi-worker search, several threads racing for an equally
+    optimal solution means even a fixed seed doesn't pin down which one
+    wins - true bit-for-bit reproducibility would additionally require
+    forcing num_search_workers=1, which this app doesn't do, since the
+    whole point of "Herhaalplanner" is to explore *different* solutions
+    across attempts, not to reproduce one.)
+    """
+    slots = make_slots(6)
+    people = ['p1', 'p2', 'p3', 'p4']
+    band = {'AVOND': [1, 2], 'WEEKEND': [1, 2], 'FEESTDAG': [1, 2]}
+
+    for seed in (1, 2, 3):
+        result = solve(people, slots, window_weeks=1, band=band, objective_mode='lexicographic', random_seed=seed)
+        assert result['success']
+        assert len(result['diagnostics']['unfilled_slots']) == 0
+        counts = {}
+        for a in result['assignments']:
+            counts[a['person_id']] = counts.get(a['person_id'], 0) + 1
+        for p in people:
+            assert 1 <= counts.get(p, 0) <= 2, f'seed {seed}: {p} fell outside the band'
+
+
+def test_diagnostics_report_max_and_total_band_deviation():
+    """
+    generate_roster's diagnostics must expose the actual deviation
+    magnitude, not just a violation count - the "Herhaalplanner" loop
+    ranks attempts by how far the worst-off (and everyone combined) person
+    strayed from their band, which a plain count can't distinguish (one
+    person 4 off vs. four people 1 off each both count as "1 violation" or
+    "4 violations" depending on what's counted, but differ hugely in
+    max_band_deviation).
+    """
+    slots = make_slots(6)
+    people = ['p1', 'p2', 'p3', 'p4']
+    band = {'AVOND': [2, 2], 'WEEKEND': [2, 2], 'FEESTDAG': [2, 2]}
+
+    result = solve(people, slots, window_weeks=1, band=band, objective_mode='lexicographic')
+
+    assert result['success']
+    diag = result['diagnostics']
+    counts = {}
+    for a in result['assignments']:
+        counts[a['person_id']] = counts.get(a['person_id'], 0) + 1
+    expected_deviations = [abs(counts.get(p, 0) - 2) for p in people]
+    assert diag['max_band_deviation'] == max(expected_deviations)
+    assert diag['total_band_deviation'] == sum(expected_deviations)
+
+
+def test_diagnostics_report_soft_block_violations_and_preference_matches():
+    """
+    Both counts must reflect the actual final assignment, not the
+    objective terms that pushed toward them - see generate_roster's
+    assigned_pairs computation. Two independent slots so each mechanism can
+    be checked without the other interfering: p1 is LIEVER_NIET on slot 0
+    but forced onto it (sole candidate), p2 has a VOORKEUR mark on slot 1
+    and is free to get it.
+    """
+    slots = make_slots(2)
+    people = ['p1', 'p2']
+    soft = {('p1', slots[0]['id']): 1.0}
+    preferred = {('p2', slots[1]['id']): 1.0}
+    blocked = {('p2', slots[0]['id']), ('p1', slots[1]['id'])}
+
+    result = solve(
+        people, slots, window_weeks=1, soft=soft, preferred=preferred, blocked=blocked,
+        objective_mode='lexicographic'
+    )
+
+    assert result['success']
+    diag = result['diagnostics']
+    assert diag['soft_block_violations'] == 1, 'p1 had no alternative, so the LIEVER_NIET mark had to be violated'
+    assert diag['preference_matches'] == 1, "p2's VOORKEUR slot should have been honoured"

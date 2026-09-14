@@ -36,6 +36,13 @@ import { randomUUID } from 'crypto';
 
 export type RosterGenerationJobStatus = 'RUNNING' | 'DONE' | 'ERROR';
 
+// Why the "Herhaalplanner" (multi-start) run stopped - only ever set on a
+// job whose ruleset had objectiveMode 'multi_start'; absent (undefined) for
+// an ordinary single-solve job. Surfaced so the result screen can say
+// something more useful than just "klaar" - a planner who cancelled wants
+// to see that was actually respected, not wonder if it silently ran to 100.
+export type RosterGenerationStoppedReason = 'max_attempts' | 'perfect' | 'cancelled';
+
 export interface RosterGenerationJobResult {
   assignments_created: number;
   unfilled_slots: Array<{ slot_id: string; shortfall: number; datum: string | null; teller: string | null }>;
@@ -45,6 +52,23 @@ export interface RosterGenerationJobResult {
   time_seconds: number;
   solver_status: string;
   row_version: number;
+  // Only present for a "Herhaalplanner" job (see generate-roster/route.ts's
+  // runMultiStart) - attempts actually run and why the loop stopped.
+  attempts_tried?: number;
+  stopped_reason?: RosterGenerationStoppedReason;
+}
+
+// Live progress for a "Herhaalplanner" job, polled the same way as the
+// final result - RosterGenerationDialog renders this as "poging X/N" plus
+// a progress bar while status is still RUNNING. Absent for an ordinary
+// single-solve job (nothing to show beyond "bezig").
+export interface RosterGenerationJobProgress {
+  attempt: number;
+  maxAttempts: number;
+  // Best attempt's outcome so far, or null before the first attempt has
+  // finished - shown as "beste tot nu toe: N lege diensten, ..." so a
+  // planner watching a long run sees it's actually converging, not stuck.
+  bestSoFar: { unfilled_slots: number; max_band_deviation: number } | null;
 }
 
 interface RosterGenerationJob {
@@ -54,6 +78,17 @@ interface RosterGenerationJob {
   startedAt: number;
   result?: RosterGenerationJobResult;
   error?: { message: string; status: number };
+  progress?: RosterGenerationJobProgress;
+  // Set by requestRosterGenerationJobCancel, read by runMultiStart's loop
+  // between attempts. Never reset back to false: a job is created fresh
+  // per POST, so there's nothing to reuse it for.
+  cancelRequested?: boolean;
+  // Registered by runMultiStart (generate-roster/route.ts) before it makes
+  // each attempt's solver call, so requestRosterGenerationJobCancel can
+  // abort whichever attempt is actually in flight right now, not just stop
+  // the *next* one from starting. Not set on an ordinary single-solve job -
+  // cancelling one of those isn't supported.
+  abortController?: AbortController;
 }
 
 const globalForJobs = globalThis as unknown as {
@@ -106,4 +141,42 @@ export function getRosterGenerationJob(jobId: string, periodId: string): RosterG
   const job = jobs.get(jobId);
   if (!job || job.periodId !== periodId) return undefined;
   return job;
+}
+
+export function updateRosterGenerationJobProgress(
+  jobId: string,
+  progress: RosterGenerationJobProgress
+): void {
+  const job = jobs.get(jobId);
+  if (job) {
+    job.progress = progress;
+  }
+}
+
+// Called by runMultiStart right before each attempt's solver call, so a
+// cancel arriving mid-attempt has something to abort. Overwritten every
+// attempt - only the current one's controller is ever relevant.
+export function setRosterGenerationJobAbortController(jobId: string, controller: AbortController): void {
+  const job = jobs.get(jobId);
+  if (job) {
+    job.abortController = controller;
+  }
+}
+
+// Scoped to periodId for the same reason getRosterGenerationJob is - a
+// planner must not be able to cancel a job on a period they can't even see.
+// Flips the flag (so the loop stops *starting new* attempts) and, if one is
+// already in flight, aborts it immediately via the registered controller
+// rather than waiting out however long that attempt still had left.
+export function requestRosterGenerationJobCancel(jobId: string, periodId: string): boolean {
+  const job = jobs.get(jobId);
+  if (!job || job.periodId !== periodId) return false;
+  if (job.status !== 'RUNNING') return false;
+  job.cancelRequested = true;
+  job.abortController?.abort();
+  return true;
+}
+
+export function isRosterGenerationJobCancelRequested(jobId: string): boolean {
+  return jobs.get(jobId)?.cancelRequested === true;
 }

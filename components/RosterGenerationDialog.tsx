@@ -50,12 +50,17 @@ interface RulesetConfig {
   shortfallWeight: number;
   bandImbalanceWeight: number;
   preferenceRewardWeight: number;
-  // Which of the two roster-generation approaches to use. 'lexicographic'
+  // Which of the three roster-generation approaches to use. 'lexicographic'
   // ("Prioriteitenplanner") solves dekking > eerlijkheid > liever-niet >
   // voorkeur in strict priority order and ignores every weight field above;
   // 'weighted' ("Puntenplanner") is the older single-weighted-sum model
-  // those fields tune. See solver/solver.py's module docstring.
-  objectiveMode: 'weighted' | 'lexicographic';
+  // those fields tune; 'multi_start' ("Herhaalplanner") repeats a
+  // 'lexicographic' solve up to maxAttempts times with a different random
+  // seed each time and keeps the best. See solver/solver.py's module
+  // docstring for the weighted/lexicographic comparison.
+  objectiveMode: 'weighted' | 'lexicographic' | 'multi_start';
+  // Only meaningful when objectiveMode is 'multi_start'.
+  maxAttempts: number;
 }
 
 // Matches solver/main.py's RuleSet field defaults - the "Standaardinstellingen
@@ -71,7 +76,12 @@ const DEFAULT_PREFERENCE_REWARD_WEIGHT = 0.3;
 // a period whose frozen ruleset predates this field is treated as
 // 'weighted', exactly as the solver itself treats it. New periods get
 // 'lexicographic' instead, set by SetupWizard when the period is opened.
-const DEFAULT_OBJECTIVE_MODE: 'weighted' | 'lexicographic' = 'weighted';
+const DEFAULT_OBJECTIVE_MODE: 'weighted' | 'lexicographic' | 'multi_start' = 'weighted';
+
+// maxAttempts has no Python-side counterpart - it's purely a Next.js
+// concept, see generate-roster/route.ts's runMultiStart. 100 is the
+// default the planner asked for.
+const DEFAULT_MAX_ATTEMPTS = 100;
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds} seconden`;
@@ -105,6 +115,16 @@ const VIOLATION_LABEL: Record<string, string> = {
   band_limit: 'Buiten streefbereik',
 };
 
+// Mirrors lib/rosterGenerationJobs.ts's RosterGenerationJobProgress -
+// duplicated locally like RulesetConfig above rather than imported, since
+// that module also pulls in Node-only globals (crypto.randomUUID) that
+// have no place in a client bundle.
+interface RosterGenerationJobProgress {
+  attempt: number;
+  maxAttempts: number;
+  bestSoFar: { unfilled_slots: number; max_band_deviation: number } | null;
+}
+
 interface UnfilledSlot {
   slot_id: string;
   shortfall: number;
@@ -120,6 +140,10 @@ interface GenerateResult {
   violations: Record<string, number>;
   time_seconds: number;
   solver_status: string;
+  // Only present for a "Herhaalplanner" (multi_start) run - see
+  // lib/rosterGenerationJobs.ts's RosterGenerationJobResult.
+  attempts_tried?: number;
+  stopped_reason?: 'max_attempts' | 'perfect' | 'cancelled';
 }
 
 interface Props {
@@ -174,6 +198,15 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // application error) - shown so a planner sees *why* the wait continues
   // instead of the dialog looking frozen during a brief connection hiccup.
   const [reconnecting, setReconnecting] = useState(false);
+  // Only ever populated while a "Herhaalplanner" (multi_start) job is
+  // RUNNING - see pollJobStatus. null both before the first poll response
+  // and for an ordinary single-solve job, which never has progress to show.
+  const [progress, setProgress] = useState<RosterGenerationJobProgress | null>(null);
+  // The job id handleGenerate just started, so handleCancelGeneration knows
+  // what to cancel - a plain local variable inside handleGenerate wouldn't
+  // survive to a later click on the Stoppen button.
+  const [currentJobId, setCurrentJobId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
   // Stops an in-flight poll loop from touching state after the dialog is
   // closed or a fresh handleGenerate() call starts a new one.
   const pollCancelledRef = useRef(false);
@@ -222,9 +255,15 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
               ? parsed.preferenceRewardWeight
               : DEFAULT_PREFERENCE_REWARD_WEIGHT,
           objectiveMode:
-            parsed.objectiveMode === 'weighted' || parsed.objectiveMode === 'lexicographic'
+            parsed.objectiveMode === 'weighted' ||
+            parsed.objectiveMode === 'lexicographic' ||
+            parsed.objectiveMode === 'multi_start'
               ? parsed.objectiveMode
               : DEFAULT_OBJECTIVE_MODE,
+          maxAttempts:
+            typeof parsed.maxAttempts === 'number' && Number.isInteger(parsed.maxAttempts) && parsed.maxAttempts >= 1
+              ? parsed.maxAttempts
+              : DEFAULT_MAX_ATTEMPTS,
         };
         setRuleset(loaded);
         setOriginalRuleset(loaded);
@@ -315,7 +354,12 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       }
 
       const job = data.data;
-      if (job.status === 'RUNNING') continue;
+      if (job.status === 'RUNNING') {
+        setProgress(job.progress ?? null);
+        continue;
+      }
+
+      setProgress(null);
 
       if (job.status === 'DONE') {
         setResult(job.result);
@@ -348,6 +392,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     setError(null);
     setResult(null);
     setReconnecting(false);
+    setProgress(null);
+    setCurrentJobId(null);
     setPendingTimeLimitSeconds(timeLimitSeconds ?? null);
 
     try {
@@ -399,12 +445,36 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         throw new Error('Genereren van rooster mislukt');
       }
 
+      setCurrentJobId(jobId);
       await pollJobStatus(jobId, timeLimitSeconds);
     } catch (err) {
       if (!pollCancelledRef.current) {
         setError(toDutchErrorMessage(err, 'Genereren van rooster mislukt'));
         setLoading(false);
       }
+    }
+  };
+
+  // Only offered while a "Herhaalplanner" run is RUNNING (see the
+  // Stoppen-button JSX below) - stops the loop after whichever attempt is
+  // currently in flight and applies the best one found so far, exactly
+  // like reaching maxAttempts or finding a perfect roster would. The
+  // already-running pollJobStatus loop picks up the resulting DONE/ERROR
+  // status on its own; this call only has to ask the server to stop.
+  const handleCancelGeneration = async () => {
+    if (!currentJobId || cancelling) return;
+    setCancelling(true);
+    try {
+      await fetch(`/api/planner/period/${periodId}/generate-roster/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: currentJobId }),
+      });
+    } catch {
+      // A dropped cancel request just means "try again" - the run keeps
+      // going server-side either way, same as a dropped status poll.
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -416,6 +486,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     setLastTimeLimitSeconds(null);
     setPendingTimeLimitSeconds(null);
     setReconnecting(false);
+    setProgress(null);
+    setCurrentJobId(null);
+    setCancelling(false);
     onClose();
   };
 
@@ -611,7 +684,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         Optimalisatiemethode
                       </label>
                       <div className="space-y-2">
-                        {(['lexicographic', 'weighted'] as const).map((mode) => (
+                        {(['lexicographic', 'multi_start', 'weighted'] as const).map((mode) => (
                           <label key={mode} className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="radio"
@@ -623,17 +696,47 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                             />
                             <span className="text-sm">
                               {mode === 'lexicographic' && 'Prioriteitenplanner (standaard)'}
+                              {mode === 'multi_start' && 'Herhaalplanner'}
                               {mode === 'weighted' && 'Puntenplanner'}
                             </span>
                           </label>
                         ))}
                       </div>
                       <p className="text-xs text-neutral-500 mt-1">
-                        {ruleset.objectiveMode === 'lexicographic'
-                          ? 'Lost eerst dekking zo goed mogelijk op, dan pas een eerlijke verdeling, dan liever-niet-voorkeuren, en als laatste voorkeuren - elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'
-                          : 'Eén gecombineerde score van alle punten hieronder samen - de solver kiest wat die score het laagst maakt. Kan bij veel personeel of diensten een minder eerlijke verdeling opleveren dan de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
+                        {ruleset.objectiveMode === 'lexicographic' &&
+                          'Lost eerst dekking zo goed mogelijk op, dan pas een eerlijke verdeling, dan liever-niet-voorkeuren, en als laatste voorkeuren - elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'}
+                        {ruleset.objectiveMode === 'multi_start' &&
+                          'Draait de Prioriteitenplanner meerdere keren met een andere toevalsvolgorde en bewaart steeds het beste rooster tot nu toe - stopt vanzelf zodra een perfect rooster is gevonden (alles ingevuld, iedereen exact binnen bereik) of het aantal pogingen hieronder is bereikt. Kan langer duren dan de andere methodes; je kunt tussentijds stoppen. De punten hieronder gelden niet voor deze methode.'}
+                        {ruleset.objectiveMode === 'weighted' &&
+                          'Eén gecombineerde score van alle punten hieronder samen - de solver kiest wat die score het laagst maakt. Kan bij veel personeel of diensten een minder eerlijke verdeling opleveren dan de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
                       </p>
                     </div>
+
+                    {ruleset.objectiveMode === 'multi_start' && (
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-700 mb-0.5">
+                          Aantal pogingen
+                        </label>
+                        <p className="text-xs text-neutral-500 mb-1">
+                          Hoe vaak de Herhaalplanner het rooster opnieuw probeert te genereren voor
+                          hij stopt en het beste tot dan toe gevonden rooster gebruikt (of eerder,
+                          als een perfect rooster wordt gevonden).
+                        </p>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={ruleset.maxAttempts}
+                          onChange={(e) =>
+                            setRuleset({
+                              ...ruleset,
+                              maxAttempts: Math.max(1, parseInt(e.target.value) || 1),
+                            })
+                          }
+                          className="w-28 px-2 py-1 border rounded text-sm"
+                        />
+                      </div>
+                    )}
 
                     {ruleset.objectiveMode === 'weighted' && (
                       <>
@@ -832,9 +935,38 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
               <p className="text-center text-sm text-neutral-600">
                 Rooster genereren...
               </p>
+              {progress && (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-neutral-600">
+                    <span>
+                      Poging {progress.attempt} van {progress.maxAttempts}
+                    </span>
+                    {progress.bestSoFar && (
+                      <span>
+                        Beste tot nu toe: {progress.bestSoFar.unfilled_slots}{' '}
+                        {progress.bestSoFar.unfilled_slots === 1 ? 'lege dienst' : 'lege diensten'},{' '}
+                        {progress.bestSoFar.max_band_deviation === 0
+                          ? 'iedereen binnen bereik'
+                          : `grootste afwijking ${progress.bestSoFar.max_band_deviation}`}
+                      </span>
+                    )}
+                  </div>
+                  <div className="w-full bg-neutral-200 rounded-full h-2">
+                    <div
+                      className="bg-blue-600 h-2 rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (progress.attempt / progress.maxAttempts) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
               {reconnecting ? (
                 <p className="text-xs text-center text-amber-700">
                   Verbinding onderbroken, opnieuw verbinden... Het genereren loopt gewoon door.
+                </p>
+              ) : progress ? (
+                <p className="text-xs text-center text-neutral-500">
+                  Je kunt dit scherm open laten staan of later terugkomen, of tussentijds stoppen
+                  hieronder.
                 </p>
               ) : (
                 <p className="text-xs text-center text-neutral-500">
@@ -893,6 +1025,17 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                   </p>
                 )}
 
+                {result.attempts_tried !== undefined && (
+                  <p className="text-xs text-green-800 mt-2 pt-2 border-t border-green-200">
+                    Herhaalplanner: {result.attempts_tried} poging{result.attempts_tried === 1 ? '' : 'en'}{' '}
+                    geprobeerd ·{' '}
+                    {result.stopped_reason === 'perfect' &&
+                      'gestopt: perfect rooster gevonden (alles ingevuld, iedereen binnen bereik)'}
+                    {result.stopped_reason === 'cancelled' && 'gestopt: handmatig gestopt'}
+                    {result.stopped_reason === 'max_attempts' && 'gestopt: aantal pogingen bereikt'}
+                  </p>
+                )}
+
                 {Object.keys(result.violations).length > 0 && (
                   <div className="mt-4 pt-4 border-t border-green-200">
                     <p className="text-xs font-semibold text-green-900 mb-2">Overtredingen:</p>
@@ -908,7 +1051,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 )}
               </div>
 
-              {result.solver_status === 'FEASIBLE' && nextTimeLimitSeconds !== null && (
+              {result.solver_status === 'FEASIBLE' &&
+                nextTimeLimitSeconds !== null &&
+                result.attempts_tried === undefined && (
                 <div className="bg-blue-50 border border-blue-200 rounded p-4">
                   <p className="text-sm text-blue-900">
                     De solver had nog niet bewezen dat dit de best mogelijke oplossing is toen de
@@ -939,13 +1084,23 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         <div className="border-t p-6 flex gap-3 flex-shrink-0">
           {!result && !error && (
             <>
-              <button
-                onClick={handleClose}
-                disabled={loading}
-                className="flex-1 px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
-              >
-                Annuleren
-              </button>
+              {loading && progress ? (
+                <button
+                  onClick={handleCancelGeneration}
+                  disabled={cancelling}
+                  className="flex-1 px-4 py-2 rounded font-medium bg-red-100 text-red-800 hover:bg-red-200 disabled:bg-red-50 disabled:text-red-400 transition-colors"
+                >
+                  {cancelling ? 'Bezig met stoppen...' : 'Stoppen (beste tot nu toe gebruiken)'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleClose}
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
+                >
+                  Annuleren
+                </button>
+              )}
               <button
                 onClick={() => handleGenerate()}
                 disabled={loading || formInvalid}

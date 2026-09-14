@@ -151,6 +151,15 @@ class RuleSet(BaseModel):
     # periods get 'lexicographic' as their default instead - see wherever
     # a fresh ruleset's fields are assigned on the Next.js side.
     objective_mode: Literal['weighted', 'lexicographic'] = 'weighted'
+    # Varies CP-SAT's own search only - never the model or constraints, so
+    # the same seed on the same input always reproduces the same result.
+    # None (default) leaves OR-Tools' own default search in place. Set by
+    # the Next.js "Herhaalplanner" multi-start loop to a different value on
+    # each repeated /solve call for the same period, so those calls can
+    # actually land on different solutions instead of deterministically
+    # reproducing the same one every time - see solver.py's
+    # RosterSolver.random_seed.
+    random_seed: Optional[int] = None
     # A negative value would turn the LIEVER_NIET penalty into a reward,
     # actively steering the solver towards a blocked-but-not-ABSOLUUT slot.
     soft_block_penalty: float = Field(default=1.0, ge=0)
@@ -312,6 +321,16 @@ class SolverDiagnostics(BaseModel):
     time_seconds: float
     solver_status: str
     violations: dict[str, int]
+    # Used by the Next.js "Herhaalplanner" multi-start loop to rank one
+    # /solve call's result against another's when deciding whether a new
+    # attempt beats the best one kept so far - see
+    # lib/rosterGenerationJobs.ts's isBetterRoster. Not used by a plain
+    # single solve, but always present so every response has the same
+    # shape regardless of which UI mode triggered it.
+    max_band_deviation: int = 0
+    total_band_deviation: int = 0
+    soft_block_violations: int = 0
+    preference_matches: int = 0
 
 
 class SolverOutput(BaseModel):
@@ -441,7 +460,8 @@ async def solve_roster(request: SolverInput):
             shortfall_weight=request.rules.shortfall_weight,
             band_imbalance_weight=request.rules.band_imbalance_weight,
             preference_reward_weight=request.rules.preference_reward_weight,
-            objective_mode=request.rules.objective_mode
+            objective_mode=request.rules.objective_mode,
+            random_seed=request.rules.random_seed
         )
 
         if not result['success']:

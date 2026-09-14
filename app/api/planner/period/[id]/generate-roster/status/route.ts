@@ -44,7 +44,10 @@ export async function GET(
   }
 
   if (job.status === 'RUNNING') {
-    return NextResponse.json({ success: true, data: { status: 'RUNNING' } });
+    return NextResponse.json({
+      success: true,
+      data: { status: 'RUNNING', progress: job.progress ?? null },
+    });
   }
 
   if (job.status === 'DONE') {

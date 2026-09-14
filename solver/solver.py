@@ -53,6 +53,15 @@ class RosterSolver:
         self.model = None
         self.solver = None
         self.status = None
+        # Set per generate_roster() call, applied to every CpSolver() this
+        # instance creates (solve() and each _solve_lexicographic phase).
+        # None (default) leaves OR-Tools' own default search in place -
+        # only the "Herhaalplanner" multi-start loop (Next.js side, see
+        # lib/rosterGenerationJobs.ts) sets this, to a different value per
+        # attempt, so repeated solves of the same input can actually land
+        # on different (equally or less optimal) solutions instead of
+        # deterministically reproducing the same one every time.
+        self.random_seed: Optional[int] = None
 
     # ========================================================================
     # Model Building
@@ -261,6 +270,8 @@ class RosterSolver:
 
         self.solver = cp_model.CpSolver()
         self.solver.parameters.max_time_in_seconds = self.time_limit_seconds
+        if self.random_seed is not None:
+            self.solver.parameters.random_seed = self.random_seed
         # CP-SAT's search log is ~700 lines per solve. Useful when tuning
         # the model, overwhelming in normal operation (and in test output),
         # so it follows the service's own log level instead of being on
@@ -348,6 +359,8 @@ class RosterSolver:
                 model.Maximize(objective_expr)
             self.solver = cp_model.CpSolver()
             self.solver.parameters.max_time_in_seconds = phase_time_limit
+            if self.random_seed is not None:
+                self.solver.parameters.random_seed = self.random_seed
             self.solver.parameters.log_search_progress = logger.isEnabledFor(logging.DEBUG)
             self.status = self.solver.Solve(model)
             ok = self.status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
@@ -473,10 +486,18 @@ class RosterSolver:
 
             band_slack_vars = model_data.get('band_slack_vars', {})
             band_violations = 0
+            max_band_deviation = 0
+            total_band_deviation = 0
             for under_var, over_var in band_slack_vars.values():
-                if self.solver.Value(under_var) > 0 or self.solver.Value(over_var) > 0:
+                deviation = self.solver.Value(under_var) + self.solver.Value(over_var)
+                if deviation > 0:
                     band_violations += 1
+                max_band_deviation = max(max_band_deviation, deviation)
+                total_band_deviation += deviation
             violations['band_limit'] = band_violations
+        else:
+            max_band_deviation = 0
+            total_band_deviation = 0
 
         return {
             'success': self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE],
@@ -485,7 +506,15 @@ class RosterSolver:
             'unfilled_slots': unfilled_slots,
             'objective_value': self.solver.ObjectiveValue() if self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE] else None,
             'time_seconds': elapsed,
-            'violations': violations
+            'violations': violations,
+            # Used by the Next.js "Herhaalplanner" multi-start loop to rank
+            # attempts against each other (see
+            # lib/rosterGenerationJobs.ts's isBetterRoster) - the *sum*
+            # (max_band_deviation) already existed as a violation *count*
+            # above, but ranking attempts needs the actual magnitude, not
+            # just how many people were affected.
+            'max_band_deviation': max_band_deviation,
+            'total_band_deviation': total_band_deviation,
         }
 
     # ========================================================================
@@ -515,13 +544,21 @@ class RosterSolver:
         shortfall_weight: float = 1000.0,
         band_imbalance_weight: float = 0.5,
         preference_reward_weight: float = 0.3,
-        objective_mode: str = 'weighted'
+        objective_mode: str = 'weighted',
+        random_seed: Optional[int] = None
     ) -> dict:
         """
         End-to-end: build model, solve (weighted or lexicographic per
         objective_mode), extract assignments.
+
+        random_seed only ever varies CP-SAT's own search, never the model
+        or constraints - passing the same seed for the same input always
+        reproduces the same result. Set by the "Herhaalplanner" multi-start
+        loop (Next.js) to a different value per attempt so repeated calls
+        with otherwise identical input can land on different solutions.
         """
-        logger.info(f"Generating roster for period {period_id} (objective_mode={objective_mode})")
+        logger.info(f"Generating roster for period {period_id} (objective_mode={objective_mode}, random_seed={random_seed})")
+        self.random_seed = random_seed
 
         try:
             # Build
@@ -541,6 +578,15 @@ class RosterSolver:
             else:
                 result = self.solve(model_data)
 
+            assigned_pairs = {(a['person_id'], a['slot_id']) for a in result['assignments']}
+            # Counted from the actual assignment, not read off an objective
+            # term - meaningful under both objective_mode's, and the only
+            # way the "Herhaalplanner" loop (which always solves
+            # 'lexicographic') can compare liever-niet/voorkeur quality
+            # between attempts that tied on coverage and fairness.
+            soft_block_violations = sum(1 for pair in soft_slots if pair in assigned_pairs)
+            preference_matches = sum(1 for pair in (preferred_slots or {}) if pair in assigned_pairs)
+
             return {
                 'success': result['success'],
                 'period_id': period_id,
@@ -552,7 +598,11 @@ class RosterSolver:
                     'total_cost': result['objective_value'] or 0,
                     'time_seconds': result['time_seconds'],
                     'solver_status': result['status'],
-                    'violations': result['violations']
+                    'violations': result['violations'],
+                    'max_band_deviation': result.get('max_band_deviation', 0),
+                    'total_band_deviation': result.get('total_band_deviation', 0),
+                    'soft_block_violations': soft_block_violations,
+                    'preference_matches': preference_matches,
                 }
             }
 
@@ -569,6 +619,10 @@ class RosterSolver:
                     'total_cost': 0,
                     'time_seconds': 0,
                     'solver_status': 'ERROR',
-                    'violations': {}
+                    'violations': {},
+                    'max_band_deviation': 0,
+                    'total_band_deviation': 0,
+                    'soft_block_violations': 0,
+                    'preference_matches': 0,
                 }
             }

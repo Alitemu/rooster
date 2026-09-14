@@ -15,7 +15,15 @@ import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBan
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
-import { createRosterGenerationJob, completeRosterGenerationJob, failRosterGenerationJob } from '@/lib/rosterGenerationJobs';
+import {
+  createRosterGenerationJob,
+  completeRosterGenerationJob,
+  failRosterGenerationJob,
+  updateRosterGenerationJobProgress,
+  setRosterGenerationJobAbortController,
+  isRosterGenerationJobCancelRequested,
+  type RosterGenerationStoppedReason,
+} from '@/lib/rosterGenerationJobs';
 
 export async function POST(
   request: NextRequest,
@@ -336,6 +344,26 @@ async function runGeneration(args: {
       )
       .all(periodId) as Array<{ person_id: string; datum: string; teller: string }>;
 
+    // Which roster-generation approach this period's ruleset asks for -
+    // falls back to 'weighted' (not 'lexicographic' or 'multi_start') when
+    // a period's frozen ruleset has no objectiveMode at all, matching
+    // solver/main.py's RuleSet backward-compat default exactly: a period
+    // opened before this field existed must keep behaving as it always
+    // has. New periods get 'lexicographic' from SetupWizard's own ruleset
+    // payload instead - that default belongs there, not in this fallback.
+    const objectiveModeConfig: 'weighted' | 'lexicographic' | 'multi_start' =
+      config.objectiveMode === 'weighted' ||
+      config.objectiveMode === 'lexicographic' ||
+      config.objectiveMode === 'multi_start'
+        ? config.objectiveMode
+        : 'weighted';
+
+    // What actually gets sent to the solver on every call - see
+    // runMultiStart below for why 'multi_start' itself is never one of
+    // these.
+    const solverObjectiveMode: 'weighted' | 'lexicographic' =
+      objectiveModeConfig === 'multi_start' ? 'lexicographic' : objectiveModeConfig;
+
     // Build solver request
     const solverInput = {
       period_id: periodId,
@@ -383,17 +411,13 @@ async function runGeneration(args: {
           typeof config.bandImbalanceWeight === 'number' ? config.bandImbalanceWeight : 0.5,
         preference_reward_weight:
           typeof config.preferenceRewardWeight === 'number' ? config.preferenceRewardWeight : 0.3,
-        // Which roster-generation approach to use - falls back to
-        // 'weighted' (not 'lexicographic') when a period's frozen ruleset
-        // has no objectiveMode at all, matching solver/main.py's RuleSet
-        // backward-compat default exactly: a period opened before this
-        // field existed must keep behaving as it always has. New periods
-        // get 'lexicographic' from SetupWizard's own ruleset payload
-        // instead - that default belongs there, not in this fallback.
-        objective_mode:
-          config.objectiveMode === 'weighted' || config.objectiveMode === 'lexicographic'
-            ? config.objectiveMode
-            : 'weighted',
+        // The solver itself only ever knows 'weighted' or 'lexicographic' -
+        // 'multi_start' ("Herhaalplanner") is a Next.js-side concept, see
+        // objectiveModeConfig/solverObjectiveMode below: it repeats
+        // 'lexicographic' solves with a different random_seed each time and
+        // keeps the best, rather than being a third thing the solver has to
+        // understand.
+        objective_mode: solverObjectiveMode,
       },
       balances,
       prior_assignments: priorAssignmentRows.map((r) => ({
@@ -427,49 +451,39 @@ async function runGeneration(args: {
     // actually finished and answered successfully - a slow-but-legitimate
     // solve must never be mistaken for a dead connection.
     const solverUrl = process.env.SOLVER_URL || 'http://solver:8000';
-    const solverResponse = await postJson(
-      `${solverUrl}/solve`,
-      solverInput,
-      (timeLimitSeconds ?? 120) * 1000 + 300_000
-    );
+    const solverTimeoutMs = (timeLimitSeconds ?? 120) * 1000 + 300_000;
 
-    if (!solverResponse.ok) {
-      const error = await solverResponse.text();
-      // Never forward the solver's raw response (stack traces, internal
-      // exception text) to the client - log it server-side and return a
-      // generic, client-safe Dutch message instead, per CLAUDE.md.
-      console.error('[generate-roster] solver error', error);
-      failRosterGenerationJob(
+    let solverOutput: any;
+    let attemptsTried: number | undefined;
+    let stoppedReason: RosterGenerationStoppedReason | undefined;
+
+    if (objectiveModeConfig === 'multi_start') {
+      const multiStart = await runMultiStart({
         jobId,
-        'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.',
-        500
-      );
-      return;
-    }
+        solverUrl,
+        solverInput,
+        timeoutMs: solverTimeoutMs,
+        maxAttempts:
+          typeof config.maxAttempts === 'number' && Number.isFinite(config.maxAttempts) && config.maxAttempts >= 1
+            ? Math.floor(config.maxAttempts)
+            : 100,
+      });
 
-    const solverOutput = await solverResponse.json();
+      if (!multiStart.ok) {
+        failRosterGenerationJob(jobId, multiStart.message, multiStart.status);
+        return;
+      }
 
-    if (!solverOutput.success) {
-      // Capacity and band limits are soft constraints (see solver/constraints.py),
-      // so the solver almost always returns a best-effort roster even when
-      // there aren't enough people - this only fires when no assignment at
-      // all is possible without breaking a hard rule (ABSOLUUT block,
-      // window rule), or the solver genuinely errored. A real business
-      // outcome, not a server fault, so 422 rather than 500.
-      //
-      // solverOutput.message is English and, for a genuine failure, was
-      // never actually a useful explanation ("Solve did not succeed
-      // (status: INFEASIBLE)") - never forward it directly, per CLAUDE.md.
-      const status = solverOutput.diagnostics?.solver_status;
-      const statusExplanation: Record<string, string> = {
-        INFEASIBLE: 'Er is geen enkele geldige indeling mogelijk binnen de harde regels (bijv. geblokkeerde dagen of het minimumvenster tussen diensten). Versoepel de instellingen of vraag deelnemers hun blokkades te herzien.',
-        UNKNOWN: 'De solver kon binnen de tijdslimiet geen oplossing vinden. Probeer het opnieuw, of versoepel de instellingen als dit blijft gebeuren.',
-        ERROR: 'Er is een onverwachte fout opgetreden in de solver.',
-      };
-      const message = statusExplanation[status] || 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.';
-
-      failRosterGenerationJob(jobId, message, 422);
-      return;
+      solverOutput = multiStart.output;
+      attemptsTried = multiStart.attemptsTried;
+      stoppedReason = multiStart.stoppedReason;
+    } else {
+      const result = await callSolver(solverUrl, solverInput, solverTimeoutMs);
+      if (!result.ok) {
+        failRosterGenerationJob(jobId, result.message, result.status);
+        return;
+      }
+      solverOutput = result.output;
     }
 
     // The solver call above is async and yields the event loop, so a second
@@ -599,9 +613,209 @@ async function runGeneration(args: {
       // version that's already one behind and gets rejected with a
       // conflict that has nothing to do with anyone else editing it.
       row_version: rowVersion,
+      ...(attemptsTried !== undefined ? { attempts_tried: attemptsTried } : {}),
+      ...(stoppedReason !== undefined ? { stopped_reason: stoppedReason } : {}),
     });
   } catch (error) {
     console.error('[generate-roster]', error);
     failRosterGenerationJob(jobId, 'Er is iets misgegaan. Probeer het opnieuw.');
   }
+}
+
+// ============================================================================
+// Solver call + "Herhaalplanner" multi-start orchestration
+// ============================================================================
+
+type SolverCallResult = { ok: true; output: any } | { ok: false; message: string; status: number };
+
+/**
+ * One POST to the solver's /solve, translated into a client-safe Dutch
+ * outcome. Shared by the plain single-solve path and each attempt of
+ * runMultiStart below, so both report failures identically.
+ */
+async function callSolver(
+  solverUrl: string,
+  solverInput: unknown,
+  timeoutMs: number,
+  signal?: AbortSignal
+): Promise<SolverCallResult> {
+  const solverResponse = await postJson(`${solverUrl}/solve`, solverInput, timeoutMs, signal);
+
+  if (!solverResponse.ok) {
+    const error = await solverResponse.text();
+    // Never forward the solver's raw response (stack traces, internal
+    // exception text) to the client - log it server-side and return a
+    // generic, client-safe Dutch message instead, per CLAUDE.md.
+    console.error('[generate-roster] solver error', error);
+    return {
+      ok: false,
+      message: 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.',
+      status: 500,
+    };
+  }
+
+  const output = await solverResponse.json();
+
+  if (!output.success) {
+    // Capacity and band limits are soft constraints (see solver/constraints.py),
+    // so the solver almost always returns a best-effort roster even when
+    // there aren't enough people - this only fires when no assignment at
+    // all is possible without breaking a hard rule (ABSOLUUT block,
+    // window rule), or the solver genuinely errored. A real business
+    // outcome, not a server fault, so 422 rather than 500.
+    //
+    // output.message is English and, for a genuine failure, was never
+    // actually a useful explanation ("Solve did not succeed (status:
+    // INFEASIBLE)") - never forward it directly, per CLAUDE.md.
+    const status = output.diagnostics?.solver_status;
+    const statusExplanation: Record<string, string> = {
+      INFEASIBLE: 'Er is geen enkele geldige indeling mogelijk binnen de harde regels (bijv. geblokkeerde dagen of het minimumvenster tussen diensten). Versoepel de instellingen of vraag deelnemers hun blokkades te herzien.',
+      UNKNOWN: 'De solver kon binnen de tijdslimiet geen oplossing vinden. Probeer het opnieuw, of versoepel de instellingen als dit blijft gebeuren.',
+      ERROR: 'Er is een onverwachte fout opgetreden in de solver.',
+    };
+    const message = statusExplanation[status] || 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.';
+    return { ok: false, message, status: 422 };
+  }
+
+  return { ok: true, output };
+}
+
+/**
+ * Ranks two /solve outcomes against each other for the "Herhaalplanner" -
+ * the same priority order the Prioriteitenplanner itself solves in
+ * (dekking > eerlijkheid grootste afwijking > eerlijkheid totale afwijking
+ * > liever-niet > voorkeur), so "beter" here means exactly what it means
+ * inside a single solve, just applied across repeated ones. Returns true
+ * when `a` is strictly better than `b`; a full tie keeps whichever was
+ * found first (stable - doesn't churn the kept result for no reason).
+ */
+function isBetterRoster(a: any, b: any): boolean {
+  const tupleOf = (d: any) => [
+    Array.isArray(d?.unfilled_slots) ? d.unfilled_slots.length : 0,
+    d?.max_band_deviation ?? 0,
+    d?.total_band_deviation ?? 0,
+    d?.soft_block_violations ?? 0,
+    -(d?.preference_matches ?? 0),
+  ];
+  const ta = tupleOf(a);
+  const tb = tupleOf(b);
+  for (let i = 0; i < ta.length; i++) {
+    if (ta[i] !== tb[i]) return ta[i] < tb[i];
+  }
+  return false;
+}
+
+/**
+ * "Perfect" per the planner's own stopping rule: every slot filled and
+ * everyone exactly within their streefbereik (zero band slack either
+ * direction). Window rule and ABSOLUUT blocks are hard constraints the
+ * solver can never violate in any OPTIMAL/FEASIBLE result, so they need no
+ * separate check here.
+ */
+function isPerfectRoster(d: any): boolean {
+  const unfilled = Array.isArray(d?.unfilled_slots) ? d.unfilled_slots.length : 0;
+  return unfilled === 0 && (d?.max_band_deviation ?? 0) === 0;
+}
+
+type MultiStartResult =
+  | { ok: true; output: any; attemptsTried: number; stoppedReason: RosterGenerationStoppedReason }
+  | { ok: false; message: string; status: number };
+
+/**
+ * "Herhaalplanner": repeats a plain 'lexicographic' solve up to
+ * maxAttempts times, each with a different CP-SAT random_seed, and keeps
+ * the best result found (see isBetterRoster) - see solver/solver.py's
+ * RosterSolver.random_seed for why a different seed can land on a
+ * different solution even for identical input. Stops early the moment an
+ * attempt is "perfect" (isPerfectRoster), or when the job's cancellation
+ * flag is set (checked before every new attempt, and via the AbortController
+ * registered for whichever attempt is currently in flight) - either of
+ * those, like reaching maxAttempts, just ends the loop with whatever was
+ * best so far; only having *no* successful attempt at all is a failure.
+ */
+async function runMultiStart(args: {
+  jobId: string;
+  solverUrl: string;
+  solverInput: any;
+  timeoutMs: number;
+  maxAttempts: number;
+}): Promise<MultiStartResult> {
+  const { jobId, solverUrl, solverInput, timeoutMs, maxAttempts } = args;
+
+  let best: any = null;
+  let attemptsTried = 0;
+  let stoppedReason: RosterGenerationStoppedReason = 'max_attempts';
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (isRosterGenerationJobCancelRequested(jobId)) {
+      stoppedReason = 'cancelled';
+      break;
+    }
+
+    updateRosterGenerationJobProgress(jobId, {
+      attempt,
+      maxAttempts,
+      bestSoFar: best
+        ? {
+            unfilled_slots: best.diagnostics.unfilled_slots.length,
+            max_band_deviation: best.diagnostics.max_band_deviation ?? 0,
+          }
+        : null,
+    });
+
+    const controller = new AbortController();
+    setRosterGenerationJobAbortController(jobId, controller);
+
+    // CP-SAT's random_seed is a signed int32 field - well within
+    // Math.random()'s usable range, and doesn't need to be
+    // cryptographically random, only different per attempt.
+    const attemptInput = {
+      ...solverInput,
+      rules: { ...solverInput.rules, random_seed: Math.floor(Math.random() * 2_147_483_647) },
+    };
+
+    let result: SolverCallResult;
+    try {
+      result = await callSolver(solverUrl, attemptInput, timeoutMs, controller.signal);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        stoppedReason = 'cancelled';
+        break;
+      }
+      throw err;
+    }
+
+    attemptsTried = attempt;
+
+    if (!result.ok) {
+      if (!best && attempt === 1) {
+        // Feasibility doesn't depend on random_seed - if the very first
+        // attempt can't find any valid assignment at all, every remaining
+        // attempt would fail identically. Fail now instead of burning
+        // through up to maxAttempts calls for nothing.
+        return { ok: false, message: result.message, status: result.status };
+      }
+      // A later attempt failing (a transient solver hiccup) shouldn't
+      // discard whatever was already found - skip it and keep going.
+      console.error(`[generate-roster] Herhaalplanner poging ${attempt} mislukt`, result.message);
+      continue;
+    }
+
+    if (!best || isBetterRoster(result.output.diagnostics, best.diagnostics)) {
+      best = result.output;
+    }
+
+    if (isPerfectRoster(result.output.diagnostics)) {
+      stoppedReason = 'perfect';
+      break;
+    }
+  }
+
+  if (!best) {
+    return stoppedReason === 'cancelled'
+      ? { ok: false, message: 'Genereren geannuleerd voordat er een bruikbaar rooster was gevonden.', status: 400 }
+      : { ok: false, message: 'De solver kon in geen van de pogingen een rooster genereren.', status: 422 };
+  }
+
+  return { ok: true, output: best, attemptsTried, stoppedReason };
 }

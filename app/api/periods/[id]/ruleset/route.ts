@@ -14,13 +14,15 @@
  * database directly.
  *
  * This lets a planner update window/band/blockBudget/softBlockBudget, which
- * of the two optimization methods to use (objectiveMode: 'weighted' /
- * "Puntenplanner" or 'lexicographic' / "Prioriteitenplanner"), and the
+ * of the three optimization methods to use (objectiveMode: 'weighted' /
+ * "Puntenplanner", 'lexicographic' / "Prioriteitenplanner", or
+ * 'multi_start' / "Herhaalplanner" - the latter repeats 'lexicographic'
+ * with maxAttempts different random seeds and keeps the best), and the
  * weighted method's own objective weights (softBlockPenalty,
  * bandDeviationPenalty, bandDeviationMultiplier, shortfallWeight,
- * bandImbalanceWeight, preferenceRewardWeight - unused when objectiveMode is
- * 'lexicographic') on the frozen ruleset itself (distributionMode and
- * anything else already stored is left alone), right before a
+ * bandImbalanceWeight, preferenceRewardWeight - unused by the other two
+ * methods) on the frozen ruleset itself (distributionMode and anything
+ * else already stored is left alone), right before a
  * (re)generate - the same statuses generate-roster accepts, minus CONCEPT
  * (which has no frozen ruleset yet - that's set via POST .../open instead)
  * and GEPUBLICEERD (frozen for good once published).
@@ -52,7 +54,8 @@ interface UpdateRulesetRequest {
   shortfallWeight?: number;
   bandImbalanceWeight?: number;
   preferenceRewardWeight?: number;
-  objectiveMode?: 'weighted' | 'lexicographic';
+  objectiveMode?: 'weighted' | 'lexicographic' | 'multi_start';
+  maxAttempts?: number;
   rowVersion?: number;
 }
 
@@ -249,11 +252,23 @@ export async function PATCH(
     if (
       body.objectiveMode !== undefined &&
       body.objectiveMode !== 'weighted' &&
-      body.objectiveMode !== 'lexicographic'
+      body.objectiveMode !== 'lexicographic' &&
+      body.objectiveMode !== 'multi_start'
     ) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_OBJECTIVE_MODE', message: '"Optimalisatiemethode" moet "weighted" of "lexicographic" zijn' },
+        error: { code: 'INVALID_OBJECTIVE_MODE', message: '"Optimalisatiemethode" moet "weighted", "lexicographic" of "multi_start" zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (
+      body.maxAttempts !== undefined &&
+      (typeof body.maxAttempts !== 'number' || !Number.isInteger(body.maxAttempts) || body.maxAttempts < 1)
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_WEIGHT', message: '"Aantal pogingen" moet een geheel getal van 1 of hoger zijn' },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -293,6 +308,7 @@ export async function PATCH(
       ...(body.bandImbalanceWeight !== undefined ? { bandImbalanceWeight: body.bandImbalanceWeight } : {}),
       ...(body.preferenceRewardWeight !== undefined ? { preferenceRewardWeight: body.preferenceRewardWeight } : {}),
       ...(body.objectiveMode !== undefined ? { objectiveMode: body.objectiveMode } : {}),
+      ...(body.maxAttempts !== undefined ? { maxAttempts: body.maxAttempts } : {}),
     };
 
     // A period already sitting on a generated roster (GEGENEREERD) must go
