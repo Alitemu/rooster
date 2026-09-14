@@ -181,4 +181,11 @@ export interface RulesetConfig {
   shortfallWeight: number;
   bandImbalanceWeight: number;
   preferenceRewardWeight: number;
+  // Which roster-generation approach to use - 'weighted' ("Puntenplanner",
+  // the model shortfallWeight/bandImbalanceWeight/preferenceRewardWeight
+  // above tune) or 'lexicographic' ("Prioriteitenplanner", the default for
+  // new periods - ignores those weights, solves dekking > eerlijkheid >
+  // liever-niet > voorkeur in strict priority order instead). See
+  // solver/solver.py's module docstring for the full comparison.
+  objectiveMode: 'weighted' | 'lexicographic';
 }

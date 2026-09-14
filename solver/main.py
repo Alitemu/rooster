@@ -133,6 +133,24 @@ class RuleSet(BaseModel):
     band_weekend: tuple[int, int] = (7, 8)
     band_feestdag: tuple[int, int] = (7, 8)
     distribution_mode: Literal['GELIJK', 'NAAR_RATO'] = "GELIJK"
+    # Which of the two roster-generation approaches to use - see
+    # solver.py's module docstring for the full comparison.
+    # 'weighted' ("Puntenplanner"): one combined weighted-sum objective,
+    # single solve - all the fields below this one tune its weights.
+    # 'lexicographic' ("Prioriteitenplanner", new): several solves in
+    # strict priority order (dekking > eerlijkheid > liever-niet >
+    # voorkeur), each phase locking its own optimum in before the next is
+    # even considered - none of the weight fields below apply to it.
+    #
+    # Defaults to 'weighted' here specifically for backward compatibility:
+    # every period whose ruleset was frozen before this field existed has
+    # no objectiveMode key in its bevroren_ruleset_json at all, and
+    # CLAUDE.md's "freeze ruleset when period opens, no retroactive rule
+    # changes" means regenerating one of those periods must keep behaving
+    # exactly as it always has, not silently switch algorithms. New
+    # periods get 'lexicographic' as their default instead - see wherever
+    # a fresh ruleset's fields are assigned on the Next.js side.
+    objective_mode: Literal['weighted', 'lexicographic'] = 'weighted'
     # A negative value would turn the LIEVER_NIET penalty into a reward,
     # actively steering the solver towards a blocked-but-not-ABSOLUUT slot.
     soft_block_penalty: float = Field(default=1.0, ge=0)
@@ -422,7 +440,8 @@ async def solve_roster(request: SolverInput):
             holiday_spread_weeks=request.rules.holiday_spread_weeks,
             shortfall_weight=request.rules.shortfall_weight,
             band_imbalance_weight=request.rules.band_imbalance_weight,
-            preference_reward_weight=request.rules.preference_reward_weight
+            preference_reward_weight=request.rules.preference_reward_weight,
+            objective_mode=request.rules.objective_mode
         )
 
         if not result['success']:

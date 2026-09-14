@@ -56,7 +56,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
           preferred=None, prior=None, manual=None, soft_block_penalty=1.0, distribution_mode='GELIJK',
           participation_factors=None, coverage=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
           holiday_spread_weeks=0, shortfall_weight=1000.0, band_imbalance_weight=0.5,
-          preference_reward_weight=0.3):
+          preference_reward_weight=0.3, objective_mode='weighted'):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -82,6 +82,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         shortfall_weight=shortfall_weight,
         band_imbalance_weight=band_imbalance_weight,
         preference_reward_weight=preference_reward_weight,
+        objective_mode=objective_mode,
     )
 
 
@@ -1096,3 +1097,138 @@ def test_band_target_is_reduced_by_an_existing_manual_assignment():
         f"assignment, p2=2), got {counts}"
     )
     assert result['diagnostics']['violations']['band_limit'] == 0
+
+
+# ---------------------------------------------------------------------------
+# OBJECTIVE_MODE='lexicographic' ("Prioriteitenplanner"): strict phase
+# priority instead of one weighted sum
+# ---------------------------------------------------------------------------
+#
+# objective_mode defaulting to 'weighted' when omitted is already proven by
+# every test above this point - none of them pass objective_mode, and all
+# still pass unchanged, which is exactly the backward-compatibility
+# guarantee that default exists for (see main.py's RuleSet.objective_mode
+# docstring: an already-frozen period's ruleset predates this field
+# entirely, and CLAUDE.md rules out retroactively changing its behaviour).
+
+def test_lexicographic_minimizes_the_worst_individual_deviation_not_the_sum():
+    """
+    The structural bug 'weighted' can never fully close: add_band_imbalance_
+    objective (and, for under-band shortage specifically, add_band_slack_
+    objective under its default flat tier) sums each person's deviation, so
+    one person 2 short costs exactly the same as two people 1 short each -
+    the model has no preference between "concentrated on one person" and
+    "spread across several" as long as the sum matches. That is exactly the
+    real-world case this feature exists for: one person absorbing far more
+    of a shortage than everyone else, with the weighted model unable to see
+    anything wrong with it.
+
+    4 people, band [2,2] (everyone wants exactly 2 -> demand 8), 6 slots -
+    2 short of that demand, so *some* shortage is unavoidable once every
+    slot is filled (phase 1 already guarantees all 6 are filled - leaving
+    any unfilled instead would only add shortfall cost with nothing to
+    show for it). The only question is how that 2-unit shortage lands:
+
+    - Concentrated (one person at 0, deviation 2, the rest at 2): the worst
+      deviation is 2.
+    - Spread (two people at 1, deviation 1 each, two at 2): the worst
+      deviation is 1.
+
+    Phase 2 minimizes the *worst* deviation directly (AddMaxEquality, not a
+    sum), so spreading strictly beats concentrating here - not a tie a
+    solver could break either way, a genuinely lower objective value. Every
+    split achieving worst-case 1 is an acceptable answer (there's more than
+    one shape), so this checks the deviation bound itself rather than one
+    specific distribution.
+    """
+    slots = make_slots(6)
+    people = ['p1', 'p2', 'p3', 'p4']
+    band = {'AVOND': [2, 2], 'WEEKEND': [2, 2], 'FEESTDAG': [2, 2]}
+
+    result = solve(people, slots, window_weeks=1, band=band, objective_mode='lexicographic')
+
+    assert result['success']
+    assert len(result['diagnostics']['unfilled_slots']) == 0, 'all 6 slots should still be filled'
+    counts = {p: 0 for p in people}
+    for a in result['assignments']:
+        counts[a['person_id']] += 1
+
+    deviations = [abs(c - 2) for c in counts.values()]
+    assert max(deviations) == 1, (
+        f"expected the worst-case deviation minimized to exactly 1 (the true minimum possible "
+        f"here, forcing the shortage to spread), got deviations={deviations} from counts={counts}"
+    )
+
+
+def test_lexicographic_still_fills_as_much_as_physically_possible_first():
+    """
+    Phase 1 (dekking) must still dominate everything else - a partial
+    roster, not nothing, when there genuinely aren't enough people. Mirrors
+    test_understaffed_period_returns_partial_roster_not_nothing, under
+    'lexicographic' instead of the default 'weighted'.
+    """
+    slots = make_slots(10)
+    result = solve(['p1'], slots, window_weeks=5, objective_mode='lexicographic')
+
+    assert result['success'], 'solver should still succeed when short-staffed'
+    assigned = len(result['assignments'])
+    unfilled = len(result['diagnostics']['unfilled_slots'])
+
+    assert assigned > 0, 'expected a partial roster, got nothing'
+    assert unfilled > 0, 'expected reported gaps'
+    assert assigned + unfilled == len(slots)
+
+
+def test_lexicographic_never_violates_a_hard_rule_even_under_scarcity():
+    """
+    Hard rules (ABSOLUUT blocks, here) are built once by build_model
+    regardless of objective_mode - constraints.py never sees which mode is
+    active. Mirrors test_absoluut_block_is_never_violated_even_under_
+    scarcity to prove that's actually true for 'lexicographic' too, not
+    just assumed from shared code.
+    """
+    slots = make_slots(6)
+    blocked = {('p1', s['id']) for s in slots}
+    result = solve(['p1'], slots, window_weeks=1, blocked=blocked, objective_mode='lexicographic')
+
+    assert result['success']
+    assert result['assignments'] == [], 'solver violated an ABSOLUUT block'
+    assert len(result['diagnostics']['unfilled_slots']) == 6
+
+
+def test_lexicographic_avoids_a_lievernietslot_when_a_free_alternative_exists():
+    """
+    Phase 3 (liever-niet) must actually do something, not just exist as an
+    empty pass-through. One slot, two otherwise-interchangeable people
+    (same wide-open band, so phase 2 can't prefer either) - p1 has marked
+    it LIEVER_NIET, p2 hasn't, so avoiding p1 costs nothing on any earlier
+    phase. p2 must get it.
+    """
+    slots = make_slots(1)
+    people = ['p1', 'p2']
+    soft = {('p1', slots[0]['id']): 1.0}
+
+    result = solve(people, slots, window_weeks=1, soft=soft, objective_mode='lexicographic')
+
+    assert result['success']
+    assigned = [a['person_id'] for a in result['assignments']]
+    assert assigned == ['p2'], f'expected p2 (no LIEVER_NIET mark) to get the slot, got {assigned}'
+
+
+def test_lexicographic_honours_preference_when_choice_is_otherwise_tied():
+    """
+    Phase 4 (voorkeur) must actually do something too. Mirrors
+    test_preference_is_honoured_when_choice_is_otherwise_tied under
+    'lexicographic': one slot, two interchangeable people, only p1 has a
+    VOORKEUR mark - nothing earlier in the phase order can prefer either of
+    them, so phase 4 alone decides.
+    """
+    slots = make_slots(1)
+    people = ['p1', 'p2']
+    preferred = {('p1', slots[0]['id']): 1.0}
+
+    result = solve(people, slots, window_weeks=1, preferred=preferred, objective_mode='lexicographic')
+
+    assert result['success']
+    assigned = [a['person_id'] for a in result['assignments']]
+    assert assigned == ['p1'], f'expected the preferred person p1 to get the sole shift, got {assigned}'

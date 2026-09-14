@@ -2,6 +2,33 @@
 CP-SAT Solver Execution
 
 Orchestrates model building, constraint application, and solution extraction.
+
+Two objective modes, selectable per period (RuleSet.objective_mode):
+
+- 'weighted' ("Puntenplanner"): one combined weighted sum of every cost/
+  reward term, minimized in a single solve - see objective.py. Simple and
+  fast, but a weighted sum is structurally blind to *how* a total is
+  reached: add_band_imbalance_objective sums each person's deviation from
+  their target, so one person 4 shifts off costs exactly the same as four
+  people 1 shift off each - the model has no preference between
+  "concentrated on one person" and "spread across several" as long as the
+  sum matches. That is precisely the failure mode that motivated
+  'lexicographic' below: a planner-visible, reproducible case of one
+  person absorbing far more than their share while others stayed
+  comfortably inside their own band, because the *sum* looked no worse
+  than spreading it would have.
+
+- 'lexicographic' ("Prioriteitenplanner"): see _solve_lexicographic below.
+  Solves several times in strict priority order, each phase locking its
+  own optimum in as a hard constraint before the next phase's objective
+  is even considered - so a lower-priority phase can never trade away a
+  higher-priority one's optimum, the way one big weight can silently be
+  outweighed by the sum of several smaller ones in the weighted model
+  once enough of them stack up (band_deviation_penalty's tiers, soft_
+  block_penalty, band_imbalance_weight and preference_reward_weight can
+  all combine on one side of a decision - nothing structurally prevents
+  their sum from approaching shortfall_weight/the over-band floor once a
+  period has enough people and slots).
 """
 
 import logging
@@ -52,16 +79,24 @@ class RosterSolver:
         holiday_spread_weeks: int = 0,
         shortfall_weight: float = 1000.0,
         band_imbalance_weight: float = 0.5,
-        preference_reward_weight: float = 0.3
+        preference_reward_weight: float = 0.3,
+        objective_mode: str = 'weighted'
     ) -> dict:
         """
-        Build the CP-SAT model with all constraints and objectives.
+        Build the CP-SAT model: every constraint always, the combined
+        weighted objective only when objective_mode == 'weighted' -
+        'lexicographic' builds and solves its own objectives phase by
+        phase afterward (see _solve_lexicographic), directly on the
+        constraints/variables this returns.
 
         Returns:
         {
             'model': cp_model.CpModel,
             'assignment_vars': dict[(person, slot) -> IntVar],
-            'constraints_builder': ConstraintBuilder
+            'shortfall_vars': dict[slot_id -> IntVar],
+            'band_slack_vars': dict[(person, counter) -> (under, over)],
+            'constraints_builder': ConstraintBuilder,
+            'objective_builder': ObjectiveBuilder | None
         }
         """
         logger.info("Building CP-SAT model")
@@ -134,51 +169,58 @@ class RosterSolver:
             coverage_factors=coverage_factors, already_assigned=already_assigned
         )
 
-        # Add objectives
-        objective_builder = ObjectiveBuilder(self.model)
+        objective_builder = None
+        if objective_mode == 'weighted':
+            objective_builder = ObjectiveBuilder(self.model)
 
-        # shortfall_weight is shared between these two calls on purpose:
-        # add_band_slack_objective's `over` term prices every unit at
-        # shortfall_weight + its own tier, specifically so exceeding
-        # anyone's streefwaarde can never be cheaper than leaving a slot
-        # unfilled instead - see that function's docstring. Whatever value
-        # a planner configures, the same value must go to both calls.
-        logger.info("Adding shortfall objective")
-        shortfall_cost = objective_builder.add_shortfall_objective(
-            shortfall_vars, weight=shortfall_weight
-        )
+            # shortfall_weight is shared between these two calls on purpose:
+            # add_band_slack_objective's `over` term prices every unit at
+            # shortfall_weight + its own tier, specifically so exceeding
+            # anyone's streefwaarde can never be cheaper than leaving a slot
+            # unfilled instead - see that function's docstring. Whatever
+            # value a planner configures, the same value must go to both
+            # calls.
+            logger.info("Adding shortfall objective")
+            shortfall_cost = objective_builder.add_shortfall_objective(
+                shortfall_vars, weight=shortfall_weight
+            )
 
-        logger.info("Adding band slack objective")
-        band_slack_cost = objective_builder.add_band_slack_objective(
-            band_slack_vars, penalty_tiers=band_deviation_penalty, multiplier=band_deviation_multiplier,
-            shortfall_weight=shortfall_weight
-        )
+            logger.info("Adding band slack objective")
+            band_slack_cost = objective_builder.add_band_slack_objective(
+                band_slack_vars, penalty_tiers=band_deviation_penalty, multiplier=band_deviation_multiplier,
+                shortfall_weight=shortfall_weight
+            )
 
-        logger.info("Adding soft preference objective")
-        soft_cost = objective_builder.add_soft_preference_objective(
-            assignment_vars, soft_slots, weight=soft_block_penalty
-        )
+            logger.info("Adding soft preference objective")
+            soft_cost = objective_builder.add_soft_preference_objective(
+                assignment_vars, soft_slots, weight=soft_block_penalty
+            )
 
-        logger.info("Adding band imbalance objective")
-        imbalance_cost = objective_builder.add_band_imbalance_objective(
-            assignment_vars, people, slots, band_ranges, balances, weight=band_imbalance_weight,
-            distribution_mode=distribution_mode, participation_factors=participation_factors,
-            coverage_factors=coverage_factors, already_assigned=already_assigned
-        )
+            logger.info("Adding band imbalance objective")
+            imbalance_cost = objective_builder.add_band_imbalance_objective(
+                assignment_vars, people, slots, band_ranges, balances, weight=band_imbalance_weight,
+                distribution_mode=distribution_mode, participation_factors=participation_factors,
+                coverage_factors=coverage_factors, already_assigned=already_assigned
+            )
 
-        logger.info("Adding preference reward objective")
-        preference_reward_cost = objective_builder.add_preference_reward_objective(
-            assignment_vars, preferred_slots or {}, weight=preference_reward_weight
-        )
+            logger.info("Adding preference reward objective")
+            preference_reward_cost = objective_builder.add_preference_reward_objective(
+                assignment_vars, preferred_slots or {}, weight=preference_reward_weight
+            )
 
-        logger.info("Building combined objective")
-        objective_builder.build_objective(
-            shortfall_cost=shortfall_cost,
-            band_slack_cost=band_slack_cost,
-            soft_cost=soft_cost,
-            imbalance_cost=imbalance_cost,
-            preference_reward_cost=preference_reward_cost
-        )
+            logger.info("Building combined objective")
+            objective_builder.build_objective(
+                shortfall_cost=shortfall_cost,
+                band_slack_cost=band_slack_cost,
+                soft_cost=soft_cost,
+                imbalance_cost=imbalance_cost,
+                preference_reward_cost=preference_reward_cost
+            )
+        else:
+            logger.info(
+                "objective_mode=lexicographic - skipping the combined weighted objective, "
+                "phases are built and solved individually by _solve_lexicographic"
+            )
 
         elapsed = time.time() - start
         logger.info(f"Model built in {elapsed:.2f}s")
@@ -193,7 +235,7 @@ class RosterSolver:
         }
 
     # ========================================================================
-    # Solving
+    # Solving - weighted (single solve)
     # ========================================================================
 
     def solve(
@@ -201,7 +243,8 @@ class RosterSolver:
         model_data: dict
     ) -> dict:
         """
-        Run the CP-SAT solver.
+        Run the CP-SAT solver once against the combined weighted objective
+        already attached to the model by build_model.
 
         Returns:
         {
@@ -216,10 +259,6 @@ class RosterSolver:
         logger.info(f"Starting solver (time limit: {self.time_limit_seconds}s)")
         start = time.time()
 
-        model = model_data['model']
-        assignment_vars = model_data['assignment_vars']
-
-        # Create solver with time limit
         self.solver = cp_model.CpSolver()
         self.solver.parameters.max_time_in_seconds = self.time_limit_seconds
         # CP-SAT's search log is ~700 lines per solve. Useful when tuning
@@ -228,13 +267,165 @@ class RosterSolver:
         # unconditionally.
         self.solver.parameters.log_search_progress = logger.isEnabledFor(logging.DEBUG)
 
-        # Solve
-        self.status = self.solver.Solve(model)
+        self.status = self.solver.Solve(model_data['model'])
 
         elapsed = time.time() - start
         logger.info(f"Solve completed in {elapsed:.2f}s, status: {self.status}")
 
-        # Extract solution
+        return self._extract_result(model_data, elapsed)
+
+    # ========================================================================
+    # Solving - lexicographic (several solves, strict priority order)
+    # ========================================================================
+
+    def _solve_lexicographic(
+        self,
+        model_data: dict,
+        soft_slots: dict[tuple[str, str], float],
+        preferred_slots: dict[tuple[str, str], float],
+    ) -> dict:
+        """
+        "Prioriteitenplanner": runs up to 5 sequential solves on the same
+        model instead of one weighted-sum minimize, each phase locking its
+        own just-found optimum in as a `<=` constraint before the next
+        phase's objective is even considered. A later phase can therefore
+        never trade away so much as one unit of an earlier phase's result
+        in exchange for improving its own - there is no shared currency
+        (a weight) for it to spend against a higher phase, unlike the
+        'weighted' model where enough smaller terms stacking up can
+        approach a supposedly-dominant one.
+
+        Phases, most senior first:
+
+        1. Coverage - minimize total shortfall (unfilled slot-headcount).
+        2. Fairness (worst case) - minimize the single worst individual's
+           band deviation (under+over from add_band_constraints) via
+           AddMaxEquality over everyone's deviation, not the *sum* of
+           deviations the weighted model's add_band_imbalance_objective
+           uses - a sum is indifferent between "one person 4 off" and
+           "four people 1 off each" (both sum to 4), which is exactly the
+           failure mode this exists to close structurally rather than
+           calibrate around.
+        2b. Fairness (spread) - with that worst case now fixed, minimize
+            the *sum* of deviations too, so among every allocation tied on
+            the worst case, the one that also spreads the remainder most
+            evenly still wins. Not one of Opus's four core phases, but a
+            cheap, natural tie-break extension of it (real leximin would
+            repeat 2 on the second-worst, third-worst, etc. - this is a
+            lighter approximation of the same idea, one extra solve
+            instead of up to N).
+        3. Soft blocking - minimize weighted LIEVER_NIET violations.
+        4. Preference - maximize weighted VOORKEUR honoured, with
+           everything above already locked in.
+
+        Phase 1 always runs (even with nothing to minimize, `sum([])` is a
+        valid degenerate objective) so self.solver/self.status are always
+        populated by the time this returns, even for a period with no
+        slots at all. Phases 2/2b/3/4 are skipped outright when there is
+        nothing for them to optimize (no band counters in play, no soft
+        marks, no preferences) - skipping is safe because there is nothing
+        to fix afterward either, so the previous phase's fixed result
+        already speaks for the whole model as far as that phase is
+        concerned.
+
+        Each phase gets an equal slice of self.time_limit_seconds - a
+        planner's configured budget is a promise about total wall-clock
+        time, not a per-phase one.
+        """
+        model = model_data['model']
+        shortfall_vars = model_data['shortfall_vars']
+        band_slack_vars = model_data['band_slack_vars']
+        assignment_vars = model_data['assignment_vars']
+
+        PHASES = 5
+        phase_time_limit = max(1.0, self.time_limit_seconds / PHASES)
+        total_start = time.time()
+
+        def run_phase(objective_expr, sense: str, label: str):
+            if sense == 'min':
+                model.Minimize(objective_expr)
+            else:
+                model.Maximize(objective_expr)
+            self.solver = cp_model.CpSolver()
+            self.solver.parameters.max_time_in_seconds = phase_time_limit
+            self.solver.parameters.log_search_progress = logger.isEnabledFor(logging.DEBUG)
+            self.status = self.solver.Solve(model)
+            ok = self.status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+            value = self.solver.ObjectiveValue() if ok else None
+            logger.info(f"Lexicographic phase '{label}': status={self.status}, value={value}")
+            return ok, value
+
+        # Phase 1: coverage. Always runs - see docstring.
+        shortfall_expr = sum(shortfall_vars.values()) if shortfall_vars else 0
+        ok, shortfall_opt = run_phase(shortfall_expr, 'min', '1 dekking')
+        if not ok:
+            elapsed = time.time() - total_start
+            return self._extract_result(model_data, elapsed)
+        if shortfall_vars:
+            model.Add(sum(shortfall_vars.values()) <= round(shortfall_opt))
+
+        # Phase 2 (+2b): fairness.
+        deviations = [under + over for (under, over) in band_slack_vars.values()]
+        if deviations:
+            max_dev = model.NewIntVar(0, 100_000, 'lex_max_deviation')
+            model.AddMaxEquality(max_dev, deviations)
+            ok, max_dev_opt = run_phase(max_dev, 'min', '2 eerlijkheid (grootste afwijking)')
+            if not ok:
+                elapsed = time.time() - total_start
+                return self._extract_result(model_data, elapsed)
+            model.Add(max_dev <= round(max_dev_opt))
+
+            ok, sum_dev_opt = run_phase(sum(deviations), 'min', '2b eerlijkheid (totale afwijking)')
+            if not ok:
+                elapsed = time.time() - total_start
+                return self._extract_result(model_data, elapsed)
+            model.Add(sum(deviations) <= round(sum_dev_opt))
+
+        # Phase 3: soft blocking (LIEVER_NIET).
+        soft_terms = [
+            penalty * assignment_vars[(p, s)]
+            for (p, s), penalty in soft_slots.items()
+            if (p, s) in assignment_vars
+        ]
+        if soft_terms:
+            ok, soft_opt = run_phase(sum(soft_terms), 'min', '3 liever-niet')
+            if not ok:
+                elapsed = time.time() - total_start
+                return self._extract_result(model_data, elapsed)
+            model.Add(sum(soft_terms) <= round(soft_opt))
+
+        # Phase 4: preference (VOORKEUR) - final phase, nothing left to fix
+        # afterward.
+        preference_terms = [
+            value * assignment_vars[(p, s)]
+            for (p, s), value in (preferred_slots or {}).items()
+            if (p, s) in assignment_vars
+        ]
+        if preference_terms:
+            ok, _ = run_phase(sum(preference_terms), 'max', '4 voorkeur')
+            if not ok:
+                elapsed = time.time() - total_start
+                return self._extract_result(model_data, elapsed)
+
+        elapsed = time.time() - total_start
+        logger.info(f"Lexicographic solve completed in {elapsed:.2f}s across all phases")
+        return self._extract_result(model_data, elapsed)
+
+    # ========================================================================
+    # Shared result extraction
+    # ========================================================================
+
+    def _extract_result(self, model_data: dict, elapsed: float) -> dict:
+        """
+        Reads assignments/unfilled slots/violations off self.solver +
+        self.status - whatever the most recent Solve() call left there,
+        whether that was solve()'s single weighted solve or
+        _solve_lexicographic's final phase. Shared so both paths report
+        results in exactly the same shape and get exactly the same
+        band_limit/capacity bookkeeping.
+        """
+        assignment_vars = model_data['assignment_vars']
+
         assignments = []
         if self.status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
             for (person_id, slot_id), var in assignment_vars.items():
@@ -323,12 +514,14 @@ class RosterSolver:
         holiday_spread_weeks: int = 0,
         shortfall_weight: float = 1000.0,
         band_imbalance_weight: float = 0.5,
-        preference_reward_weight: float = 0.3
+        preference_reward_weight: float = 0.3,
+        objective_mode: str = 'weighted'
     ) -> dict:
         """
-        End-to-end: build model, solve, extract assignments.
+        End-to-end: build model, solve (weighted or lexicographic per
+        objective_mode), extract assignments.
         """
-        logger.info(f"Generating roster for period {period_id}")
+        logger.info(f"Generating roster for period {period_id} (objective_mode={objective_mode})")
 
         try:
             # Build
@@ -339,11 +532,14 @@ class RosterSolver:
                 distribution_mode, participation_factors, coverage_factors,
                 band_deviation_penalty, band_deviation_multiplier,
                 holiday_spread_weeks, shortfall_weight, band_imbalance_weight,
-                preference_reward_weight
+                preference_reward_weight, objective_mode
             )
 
             # Solve
-            result = self.solve(model_data)
+            if objective_mode == 'lexicographic':
+                result = self._solve_lexicographic(model_data, soft_slots, preferred_slots or {})
+            else:
+                result = self.solve(model_data)
 
             return {
                 'success': result['success'],

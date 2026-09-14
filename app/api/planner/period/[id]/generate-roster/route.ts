@@ -383,6 +383,17 @@ async function runGeneration(args: {
           typeof config.bandImbalanceWeight === 'number' ? config.bandImbalanceWeight : 0.5,
         preference_reward_weight:
           typeof config.preferenceRewardWeight === 'number' ? config.preferenceRewardWeight : 0.3,
+        // Which roster-generation approach to use - falls back to
+        // 'weighted' (not 'lexicographic') when a period's frozen ruleset
+        // has no objectiveMode at all, matching solver/main.py's RuleSet
+        // backward-compat default exactly: a period opened before this
+        // field existed must keep behaving as it always has. New periods
+        // get 'lexicographic' from SetupWizard's own ruleset payload
+        // instead - that default belongs there, not in this fallback.
+        objective_mode:
+          config.objectiveMode === 'weighted' || config.objectiveMode === 'lexicographic'
+            ? config.objectiveMode
+            : 'weighted',
       },
       balances,
       prior_assignments: priorAssignmentRows.map((r) => ({

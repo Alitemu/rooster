@@ -13,11 +13,14 @@
  * set) too restrictively for this period had no way back except editing the
  * database directly.
  *
- * This lets a planner update window/band/blockBudget/softBlockBudget and the
- * solver's objective weights (softBlockPenalty, bandDeviationPenalty,
- * bandDeviationMultiplier, shortfallWeight, bandImbalanceWeight,
- * preferenceRewardWeight) on the frozen ruleset itself (distributionMode
- * and anything else already stored is left alone), right before a
+ * This lets a planner update window/band/blockBudget/softBlockBudget, which
+ * of the two optimization methods to use (objectiveMode: 'weighted' /
+ * "Puntenplanner" or 'lexicographic' / "Prioriteitenplanner"), and the
+ * weighted method's own objective weights (softBlockPenalty,
+ * bandDeviationPenalty, bandDeviationMultiplier, shortfallWeight,
+ * bandImbalanceWeight, preferenceRewardWeight - unused when objectiveMode is
+ * 'lexicographic') on the frozen ruleset itself (distributionMode and
+ * anything else already stored is left alone), right before a
  * (re)generate - the same statuses generate-roster accepts, minus CONCEPT
  * (which has no frozen ruleset yet - that's set via POST .../open instead)
  * and GEPUBLICEERD (frozen for good once published).
@@ -49,6 +52,7 @@ interface UpdateRulesetRequest {
   shortfallWeight?: number;
   bandImbalanceWeight?: number;
   preferenceRewardWeight?: number;
+  objectiveMode?: 'weighted' | 'lexicographic';
   rowVersion?: number;
 }
 
@@ -242,6 +246,18 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
 
+    if (
+      body.objectiveMode !== undefined &&
+      body.objectiveMode !== 'weighted' &&
+      body.objectiveMode !== 'lexicographic'
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_OBJECTIVE_MODE', message: '"Optimalisatiemethode" moet "weighted" of "lexicographic" zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {
       const response: ApiErrorResponse = {
         success: false,
@@ -276,6 +292,7 @@ export async function PATCH(
       ...(body.shortfallWeight !== undefined ? { shortfallWeight: body.shortfallWeight } : {}),
       ...(body.bandImbalanceWeight !== undefined ? { bandImbalanceWeight: body.bandImbalanceWeight } : {}),
       ...(body.preferenceRewardWeight !== undefined ? { preferenceRewardWeight: body.preferenceRewardWeight } : {}),
+      ...(body.objectiveMode !== undefined ? { objectiveMode: body.objectiveMode } : {}),
     };
 
     // A period already sitting on a generated roster (GEGENEREERD) must go

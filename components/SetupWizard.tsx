@@ -829,6 +829,15 @@ export function SetupWizard({ period, onComplete }: Props) {
               FEESTDAG: { maxFraction: blockBudgetConfig.softPercent / 100 },
               parttimeExempt: blockBudgetConfig.parttimeExempt,
             },
+            // New periods default to the Prioriteitenplanner (strict
+            // priority order: dekking > eerlijkheid > liever-niet >
+            // voorkeur) rather than the older Puntenplanner (weighted sum) -
+            // a planner can still switch a period back to 'weighted' later
+            // via "Geavanceerde instellingen". Periods opened before this
+            // field existed have no objectiveMode in their frozen ruleset at
+            // all, and the solver's own backward-compat default for that
+            // case is 'weighted', not this one - see solver/main.py.
+            objectiveMode: 'lexicographic',
           },
         }),
       });

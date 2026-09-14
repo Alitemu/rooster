@@ -50,6 +50,12 @@ interface RulesetConfig {
   shortfallWeight: number;
   bandImbalanceWeight: number;
   preferenceRewardWeight: number;
+  // Which of the two roster-generation approaches to use. 'lexicographic'
+  // ("Prioriteitenplanner") solves dekking > eerlijkheid > liever-niet >
+  // voorkeur in strict priority order and ignores every weight field above;
+  // 'weighted' ("Puntenplanner") is the older single-weighted-sum model
+  // those fields tune. See solver/solver.py's module docstring.
+  objectiveMode: 'weighted' | 'lexicographic';
 }
 
 // Matches solver/main.py's RuleSet field defaults - the "Standaardinstellingen
@@ -60,6 +66,12 @@ const DEFAULT_BAND_DEVIATION_MULTIPLIER = 1.0;
 const DEFAULT_SHORTFALL_WEIGHT = 1000.0;
 const DEFAULT_BAND_IMBALANCE_WEIGHT = 0.5;
 const DEFAULT_PREFERENCE_REWARD_WEIGHT = 0.3;
+
+// Matches solver/main.py's RuleSet.objective_mode backward-compat default -
+// a period whose frozen ruleset predates this field is treated as
+// 'weighted', exactly as the solver itself treats it. New periods get
+// 'lexicographic' instead, set by SetupWizard when the period is opened.
+const DEFAULT_OBJECTIVE_MODE: 'weighted' | 'lexicographic' = 'weighted';
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds} seconden`;
@@ -209,6 +221,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
             typeof parsed.preferenceRewardWeight === 'number'
               ? parsed.preferenceRewardWeight
               : DEFAULT_PREFERENCE_REWARD_WEIGHT,
+          objectiveMode:
+            parsed.objectiveMode === 'weighted' || parsed.objectiveMode === 'lexicographic'
+              ? parsed.objectiveMode
+              : DEFAULT_OBJECTIVE_MODE,
         };
         setRuleset(loaded);
         setOriginalRuleset(loaded);
@@ -590,6 +606,37 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
 
                 {showAdvanced && ruleset && (
                   <div className="space-y-4 bg-neutral-50 border border-neutral-200 rounded p-3">
+                    <div>
+                      <label className="block text-xs font-medium text-neutral-700 mb-1">
+                        Optimalisatiemethode
+                      </label>
+                      <div className="space-y-2">
+                        {(['lexicographic', 'weighted'] as const).map((mode) => (
+                          <label key={mode} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="objective_mode"
+                              value={mode}
+                              checked={ruleset.objectiveMode === mode}
+                              onChange={() => setRuleset({ ...ruleset, objectiveMode: mode })}
+                              className="rounded-full"
+                            />
+                            <span className="text-sm">
+                              {mode === 'lexicographic' && 'Prioriteitenplanner (standaard)'}
+                              {mode === 'weighted' && 'Puntenplanner'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      <p className="text-xs text-neutral-500 mt-1">
+                        {ruleset.objectiveMode === 'lexicographic'
+                          ? 'Lost eerst dekking zo goed mogelijk op, dan pas een eerlijke verdeling, dan liever-niet-voorkeuren, en als laatste voorkeuren - elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'
+                          : 'Eén gecombineerde score van alle punten hieronder samen - de solver kiest wat die score het laagst maakt. Kan bij veel personeel of diensten een minder eerlijke verdeling opleveren dan de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
+                      </p>
+                    </div>
+
+                    {ruleset.objectiveMode === 'weighted' && (
+                      <>
                     <p className="text-xs text-neutral-500">
                       Dit zijn de punten waarmee de solver bepaalt hoe hij diensten verdeelt: hoe
                       hoger het getal, hoe zwaarder die actie meetelt. De standaardinstellingen
@@ -732,6 +779,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                     >
                       Standaardinstellingen herstellen
                     </button>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
