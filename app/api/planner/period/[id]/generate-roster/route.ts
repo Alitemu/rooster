@@ -345,24 +345,32 @@ async function runGeneration(args: {
       .all(periodId) as Array<{ person_id: string; datum: string; teller: string }>;
 
     // Which roster-generation approach this period's ruleset asks for -
-    // falls back to 'weighted' (not 'lexicographic' or 'multi_start') when
-    // a period's frozen ruleset has no objectiveMode at all, matching
+    // falls back to 'weighted' (not any of the other three) when a
+    // period's frozen ruleset has no objectiveMode at all, matching
     // solver/main.py's RuleSet backward-compat default exactly: a period
     // opened before this field existed must keep behaving as it always
     // has. New periods get 'lexicographic' from SetupWizard's own ruleset
     // payload instead - that default belongs there, not in this fallback.
-    const objectiveModeConfig: 'weighted' | 'lexicographic' | 'multi_start' =
+    const objectiveModeConfig: 'weighted' | 'lexicographic' | 'multi_start' | 'randomized' =
       config.objectiveMode === 'weighted' ||
       config.objectiveMode === 'lexicographic' ||
-      config.objectiveMode === 'multi_start'
+      config.objectiveMode === 'multi_start' ||
+      config.objectiveMode === 'randomized'
         ? config.objectiveMode
         : 'weighted';
 
-    // What actually gets sent to the solver on every call - see
-    // runMultiStart below for why 'multi_start' itself is never one of
-    // these.
+    // Which greedy day-fill order to use - only consulted when
+    // objectiveModeConfig is 'randomized'. See solver/greedy.py's module
+    // docstring for what each variant actually does differently.
+    const randomizedVariant: 'medewerker' | 'dagen' =
+      config.randomizedVariant === 'dagen' ? 'dagen' : 'medewerker';
+
+    // What actually gets sent to POST /solve's `rules.objective_mode` on
+    // every call - meaningless (and never read) for 'randomized', which
+    // calls POST /solve-greedy instead, but still has to be one of the two
+    // values the solver's RuleSet.objective_mode actually accepts.
     const solverObjectiveMode: 'weighted' | 'lexicographic' =
-      objectiveModeConfig === 'multi_start' ? 'lexicographic' : objectiveModeConfig;
+      objectiveModeConfig === 'weighted' ? 'weighted' : 'lexicographic';
 
     // Build solver request
     const solverInput = {
@@ -411,12 +419,15 @@ async function runGeneration(args: {
           typeof config.bandImbalanceWeight === 'number' ? config.bandImbalanceWeight : 0.5,
         preference_reward_weight:
           typeof config.preferenceRewardWeight === 'number' ? config.preferenceRewardWeight : 0.3,
-        // The solver itself only ever knows 'weighted' or 'lexicographic' -
-        // 'multi_start' ("Herhaalplanner") is a Next.js-side concept, see
-        // objectiveModeConfig/solverObjectiveMode below: it repeats
-        // 'lexicographic' solves with a different random_seed each time and
-        // keeps the best, rather than being a third thing the solver has to
-        // understand.
+        // POST /solve's RuleSet.objective_mode only ever knows 'weighted'
+        // or 'lexicographic' - 'multi_start' ("Herhaalplanner") and
+        // 'randomized' ("Gerandomiseerde planner") are Next.js-side
+        // concepts, see objectiveModeConfig/solverObjectiveMode below:
+        // 'multi_start' repeats 'lexicographic' solves with a different
+        // random_seed each time and keeps the best; 'randomized' doesn't
+        // call /solve at all (see runMultiStart's endpointPath), so this
+        // field is simply unused whenever objectiveModeConfig is
+        // 'randomized'.
         objective_mode: solverObjectiveMode,
       },
       balances,
@@ -457,16 +468,20 @@ async function runGeneration(args: {
     let attemptsTried: number | undefined;
     let stoppedReason: RosterGenerationStoppedReason | undefined;
 
-    if (objectiveModeConfig === 'multi_start') {
+    const maxAttempts =
+      typeof config.maxAttempts === 'number' && Number.isFinite(config.maxAttempts) && config.maxAttempts >= 1
+        ? Math.floor(config.maxAttempts)
+        : 100;
+
+    if (objectiveModeConfig === 'multi_start' || objectiveModeConfig === 'randomized') {
       const multiStart = await runMultiStart({
         jobId,
         solverUrl,
+        endpointPath: objectiveModeConfig === 'randomized' ? '/solve-greedy' : '/solve',
         solverInput,
+        extraAttemptFields: objectiveModeConfig === 'randomized' ? { variant: randomizedVariant } : undefined,
         timeoutMs: solverTimeoutMs,
-        maxAttempts:
-          typeof config.maxAttempts === 'number' && Number.isFinite(config.maxAttempts) && config.maxAttempts >= 1
-            ? Math.floor(config.maxAttempts)
-            : 100,
+        maxAttempts,
       });
 
       if (!multiStart.ok) {
@@ -478,7 +493,7 @@ async function runGeneration(args: {
       attemptsTried = multiStart.attemptsTried;
       stoppedReason = multiStart.stoppedReason;
     } else {
-      const result = await callSolver(solverUrl, solverInput, solverTimeoutMs);
+      const result = await callSolver(solverUrl, '/solve', solverInput, solverTimeoutMs);
       if (!result.ok) {
         failRosterGenerationJob(jobId, result.message, result.status);
         return;
@@ -623,23 +638,27 @@ async function runGeneration(args: {
 }
 
 // ============================================================================
-// Solver call + "Herhaalplanner" multi-start orchestration
+// Solver call + multi-start orchestration ("Herhaalplanner" and
+// "Gerandomiseerde planner")
 // ============================================================================
 
 type SolverCallResult = { ok: true; output: any } | { ok: false; message: string; status: number };
 
 /**
- * One POST to the solver's /solve, translated into a client-safe Dutch
- * outcome. Shared by the plain single-solve path and each attempt of
- * runMultiStart below, so both report failures identically.
+ * One POST to the solver (path is '/solve' for the CP-SAT models,
+ * '/solve-greedy' for the "Gerandomiseerde planner" - see
+ * solver/greedy.py), translated into a client-safe Dutch outcome. Shared
+ * by the plain single-solve path and each attempt of runMultiStart below,
+ * so both report failures identically.
  */
 async function callSolver(
   solverUrl: string,
+  path: '/solve' | '/solve-greedy',
   solverInput: unknown,
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<SolverCallResult> {
-  const solverResponse = await postJson(`${solverUrl}/solve`, solverInput, timeoutMs, signal);
+  const solverResponse = await postJson(`${solverUrl}${path}`, solverInput, timeoutMs, signal);
 
   if (!solverResponse.ok) {
     const error = await solverResponse.text();
@@ -722,13 +741,16 @@ type MultiStartResult =
   | { ok: false; message: string; status: number };
 
 /**
- * "Herhaalplanner": repeats a plain 'lexicographic' solve up to
- * maxAttempts times, each with a different CP-SAT random_seed, and keeps
- * the best result found (see isBetterRoster) - see solver/solver.py's
- * RosterSolver.random_seed for why a different seed can land on a
- * different solution even for identical input. Stops early the moment an
- * attempt is "perfect" (isPerfectRoster), or when the job's cancellation
- * flag is set (checked before every new attempt, and via the AbortController
+ * Shared multi-attempt loop behind both "Herhaalplanner" (endpointPath
+ * '/solve', a plain 'lexicographic' solve with a different CP-SAT
+ * random_seed each attempt) and "Gerandomiseerde planner" (endpointPath
+ * '/solve-greedy', a greedy construction attempt with a different
+ * random_seed each time - see solver/greedy.py). Both repeat up to
+ * maxAttempts times and keep the best result found (see isBetterRoster) -
+ * the ranking is identical either way since both endpoints return
+ * diagnostics in the same shape. Stops early the moment an attempt is
+ * "perfect" (isPerfectRoster), or when the job's cancellation flag is set
+ * (checked before every new attempt, and via the AbortController
  * registered for whichever attempt is currently in flight) - either of
  * those, like reaching maxAttempts, just ends the loop with whatever was
  * best so far; only having *no* successful attempt at all is a failure.
@@ -736,11 +758,17 @@ type MultiStartResult =
 async function runMultiStart(args: {
   jobId: string;
   solverUrl: string;
+  endpointPath: '/solve' | '/solve-greedy';
   solverInput: any;
+  // Merged onto the top-level request body for every attempt - e.g.
+  // { variant: 'dagen' } for the greedy endpoint. Undefined for
+  // "Herhaalplanner", which needs nothing beyond the per-attempt
+  // random_seed already added below.
+  extraAttemptFields?: Record<string, unknown>;
   timeoutMs: number;
   maxAttempts: number;
 }): Promise<MultiStartResult> {
-  const { jobId, solverUrl, solverInput, timeoutMs, maxAttempts } = args;
+  const { jobId, solverUrl, endpointPath, solverInput, extraAttemptFields, timeoutMs, maxAttempts } = args;
 
   let best: any = null;
   let attemptsTried = 0;
@@ -766,17 +794,18 @@ async function runMultiStart(args: {
     const controller = new AbortController();
     setRosterGenerationJobAbortController(jobId, controller);
 
-    // CP-SAT's random_seed is a signed int32 field - well within
+    // random_seed is a signed int32 field on both endpoints - well within
     // Math.random()'s usable range, and doesn't need to be
     // cryptographically random, only different per attempt.
     const attemptInput = {
       ...solverInput,
+      ...extraAttemptFields,
       rules: { ...solverInput.rules, random_seed: Math.floor(Math.random() * 2_147_483_647) },
     };
 
     let result: SolverCallResult;
     try {
-      result = await callSolver(solverUrl, attemptInput, timeoutMs, controller.signal);
+      result = await callSolver(solverUrl, endpointPath, attemptInput, timeoutMs, controller.signal);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
         stoppedReason = 'cancelled';
@@ -797,7 +826,7 @@ async function runMultiStart(args: {
       }
       // A later attempt failing (a transient solver hiccup) shouldn't
       // discard whatever was already found - skip it and keep going.
-      console.error(`[generate-roster] Herhaalplanner poging ${attempt} mislukt`, result.message);
+      console.error(`[generate-roster] multi-start poging ${attempt} (${endpointPath}) mislukt`, result.message);
       continue;
     }
 

@@ -50,17 +50,23 @@ interface RulesetConfig {
   shortfallWeight: number;
   bandImbalanceWeight: number;
   preferenceRewardWeight: number;
-  // Which of the three roster-generation approaches to use. 'lexicographic'
+  // Which of the four roster-generation approaches to use. 'lexicographic'
   // ("Prioriteitenplanner") solves dekking > eerlijkheid > liever-niet >
   // voorkeur in strict priority order and ignores every weight field above;
   // 'weighted' ("Puntenplanner") is the older single-weighted-sum model
   // those fields tune; 'multi_start' ("Herhaalplanner") repeats a
   // 'lexicographic' solve up to maxAttempts times with a different random
-  // seed each time and keeps the best. See solver/solver.py's module
-  // docstring for the weighted/lexicographic comparison.
-  objectiveMode: 'weighted' | 'lexicographic' | 'multi_start';
-  // Only meaningful when objectiveMode is 'multi_start'.
+  // seed each time and keeps the best; 'randomized' ("Gerandomiseerde
+  // planner") repeats a non-CP-SAT greedy construction instead (see
+  // solver/greedy.py and randomizedVariant below), same "keep the best"
+  // idea. See solver/solver.py's module docstring for the
+  // weighted/lexicographic comparison.
+  objectiveMode: 'weighted' | 'lexicographic' | 'multi_start' | 'randomized';
+  // Only meaningful when objectiveMode is 'multi_start' or 'randomized'.
   maxAttempts: number;
+  // Only meaningful when objectiveMode is 'randomized' - see
+  // solver/greedy.py's module docstring for what each variant does.
+  randomizedVariant: 'medewerker' | 'dagen';
 }
 
 // Matches solver/main.py's RuleSet field defaults - the "Standaardinstellingen
@@ -76,12 +82,15 @@ const DEFAULT_PREFERENCE_REWARD_WEIGHT = 0.3;
 // a period whose frozen ruleset predates this field is treated as
 // 'weighted', exactly as the solver itself treats it. New periods get
 // 'lexicographic' instead, set by SetupWizard when the period is opened.
-const DEFAULT_OBJECTIVE_MODE: 'weighted' | 'lexicographic' | 'multi_start' = 'weighted';
+const DEFAULT_OBJECTIVE_MODE: 'weighted' | 'lexicographic' | 'multi_start' | 'randomized' = 'weighted';
 
 // maxAttempts has no Python-side counterpart - it's purely a Next.js
 // concept, see generate-roster/route.ts's runMultiStart. 100 is the
 // default the planner asked for.
 const DEFAULT_MAX_ATTEMPTS = 100;
+
+// Matches solver/greedy.py's own RuleSet-equivalent variant default.
+const DEFAULT_RANDOMIZED_VARIANT: 'medewerker' | 'dagen' = 'medewerker';
 
 function formatDuration(seconds: number): string {
   if (seconds < 60) return `${seconds} seconden`;
@@ -96,7 +105,11 @@ const COUNTER_LABEL: Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', string> = {
 };
 
 // Mirrors solver/solver.py's status_map plus its 'ERROR' catch-all - see
-// solver.py:227-236 and solver.py:313.
+// solver.py:227-236 and solver.py:313. 'GREEDY' is solver/greedy.py's own
+// fixed status (Gerandomiseerde planner) - always this value regardless of
+// coverage, since that algorithm has no OPTIMAL/FEASIBLE/INFEASIBLE
+// concept of its own; fully_covered/unfilled_slots already say how
+// complete the result is.
 const SOLVER_STATUS_LABEL: Record<string, string> = {
   OPTIMAL: 'Optimaal',
   FEASIBLE: 'Haalbaar (niet per se optimaal)',
@@ -104,6 +117,7 @@ const SOLVER_STATUS_LABEL: Record<string, string> = {
   MODEL_INVALID: 'Ongeldig model',
   UNKNOWN: 'Onbekend',
   ERROR: 'Fout tijdens genereren',
+  GREEDY: 'Gerandomiseerd opgebouwd',
 };
 
 // Mirrors the fixed keys solver/constraints.py always initializes on
@@ -257,13 +271,18 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           objectiveMode:
             parsed.objectiveMode === 'weighted' ||
             parsed.objectiveMode === 'lexicographic' ||
-            parsed.objectiveMode === 'multi_start'
+            parsed.objectiveMode === 'multi_start' ||
+            parsed.objectiveMode === 'randomized'
               ? parsed.objectiveMode
               : DEFAULT_OBJECTIVE_MODE,
           maxAttempts:
             typeof parsed.maxAttempts === 'number' && Number.isInteger(parsed.maxAttempts) && parsed.maxAttempts >= 1
               ? parsed.maxAttempts
               : DEFAULT_MAX_ATTEMPTS,
+          randomizedVariant:
+            parsed.randomizedVariant === 'medewerker' || parsed.randomizedVariant === 'dagen'
+              ? parsed.randomizedVariant
+              : DEFAULT_RANDOMIZED_VARIANT,
         };
         setRuleset(loaded);
         setOriginalRuleset(loaded);
@@ -684,7 +703,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         Optimalisatiemethode
                       </label>
                       <div className="space-y-2">
-                        {(['lexicographic', 'multi_start', 'weighted'] as const).map((mode) => (
+                        {(['lexicographic', 'multi_start', 'randomized', 'weighted'] as const).map((mode) => (
                           <label key={mode} className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="radio"
@@ -697,6 +716,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                             <span className="text-sm">
                               {mode === 'lexicographic' && 'Prioriteitenplanner (standaard)'}
                               {mode === 'multi_start' && 'Herhaalplanner'}
+                              {mode === 'randomized' && 'Gerandomiseerde planner'}
                               {mode === 'weighted' && 'Puntenplanner'}
                             </span>
                           </label>
@@ -707,20 +727,53 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                           'Lost eerst dekking zo goed mogelijk op, dan pas een eerlijke verdeling, dan liever-niet-voorkeuren, en als laatste voorkeuren - elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'multi_start' &&
                           'Draait de Prioriteitenplanner meerdere keren met een andere toevalsvolgorde en bewaart steeds het beste rooster tot nu toe - stopt vanzelf zodra een perfect rooster is gevonden (alles ingevuld, iedereen exact binnen bereik) of het aantal pogingen hieronder is bereikt. Kan langer duren dan de andere methodes; je kunt tussentijds stoppen. De punten hieronder gelden niet voor deze methode.'}
+                        {ruleset.objectiveMode === 'randomized' &&
+                          'Vult diensten stap voor stap in met een steeds willekeurig geschud personeelslijstje in plaats van met de solver hierboven - geen teruggrabbelen als een keuze verderop tot een probleem leidt. Draait meerdere pogingen en bewaart steeds het beste rooster tot nu toe, net als de Herhaalplanner. Kan een minder eerlijke verdeling opleveren dan de Prioriteitenplanner. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'weighted' &&
                           'Eén gecombineerde score van alle punten hieronder samen - de solver kiest wat die score het laagst maakt. Kan bij veel personeel of diensten een minder eerlijke verdeling opleveren dan de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
                       </p>
                     </div>
 
-                    {ruleset.objectiveMode === 'multi_start' && (
+                    {ruleset.objectiveMode === 'randomized' && (
+                      <div>
+                        <label className="block text-xs font-medium text-neutral-700 mb-1">
+                          Volgorde
+                        </label>
+                        <div className="space-y-2">
+                          {(['medewerker', 'dagen'] as const).map((variant) => (
+                            <label key={variant} className="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="randomized_variant"
+                                value={variant}
+                                checked={ruleset.randomizedVariant === variant}
+                                onChange={() => setRuleset({ ...ruleset, randomizedVariant: variant })}
+                                className="rounded-full"
+                              />
+                              <span className="text-sm">
+                                {variant === 'medewerker' && 'Medewerker gerandomiseerd'}
+                                {variant === 'dagen' && 'Dagen gerandomiseerd'}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                        <p className="text-xs text-neutral-500 mt-1">
+                          {ruleset.randomizedVariant === 'medewerker'
+                            ? 'Dagen worden op volgorde afgewerkt; per dienst wordt het personeelslijstje opnieuw geschud.'
+                            : 'Ook de volgorde van de dagen zelf wordt geschud, niet alleen het personeelslijstje per dienst.'}
+                        </p>
+                      </div>
+                    )}
+
+                    {(ruleset.objectiveMode === 'multi_start' || ruleset.objectiveMode === 'randomized') && (
                       <div>
                         <label className="block text-xs font-medium text-neutral-700 mb-0.5">
                           Aantal pogingen
                         </label>
                         <p className="text-xs text-neutral-500 mb-1">
-                          Hoe vaak de Herhaalplanner het rooster opnieuw probeert te genereren voor
-                          hij stopt en het beste tot dan toe gevonden rooster gebruikt (of eerder,
-                          als een perfect rooster wordt gevonden).
+                          Hoe vaak het rooster opnieuw geprobeerd wordt voor gestopt wordt en het
+                          beste tot dan toe gevonden rooster gebruikt (of eerder, als een perfect
+                          rooster wordt gevonden).
                         </p>
                         <input
                           type="number"
@@ -1027,8 +1080,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
 
                 {result.attempts_tried !== undefined && (
                   <p className="text-xs text-green-800 mt-2 pt-2 border-t border-green-200">
-                    Herhaalplanner: {result.attempts_tried} poging{result.attempts_tried === 1 ? '' : 'en'}{' '}
-                    geprobeerd ·{' '}
+                    {ruleset?.objectiveMode === 'randomized' ? 'Gerandomiseerde planner' : 'Herhaalplanner'}:{' '}
+                    {result.attempts_tried} poging{result.attempts_tried === 1 ? '' : 'en'} geprobeerd ·{' '}
                     {result.stopped_reason === 'perfect' &&
                       'gestopt: perfect rooster gevonden (alles ingevuld, iedereen binnen bereik)'}
                     {result.stopped_reason === 'cancelled' && 'gestopt: handmatig gestopt'}

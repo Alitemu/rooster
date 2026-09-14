@@ -14,15 +14,17 @@
  * database directly.
  *
  * This lets a planner update window/band/blockBudget/softBlockBudget, which
- * of the three optimization methods to use (objectiveMode: 'weighted' /
- * "Puntenplanner", 'lexicographic' / "Prioriteitenplanner", or
- * 'multi_start' / "Herhaalplanner" - the latter repeats 'lexicographic'
- * with maxAttempts different random seeds and keeps the best), and the
- * weighted method's own objective weights (softBlockPenalty,
- * bandDeviationPenalty, bandDeviationMultiplier, shortfallWeight,
- * bandImbalanceWeight, preferenceRewardWeight - unused by the other two
- * methods) on the frozen ruleset itself (distributionMode and anything
- * else already stored is left alone), right before a
+ * of the four optimization methods to use (objectiveMode: 'weighted' /
+ * "Puntenplanner", 'lexicographic' / "Prioriteitenplanner", 'multi_start' /
+ * "Herhaalplanner" - repeats 'lexicographic' with maxAttempts different
+ * random seeds and keeps the best - or 'randomized' / "Gerandomiseerde
+ * planner" - repeats a non-CP-SAT greedy construction instead, in either
+ * randomizedVariant 'medewerker' or 'dagen', maxAttempts times, same
+ * "keep the best" idea), and the weighted method's own objective weights
+ * (softBlockPenalty, bandDeviationPenalty, bandDeviationMultiplier,
+ * shortfallWeight, bandImbalanceWeight, preferenceRewardWeight - unused by
+ * the other three methods) on the frozen ruleset itself (distributionMode
+ * and anything else already stored is left alone), right before a
  * (re)generate - the same statuses generate-roster accepts, minus CONCEPT
  * (which has no frozen ruleset yet - that's set via POST .../open instead)
  * and GEPUBLICEERD (frozen for good once published).
@@ -54,8 +56,9 @@ interface UpdateRulesetRequest {
   shortfallWeight?: number;
   bandImbalanceWeight?: number;
   preferenceRewardWeight?: number;
-  objectiveMode?: 'weighted' | 'lexicographic' | 'multi_start';
+  objectiveMode?: 'weighted' | 'lexicographic' | 'multi_start' | 'randomized';
   maxAttempts?: number;
+  randomizedVariant?: 'medewerker' | 'dagen';
   rowVersion?: number;
 }
 
@@ -253,11 +256,15 @@ export async function PATCH(
       body.objectiveMode !== undefined &&
       body.objectiveMode !== 'weighted' &&
       body.objectiveMode !== 'lexicographic' &&
-      body.objectiveMode !== 'multi_start'
+      body.objectiveMode !== 'multi_start' &&
+      body.objectiveMode !== 'randomized'
     ) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_OBJECTIVE_MODE', message: '"Optimalisatiemethode" moet "weighted", "lexicographic" of "multi_start" zijn' },
+        error: {
+          code: 'INVALID_OBJECTIVE_MODE',
+          message: '"Optimalisatiemethode" moet "weighted", "lexicographic", "multi_start" of "randomized" zijn',
+        },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -269,6 +276,18 @@ export async function PATCH(
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_WEIGHT', message: '"Aantal pogingen" moet een geheel getal van 1 of hoger zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (
+      body.randomizedVariant !== undefined &&
+      body.randomizedVariant !== 'medewerker' &&
+      body.randomizedVariant !== 'dagen'
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_OBJECTIVE_MODE', message: '"Volgorde" moet "medewerker" of "dagen" zijn' },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -309,6 +328,7 @@ export async function PATCH(
       ...(body.preferenceRewardWeight !== undefined ? { preferenceRewardWeight: body.preferenceRewardWeight } : {}),
       ...(body.objectiveMode !== undefined ? { objectiveMode: body.objectiveMode } : {}),
       ...(body.maxAttempts !== undefined ? { maxAttempts: body.maxAttempts } : {}),
+      ...(body.randomizedVariant !== undefined ? { randomizedVariant: body.randomizedVariant } : {}),
     };
 
     // A period already sitting on a generated roster (GEGENEREERD) must go

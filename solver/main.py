@@ -302,6 +302,21 @@ class SolverInput(BaseModel):
         return value
 
 
+class GreedySolverInput(SolverInput):
+    """
+    Same shape as SolverInput (period_id/slots/person_preferences/people/
+    rules/balances/prior_assignments/manual_assignments/
+    participation_factors/coverage_factors) - time_limit_seconds is simply
+    ignored here (greedy construction has no search to bound, it runs in
+    a fraction of a second). rules.random_seed still applies (see
+    greedy.run_greedy_construction) - a different seed per attempt is how
+    the Next.js "Gerandomiseerde planner" multi-start loop gets a
+    different candidate roster on each call, same idea as
+    "Herhaalplanner"'s repeated 'lexicographic' solves.
+    """
+    variant: Literal['medewerker', 'dagen'] = 'medewerker'
+
+
 class Assignment(BaseModel):
     person_id: str
     slot_id: str
@@ -495,6 +510,88 @@ async def solve_roster(request: SolverInput):
 
     except Exception as e:
         logger.error(f"Solver error: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Solver error: {str(e)}"
+        )
+
+
+@app.post("/solve-greedy", response_model=SolverOutput)
+async def solve_roster_greedy(request: GreedySolverInput):
+    """
+    One randomized greedy-construction attempt ("Gerandomiseerde planner") -
+    see greedy.py's module docstring for the algorithm itself and why it
+    lives entirely outside the CP-SAT path. Always "succeeds" in the sense
+    that it always returns a (possibly partial) roster rather than an
+    INFEASIBLE/error status - diagnostics.unfilled_slots reports whatever
+    it couldn't place.
+
+    Request/response shapes intentionally mirror /solve (minus
+    time_limit_seconds, which has no meaning here) so Next.js's
+    runMultiStart can call whichever endpoint the chosen objectiveMode
+    needs and compare the results with the same isBetterRoster logic
+    either way.
+    """
+    start_time = time.time()
+    logger.info(f"Greedy solve request for period {request.period_id} (variant={request.variant})")
+
+    try:
+        from greedy import run_greedy_construction
+
+        blocked_slots = set()
+        soft_slots = {}
+        preferred_slots = {}
+
+        for person_id, preferences in request.person_preferences.items():
+            for pref in preferences:
+                if pref.blocking_level == "ABSOLUUT":
+                    blocked_slots.add((person_id, pref.slot_id))
+                elif pref.blocking_level == "LIEVER_NIET":
+                    soft_slots[(person_id, pref.slot_id)] = 1.0
+                elif pref.blocking_level == "VOORKEUR":
+                    preferred_slots[(person_id, pref.slot_id)] = 1.0
+
+        band_ranges = {
+            'AVOND': request.rules.band_avond,
+            'WEEKEND': request.rules.band_weekend,
+            'FEESTDAG': request.rules.band_feestdag,
+        }
+
+        result = run_greedy_construction(
+            people=request.people,
+            slots=[s.model_dump() for s in request.slots],
+            blocked_slots=blocked_slots,
+            soft_slots=soft_slots,
+            band_ranges=band_ranges,
+            balances=request.balances,
+            window_weeks=request.rules.window_weeks,
+            preferred_slots=preferred_slots,
+            prior_assignments=[p.model_dump() for p in request.prior_assignments],
+            manual_assignments=[p.model_dump() for p in request.manual_assignments],
+            distribution_mode=request.rules.distribution_mode,
+            participation_factors=request.participation_factors,
+            coverage_factors=request.coverage_factors,
+            holiday_spread_weeks=request.rules.holiday_spread_weeks,
+            variant=request.variant,
+            random_seed=request.rules.random_seed,
+        )
+
+        assignments = [Assignment(**a) for a in result['assignments']]
+        diagnostics = SolverDiagnostics(**result['diagnostics'])
+
+        elapsed = time.time() - start_time
+        logger.info(f"Greedy solve completed: {len(assignments)} assignments in {elapsed:.2f}s")
+
+        return SolverOutput(
+            success=result['success'],
+            period_id=request.period_id,
+            assignments=assignments,
+            diagnostics=diagnostics,
+            message=f"Generated {len(assignments)} assignments in {elapsed:.2f}s"
+        )
+
+    except Exception as e:
+        logger.error(f"Greedy solver error: {str(e)}", exc_info=True)
         raise HTTPException(
             status_code=500,
             detail=f"Solver error: {str(e)}"

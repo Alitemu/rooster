@@ -32,13 +32,13 @@ interface RulesetConfig {
   distributionMode: string;
   blockBudget?: BlockBudgetPerTeller & { parttimeExempt: boolean };
   softBlockBudget?: BlockBudgetPerTeller & { parttimeExempt?: boolean };
-  // Which of the three roster-generation approaches a new period defaults
+  // Which of the four roster-generation approaches a new period defaults
   // to ('lexicographic' / "Prioriteitenplanner", set by SetupWizard) - not
   // validated here like windowWeeks/bandX above since it's just persisted
   // into bevroren_ruleset_json verbatim along with every other ruleset
   // field the wizard sends (softBlockPenalty, shortfallWeight, ...), none
   // of which this interface enumerates either.
-  objectiveMode?: 'weighted' | 'lexicographic' | 'multi_start';
+  objectiveMode?: 'weighted' | 'lexicographic' | 'multi_start' | 'randomized';
 }
 
 interface OpenPeriodRequest {

@@ -187,14 +187,23 @@ export interface RulesetConfig {
   // new periods - ignores those weights, solves dekking > eerlijkheid >
   // liever-niet > voorkeur in strict priority order instead), or
   // 'multi_start' ("Herhaalplanner" - repeats a 'lexicographic' solve up
-  // to maxAttempts times with a different random seed each time and keeps
-  // the best result; see generate-roster/route.ts's runMultiStart). See
+  // to maxAttempts times with a different random seed each time), or
+  // 'randomized' ("Gerandomiseerde planner" - repeats a non-CP-SAT greedy
+  // day-by-day construction instead, see solver/greedy.py and
+  // randomizedVariant below). Both multi-attempt modes keep the best
+  // result found; see generate-roster/route.ts's runMultiStart. See
   // solver/solver.py's module docstring for the weighted/lexicographic
   // comparison.
-  objectiveMode: 'weighted' | 'lexicographic' | 'multi_start';
-  // Only consulted when objectiveMode is 'multi_start' - how many times to
-  // repeat the solve before giving up and keeping the best found so far
-  // (a planner can also stop it early via the cancel button, or it stops
-  // itself the moment an attempt is "perfect" - see isPerfectRoster).
+  objectiveMode: 'weighted' | 'lexicographic' | 'multi_start' | 'randomized';
+  // Only consulted when objectiveMode is 'multi_start' or 'randomized' -
+  // how many times to repeat before giving up and keeping the best found
+  // so far (a planner can also stop it early via the cancel button, or it
+  // stops itself the moment an attempt is "perfect" - see
+  // isPerfectRoster).
   maxAttempts: number;
+  // Only consulted when objectiveMode is 'randomized'. 'medewerker': days
+  // filled in chronological order, employee list randomized per slot.
+  // 'dagen': day order is ALSO randomized (employee-list randomization is
+  // identical to 'medewerker'). See solver/greedy.py's module docstring.
+  randomizedVariant: 'medewerker' | 'dagen';
 }
