@@ -279,6 +279,33 @@ export default function PlannerHomePage() {
         </div>
       </div>
 
+      {/* Staff/pool membership is its own thing, independent of any period
+          (add/remove someone, change their dates or deelnamefactor) - this
+          lets a planner reach it straight from the landing page instead of
+          only via a period's own wizard, so managing staff never has to
+          wait on a period existing or being opened first. */}
+      {!loading && pools.length > 0 && (
+        <div className="card p-4 space-y-2">
+          <h2 className="text-sm font-semibold text-neutral-700">Personeel</h2>
+          <div className="divide-y">
+            {pools.map((pool) => (
+              <div key={pool.id} className="py-2 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium">{pool.naam}</p>
+                  <p className="text-xs text-neutral-600">{pool.member_count} leden</p>
+                </div>
+                <Link
+                  href={`/planner/pool/${pool.id}/staff`}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium shrink-0"
+                >
+                  👥 Personeel beheren →
+                </Link>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {showCreate && (
         <div className="card card-padding space-y-4">
           <h2 className="text-lg font-semibold">Nieuwe periode aanmaken</h2>
