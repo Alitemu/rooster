@@ -85,9 +85,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   // AssignmentGrid's loadError/error: a rejected action isn't a reason to
   // blank out everything else the planner was looking at, and a planner
   // who fixes the underlying issue needs a way to dismiss it and try again
-  // without a full page reload.
+  // without a full page reload. Keyed by personId and rendered inside that
+  // person's own row (see below), not as a page-level banner - the staff
+  // table can run to 30+ rows, so a banner anywhere outside the row itself
+  // (even at the top of this same card) can still land off-screen for
+  // whichever row the planner actually scrolled to, making a real
+  // rejection (e.g. no preferences to submit yet) look like the button did
+  // nothing.
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ personId: string; message: string } | null>(null);
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
@@ -155,7 +161,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
       // res.ok-checked fetch this used to duplicate without one.
       await loadData();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Indienen mislukt');
+      setActionError({ personId, message: err instanceof Error ? err.message : 'Indienen mislukt' });
     } finally {
       setSubmittingFor(null);
     }
@@ -226,18 +232,6 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
 
   return (
     <div className="space-y-6">
-      {actionError && (
-        <div className="card p-3 bg-red-50 border border-red-200 flex items-start justify-between gap-3">
-          <p className="text-red-700 text-sm">{actionError}</p>
-          <button
-            onClick={() => setActionError(null)}
-            className="text-red-700 hover:text-red-900 text-sm font-medium shrink-0"
-          >
-            Sluiten
-          </button>
-        </div>
-      )}
-
       {/* Submission Progress Summary */}
       <div className="card p-6">
         <h3 className="font-bold text-lg mb-4">Voortgang indiening</h3>
@@ -355,13 +349,26 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
                   </td>
                   <td className="px-3 py-2 text-center">
                     {(!person.submission_status || person.submission_status === 'NIET_BEGONNEN') && (
-                      <button
-                        onClick={() => handleSubmitOnBehalf(person.person_id)}
-                        disabled={submittingFor === person.person_id}
-                        className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
-                      >
-                        {submittingFor === person.person_id ? 'Bezig...' : 'Indienen'}
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleSubmitOnBehalf(person.person_id)}
+                          disabled={submittingFor === person.person_id}
+                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
+                        >
+                          {submittingFor === person.person_id ? 'Bezig...' : 'Indienen'}
+                        </button>
+                        {actionError?.personId === person.person_id && (
+                          <div className="mt-1 flex items-center justify-center gap-2">
+                            <p className="text-xs text-red-700">{actionError.message}</p>
+                            <button
+                              onClick={() => setActionError(null)}
+                              className="text-red-700 hover:text-red-900 text-xs font-medium shrink-0"
+                            >
+                              Sluiten
+                            </button>
+                          </div>
+                        )}
+                      </>
                     )}
                   </td>
                 </tr>
