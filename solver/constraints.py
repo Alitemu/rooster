@@ -34,6 +34,12 @@ def _week_ordinal(datum: str) -> int:
     return monday.toordinal() // 7
 
 
+# Hard ceiling on how far add_band_constraints lets anyone's assignment
+# count run past their (possibly ledger-adjusted) band maximum - see that
+# function's docstring for why this must be a hard cap, not just a cost.
+MAX_BAND_OVERSHOOT = 1
+
+
 class ConstraintBuilder:
     """Builds and manages CP-SAT constraints"""
 
@@ -404,17 +410,27 @@ class ConstraintBuilder:
         but a mid-period joiner gets a proportionally smaller target even
         under 'GELIJK'.
 
-        Soft via under/over slack rather than a hard range - a hard range
-        could make the whole model infeasible outright when demand and
-        supply don't line up exactly. Both directions are penalized in the
-        objective (see objective.py's add_band_slack_objective), but
-        asymmetrically: falling short of the minimum costs less than
-        leaving a slot unfilled (so the solver still prefers assigning
-        someone under-target over an empty shift), while exceeding the
-        maximum costs *more* than leaving a slot unfilled - "eerlijk
-        verdelen, koste wat kost": nobody is pushed past their
-        streefwaarde just to cover a shift; an uncovered shift is left for
-        the planner to resolve by hand instead.
+        `under` stays fully soft (unbounded slack, up to actual_min) for the
+        same reason as ever - a hard minimum could make the whole model
+        infeasible outright when demand and supply don't line up exactly,
+        and falling short of a target is the lesser evil next to an empty
+        shift.
+
+        `over` is hard-capped at MAX_BAND_OVERSHOOT units past actual_max
+        (currently 1), not left unbounded: a planner-promised korting (a
+        negative ledger delta lowering someone's target for taking on an
+        extra shift earlier) is otherwise just another soft target like any
+        other, and on a tight enough period the solver can still push that
+        same person over their already-lowered band to cover a shift -
+        exactly defeating the point of promising them fewer diensten. A
+        small fixed headroom (rather than 0) still lets the solver avoid
+        leaving a shift completely unstaffed when every eligible person is
+        already at their cap - see this function's own tests for the
+        concrete unfilled-slots cost of 0 headroom vs. 1. Both directions
+        are still weighed against each other in the objective (see
+        objective.py's add_band_slack_objective) for 'weighted' mode; this
+        cap applies unconditionally, in every objective_mode, since it's a
+        hard rule now rather than a cost to trade off.
 
         Returns: dict[(person_id, counter), (under IntVar, over IntVar)]
         """
@@ -468,13 +484,19 @@ class ConstraintBuilder:
                     under = self.model.NewIntVar(
                         0, max(0, actual_min), f'band_under_{person_id}_{counter}'
                     )
-                    # Mirrors `under`'s headroom: assignment_count ranges up
-                    # to len(counter_vars), so when actual_max is pulled
-                    # negative by a large enough delta, over must be able to
-                    # cover the full gap (len(counter_vars) - actual_max) or
-                    # the model becomes infeasible for every solution.
+                    # Capped at MAX_BAND_OVERSHOOT past actual_max, not left
+                    # unbounded - see this function's docstring. When
+                    # actual_max is itself pulled negative by a large enough
+                    # ledger delta, max(0, -actual_max) adds back exactly
+                    # the headroom needed to keep assignment_count=0
+                    # satisfiable, so the model never goes infeasible over a
+                    # correction this large - the effective ceiling in that
+                    # case is just 0 + MAX_BAND_OVERSHOOT, not the
+                    # unbounded gap the old formula allowed.
                     over = self.model.NewIntVar(
-                        0, len(counter_vars) - min(0, actual_max), f'band_over_{person_id}_{counter}'
+                        0,
+                        MAX_BAND_OVERSHOOT + max(0, -actual_max),
+                        f'band_over_{person_id}_{counter}',
                     )
 
                     self.model.Add(assignment_count + under >= actual_min)
