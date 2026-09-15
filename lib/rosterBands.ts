@@ -13,6 +13,7 @@
 
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
+import { computeCoverageFactor } from '@/lib/coverageFactor';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
 export type Band = [number, number];
@@ -161,6 +162,54 @@ export function resolveBands(
     bands[teller] = Array.isArray(c) && c.length === 2 ? (c as Band) : defaultBand(teller);
   }
   return bands;
+}
+
+export interface CoverageAwareMember {
+  deelnamefactor: number;
+  geldig_vanaf: string;
+  geldig_tot: string;
+}
+
+/**
+ * A single member's effective [min, max] for one counter, scaled from the
+ * period's flat band exactly the way solver/constraints.py's
+ * add_band_constraints does - coverage_factor always applied first
+ * (unconditional - a mid-period joiner/leaver is a structural fact, not a
+ * distribution_mode-gated policy choice), then the NAAR_RATO deelnamefactor
+ * scaling only when distribution_mode asks for it. floor(min)/ceil(max) at
+ * each step keeps the band width >= 1 whenever the un-scaled band already
+ * had one, instead of both ends rounding the same way and collapsing it to
+ * a single value.
+ *
+ * Extracted out of lib/publicationCheck.ts (which used to carry this
+ * scaling as its own private closure) so the pre-publication gate and
+ * anything else that needs a real person's target - not just the period's
+ * flat band - can never disagree about what that target is.
+ */
+export function scaledBandForMember(
+  bands: BandsByTeller,
+  teller: Teller,
+  member: CoverageAwareMember,
+  period: { start_datum: string; eind_datum: string },
+  distributionMode: string
+): Band {
+  const [baseMin, baseMax] = bands[teller];
+
+  const coverageFactor = computeCoverageFactor(
+    member.geldig_vanaf,
+    member.geldig_tot,
+    period.start_datum,
+    period.eind_datum
+  );
+  let min = Math.floor(baseMin * coverageFactor);
+  let max = Math.max(min, Math.ceil(baseMax * coverageFactor));
+
+  if (distributionMode === 'NAAR_RATO') {
+    min = Math.floor(min * member.deelnamefactor);
+    max = Math.max(min, Math.ceil(max * member.deelnamefactor));
+  }
+
+  return [min, max];
 }
 
 /**

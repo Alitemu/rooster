@@ -18,9 +18,8 @@ import {
   countSlotsByTeller,
   resolveBands,
   resolveRulesetConfig,
-  type Band,
+  scaledBandForMember,
   type BandsByTeller,
-  type Teller,
 } from '@/lib/rosterBands';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 
@@ -108,30 +107,7 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // it showed (adjust the band, or manually move people) couldn't
   // actually fix that, since the real target per person was never wrong.
   const naarRato = config.distributionMode === 'NAAR_RATO';
-  const scaledBand = (teller: Teller, member: { deelnamefactor: number; geldig_vanaf: string; geldig_tot: string }): Band => {
-    const [baseMin, baseMax] = bands[teller];
-
-    // Coverage scaling is unconditional (same as
-    // constraints.add_band_constraints' coverage_factors) - a mid-period
-    // joiner/leaver is a structural fact, not a NAAR_RATO-gated policy
-    // choice, and must be applied first so the two scalings stay
-    // multiplicative in exactly the same order the solver used.
-    const coverageFactor = computeCoverageFactor(
-      member.geldig_vanaf,
-      member.geldig_tot,
-      period.start_datum,
-      period.eind_datum
-    );
-    let min = Math.floor(baseMin * coverageFactor);
-    let max = Math.max(min, Math.ceil(baseMax * coverageFactor));
-
-    if (naarRato) {
-      min = Math.floor(min * member.deelnamefactor);
-      max = Math.max(min, Math.ceil(max * member.deelnamefactor));
-    }
-
-    return [min, max];
-  };
+  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
 
   const perPerson = db
     .prepare(
@@ -169,7 +145,7 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     }
     for (const teller of TELLERS) {
       const key = `${member.id}|${teller}`;
-      const [min, max] = scaledBand(teller, member);
+      const [min, max] = scaledBandForMember(bands, teller, member, period, distributionMode);
       const delta = deltas.get(key) || 0;
       const count = counts.get(key) || 0;
       if (count < min + delta || count > max + delta) bandViolations++;

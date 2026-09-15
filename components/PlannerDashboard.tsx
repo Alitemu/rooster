@@ -21,6 +21,7 @@ import { AssignmentGrid } from './AssignmentGrid';
 import { AssignmentCalendar } from './AssignmentCalendar';
 import { StaffingOverview } from './StaffingOverview';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
+import { RebalanceSuggestions } from './RebalanceSuggestions';
 
 interface PersonProgress {
   person_id: string;
@@ -425,6 +426,16 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
           </a>
         </div>
       </div>
+
+      {/* Only meaningful once there's an actual roster to rebalance -
+          suggestions need existing assignments to move around. */}
+      {dashboard.assignment_count > 0 && (
+        <RebalanceSuggestions
+          periodId={periodId}
+          isPublished={dashboard.status === 'GEPUBLICEERD'}
+          onApplied={loadData}
+        />
+      )}
 
       {/* Assignments - visible from OPEN onward (not just after the solver
           has run) so a planner can pre-fill strong preferences by hand
