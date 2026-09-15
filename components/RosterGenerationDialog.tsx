@@ -645,7 +645,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <h3 className="text-sm font-semibold text-neutral-800 mb-1">Venster en streefbereik</h3>
                 <p className="text-xs text-neutral-500 mb-3">
                   Dit zijn de huidige instellingen voor deze periode - onveranderd levert opnieuw
-                  genereren hetzelfde resultaat op. Pas aan voor een ander resultaat.
+                  genereren hetzelfde resultaat op. Pas aan voor een ander resultaat. Boven het
+                  maximum hieronder staat de solver, bij elke methode, maximaal 1 extra dienst toe
+                  per persoon - nooit meer, ook niet als dat de enige manier is om een dienst te
+                  vullen.
                 </p>
 
                 {rulesetLoading && <p className="text-sm text-neutral-600">Instellingen laden...</p>}
@@ -893,7 +896,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         gespreid dan bij één persoon neergelegd. Komt iemand juist boven hun
                         streefaantal, dan telt bovenop deze waarde ook altijd de volledige straf
                         voor "Lege dienst" mee - zo blijft een dienst leeglaten altijd goedkoper dan
-                        iemand over hun streefbereik heen duwen.
+                        iemand over hun streefbereik heen duwen. Dit stuurt alleen hoe duur die ene
+                        toegestane extra dienst is; hoger zetten maakt hem niet vaker toegestaan -
+                        boven het maximum staat de solver sowieso nooit meer dan 1 dienst extra toe,
+                        ongeacht deze instelling.
                       </p>
                       <input
                         type="text"
