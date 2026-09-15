@@ -461,16 +461,21 @@ export function SetupWizard({ period, onComplete }: Props) {
       );
 
       // The first time this period's staff list is opened, everyone in the
-      // pool should already be checked in as available - matches how a
-      // newly-added member already defaults to this period's dates. Bring
-      // any leftover members from an earlier period's date range up to
-      // date automatically instead of making the planner click each one.
+      // pool should default to 100% coverage of this period - matches how a
+      // newly-added member already defaults to this period's dates. Widen
+      // any membership window that doesn't already fully cover the period
+      // (whether it's currently fully inactive, or only partially
+      // overlapping - e.g. left over from an earlier period's shorter
+      // dates) instead of making the planner click/edit each one.
+      // computeActivationPatch only ever widens (never narrows), so a
+      // window a planner already stretched past this period's bounds is
+      // left alone here.
       if (period?.id && autoActivatedPeriodRef.current !== period.id) {
         autoActivatedPeriodRef.current = period.id;
-        const toActivate = (membersData.data || []).filter((m: any) => !m.is_active);
-        if (toActivate.length > 0) {
+        const toWiden = membersData.data || [];
+        if (toWiden.length > 0) {
           await Promise.all(
-            toActivate.map((m: any) => {
+            toWiden.map((m: any) => {
               const patch = computeActivationPatch(m, true);
               return patch ? patchMembership(m.id, patch) : Promise.resolve(null);
             })
