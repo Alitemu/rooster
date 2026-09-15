@@ -776,7 +776,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                             />
                             <span className="text-sm">
                               {mode === 'lexicographic' && 'Prioriteitenplanner (standaard)'}
-                              {mode === 'multi_start' && 'Herhaalplanner'}
+                              {mode === 'multi_start' && 'Herhaalplanner (= Prioriteitenplanner, herhaald)'}
                               {mode === 'randomized' && 'Gerandomiseerde planner'}
                               {mode === 'weighted' && 'Puntenplanner'}
                             </span>
@@ -787,7 +787,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         {ruleset.objectiveMode === 'lexicographic' &&
                           'Lost eerst dekking zo goed mogelijk op, dan pas een eerlijke verdeling, dan liever-niet-voorkeuren, en als laatste voorkeuren - elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'multi_start' &&
-                          'Draait de Prioriteitenplanner meerdere keren met een andere toevalsvolgorde en bewaart steeds het beste rooster tot nu toe - stopt vanzelf zodra een perfect rooster is gevonden (alles ingevuld, iedereen exact binnen bereik) of het aantal pogingen hieronder is bereikt. Kan langer duren dan de andere methodes; je kunt tussentijds stoppen. De punten hieronder gelden niet voor deze methode.'}
+                          'Is dezelfde Prioriteitenplanner, gewoon meerdere keren gedraaid met een andere toevalsvolgorde, en bewaart steeds het beste rooster tot nu toe. Op de meeste periodes levert dit precies hetzelfde rooster op als één keer de Prioriteitenplanner draaien - alleen op een krappe periode (weinig personeel, veel blokkades) kan een volgende poging een beter of compleet rooster vinden waar een eerdere poging bleef steken. Stopt vanzelf zodra een perfect rooster is gevonden (alles ingevuld, iedereen exact binnen bereik) of het aantal pogingen hieronder is bereikt. Kan langer duren dan de andere methodes; je kunt tussentijds stoppen. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'randomized' &&
                           'Vult diensten stap voor stap in met een steeds willekeurig geschud personeelslijstje in plaats van met de solver hierboven - geen teruggrabbelen als een keuze verderop tot een probleem leidt. Draait meerdere pogingen en bewaart steeds het beste rooster tot nu toe, net als de Herhaalplanner. Kan een minder eerlijke verdeling opleveren dan de Prioriteitenplanner. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'weighted' &&
