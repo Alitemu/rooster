@@ -45,6 +45,17 @@ interface EligiblePerson {
   id: string;
   codenaam: string;
   category: EligibilityCategory;
+  band_count: number;
+  band_max: number;
+}
+
+// The solver itself now never assigns anyone past their streefbereik (see
+// solver/constraints.py's MAX_BAND_OVERSHOOT), but a manual pick here is
+// deliberately never blocked by that - so this is purely informational,
+// shown next to every candidate regardless of category, not a filter.
+function bandLabel(p: EligiblePerson): string {
+  const suffix = p.band_count >= p.band_max ? ' - vol' : '';
+  return `${p.codenaam} (${p.band_count} van ${p.band_max}${suffix})`;
 }
 
 interface Props {
@@ -536,7 +547,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
                           onClick={() => handlePick(person.id, person.codenaam)}
                           className="w-full text-left px-3 py-1 text-sm text-neutral-800 hover:bg-neutral-100 disabled:opacity-50"
                         >
-                          {person.codenaam}
+                          {bandLabel(person)}
                         </button>
                       ))}
                     </div>

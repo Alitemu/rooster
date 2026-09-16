@@ -342,11 +342,11 @@ def test_band_max_overshoot_is_hard_capped_even_under_dekking_priority():
     push a single available person as far past their band max as needed
     to cover every last shift, no matter how far over that left them
     (exactly the scenario a planner-promised korting must never suffer -
-    see constraints.add_band_constraints' docstring). MAX_BAND_OVERSHOOT
-    makes more than 1 unit past the max a hard ceiling instead, applying
-    even under 'lexicographic' where dekking would otherwise always win:
-    1 person, band max 1, 3 slots on offer - dekking can fill at most 2
-    (the band max plus the 1 unit of allowed overshoot), never all 3.
+    see constraints.add_band_constraints' docstring). MAX_BAND_OVERSHOOT=0
+    makes even a single unit past the max a hard ceiling, applying even
+    under 'lexicographic' where dekking would otherwise always win:
+    1 person, band max 1, 3 slots on offer - dekking can fill at most 1
+    (exactly the band max, zero overshoot allowed), never more.
     """
     slots = make_slots(3)
     result = solve(
@@ -357,13 +357,13 @@ def test_band_max_overshoot_is_hard_capped_even_under_dekking_priority():
 
     assert result['success']
     assigned = len(result['assignments'])
-    assert assigned == 2, (
-        f'expected dekking to stop at band_max + MAX_BAND_OVERSHOOT (2) even though it could '
-        f'otherwise cover the 3rd slot too, got {assigned} assigned'
+    assert assigned == 1, (
+        f'expected dekking to stop at exactly the band max (1) even though it could otherwise '
+        f'cover more slots by pushing p1 over, got {assigned} assigned'
     )
-    assert len(result['diagnostics']['unfilled_slots']) == 1
-    assert result['diagnostics']['max_band_deviation'] == 1, (
-        'the one unit of overshoot taken should be exactly MAX_BAND_OVERSHOOT, never more'
+    assert len(result['diagnostics']['unfilled_slots']) == 2
+    assert result['diagnostics']['max_band_deviation'] == 0, (
+        'nobody should ever be pushed past their band max now - MAX_BAND_OVERSHOOT is 0'
     )
 
 

@@ -30,6 +30,17 @@ interface EligiblePerson {
   id: string;
   codenaam: string;
   category: EligibilityCategory;
+  band_count: number;
+  band_max: number;
+}
+
+// The solver itself now never assigns anyone past their streefbereik (see
+// solver/constraints.py's MAX_BAND_OVERSHOOT), but a manual pick here is
+// deliberately never blocked by that - so this is purely informational,
+// shown next to every candidate regardless of category, not a filter.
+function bandLabel(p: EligiblePerson): string {
+  const suffix = p.band_count >= p.band_max ? ' - vol' : '';
+  return `${p.codenaam} (${p.band_count} van ${p.band_max}${suffix})`;
 }
 
 // Display order for the grouped menu, and the group headings - best
@@ -383,7 +394,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                               >
                                 {people.map((p) => (
                                   <option key={p.id} value={p.id}>
-                                    {p.codenaam}
+                                    {bandLabel(p)}
                                   </option>
                                 ))}
                               </optgroup>

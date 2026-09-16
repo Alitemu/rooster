@@ -646,9 +646,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <p className="text-xs text-neutral-500 mb-3">
                   Dit zijn de huidige instellingen voor deze periode - onveranderd levert opnieuw
                   genereren hetzelfde resultaat op. Pas aan voor een ander resultaat. Boven het
-                  maximum hieronder staat de solver, bij elke methode, maximaal 1 extra dienst toe
-                  per persoon - nooit meer, ook niet als dat de enige manier is om een dienst te
-                  vullen.
+                  maximum hieronder wijst de solver, bij elke methode, nooit iemand een extra
+                  dienst toe - ook niet als dat de enige manier is om een dienst te vullen. Zo'n
+                  dienst blijft dan open, om zelf in te vullen (zie &quot;Rooster vooraf
+                  invullen&quot;) of via &quot;Voorstellen voor herverdeling&quot;.
                 </p>
 
                 {rulesetLoading && <p className="text-sm text-neutral-600">Instellingen laden...</p>}
@@ -893,13 +894,12 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         Straf per dienst die iemand onder hun streefaantal blijft: de eerste,
                         komma-gescheiden waarde geldt voor de eerste dienst eronder, de tweede voor
                         de tweede, enzovoort - zo wordt een tekort liever over meerdere mensen
-                        gespreid dan bij één persoon neergelegd. Komt iemand juist boven hun
-                        streefaantal, dan telt bovenop deze waarde ook altijd de volledige straf
-                        voor "Lege dienst" mee - zo blijft een dienst leeglaten altijd goedkoper dan
-                        iemand over hun streefbereik heen duwen. Dit stuurt alleen hoe duur die ene
-                        toegestane extra dienst is; hoger zetten maakt hem niet vaker toegestaan -
-                        boven het maximum staat de solver sowieso nooit meer dan 1 dienst extra toe,
-                        ongeacht deze instelling.
+                        gespreid dan bij één persoon neergelegd. Het deel van deze instelling voor
+                        boven het streefaantal heeft in de praktijk geen effect meer: de solver
+                        wijst nooit meer iemand een dienst toe die hem boven zijn maximum brengt
+                        (ook niet tegen een hoge straf), dus dat kan hier niets meer afdwingen. Een
+                        dienst die daardoor niet gevuld kan worden, blijft open in plaats van bij
+                        iemand terecht te komen die al vol zit.
                       </p>
                       <input
                         type="text"

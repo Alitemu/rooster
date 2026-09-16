@@ -223,6 +223,26 @@ describe('rosterGaps', () => {
       expect(untouchedPerson?.category).toBe('BESCHIKBAAR');
     });
 
+    it("reports each candidate's own band count and max for the slot's counter, not just their category", () => {
+      const f = createFixture(2, '2027-01-04', '2027-01-24'); // weeks 1-4, 3 slots
+      db.prepare(
+        `UPDATE dienstrooster_ruleset SET config_json = '{"bandAvond":[1,2]}' WHERE id =
+         (SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?)`
+      ).run(f.poolId);
+      assign(f.periodId, f.personIds[0], f.slotIds[0], 'SOLVER'); // personIds[0]: 1 of [1,2] used
+      // personIds[1]: 0 assigned - a genuinely different count from personIds[0], not a
+      // coincidence a bug computing the same number for everyone could hide behind.
+
+      const gap = findUnfilledSlots(f.periodId).find((g) => g.slot_id === f.slotIds[1]);
+
+      const withOne = gap!.eligible_people.find((p) => p.id === f.personIds[0]);
+      expect(withOne?.band_count).toBe(1);
+      expect(withOne?.band_max).toBe(2);
+      const withNone = gap!.eligible_people.find((p) => p.id === f.personIds[1]);
+      expect(withNone?.band_count).toBe(0);
+      expect(withNone?.band_max).toBe(2);
+    });
+
     it('a window conflict still outranks a stated VOORKEUR for the same day', () => {
       const f = createFixture(2, '2027-01-04', '2027-01-24'); // weeks 1-4
       db.prepare(
@@ -255,6 +275,24 @@ describe('rosterGaps', () => {
       for (const slotId of f.slotIds) assign(f.periodId, f.personIds[0], slotId, 'SOLVER');
 
       expect(findUnfilledSlots(f.periodId)).toEqual([]);
+    });
+  });
+
+  describe('getEligiblePeopleForSlot', () => {
+    it("reports a candidate's band count and max too, the same as findUnfilledSlots", () => {
+      const f = createFixture(1, '2027-01-04', '2027-01-24'); // 3 slots
+      db.prepare(
+        `UPDATE dienstrooster_ruleset SET config_json = '{"bandAvond":[1,3]}' WHERE id =
+         (SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?)`
+      ).run(f.poolId);
+      assign(f.periodId, f.personIds[0], f.slotIds[0], 'SOLVER');
+      assign(f.periodId, f.personIds[0], f.slotIds[1], 'SOLVER');
+
+      const eligible = getEligiblePeopleForSlot(f.periodId, f.slotIds[2]);
+
+      const candidate = eligible.find((p) => p.id === f.personIds[0]);
+      expect(candidate?.band_count).toBe(2);
+      expect(candidate?.band_max).toBe(3);
     });
   });
 

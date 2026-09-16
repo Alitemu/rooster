@@ -37,7 +37,12 @@ def _week_ordinal(datum: str) -> int:
 # Hard ceiling on how far add_band_constraints lets anyone's assignment
 # count run past their (possibly ledger-adjusted) band maximum - see that
 # function's docstring for why this must be a hard cap, not just a cost.
-MAX_BAND_OVERSHOOT = 1
+# 0: nobody is ever pushed past their streefbereik, period - a shift that
+# would require it stays unfilled instead, for the planner to resolve by
+# hand (see lib/rosterGaps.ts's gap-filling flow and
+# lib/rebalanceSuggestions.ts). Kept as a named constant rather than a
+# bare 0 at the call site, in case that trade-off is ever revisited.
+MAX_BAND_OVERSHOOT = 0
 
 
 class ConstraintBuilder:
@@ -417,17 +422,19 @@ class ConstraintBuilder:
         shift.
 
         `over` is hard-capped at MAX_BAND_OVERSHOOT units past actual_max
-        (currently 1), not left unbounded: a planner-promised korting (a
-        negative ledger delta lowering someone's target for taking on an
-        extra shift earlier) is otherwise just another soft target like any
-        other, and on a tight enough period the solver can still push that
-        same person over their already-lowered band to cover a shift -
-        exactly defeating the point of promising them fewer diensten. A
-        small fixed headroom (rather than 0) still lets the solver avoid
-        leaving a shift completely unstaffed when every eligible person is
-        already at their cap - see this function's own tests for the
-        concrete unfilled-slots cost of 0 headroom vs. 1. Both directions
-        are still weighed against each other in the objective (see
+        (currently 0 - nobody is ever pushed past their streefbereik, full
+        stop): a planner-promised korting (a negative ledger delta
+        lowering someone's target for taking on an extra shift earlier)
+        is otherwise just another soft target like any other, and on a
+        tight enough period the solver could still push that same person
+        over their already-lowered band to cover a shift - exactly
+        defeating the point of promising them fewer diensten. A shift
+        that would require going over stays unfilled instead, for the
+        planner to resolve by hand (or accept the overshoot themselves,
+        deliberately, the way a manual reassign already allows) - see
+        this function's own tests for the concrete unfilled-slots cost of
+        a 0 vs. 1-unit headroom. Both directions are still weighed
+        against each other in the objective (see
         objective.py's add_band_slack_objective) for 'weighted' mode; this
         cap applies unconditionally, in every objective_mode, since it's a
         hard rule now rather than a cost to trade off.

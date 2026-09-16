@@ -12,7 +12,7 @@
  */
 
 import { db } from '@/db/client';
-import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
+import { resolveRulesetConfig, resolveWindowWeeks, computeBandStatusByPerson, type Teller } from '@/lib/rosterBands';
 import { getWindowConflictingPersonIds } from '@/lib/windowRule';
 
 /**
@@ -50,6 +50,17 @@ export interface EligiblePerson {
   id: string;
   codenaam: string;
   category: EligibilityCategory;
+  // This candidate's actual count vs. effective ceiling for the slot's own
+  // counter (AVOND/WEEKEND/FEESTDAG), ledger delta already folded in - see
+  // rosterBands.computeBandStatusByPerson. Shown regardless of category so
+  // a planner filling a gap by hand can see who's already at (or even
+  // over) their streefbereik before picking someone - the solver itself
+  // now never assigns past MAX_BAND_OVERSHOOT (solver/constraints.py), but
+  // a manual pick is never blocked by that, on purpose (see this file's
+  // own module doc comment), so nothing here stops a planner from doing
+  // it deliberately - it just stops them from doing it blindly.
+  band_count: number;
+  band_max: number;
 }
 
 export interface UnfilledSlot {
@@ -175,12 +186,20 @@ export function getEligiblePeopleForSlot(
     ? getWindowConflictingPersonIds(periodId, slot.iso_jaar, slot.iso_week, slot.teller, windowWeeks, slotId)
     : new Set<string>();
 
+  const bandStatus = computeBandStatusByPerson(periodId);
+  const teller = slot?.teller as Teller | undefined;
+
   return poolMembers
     .filter((p) => p.id !== excludePersonId)
-    .map((p) => ({
-      ...p,
-      category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
-    }));
+    .map((p) => {
+      const status = teller ? bandStatus.get(p.id)?.[teller] : undefined;
+      return {
+        ...p,
+        category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
+        band_count: status?.count ?? 0,
+        band_max: status?.max ?? 0,
+      };
+    });
 }
 
 /**
@@ -283,6 +302,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
   }
 
   const windowWeeks = getWindowWeeks(period);
+  const bandStatus = computeBandStatusByPerson(periodId);
 
   return gaps.map((slot) => {
     const slotPreference = preferenceBySlot.get(slot.id) ?? new Map<string, { level: string; source: string }>();
@@ -295,6 +315,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       slot.id
     );
     const required = slot.benodigd_aantal_personen || 1;
+    const teller = slot.teller as Teller;
     return {
       slot_id: slot.id,
       datum: slot.datum,
@@ -303,10 +324,15 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       benodigd_aantal_personen: required,
       assigned_count: slot.assigned_count,
       shortfall: required - slot.assigned_count,
-      eligible_people: poolMembers.map((p) => ({
-        ...p,
-        category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
-      })),
+      eligible_people: poolMembers.map((p) => {
+        const status = bandStatus.get(p.id)?.[teller];
+        return {
+          ...p,
+          category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
+          band_count: status?.count ?? 0,
+          band_max: status?.max ?? 0,
+        };
+      }),
     };
   });
 }

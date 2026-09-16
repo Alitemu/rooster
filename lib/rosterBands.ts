@@ -233,3 +233,92 @@ export function countSlotsByTeller(periodId: string): Record<Teller, number> {
   }
   return counts;
 }
+
+export interface PersonBandStatus {
+  count: number; // this person's actual assignment count for this counter, this period
+  max: number; // scaledBandForMember's max, ledger delta already folded in - the same
+  // "actual_max" the solver itself enforces, so `count > max` here means
+  // literally the same thing it means in solver/constraints.py.
+}
+
+/**
+ * Every active pool member's real count vs. effective ceiling, per counter,
+ * for one period - the one place that combines resolveBands (the period's
+ * flat band), scaledBandForMember (per-person scaling) and the ledger
+ * delta into what a person's target actually is right now.
+ *
+ * Shared by lib/rebalanceSuggestions.ts (who's over, who has room to
+ * absorb a moved dienst) and lib/rosterGaps.ts (showing a candidate's
+ * band room when a planner is filling a gap by hand) - both need the
+ * exact same number for "how full is this person", so it's computed once
+ * here instead of twice.
+ */
+export function computeBandStatusByPerson(periodId: string): Map<string, Record<Teller, PersonBandStatus>> {
+  const period = db
+    .prepare(
+      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
+       FROM dienstrooster_schedule_period WHERE id = ?`
+    )
+    .get(periodId) as
+    | { id: string; pool_id: string; start_datum: string; eind_datum: string; bevroren_ruleset_json: string | null }
+    | undefined;
+
+  const result = new Map<string, Record<Teller, PersonBandStatus>>();
+  if (!period) return result;
+
+  const members = db
+    .prepare(
+      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
+       FROM dienstrooster_pool_membership pm
+       JOIN dienstrooster_person p ON p.id = pm.person_id
+       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
+    )
+    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<CoverageAwareMember & { id: string }>;
+
+  if (members.length === 0) return result;
+
+  const config = resolveRulesetConfig(period);
+  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
+  const bands = resolveBands(config, countSlotsByTeller(periodId), members.length);
+
+  const counts = new Map<string, number>();
+  for (const row of db
+    .prepare(
+      `SELECT a.person_id, st.teller, COUNT(*) as count
+       FROM dienstrooster_assignment a
+       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+       WHERE a.schedule_version_id = ?
+       GROUP BY a.person_id, st.teller`
+    )
+    .all(periodId) as Array<{ person_id: string; teller: string; count: number }>) {
+    counts.set(`${row.person_id}|${row.teller}`, row.count);
+  }
+
+  const deltas = new Map<string, number>();
+  for (const row of db
+    .prepare(
+      `SELECT person_id, teller, SUM(delta) as total
+       FROM dienstrooster_ledger_entry
+       WHERE geldt_voor_periode_id = ?
+       GROUP BY person_id, teller`
+    )
+    .all(periodId) as Array<{ person_id: string; teller: string; total: number }>) {
+    deltas.set(`${row.person_id}|${row.teller}`, row.total || 0);
+  }
+
+  for (const member of members) {
+    const byTeller = {} as Record<Teller, PersonBandStatus>;
+    for (const teller of TELLERS) {
+      const key = `${member.id}|${teller}`;
+      const [, max] = scaledBandForMember(bands, teller, member, period, distributionMode);
+      byTeller[teller] = {
+        count: counts.get(key) || 0,
+        max: max + (deltas.get(key) || 0),
+      };
+    }
+    result.set(member.id, byTeller);
+  }
+
+  return result;
+}

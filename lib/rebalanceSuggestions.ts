@@ -22,14 +22,7 @@
  */
 
 import { db } from '@/db/client';
-import {
-  TELLERS,
-  countSlotsByTeller,
-  resolveBands,
-  resolveRulesetConfig,
-  scaledBandForMember,
-  type Teller,
-} from '@/lib/rosterBands';
+import { TELLERS, computeBandStatusByPerson, type Teller } from '@/lib/rosterBands';
 import { getEligiblePeopleForSlot, type EligibilityCategory } from '@/lib/rosterGaps';
 
 export interface RebalanceSuggestion {
@@ -49,20 +42,9 @@ export interface RebalanceSuggestion {
   warning: string | null;
 }
 
-interface PeriodRow {
-  id: string;
-  pool_id: string;
-  start_datum: string;
-  eind_datum: string;
-  bevroren_ruleset_json: string | null;
-}
-
 interface Member {
   id: string;
   codenaam: string;
-  deelnamefactor: number;
-  geldig_vanaf: string;
-  geldig_tot: string;
 }
 
 // Desirability order for picking a recipient among several eligible
@@ -96,65 +78,35 @@ function warningFor(category: EligibilityCategory, codenaam: string): string | n
  */
 export function suggestRebalances(periodId: string): RebalanceSuggestion[] {
   const period = db
-    .prepare(
-      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
-       FROM dienstrooster_schedule_period WHERE id = ?`
-    )
-    .get(periodId) as PeriodRow | undefined;
+    .prepare('SELECT id FROM dienstrooster_schedule_period WHERE id = ?')
+    .get(periodId);
 
   if (!period) return [];
 
+  const status = computeBandStatusByPerson(periodId);
+  if (status.size === 0) return [];
+
   const members = db
     .prepare(
-      `SELECT p.id, p.codenaam, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
+      `SELECT p.id, p.codenaam
        FROM dienstrooster_pool_membership pm
        JOIN dienstrooster_person p ON p.id = pm.person_id
-       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
+       WHERE pm.pool_id = (SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?)
+         AND pm.geldig_vanaf <= (SELECT eind_datum FROM dienstrooster_schedule_period WHERE id = ?)
+         AND pm.geldig_tot >= (SELECT start_datum FROM dienstrooster_schedule_period WHERE id = ?)
+         AND p.actief = 1`
     )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Member[];
-
-  if (members.length === 0) return [];
-
-  const config = resolveRulesetConfig(period);
-  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolveBands(config, countSlotsByTeller(periodId), members.length);
-
-  const counts = new Map<string, number>(); // `${personId}|${teller}` -> count
-  for (const row of db
-    .prepare(
-      `SELECT a.person_id, st.teller, COUNT(*) as count
-       FROM dienstrooster_assignment a
-       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
-       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-       WHERE a.schedule_version_id = ?
-       GROUP BY a.person_id, st.teller`
-    )
-    .all(periodId) as Array<{ person_id: string; teller: string; count: number }>) {
-    counts.set(`${row.person_id}|${row.teller}`, row.count);
-  }
-
-  const deltas = new Map<string, number>();
-  for (const row of db
-    .prepare(
-      `SELECT person_id, teller, SUM(delta) as total
-       FROM dienstrooster_ledger_entry
-       WHERE geldt_voor_periode_id = ?
-       GROUP BY person_id, teller`
-    )
-    .all(periodId) as Array<{ person_id: string; teller: string; total: number }>) {
-    deltas.set(`${row.person_id}|${row.teller}`, row.total || 0);
-  }
+    .all(periodId, periodId, periodId) as Member[];
 
   const membersById = new Map(members.map((m) => [m.id, m]));
 
-  // Effective [min, max] per person/teller, ledger delta already folded
-  // in - the same "actual_min/actual_max" the solver itself enforces.
+  const counts = new Map<string, number>(); // `${personId}|${teller}` -> count
   const effectiveMax = new Map<string, number>();
-  for (const member of members) {
+  for (const [personId, byTeller] of status) {
     for (const teller of TELLERS) {
-      const key = `${member.id}|${teller}`;
-      const [, max] = scaledBandForMember(bands, teller, member, period, distributionMode);
-      effectiveMax.set(key, max + (deltas.get(key) || 0));
+      const key = `${personId}|${teller}`;
+      counts.set(key, byTeller[teller].count);
+      effectiveMax.set(key, byTeller[teller].max);
     }
   }
 
@@ -162,12 +114,9 @@ export function suggestRebalances(periodId: string): RebalanceSuggestion[] {
   // below so the same recipient is never suggested more room than they
   // actually have across multiple suggestions in this one pass.
   const remainingRoom = new Map<string, number>();
-  for (const member of members) {
+  for (const [personId, byTeller] of status) {
     for (const teller of TELLERS) {
-      const key = `${member.id}|${teller}`;
-      const max = effectiveMax.get(key) ?? 0;
-      const count = counts.get(key) || 0;
-      remainingRoom.set(key, Math.max(0, max - count));
+      remainingRoom.set(`${personId}|${teller}`, Math.max(0, byTeller[teller].max - byTeller[teller].count));
     }
   }
 
