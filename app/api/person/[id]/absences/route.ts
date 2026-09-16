@@ -44,10 +44,8 @@ interface CreateAbsenceRequest {
 /**
  * GET /api/person/[id]/absences - List all absences
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id } = params;
 
@@ -133,10 +131,8 @@ export async function GET(
 /**
  * POST /api/person/[id]/absences - Create new absence
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id } = params;
 

@@ -16,7 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // dependency on Node's crypto module, which the Edge Runtime doesn't support.
 const SESSION_COOKIE_NAME = 'dienstrooster_session';
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith('/planner/login')) {

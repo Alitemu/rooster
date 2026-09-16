@@ -42,10 +42,8 @@ interface DashboardData {
   assignment_count: number;
 }
 
-export async function GET(
-  _req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(_req);
     if (!requirePlannerAccess(auth)) {

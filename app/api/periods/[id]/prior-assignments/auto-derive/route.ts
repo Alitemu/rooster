@@ -27,10 +27,8 @@ interface AutoDeriveResult {
  * Derives prior assignments from the previous period's published assignments.
  * Only processes the last windowWeeks-1 weeks of the prior period.
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

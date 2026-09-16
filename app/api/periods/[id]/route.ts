@@ -32,10 +32,8 @@ interface PeriodDetail {
  *
  * Returns full period information including frozen ruleset and confirmation status
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     // Both staff and any authenticated person need this: the person page
     // reads their own current period's name/dates/status through it.
@@ -107,10 +105,8 @@ export async function GET(
  * RETENTION_DAYS, after which it is purged automatically. Use
  * POST .../purge to skip the wait and delete it permanently right away.
  */
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

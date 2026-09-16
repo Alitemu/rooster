@@ -13,8 +13,9 @@ import { resolveRulesetConfig, resolveBands, countSlotsByTeller, TELLERS, type T
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string; 'period-id': string } }
+  props: { params: Promise<{ id: string; 'period-id': string }> }
 ) {
+  const params = await props.params;
   try {
     const personId = params.id;
     const periodId = params['period-id'];

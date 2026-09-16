@@ -14,10 +14,8 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(_request);
     if (!requirePlannerAccess(auth)) {

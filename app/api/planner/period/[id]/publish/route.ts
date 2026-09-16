@@ -14,10 +14,8 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(request);
     if (!requirePlannerAccess(auth)) {

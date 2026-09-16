@@ -40,10 +40,8 @@ interface CreatePatternRequest {
 /**
  * GET /api/person/[id]/parttime-patterns - List all part-time patterns
  */
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id } = params;
 
@@ -93,10 +91,8 @@ export async function GET(
  *
  * Creates part-time pattern and auto-generates availability blocks
  */
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id } = params;
 

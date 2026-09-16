@@ -13,8 +13,9 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; 'assignment-id': string } }
+  props: { params: Promise<{ id: string; 'assignment-id': string }> }
 ) {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(request);
     if (!requirePlannerAccess(auth)) {

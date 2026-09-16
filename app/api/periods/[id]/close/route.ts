@@ -11,10 +11,8 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

@@ -15,10 +15,8 @@ interface SubmitRequest {
   reason?: string;
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

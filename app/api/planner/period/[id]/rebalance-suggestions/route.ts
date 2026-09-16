@@ -14,10 +14,8 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { suggestRebalances } from '@/lib/rebalanceSuggestions';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

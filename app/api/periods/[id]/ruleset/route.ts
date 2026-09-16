@@ -99,10 +99,8 @@ function isValidBudget(budget: unknown): budget is BlockBudgetPerTeller {
   return typeof b.parttimeExempt === 'boolean';
 }
 
-export async function PATCH(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

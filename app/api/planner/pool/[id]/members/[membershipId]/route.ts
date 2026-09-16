@@ -38,8 +38,9 @@ function getMembership(poolId: string, membershipId: string) {
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; membershipId: string } }
+  props: { params: Promise<{ id: string; membershipId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {
@@ -120,8 +121,9 @@ export async function PATCH(
 
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; membershipId: string } }
+  props: { params: Promise<{ id: string; membershipId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

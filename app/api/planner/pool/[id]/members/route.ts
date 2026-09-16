@@ -32,10 +32,8 @@ function isValidDeelnamefactor(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1;
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {
@@ -86,10 +84,8 @@ interface AddMemberRequest {
   deelnamefactor?: number;
 }
 
-export async function POST(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

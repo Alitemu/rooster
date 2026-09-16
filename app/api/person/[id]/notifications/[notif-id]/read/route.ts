@@ -11,8 +11,9 @@ import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; 'notif-id': string } }
+  props: { params: Promise<{ id: string; 'notif-id': string }> }
 ) {
+  const params = await props.params;
   try {
     const personId = params.id;
 

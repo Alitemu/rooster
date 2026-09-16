@@ -32,8 +32,9 @@ const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; 'assignment-id': string } }
+  props: { params: Promise<{ id: string; 'assignment-id': string }> }
 ) {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(request);
     if (!requirePlannerAccess(auth)) {

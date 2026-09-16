@@ -118,7 +118,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
 
     const res = await POST(
       postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden: 'Test', aantal: 1 }] }, null),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
 
     expect(res.status).toBe(401);
@@ -133,7 +133,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
 
     const res = await POST(
       postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden: 'Test', aantal: 1 }] }, plannerCookie(planner)),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
     const body = await res.json();
 
@@ -150,7 +150,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
 
     const res = await POST(
       postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden: 'Test', aantal: 1 }] }, plannerCookie(planner)),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
 
     expect(res.status).toBe(400);
@@ -165,7 +165,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
 
     const res = await POST(
       postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden: 'Test', aantal: 0 }] }, plannerCookie(planner)),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
     const body = await res.json();
 
@@ -182,7 +182,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
 
     const res = await POST(
       postRequest(periodId, { corrections: [{ person_id: person, type: 'NACHT', reden: 'Test', aantal: 1 }] }, plannerCookie(planner)),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
     const body = await res.json();
 
@@ -199,7 +199,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
 
     const res = await POST(
       postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden: 'Test', aantal: 1 }] }, plannerCookie(planner)),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
     const body = await res.json();
 
@@ -230,7 +230,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
         },
         plannerCookie(planner)
       ),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
 
     expect(res.status).toBe(400);
@@ -250,7 +250,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
         { corrections: [{ person_id: person, type: 'AVOND', reden: 'Dienst overgenomen', aantal: -1 }] },
         plannerCookie(planner)
       ),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
     const body = await res.json();
 
@@ -287,7 +287,7 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
         },
         plannerCookie(planner)
       ),
-      { params: { id: periodId } }
+      { params: Promise.resolve({ id: periodId }) }
     );
     const body = await res.json();
 

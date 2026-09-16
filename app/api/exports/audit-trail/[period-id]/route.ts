@@ -67,10 +67,8 @@ function extractOverride(nieuwJson: string | null): string | null {
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { 'period-id': string } }
-): Promise<NextResponse> {
+export async function GET(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {

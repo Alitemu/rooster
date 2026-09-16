@@ -25,10 +25,8 @@ interface StaffingRow {
   totaal: number;
 }
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-): Promise<NextResponse> {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(request);
     if (!requirePlannerAccess(auth)) {

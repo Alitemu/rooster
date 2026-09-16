@@ -20,8 +20,9 @@ class SwapAlreadyHandledError extends Error {}
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; 'swap-id': string } }
+  props: { params: Promise<{ id: string; 'swap-id': string }> }
 ) {
+  const params = await props.params;
   try {
     const personId = params.id;
 

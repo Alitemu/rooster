@@ -19,8 +19,9 @@ import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; slotId: string } }
+  props: { params: Promise<{ id: string; slotId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id, slotId } = params;
 

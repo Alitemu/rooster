@@ -25,7 +25,7 @@ const VALID_GROUPS = new Set([
 
 export async function POST(
   req: NextRequest,
-  { params: _params }: { params: { id: string } }
+  _context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(req);

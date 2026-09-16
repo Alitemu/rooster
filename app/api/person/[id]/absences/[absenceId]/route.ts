@@ -28,8 +28,9 @@ interface UpdateAbsenceRequest {
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; absenceId: string } }
+  props: { params: Promise<{ id: string; absenceId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id, absenceId } = params;
 
@@ -151,8 +152,9 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; absenceId: string } }
+  props: { params: Promise<{ id: string; absenceId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id, absenceId } = params;
 

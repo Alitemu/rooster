@@ -33,8 +33,9 @@ interface UpdatePatternRequest {
  */
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string; patternId: string } }
+  props: { params: Promise<{ id: string; patternId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id, patternId } = params;
 
@@ -168,8 +169,9 @@ export async function PATCH(
  */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string; patternId: string } }
+  props: { params: Promise<{ id: string; patternId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id, patternId } = params;
 

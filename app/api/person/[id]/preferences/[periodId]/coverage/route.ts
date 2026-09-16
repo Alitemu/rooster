@@ -30,8 +30,9 @@ interface CoverageResponse {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string; periodId: string } }
+  props: { params: Promise<{ id: string; periodId: string }> }
 ): Promise<NextResponse> {
+  const params = await props.params;
   try {
     const { id, periodId } = params;
 

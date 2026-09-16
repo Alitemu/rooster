@@ -29,10 +29,8 @@ const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   WINDOW_OVERRIDE: 'een dienst binnen het venster is toch ingepland',
 };
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(request);
     if (!requirePlannerAccess(auth)) {
