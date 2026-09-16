@@ -119,7 +119,7 @@ async function main() {
     jar: planner,
     body: {
       naam: 'Full Check Period', start_datum: period.start_datum, eind_datum: period.eind_datum, deadline: period.deadline,
-      ruleset: { windowWeeks: 7, bandAvond: [8, 9], bandWeekend: [4, 5], bandFeestdag: [1, 2], distributionMode: 'EVEN' },
+      ruleset: { windowWeeks: 7, bandAvond: [8, 9], bandWeekend: [4, 5], bandFeestdag: [1, 2], distributionMode: 'GELIJK' },
     },
   });
   rec('Open period → OPEN + 154 slots / 22 weeks', open.status === 200 && open.json?.data?.slots_generated === 154 && open.json?.data?.weeks_covered === 22,
