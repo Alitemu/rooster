@@ -2,14 +2,16 @@
  * Authentication utilities
  *
  * Conventions:
- * - Passwords: bcryptjs hashing
+ * - Passwords: bcrypt hashing (native bindings - see package.json; the
+ *   $2a$/$2b$ hash format is identical to bcryptjs's, so switching here
+ *   doesn't invalidate any password hash already stored in a database)
  * - TOTP: speakeasy library
  * - Access tokens: SHA256 hash of long random token
  * - Always use ISO-8601 dates
  */
 
 import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import bcrypt from 'bcrypt';
 import speakeasy from 'speakeasy';
 
 /**
