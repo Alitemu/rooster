@@ -14,6 +14,7 @@ import { FillGapsSummary } from '@/components/FillGapsSummary';
 
 interface Period {
   id: string;
+  pool_id: string;
   naam: string;
   start_datum: string;
   eind_datum: string;
@@ -308,10 +309,13 @@ export default function PlannerPeriodPage() {
         </a>
       )}
 
-      {/* Adding pool members has no period-status restriction server-side; GEPUBLICEERD stays excluded since its ruleset is frozen. */}
+      {/* Adding pool members has no period-status restriction server-side; GEPUBLICEERD stays excluded since its ruleset is frozen.
+          Links to the standalone pool-wide staff page (not the setup wizard's "Personeel" step) - that step only exists to walk
+          through when opening a new period, and dropping a planner into it mid-tab for an already-open period made it look like
+          part of a multi-step flow they still needed to click through, rather than a direct edit. */}
       {['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status) && (
         <a
-          href={`/planner/setup/${periodId}?stap=staff`}
+          href={`/planner/pool/${period.pool_id}/staff`}
           className="inline-block ml-3 px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
         >
           👥 Personeel beheren
