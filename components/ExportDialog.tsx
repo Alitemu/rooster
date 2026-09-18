@@ -12,6 +12,14 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 
 type ExportType = 'invitations' | 'reminders' | 'audit-trail' | null;
 
+// Must match exactly the "Onderwerpfilter" configured on the Power
+// Automate-stroom's "Wanneer een nieuwe e-mail arriveert (V2)"-trigger -
+// see the "Automatisch versturen via Power Automate"-sectie hieronder.
+// Dienstrooster heeft verder geen weet van Power Automate of SharePoint;
+// het enige contract is deze vaste onderwerptekst plus de JSON-vorm van
+// het gedownloade bestand (een lijst van {codenaam, onderwerp, tekst}).
+const NOTIFICATION_TRIGGER_SUBJECT = 'DIENSTROOSTER-VERZENDLIJST';
+
 interface ReminderTemplate {
   person_id: string;
   codenaam: string;
@@ -104,6 +112,31 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
       ? editedBody.split(templateLink).join(reminder.personal_link)
       : editedBody;
     return `mailto:?subject=${encodeURIComponent(editedSubject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const triggerMailto = `mailto:?subject=${encodeURIComponent(NOTIFICATION_TRIGGER_SUBJECT)}&body=${encodeURIComponent(
+    'Zie bijlage. Voeg het zojuist gedownloade JSON-bestand toe als bijlage voordat je deze e-mail verstuurt.'
+  )}`;
+
+  // Zelfde substitutie als mailtoFor (ieders eigen persoonlijke link, geen
+  // URL-encoding nodig - dit wordt een bestand, geen mailto-link) - zo
+  // geldt een bewerking van onderwerp/bericht hierboven ook voor de
+  // batch-download, net als voor de losse mailto-links per persoon.
+  const downloadBatchJson = () => {
+    const payload = reminders.map((reminder) => ({
+      codenaam: reminder.codenaam,
+      onderwerp: editedSubject,
+      tekst: templateLink ? editedBody.split(templateLink).join(reminder.personal_link) : editedBody,
+    }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dienstrooster-meldingen_${periodName.replace(/ /g, '_')}.json`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   };
 
   const downloadInvitations = async () => {
@@ -330,8 +363,54 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                   )}
                 </div>
 
+                <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6 space-y-3">
+                  <p className="text-sm font-semibold text-blue-900">
+                    Automatisch versturen via Power Automate
+                  </p>
+                  <p className="text-sm text-blue-900">
+                    Download het bestand hieronder en stuur het als bijlage naar jezelf - dat
+                    start de Power Automate-stroom die alle {reminders.length} herinneringen
+                    hieronder automatisch verstuurt.
+                  </p>
+                  <ol className="text-sm text-blue-900 list-decimal list-inside space-y-1">
+                    <li>Download het JSON-bestand</li>
+                    <li>Open een nieuwe e-mail (de knop hiernaast vult het onderwerp al goed in)</li>
+                    <li>Voeg het zojuist gedownloade bestand toe als bijlage</li>
+                    <li>Verstuur de e-mail naar jezelf</li>
+                  </ol>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={downloadBatchJson}
+                      disabled={!linkPlaceholderIntact}
+                      className="flex-1 py-2 px-4 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
+                    >
+                      📥 JSON-bestand downloaden
+                    </button>
+                    <a
+                      href={linkPlaceholderIntact ? triggerMailto : undefined}
+                      aria-disabled={!linkPlaceholderIntact}
+                      onClick={(e) => {
+                        if (!linkPlaceholderIntact) e.preventDefault();
+                      }}
+                      className={`flex-1 py-2 px-4 rounded font-medium text-center transition-colors ${
+                        linkPlaceholderIntact
+                          ? 'bg-blue-100 text-blue-900 hover:bg-blue-200'
+                          : 'opacity-50 cursor-not-allowed bg-blue-100 text-blue-900'
+                      }`}
+                    >
+                      ✉️ Nieuwe e-mail openen
+                    </a>
+                  </div>
+                  <p className="text-xs text-blue-800">
+                    Onderwerp van deze e-mail moet exact{' '}
+                    <code className="font-mono bg-blue-100 px-1 rounded">{NOTIFICATION_TRIGGER_SUBJECT}</code>{' '}
+                    zijn - dat is wat de Power Automate-stroom herkent. De knop hierboven vult dit
+                    al goed in.
+                  </p>
+                </div>
+
                 <p className="text-sm text-neutral-600 mb-4">
-                  Klik op iemand om hun herinneringsmail te openen in je standaard e-mailprogramma.
+                  Of klik op iemand om diens herinneringsmail los te openen in je standaard e-mailprogramma.
                 </p>
 
                 <div className="space-y-2 mb-6">
