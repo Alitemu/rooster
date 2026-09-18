@@ -249,11 +249,11 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                 Kolommen: Naam, Persoonlijke link, Deadline
               </p>
             </div>
-            <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
-              <p className="text-sm text-amber-900">
-                Downloaden maakt voor iedereen een nieuwe persoonlijke link aan. Een link die je
-                al eerder verstuurde, werkt daarna niet meer - alleen de link in dit nieuwe
-                bestand werkt nog.
+            <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
+              <p className="text-sm text-blue-900">
+                Downloaden maakt voor iedereen een nieuwe persoonlijke link aan. Eerder verstuurde
+                links blijven gewoon werken - wie de vorige mail nog heeft, kan die blijven
+                gebruiken.
               </p>
             </div>
 
@@ -311,11 +311,11 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
 
             {!remindersLoaded ? (
               <>
-                <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
-                  <p className="text-sm text-amber-900">
+                <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
+                  <p className="text-sm text-blue-900">
                     Dit maakt voor iedereen die nog niet heeft bevestigd een nieuwe persoonlijke link aan.
-                    Een eerder verstuurde link voor deze mensen werkt daarna niet meer - stuur dus altijd
-                    de nieuwe link mee, niet de oude.
+                    Eerder verstuurde links blijven gewoon werken - wie de uitnodigingsmail nog heeft,
+                    kan die link blijven gebruiken.
                   </p>
                 </div>
                 <button

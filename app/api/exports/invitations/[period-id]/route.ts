@@ -5,15 +5,19 @@
  *
  * The plaintext access token is never persisted (only its hash), so it can't
  * be read back for an existing link. This route issues a fresh token for
- * every active pool member on each export (revoking any previous one for
- * this period) so the CSV always contains working links.
+ * every active pool member on each export, so the CSV always contains
+ * working links.
  *
- * POST, not GET, precisely because of that revoke-and-reissue: it changes
- * state, and the session cookie is SameSite=Lax, which still travels on a
- * cross-site top-level navigation. As a GET, any link a logged-in planner
- * could be induced to click (a chat message, an <img> in an email preview,
- * a bookmark gone stale) silently invalidated every personal link that had
- * already been sent out. Browsers never turn a link click into a POST.
+ * Those are issued ALONGSIDE any link a member already has, not instead of
+ * them: this used to revoke the previous ones first, so downloading the
+ * CSV a second time silently broke the link everyone had already been
+ * sent. A link is only valid for its own period anyway, and being able to
+ * go back to the original mail is worth more than retiring an older token.
+ * See the reminders export for the same reasoning.
+ *
+ * POST, not GET: it mints credentials, and a GET that changes state is
+ * reachable by anything that merely follows a URL with the planner's
+ * cookie attached (a restored tab, a bookmark, an address-bar suggestion).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -64,11 +68,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     `);
     const members = membersStmt.all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
 
-    const revokeStmt = db.prepare(`
-      UPDATE dienstrooster_person_access_link
-      SET ingetrokken_op = ?
-      WHERE person_id = ? AND geldt_voor_periode_id = ? AND ingetrokken_op IS NULL
-    `);
     const insertStmt = db.prepare(`
       INSERT INTO dienstrooster_person_access_link
         (id, person_id, geldt_voor_periode_id, token_hash, aangemaakt_op)
@@ -77,7 +76,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
 
     const now = new Date().toISOString();
     const links = members.map((member) => {
-      revokeStmt.run(now, member.id, periodId);
+      // Added to this member's links, not replacing them - an earlier
+      // invitation keeps working (see the module docstring).
       const token = generateAccessToken();
       insertStmt.run(crypto.randomUUID(), member.id, periodId, hashToken(token), now);
       return { codenaam: member.codenaam, token };

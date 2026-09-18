@@ -10,14 +10,23 @@
  * milestones (dienstrooster_reminder_schedule, see lib/reminderSchedule.ts)
  * rather than a fixed cutoff.
  *
- * As with invitations, the plaintext access token is never persisted, so a
- * fresh one is issued (revoking any previous one for this period) for each
- * person included in the reminder batch.
+ * The plaintext access token is never persisted (only its hash), so an
+ * existing link can't be read back and put in the reminder - each person
+ * in the batch gets a freshly issued one.
  *
- * POST, not GET, for that same reason: it revokes and reissues links, and
- * a SameSite=Lax session cookie still travels on a cross-site top-level
- * navigation - so as a GET, one link a logged-in planner clicked was
- * enough to invalidate every personal link already sent out.
+ * That new link is issued ALONGSIDE whatever they already have, not
+ * instead of it. This used to revoke their previous links first, which
+ * meant generating reminders - even just to see who was still outstanding -
+ * silently killed the link in everyone's original invitation email. A
+ * personal link is only valid for its own period anyway, so letting people
+ * keep using the first mail they received is worth more than retiring an
+ * older token. Revoking is still possible (ingetrokken_op, honoured on
+ * every request by lib/auth-context.ts) but is deliberately not something
+ * an export does behind the planner's back.
+ *
+ * POST, not GET: it still mints credentials, and a GET that changes state
+ * is reachable by anything that merely follows a URL with the planner's
+ * cookie attached (a restored tab, a bookmark, an address-bar suggestion).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -107,11 +116,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       codenaam: string;
     }>;
 
-    const revokeStmt = db.prepare(`
-      UPDATE dienstrooster_person_access_link
-      SET ingetrokken_op = ?
-      WHERE person_id = ? AND geldt_voor_periode_id = ? AND ingetrokken_op IS NULL
-    `);
     const insertStmt = db.prepare(`
       INSERT INTO dienstrooster_person_access_link
         (id, person_id, geldt_voor_periode_id, token_hash, aangemaakt_op)
@@ -129,7 +133,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const urgency = resolveReminderUrgency(daysBeforeDeadline, milestones);
 
     const reminders: ReminderTemplate[] = outstanding.map((person) => {
-      revokeStmt.run(now, person.person_id, periodId);
+      // Added to this person's links, not replacing them - their earlier
+      // invitation link keeps working (see the module docstring).
       const token = generateAccessToken();
       insertStmt.run(crypto.randomUUID(), person.person_id, periodId, hashToken(token), now);
 

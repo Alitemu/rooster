@@ -238,7 +238,11 @@ Show live in settings screen with interpretation in plain Dutch/English.
    - Long random token → SHA256 hash in DB
    - Grants access to own period/preferences only
    - Read-only after deadline
-   - Can be revoked per person, anytime
+   - Valid for its own period; a new export issues an extra link rather
+     than retiring earlier ones, so someone can still use the link in the
+     original invitation mail. `ingetrokken_op` is honoured on every
+     request (lib/auth-context.ts), but no flow sets it - revoking is a
+     deliberate manual act, not a side effect of exporting.
 
 2. **Password + TOTP** (planner/admin)
    - bcryptjs for password hashing
