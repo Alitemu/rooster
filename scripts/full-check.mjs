@@ -180,8 +180,11 @@ async function main() {
   rec('Dashboard', eq((await req('GET', `/api/planner/period/${period.id}/dashboard`, { jar: planner })).status, 200));
   rec('Progress', eq((await req('GET', `/api/planner/period/${period.id}/progress`, { jar: planner })).status, 200));
   rec('Staff links', eq((await req('GET', `/api/planner/period/${period.id}/staff-links`, { jar: planner })).status, 200));
-  rec('Export invitations', eq((await req('GET', `/api/exports/invitations/${period.id}`, { jar: planner })).status, 200));
-  rec('Export reminders', eq((await req('GET', `/api/exports/reminders/${period.id}`, { jar: planner })).status, 200));
+  // POST: both revoke and reissue personal links, so neither is a GET.
+  rec('Export invitations', eq((await req('POST', `/api/exports/invitations/${period.id}`, { jar: planner })).status, 200));
+  rec('Export reminders', eq((await req('POST', `/api/exports/reminders/${period.id}`, { jar: planner })).status, 200));
+  rec('Export reminders rejects GET (state-changing, not link-clickable)',
+      eq((await req('GET', `/api/exports/reminders/${period.id}`, { jar: planner })).status, 405));
   rec('Export status report', eq((await req('GET', `/api/exports/status-report/${period.id}`, { jar: planner })).status, 200));
 
   // ---------- GENERATION + MANUAL COMPLETION ----------

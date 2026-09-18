@@ -119,6 +119,23 @@ export function createRosterGenerationJob(periodId: string): string {
   return id;
 }
 
+/**
+ * True while a generation for this period is still running.
+ *
+ * Two concurrent generations for one period both clear and re-insert the
+ * same period's assignments, and whichever finishes second dies on
+ * `UNIQUE(schedule_version_id, slot_id)` - observed live, with the first
+ * run's roster left half-overwritten by the second. The UI disables its
+ * own button while a job runs, so this is the server-side guarantee
+ * behind that, for a double POST, two planners, or a stale tab.
+ */
+export function hasRunningJobForPeriod(periodId: string): boolean {
+  for (const job of jobs.values()) {
+    if (job.periodId === periodId && job.status === 'RUNNING') return true;
+  }
+  return false;
+}
+
 export function completeRosterGenerationJob(jobId: string, result: RosterGenerationJobResult): void {
   const job = jobs.get(jobId);
   if (job) {

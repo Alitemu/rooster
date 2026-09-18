@@ -62,6 +62,14 @@ services:
       # directly from the process environment, so leaving it out here means
       # it's stuck at "disabled" no matter what a deployment's .env says.
       NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
+      # Hardcoded true, not an override: in THIS compose file the app is
+      # only ever reachable through Caddy, which replaces X-Real-IP with
+      # the connecting peer's address (see Caddyfile), so the header can't
+      # be forged. lib/rateLimit.ts therefore uses it to tell clients
+      # apart. Any deployment without that guarantee must leave this unset,
+      # or a caller could rotate the header past the rate limit - or spoof
+      # someone else's address to lock them out.
+      TRUST_PROXY_HEADERS: "true"
     volumes:
       # A bind mount to a plain folder next to this file (default ./data),
       # not a Docker-managed named volume - so the database and the

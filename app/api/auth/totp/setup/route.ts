@@ -13,7 +13,7 @@ import { generateTOTPSecret } from '@/lib/auth';
 import { getAuthContextFromRequest } from '@/lib/auth-context';
 import { signPayload } from '@/lib/session';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { checkRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { checkRateLimit, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
 
 export interface TotpSetupPayload {
   kind: 'totp-setup';
@@ -31,10 +31,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
-    const rateLimit = checkRateLimit(`totp-setup:${auth.userId}`, MAX_ATTEMPTS);
+    // Unlike the auth routes, every call counts here, not just failures:
+    // this hands out a fresh secret + QR each time, so the thing worth
+    // limiting is the operation itself, not a wrong guess.
+    const rateLimitKey = `totp-setup:${auth.userId}`;
+    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
     if (!rateLimit.allowed) {
       return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
+    recordAttempt(rateLimitKey);
 
     const person = db
       .prepare(`SELECT codenaam FROM dienstrooster_person WHERE id = ?`)

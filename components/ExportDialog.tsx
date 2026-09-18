@@ -79,7 +79,10 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
     setRemindersLoadFailed(false);
     setLoading(true);
     try {
-      const res = await fetch(`/api/exports/reminders/${periodId}`);
+      // POST, not GET: this revokes and reissues everyone's personal link
+      // (see the route's docstring) - a state change must not be reachable
+      // by a link click.
+      const res = await fetch(`/api/exports/reminders/${periodId}`, { method: 'POST' });
       if (!res.ok) throw new Error('Laden van herinneringen mislukt');
 
       const data = await res.json();
@@ -141,7 +144,8 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
 
   const downloadInvitations = async () => {
     try {
-      const res = await fetch(`/api/exports/invitations/${periodId}`);
+      // POST for the same reason as the reminders fetch above.
+      const res = await fetch(`/api/exports/invitations/${periodId}`, { method: 'POST' });
       if (!res.ok) throw new Error('Downloaden van uitnodigingen mislukt');
 
       const blob = await res.blob();

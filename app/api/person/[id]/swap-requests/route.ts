@@ -12,6 +12,7 @@ import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+import { checkSwapAllowed } from '@/lib/swapEligibility';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -134,28 +135,38 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
+    const slotStmt = db.prepare(
+      `SELECT s.datum, st.teller FROM dienstrooster_shift_slot s
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+       WHERE s.id = ?`
+    );
+    const offeredSlot = slotStmt.get(offered_slot_id) as { datum: string; teller: string } | undefined;
+    const requestedSlot = slotStmt.get(requested_slot_id) as { datum: string; teller: string } | undefined;
+
+    // Only on a published roster, and only for shifts still ahead - see
+    // lib/swapEligibility.ts for why both matter. Re-checked at approval
+    // time too, since a period can move on while a request sits pending.
+    const period = db
+      .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(period_id as string) as { status: string } | undefined;
+    if (!period) {
+      return NextResponse.json({ success: false, error: 'Periode niet gevonden' }, { status: 404 });
+    }
+    const eligibility = checkSwapAllowed({
+      periodStatus: period.status,
+      slotDates: [offeredSlot?.datum, requestedSlot?.datum],
+    });
+    if (!eligibility.allowed) {
+      return NextResponse.json({ success: false, error: eligibility.message }, { status: 403 });
+    }
+
     // A swap trades one shift for an equivalent one - trading across
     // counters (e.g. an avonddienst for a weekenddienst) silently shifts
     // both people's per-counter fairness away from what the solver
     // computed, with nothing here to account for it. An unequal trade like
     // that still has a path: the planner's manual saldo-correcties, which
     // record the resulting counter/counter delta explicitly.
-    const offeredTeller = db
-      .prepare(
-        `SELECT st.teller FROM dienstrooster_shift_slot s
-         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-         WHERE s.id = ?`
-      )
-      .get(offered_slot_id) as { teller: string } | undefined;
-    const requestedTeller = db
-      .prepare(
-        `SELECT st.teller FROM dienstrooster_shift_slot s
-         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-         WHERE s.id = ?`
-      )
-      .get(requested_slot_id) as { teller: string } | undefined;
-
-    if (offeredTeller?.teller !== requestedTeller?.teller) {
+    if (offeredSlot?.teller !== requestedSlot?.teller) {
       return NextResponse.json(
         {
           success: false,
@@ -178,20 +189,6 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const respondent = db
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
       .get(respondentAssignment.person_id) as { codenaam: string } | undefined;
-    const offeredSlot = db
-      .prepare(
-        `SELECT s.datum, st.teller FROM dienstrooster_shift_slot s
-         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-         WHERE s.id = ?`
-      )
-      .get(offered_slot_id) as { datum: string; teller: string } | undefined;
-    const requestedSlot = db
-      .prepare(
-        `SELECT s.datum, st.teller FROM dienstrooster_shift_slot s
-         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-         WHERE s.id = ?`
-      )
-      .get(requested_slot_id) as { datum: string; teller: string } | undefined;
 
     const details = `Aangeboden: ${offeredSlot?.datum} (${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller})\nGevraagd: ${requestedSlot?.datum} (${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller})`;
 

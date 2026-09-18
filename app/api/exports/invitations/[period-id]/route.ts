@@ -1,12 +1,19 @@
 /**
  * Invitations Export Route
  *
- * GET /api/exports/invitations/[period-id] - Generate CSV with staff links
+ * POST /api/exports/invitations/[period-id] - Generate CSV with staff links
  *
  * The plaintext access token is never persisted (only its hash), so it can't
  * be read back for an existing link. This route issues a fresh token for
  * every active pool member on each export (revoking any previous one for
  * this period) so the CSV always contains working links.
+ *
+ * POST, not GET, precisely because of that revoke-and-reissue: it changes
+ * state, and the session cookie is SameSite=Lax, which still travels on a
+ * cross-site top-level navigation. As a GET, any link a logged-in planner
+ * could be induced to click (a chat message, an <img> in an email preview,
+ * a bookmark gone stale) silently invalidated every personal link that had
+ * already been sent out. Browsers never turn a link click into a POST.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,7 +25,7 @@ import { resolveBaseUrl } from '@/lib/baseUrl';
 import { csvField, sanitizeFilenamePart } from '@/lib/csv';
 import type { ApiErrorResponse } from '@/types';
 
-export async function GET(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
   const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);

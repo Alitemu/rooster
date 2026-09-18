@@ -12,6 +12,7 @@ import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
 import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+import { checkSwapAllowed } from '@/lib/swapEligibility';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -102,6 +103,27 @@ export async function POST(
         },
         { status: 409 }
       );
+    }
+
+    const offeredSlotForCheck = db
+      .prepare('SELECT datum FROM dienstrooster_shift_slot WHERE id = ?')
+      .get(swapRequest.aangeboden_slot_id) as { datum: string } | undefined;
+    const requestedSlotForCheck = db
+      .prepare('SELECT datum FROM dienstrooster_shift_slot WHERE id = ?')
+      .get(swapRequest.gevraagde_slot_id) as { datum: string } | undefined;
+    const period = db
+      .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(swapRequest.periode_id) as { status: string } | undefined;
+
+    // Re-checked here, not just at creation: a request can sit PENDING
+    // while the planner reopens/regenerates the period, or simply until
+    // one of the two shifts has already been worked.
+    const eligibility = checkSwapAllowed({
+      periodStatus: period?.status ?? '',
+      slotDates: [offeredSlotForCheck?.datum, requestedSlotForCheck?.datum],
+    });
+    if (!eligibility.allowed) {
+      return NextResponse.json({ success: false, error: eligibility.message }, { status: 403 });
     }
 
     // Notify requester that swap was approved

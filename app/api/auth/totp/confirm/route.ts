@@ -11,14 +11,15 @@ import { verifyTOTPCode, isValidTOTPFormat } from '@/lib/auth';
 import { getAuthContextFromRequest } from '@/lib/auth-context';
 import { verifyPayload } from '@/lib/session';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { checkRateLimit, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { TotpSetupPayload } from '../setup/route';
 
 // Keyed by the authenticated actor (this route requires a session, unlike
 // staff-login/verify-link) rather than IP - a valid 6-digit TOTP code is
 // cheap and fast to guess (no bcrypt-style cost like a password), so
 // without this an already-logged-in attacker could brute-force it well
-// within the setup token's 10-minute lifetime.
+// within the setup token's 10-minute lifetime. Counts rejected codes only,
+// so repeatedly re-enrolling (a legitimate action) never uses it up.
 const MAX_ATTEMPTS = 10;
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -28,7 +29,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
-    const rateLimit = checkRateLimit(`totp-confirm:${auth.userId}`, MAX_ATTEMPTS);
+    const rateLimitKey = `totp-confirm:${auth.userId}`;
+    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
     if (!rateLimit.allowed) {
       return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
@@ -52,11 +54,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     if (!verifyTOTPCode(setupPayload.secret, code)) {
+      recordAttempt(rateLimitKey);
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_CODE', message: 'Onjuiste code' } },
         { status: 400 }
       );
     }
+
+    clearRateLimit(rateLimitKey);
 
     db.prepare(`UPDATE dienstrooster_person SET totp_secret = ? WHERE id = ?`).run(
       setupPayload.secret,

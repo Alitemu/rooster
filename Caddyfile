@@ -60,10 +60,18 @@ https://:{$APP_PORT:8010} {
 	reverse_proxy web:3000 {
 		header_up X-Real-IP {http.request.remote.host}
 	}
+	# Only what Caddy is the right place for: HSTS (it owns TLS) plus a
+	# belt-and-braces copy of the two oldest headers. Content-Security-
+	# Policy, Referrer-Policy and Permissions-Policy are set by the app
+	# itself (next.config.js), so there is one place to change them and
+	# they apply too when the app runs without Caddy in front.
+	# X-XSS-Protection is deliberately dropped: the legacy auditor it
+	# switched on is gone from current browsers and was itself a source of
+	# injection bugs in the ones that still ship it.
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
-		X-XSS-Protection "1; mode=block"
+		-X-XSS-Protection
 	}
 }

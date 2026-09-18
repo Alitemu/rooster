@@ -9,7 +9,7 @@ import { db } from '@/db/client';
 import { verifyPassword, isValidTOTPFormat, verifyTOTPCode, DUMMY_PASSWORD_HASH } from '@/lib/auth';
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, getClientIp, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { checkRateLimit, getClientIp, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 
 interface StaffLoginRequest {
   codenaam: string;
@@ -17,14 +17,18 @@ interface StaffLoginRequest {
   totpCode?: string;
 }
 
-// 10 attempts per 15 minutes per client IP - enough for a human who
+// 10 FAILED attempts per 15 minutes per client - enough for a human who
 // fumbles a password or TOTP code a few times, tight enough that
-// brute-forcing either is impractical.
+// brute-forcing either is impractical. Successful logins deliberately
+// don't count: every staff member shares one hospital NAT address, so
+// counting them meant the 11th ordinary login of the afternoon was
+// refused (see lib/rateLimit.ts).
 const MAX_ATTEMPTS = 10;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const rateLimit = checkRateLimit(`staff-login:${getClientIp(req)}`, MAX_ATTEMPTS);
+    const rateLimitKey = `staff-login:${getClientIp(req)}`;
+    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
     if (!rateLimit.allowed) {
       return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
@@ -39,11 +43,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const invalidCredentials = () =>
-      NextResponse.json(
+    const invalidCredentials = () => {
+      recordAttempt(rateLimitKey);
+      return NextResponse.json(
         { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Ongeldige inloggegevens' } },
         { status: 401 }
       );
+    };
 
     const person = db
       .prepare(
@@ -77,6 +83,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (person.totp_secret) {
       if (!totpCode || !isValidTOTPFormat(totpCode)) {
+        // Not counted: the password was right, this is the normal first
+        // half of a two-step login, not a failed guess.
         return NextResponse.json(
           { success: false, error: { code: 'TOTP_REQUIRED', message: 'Authenticatiecode is verplicht' } },
           { status: 401 }
@@ -86,6 +94,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         return invalidCredentials();
       }
     }
+
+    clearRateLimit(rateLimitKey);
 
     const response = NextResponse.json({
       success: true,

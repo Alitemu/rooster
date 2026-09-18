@@ -17,6 +17,7 @@ import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGa
 import { postJson } from '@/lib/solverClient';
 import {
   createRosterGenerationJob,
+  hasRunningJobForPeriod,
   completeRosterGenerationJob,
   failRosterGenerationJob,
   updateRosterGenerationJobProgress,
@@ -191,6 +192,20 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // client poll ./generate-roster/status instead of holding one request
     // open. Each poll is cheap and short, so a dropped one just means "ask
     // again in a moment" rather than losing the whole generation.
+    // Two generations for the same period would both wipe and rewrite its
+    // assignments; the second to finish dies on the assignment table's
+    // UNIQUE(schedule_version_id, slot_id), after having already cleared
+    // part of the first one's roster.
+    if (hasRunningJobForPeriod(periodId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Er loopt al een roostergeneratie voor deze periode. Wacht tot die klaar is of annuleer hem eerst.',
+        },
+        { status: 409 }
+      );
+    }
+
     const jobId = createRosterGenerationJob(periodId);
     runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, poolMembers, people }).catch(
       (error) => {

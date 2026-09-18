@@ -9,13 +9,20 @@ import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
 import { setSessionCookie, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { internalErrorResponse } from '@/lib/api-errors';
-import { checkRateLimit, getClientIp, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { checkRateLimit, getClientIp, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 // A personal-link token is the only access control a participant has, so
 // guessing one is the more dangerous brute-force target here - a bigger
 // allowance than staff-login (30 vs 10 per window) still makes guessing a
 // long random token infeasible while tolerating a mistyped/partial paste.
+//
+// Counts only rejected tokens. Every page load of /person/[token] calls
+// this route, and the whole ward shares one NAT address, so counting
+// successful verifications meant a batch of reminder emails could exhaust
+// the allowance within minutes of being sent - and the participant page
+// shows a 429 as "Ongeldige of verlopen toegangslink" (see
+// app/person/[token]/page.tsx), i.e. exactly the wrong advice.
 const MAX_ATTEMPTS = 30;
 
 interface VerifyLinkResponse {
@@ -31,7 +38,8 @@ interface VerifyLinkResponse {
  */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const rateLimit = checkRateLimit(`verify-link:${getClientIp(req)}`, MAX_ATTEMPTS);
+    const rateLimitKey = `verify-link:${getClientIp(req)}`;
+    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
     if (!rateLimit.allowed) {
       return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
@@ -68,6 +76,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const link = linkStmt.get(tokenHash) as any;
 
     if (!link) {
+      recordAttempt(rateLimitKey);
       const response: ApiErrorResponse = {
         success: false,
         error: {
@@ -80,6 +89,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     // Check if token was revoked
     if (link.ingetrokken_op) {
+      recordAttempt(rateLimitKey);
       const response: ApiErrorResponse = {
         success: false,
         error: {

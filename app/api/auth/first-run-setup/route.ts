@@ -24,7 +24,7 @@ import { db } from '@/db/client';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { verifySetupToken, clearSetupToken } from '@/lib/setupToken';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, getClientIp, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { checkRateLimit, getClientIp, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface FirstRunSetupRequest {
@@ -40,7 +40,8 @@ const MAX_ATTEMPTS = 10;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const rateLimit = checkRateLimit(`first-run-setup:${getClientIp(req)}`, MAX_ATTEMPTS);
+    const rateLimitKey = `first-run-setup:${getClientIp(req)}`;
+    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
     if (!rateLimit.allowed) {
       return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // not the codenaam it named even exists or is still claimable, so it
     // learns nothing about account state either way.
     if (!verifySetupToken(setup_token)) {
+      recordAttempt(rateLimitKey);
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_SETUP_TOKEN', message: 'Ongeldige of ontbrekende setup-token' },

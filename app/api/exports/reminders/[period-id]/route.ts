@@ -1,7 +1,7 @@
 /**
  * Reminders Export Route
  *
- * GET /api/exports/reminders/[period-id] - Get reminder templates for staff
+ * POST /api/exports/reminders/[period-id] - Get reminder templates for staff
  * who haven't confirmed their preferences yet. Optional
  * ?days_before_deadline=N overrides how many days out to pretend it is;
  * defaults to the real number of days left before the period's actual
@@ -13,6 +13,11 @@
  * As with invitations, the plaintext access token is never persisted, so a
  * fresh one is issued (revoking any previous one for this period) for each
  * person included in the reminder batch.
+ *
+ * POST, not GET, for that same reason: it revokes and reissues links, and
+ * a SameSite=Lax session cookie still travels on a cross-site top-level
+ * navigation - so as a GET, one link a logged-in planner clicked was
+ * enough to invalidate every personal link already sent out.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -55,7 +60,7 @@ function relativeDeadlineWording(daysBeforeDeadline: number): string {
   return `over ${daysBeforeDeadline} dagen`;
 }
 
-export async function GET(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
+export async function POST(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
   const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
