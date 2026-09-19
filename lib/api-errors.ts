@@ -16,10 +16,25 @@ import { NextRequest, NextResponse } from 'next/server';
  * Every route that uses this already validates its required fields
  * against the parsed object, so an empty object here correctly falls
  * through to that existing 400 response instead.
+ *
+ * Anything that is not a plain object becomes `{}` for the same reason.
+ * Catching the throw alone was not enough: the literal body `null` is
+ * valid JSON, so req.json() resolved with it instead of throwing, and the
+ * very first `const { x } = body` in the route turned it into a
+ * TypeError - a 500 on 13 routes for what is plainly a bad request. An
+ * array or a bare number/string slipped through the same way and only
+ * happened not to crash, because destructuring those yields undefined.
+ * No route here takes a top-level array, so collapsing all four cases to
+ * the same empty object keeps every caller's existing field validation as
+ * the single place that decides what a missing field means.
  */
 export async function parseJsonBody<T = Record<string, unknown>>(req: NextRequest): Promise<Partial<T>> {
   try {
-    return (await req.json()) as Partial<T>;
+    const parsed = await req.json();
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {} as Partial<T>;
+    }
+    return parsed as Partial<T>;
   } catch {
     return {} as Partial<T>;
   }

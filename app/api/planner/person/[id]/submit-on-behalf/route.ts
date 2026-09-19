@@ -108,32 +108,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     const now = new Date().toISOString();
 
-    // Create or update submission
-    if (existing) {
-      const updateStmt = db.prepare(`
-        UPDATE dienstrooster_submission
-        SET status = 'BEVESTIGD', ingediend_op = ?, row_version = row_version + 1
-        WHERE person_id = ? AND schedule_period_id = ?
-      `);
-
-      updateStmt.run(now, personId, body.period_id);
-    } else {
-      const insertStmt = db.prepare(`
-        INSERT INTO dienstrooster_submission
-          (id, person_id, schedule_period_id, status, ingediend_op, row_version)
-        VALUES (?, ?, ?, 'BEVESTIGD', ?, 1)
-      `);
-
-      insertStmt.run(crypto.randomUUID(), personId, body.period_id, now);
-    }
-
-    // Log the action in audit log
-    const auditStmt = db.prepare(`
-      INSERT INTO dienstrooster_audit_log
-        (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
     const details = JSON.stringify({
       person_id: personId,
       period_id: body.period_id,
@@ -141,7 +115,33 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       submitted_at: now,
     });
 
-    auditStmt.run(crypto.randomUUID(), submittedByPersonId, 'submission', personId, 'CREATE', details, now);
+    // The submission and its audit row are one change. This is a planner
+    // confirming something in someone else's name, so the audit row is the
+    // only record that it was not that person who did it - a crash between
+    // the two writes would leave a confirmed submission that looks exactly
+    // like one they made themselves.
+    const submitOnBehalf = db.transaction(() => {
+      if (existing) {
+        db.prepare(
+          `UPDATE dienstrooster_submission
+           SET status = 'BEVESTIGD', ingediend_op = ?, row_version = row_version + 1
+           WHERE person_id = ? AND schedule_period_id = ?`
+        ).run(now, personId, body.period_id);
+      } else {
+        db.prepare(
+          `INSERT INTO dienstrooster_submission
+             (id, person_id, schedule_period_id, status, ingediend_op, row_version)
+           VALUES (?, ?, ?, 'BEVESTIGD', ?, 1)`
+        ).run(crypto.randomUUID(), personId, body.period_id, now);
+      }
+
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log
+           (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(crypto.randomUUID(), submittedByPersonId, 'submission', personId, 'CREATE', details, now);
+    });
+    submitOnBehalf();
 
     const response: ApiSuccessResponse<{ success: true; submitted_at: string }> = {
       success: true,

@@ -14,6 +14,7 @@ import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods, syncPatt
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
+import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateAbsenceRequest {
@@ -89,6 +90,19 @@ export async function PATCH(
         error: { code: 'NO_UPDATES', message: 'Geen velden om bij te werken' },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // Same reason as the create route: the range check below compares two
+    // strings alphabetically, which says nothing useful about a value that
+    // is not a date at all.
+    for (const value of [updates.van_datum, updates.tot_datum]) {
+      if (value !== undefined && !isValidIsoDate(value)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'INVALID_DATE', message: 'Gebruik een geldige datum (JJJJ-MM-DD)' },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
     }
 
     const newVanDatum = updates.van_datum ?? absence.van_datum;

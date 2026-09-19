@@ -45,36 +45,37 @@ test.describe('Roster Publication Workflow - E2E', () => {
   test('planner sees the publish button for a generated period', async ({ page }) => {
     await gotoPlanner(page);
 
-    const publishButton = page.getByRole('button', { name: /Publish Roster/i });
+    const publishButton = page.getByRole('button', { name: '✅ Rooster publiceren' });
     await expect(publishButton).toBeVisible();
     await expect(publishButton).toBeEnabled();
   });
 
   test('publication dialog reports the roster is ready and lists its checks', async ({ page }) => {
     await gotoPlanner(page);
-    await page.getByRole('button', { name: /Publish Roster/i }).click();
+    await page.getByRole('button', { name: '✅ Rooster publiceren' }).click();
 
-    const dialogHeading = page.getByRole('heading', { name: 'Publish Roster' });
+    const dialogHeading = page.getByRole('heading', { name: 'Rooster publiceren' });
     await expect(dialogHeading).toBeVisible();
 
     // The fixture is a complete roster: 7 slots, 7 assignments, no blocks.
-    await expect(page.getByText('Ready to Publish')).toBeVisible();
+    await expect(page.getByText('Klaar om te publiceren')).toBeVisible();
 
     // Coverage tiles must report the real counts, not placeholders. Scope to
-    // the tile's own container: a bare getByText('Slots Filled') also matches
-    // the "All slots filled" check label further down.
+    // the tile's own container: a bare getByText('Diensten ingevuld') also
+    // matches the "Alle diensten ingevuld" check label further down.
     const tile = (label: string) =>
       page.locator('div.text-center', { has: page.getByText(label, { exact: true }) });
 
-    await expect(tile('Slots Filled')).toContainText('7');
-    await expect(tile('Total Slots')).toContainText('7');
+    await expect(tile('Diensten ingevuld')).toContainText('7');
+    await expect(tile('Diensten totaal')).toContainText('7');
 
-    // All three validation checks are listed, and none is marked failed.
+    // All four validation checks are listed, and none is marked failed.
     // Substring, not exact: each label's text node starts with its own
-    // status glyph, e.g. "✓All slots filled".
-    await expect(page.getByText('All slots filled')).toBeVisible();
-    await expect(page.getByText('No hard blocking violations')).toBeVisible();
-    await expect(page.getByText('Band compliance')).toBeVisible();
+    // status glyph, e.g. "✓Alle diensten ingevuld".
+    await expect(page.getByText('Alle diensten ingevuld')).toBeVisible();
+    await expect(page.getByText('Geen overtredingen van blokkades')).toBeVisible();
+    await expect(page.getByText('Geen overtredingen van het venster')).toBeVisible();
+    await expect(page.getByText('Binnen bereik')).toBeVisible();
     await expect(page.getByText('✗', { exact: true })).toHaveCount(0);
   });
 
@@ -90,11 +91,11 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
     try {
       await gotoPlanner(page);
-      await page.getByRole('button', { name: /Publish Roster/i }).click();
+      await page.getByRole('button', { name: '✅ Rooster publiceren' }).click();
 
-      await expect(page.getByText('Issues Found')).toBeVisible();
-      await expect(page.getByText(/Only 6 of 7 slots are filled/)).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Publish Now' })).toBeDisabled();
+      await expect(page.getByText('Problemen gevonden')).toBeVisible();
+      await expect(page.getByText(/6 van 7 ingevuld/)).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Nu publiceren' })).toBeDisabled();
 
       // The disabled button is convenience only - the API has to refuse it
       // too, or a direct POST publishes an incomplete roster and notifies
@@ -103,7 +104,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
         `${getBaseUrl()}/api/planner/period/${testData.period.id}/publish`
       );
       expect(res.status()).toBe(400);
-      expect(String((await res.json()).error)).toMatch(/not ready to publish/i);
+      expect(String((await res.json()).error)).toMatch(/nog niet klaar om te publiceren/i);
 
       const stillGenerated = db
         .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?')
@@ -126,16 +127,18 @@ test.describe('Roster Publication Workflow - E2E', () => {
     ).c;
 
     await gotoPlanner(page);
-    await page.getByRole('button', { name: /Publish Roster/i }).click();
+    await page.getByRole('button', { name: '✅ Rooster publiceren' }).click();
 
-    const publishNow = page.getByRole('button', { name: 'Publish Now' });
+    const publishNow = page.getByRole('button', { name: 'Nu publiceren' });
     await expect(publishNow).toBeEnabled();
     await publishNow.click();
 
     // The dialog closes and BOTH the dashboard's status line and the page's
     // own header badge reflect the new state - they hold separate copies of
     // the period, so a stale badge after publishing is a real regression.
-    await expect(page.getByText('✅ Published')).toBeVisible({ timeout: 10000 });
+    // Regex, not an exact string: the badge carries a nested span with the
+    // publication timestamp beside the label.
+    await expect(page.getByText(/✅ Gepubliceerd/)).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Status: GEPUBLICEERD')).toBeVisible();
 
     const period = db
@@ -164,7 +167,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
     await gotoPlanner(page);
 
     await expect(page.getByText('GEPUBLICEERD').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: /Publish Roster/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '✅ Rooster publiceren' })).toHaveCount(0);
   });
 
   test('republishing a published period is refused by the API', async ({ page }) => {
@@ -187,7 +190,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
       await page.waitForLoadState('networkidle');
 
-      await expect(page.getByRole('heading', { name: 'Your Roster' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
 
       const expected = (
         db
@@ -198,9 +201,10 @@ test.describe('Roster Publication Workflow - E2E', () => {
       ).c;
       expect(expected).toBeGreaterThan(0);
 
-      // Balance summary is rendered in words, never as a raw signed number.
-      const summary = page.getByText(/shifts assigned/i).first();
-      await expect(summary).toBeVisible();
+      // Balance summary is rendered in words, never as a raw signed number
+      // or a [min,max] pair (CLAUDE.md) - "je krijgt 8 of 9 avonddiensten".
+      await expect(page.getByText('Overzicht saldo')).toBeVisible();
+      await expect(page.getByText(/Streefbereik: je krijgt \d+( of \d+)? \w+diensten/).first()).toBeVisible();
     } finally {
       await context.close();
     }
@@ -223,7 +227,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
         .all(testData.period.id, user.id) as Array<{ onderwerp: string }>;
       expect(stored.length).toBeGreaterThan(0);
 
-      await page.getByRole('button', { name: /Notifications/i }).click();
+      await page.getByRole('button', { name: '🔔 Meldingen' }).click();
       await expect(page.getByText(stored[0].onderwerp).first()).toBeVisible();
     } finally {
       await context.close();

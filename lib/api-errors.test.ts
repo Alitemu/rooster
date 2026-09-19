@@ -1,0 +1,58 @@
+import { describe, it, expect } from 'vitest';
+import { NextRequest } from 'next/server';
+import { parseJsonBody } from './api-errors';
+
+/**
+ * The hard rule: a request body a client controls can never reach a route
+ * as something that is not a plain object.
+ *
+ * Every route destructures the result straight away (`const { x } = body`),
+ * so anything else has to be turned into an empty object here. `null` is
+ * the case that mattered: it is valid JSON, so it did not throw, and the
+ * destructuring turned it into a TypeError - a 500 on 13 routes for a
+ * plainly malformed request. The other shapes only happened not to crash.
+ */
+
+function bodyRequest(raw: string): NextRequest {
+  return new NextRequest('http://localhost/api/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: raw,
+  });
+}
+
+describe('parseJsonBody', () => {
+  it('passes a plain object through unchanged', async () => {
+    const body = await parseJsonBody(bodyRequest('{"deadline":"2027-01-01","rowVersion":3}'));
+    expect(body).toEqual({ deadline: '2027-01-01', rowVersion: 3 });
+  });
+
+  it('turns a literal null body into an empty object, so destructuring cannot throw', async () => {
+    const body = await parseJsonBody(bodyRequest('null'));
+    expect(body).toEqual({});
+    // The actual failure mode this guards: every route does this next.
+    expect(() => {
+      const { deadline } = body as { deadline?: string };
+      return deadline;
+    }).not.toThrow();
+  });
+
+  it('turns a top-level array into an empty object', async () => {
+    expect(await parseJsonBody(bodyRequest('[1,2,3]'))).toEqual({});
+  });
+
+  it('turns a bare number or string into an empty object', async () => {
+    expect(await parseJsonBody(bodyRequest('42'))).toEqual({});
+    expect(await parseJsonBody(bodyRequest('"tekst"'))).toEqual({});
+    expect(await parseJsonBody(bodyRequest('true'))).toEqual({});
+  });
+
+  it('turns malformed JSON into an empty object', async () => {
+    expect(await parseJsonBody(bodyRequest('{niet json'))).toEqual({});
+  });
+
+  it('turns a missing body into an empty object', async () => {
+    const req = new NextRequest('http://localhost/api/test', { method: 'POST' });
+    expect(await parseJsonBody(req)).toEqual({});
+  });
+});

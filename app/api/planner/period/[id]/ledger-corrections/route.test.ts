@@ -185,6 +185,46 @@ describe('POST /api/planner/period/[id]/ledger-corrections', () => {
     expect(ledgerRows(periodId)).toHaveLength(0);
   });
 
+  it('rejects an aantal that is wrong by orders of magnitude, and writes nothing', async () => {
+    // The likeliest real mistake is one column off in a paste - an employee
+    // number reads as a valid integer, and only surfaces much later as a
+    // target range nobody can fill. See lib/ledgerDelta.ts.
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const periodId = createPeriod(poolId, 'CONCEPT');
+    const person = createPerson();
+    createMembership(poolId, person);
+
+    const res = await POST(
+      postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden: 'Test', aantal: 123456 }] }, plannerCookie(planner)),
+      { params: Promise.resolve({ id: periodId }) }
+    );
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('INVALID_CORRECTION');
+    expect(ledgerRows(periodId)).toHaveLength(0);
+  });
+
+  it('rejects a reden that is not one readable line, and writes nothing', async () => {
+    // The reden is the only record of why a balance moved and it lands in
+    // the wijzigingsgeschiedenis export, so it has to survive as one cell.
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const periodId = createPeriod(poolId, 'CONCEPT');
+    const person = createPerson();
+    createMembership(poolId, person);
+
+    for (const reden of ['x'.repeat(5000), 'eerste regel\ntweede regel']) {
+      const res = await POST(
+        postRequest(periodId, { corrections: [{ person_id: person, type: 'AVOND', reden, aantal: 1 }] }, plannerCookie(planner)),
+        { params: Promise.resolve({ id: periodId }) }
+      );
+      expect(res.status).toBe(400);
+      expect((await res.json()).error.code).toBe('INVALID_CORRECTION');
+    }
+    expect(ledgerRows(periodId)).toHaveLength(0);
+  });
+
   it('rejects an unknown correction type', async () => {
     const poolId = createPool();
     const planner = createPerson('PLANNER');

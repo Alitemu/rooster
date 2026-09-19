@@ -125,6 +125,25 @@ identifiers, DB fields, comments, and console/log output only.
 - Property-based tests: `fast-check` for invariants
 - No DB mocks - use seed fixtures with real SQLite
 
+**Browser-level checks** need a seeded database, the solver and the app
+already running (`npm run seed`, `uvicorn main:app --port 8000` from
+`./solver`, then `npm start`) - none of them starts anything itself:
+- `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its
+  own period/assignments fixture per file (`tests/e2e/setup.ts`), so it does
+  not read the seeded period, only the pool and shift types it finds.
+- `node scripts/full-check.mjs` - the API lifecycle against real data.
+- `node scripts/ui-check.mjs` - the two screens people use most.
+
+Two things these get wrong easily, and both cost a day to diagnose:
+- **Assert on Dutch.** Every user-facing string is Dutch; a selector looking
+  for an English label matches nothing, and a `getByText(/error/i)` that
+  never matches looks exactly like a passing test.
+- **Fixtures must obey the rules they are not testing.** A fixture that
+  hands one person two shifts in the same ISO week has a window-rule
+  violation in it, so the publication check reports the roster as not ready
+  and every swap between those people is refused - failures that have
+  nothing to do with what the test meant to check.
+
 **Test Files Must Cover:**
 1. Happy path (normal operation)
 2. Boundary conditions (start of period, year boundary, etc.)

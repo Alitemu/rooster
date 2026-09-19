@@ -30,6 +30,17 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
 
     const periodId = params.id;
 
+    // Every query below joins on the period, so an unknown id returned an
+    // empty list with success:true - which on a stale link to a purged
+    // period reads as "nobody is in this pool any more" rather than "this
+    // period is gone". Same 404 the other planner views give.
+    if (!db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(periodId)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` } },
+        { status: 404 }
+      );
+    }
+
     const progressStmt = db.prepare(`
       SELECT
         p.id as person_id,

@@ -76,7 +76,7 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
       id, pool_id, naam, status, start_datum, eind_datum, deadline, aangemaakt_op
     ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(periodId, pool.id, `E2E-Period-${timestamp}`, status,
-    '2027-01-04', '2027-01-10', '2026-12-31T23:59:59Z');
+    '2027-01-04', '2027-02-21', '2026-12-31T23:59:59Z');
 
   // Create test users
   const users = createTestUsers(5, periodId);
@@ -96,18 +96,29 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   const eveningShiftType = shiftTypes.find(s => s.teller === 'AVOND') || shiftTypes[0];
   const weekendShiftType = shiftTypes.find(s => s.teller === 'WEEKEND') || shiftTypes[1];
 
-  // Create slots
+  // Create slots: one per ISO week, Monday of weeks 1 through 7 of 2027.
+  //
+  // One slot per week, not seven in a single week. Assignments below are
+  // round-robin over five people, so seven same-week slots gave two of them
+  // two shifts in the same ISO week - which the window rule correctly flags,
+  // and which no solver would ever produce. That turned every fixture into a
+  // roster with a standing rule violation in it, and the publication dialog
+  // rightly refused to call it ready.
+  const WEEK_MONDAYS = [
+    '2027-01-04', '2027-01-11', '2027-01-18', '2027-01-25',
+    '2027-02-01', '2027-02-08', '2027-02-15',
+  ];
   const slots: Array<{ id: string; datum: string; type: string }> = [];
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < WEEK_MONDAYS.length; i++) {
     const slotId = uuid();
-    const datum = `2027-01-${String(4 + i).padStart(2, '0')}`;
+    const datum = WEEK_MONDAYS[i];
     const shiftTypeId = i % 3 === 0 ? weekendShiftType.id : eveningShiftType.id;
 
     db.prepare(`
       INSERT INTO dienstrooster_shift_slot (
         id, period_id, datum, iso_jaar, iso_week, shift_type_id
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(slotId, periodId, datum, 2027, 1, shiftTypeId);
+    `).run(slotId, periodId, datum, 2027, i + 1, shiftTypeId);
 
     slots.push({ id: slotId, datum, type: i % 3 === 0 ? 'WEEKEND' : 'AVOND' });
   }

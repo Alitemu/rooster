@@ -19,6 +19,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { validateLedgerDelta } from '@/lib/ledgerDelta';
+import { validateSingleLine } from '@/lib/vrijeTekst';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
 type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
@@ -31,6 +33,9 @@ interface CorrectionInput {
 }
 
 const PLAIN_TELLERS = new Set(['AVOND', 'WEEKEND', 'FEESTDAG']);
+
+/** Long enough for a real explanation, short enough to stay one CSV cell. */
+const CORRECTIE_REDEN_MAX_LENGTH = 200;
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
@@ -93,6 +98,28 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         const response: ApiErrorResponse = {
           success: false,
           error: { code: 'INVALID_CORRECTION', message: 'Elke correctie heeft een persoon, reden en een aantal ongelijk aan 0 nodig' },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+      // Same ceiling the beginsaldo import applies - see lib/ledgerDelta.ts
+      // for why a wrong-by-orders-of-magnitude value has to be caught here
+      // rather than surface later as an unsolvable roster.
+      const deltaCheck = validateLedgerDelta(c.aantal, c.person_id);
+      if (!deltaCheck.valid) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'INVALID_CORRECTION', message: deltaCheck.message },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+      // The reden is the only record of why a balance moved, and it travels
+      // into the wijzigingsgeschiedenis CSV export. lib/csv.ts keeps a
+      // spreadsheet from executing it; this keeps it to one readable line.
+      const redenCheck = validateSingleLine(c.reden, 'Reden', CORRECTIE_REDEN_MAX_LENGTH);
+      if (!redenCheck.valid) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'INVALID_CORRECTION', message: redenCheck.message },
         };
         return NextResponse.json(response, { status: 400 });
       }

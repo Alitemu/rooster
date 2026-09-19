@@ -16,6 +16,7 @@ import { applyCarryOverForPeriod } from '@/lib/carryOver';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { validateRulesetFields } from '@/lib/rulesetValidation';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
 interface BlockBudgetPerTeller {
@@ -24,10 +25,16 @@ interface BlockBudgetPerTeller {
   FEESTDAG: { maxFraction: number };
 }
 
+/**
+ * The shape SetupWizard sends. Only the fields this route names are typed;
+ * the rest of what the wizard sends (softBlockPenalty, shortfallWeight, ...)
+ * is persisted into bevroren_ruleset_json verbatim. Every field, named here
+ * or not, is checked by validateRulesetFields below.
+ */
 interface RulesetConfig {
   // Legacy pooled window - SetupWizard now always sends windowWeeksAvond/
   // windowWeeksWeekendFeestdag below instead (kept here only so an older
-  // caller shape still type-checks; not itself validated, like those two).
+  // caller shape still type-checks).
   windowWeeks: number;
   windowWeeksAvond?: number;
   windowWeeksWeekendFeestdag?: number;
@@ -36,13 +43,7 @@ interface RulesetConfig {
   bandFeestdag: [number, number];
   distributionMode: string;
   blockBudget?: BlockBudgetPerTeller & { parttimeExempt: boolean };
-  softBlockBudget?: BlockBudgetPerTeller & { parttimeExempt?: boolean };
-  // Which of the four roster-generation approaches a new period defaults
-  // to ('lexicographic' / "Prioriteitenplanner", set by SetupWizard) - not
-  // validated here like windowWeeks/bandX above since it's just persisted
-  // into bevroren_ruleset_json verbatim along with every other ruleset
-  // field the wizard sends (softBlockPenalty, shortfallWeight, ...), none
-  // of which this interface enumerates either.
+  softBlockBudget?: BlockBudgetPerTeller & { parttimeExempt: boolean };
   objectiveMode?: 'weighted' | 'lexicographic' | 'multi_start' | 'randomized';
 }
 
@@ -52,15 +53,6 @@ interface OpenPeriodRequest {
   eind_datum: string;
   deadline: string;
   ruleset: RulesetConfig;
-}
-
-function isValidBand(band: unknown): band is [number, number] {
-  return (
-    Array.isArray(band) &&
-    band.length === 2 &&
-    band.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0) &&
-    band[0] <= band[1]
-  );
 }
 
 interface OpenPeriodResponse {
@@ -144,18 +136,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 400 });
     }
 
-    for (const [key, band] of [
-      ['bandAvond', ruleset.bandAvond],
-      ['bandWeekend', ruleset.bandWeekend],
-      ['bandFeestdag', ruleset.bandFeestdag],
-    ] as const) {
-      if (!isValidBand(band)) {
-        const response: ApiErrorResponse = {
-          success: false,
-          error: { code: 'INVALID_BAND', message: `${key}: min en max moeten getallen zijn (min <= max, min >= 0)` },
-        };
-        return NextResponse.json(response, { status: 400 });
-      }
+    // This is the route that freezes the ruleset onto the period, so it has
+    // to hold every value to the same standard PATCH .../ruleset does - it
+    // only checked the bands, and even those it let through fractional. See
+    // lib/rulesetValidation.ts.
+    const invalidRuleset = validateRulesetFields(ruleset as unknown as Record<string, unknown>, {
+      requireBands: true,
+    });
+    if (invalidRuleset) {
+      const response: ApiErrorResponse = { success: false, error: invalidRuleset };
+      return NextResponse.json(response, { status: 400 });
     }
 
     const period = db

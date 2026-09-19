@@ -260,9 +260,12 @@ export default function PlannerHomePage() {
 
   return (
     <div className="container-main py-8 space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Wraps: the four buttons below need 475px side by side, so on a
+          375px phone this row used to push the whole page 241px wide and
+          every screen behind it scrolled sideways with it. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold text-neutral-900">Periodes</h1>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <button
             onClick={() => {
               setShowTrash(!showTrash);

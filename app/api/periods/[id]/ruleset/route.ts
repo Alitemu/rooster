@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { validateRulesetFields } from '@/lib/rulesetValidation';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface BlockBudgetPerTeller {
@@ -62,60 +63,6 @@ interface UpdateRulesetRequest {
   maxAttempts?: number;
   randomizedVariant?: 'medewerker' | 'dagen';
   rowVersion?: number;
-}
-
-/**
- * Upper bound for a window, in weeks.
- *
- * Generous rather than tight: the setup form offers 0-8, and a window
- * longer than the period itself already reduces capacity to zero, so
- * anything near this is meaningless in practice. It is here to keep the
- * value in a range the rest of the stack can reason about, not to second-
- * guess a planner.
- */
-const MAX_WINDOW_WEEKS = 52;
-
-/**
- * A band is a count of shifts, so both ends are whole numbers.
- *
- * The integer check is not cosmetic: solver/main.py declares these as
- * `tuple[int, int]`, so [7.5, 8.5] was accepted here and only rejected
- * three layers down, as a solver validation error that says nothing about
- * which setting caused it.
- */
-function isValidBand(band: unknown): band is [number, number] {
-  return (
-    Array.isArray(band) &&
-    band.length === 2 &&
-    band.every((n) => typeof n === 'number' && Number.isInteger(n) && n >= 0) &&
-    band[0] <= band[1]
-  );
-}
-
-// A budget frozen at 0 (or any value below what's already blocked) is a
-// legitimate, if severe, planner choice - "no one may block any AVOND
-// shift" - but the SetupWizard has no way to load an existing period's
-// value back in, so every regenerate silently reset it to the wizard's
-// own default. This exists so a planner can actually see and correct a
-// budget that's wrong, on a period that's already open, without touching
-// the database directly - the same reason the window/band fields above
-// are editable here.
-function isValidBudget(budget: unknown): budget is BlockBudgetPerTeller {
-  if (!budget || typeof budget !== 'object') return false;
-  const b = budget as Record<string, unknown>;
-  for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG'] as const) {
-    const entry = b[teller] as { maxFraction?: unknown } | undefined;
-    if (
-      !entry ||
-      typeof entry.maxFraction !== 'number' ||
-      !Number.isFinite(entry.maxFraction) ||
-      entry.maxFraction < 0 ||
-      entry.maxFraction > 1
-    ) {
-      return false;
-    }
-  }
-  return typeof b.parttimeExempt === 'boolean';
 }
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -152,178 +99,11 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       return NextResponse.json(response, { status: 400 });
     }
 
-    // Whole weeks, and within a range that can mean something. The form
-    // offers 0-8; the route accepted any non-negative number, including
-    // 2.5 (which the solver's own schema declares as an int and rejects,
-    // so the failure surfaced a layer too late and in the wrong words) and
-    // 1000 (which makes floor(weeks / windowWeeks) zero, i.e. a period
-    // with no capacity at all and no obvious reason why).
-    for (const [label, value] of [
-      ['Venster', body.windowWeeks],
-      ['Venster (avond)', body.windowWeeksAvond],
-      ['Venster (weekend/feestdag)', body.windowWeeksWeekendFeestdag],
-    ] as const) {
-      if (value === undefined) continue;
-      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_WINDOW_WEEKS) {
-        const response: ApiErrorResponse = {
-          success: false,
-          error: {
-            code: 'INVALID_WINDOW',
-            message: `"${label}" moet een heel getal tussen 0 en ${MAX_WINDOW_WEEKS} zijn`,
-          },
-        };
-        return NextResponse.json(response, { status: 400 });
-      }
-    }
-
-    for (const [key, band] of [
-      ['bandAvond', body.bandAvond],
-      ['bandWeekend', body.bandWeekend],
-      ['bandFeestdag', body.bandFeestdag],
-    ] as const) {
-      if (band !== undefined && !isValidBand(band)) {
-        const response: ApiErrorResponse = {
-          success: false,
-          error: { code: 'INVALID_BAND', message: `${key}: min en max moeten hele getallen zijn (min <= max, min >= 0)` },
-        };
-        return NextResponse.json(response, { status: 400 });
-      }
-    }
-
-    for (const [key, budget] of [
-      ['blockBudget', body.blockBudget],
-      ['softBlockBudget', body.softBlockBudget],
-    ] as const) {
-      if (budget !== undefined && !isValidBudget(budget)) {
-        const response: ApiErrorResponse = {
-          success: false,
-          error: {
-            code: 'INVALID_BUDGET',
-            message: `${key}: percentage per teller moet tussen 0 en 100 liggen`,
-          },
-        };
-        return NextResponse.json(response, { status: 400 });
-      }
-    }
-
-    // Solver objective weights ("Geavanceerde instellingen" in
-    // RosterGenerationDialog) - mirrors the validation solver/main.py's
-    // RuleSet itself enforces, so a bad value is caught here with a Dutch
-    // message rather than surfacing as a raw 422 from the solver later.
-    if (
-      body.softBlockPenalty !== undefined &&
-      (typeof body.softBlockPenalty !== 'number' || !Number.isFinite(body.softBlockPenalty) || body.softBlockPenalty < 0)
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_WEIGHT', message: '"Liever niet genegeerd" moet 0 of hoger zijn' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (body.bandDeviationPenalty !== undefined) {
-      const tiers = body.bandDeviationPenalty;
-      const valid =
-        Array.isArray(tiers) &&
-        tiers.length > 0 &&
-        tiers.every((t) => typeof t === 'number' && Number.isFinite(t) && t > 0);
-      if (!valid) {
-        const response: ApiErrorResponse = {
-          success: false,
-          error: {
-            code: 'INVALID_WEIGHT',
-            message: '"Buiten streefbereik (trappen)" moet minstens één getal groter dan 0 bevatten',
-          },
-        };
-        return NextResponse.json(response, { status: 400 });
-      }
-    }
-
-    if (
-      body.bandDeviationMultiplier !== undefined &&
-      (typeof body.bandDeviationMultiplier !== 'number' ||
-        !Number.isFinite(body.bandDeviationMultiplier) ||
-        body.bandDeviationMultiplier < 1)
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_WEIGHT', message: '"Vermenigvuldigingsfactor" moet 1 of hoger zijn' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (
-      body.shortfallWeight !== undefined &&
-      (typeof body.shortfallWeight !== 'number' || !Number.isFinite(body.shortfallWeight) || body.shortfallWeight <= 0)
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_WEIGHT', message: '"Lege dienst" moet groter dan 0 zijn' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (
-      body.bandImbalanceWeight !== undefined &&
-      (typeof body.bandImbalanceWeight !== 'number' || !Number.isFinite(body.bandImbalanceWeight) || body.bandImbalanceWeight < 0)
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_WEIGHT', message: '"Ongelijke verdeling" moet 0 of hoger zijn' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (
-      body.preferenceRewardWeight !== undefined &&
-      (typeof body.preferenceRewardWeight !== 'number' ||
-        !Number.isFinite(body.preferenceRewardWeight) ||
-        body.preferenceRewardWeight < 0)
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_WEIGHT', message: '"Voorkeur gehonoreerd" moet 0 of hoger zijn' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (
-      body.objectiveMode !== undefined &&
-      body.objectiveMode !== 'weighted' &&
-      body.objectiveMode !== 'lexicographic' &&
-      body.objectiveMode !== 'multi_start' &&
-      body.objectiveMode !== 'randomized'
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: {
-          code: 'INVALID_OBJECTIVE_MODE',
-          message: '"Optimalisatiemethode" moet "weighted", "lexicographic", "multi_start" of "randomized" zijn',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (
-      body.maxAttempts !== undefined &&
-      (typeof body.maxAttempts !== 'number' || !Number.isInteger(body.maxAttempts) || body.maxAttempts < 1)
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_WEIGHT', message: '"Aantal pogingen" moet een geheel getal van 1 of hoger zijn' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (
-      body.randomizedVariant !== undefined &&
-      body.randomizedVariant !== 'medewerker' &&
-      body.randomizedVariant !== 'dagen'
-    ) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_OBJECTIVE_MODE', message: '"Volgorde" moet "medewerker" of "dagen" zijn' },
-      };
+    // Shared with POST .../open, which freezes the very same ruleset - see
+    // lib/rulesetValidation.ts for why both entry points have to agree.
+    const invalid = validateRulesetFields(body as Record<string, unknown>);
+    if (invalid) {
+      const response: ApiErrorResponse = { success: false, error: invalid };
       return NextResponse.json(response, { status: 400 });
     }
 

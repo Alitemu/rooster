@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { validateLedgerDelta } from '@/lib/ledgerDelta';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
 interface BalanceRow {
@@ -122,8 +123,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           // direct API call bypassing the client could send a non-integer
           // (e.g. a fraction or a string that survived JSON parsing) with
           // nothing catching it before it reaches ledger_entry.delta.
-          if (!Number.isInteger(delta)) {
-            errors.push(`Ongeldig aantal voor ${row.codenaam} (${counter}): ${delta} is geen geheel getal`);
+          // The magnitude check catches the likelier mistake: a pasted
+          // spreadsheet column that is not the saldo column at all (see
+          // lib/ledgerDelta.ts).
+          const deltaCheck = validateLedgerDelta(delta, `${row.codenaam} (${counter})`);
+          if (!deltaCheck.valid) {
+            errors.push(deltaCheck.message);
             continue;
           }
 

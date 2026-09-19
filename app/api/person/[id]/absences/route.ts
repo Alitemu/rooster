@@ -16,6 +16,7 @@ import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods } from '@
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
+import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface Absence {
@@ -163,6 +164,21 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           code: 'INVALID_SOORT',
           message: `Onbekend soort: ${soort}`,
         },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // Before the range check, not after: `>` on two strings compares them
+    // alphabetically, so "xx" > "yy" is false and a pair of non-dates sailed
+    // straight past it into the database. Everything downstream - the
+    // absence-to-availability sync, the overlap queries that decide which
+    // periods a change touches, the participant's own calendar - compares
+    // these as YYYY-MM-DD text, and silently matches nothing for a value
+    // that only looks like one.
+    if (!isValidIsoDate(van_datum) || !isValidIsoDate(tot_datum)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DATE', message: 'Gebruik een geldige datum (JJJJ-MM-DD)' },
       };
       return NextResponse.json(response, { status: 400 });
     }

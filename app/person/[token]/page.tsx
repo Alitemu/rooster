@@ -483,9 +483,11 @@ function PersonalLinkPageContent() {
         </div>
       )}
 
-      {/* Pre-published: Step indicator and preferences entry */}
+      {/* Pre-published: step indicator and preferences entry. The row
+          wraps: the four buttons are 398px side by side, wider than the
+          375px this page has to work on. */}
       {period.status !== 'GEPUBLICEERD' && (
-        <div className="flex gap-2 justify-center">
+        <div className="flex flex-wrap gap-2 justify-center">
           {(['parttime', 'calendar', 'confirmation', 'submitted'] as const).map((step) => (
             <button
               key={step}

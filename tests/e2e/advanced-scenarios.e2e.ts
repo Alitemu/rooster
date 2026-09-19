@@ -58,10 +58,10 @@ test.describe('Concurrent Operations - E2E', () => {
       // and ignores its timeout, so the old check simply raced the page's
       // client-side fetch and failed about 3 runs in 5.
       const openDialog = async (page: typeof page1) => {
-        const button = page.getByRole('button', { name: /Request Swap/i });
+        const button = page.getByRole('button', { name: '+ Ruilverzoek' });
         await button.waitFor({ state: 'visible', timeout: 15000 });
         await button.click();
-        await expect(page.getByRole('dialog', { name: 'Request Shift Swap' })).toBeVisible();
+        await expect(page.getByRole('dialog', { name: 'Ruilverzoek indienen' })).toBeVisible();
       };
 
       await Promise.all([openDialog(page1), openDialog(page2)]);
@@ -136,13 +136,13 @@ test.describe('Notification System - E2E', () => {
     try {
       await page.goto(getPersonalLinkUrl(user.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /Notifications/i }).click();
+      await page.getByRole('button', { name: '🔔 Meldingen' }).click();
 
       const item = page.locator('[data-testid="notification-item"]').first();
       await expect(item).toBeVisible();
       await expect(page.locator('[data-testid="unread-count"]')).toHaveText('1');
 
-      await page.getByRole('button', { name: 'Mark as read' }).first().click();
+      await page.getByRole('button', { name: 'Markeer als gelezen' }).first().click();
 
       await expect
         .poll(
@@ -161,7 +161,7 @@ test.describe('Notification System - E2E', () => {
       // ...and the count reflects it after a reload, not just optimistically.
       await page.reload();
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /Notifications/i }).click();
+      await page.getByRole('button', { name: '🔔 Meldingen' }).click();
       await expect(page.locator('[data-testid="unread-count"]')).toHaveText('0');
     } finally {
       await context.close();
@@ -179,7 +179,7 @@ test.describe('Notification System - E2E', () => {
     try {
       await page.goto(getPersonalLinkUrl(user.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /Notifications/i }).click();
+      await page.getByRole('button', { name: '🔔 Meldingen' }).click();
 
       await expect(page.locator('[data-testid="notification-item"]')).toHaveCount(2);
 
@@ -208,9 +208,11 @@ test.describe('Error Handling - E2E', () => {
     await page.goto(getPersonalLinkUrl('definitely-not-a-real-token'));
     await page.waitForLoadState('networkidle');
 
-    // No roster may leak, and the page has to say something.
-    await expect(page.getByRole('heading', { name: 'Your Roster' })).toHaveCount(0);
-    await expect(page.getByText(/invalid|not found|expired|error/i).first()).toBeVisible();
+    // No roster may leak, and the page has to say something. In Dutch:
+    // every user-facing string in this app is (CLAUDE.md), so matching
+    // English words here only ever passed by never finding anything.
+    await expect(page.getByRole('heading', { name: 'Jouw rooster' })).toHaveCount(0);
+    await expect(page.getByText(/ongeldig|verlopen|toegangsfout/i).first()).toBeVisible();
   });
 
   test('the API refuses an invalid personal link', async ({ request }) => {
@@ -223,7 +225,7 @@ test.describe('Error Handling - E2E', () => {
     await page.goto(`${getBaseUrl()}/planner/period/does-not-exist`);
     await page.waitForLoadState('networkidle');
 
-    await expect(page.getByText(/not found|error/i).first()).toBeVisible();
+    await expect(page.getByText(/niet gevonden|mislukt|fout/i).first()).toBeVisible();
   });
 
   test('the swap dialog will not submit until both shifts are chosen', async ({ browser }) => {
@@ -234,9 +236,9 @@ test.describe('Error Handling - E2E', () => {
     try {
       await page.goto(getPersonalLinkUrl(user.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /Request Swap/i }).click();
+      await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
 
-      const send = page.getByRole('button', { name: 'Send Request' });
+      const send = page.getByRole('button', { name: 'Verzoek versturen' });
       await expect(send).toBeVisible();
       await expect(send).toBeDisabled();
 
@@ -318,17 +320,17 @@ test.describe('Mobile Responsiveness - E2E', () => {
     try {
       await page.goto(getPersonalLinkUrl(user.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /Request Swap/i }).click();
+      await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
 
-      const dialog = page.getByRole('dialog', { name: 'Request Shift Swap' });
+      const dialog = page.getByRole('dialog', { name: 'Ruilverzoek indienen' });
       await expect(dialog).toBeVisible();
 
       const box = await dialog.locator('> div').boundingBox();
       expect(box).toBeTruthy();
       expect(box!.width).toBeLessThanOrEqual(375);
 
-      await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeVisible();
-      await expect(dialog.getByRole('button', { name: 'Send Request' })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Annuleren' })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: 'Verzoek versturen' })).toBeVisible();
     } finally {
       await context.close();
     }

@@ -58,6 +58,51 @@ test.describe('Swap Request Workflow - E2E', () => {
       .filter((r) => pred(r.person_id))
       .map((r) => r.slot_id);
 
+  /**
+   * Two shifts a swap is actually allowed to trade, as the roster stands now.
+   *
+   * Picking fixture rows by index does not work for this. A swap may only
+   * trade like for like (an avonddienst for an avonddienst), and it may not
+   * leave either person with two shifts too close together - and which
+   * counter a given index lands on, like who holds what after the earlier
+   * tests in this file have run, is not something an index knows. So: ask
+   * the database, and only consider people holding exactly one shift, for
+   * whom a trade cannot put two shifts near each other whatever the window
+   * happens to be.
+   */
+  const sameCounterPair = () => {
+    const rows = db
+      .prepare(
+        `SELECT a.person_id, a.slot_id, st.teller
+         FROM dienstrooster_assignment a
+         JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE a.schedule_version_id = ?`
+      )
+      .all(testData.period.id) as Array<{ person_id: string; slot_id: string; teller: string }>;
+
+    const shiftsPerPerson = new Map<string, number>();
+    for (const row of rows) {
+      shiftsPerPerson.set(row.person_id, (shiftsPerPerson.get(row.person_id) ?? 0) + 1);
+    }
+    const singles = rows.filter((r) => shiftsPerPerson.get(r.person_id) === 1);
+
+    for (const first of singles) {
+      const second = singles.find(
+        (r) => r.teller === first.teller && r.person_id !== first.person_id
+      );
+      if (second) {
+        return {
+          requester: testData.users.find((u) => u.id === first.person_id)!,
+          requesterSlot: first.slot_id,
+          respondent: testData.users.find((u) => u.id === second.person_id)!,
+          respondentSlot: second.slot_id,
+        };
+      }
+    }
+    throw new Error('fixture holds no swappable pair: two single-shift holders on the same counter');
+  };
+
   const ownerOfSlot = (slotId: string) =>
     (
       db
@@ -76,27 +121,35 @@ test.describe('Swap Request Workflow - E2E', () => {
       await page.goto(getPersonalLinkUrl(requester.token));
       await page.waitForLoadState('networkidle');
 
-      await page.getByRole('button', { name: /Request Swap/i }).click();
-      await expect(page.getByRole('heading', { name: 'Request Shift Swap' })).toBeVisible();
+      await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
+      await expect(page.getByRole('heading', { name: 'Ruilverzoek indienen' })).toBeVisible();
 
       // Offer one of my own shifts, ask for one of someone else's.
       const offered = page.locator('select[name="offered-slot"]');
       const requested = page.locator('select[name="requested-slot"]');
       await expect(offered).toBeVisible();
 
+      // Offered first, then requested. The second list is disabled until a
+      // shift is offered and only then filled with the shifts of the same
+      // counter someone else holds ("Kies eerst een dienst die je aanbiedt"),
+      // so reading its options up front picks up the placeholder and the
+      // real options replace it mid-click.
       const offeredValue = await offered.locator('option').nth(1).getAttribute('value');
-      const requestedValue = await requested.locator('option').nth(1).getAttribute('value');
       expect(offeredValue).toBeTruthy();
-      expect(requestedValue).toBeTruthy();
-
       await offered.selectOption(offeredValue!);
+
+      await expect(requested).toBeEnabled();
+      const requestedOption = requested.locator('option[value]:not([value=""])').first();
+      await expect(requestedOption).toHaveCount(1);
+      const requestedValue = await requestedOption.getAttribute('value');
+      expect(requestedValue).toBeTruthy();
       await requested.selectOption(requestedValue!);
       await page.fill('textarea[name="notes"]', 'Family event that weekend');
 
-      await page.getByRole('button', { name: 'Send Request' }).click();
+      await page.getByRole('button', { name: 'Verzoek versturen' }).click();
 
       // The dialog closes on success; the request must exist and be pending.
-      await expect(page.getByRole('heading', { name: 'Request Shift Swap' })).toBeHidden({
+      await expect(page.getByRole('heading', { name: 'Ruilverzoek indienen' })).toBeHidden({
         timeout: 10000,
       });
 
@@ -129,11 +182,11 @@ test.describe('Swap Request Workflow - E2E', () => {
       await page.goto(getPersonalLinkUrl(respondent.token));
       await page.waitForLoadState('networkidle');
 
-      await page.getByRole('button', { name: /View Swap Requests/i }).click();
+      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
 
       const pendingRow = page.locator('[data-status="PENDING"]');
       await expect(pendingRow.first()).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Approve' }).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Goedkeuren' }).first()).toBeVisible();
     } finally {
       await context.close();
     }
@@ -166,9 +219,9 @@ test.describe('Swap Request Workflow - E2E', () => {
     try {
       await page.goto(getPersonalLinkUrl(respondent.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /View Swap Requests/i }).click();
+      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
 
-      await page.getByRole('button', { name: 'Approve' }).first().click();
+      await page.getByRole('button', { name: 'Goedkeuren' }).first().click();
 
       await expect
         .poll(
@@ -191,11 +244,9 @@ test.describe('Swap Request Workflow - E2E', () => {
   });
 
   test('a swap can be rejected with a reason, leaving the shifts untouched', async ({ browser }) => {
-    // Build a fresh pending swap between users 2 and 3 via the API.
-    const requester = testData.users[2];
-    const respondent = testData.users[3];
-    const requesterSlot = testData.assignments.find((a) => a.personId === requester.id)!.slotId;
-    const respondentSlot = testData.assignments.find((a) => a.personId === respondent.id)!.slotId;
+    // Build a fresh pending swap between two people holding the same
+    // counter, via the API.
+    const { requester, requesterSlot, respondent, respondentSlot } = sameCounterPair();
 
     const context = await browser.newContext();
     const page = await context.newPage();
@@ -215,19 +266,21 @@ test.describe('Swap Request Workflow - E2E', () => {
           },
         }
       );
-      expect(created.ok()).toBeTruthy();
+      // The body is the message: a refused swap says exactly which rule
+      // stopped it, which a bare "expected true" does not.
+      expect(created.ok(), await created.text()).toBeTruthy();
 
       const swapId = (await created.json()).data.swap_request_id as string;
 
       await page.goto(getPersonalLinkUrl(respondent.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /View Swap Requests/i }).click();
+      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
 
-      await page.getByRole('button', { name: 'Reject' }).first().click();
+      await page.getByRole('button', { name: 'Weigeren' }).first().click();
       // The inline reason form appears below the row; its own Reject button
       // is the one that submits.
       await page.fill('textarea[name="rejection-reason"]', 'Already covering another shift that day');
-      await page.getByRole('button', { name: 'Reject' }).last().click();
+      await page.getByRole('button', { name: 'Weigeren' }).last().click();
 
       await expect
         .poll(
@@ -259,7 +312,7 @@ test.describe('Swap Request Workflow - E2E', () => {
     try {
       await page.goto(getPersonalLinkUrl(user.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /Request Swap/i }).click();
+      await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
 
       const requested = page.locator('select[name="requested-slot"]');
       await expect(requested).toBeVisible();
@@ -418,7 +471,7 @@ test.describe('Swap Request Workflow - E2E', () => {
     try {
       await page.goto(getPersonalLinkUrl(user.token));
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: /View Swap Requests/i }).click();
+      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
 
       const filter = page.locator('select[name="status-filter"]');
       await expect(filter).toBeVisible();

@@ -30,6 +30,17 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     const denied = personAccessDenial(auth, personId);
     if (denied) return denied;
 
+    // Same guard the sibling person routes (notifications, absences,
+    // part-time patterns) already apply. An unknown id came back as an
+    // empty list with success:true, which reads as "this person has no
+    // swap requests" rather than "no such person".
+    if (!db.prepare('SELECT 1 FROM dienstrooster_person WHERE id = ?').get(personId)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${personId} niet gevonden` } },
+        { status: 404 }
+      );
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const periodId = searchParams.get('period_id');
     const status = searchParams.get('status');

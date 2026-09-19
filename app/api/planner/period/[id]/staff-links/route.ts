@@ -38,6 +38,16 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
     const periodId = params.id;
 
+    // An unknown period gave an empty list with success:true, which reads
+    // as "no links have been handed out yet" - exactly the wrong thing to
+    // believe before minting a fresh set. POST below already 404s.
+    if (!db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(periodId)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` } },
+        { status: 404 }
+      );
+    }
+
     const linksStmt = db.prepare(`
       SELECT
         pal.person_id,

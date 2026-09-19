@@ -1,4 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
+// Plain ESM helper, shared with scripts/ui-check.mjs so
+// both ways of driving a browser resolve the same one. See its doc comment.
+import { chromiumExecutable } from './scripts/chromiumPath.mjs';
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -16,7 +19,10 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: { executablePath: chromiumExecutable() },
+      },
     },
   ],
 });

@@ -145,6 +145,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 400 });
     }
 
+    // The INSERT below has a foreign key on pool_id, so an unknown one used
+    // to surface as a raw SQLITE_CONSTRAINT and get reported to the planner
+    // as a 500 "er is iets misgegaan" - which says nothing about the one
+    // field that is actually wrong.
+    const poolExists = db.prepare('SELECT 1 FROM dienstrooster_pool WHERE id = ?').get(body.pool_id);
+    if (!poolExists) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'POOL_NOT_FOUND', message: `Pool ${body.pool_id} niet gevonden` },
+      };
+      return NextResponse.json(response, { status: 404 });
+    }
+
     // Create period
     const insertStmt = db.prepare(`
       INSERT INTO dienstrooster_schedule_period

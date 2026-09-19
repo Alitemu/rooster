@@ -15,6 +15,7 @@
  * Exits non-zero if anything failed.
  */
 import { chromium } from '@playwright/test';
+import { chromiumExecutable } from './chromiumPath.mjs';
 import Database from 'better-sqlite3';
 import nodeCrypto from 'crypto';
 import nodePath from 'path';
@@ -32,7 +33,7 @@ function rec(name, good, detail) {
   console.log(`${good ? '✓' : '✗'} ${name}${detail ? ' — ' + detail : ''}`);
 }
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' });
+const browser = await chromium.launch({ executablePath: chromiumExecutable() });
 const ctx = await browser.newContext();
 const page = await ctx.newPage();
 
@@ -42,7 +43,11 @@ page.on('console', (m) => {
   if (m.type() === 'error') {
     const t = m.text();
     if (/Content Security Policy/i.test(t)) cspViolations.push(t);
-    else consoleErrors.push(t);
+    // The URL, not just the message: a failed request logs only "Failed to
+    // load resource: the server responded with a status of 400", which says
+    // nothing about which request it was. The filter below needs that to
+    // tell this script's own deliberate 400 from a real one.
+    else consoleErrors.push(`${m.location()?.url ?? ''} ${t}`.trim());
   }
 });
 page.on('pageerror', (e) => consoleErrors.push(String(e)));
@@ -130,18 +135,25 @@ rec('Uitloggen leaves the token page', !/\/person\//.test(ppage.url()), ppage.ur
 rec('No CSP violations', cspViolations.length === 0, cspViolations.slice(0, 2).join(' | '));
 console.log('\nRequests that returned >= 400:');
 for (const f of failedRequests) console.log('   ' + f);
-// Two known, expected entries are filtered out rather than asserted away:
-// the 400 is this script's own deliberate weak-password submission, and
-// the 404 is /favicon.ico - there is no public/ directory in this project
-// at all, so every page load in every browser logs it. Neither is an
-// application fault, and neither should hide a real one.
-const unexpected = consoleErrors.filter(
-  (e) => !/status of 404/.test(e) && !/status of 400/.test(e)
-);
+// Exactly one expected entry is filtered out: this script's own deliberate
+// weak-password submission, matched on its URL. It used to drop every 400
+// and every 404 by message text - which also covered the favicon 404 this
+// project once had, and would have hidden any genuine failing request
+// behind the same two patterns.
+const unexpected = consoleErrors.filter((e) => !/\/api\/auth\/change-password/.test(e));
 rec('No unexpected page errors', unexpected.length === 0, unexpected.slice(0, 2).join(' | '));
-rec('Only the two known >=400s (own weak-password test, missing favicon)',
+rec('The only >=400 is this script\'s own weak-password test',
     failedRequests.every((f) => /change-password/.test(f)),
     failedRequests.join(' | ') || 'none');
+
+// app/icon.tsx generates the browser-tab icon, so the /favicon.ico 404 that
+// every page load used to log is gone. Asserted rather than assumed: it is
+// a generated route, not a file on disk, so a build that stops emitting it
+// would otherwise only show up as that 404 quietly coming back.
+const iconRes = await page.request.get(`${BASE}/icon`);
+rec('The generated tab icon is served',
+    iconRes.status() === 200 && (iconRes.headers()['content-type'] || '').includes('image/'),
+    `${iconRes.status()} ${iconRes.headers()['content-type'] || ''}`);
 
 await browser.close();
 console.log(`\n${ok.length}/${ok.length + problems.length} passed`);
