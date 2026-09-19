@@ -7,8 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CoveragePerDay {
@@ -37,9 +37,8 @@ export async function GET(
     const { id, periodId } = params;
 
     const auth = getAuthContextFromRequest(req);
-    if (!requirePersonAccess(auth, id)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, id);
+    if (denied) return denied;
 
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);
     if (!personStmt.get(id)) {

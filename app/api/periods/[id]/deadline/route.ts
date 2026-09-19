@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { parseISO } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateDeadlineRequest {
@@ -88,7 +89,11 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       return NextResponse.json(response, { status: 400 });
     }
 
-    if (deadline >= new Date(period.start_datum)) {
+    // parseISO gives local midnight; `new Date(period.start_datum)` gave
+    // UTC midnight, i.e. 01:00/02:00 that same morning in Europe/Amsterdam,
+    // so a deadline in the first hour of the period's own start day slipped
+    // through this check.
+    if (deadline >= parseISO(period.start_datum)) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_DEADLINE', message: 'Deadline moet vóór de startdatum liggen' },

@@ -7,8 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { internalErrorResponse } from '@/lib/api-errors';
 import { resolveRulesetConfig, resolveBands, countSlotsByTeller, TELLERS, type Teller } from '@/lib/rosterBands';
 
 export async function GET(
@@ -21,9 +21,8 @@ export async function GET(
     const periodId = params['period-id'];
 
     const auth = getAuthContextFromRequest(request);
-    if (!requirePersonAccess(auth, personId)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, personId);
+    if (denied) return denied;
 
     // Verify person exists
     const person = db

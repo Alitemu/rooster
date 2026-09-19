@@ -10,6 +10,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { softDeletePeriod, PeriodTrashError } from '@/lib/periodTrash';
+import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PeriodDetail {
@@ -36,36 +37,6 @@ type ParticipantPeriodView = Pick<
   'id' | 'naam' | 'start_datum' | 'eind_datum' | 'deadline' | 'status'
 >;
 
-/**
- * True when this participant belongs to the period: either they hold an
- * access link issued for it, or they are a member of its pool for dates
- * that overlap it.
- *
- * Both count, and neither alone is enough. The link is what an invitation
- * mail gives them, and it keeps working for a period they have since left
- * the pool for - they still need to read the roster they are in. Pool
- * membership covers the other direction: someone added to the pool while a
- * period is already open, before any link has been exported for them.
- */
-function isPeriodVisibleToPerson(personId: string, period: PeriodDetail): boolean {
-  const viaLink = db
-    .prepare(
-      `SELECT 1 FROM dienstrooster_person_access_link
-       WHERE person_id = ? AND geldt_voor_periode_id = ? AND ingetrokken_op IS NULL
-       LIMIT 1`
-    )
-    .get(personId, period.id);
-  if (viaLink) return true;
-
-  const viaMembership = db
-    .prepare(
-      `SELECT 1 FROM dienstrooster_pool_membership
-       WHERE person_id = ? AND pool_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?
-       LIMIT 1`
-    )
-    .get(personId, period.pool_id, period.eind_datum, period.start_datum);
-  return Boolean(viaMembership);
-}
 
 /**
  * GET /api/periods/[id] - Get period details

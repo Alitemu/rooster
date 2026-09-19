@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { isValidIsoDate } from '@/lib/isoDate';
+import { parseISO } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CreatePeriodRequest {
@@ -48,12 +50,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 400 });
     }
 
-    // Validate dates
-    const start = new Date(body.start_datum);
-    const end = new Date(body.eind_datum);
+    // Validate dates.
+    //
+    // start/eind are date-only strings and must be checked against that
+    // exact shape: `new Date()` alone accepted plenty that is not one.
+    // "04-01-2027" was read as 4 January in Dutch order but parsed as 1
+    // April, and "2027" as 1 January 2027 - both stored without complaint
+    // and both wrong in a way nothing downstream could notice.
+    if (!isValidIsoDate(body.start_datum) || !isValidIsoDate(body.eind_datum)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'INVALID_DATE',
+          message: 'Ongeldige datumnotatie. Gebruik ISO-8601 (JJJJ-MM-DD)',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // parseISO, not `new Date(...)`: a bare date-only string is parsed as
+    // UTC midnight, which in Europe/Amsterdam is 01:00 or 02:00 that same
+    // morning. Comparing that against the deadline (a real timestamp) let
+    // a deadline of 00:30 on the period's own start day pass the "deadline
+    // must be before the start" check below. parseISO gives local midnight,
+    // which is what both of those rules are actually about.
+    const start = parseISO(body.start_datum);
+    const end = parseISO(body.eind_datum);
     const deadline = new Date(body.deadline);
 
-    if (isNaN(start.getTime()) || isNaN(end.getTime()) || isNaN(deadline.getTime())) {
+    if (isNaN(deadline.getTime())) {
       const response: ApiErrorResponse = {
         success: false,
         error: {

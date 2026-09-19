@@ -60,6 +60,43 @@ async function req(method, path, { jar, body } = {}) {
 const eq = (a, b) => a === b;
 
 /**
+ * Start a roster generation and wait for it to finish.
+ *
+ * The POST no longer does the solving: it hands back a job_id and the work
+ * continues in the background (see lib/rosterGenerationJobs.ts - a CP-SAT
+ * search can outlast a request). This script used to read the finished
+ * roster straight out of that POST's response, which meant it had been
+ * asserting against `undefined` ever since, and every check that depended
+ * on a generated roster failed with it.
+ */
+async function generateRoster(periodId, jar, body) {
+  const start = await req('POST', `/api/planner/period/${periodId}/generate-roster`, { jar, body });
+  if (start.status !== 200 || !start.json?.data?.job_id) {
+    return { ok: false, detail: `start status=${start.status}`, startStatus: start.status };
+  }
+
+  const jobId = start.json.data.job_id;
+  const deadline = Date.now() + 5 * 60 * 1000;
+  while (Date.now() < deadline) {
+    const poll = await req(
+      'GET',
+      `/api/planner/period/${periodId}/generate-roster/status?job_id=${jobId}`,
+      { jar }
+    );
+    const status = poll.json?.data?.status;
+    if (status === 'DONE') return { ok: true, result: poll.json.data.result, startStatus: 200 };
+    if (status === 'ERROR') {
+      return { ok: false, detail: `solver error: ${poll.json?.data?.error}`, startStatus: 200 };
+    }
+    if (poll.status !== 200) {
+      return { ok: false, detail: `poll status=${poll.status}`, startStatus: 200 };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return { ok: false, detail: 'timed out after 5 minutes', startStatus: 200 };
+}
+
+/**
  * Mint a personal access link straight into the database and return the
  * plaintext token.
  *
@@ -71,10 +108,17 @@ const eq = (a, b) => a === b;
 function mintLink(personId) {
   const token = nodeCrypto.randomBytes(32).toString('hex');
   const hash = nodeCrypto.createHash('sha256').update(token).digest('hex');
+  // Pinned to the seeded period, exactly like the links the seed itself
+  // writes. A link without one falls back to auto-detecting the current
+  // enrollment period, and at this point in the script the period is still
+  // in CONCEPT - so a period-less link would fail here for a reason that
+  // has nothing to do with what is being tested.
+  const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1').get();
   db.prepare(
-    `INSERT INTO dienstrooster_person_access_link (id, person_id, token_hash, aangemaakt_op)
-     VALUES (?, ?, ?, datetime('now'))`
-  ).run(nodeCrypto.randomUUID(), personId, hash);
+    `INSERT INTO dienstrooster_person_access_link
+       (id, person_id, geldt_voor_periode_id, token_hash, aangemaakt_op)
+     VALUES (?, ?, ?, ?, datetime('now'))`
+  ).run(nodeCrypto.randomUUID(), personId, period.id, hash);
   return token;
 }
 
@@ -211,10 +255,12 @@ async function main() {
   console.log('\n━━ GENERATION + MANUAL COMPLETION ━━');
   rec('Close period', eq((await req('POST', `/api/periods/${period.id}/close`, { jar: planner })).status, 200));
 
-  const gen = await req('POST', `/api/planner/period/${period.id}/generate-roster`, { jar: planner });
+  const gen = await generateRoster(period.id, planner);
   rec('Generate roster returns a partial roster (not all-or-nothing)',
-      gen.status === 200 && gen.json?.data?.assignments_created > 0,
-      `${gen.json?.data?.assignments_created} assigned, ${gen.json?.data?.unfilled_slots?.length} gaps, fully_covered=${gen.json?.data?.fully_covered}`);
+      gen.ok && gen.result?.assignments_created > 0,
+      gen.ok
+        ? `${gen.result?.assignments_created} assigned, ${gen.result?.unfilled_slots?.length} gaps, fully_covered=${gen.result?.fully_covered}`
+        : gen.detail);
   const st = db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id=?').get(period.id);
   rec('Period reaches GEGENEREERD despite gaps (manual fill unblocked)', st.status === 'GEGENEREERD', `status=${st.status}`);
 
@@ -238,12 +284,31 @@ async function main() {
 
   if (unf.json?.data?.length > 0) {
     const gap = unf.json.data[0];
-    const blockedForGap = db.prepare(
-      `SELECT COUNT(*) c FROM dienstrooster_availability WHERE slot_id=? AND blocking_level='ABSOLUUT' AND person_id IN (${gap.eligible_people.map(() => '?').join(',') || "''"})`
-    ).get(gap.slot_id, ...gap.eligible_people.map((p) => p.id));
-    rec('Eligible list excludes anyone who blocked that slot', blockedForGap.c === 0);
 
-    const chosen = gap.eligible_people[0];
+    // The candidate list deliberately includes people who blocked the
+    // slot - a manual fill is an exception the planner makes in
+    // consultation with the person, so hiding them would remove the option
+    // entirely (see lib/rosterGaps.ts). What must hold is that they are
+    // labelled, never quietly mixed in with genuinely free candidates.
+    // This used to assert the opposite - that the list excluded them - and
+    // had been failing ever since the category was introduced.
+    const hardBlocked = db.prepare(
+      `SELECT person_id, source FROM dienstrooster_availability
+       WHERE slot_id=? AND blocking_level='ABSOLUUT'`
+    ).all(gap.slot_id);
+    const categoryById = new Map(gap.eligible_people.map((p) => [p.id, p.category]));
+    const mislabelled = hardBlocked.filter((row) => {
+      const category = categoryById.get(row.person_id);
+      if (category === undefined) return false; // not offered at all is fine too
+      return category !== (row.source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD');
+    });
+    rec('Anyone who blocked that slot is labelled, not offered as free',
+        mislabelled.length === 0, `${hardBlocked.length} blocked, ${mislabelled.length} mislabelled`);
+
+    // Pick someone with no objection at all, so the fill below tests the
+    // ordinary path rather than the override path.
+    const chosen = gap.eligible_people.find((p) => p.category === 'BESCHIKBAAR' || p.category === 'VOORKEUR')
+      ?? gap.eligible_people[0];
     const ma = await req('POST', `/api/planner/period/${period.id}/assignments/manual-assign`, {
       jar: planner, body: { person_id: chosen.id, slot_id: gap.slot_id, reason: 'Full check' },
     });
@@ -252,7 +317,13 @@ async function main() {
     rec('Gap count drops by one', after.json?.data?.length === unf.json.data.length - 1,
         `${unf.json.data.length} → ${after.json?.data?.length}`);
 
-    // Manual assign must still refuse a hard-blocked person
+    // Manual assign deliberately does NOT refuse a hard-blocked person -
+    // the planner may always override, in consultation with whoever takes
+    // the shift. What it must do is say so: a warning on the response and
+    // an OVERRIDE row in the audit trail, so the exception is visible both
+    // at the moment it happens and afterwards. This used to assert a 400,
+    // which stopped matching the route the moment overriding became the
+    // documented behaviour.
     const blockedRow = db.prepare(
       `SELECT av.person_id, av.slot_id FROM dienstrooster_availability av
        JOIN dienstrooster_shift_slot s ON s.id=av.slot_id
@@ -260,14 +331,26 @@ async function main() {
        AND av.slot_id NOT IN (SELECT slot_id FROM dienstrooster_assignment WHERE schedule_version_id=?) LIMIT 1`
     ).get(period.id, period.id);
     if (blockedRow) {
-      const bad = await req('POST', `/api/planner/period/${period.id}/assignments/manual-assign`, {
+      const override = await req('POST', `/api/planner/period/${period.id}/assignments/manual-assign`, {
         jar: planner, body: { person_id: blockedRow.person_id, slot_id: blockedRow.slot_id },
       });
-      rec('Manual assign refuses an ABSOLUUT-blocked person → 400', eq(bad.status, 400));
+      rec('Manual assign allows an ABSOLUUT override, but warns about it',
+          override.status === 200 && Boolean(override.json?.data?.warning),
+          `status=${override.status}, warning=${override.json?.data?.warning?.code}`);
+
+      const overrideLogged = db.prepare(
+        `SELECT COUNT(*) c FROM dienstrooster_audit_log
+         WHERE actie='MANUAL_ASSIGN'
+           AND json_extract(nieuw_json, '$.slot_id') = ?
+           AND json_extract(nieuw_json, '$.person_id') = ?
+           AND json_extract(nieuw_json, '$.override.code') IS NOT NULL`
+      ).get(blockedRow.slot_id, blockedRow.person_id);
+      rec('The override is recorded in the audit trail, so it is visible afterwards',
+          overrideLogged.c > 0, `${overrideLogged.c} audit rows naming the override`);
     }
 
-    const regen = await req('POST', `/api/planner/period/${period.id}/generate-roster`, { jar: planner });
-    rec('Regenerate allowed from GEGENEREERD', regen.status === 200, `status=${regen.status}`);
+    const regen = await generateRoster(period.id, planner);
+    rec('Regenerate allowed from GEGENEREERD', regen.ok, regen.ok ? '' : regen.detail);
     const survived = db.prepare(`SELECT bron FROM dienstrooster_assignment WHERE schedule_version_id=? AND slot_id=?`).get(period.id, gap.slot_id);
     rec('Manual assignment survives regenerate untouched', survived?.bron === 'MANUAL', `bron=${survived?.bron}`);
   }

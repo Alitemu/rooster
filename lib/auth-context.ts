@@ -7,8 +7,9 @@
  * - staff: issued when an ADMIN/PLANNER logs in with password(+TOTP)
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME, verifySessionToken, type SessionPayload } from '@/lib/session';
+import { unauthorizedResponse, forbiddenResponse } from '@/lib/api-errors';
 import { db } from '@/db/client';
 
 export interface AuthContext {
@@ -117,4 +118,23 @@ export function requirePersonAccess(auth: AuthContext | null, personId: string):
   if (!auth) return false;
   if (auth.role === 'ADMIN' || auth.role === 'PLANNER') return true;
   return auth.userId === personId;
+}
+
+/**
+ * The response to send when a /api/person/[id] request may not proceed, or
+ * null when it may.
+ *
+ * Splits the two reasons apart, which every one of these routes used to
+ * collapse into a single 403. They mean different things to the client:
+ * 401 says "you are not signed in, open your link again", 403 says "you
+ * are signed in, but this is someone else's data". Since a session can now
+ * be revoked mid-use (lib/sessionVersion.ts), the first case stopped being
+ * theoretical - a participant whose session was ended elsewhere was told
+ * they had no rights to their own page rather than that they had been
+ * logged out.
+ */
+export function personAccessDenial(auth: AuthContext | null, personId: string): NextResponse | null {
+  if (!auth) return unauthorizedResponse();
+  if (!requirePersonAccess(auth, personId)) return forbiddenResponse();
+  return null;
 }

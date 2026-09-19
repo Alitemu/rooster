@@ -9,10 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
-import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { internalErrorResponse } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
+import { checkSwapWindowRule } from '@/lib/swapWindowRule';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -31,9 +32,8 @@ export async function POST(
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    if (!requirePersonAccess(auth, personId)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, personId);
+    if (denied) return denied;
 
     const swapId = params['swap-id'];
     const now = dateToISO(new Date());
@@ -124,6 +124,22 @@ export async function POST(
     });
     if (!eligibility.allowed) {
       return NextResponse.json({ success: false, error: eligibility.message }, { status: 403 });
+    }
+
+    // The window rule is checked again here, not only when the request was
+    // created: a manual planner assignment, or another swap, can have put
+    // a shift next to one of these two in the meantime. Approving anyway
+    // would write a violation into a published roster with nobody in a
+    // position to notice.
+    const windowCheck = checkSwapWindowRule({
+      periodId: swapRequest.periode_id,
+      requesterPersonId: swapRequest.aanvrager_person_id,
+      respondentPersonId: swapRequest.respondent_person_id,
+      offeredSlotId: swapRequest.aangeboden_slot_id,
+      requestedSlotId: swapRequest.gevraagde_slot_id,
+    });
+    if (!windowCheck.allowed) {
+      return NextResponse.json({ success: false, error: windowCheck.message }, { status: 409 });
     }
 
     // Notify requester that swap was approved

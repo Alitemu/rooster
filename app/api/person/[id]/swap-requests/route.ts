@@ -9,10 +9,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
-import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
+import { checkSwapWindowRule } from '@/lib/swapWindowRule';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -26,9 +27,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    if (!requirePersonAccess(auth, personId)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, personId);
+    if (denied) return denied;
 
     const searchParams = request.nextUrl.searchParams;
     const periodId = searchParams.get('period_id');
@@ -83,9 +83,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    if (!requirePersonAccess(auth, personId)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, personId);
+    if (denied) return denied;
 
     const body = await parseJsonBody(request);
     const { period_id, offered_slot_id, requested_slot_id, notes } = body;
@@ -174,6 +173,20 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         },
         { status: 400 }
       );
+    }
+
+    // Checked here as well as at approval, so someone finds out now rather
+    // than after waiting for a colleague to agree to something that can
+    // never go through.
+    const windowCheck = checkSwapWindowRule({
+      periodId: period_id as string,
+      requesterPersonId: personId,
+      respondentPersonId: respondentAssignment.person_id,
+      offeredSlotId: offered_slot_id as string,
+      requestedSlotId: requested_slot_id as string,
+    });
+    if (!windowCheck.allowed) {
+      return NextResponse.json({ success: false, error: windowCheck.message }, { status: 400 });
     }
 
     // Create swap request

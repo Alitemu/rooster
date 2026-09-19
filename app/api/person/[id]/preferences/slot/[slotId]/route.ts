@@ -6,8 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
@@ -26,9 +26,8 @@ export async function PATCH(
     const { id, slotId } = params;
 
     const auth = getAuthContextFromRequest(req);
-    if (!requirePersonAccess(auth, id)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, id);
+    if (denied) return denied;
 
     const body = (await parseJsonBody(req)) as {
       level: 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;

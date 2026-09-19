@@ -13,8 +13,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
-import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { internalErrorResponse } from '@/lib/api-errors';
 
 class SwapAlreadyHandledError extends Error {}
 
@@ -27,9 +27,8 @@ export async function POST(
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    if (!requirePersonAccess(auth, personId)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, personId);
+    if (denied) return denied;
 
     const swapId = params['swap-id'];
     const now = dateToISO(new Date());

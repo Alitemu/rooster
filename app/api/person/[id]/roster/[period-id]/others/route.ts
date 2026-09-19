@@ -8,8 +8,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, requirePersonAccess } from '@/lib/auth-context';
-import { forbiddenResponse, internalErrorResponse } from '@/lib/api-errors';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { internalErrorResponse } from '@/lib/api-errors';
 
 export async function GET(
   request: NextRequest,
@@ -21,15 +22,31 @@ export async function GET(
     const periodId = params['period-id'];
 
     const auth = getAuthContextFromRequest(request);
-    if (!requirePersonAccess(auth, personId)) {
-      return forbiddenResponse();
-    }
+    const denied = personAccessDenial(auth, personId);
+    if (denied) return denied;
 
     const period = db
-      .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(periodId) as { status: string } | undefined;
+      .prepare(
+        `SELECT id, pool_id, status, start_datum, eind_datum
+         FROM dienstrooster_schedule_period WHERE id = ?`
+      )
+      .get(periodId) as
+      | { id: string; pool_id: string; status: string; start_datum: string; eind_datum: string }
+      | undefined;
 
     if (!period) {
+      return NextResponse.json(
+        { success: false, error: 'Periode niet gevonden' },
+        { status: 404 }
+      );
+    }
+
+    // This route hands out other people's codenamen and shift dates. Being
+    // a participant somewhere was enough to read any published period that
+    // way, including one belonging to a pool you have nothing to do with.
+    // Staff pass by role (they may read every period); a participant has
+    // to belong to this one.
+    if (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(personId, period)) {
       return NextResponse.json(
         { success: false, error: 'Periode niet gevonden' },
         { status: 404 }
