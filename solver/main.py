@@ -629,4 +629,22 @@ async def solve_roster_greedy(request: GreedySolverInput):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    # Loopback by default. This branch is the "run it straight from a shell"
+    # path - on a laptop or on the NAS itself - and this service has no
+    # authentication of any kind: anything that can reach the port can ask
+    # it to solve, and read back whatever it is handed. On 0.0.0.0 that was
+    # everyone on the local network.
+    #
+    # The container does not come through here; its Dockerfile CMD binds
+    # 0.0.0.0 on purpose, because a container-internal 127.0.0.1 would be
+    # unreachable for the web container. What keeps it private there is
+    # docker-compose.yml, which only `expose`s the port on the internal
+    # bridge network rather than publishing it to the host.
+    #
+    # Set SOLVER_HOST=0.0.0.0 to deliberately listen wider.
+    uvicorn.run(
+        app,
+        host=os.environ.get("SOLVER_HOST", "127.0.0.1"),
+        port=int(os.environ.get("SOLVER_PORT", "8000")),
+    )

@@ -29,5 +29,12 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
 
 USER appuser
 
-# Start solver
+# Start solver.
+#
+# 0.0.0.0 is required here, not an oversight: inside a container 127.0.0.1
+# is the container's own loopback, so the web container could never reach
+# it. Privacy comes from docker-compose.yml instead, which only `expose`s
+# this port on the internal bridge network and never publishes it to the
+# host. Running main.py directly (outside Docker) binds loopback instead -
+# see the __main__ block there.
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

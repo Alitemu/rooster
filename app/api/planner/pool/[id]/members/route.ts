@@ -15,6 +15,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
+import { validateCodenaam } from '@/lib/codenaam';
+import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PoolMember {
@@ -94,12 +96,32 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     const poolId = params.id;
     const body = (await parseJsonBody(req)) as Partial<AddMemberRequest>;
-    const codenaam = body.codenaam?.trim();
 
-    if (!codenaam || !body.geldig_vanaf || !body.geldig_tot) {
+    if (!body.geldig_vanaf || !body.geldig_tot) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_INPUT', message: 'Codenaam, geldig vanaf en geldig tot zijn verplicht' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    const codenaamCheck = validateCodenaam(body.codenaam);
+    if (!codenaamCheck.valid) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: codenaamCheck.message },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+    const codenaam = codenaamCheck.codenaam;
+
+    if (!isValidIsoDate(body.geldig_vanaf) || !isValidIsoDate(body.geldig_tot)) {
+      // Everything downstream compares these two as strings (ISO-8601 sorts
+      // chronologically), so a value that merely looks date-ish would pass
+      // the range check below and then quietly never match any period.
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'Datums moeten in het formaat JJJJ-MM-DD staan' },
       };
       return NextResponse.json(response, { status: 400 });
     }

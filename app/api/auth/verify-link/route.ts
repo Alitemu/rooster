@@ -105,21 +105,40 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // preferences UI before publication and their roster after. Only a
     // general link with no period (geldt_voor_periode_id IS NULL) falls back
     // to auto-detecting the current enrollment period.
+    //
+    // A period in the trash (verwijderd_op set) is excluded in both
+    // branches: it is on its way to being purged, and sending someone to
+    // fill in preferences for it would mean their work disappears with it.
+    // The link is not retired for that - restoring the period brings it
+    // back - so this only has to stop resolving while it sits in the trash.
     let period: any;
     if (link.geldt_voor_periode_id) {
       period = db
-        .prepare(`SELECT id, pool_id FROM dienstrooster_schedule_period WHERE id = ?`)
+        .prepare(
+          `SELECT id, pool_id FROM dienstrooster_schedule_period
+           WHERE id = ? AND verwijderd_op IS NULL`
+        )
         .get(link.geldt_voor_periode_id);
     } else {
+      // A general link with no period of its own only auto-detects within
+      // the pools this person actually belongs to - otherwise, as soon as a
+      // second pool exists, it would hand them whichever period happens to
+      // be the most recent one in the whole database.
       period = db
         .prepare(
-          `SELECT id, pool_id
-           FROM dienstrooster_schedule_period
-           WHERE status IN ('OPEN', 'GESLOTEN')
-           ORDER BY start_datum DESC
+          `SELECT sp.id, sp.pool_id
+           FROM dienstrooster_schedule_period sp
+           JOIN dienstrooster_pool_membership pm
+             ON pm.pool_id = sp.pool_id
+            AND pm.person_id = ?
+            AND pm.geldig_vanaf <= sp.eind_datum
+            AND pm.geldig_tot >= sp.start_datum
+           WHERE sp.status IN ('OPEN', 'GESLOTEN')
+             AND sp.verwijderd_op IS NULL
+           ORDER BY sp.start_datum DESC
            LIMIT 1`
         )
-        .get();
+        .get(link.person_id);
     }
 
     if (!period) {

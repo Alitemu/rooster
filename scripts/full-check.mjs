@@ -17,6 +17,7 @@
  */
 import Database from 'better-sqlite3';
 
+import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
 
@@ -58,6 +59,25 @@ async function req(method, path, { jar, body } = {}) {
 }
 const eq = (a, b) => a === b;
 
+/**
+ * Mint a personal access link straight into the database and return the
+ * plaintext token.
+ *
+ * The seed only ever stores the hash (as production does), so there is no
+ * token to look up - this script issues its own, the same way the planner's
+ * export screen would, and keeps the plaintext in memory for the requests
+ * below.
+ */
+function mintLink(personId) {
+  const token = nodeCrypto.randomBytes(32).toString('hex');
+  const hash = nodeCrypto.createHash('sha256').update(token).digest('hex');
+  db.prepare(
+    `INSERT INTO dienstrooster_person_access_link (id, person_id, token_hash, aangemaakt_op)
+     VALUES (?, ?, ?, datetime('now'))`
+  ).run(nodeCrypto.randomUUID(), personId, hash);
+  return token;
+}
+
 // scripts/seed.ts sets planner to DEFAULT_TEST_PASSWORD directly (see its
 // comment) - the account already has it, so this only ever exercises the
 // "already claimed" 409 path now. Kept as coverage of that route rather
@@ -90,7 +110,7 @@ async function main() {
   const s1 = db.prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE codenaam='Persoon-01'`).get();
   const s2 = db.prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE codenaam='Persoon-02'`).get();
   const person = {};
-  rec('Personal-link auth', eq((await req('GET', `/api/auth/verify-link?token=token_${s1.id}`, { jar: person })).status, 200));
+  rec('Personal-link auth', eq((await req('GET', `/api/auth/verify-link?token=${mintLink(s1.id)}`, { jar: person })).status, 200));
   rec('Invalid token → 401', eq((await req('GET', '/api/auth/verify-link?token=bogus', { jar: {} })).status, 401));
   rec('IDOR: person1 cannot read person2 → 403', eq((await req('GET', `/api/person/${s2.id}/absences`, { jar: person })).status, 403));
   rec('Person cannot reach planner dashboard → 401', eq((await req('GET', `/api/planner/period/x/dashboard`, { jar: person })).status, 401));

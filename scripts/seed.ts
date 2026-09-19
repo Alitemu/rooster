@@ -10,7 +10,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { v4 as uuid } from 'uuid';
-import { hashToken, hashPassword, validatePasswordStrength } from '../lib/auth';
+import { hashToken, hashPassword, validatePasswordStrength, generateAccessToken } from '../lib/auth';
 import { generateSlotsForPeriod } from '../lib/slotGeneration';
 import { createSetupToken } from '../lib/setupToken';
 
@@ -551,9 +551,15 @@ async function seed() {
         VALUES (?, ?, ?, ?, ?)
       `).run(staffId, codenaam, 'DEELNEMER', 1, now);
 
-      // Create access links for staff
-      const token = `token_${staffId}`;
-      const tokenHash = hashToken(token);
+      // Create access links for staff.
+      //
+      // A real random token, not one derived from the person id: the id is
+      // handed out by several planner endpoints, so a derivable token would
+      // mean anyone who can see a person's id can open that person's page.
+      // Nothing needs to read these back - the planner mints a fresh link
+      // through the export screen - so the plaintext is deliberately dropped
+      // here and only the hash survives, exactly as in production.
+      const tokenHash = hashToken(generateAccessToken());
 
       db.prepare(`
         INSERT INTO dienstrooster_person_access_link (id, person_id, token_hash, aangemaakt_op)
