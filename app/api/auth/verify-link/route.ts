@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
 import { setSessionCookie, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
+import { getSessionVersion } from '@/lib/sessionVersion';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { checkRateLimit, getClientIp, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -173,7 +174,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const response = NextResponse.json(responseBody);
     setSessionCookie(
       response,
-      { kind: 'person', personId: link.person_id },
+      { kind: 'person', personId: link.person_id, sessionVersion: getSessionVersion(link.person_id) ?? 1 },
       PERSON_SESSION_MAX_AGE_SECONDS
     );
 

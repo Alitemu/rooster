@@ -168,6 +168,21 @@ function PersonalLinkPageContent() {
   // deps). A stable no-op avoids that.
   const noopCoverageUpdate = useCallback(() => {}, []);
 
+  /**
+   * End this session and leave the page.
+   *
+   * `router.replace('/')` rather than `push`: the token is part of this
+   * page's own URL, so pushing would leave it one Back press away in the
+   * history of a computer someone just logged out of.
+   */
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      router.replace('/');
+    }
+  }, [router]);
+
   // Verify token and load person data
   useEffect(() => {
     const verifyToken = async () => {
@@ -412,14 +427,28 @@ function PersonalLinkPageContent() {
               Deadline: {new Date(period.deadline).toLocaleString('nl-NL')}
             </p>
           </div>
-          {period.status === 'GEPUBLICEERD' && (
+          <div className="flex shrink-0 gap-2 self-start">
+            {period.status === 'GEPUBLICEERD' && (
+              <button
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+              >
+                🔔 Meldingen
+              </button>
+            )}
+            {/* There was no way to end a session here at all. On a shared
+                ward computer that mattered: the session cookie is good for
+                30 days, so the next person to sit down was still signed in
+                as whoever used it last. Opening the link from the
+                invitation mail again signs you straight back in - the link
+                itself is not affected. */}
             <button
-              onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="shrink-0 self-start px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+              onClick={handleLogout}
+              className="px-4 py-2 rounded font-medium bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-colors text-sm"
             >
-              🔔 Meldingen
+              Uitloggen
             </button>
-          )}
+          </div>
         </div>
       </div>
 

@@ -15,11 +15,15 @@ import type { NextResponse } from 'next/server';
 export interface PersonSessionPayload {
   kind: 'person';
   personId: string;
+  /** See lib/sessionVersion.ts - stale value means the session was revoked. */
+  sessionVersion: number;
 }
 
 export interface StaffSessionPayload {
   kind: 'staff';
   personId: string;
+  /** See lib/sessionVersion.ts - stale value means the session was revoked. */
+  sessionVersion: number;
 }
 
 export type SessionPayload = PersonSessionPayload | StaffSessionPayload;

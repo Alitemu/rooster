@@ -8,6 +8,7 @@ import {
   PERSON_SESSION_MAX_AGE_SECONDS,
   STAFF_SESSION_MAX_AGE_SECONDS,
 } from '@/lib/session';
+import { getSessionVersion } from '@/lib/sessionVersion';
 import { GET } from './route';
 
 /**
@@ -91,7 +92,10 @@ function createPeriod(poolId: string): string {
 
 function request(periodId: string, personId: string, kind: 'person' | 'staff'): NextRequest {
   const maxAge = kind === 'staff' ? STAFF_SESSION_MAX_AGE_SECONDS : PERSON_SESSION_MAX_AGE_SECONDS;
-  const token = createSessionToken({ kind, personId } as never, maxAge);
+  const token = createSessionToken(
+    { kind, personId, sessionVersion: getSessionVersion(personId)! } as never,
+    maxAge
+  );
   return new NextRequest(`http://localhost/api/periods/${periodId}`, {
     headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
   });

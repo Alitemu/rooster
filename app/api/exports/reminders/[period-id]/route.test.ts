@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
+import { getSessionVersion } from '@/lib/sessionVersion';
 import { POST } from './route';
 
 /**
@@ -84,7 +85,10 @@ function isLinkLive(token: string): boolean {
 }
 
 function plannerRequest(periodId: string, plannerId: string): NextRequest {
-  const token = createSessionToken({ kind: 'staff', personId: plannerId }, STAFF_SESSION_MAX_AGE_SECONDS);
+  const token = createSessionToken(
+    { kind: 'staff', personId: plannerId, sessionVersion: getSessionVersion(plannerId)! },
+    STAFF_SESSION_MAX_AGE_SECONDS
+  );
   return new NextRequest(`http://localhost/api/exports/reminders/${periodId}`, {
     method: 'POST',
     headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },

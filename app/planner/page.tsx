@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 
 interface Period {
   id: string;
@@ -88,6 +89,7 @@ export default function PlannerHomePage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const [showTrash, setShowTrash] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
@@ -272,6 +274,9 @@ export default function PlannerHomePage() {
           </button>
           <button onClick={() => setShowCreate(!showCreate)} className="btn-primary">
             {showCreate ? 'Annuleren' : '+ Nieuwe periode'}
+          </button>
+          <button onClick={() => setShowChangePassword(true)} className="btn-secondary">
+            Wachtwoord wijzigen
           </button>
           <button onClick={handleLogout} className="btn-secondary">
             Uitloggen
@@ -573,6 +578,11 @@ export default function PlannerHomePage() {
           </div>
         </div>
       )}
+
+      <ChangePasswordDialog
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+      />
     </div>
   );
 }

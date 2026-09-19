@@ -24,6 +24,15 @@ export const person = sqliteTable(
     actief: integer('actief', { mode: 'boolean' }).default(true).notNull(),
     wachtwoord_hash: text('wachtwoord_hash'),
     totp_secret: text('totp_secret'),
+    // Bumped to invalidate every session already issued for this person.
+    // Session cookies are self-contained signed tokens (lib/session.ts),
+    // so logging out can only clear the cookie in the browser that asked -
+    // a copy taken elsewhere keeps working until it expires. The number is
+    // baked into each token and compared on every request
+    // (lib/sessionVersion.ts), which turns "log out everywhere" and
+    // "changing the password kicks out whoever else was logged in" into
+    // one integer update.
+    sessie_versie: integer('sessie_versie').notNull().default(1),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   }
 );

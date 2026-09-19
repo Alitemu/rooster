@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
+import { getSessionVersion } from '@/lib/sessionVersion';
 import { POST } from './route';
 
 /**
@@ -71,7 +72,10 @@ function createPeriod(poolId: string, status: string): string {
 }
 
 function plannerCookie(plannerId: string): string {
-  const token = createSessionToken({ kind: 'staff', personId: plannerId }, STAFF_SESSION_MAX_AGE_SECONDS);
+  const token = createSessionToken(
+    { kind: 'staff', personId: plannerId, sessionVersion: getSessionVersion(plannerId)! },
+    STAFF_SESSION_MAX_AGE_SECONDS
+  );
   return `${SESSION_COOKIE_NAME}=${token}`;
 }
 

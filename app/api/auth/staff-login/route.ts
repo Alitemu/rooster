@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { verifyPassword, isValidTOTPFormat, verifyTOTPCode, DUMMY_PASSWORD_HASH } from '@/lib/auth';
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
+import { getSessionVersion } from '@/lib/sessionVersion';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { checkRateLimit, getClientIp, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 
@@ -109,7 +110,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     setSessionCookie(
       response,
-      { kind: 'staff', personId: person.id },
+      { kind: 'staff', personId: person.id, sessionVersion: getSessionVersion(person.id) ?? 1 },
       STAFF_SESSION_MAX_AGE_SECONDS
     );
 

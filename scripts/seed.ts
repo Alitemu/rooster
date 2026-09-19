@@ -99,6 +99,7 @@ async function createTables() {
       actief INTEGER NOT NULL DEFAULT 1,
       wachtwoord_hash TEXT,
       totp_secret TEXT,
+      sessie_versie INTEGER NOT NULL DEFAULT 1,
       aangemaakt_op TEXT NOT NULL
     );
 
@@ -467,6 +468,43 @@ const SEEDED_TABLES = [
   'dienstrooster_person',
 ];
 
+/**
+ * Columns added to the schema after this script's CREATE TABLE statements
+ * were first written, as `table -> column -> ALTER TABLE fragment`.
+ *
+ * This exists because of a fork in how the schema gets built. A database
+ * created by this script gets it from the raw SQL above, and db/client.ts
+ * then deliberately never runs a migration against it (see its
+ * `schemaAlreadyExistsWithoutLedger` - migration 0000 would collide with
+ * the tables already there). That is fine for a *fresh* seed, where the
+ * SQL above is up to date by construction. It is not fine for a database
+ * seeded weeks ago: `CREATE TABLE IF NOT EXISTS` is a no-op on it, so a
+ * column added since then never appears, and the first query that selects
+ * it fails with "no such column".
+ *
+ * Adding the ALTER here as well as in db/migrations keeps both paths
+ * arriving at the same schema. SQLite's ALTER TABLE ADD COLUMN is cheap
+ * and this only runs for columns that are genuinely missing.
+ */
+const LATER_COLUMNS: Record<string, Record<string, string>> = {
+  dienstrooster_person: {
+    sessie_versie: 'INTEGER NOT NULL DEFAULT 1',
+  },
+};
+
+function applyMissingColumns() {
+  for (const [table, columns] of Object.entries(LATER_COLUMNS)) {
+    const existing = new Set(
+      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name)
+    );
+    for (const [column, definition] of Object.entries(columns)) {
+      if (existing.has(column)) continue;
+      console.log(`  Adding missing column ${table}.${column}`);
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+    }
+  }
+}
+
 /** True once a previous seed run has populated this database. */
 function alreadySeeded(): boolean {
   const row = db
@@ -488,6 +526,7 @@ async function seed() {
   try {
     console.log('Creating tables...');
     createTables();
+    applyMissingColumns();
 
     // Re-running the seed used to die on `UNIQUE constraint failed:
     // dienstrooster_person.codenaam` - a raw SQLite error that says nothing

@@ -8,13 +8,29 @@
  */
 
 import { NextRequest } from 'next/server';
-import { SESSION_COOKIE_NAME, verifySessionToken } from '@/lib/session';
+import { SESSION_COOKIE_NAME, verifySessionToken, type SessionPayload } from '@/lib/session';
 import { db } from '@/db/client';
 
 export interface AuthContext {
   userId: string;
   role: 'ADMIN' | 'PLANNER' | 'DEELNEMER';
   timestamp: string;
+}
+
+/**
+ * Reject a session token minted before the person's sessions were last
+ * revoked (see lib/sessionVersion.ts).
+ *
+ * A token that predates the column carries no version at all. Those are
+ * treated as revoked rather than accepted: any database this runs against
+ * either was created with the column or had it added with every row at
+ * version 1, so a versionless token can only come from a cookie issued by
+ * an older build - and accepting it would mean the one cookie an attacker
+ * is most likely to be holding is exactly the one revocation cannot reach.
+ * The cost is that everyone logs in again once after the upgrade.
+ */
+function sessionVersionMatches(session: SessionPayload, current: number): boolean {
+  return session.sessionVersion === current;
 }
 
 /**
@@ -42,9 +58,12 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
     // after one is added, instead of a role downgrade only taking effect
     // once the 12-hour cookie naturally expires.
     const current = db
-      .prepare(`SELECT rol FROM dienstrooster_person WHERE id = ? AND actief = 1`)
-      .get(session.personId) as { rol: 'ADMIN' | 'PLANNER' | 'DEELNEMER' } | undefined;
+      .prepare(`SELECT rol, sessie_versie FROM dienstrooster_person WHERE id = ? AND actief = 1`)
+      .get(session.personId) as
+      | { rol: 'ADMIN' | 'PLANNER' | 'DEELNEMER'; sessie_versie: number }
+      | undefined;
     if (!current) return null;
+    if (!sessionVersionMatches(session, current.sessie_versie)) return null;
 
     return {
       userId: session.personId,
@@ -68,12 +87,13 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
   // doesn't silently leave an already-issued 30-day session valid.
   const stillValid = db
     .prepare(
-      `SELECT 1 FROM dienstrooster_person_access_link pal
+      `SELECT p.sessie_versie FROM dienstrooster_person_access_link pal
        JOIN dienstrooster_person p ON p.id = pal.person_id
        WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1 LIMIT 1`
     )
-    .get(session.personId);
+    .get(session.personId) as { sessie_versie: number } | undefined;
   if (!stillValid) return null;
+  if (!sessionVersionMatches(session, stillValid.sessie_versie)) return null;
 
   return {
     userId: session.personId,
