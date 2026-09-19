@@ -72,12 +72,23 @@ function createPeriod(
   endDate: string,
   frozen: Record<string, unknown> | null
 ): { period: Period; slotIds: string[] } {
+  // Most tests below build a roster with fillEvenly(), which round-robins
+  // slotIds - a weekly-recurring shape for whoever holds a fixed position
+  // in the rotation. That is exactly what a windowWeeks >= 2 rule exists to
+  // forbid, and none of these tests are about the window rule; they are
+  // about slots_filled/band_compliance/hard-blocking. windowWeeks: 1 (a
+  // real, legitimate setting - "no window rule") keeps
+  // countWindowRuleViolations a no-op unless a test overrides it, the same
+  // way createPool's other defaults keep unrelated checks out of the way.
+  const windowDefault = { windowWeeks: 1 };
+  const rulesetConfig = frozen ? { ...windowDefault, ...frozen } : frozen;
+
   const periodId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
        (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, aangemaakt_op)
      VALUES (?, ?, 'P', ?, ?, '2099-01-01T00:00:00Z', 'GEGENEREERD', ?, datetime('now'))`
-  ).run(periodId, ctx.poolId, startDate, endDate, frozen ? JSON.stringify(frozen) : null);
+  ).run(periodId, ctx.poolId, startDate, endDate, rulesetConfig ? JSON.stringify(rulesetConfig) : null);
   createdPeriodIds.push(periodId);
 
   const slots = generateSlotsForPeriod({ startDate, endDate, shiftTypes: ['AVOND'] });
@@ -216,7 +227,15 @@ describe('runPublicationCheck', () => {
     expect(result.issues.join(' ')).toContain(`${slotIds.length - 1} van ${slotIds.length}`);
   });
 
-  it('refuses a roster that schedules someone on a day they blocked absolutely', () => {
+  it('warns, but does not block, a roster that overrode a blocked day', () => {
+    // The solver itself can never produce this (ABSOLUUT is a hard
+    // constraint on its side), so finding one here always means a planner
+    // deliberately overrode it via manual-assign - which that route
+    // explicitly allows, "in consultation with the person taking the
+    // shift". Blocking publication on the same override the planner just
+    // made on purpose would mean there was no way to ever ship a roster
+    // that used it - so this is a warning requiring confirmation, not an
+    // issue that blocks `valid`.
     const ctx = createPool(7, { bandAvond: [4, 4] });
     const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4] });
     fillEvenly(period.id, slotIds, ctx.personIds);
@@ -226,15 +245,17 @@ describe('runPublicationCheck', () => {
 
     const result = runPublicationCheck(period);
 
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
+    expect(result.requiresConfirmation).toBe(true);
     expect(result.checks.no_hard_blocking).toBe(false);
     expect(result.checks.slots_filled).toBe(true);
+    expect(result.issues).toEqual([]);
     // User-facing text says "geblokkeerd", not the internal ABSOLUUT enum
     // value (CLAUDE.md terminology: ABSOLUUT -> "Geblokkeerd" for users).
-    expect(result.issues.join(' ')).toContain('geblokkeerd');
+    expect(result.warnings.join(' ')).toContain('geblokkeerd');
   });
 
-  it('allows a soft "prefer not" day to be used', () => {
+  it('allows a soft "prefer not" day to be used, with no warning at all', () => {
     // LIEVER_NIET is a preference the solver pays for, not a rule that
     // blocks publication. Treating it as hard would make most rosters
     // unpublishable.
@@ -247,6 +268,8 @@ describe('runPublicationCheck', () => {
 
     expect(result.checks.no_hard_blocking).toBe(true);
     expect(result.valid).toBe(true);
+    expect(result.requiresConfirmation).toBe(false);
+    expect(result.warnings).toEqual([]);
   });
 
   it('refuses a roster where one person is over the band by a single shift', () => {
@@ -490,10 +513,11 @@ describe('runPublicationCheck', () => {
     expect(result.valid).toBe(true);
   });
 
-  it('reports every failing rule at once, not just the first', () => {
+  it('reports every failing rule at once, not just the first - issues and warnings both', () => {
     const ctx = createPool(7, { bandAvond: [4, 4] });
     const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4] });
-    // Short by one slot AND a hard-block violation.
+    // Short by one slot (a genuine issue) AND an ABSOLUUT override (a
+    // warning) - one does not hide the other.
     fillEvenly(period.id, slotIds.slice(0, -1), ctx.personIds);
     block(ctx.personIds[0], slotIds[0], 'ABSOLUUT');
 
@@ -501,6 +525,42 @@ describe('runPublicationCheck', () => {
 
     expect(result.checks.slots_filled).toBe(false);
     expect(result.checks.no_hard_blocking).toBe(false);
-    expect(result.issues.length).toBeGreaterThanOrEqual(2);
+    expect(result.valid).toBe(false); // slots_filled alone already blocks
+    expect(result.requiresConfirmation).toBe(true);
+    // At least the slots_filled issue - going one slot short of an evenly
+    // round-robinned roster can also throw one person under their band, an
+    // incidental second issue that isn't the point of this test.
+    expect(result.issues.length).toBeGreaterThanOrEqual(1);
+    expect(result.warnings.length).toBe(1);
+  });
+
+  it('warns about a window-rule violation without blocking, the same way as the ABSOLUUT override', () => {
+    const ctx = createPool(7, { bandAvond: [4, 4] });
+    // windowWeeks: 2 explicitly, overriding createPeriod's windowWeeks: 1
+    // default - this is the one test in the file that means to exercise
+    // the window rule.
+    const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4], windowWeeks: 2 });
+    fillEvenly(period.id, slotIds, ctx.personIds);
+
+    // Person 0's round-robin shifts are one week apart (slotIds[0], [7],
+    // [14], [21]) - inside a 2-week window, which the solver would never
+    // produce but a manual override can.
+    const result = runPublicationCheck(period);
+
+    expect(result.valid).toBe(true);
+    expect(result.requiresConfirmation).toBe(true);
+    expect(result.checks.window_compliance).toBe(false);
+    expect(result.warnings.join(' ')).toContain('venster');
+  });
+
+  it('does not warn about the window rule when nothing is close together', () => {
+    const ctx = createPool(7, { bandAvond: [4, 4] });
+    const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4], windowWeeks: 0 });
+    fillEvenly(period.id, slotIds, ctx.personIds);
+
+    const result = runPublicationCheck(period);
+
+    expect(result.checks.window_compliance).toBe(true);
+    expect(result.requiresConfirmation).toBe(false);
   });
 });

@@ -10,6 +10,24 @@
  *
  * Shared by the publication-check endpoint and the publish route so the two
  * can never disagree about what "ready" means.
+ *
+ * Two different kinds of problem live here, and they used to all be treated
+ * the same way (`issues`, hard-blocking `valid = false`):
+ *
+ *   - `issues` - the roster is genuinely not finished: slots nobody was
+ *     assigned to, or someone outside their streefbereik. Publishing stays
+ *     blocked until these are actually fixed.
+ *   - `warnings` - a rule the roster deliberately breaks, on a planner's own
+ *     say-so. The solver itself can never produce an ABSOLUUT violation or a
+ *     window-rule violation - both are hard constraints on its side - so
+ *     finding one here means a planner manually overrode it (manual-assign
+ *     explicitly allows that, "in consultation with the person taking the
+ *     shift" - see lib/windowRule.ts and the manual-assign route). Blocking
+ *     publication on the same override the planner just made on purpose was
+ *     a contradiction: there was no way to ship a roster that used that
+ *     override at all. These require explicit confirmation
+ *     (`requiresConfirmation`) before /publish will proceed, but do not by
+ *     themselves make `valid` false.
  */
 
 import { db } from '@/db/client';
@@ -18,18 +36,23 @@ import {
   countSlotsByTeller,
   resolveBands,
   resolveRulesetConfig,
+  resolveWindowWeeks,
   scaledBandForMember,
   type BandsByTeller,
 } from '@/lib/rosterBands';
+import { countWindowRuleViolations } from '@/lib/windowRule';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 
 export interface PublicationCheckResult {
   valid: boolean;
+  requiresConfirmation: boolean;
   issues: string[];
+  warnings: string[];
   checks: {
     slots_filled: boolean;
     no_hard_blocking: boolean;
     band_compliance: boolean;
+    window_compliance: boolean;
   };
   bands: BandsByTeller;
   totals: {
@@ -50,6 +73,7 @@ interface PeriodRow {
 export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   const periodId = period.id;
   const issues: string[] = [];
+  const warnings: string[] = [];
 
   const slots = db
     .prepare('SELECT COUNT(*) as count FROM dienstrooster_shift_slot WHERE period_id = ?')
@@ -72,8 +96,25 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     .get(periodId) as { count: number };
 
   if (blockingViolations.count > 0) {
-    issues.push(
-      `${blockingViolations.count} toewijzing(en) staan op een dag die geblokkeerd is voor die persoon - dit mag niet gebeuren`
+    // A warning, not an issue: the solver can never produce this (ABSOLUUT
+    // is a hard constraint on its side), so every one of these is a
+    // planner's own deliberate manual-assign override, already made and
+    // already in the audit trail. Blocking publication on it would mean
+    // that override could never actually be shipped.
+    warnings.push(
+      `${blockingViolations.count} toewijzing(en) staan op een dag die geblokkeerd is voor die persoon - ` +
+        `controleer of dit bewust is afgesproken met de betrokkene(n)`
+    );
+  }
+
+  const windowViolations = countWindowRuleViolations(periodId, resolveWindowWeeks(resolveRulesetConfig(period)));
+  if (windowViolations > 0) {
+    // Same reasoning as the ABSOLUUT check above: the solver never breaks
+    // the window rule, so a violation here is a deliberate manual-assign
+    // override too.
+    warnings.push(
+      `${windowViolations}x staat iemand twee diensten binnen het venster van elkaar - ` +
+        `controleer of dit bewust is afgesproken met de betrokkene(n)`
     );
   }
 
@@ -171,11 +212,14 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
 
   return {
     valid: issues.length === 0,
+    requiresConfirmation: warnings.length > 0,
     issues,
+    warnings,
     checks: {
       slots_filled: slotsFilled,
       no_hard_blocking: blockingViolations.count === 0,
       band_compliance: bandViolations === 0,
+      window_compliance: windowViolations === 0,
     },
     bands,
     totals: {

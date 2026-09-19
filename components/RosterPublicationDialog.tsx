@@ -4,6 +4,19 @@
  * Roster Publication Dialog
  *
  * Pre-publication validation checklist and publishing interface.
+ *
+ * Two different kinds of finding, shown differently on purpose - see
+ * lib/publicationCheck.ts's module doc for why they are not the same
+ * thing:
+ *
+ *   - issues: the roster genuinely is not finished (an unfilled slot, a
+ *     band violation). Publish stays disabled until these are fixed.
+ *   - warnings: a rule the roster deliberately breaks, on the planner's own
+ *     say-so via manual-assign (an ABSOLUUT override, a window-rule
+ *     override). These require ticking a confirmation box before Publish
+ *     enables, but do not block it outright - blocking on the same
+ *     override a planner just made on purpose left no way to ever publish
+ *     a roster that used it.
  */
 
 import { useState, useEffect } from 'react';
@@ -14,11 +27,14 @@ interface ValidationCheck {
   slots_filled: boolean;
   no_hard_blocking: boolean;
   band_compliance: boolean;
+  window_compliance: boolean;
 }
 
 interface CheckResult {
   valid: boolean;
+  requiresConfirmation: boolean;
   issues: string[];
+  warnings: string[];
   checks: ValidationCheck;
   totals: {
     total_slots: number;
@@ -37,11 +53,17 @@ interface Props {
 export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }: Props) {
   const [validating, setValidating] = useState(true);
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
+  const [overridesConfirmed, setOverridesConfirmed] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
+
+    // Reset the checkbox on every open - a stale "confirmed" from a
+    // previous visit to this dialog must not silently carry over to a
+    // roster that has since changed underneath it.
+    setOverridesConfirmed(false);
 
     const validateRoster = async () => {
       setValidating(true);
@@ -75,6 +97,9 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
       const res = await fetch(`/api/planner/period/${periodId}/publish`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          checkResult?.requiresConfirmation ? { confirmOverrides: overridesConfirmed } : {}
+        ),
       });
 
       if (!res.ok) {
@@ -96,6 +121,18 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
   const dismissBackdrop = useDialogDismiss(isOpen, onClose, !publishing);
 
   if (!isOpen) return null;
+
+  const hasIssues = !checkResult?.valid;
+  const needsConfirmation = !!checkResult?.requiresConfirmation;
+  const canPublish =
+    !!checkResult && !hasIssues && (!needsConfirmation || overridesConfirmed);
+
+  const bannerTone = hasIssues ? 'amber' : needsConfirmation ? 'amber' : 'green';
+  const bannerTitle = hasIssues
+    ? 'Problemen gevonden'
+    : needsConfirmation
+      ? 'Bewuste uitzonderingen gevonden'
+      : 'Klaar om te publiceren';
 
   return (
     <div
@@ -127,21 +164,23 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
               {/* Status */}
               <div
                 className={`p-4 rounded-lg ${
-                  checkResult.valid
+                  bannerTone === 'green'
                     ? 'bg-green-50 border border-green-200'
                     : 'bg-amber-50 border border-amber-200'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <span className="text-2xl">
-                    {checkResult.valid ? '✓' : '⚠️'}
-                  </span>
+                  <span className="text-2xl">{bannerTone === 'green' ? '✓' : '⚠️'}</span>
                   <div>
-                    <h3 className={`font-semibold ${checkResult.valid ? 'text-green-900' : 'text-amber-900'}`}>
-                      {checkResult.valid ? 'Klaar om te publiceren' : 'Problemen gevonden'}
+                    <h3
+                      className={`font-semibold ${
+                        bannerTone === 'green' ? 'text-green-900' : 'text-amber-900'
+                      }`}
+                    >
+                      {bannerTitle}
                     </h3>
                     {checkResult.issues.length > 0 && (
-                      <ul className={`mt-2 space-y-1 text-sm ${checkResult.valid ? 'text-green-800' : 'text-amber-800'}`}>
+                      <ul className="mt-2 space-y-1 text-sm text-amber-800">
                         {checkResult.issues.map((issue, i) => (
                           <li key={i}>• {issue}</li>
                         ))}
@@ -150,6 +189,32 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
                   </div>
                 </div>
               </div>
+
+              {/* Deliberate overrides - separate from issues above, since
+                  these do not block publishing on their own. */}
+              {checkResult.warnings.length > 0 && (
+                <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                  <h3 className="font-semibold text-amber-900">Bewuste uitzonderingen</h3>
+                  <p className="text-sm text-amber-800 mt-1">
+                    Dit rooster bevat handmatige toewijzingen die bewust een regel doorbreken
+                    (bijvoorbeeld op verzoek van de betrokkene). Controleer ze voordat je publiceert.
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm text-amber-800">
+                    {checkResult.warnings.map((warning, i) => (
+                      <li key={i}>• {warning}</li>
+                    ))}
+                  </ul>
+                  <label className="flex items-start gap-2 mt-3 text-sm text-amber-900">
+                    <input
+                      type="checkbox"
+                      checked={overridesConfirmed}
+                      onChange={(e) => setOverridesConfirmed(e.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>Ik heb deze uitzonderingen gezien en bevestig dat ze bewust zijn.</span>
+                  </label>
+                </div>
+              )}
 
               {/* Totals */}
               <div className="grid grid-cols-3 gap-3">
@@ -184,10 +249,16 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
                     Alle diensten ingevuld
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <span className={checkResult.checks.no_hard_blocking ? 'text-green-700' : 'text-red-700'}>
-                      {checkResult.checks.no_hard_blocking ? '✓' : '✗'}
+                    <span className={checkResult.checks.no_hard_blocking ? 'text-green-700' : 'text-amber-700'}>
+                      {checkResult.checks.no_hard_blocking ? '✓' : '⚠️'}
                     </span>
                     Geen overtredingen van blokkades
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <span className={checkResult.checks.window_compliance ? 'text-green-700' : 'text-amber-700'}>
+                      {checkResult.checks.window_compliance ? '✓' : '⚠️'}
+                    </span>
+                    Geen overtredingen van het venster
                   </label>
                   <label className="flex items-center gap-2 text-sm">
                     <span className={checkResult.checks.band_compliance ? 'text-green-700' : 'text-red-700'}>
@@ -218,7 +289,7 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
           </button>
           <button
             onClick={handlePublish}
-            disabled={publishing || !checkResult?.valid || validating}
+            disabled={publishing || validating || !canPublish}
             className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
           >
             {publishing ? 'Bezig met publiceren...' : 'Nu publiceren'}

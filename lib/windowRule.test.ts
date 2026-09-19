@@ -6,6 +6,7 @@ import {
   personWouldViolateWindowRule,
   getWindowConflictingPersonIds,
   requiredGapWeeks,
+  countWindowRuleViolations,
 } from '@/lib/windowRule';
 import type { WindowWeeksConfig } from '@/lib/rosterBands';
 
@@ -359,5 +360,100 @@ describe('personWouldViolateWindowRule (per-teller windows, cross-type floor)', 
       { avond: 2, weekendFeestdag: 4 }
     );
     expect(violates).toBe(false);
+  });
+});
+
+/**
+ * countWindowRuleViolations counts what personWouldViolateWindowRule only
+ * predicts: actual violations already sitting in a roster. This is what
+ * lib/publicationCheck.ts warns about before publishing - never a hard
+ * block, since the solver can never produce one (a violation here can only
+ * come from a deliberate manual-assign override).
+ */
+describe('countWindowRuleViolations', () => {
+  const windows: WindowWeeksConfig = { avond: 2, weekendFeestdag: 2 };
+
+  it('counts zero for an empty roster', () => {
+    const f = createFixture(1, '2027-01-04', '2027-01-24');
+    expect(countWindowRuleViolations(f.periodId, windows)).toBe(0);
+  });
+
+  it('counts one violation for one too-close pair', () => {
+    const f = createFixture(1, '2027-01-04', '2027-01-24'); // weeks 1-4
+    const week1 = f.slotIds.find((id) => slotById(id).iso_week === 1)!;
+    const week2 = f.slotIds.find((id) => slotById(id).iso_week === 2)!;
+    assign(f.periodId, f.personIds[0], week1);
+    assign(f.periodId, f.personIds[0], week2); // 1 week apart, window is 2
+
+    expect(countWindowRuleViolations(f.periodId, windows)).toBe(1);
+  });
+
+  it('does not count a pair that clears the window', () => {
+    const f = createFixture(1, '2027-01-04', '2027-02-14'); // weeks 1-6
+    const week1 = f.slotIds.find((id) => slotById(id).iso_week === 1)!;
+    const week3 = f.slotIds.find((id) => slotById(id).iso_week === 3)!;
+    assign(f.periodId, f.personIds[0], week1);
+    assign(f.periodId, f.personIds[0], week3); // 2 weeks apart, window is 2
+
+    expect(countWindowRuleViolations(f.periodId, windows)).toBe(0);
+  });
+
+  it('does not count two different people\'s shifts against each other', () => {
+    const f = createFixture(2, '2027-01-04', '2027-01-24');
+    const week1 = f.slotIds.find((id) => slotById(id).iso_week === 1)!;
+    const week2 = f.slotIds.find((id) => slotById(id).iso_week === 2)!;
+    assign(f.periodId, f.personIds[0], week1);
+    assign(f.periodId, f.personIds[1], week2); // different person - no rule between them
+
+    expect(countWindowRuleViolations(f.periodId, windows)).toBe(0);
+  });
+
+  it('counts a violation against a carried-over shift from the previous period', () => {
+    // The window rule reaches across the period boundary via
+    // dienstrooster_prior_assignment - the same history the solver itself
+    // sees (generate-roster/route.ts). A shift right after one at the very
+    // end of the last period has to be caught here too, not just within
+    // this period's own slots.
+    const f = createFixture(1, '2027-01-11', '2027-01-31'); // starts week 2
+    db.prepare(
+      `INSERT INTO dienstrooster_prior_assignment
+         (id, period_id, datum, iso_jaar, iso_week, person_id, teller, bron, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, '2027-01-08', 2027, 1, ?, 'AVOND', 'AFGELEID', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), f.periodId, f.personIds[0], f.personIds[0]);
+
+    const week2 = f.slotIds.find((id) => slotById(id).iso_week === 2)!;
+    assign(f.periodId, f.personIds[0], week2); // 1 week after the prior-period shift
+
+    expect(countWindowRuleViolations(f.periodId, windows)).toBe(1);
+
+    db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ?').run(f.periodId);
+  });
+
+  it('does not count two prior-period shifts against each other', () => {
+    // Both predate this period - if they were too close together, that was
+    // already the previous period's roster to get right, not something
+    // this period's own publication should be blocked or warned about.
+    const f = createFixture(1, '2027-01-11', '2027-01-31');
+    const prior = db.prepare(
+      `INSERT INTO dienstrooster_prior_assignment
+         (id, period_id, datum, iso_jaar, iso_week, person_id, teller, bron, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, ?, ?, ?, ?, 'AVOND', 'AFGELEID', ?, datetime('now'))`
+    );
+    prior.run(crypto.randomUUID(), f.periodId, '2027-01-01', 2026, 53, f.personIds[0], f.personIds[0]);
+    prior.run(crypto.randomUUID(), f.periodId, '2027-01-08', 2027, 1, f.personIds[0], f.personIds[0]);
+
+    expect(countWindowRuleViolations(f.periodId, windows)).toBe(0);
+
+    db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ?').run(f.periodId);
+  });
+
+  it('is a no-op when the window is 1 week or less, same as the per-slot check', () => {
+    const f = createFixture(1, '2027-01-04', '2027-01-24');
+    const week1 = f.slotIds.find((id) => slotById(id).iso_week === 1)!;
+    const week2 = f.slotIds.find((id) => slotById(id).iso_week === 2)!;
+    assign(f.periodId, f.personIds[0], week1);
+    assign(f.periodId, f.personIds[0], week2);
+
+    expect(countWindowRuleViolations(f.periodId, { avond: 1, weekendFeestdag: 1 })).toBe(0);
   });
 });

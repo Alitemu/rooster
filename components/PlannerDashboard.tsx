@@ -15,6 +15,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ExportDialog } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
 import { AssignmentGrid } from './AssignmentGrid';
@@ -99,6 +101,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
   const [publicationDialogOpen, setPublicationDialogOpen] = useState(false);
+  const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false);
+  const [unpublishing, setUnpublishing] = useState(false);
+  const [unpublishError, setUnpublishError] = useState<string | null>(null);
   const [showAssignments, setShowAssignments] = useState(false);
   // Forces AssignmentGrid/AssignmentCalendar to remount (and so refetch)
   // after any roster (re)generation - their own fetch effects only depend
@@ -107,6 +112,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   // happened to remount them.
   const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
   const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar' | 'dienstdoende'>('list');
+
+  // Called unconditionally, above every early return below (loading/error/
+  // !dashboard) - both hooks are no-ops while showUnpublishConfirm is
+  // false, but React requires the call itself to happen on every render.
+  useBodyScrollLock(showUnpublishConfirm);
+  const dismissUnpublishBackdrop = useDialogDismiss(showUnpublishConfirm, () => setShowUnpublishConfirm(false), !unpublishing);
 
   const loadData = async () => {
     try {
@@ -138,6 +149,24 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   useEffect(() => {
     loadData();
   }, [periodId]);
+
+  const handleUnpublish = async () => {
+    setUnpublishing(true);
+    setUnpublishError(null);
+    try {
+      const res = await fetch(`/api/planner/period/${periodId}/unpublish`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Intrekken van publicatie mislukt');
+      }
+      setShowUnpublishConfirm(false);
+      await loadData();
+    } catch (err) {
+      setUnpublishError(err instanceof Error ? err.message : 'Intrekken van publicatie mislukt');
+    } finally {
+      setUnpublishing(false);
+    }
+  };
 
   const handleSubmitOnBehalf = async (personId: string) => {
     setSubmittingFor(personId);
@@ -404,6 +433,17 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
                 ✅ Rooster publiceren
               </button>
             )}
+            {dashboard.status === 'GEPUBLICEERD' && (
+              <button
+                onClick={() => {
+                  setUnpublishError(null);
+                  setShowUnpublishConfirm(true);
+                }}
+                className="px-4 py-2 rounded font-medium bg-white border border-red-300 text-red-700 hover:bg-red-50 transition-colors"
+              >
+                ↩️ Publicatie intrekken
+              </button>
+            )}
           </div>
           <p className="text-xs text-neutral-500 mt-2">
             Status: <span className="font-semibold">{dashboard.status}</span>
@@ -562,6 +602,53 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         isOpen={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
       />
+
+      {/* Unpublish confirmation - the one way back out of GEPUBLICEERD.
+          Assignments and already-sent notifications stay; every pool
+          member gets told the publication was withdrawn. */}
+      {showUnpublishConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Publicatie intrekken"
+          onClick={dismissUnpublishBackdrop}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-2 text-red-700">Publicatie intrekken?</h2>
+            <p className="text-sm text-neutral-700 mb-2">
+              Het rooster voor &quot;{dashboard.period_name}&quot; gaat terug naar de status
+              &quot;Gegenereerd&quot;. De toewijzingen blijven staan - je kunt ze aanpassen en het
+              rooster later opnieuw publiceren.
+            </p>
+            <p className="text-sm text-neutral-700 mb-4">
+              Iedereen die het gepubliceerde rooster kon zien, krijgt een melding dat de publicatie
+              is ingetrokken.
+            </p>
+            {unpublishError && (
+              <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">
+                <p className="text-sm text-red-800">{unpublishError}</p>
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowUnpublishConfirm(false)}
+                disabled={unpublishing}
+                className="flex-1 py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors disabled:opacity-50"
+              >
+                Annuleren
+              </button>
+              <button
+                onClick={handleUnpublish}
+                disabled={unpublishing}
+                className="flex-1 py-2 px-4 rounded font-medium bg-red-700 text-white hover:bg-red-800 transition-colors disabled:opacity-50"
+              >
+                {unpublishing ? 'Bezig...' : 'Ja, publicatie intrekken'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

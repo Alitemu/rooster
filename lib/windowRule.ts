@@ -91,6 +91,82 @@ export function personWouldViolateWindowRule(
   });
 }
 
+interface TimedShift {
+  iso_jaar: number;
+  iso_week: number;
+  teller: string;
+}
+
+/**
+ * Count actual window-rule violations already sitting in a period's
+ * roster - not "would this violate", but "does this".
+ *
+ * The solver never produces one (it's a hard constraint), so a violation
+ * here can only come from a deliberate manual override: a planner's manual
+ * assign, which lib/windowRule.ts's own module doc says must always be
+ * allowed to override this rule, in consultation with the person taking
+ * the shift. That is why lib/publicationCheck.ts treats this as a warning
+ * to confirm before publishing rather than a hard block - the override
+ * already happened, deliberately, at manual-assign time; the gate's job is
+ * to make sure a planner sees it once more before it goes out, not to
+ * undo it.
+ *
+ * Also weighs in the previous period's carried-over tail
+ * (dienstrooster_prior_assignment), the same history the solver itself
+ * sees - otherwise a shift right after one at the very end of the last
+ * period would look clean here despite being exactly what the window rule
+ * exists to catch. A pair where both shifts are prior-period history is
+ * not counted: that pair was already someone else's roster to get right,
+ * not a violation this period's publication introduces.
+ */
+export function countWindowRuleViolations(periodId: string, windows: WindowWeeksConfig): number {
+  if (windows.avond <= 1 && windows.weekendFeestdag <= 1) return 0;
+
+  const current = db
+    .prepare(
+      `SELECT a.person_id, s.iso_jaar, s.iso_week, st.teller
+       FROM dienstrooster_assignment a
+       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+       WHERE a.schedule_version_id = ?`
+    )
+    .all(periodId) as Array<{ person_id: string } & TimedShift>;
+
+  const prior = db
+    .prepare(
+      `SELECT person_id, iso_jaar, iso_week, teller
+       FROM dienstrooster_prior_assignment
+       WHERE period_id = ? AND person_id IS NOT NULL`
+    )
+    .all(periodId) as Array<{ person_id: string } & TimedShift>;
+
+  const byPerson = new Map<string, Array<TimedShift & { isCurrent: boolean }>>();
+  for (const row of current) {
+    if (!byPerson.has(row.person_id)) byPerson.set(row.person_id, []);
+    byPerson.get(row.person_id)!.push({ ...row, isCurrent: true });
+  }
+  for (const row of prior) {
+    if (!byPerson.has(row.person_id)) byPerson.set(row.person_id, []);
+    byPerson.get(row.person_id)!.push({ ...row, isCurrent: false });
+  }
+
+  let violations = 0;
+  for (const shifts of byPerson.values()) {
+    for (let i = 0; i < shifts.length; i++) {
+      for (let j = i + 1; j < shifts.length; j++) {
+        const a = shifts[i];
+        const b = shifts[j];
+        if (!a.isCurrent && !b.isCurrent) continue; // both history - not this roster's doing
+        const required = requiredGapWeeks(a.teller, b.teller, windows);
+        if (required > 1 && isoWeeksApart(a.iso_jaar, a.iso_week, b.iso_jaar, b.iso_week) < required) {
+          violations++;
+        }
+      }
+    }
+  }
+  return violations;
+}
+
 /**
  * Person ids that already have an assignment elsewhere in the period too
  * close (per requiredGapWeeks) to a shift of `targetTeller` in

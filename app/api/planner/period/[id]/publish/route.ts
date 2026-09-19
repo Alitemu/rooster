@@ -10,9 +10,19 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+
+interface PublishRequest {
+  /**
+   * Required when runPublicationCheck() reports warnings (an ABSOLUUT or
+   * window-rule override a planner deliberately made via manual-assign).
+   * Absent or false, publish stops and hands back the warnings for the
+   * confirmation screen instead of shipping the roster.
+   */
+  confirmOverrides?: boolean;
+}
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -25,6 +35,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     const periodId = params.id;
     const now = dateToISO(new Date());
+    const body = await parseJsonBody<PublishRequest>(request);
 
     // Verify period exists
     const period = db
@@ -48,7 +59,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Enforce the same validation the planner saw, rather than assuming the
     // dialog ran it. Publishing freezes the roster and tells every pool
     // member these are their shifts, so a direct POST must not be able to
-    // ship one with unfilled slots or ABSOLUUT violations - which it could:
+    // ship one with unfilled slots or a band violation - which it could:
     // the disabled button in the UI was the only thing standing in the way.
     const check = runPublicationCheck(period);
     if (!check.valid) {
@@ -59,6 +70,28 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           data: { issues: check.issues, checks: check.checks },
         },
         { status: 400 }
+      );
+    }
+
+    // check.warnings are deliberate overrides (see lib/publicationCheck.ts) -
+    // real, worth a planner looking at one more time before this goes out,
+    // but not something publish should refuse. Without confirmOverrides,
+    // stop and hand back exactly what would need confirming; the dialog
+    // shows this and re-POSTs with confirmOverrides once the planner has
+    // seen it. A direct POST that skips the dialog entirely gets the same
+    // stop, not a silent publish - matching how check.issues was already
+    // enforced above.
+    if (check.requiresConfirmation && body.confirmOverrides !== true) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'CONFIRMATION_REQUIRED',
+            message: `Dit rooster bevat bewuste uitzonderingen: ${check.warnings.join('; ')}`,
+          },
+          data: { warnings: check.warnings, checks: check.checks },
+        },
+        { status: 409 }
       );
     }
 
@@ -111,7 +144,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         periodId,
         'PUBLISH',
         JSON.stringify({ status: 'GEGENEREERD' }),
-        JSON.stringify({ status: 'GEPUBLICEERD', notifications_sent: people.length }),
+        JSON.stringify({
+          status: 'GEPUBLICEERD',
+          notifications_sent: people.length,
+          // Empty when there was nothing to confirm - keeps the common
+          // case's audit entry uncluttered rather than always carrying an
+          // empty array.
+          ...(check.warnings.length > 0 ? { overrides_confirmed: check.warnings } : {}),
+        }),
         now
       );
 
