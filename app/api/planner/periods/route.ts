@@ -9,8 +9,16 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { isValidIsoDate } from '@/lib/isoDate';
+import { validateSingleLine } from '@/lib/vrijeTekst';
 import { parseISO } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+
+/**
+ * Long enough for the names a ward actually uses ("2027-1",
+ * "Zomer 2027 achterwacht") with room to spare, short enough to stay
+ * readable as an e-mail subject and a heading in the grid.
+ */
+const PERIODE_NAAM_MAX_LENGTH = 60;
 
 interface CreatePeriodRequest {
   naam: string;
@@ -49,6 +57,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       };
       return NextResponse.json(response, { status: 400 });
     }
+
+    // The period name is only ever read as one line: it becomes the
+    // subject of the invitation and reminder e-mails, part of the export's
+    // filename, and a heading in the grid. Until now it was only checked
+    // for being non-empty, so a newline in it split an e-mail subject in
+    // two and a very long one broke every place that has to show it.
+    const naamCheck = validateSingleLine(body.naam, 'Naam', PERIODE_NAAM_MAX_LENGTH);
+    if (!naamCheck.valid) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: naamCheck.message },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+    const naam = naamCheck.value;
 
     // Validate dates.
     //
@@ -132,13 +155,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const periodId = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    insertStmt.run(periodId, body.naam, body.pool_id, body.start_datum, body.eind_datum, body.deadline, now);
+    insertStmt.run(periodId, naam, body.pool_id, body.start_datum, body.eind_datum, body.deadline, now);
 
     const response: ApiSuccessResponse<CreatePeriodResponse> = {
       success: true,
       data: {
         id: periodId,
-        naam: body.naam,
+        naam,
         start_datum: body.start_datum,
         eind_datum: body.eind_datum,
         deadline: body.deadline,

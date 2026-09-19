@@ -33,6 +33,12 @@ export function NotificationCenter({ personId, periodId }: Props) {
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Flipping a filter re-runs this while the previous request may still
+    // be in flight, and the two can come back in either order. Without
+    // this flag the older reply could land last, leaving the list showing
+    // the results of a filter the buttons no longer say is selected.
+    let current = true;
+
     const loadNotifications = async () => {
       setLoading(true);
       setError(null);
@@ -47,16 +53,21 @@ export function NotificationCenter({ personId, periodId }: Props) {
         if (!res.ok) throw new Error('Laden van meldingen mislukt');
 
         const data = await res.json();
+        if (!current) return;
         setNotifications(data.data.notifications);
         setUnreadCount(data.data.unread_count);
       } catch (err) {
+        if (!current) return;
         setError(err instanceof Error ? err.message : 'Laden van meldingen mislukt');
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
 
     loadNotifications();
+    return () => {
+      current = false;
+    };
   }, [personId, periodId, filterType, unreadOnly]);
 
   const handleMarkRead = async (notifId: string) => {

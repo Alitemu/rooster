@@ -131,25 +131,48 @@ export async function PATCH(
       // got there first - see syncPatternsForPerson's doc comment.
       syncPatternsForPerson(id);
       syncAbsencesForPerson(id);
+      markSubmissionStarted(id, slot.period_id);
     } else {
-      const existing = db
-        .prepare(`SELECT id FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?`)
-        .get(id, slotId);
-
-      if (existing) {
-        db.prepare(
-          `UPDATE dienstrooster_availability SET blocking_level = ? WHERE person_id = ? AND slot_id = ?`
-        ).run(level, id, slotId);
-      } else {
+      // One statement instead of SELECT-then-INSERT-or-UPDATE.
+      //
+      // Not for a race: better-sqlite3 is synchronous and this deployment
+      // runs a single Node process, so nothing can interleave between a
+      // read and the write that follows it. It is for the second reason
+      // below, and the single statement is simply the honest way to say
+      // "this row should end up like this" - it also stays correct if this
+      // ever runs with more than one worker.
+      //
+      // The UPDATE branch only ever set blocking_level, so a row a
+      // part-time pattern or an absence had created kept its
+      // source='PARTTIME'/'ABSENCE' and its bron_* id while now holding a
+      // manually chosen level. That left the pattern believing it still
+      // covered a slot whose ABSOLUUT had quietly become a VOORKEUR (so
+      // the solver could roster that part-time free day), and the next
+      // pattern edit deleted the person's own choice with it, because
+      // reconcilePatternForPeriod removes rows by bron_pattern_id.
+      // Setting it by hand means owning it: source becomes MANUAL and both
+      // bron_* ids are cleared, which is exactly the "some other source
+      // owns this slot" case both sync modules already document and skip
+      // over.
+      const writeAndMark = db.transaction(() => {
         db.prepare(
           `INSERT INTO dienstrooster_availability
-           (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
-           VALUES (?, ?, ?, ?, 'MANUAL', ?)`
+             (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+           VALUES (?, ?, ?, ?, 'MANUAL', ?)
+           ON CONFLICT(person_id, slot_id) DO UPDATE SET
+             blocking_level = excluded.blocking_level,
+             source = 'MANUAL',
+             bron_pattern_id = NULL,
+             bron_absence_id = NULL`
         ).run(crypto.randomUUID(), id, slotId, level, new Date().toISOString());
-      }
-    }
 
-    markSubmissionStarted(id, slot.period_id);
+        // Together with the write: a crash in between would leave the
+        // preference saved while the submission still reads as never
+        // started, or the other way round.
+        markSubmissionStarted(id, slot.period_id);
+      });
+      writeAndMark();
+    }
 
     try {
       writePreferencesBackup(id, slot.period_id);

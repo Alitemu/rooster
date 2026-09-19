@@ -44,6 +44,12 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    // Same reason as NotificationCenter's list: changing the status filter
+    // re-runs this while the previous request may still be on its way, and
+    // an older reply landing last would show one filter's results under
+    // another filter's button.
+    let current = true;
+
     const loadSwaps = async () => {
       setLoading(true);
       setError(null);
@@ -56,15 +62,20 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
         if (!res.ok) throw new Error('Laden van ruilverzoeken mislukt');
 
         const data = await res.json();
+        if (!current) return;
         setSwapRequests(data.data.swap_requests);
       } catch (err) {
+        if (!current) return;
         setError(err instanceof Error ? err.message : 'Laden van ruilverzoeken mislukt');
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
 
     loadSwaps();
+    return () => {
+      current = false;
+    };
   }, [personId, periodId, filterStatus]);
 
   const showSuccess = (message: string) => {

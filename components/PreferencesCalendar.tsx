@@ -24,7 +24,7 @@
  * - Mobile-first, 375px min width
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { dateToISO, parseISO, getHolidayInfo, addDays } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 
@@ -188,7 +188,17 @@ export function PreferencesCalendar({
   // would keep showing pool-wide numbers from before the participant's own
   // just-saved change, which is exactly the kind of stale "live" number
   // CLAUDE.md's balance-messaging rule warns against.
+  // Which coverage request is the current one. Clicking through several
+  // days in a row fires one of these per save, and responses can come back
+  // in a different order than they were sent - in which case an older
+  // reply would land last and overwrite the newer numbers with the ones
+  // from before the most recent save. That is precisely the stale "live"
+  // number the comment above says this refetch exists to avoid, so a
+  // reply that is no longer the newest is dropped instead of applied.
+  const coverageRequestId = useRef(0);
+
   const fetchCoverage = useCallback(async () => {
+    const requestId = ++coverageRequestId.current;
     try {
       const res = await fetch(`/api/person/${personId}/preferences/${periodId}/coverage`);
       if (!res.ok) throw new Error('Failed to fetch coverage');
@@ -197,6 +207,8 @@ export function PreferencesCalendar({
       const cov = new Map<string, CoverageInfo>(
         data.data.coverage_by_day.map((c: CoverageInfo) => [c.datum, c])
       );
+
+      if (requestId !== coverageRequestId.current) return;
 
       setCoverage(cov);
       onCoverageUpdate?.(cov);

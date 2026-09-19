@@ -111,14 +111,21 @@ export async function PATCH(
       WHERE id = ? AND person_id = ?
     `);
 
-    updateStmt.run(...values);
+    // The edit and both re-syncs are one change: a crash between them
+    // leaves the absence saying one thing and the blocked days another.
+    // The backup below stays outside - it writes to disk, and a slow
+    // filesystem must never hold the database's write lock.
+    const applyEdit = db.transaction(() => {
+      updateStmt.run(...values);
 
-    syncAvailabilityForAbsence(absenceId);
+      syncAvailabilityForAbsence(absenceId);
 
-    // A shrunk or moved date range can free up a slot the person's own
-    // part-time pattern would otherwise cover - see syncPatternsForPerson's
-    // doc comment for why that reclaim doesn't happen automatically.
-    syncPatternsForPerson(id);
+      // A shrunk or moved date range can free up a slot the person's own
+      // part-time pattern would otherwise cover - see syncPatternsForPerson's
+      // doc comment for why that reclaim doesn't happen automatically.
+      syncPatternsForPerson(id);
+    });
+    applyEdit();
 
     // Same as the create route: an edit still changes what's blocked, so
     // it must be tracked as a genuinely-started submission and backed up.
@@ -187,16 +194,23 @@ export async function DELETE(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Must remove the availability rows this absence generated first,
-    // since bron_absence_id has no ON DELETE clause and foreign_keys=ON
-    // would otherwise reject deleting the absence row.
-    removeAbsenceAvailability(absenceId);
-
-    db.prepare(`DELETE FROM dienstrooster_absence WHERE id = ? AND person_id = ?`).run(absenceId, id);
-
-    // Same reclaim as the PATCH route - a deleted absence can free up a
-    // slot the person's own part-time pattern would otherwise cover.
-    syncPatternsForPerson(id);
+    // All three together. Removing the availability rows has to happen
+    // before the absence row itself (bron_absence_id has no ON DELETE
+    // clause and foreign_keys=ON would reject the delete), but as separate
+    // statements a crash in between left the absence still on the books
+    // with nothing blocked for it any more - an afwezigheid that silently
+    // stopped protecting its own dates, visible nowhere.
+    //
+    // better-sqlite3 nests transactions as savepoints, so the ones inside
+    // these two helpers simply join this one.
+    const deleteAbsence = db.transaction(() => {
+      removeAbsenceAvailability(absenceId);
+      db.prepare(`DELETE FROM dienstrooster_absence WHERE id = ? AND person_id = ?`).run(absenceId, id);
+      // Same reclaim as the PATCH route - a deleted absence can free up a
+      // slot the person's own part-time pattern would otherwise cover.
+      syncPatternsForPerson(id);
+    });
+    deleteAbsence();
 
     const response: ApiSuccessResponse<{ deleted: boolean }> = {
       success: true,
