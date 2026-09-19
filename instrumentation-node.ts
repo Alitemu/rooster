@@ -31,6 +31,8 @@
  * their code ran in-process instead.
  */
 export async function runStartupBootstrap(): Promise<void> {
+  await warnAboutSeededPassword();
+
   if (process.env.SEED_ON_START !== 'true' && !process.env.SEED_PLANNER_PASSWORD) return;
 
   const { db } = await import('./db/client');
@@ -62,5 +64,56 @@ export async function runStartupBootstrap(): Promise<void> {
   }
   if (process.env.SEED_PLANNER_PASSWORD) {
     await runScript('scripts/claim-password.ts', ['planner']);
+  }
+}
+
+/**
+ * Say so, loudly, on every start while a staff account still has the
+ * password that scripts/seed.ts sets.
+ *
+ * That password is in this repository on purpose - it makes the app
+ * usable the moment it is seeded, while it is being built and tested. The
+ * risk is not that it exists; it is that a deployment quietly keeps it
+ * after becoming the real thing. docker-compose.yml's own comment claimed
+ * for a while that seeding left the account without a password at all,
+ * which is exactly the kind of belief this check exists to interrupt.
+ *
+ * Only ever a log line: it must never refuse to start or change an
+ * account, because it cannot tell a real deployment apart from the
+ * testing it is meant to support.
+ */
+async function warnAboutSeededPassword(): Promise<void> {
+  try {
+    const { db } = await import('./db/client');
+    const staff = db
+      .prepare(
+        `SELECT codenaam, wachtwoord_hash FROM dienstrooster_person
+         WHERE rol IN ('ADMIN', 'PLANNER') AND wachtwoord_hash IS NOT NULL`
+      )
+      .all() as Array<{ codenaam: string; wachtwoord_hash: string }>;
+    if (staff.length === 0) return;
+
+    const { verifyPassword } = await import('./lib/auth');
+    const { DEFAULT_TEST_PASSWORD } = await import('./lib/seedPassword');
+
+    const stillDefault: string[] = [];
+    for (const account of staff) {
+      if (await verifyPassword(DEFAULT_TEST_PASSWORD, account.wachtwoord_hash)) {
+        stillDefault.push(account.codenaam);
+      }
+    }
+    if (stillDefault.length === 0) return;
+
+    console.warn(
+      `\n[dienstrooster] LET OP: ${stillDefault.join(', ')} ` +
+        `${stillDefault.length === 1 ? 'gebruikt' : 'gebruiken'} nog het standaard seed-wachtwoord.\n` +
+        '            Dat wachtwoord staat in de broncode, dus iedereen die de repository\n' +
+        '            heeft gezien kan hiermee inloggen en het hele rooster beheren.\n' +
+        '            Wijzig het via "Wachtwoord wijzigen" op de periodepagina voordat\n' +
+        '            deze installatie voor echte roosters gebruikt wordt.\n'
+    );
+  } catch {
+    // A warning is never worth failing a boot over - e.g. a database that
+    // has not been migrated yet at this point.
   }
 }

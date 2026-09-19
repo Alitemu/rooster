@@ -22,6 +22,12 @@
 import fs from 'fs';
 import path from 'path';
 import { db, dbFilePath } from '@/db/client';
+// Shared with the planner's exports rather than a local copy: this file
+// used to quote fields itself, without the formula-injection guard that
+// lib/csv.ts has. These backups carry the codenaam and the period name,
+// both planner-entered free text, and they are written to be opened in a
+// spreadsheet - exactly the case that guard exists for.
+import { csvField } from '@/lib/csv';
 
 export const BACKUP_DIR = path.join(path.dirname(dbFilePath), 'backups', 'preferences');
 
@@ -37,11 +43,6 @@ function slugify(value: string): string {
 // this makes that collision far less likely in the first place.
 function timestampForFilename(date: Date): string {
   return date.toISOString().replace(/:/g, '-');
-}
-
-function csvField(value: string | number | null): string {
-  const str = value === null ? '' : String(value);
-  return `"${str.replace(/"/g, '""')}"`;
 }
 
 interface PreferenceRow {

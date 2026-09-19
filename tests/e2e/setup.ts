@@ -151,7 +151,7 @@ export function getBaseUrl(): string {
  */
 export async function loginAsPlanner(page: Page): Promise<void> {
   const codenaam = process.env.E2E_PLANNER_CODENAAM || 'planner';
-  // Must match DEFAULT_TEST_PASSWORD in scripts/seed.ts, which planner is
+  // Must match DEFAULT_TEST_PASSWORD in lib/seedPassword.ts, which planner is
   // seeded with directly.
   const password = process.env.E2E_PLANNER_PASSWORD || 'Password123!';
 

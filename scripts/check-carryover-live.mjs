@@ -63,7 +63,7 @@ const RULESET = { windowWeeks: 1, distributionMode: 'EVEN' }; // no explicit ban
 // comment) - this only ever exercises the "already claimed" 409 path now,
 // kept as coverage of that route for whenever the seeded password is
 // cleared instead.
-const SEEDED_TEST_PASSWORD = 'Password123!'; // must match DEFAULT_TEST_PASSWORD in scripts/seed.ts
+const SEEDED_TEST_PASSWORD = 'Password123!'; // must match DEFAULT_TEST_PASSWORD in lib/seedPassword.ts
 async function ensureStaffPassword(codenaam, password) {
   await req('POST', '/api/auth/first-run-setup', { body: { codenaam, password } });
 }

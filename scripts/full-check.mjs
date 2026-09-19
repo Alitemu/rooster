@@ -128,7 +128,7 @@ function mintLink(personId) {
 // than removed: a real operator who does clear the seeded password (or a
 // future deployment that goes back to leaving it unset) still goes through
 // exactly this flow, and this proves it still works either way.
-const SEEDED_TEST_PASSWORD = 'Password123!'; // must match DEFAULT_TEST_PASSWORD in scripts/seed.ts
+const SEEDED_TEST_PASSWORD = 'Password123!'; // must match DEFAULT_TEST_PASSWORD in lib/seedPassword.ts
 async function ensureStaffPassword(codenaam, password) {
   await req('POST', '/api/auth/first-run-setup', { body: { codenaam, password } });
 }

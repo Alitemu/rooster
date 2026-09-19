@@ -13,10 +13,6 @@ import { v4 as uuid } from 'uuid';
 import { hashToken, hashPassword, validatePasswordStrength, generateAccessToken } from '../lib/auth';
 import { generateSlotsForPeriod } from '../lib/slotGeneration';
 import { createSetupToken } from '../lib/setupToken';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // The planner account gets this password set directly by the seed, on
 // explicit request - a known password checked into git that's trivial to
 // type on a phone during testing, no /planner/login "first run" form or
@@ -24,11 +20,14 @@ const __dirname = path.dirname(__filename);
 // validatePasswordStrength/hashPassword lib/auth.ts uses for that form -
 // only the source of the password changed, not the strength rule.
 //
-// CHANGE OR REMOVE THIS before pointing a deployment at real staff and
-// real schedules: anyone with read access to this repository (now or at
-// any point in its git history) knows this password. It controls the
-// entire roster for every participant, not just the account itself.
-const DEFAULT_TEST_PASSWORD = 'Password123!';
+// The value lives in its own module because the startup check in
+// instrumentation-node.ts warns while an account still has it, and has to
+// compare against exactly the same string - a second copy would drift, and
+// the half that drifts is the warning.
+import { DEFAULT_TEST_PASSWORD } from '../lib/seedPassword';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Resolve which password the freshly-created planner account gets: the
@@ -1014,7 +1013,11 @@ async function seed() {
     console.log(
       plannerPasswordFromEnv
         ? `  - Planner: planner / password: (set from SEED_PLANNER_PASSWORD)`
-        : `  - Planner: planner / password: ${DEFAULT_TEST_PASSWORD} (change before real use - see DEFAULT_TEST_PASSWORD in this file)`
+        : `  - Planner: planner / password: ${DEFAULT_TEST_PASSWORD}\n` +
+          `    CHANGE THIS before real staff and real schedules use this deployment:\n` +
+          `    it is checked into this repository, so everyone with read access knows it.\n` +
+          `    Log in and use "Wachtwoord wijzigen" on the period list - changing it there\n` +
+          `    also ends every session opened with the old one.`
     );
     if (setupToken) {
       console.log(

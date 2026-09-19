@@ -230,4 +230,25 @@ describe('writePreferencesBackup', () => {
   it('returns null for an unknown person or period instead of throwing', () => {
     expect(writePreferencesBackup('does-not-exist', 'also-does-not-exist')).toBeNull();
   });
+
+  it('neutralises a codenaam or period name that would run as a spreadsheet formula', () => {
+    // These files exist to be opened in a spreadsheet, and both of these
+    // fields are planner-entered free text. A leading `=` makes the cell a
+    // formula in Excel, Numbers and Sheets - so it gets the same apostrophe
+    // guard the planner's exports use (lib/csv.ts). This file used to quote
+    // its fields with a local helper that had no such guard.
+    const fixture = trackFixture(
+      createFixture({ codenaam: '=HYPERLINK("http://evil.example","klik")', periodNaam: '@SUM(A1:A9)' })
+    );
+    setBlockingLevel(fixture.personId, fixture.slotIds['2027-01-04'], 'ABSOLUUT');
+
+    const filePath = writePreferencesBackup(fixture.personId, fixture.periodId)!;
+    writtenFiles.push(filePath);
+
+    const row = fs.readFileSync(filePath, 'utf-8').trim().split('\n')[1];
+    expect(row).toContain(`"'=HYPERLINK`);
+    expect(row).toContain(`"'@SUM(A1:A9)"`);
+    // The cell must never start the formula straight after the quote.
+    expect(row.startsWith('"=')).toBe(false);
+  });
 });

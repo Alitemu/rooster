@@ -20,7 +20,7 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 | Styling | Tailwind CSS + shadcn/ui | 3.3+ |
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |
 | ORM | Drizzle | 0.29+ |
-| Auth | Custom (tokens + TOTP) | bcryptjs, speakeasy |
+| Auth | Custom (tokens + TOTP) | bcrypt, speakeasy |
 | Solver | Python + FastAPI | 3.11+, 0.104+ |
 | Testing | Vitest + fast-check | 1.0+, 3.14+ |
 | Container | Docker Compose | 3.8+ |
@@ -167,7 +167,7 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 ## Datamodel Overview (Phase 0)
 
 **Core Tables (Implemented Phase 0):**
-- `person` - staff members (codenaam, role, password_hash, totp_secret)
+- `person` - staff members (codenaam, role, password_hash, totp_secret, sessie_versie)
 - `person_access_link` - personal links for participants
 - `pool` - shift pool (name, type, settings reference)
 - `pool_membership` - who's in which pool when
@@ -245,10 +245,33 @@ Show live in settings screen with interpretation in plain Dutch/English.
      deliberate manual act, not a side effect of exporting.
 
 2. **Password + TOTP** (planner/admin)
-   - bcryptjs for password hashing
+   - bcrypt (the native binding) for password hashing
    - Speakeasy for TOTP generation
    - QR code shown at setup
    - No email required (pseudonymous)
+   - The password is changed through POST /api/auth/change-password
+     ("Wachtwoord wijzigen" on the period list), which requires the
+     current one. /api/auth/first-run-setup only ever claims an account
+     that has none yet, so it is not a reset path.
+   - `scripts/seed.ts` sets a known password from `lib/seedPassword.ts` -
+     deliberate, so a seeded database is immediately usable while this is
+     being built. The app logs a warning on every start while an account
+     still has it.
+
+**Session revocation**
+
+Session cookies are self-contained signed tokens, so nothing server-side
+knows they exist. `person.sessie_versie` is the one thing that does: it is
+baked into every token and compared on each request (lib/sessionVersion.ts).
+Raising it invalidates every token issued for that person in one UPDATE.
+
+- Logging out revokes every session for that person, not just this
+  browser's cookie. `{ "alleenDezeBrowser": true }` on POST /api/auth/logout
+  keeps the others.
+- Changing the password revokes them too, and re-issues a cookie for the
+  browser that made the change.
+- A token from before the column existed carries no version and is
+  refused, so everyone logs in once more after that upgrade.
 
 ## Deployment
 
@@ -288,8 +311,20 @@ Show live in settings screen with interpretation in plain Dutch/English.
 - Holiday history for 2025-2028
 - Creates the audit_log table, but does not insert any rows into it - a
   fresh seed has an empty audit trail until real actions happen
+- Access links get a real random token; only its hash is stored, exactly
+  as in production, so the plaintext is gone the moment the seed ends.
+  Mint a fresh link through the planner's export screen to open someone's
+  page.
 
 All data uses codenamen only, no real personal data.
+
+**The seed builds the schema with its own raw SQL**, and db/client.ts then
+skips migrations for a database that came out of it (migration 0000 would
+collide with the tables already there). A column added to `db/schema.ts`
+therefore needs three things, not one: the schema, a migration under
+`db/migrations`, and an entry in the seed - either in its CREATE TABLE for
+a fresh database, or in `LATER_COLUMNS` so a database seeded weeks ago
+picks it up too.
 
 ## Common Patterns & Pitfalls
 
