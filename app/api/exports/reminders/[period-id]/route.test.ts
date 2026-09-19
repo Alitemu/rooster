@@ -18,6 +18,9 @@ import { POST } from './route';
 
 const createdPeriodIds: string[] = [];
 const createdPoolIds: string[] = [];
+// Tracked so the ruleset createPool() mints is cleaned up too - it has no
+// FK pointing at it, so nothing else would ever remove it.
+const createdRulesetIds: string[] = [];
 const createdPersonIds: string[] = [];
 
 function createPool(): string {
@@ -25,6 +28,7 @@ function createPool(): string {
   db.prepare(
     `INSERT INTO dienstrooster_ruleset (id, naam, config_json, aangemaakt_op) VALUES (?, ?, ?, datetime('now'))`
   ).run(rulesetId, 'Test ruleset', JSON.stringify({}));
+  createdRulesetIds.push(rulesetId);
 
   const poolId = crypto.randomUUID();
   db.prepare(
@@ -104,6 +108,9 @@ afterEach(() => {
   }
   while (createdPoolIds.length > 0) {
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(createdPoolIds.pop()!);
+  }
+  while (createdRulesetIds.length > 0) {
+    db.prepare('DELETE FROM dienstrooster_ruleset WHERE id = ?').run(createdRulesetIds.pop()!);
   }
 });
 

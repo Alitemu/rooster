@@ -42,6 +42,9 @@ yarn-error.log*
 
 # Database
 *.db
+
+# Test database (vitest.config.ts + tests/globalSetup.ts) - wiped before every run
+.test-data/
 *.db-shm
 *.db-wal
 

@@ -119,8 +119,17 @@ afterEach(() => {
     ).run(period.pool_id);
     db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
+    // Read the member ids BEFORE deleting the membership rows they live
+    // in: the other way round leaves the subquery empty, so no person is
+    // ever deleted. That is how this fixture quietly leaked a row per test
+    // into the database the whole suite shares.
+    const memberIds = db
+      .prepare('SELECT person_id FROM dienstrooster_pool_membership WHERE pool_id = ?')
+      .all(period.pool_id) as Array<{ person_id: string }>;
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(period.pool_id);
-    db.prepare('DELETE FROM dienstrooster_person WHERE id IN (SELECT person_id FROM dienstrooster_pool_membership WHERE pool_id = ?)').run(period.pool_id);
+    for (const m of memberIds) {
+      db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(m.person_id);
+    }
     const pool = db.prepare('SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?').get(period.pool_id) as { ruleset_id: string } | undefined;
     db.prepare('DELETE FROM dienstrooster_shift_type WHERE pool_id = ?').run(period.pool_id);
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(period.pool_id);

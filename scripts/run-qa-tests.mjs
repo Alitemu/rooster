@@ -12,9 +12,32 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Initialize database (use same path as seed.ts)
-const dbPath = path.join(__dirname, '..', 'rooster.db');
+/**
+ * Same resolution as scripts/seed.ts / db/client.ts.
+ *
+ * This used to hardcode <repo>/rooster.db, ignoring DATABASE_URL - so it
+ * always wrote into the local development database even when the app was
+ * pointed somewhere else, and there was no way to aim it at a scratch
+ * database instead. Combined with foreign_keys=OFF below, that is how
+ * dienstrooster_audit_log ended up with rows whose actor_id referenced
+ * people that no longer existed.
+ */
+function resolveDbPath() {
+  let raw = process.env.DATABASE_URL || 'file:./rooster.db';
+  if (raw.startsWith('file:')) {
+    raw = raw.slice(5);
+    if (raw.startsWith('//')) raw = raw.slice(2);
+  }
+  return path.isAbsolute(raw) ? raw : path.resolve(__dirname, '..', raw);
+}
+
+const dbPath = resolveDbPath();
+console.log(`QA tests running against: ${dbPath}`);
 const db = new Database(dbPath);
+// This script inserts fixture rows in an order that does not always satisfy
+// the foreign keys, so they stay off for its duration - which is exactly why
+// it must not be pointed at a database anyone cares about. Run it against a
+// scratch copy: DATABASE_URL=file:./qa-scratch.db node scripts/run-qa-tests.mjs
 db.pragma('foreign_keys = OFF');
 
 const results = [];

@@ -173,6 +173,12 @@ export function cleanupPhase3TestData(periodId?: string, personIds?: string[]) {
     // Clean test person records if provided
     if (personIds && personIds.length > 0) {
       for (const personId of personIds) {
+        // Audit rows first: they reference the person as actor_id, and
+        // deleting the person while one still points at them leaves a row
+        // with a dangling actor (only possible because this fixture runs
+        // with foreign_keys off) - which is exactly the debris that
+        // accumulated in the development database.
+        db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(personId);
         db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(personId);
       }
     }
