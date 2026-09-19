@@ -10,12 +10,46 @@ out
 .vscode
 .idea
 .DS_Store
-*.db
-*.db-shm
-*.db-wal
+# *.db* rather than a list: it also catches the -wal/-shm sidecars and the
+# dated copies a manual backup leaves behind (rooster.db.backup-...),
+# which a plain *.db does not match.
+*.db*
 caddy_data
 __pycache__
 .pytest_cache
 venv
 .venv
+
+# Secrets and real data that a build must never bake into the image.
+#
+# The Dockerfile does `COPY . .`, so anything left behind by running the
+# app locally travels into the image - which is a distributable artifact.
+# The database was already excluded above; these are the rest of what the
+# app writes beside it:
+#
+# - .session_secret / .setup_token_hash: generated secrets. At runtime the
+#   app reads them from DATA_DIR (/data), never from /app, so a copy in the
+#   image is useless to the app and useful only to whoever has the image.
+# - backups/: the preference CSV backups (lib/preferencesBackup.ts), one
+#   per person per period, with what each of them actually filled in.
+# - .test-data/: the test database and its own backups.
+# - data/: the default DATA_DIR from docker-compose.yml, and the case that
+#   matters most - an operator building the image on the machine the app
+#   has been running on has a full database and everyone's preference CSVs
+#   sitting right there. It is a bind-mount target, so whatever ends up in
+#   the image at that path is shadowed at runtime regardless.
+#
+# The ** variants are not redundant: Docker matches these against the whole
+# relative path and a plain * never crosses a /, so `*.db*` alone does not
+# match `data/rooster.db`, and a custom DATA_DIR puts them somewhere else
+# again.
 .session_secret
+.setup_token_hash
+data
+backups
+**/backups
+**/*.db*
+**/.session_secret
+**/.setup_token_hash
+.test-data
+coverage
