@@ -64,11 +64,30 @@ interface UpdateRulesetRequest {
   rowVersion?: number;
 }
 
+/**
+ * Upper bound for a window, in weeks.
+ *
+ * Generous rather than tight: the setup form offers 0-8, and a window
+ * longer than the period itself already reduces capacity to zero, so
+ * anything near this is meaningless in practice. It is here to keep the
+ * value in a range the rest of the stack can reason about, not to second-
+ * guess a planner.
+ */
+const MAX_WINDOW_WEEKS = 52;
+
+/**
+ * A band is a count of shifts, so both ends are whole numbers.
+ *
+ * The integer check is not cosmetic: solver/main.py declares these as
+ * `tuple[int, int]`, so [7.5, 8.5] was accepted here and only rejected
+ * three layers down, as a solver validation error that says nothing about
+ * which setting caused it.
+ */
 function isValidBand(band: unknown): band is [number, number] {
   return (
     Array.isArray(band) &&
     band.length === 2 &&
-    band.every((n) => typeof n === 'number' && Number.isFinite(n) && n >= 0) &&
+    band.every((n) => typeof n === 'number' && Number.isInteger(n) && n >= 0) &&
     band[0] <= band[1]
   );
 }
@@ -133,22 +152,25 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       return NextResponse.json(response, { status: 400 });
     }
 
-    if (body.windowWeeks !== undefined && (typeof body.windowWeeks !== 'number' || body.windowWeeks < 0)) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_WINDOW', message: 'Venster moet 0 of hoger zijn' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
+    // Whole weeks, and within a range that can mean something. The form
+    // offers 0-8; the route accepted any non-negative number, including
+    // 2.5 (which the solver's own schema declares as an int and rejects,
+    // so the failure surfaced a layer too late and in the wrong words) and
+    // 1000 (which makes floor(weeks / windowWeeks) zero, i.e. a period
+    // with no capacity at all and no obvious reason why).
     for (const [label, value] of [
+      ['Venster', body.windowWeeks],
       ['Venster (avond)', body.windowWeeksAvond],
       ['Venster (weekend/feestdag)', body.windowWeeksWeekendFeestdag],
     ] as const) {
-      if (value !== undefined && (typeof value !== 'number' || value < 0)) {
+      if (value === undefined) continue;
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > MAX_WINDOW_WEEKS) {
         const response: ApiErrorResponse = {
           success: false,
-          error: { code: 'INVALID_WINDOW', message: `"${label}" moet 0 of hoger zijn` },
+          error: {
+            code: 'INVALID_WINDOW',
+            message: `"${label}" moet een heel getal tussen 0 en ${MAX_WINDOW_WEEKS} zijn`,
+          },
         };
         return NextResponse.json(response, { status: 400 });
       }
@@ -162,7 +184,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       if (band !== undefined && !isValidBand(band)) {
         const response: ApiErrorResponse = {
           success: false,
-          error: { code: 'INVALID_BAND', message: `${key}: min en max moeten getallen zijn (min <= max, min >= 0)` },
+          error: { code: 'INVALID_BAND', message: `${key}: min en max moeten hele getallen zijn (min <= max, min >= 0)` },
         };
         return NextResponse.json(response, { status: 400 });
       }
