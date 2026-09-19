@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import {
-  calculatePriorAssignmentWeeks,
+  resolvePriorAssignmentWeeks,
   calculatePriorAssignmentRange,
 } from '@/lib/priorAssignmentDerive';
 import { getISOWeek, parseISO } from '@/lib/holidays';
@@ -78,16 +78,6 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       | undefined;
     const lookbackAnchor = prevPeriod?.eind_datum || period.start_datum;
 
-    // Parse windowWeeks from frozen ruleset
-    let windowWeeks = 7;
-    if (period.bevroren_ruleset_json) {
-      try {
-        const config = JSON.parse(period.bevroren_ruleset_json);
-        windowWeeks = config.windowWeeks || 7;
-      } catch (e) {
-        // Fallback
-      }
-    }
 
     // Fetch existing prior assignments
     const assignmentsStmt = db.prepare(`
@@ -123,7 +113,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     }));
 
     // Calculate date range
-    const weeksToLookBack = calculatePriorAssignmentWeeks(windowWeeks);
+    const weeksToLookBack = resolvePriorAssignmentWeeks(period);
     const [startDate, endDate] = calculatePriorAssignmentRange(
       lookbackAnchor,
       weeksToLookBack

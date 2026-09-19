@@ -9,6 +9,7 @@
  */
 
 import { dateToISO, parseISO, getISOWeek } from './holidays';
+import { resolveRulesetConfig, resolveWindowWeeks } from './rosterBands';
 
 export interface PriorAssignmentInput {
   previousPeriodEndDate: string; // ISO date, should be Sunday-rounded
@@ -37,6 +38,37 @@ export function calculatePriorAssignmentWeeks(
 ): number {
   // We need windowWeeks - 1 weeks from the previous period
   return Math.max(0, windowWeeks - 1);
+}
+
+/**
+ * How many weeks of the previous period a period needs carried over, read
+ * straight from its own ruleset.
+ *
+ * Three routes (the prior-assignments list, auto-derive and confirm) each
+ * worked this out themselves with `JSON.parse(...).windowWeeks || 7`, and
+ * all three were wrong in the same three ways:
+ *
+ *   - the fallback was 7 while resolveWindowWeeks - what the solver
+ *     actually runs on - falls back to 2;
+ *   - `|| 7` turns an explicitly configured 0 ("no window rule") into 7;
+ *   - per-teller windows were invisible to them, so a period configured
+ *     with only windowWeeksAvond/windowWeeksWeekendFeestdag fell back to 7
+ *     regardless of what those said.
+ *
+ * That matters because this number decides how much history the window
+ * rule can see across the period boundary. Too little and someone can be
+ * rostered too soon after a shift in the previous period - the one thing
+ * carrying these over exists to prevent.
+ *
+ * The larger of the two windows wins: the history has to be deep enough
+ * for whichever rule reaches back furthest.
+ */
+export function resolvePriorAssignmentWeeks(period: {
+  bevroren_ruleset_json?: string | null;
+  pool_id: string;
+}): number {
+  const windows = resolveWindowWeeks(resolveRulesetConfig(period));
+  return calculatePriorAssignmentWeeks(Math.max(windows.avond, windows.weekendFeestdag));
 }
 
 /**

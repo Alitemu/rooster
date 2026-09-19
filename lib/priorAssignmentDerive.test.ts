@@ -7,6 +7,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   calculatePriorAssignmentWeeks,
+  resolvePriorAssignmentWeeks,
   calculatePriorAssignmentRange,
   generateSkeletonPriorAssignments,
   doRangesOverlap,
@@ -30,6 +31,68 @@ describe('Prior Assignment Derivation', () => {
 
     it('returns 0 for single-week windows', () => {
       expect(calculatePriorAssignmentWeeks(1)).toBe(0);
+    });
+  });
+
+  /**
+   * How deep the history carried over from the previous period has to be.
+   *
+   * The window rule is what these prior assignments exist for: without
+   * enough of them, the solver cannot see a shift that happened just
+   * before this period started, and can put someone on duty too soon
+   * after it. Three routes each derived this number themselves with
+   * `JSON.parse(...).windowWeeks || 7`, which got it wrong in three
+   * different ways - each has a case below.
+   */
+  describe('resolvePriorAssignmentWeeks', () => {
+    it('reads the window from the frozen ruleset', () => {
+      const period = { pool_id: 'p', bevroren_ruleset_json: JSON.stringify({ windowWeeks: 5 }) };
+      expect(resolvePriorAssignmentWeeks(period)).toBe(4);
+    });
+
+    it('falls back to the same default the solver uses, not to 7', () => {
+      // resolveWindowWeeks falls back to 2, so this must give 2 - 1 = 1.
+      // The old code answered 6 here, carrying five weeks of history that
+      // nothing asked for.
+      const period = { pool_id: 'p', bevroren_ruleset_json: JSON.stringify({}) };
+      expect(resolvePriorAssignmentWeeks(period)).toBe(1);
+    });
+
+    it('honours an explicitly configured window of 0', () => {
+      // `windowWeeks || 7` read a deliberate 0 ("no window rule") as
+      // falsy and silently substituted 7.
+      const period = { pool_id: 'p', bevroren_ruleset_json: JSON.stringify({ windowWeeks: 0 }) };
+      expect(resolvePriorAssignmentWeeks(period)).toBe(0);
+    });
+
+    it('sees per-teller windows, and takes the one that reaches furthest', () => {
+      // A period configured this way has no legacy windowWeeks at all, so
+      // the old code fell back to 7 regardless of what these said. The
+      // history has to be deep enough for the larger of the two.
+      const period = {
+        pool_id: 'p',
+        bevroren_ruleset_json: JSON.stringify({
+          windowWeeksAvond: 3,
+          windowWeeksWeekendFeestdag: 6,
+        }),
+      };
+      expect(resolvePriorAssignmentWeeks(period)).toBe(5);
+    });
+
+    it('lets a per-teller window override the pooled one', () => {
+      const period = {
+        pool_id: 'p',
+        bevroren_ruleset_json: JSON.stringify({ windowWeeks: 2, windowWeeksWeekendFeestdag: 8 }),
+      };
+      expect(resolvePriorAssignmentWeeks(period)).toBe(7);
+    });
+
+    it('survives a ruleset that is not valid JSON', () => {
+      // resolveRulesetConfig falls through to the pool's own ruleset for
+      // this; with no such pool in the test database that means defaults,
+      // and the important part is that it answers rather than throwing.
+      const period = { pool_id: 'no-such-pool', bevroren_ruleset_json: '{ niet: json' };
+      expect(() => resolvePriorAssignmentWeeks(period)).not.toThrow();
     });
 
     it('handles large window weeks', () => {

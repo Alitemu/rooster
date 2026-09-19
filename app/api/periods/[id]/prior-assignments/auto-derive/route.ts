@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import {
-  calculatePriorAssignmentWeeks,
+  resolvePriorAssignmentWeeks,
   calculatePriorAssignmentRange,
 } from '@/lib/priorAssignmentDerive';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -59,16 +59,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Parse windowWeeks
-    let windowWeeks = 7;
-    if (period.bevroren_ruleset_json) {
-      try {
-        const config = JSON.parse(period.bevroren_ruleset_json);
-        windowWeeks = config.windowWeeks || 7;
-      } catch (e) {
-        // Fallback
-      }
-    }
 
     // Find previous period (most recent before current)
     const prevStmt = db.prepare(`
@@ -95,7 +85,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
 
     // Calculate lookback range from previous period
-    const weeksToLookBack = calculatePriorAssignmentWeeks(windowWeeks);
+    const weeksToLookBack = resolvePriorAssignmentWeeks(period);
     const [startDate, endDate] = calculatePriorAssignmentRange(
       prevPeriod.eind_datum,
       weeksToLookBack

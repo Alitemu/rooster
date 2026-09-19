@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { calculatePriorAssignmentWeeks, calculatePriorAssignmentRange } from '@/lib/priorAssignmentDerive';
+import { resolvePriorAssignmentWeeks, calculatePriorAssignmentRange } from '@/lib/priorAssignmentDerive';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -36,15 +36,6 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
-    }
-
-    let windowWeeks = 7;
-    if (period.bevroren_ruleset_json) {
-      try {
-        windowWeeks = JSON.parse(period.bevroren_ruleset_json).windowWeeks || 7;
-      } catch {
-        // Fallback to default
-      }
     }
 
     const prevPeriod = db
@@ -74,7 +65,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     // itself finds: the assignments that actually existed in this window.
     let expectedCount = 0;
     if (prevPeriod) {
-      const weeksToLookBack = calculatePriorAssignmentWeeks(windowWeeks);
+      const weeksToLookBack = resolvePriorAssignmentWeeks(period);
       const [startDate, endDate] = calculatePriorAssignmentRange(prevPeriod.eind_datum, weeksToLookBack);
       expectedCount = (
         db
