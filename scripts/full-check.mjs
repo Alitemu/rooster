@@ -86,7 +86,13 @@ async function generateRoster(periodId, jar, body) {
     const status = poll.json?.data?.status;
     if (status === 'DONE') return { ok: true, result: poll.json.data.result, startStatus: 200 };
     if (status === 'ERROR') {
-      return { ok: false, detail: `solver error: ${poll.json?.data?.error}`, startStatus: 200 };
+      // job.error is { message, status }, not a string (see
+      // lib/rosterGenerationJobs.ts's failRosterGenerationJob) - printing
+      // it directly gave "[object Object]", which says nothing about what
+      // actually went wrong. The dialog already handles both shapes.
+      const err = poll.json?.data?.error;
+      const detail = typeof err === 'string' ? err : err?.message ?? JSON.stringify(err);
+      return { ok: false, detail: `solver error: ${detail}`, startStatus: 200 };
     }
     if (poll.status !== 200) {
       return { ok: false, detail: `poll status=${poll.status}`, startStatus: 200 };

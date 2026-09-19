@@ -116,8 +116,20 @@ class PriorAssignment(BaseModel):
     teller: str  # AVOND, WEEKEND, or FEESTDAG
 
 
+# Upper bound for every "number of weeks" field below.
+#
+# These values drive `range(week, week + N)` loops in constraints.py, once
+# per person per week. Each iteration is cheap, but nothing stopped N from
+# being enormous, and a large enough N turns model building into a hang
+# that looks exactly like a slow solve. The web app caps its own window
+# settings at the same number (app/api/periods/[id]/ruleset/route.ts), so
+# this rejects nothing the app can legitimately send - it is the second
+# half of one rule, stated where the loops actually are.
+MAX_WEEKS = 52
+
+
 class RuleSet(BaseModel):
-    window_weeks: int = Field(default=2, ge=0)
+    window_weeks: int = Field(default=2, ge=0, le=MAX_WEEKS)
     # A fixed 2-tuple rather than list[int]: constraints.py always does
     # `base_min, base_max = band_ranges.get(counter, [7, 8])`, and a
     # wrong-length list used to reach that unpack and crash with a raw
@@ -180,8 +192,8 @@ class RuleSet(BaseModel):
     # greedy.py's run_greedy_construction, both of which apply this
     # identically. holiday_spread_weeks (below) is a separate,
     # already-existing FEESTDAG-only extra rule, untouched by this.
-    window_weeks_avond: Optional[int] = Field(default=None, ge=0)
-    window_weeks_weekend_feestdag: Optional[int] = Field(default=None, ge=0)
+    window_weeks_avond: Optional[int] = Field(default=None, ge=0, le=MAX_WEEKS)
+    window_weeks_weekend_feestdag: Optional[int] = Field(default=None, ge=0, le=MAX_WEEKS)
     # A negative value would turn the LIEVER_NIET penalty into a reward,
     # actively steering the solver towards a blocked-but-not-ABSOLUUT slot.
     soft_block_penalty: float = Field(default=1.0, ge=0)
@@ -210,7 +222,7 @@ class RuleSet(BaseModel):
     band_deviation_multiplier: float = Field(default=1.0, ge=1.0)
     # Hard minimum weeks between two FEESTDAG shifts for the same person,
     # independent of window_weeks. 0 (default) = no such rule.
-    holiday_spread_weeks: int = Field(default=0, ge=0)
+    holiday_spread_weeks: int = Field(default=0, ge=0, le=MAX_WEEKS)
     # Cost of one completely unfilled slot - see
     # objective.add_shortfall_objective. The dominant term by default (far
     # above everything else below), and the anchor add_band_slack_objective's

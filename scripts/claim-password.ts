@@ -49,10 +49,18 @@ function resolveDbPath(): string {
 
 async function main() {
   const [codenaam, argPassword] = process.argv.slice(2);
+  // SEED_PLANNER_PASSWORD is the preferred way in, and the only one
+  // docker-entrypoint.sh uses: a command-line argument is visible to every
+  // other process on the host via `ps aux` for as long as this runs, and
+  // usually ends up in the shell's history file too. The argument stays
+  // supported for a one-off manual run, but it is the second choice.
   const password = argPassword || process.env.SEED_PLANNER_PASSWORD;
 
   if (!codenaam || !password) {
-    console.error('Usage: tsx scripts/claim-password.ts <CODENAAM> [password] (or set SEED_PLANNER_PASSWORD)');
+    console.error(
+      'Usage: SEED_PLANNER_PASSWORD=... tsx scripts/claim-password.ts <CODENAAM>\n' +
+        '       (a password as second argument also works, but is visible in `ps aux`)'
+    );
     process.exit(1);
   }
 
