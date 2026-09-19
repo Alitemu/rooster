@@ -107,30 +107,40 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 400 });
     }
 
+    // Hashing happens before the transaction: better-sqlite3 transactions
+    // are synchronous and cannot contain an await.
     const newHash = await hashPassword(nieuw_wachtwoord);
-    db.prepare('UPDATE dienstrooster_person SET wachtwoord_hash = ? WHERE id = ?').run(newHash, person.id);
 
-    // Ends every session issued before this moment, including any the old
-    // password was used to open elsewhere.
-    const newSessionVersion = revokeAllSessions(person.id);
+    // All three together or none. A crash between the password write and
+    // the revocation would leave the new password in place while every
+    // session opened with the old one stayed valid - which is exactly the
+    // situation someone changing their password after a suspected leak is
+    // trying to end.
+    const newSessionVersion = db.transaction(() => {
+      db.prepare('UPDATE dienstrooster_person SET wachtwoord_hash = ? WHERE id = ?').run(newHash, person.id);
+
+      const version = revokeAllSessions(person.id);
+
+      // 'UPDATE' rather than a new action value: `actie` has a CHECK
+      // constraint listing the ten allowed actions, and what happened is
+      // recorded in nieuw_json instead. Deliberately no password material
+      // of any kind, not even its length.
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log
+           (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip)
+         VALUES (?, ?, 'person', ?, 'UPDATE', ?, ?)`
+      ).run(
+        crypto.randomUUID(),
+        person.id,
+        person.id,
+        JSON.stringify({ wijziging: 'wachtwoord', sessies_ingetrokken: true }),
+        new Date().toISOString()
+      );
+
+      return version;
+    })();
 
     clearRateLimit(rateLimitKey);
-
-    // 'UPDATE' rather than a new action value: `actie` has a CHECK
-    // constraint listing the ten allowed actions, and what happened is
-    // recorded in nieuw_json instead. Deliberately no password material of
-    // any kind, not even its length.
-    db.prepare(
-      `INSERT INTO dienstrooster_audit_log
-         (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip)
-       VALUES (?, ?, 'person', ?, 'UPDATE', ?, ?)`
-    ).run(
-      crypto.randomUUID(),
-      person.id,
-      person.id,
-      JSON.stringify({ wijziging: 'wachtwoord', sessies_ingetrokken: true }),
-      new Date().toISOString()
-    );
 
     const responseBody: ApiSuccessResponse<{ changed: true }> = {
       success: true,

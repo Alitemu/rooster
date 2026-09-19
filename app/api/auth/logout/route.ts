@@ -16,9 +16,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { clearSessionCookie } from '@/lib/session';
 import { getAuthContextFromRequest } from '@/lib/auth-context';
 import { revokeAllSessions } from '@/lib/sessionVersion';
-import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { parseJsonBody } from '@/lib/api-errors';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  // Clearing this browser's cookie comes first and is never conditional.
+  // Revoking the other sessions is the better outcome, but if anything
+  // about it fails, the one thing someone pressing "Uitloggen" is entitled
+  // to - being signed out here - must still happen. An error response
+  // would leave them logged in on the machine they are walking away from.
+  const response = NextResponse.json({ success: true, data: { loggedOut: true } });
+  clearSessionCookie(response);
+
   try {
     const auth = getAuthContextFromRequest(req);
 
@@ -29,11 +37,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (auth && !alleenDezeBrowser) {
       revokeAllSessions(auth.userId);
     }
-
-    const response = NextResponse.json({ success: true, data: { loggedOut: true } });
-    clearSessionCookie(response);
-    return response;
   } catch (error) {
-    return internalErrorResponse('logout', error);
+    console.error('[logout] intrekken van de overige sessies mislukt', error);
   }
+
+  return response;
 }

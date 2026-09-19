@@ -38,6 +38,34 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 400 });
     }
 
+    // Both checked before anything else: the preference count below
+    // returns 0 for a person who does not exist and for a period that does
+    // not exist, so every mistyped id used to come back as "Deze persoon
+    // heeft nog geen voorkeuren ingediend" - which sends a planner looking
+    // at the wrong problem entirely.
+    if (!db.prepare('SELECT 1 FROM dienstrooster_person WHERE id = ?').get(personId)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${personId} niet gevonden` },
+      };
+      return NextResponse.json(response, { status: 404 });
+    }
+
+    // `verwijderd_op IS NULL`: a period in the trash is on its way out, so
+    // recording a confirmed submission against it is recording something
+    // that is about to disappear.
+    if (
+      !db
+        .prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
+        .get(body.period_id)
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${body.period_id} niet gevonden` },
+      };
+      return NextResponse.json(response, { status: 404 });
+    }
+
     // Check if person has blocking preferences
     const slotStmt = db.prepare(`
       SELECT COUNT(*) as count

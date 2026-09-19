@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
@@ -47,7 +48,7 @@ export async function PATCH(
     // Verify slot exists and its period still accepts preference changes
     const slotStmt = db.prepare(
       `SELECT s.id, s.period_id, sp.status as period_status, sp.deadline as period_deadline,
-              sp.bevroren_ruleset_json, sp.pool_id, st.teller
+              sp.bevroren_ruleset_json, sp.pool_id, sp.start_datum, sp.eind_datum, st.teller
        FROM dienstrooster_shift_slot s
        JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
        JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
@@ -61,10 +62,27 @@ export async function PATCH(
           period_deadline: string;
           bevroren_ruleset_json: string | null;
           pool_id: string;
+          start_datum: string;
+          eind_datum: string;
           teller: Teller;
         }
       | undefined;
-    if (!slot) {
+    // A slot belonging to a period this person has nothing to do with is
+    // treated as not existing. This is a write path: without the check,
+    // knowing any slot id from another pool was enough to put an
+    // availability row into that pool's period - counting against its
+    // block budget and feeding its solver run, for someone who is not in
+    // it.
+    if (
+      !slot ||
+      (!requirePlannerAccess(auth) &&
+        !isPeriodVisibleToPerson(id, {
+          id: slot.period_id,
+          pool_id: slot.pool_id,
+          start_datum: slot.start_datum,
+          eind_datum: slot.eind_datum,
+        }))
+    ) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'SLOT_NOT_FOUND', message: `Dienst ${slotId} niet gevonden` },
