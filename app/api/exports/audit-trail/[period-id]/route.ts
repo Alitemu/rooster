@@ -129,46 +129,49 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
     }));
 
     // Manual fills of an open slot never touch assignment_edit, only
-    // audit_log - the only place these show up at all.
+    // audit_log - the only place these show up at all. Joined straight to
+    // the slot/person the JSON snapshot names (json_extract, available in
+    // better-sqlite3's SQLite build) and filtered by period in SQL, rather
+    // than pulling every MANUAL_ASSIGN row this database has ever recorded
+    // and filtering in JS - that used to mean every export scanned the
+    // entire history of the deployment, growing without bound period after
+    // period, to find the handful that belong to this one.
+    //
+    // Not joined to dienstrooster_assignment itself: entiteit_id is the
+    // assignment's id at creation time, but a later reassign or delete
+    // removes that row (see those routes), which would silently drop this
+    // event from the trail the moment the assignment it created was ever
+    // touched again - exactly the history an accountability trail exists
+    // to keep. The person/slot ids in the JSON snapshot don't have that
+    // problem: a slot and a person are never deleted out from under a
+    // period that still exists.
     const manualAssignRows = db
       .prepare(
-        `SELECT al.nieuw_json, al.tijdstip, actor.codenaam as door
+        `SELECT al.tijdstip, actor.codenaam as door,
+                p.codenaam as persoon, s.datum as dienst_datum, st.teller,
+                json_extract(al.nieuw_json, '$.reason') as reden,
+                json_extract(al.nieuw_json, '$.override.code') as override_code
          FROM dienstrooster_audit_log al
          JOIN dienstrooster_person actor ON actor.id = al.actor_id
-         WHERE al.entiteit = 'assignment' AND al.actie = 'MANUAL_ASSIGN'`
+         JOIN dienstrooster_shift_slot s ON s.id = json_extract(al.nieuw_json, '$.slot_id')
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         JOIN dienstrooster_person p ON p.id = json_extract(al.nieuw_json, '$.person_id')
+         WHERE al.entiteit = 'assignment' AND al.actie = 'MANUAL_ASSIGN' AND s.period_id = ?`
       )
-      .all() as Array<{ nieuw_json: string; tijdstip: string; door: string }>;
-
-    const slotStmt = db.prepare(
-      `SELECT s.datum, s.period_id, st.teller, p.codenaam
-       FROM dienstrooster_shift_slot s
-       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-       JOIN dienstrooster_person p ON p.id = ?
-       WHERE s.id = ?`
-    );
+      .all(periodId) as Array<{
+        tijdstip: string; door: string; persoon: string; dienst_datum: string;
+        teller: string; reden: string | null; override_code: string | null;
+      }>;
 
     for (const r of manualAssignRows) {
-      let parsed: { person_id?: string; slot_id?: string; reason?: string | null; override?: { code: string } | null };
-      try {
-        parsed = JSON.parse(r.nieuw_json);
-      } catch {
-        continue;
-      }
-      if (!parsed.person_id || !parsed.slot_id) continue;
-
-      const slot = slotStmt.get(parsed.person_id, parsed.slot_id) as
-        | { datum: string; period_id: string; teller: string; codenaam: string }
-        | undefined;
-      if (!slot || slot.period_id !== periodId) continue;
-
       rows.push({
         wijziging_op: r.tijdstip,
         actie: 'Toegewezen (open plek ingevuld)',
-        persoon: slot.codenaam,
-        dienst_datum: slot.datum,
-        teller: TELLER_LABELS[slot.teller] ?? slot.teller,
-        reden: parsed.reason ?? null,
-        overrule: parsed.override ? OVERRIDE_LABELS[parsed.override.code] ?? parsed.override.code : null,
+        persoon: r.persoon,
+        dienst_datum: r.dienst_datum,
+        teller: TELLER_LABELS[r.teller] ?? r.teller,
+        reden: r.reden,
+        overrule: r.override_code ? OVERRIDE_LABELS[r.override_code] ?? r.override_code : null,
         door: r.door,
       });
     }

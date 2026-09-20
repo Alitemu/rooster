@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
+import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
 
 interface Period {
   id: string;
@@ -90,6 +91,7 @@ export default function PlannerHomePage() {
 
   const [showTrash, setShowTrash] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [showTotpSettings, setShowTotpSettings] = useState(false);
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
@@ -280,6 +282,9 @@ export default function PlannerHomePage() {
           </button>
           <button onClick={() => setShowChangePassword(true)} className="btn-secondary">
             Wachtwoord wijzigen
+          </button>
+          <button onClick={() => setShowTotpSettings(true)} className="btn-secondary">
+            Tweestapsverificatie
           </button>
           <button onClick={handleLogout} className="btn-secondary">
             Uitloggen
@@ -585,6 +590,10 @@ export default function PlannerHomePage() {
       <ChangePasswordDialog
         isOpen={showChangePassword}
         onClose={() => setShowChangePassword(false)}
+      />
+      <TotpSettingsDialog
+        isOpen={showTotpSettings}
+        onClose={() => setShowTotpSettings(false)}
       />
     </div>
   );

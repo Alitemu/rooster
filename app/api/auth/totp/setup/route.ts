@@ -5,9 +5,16 @@
  * secret and returns a QR code plus a short-lived signed setup token; the
  * secret is only persisted once confirmed via /api/auth/totp/confirm, so a
  * staff member who never scans the QR code doesn't get locked out.
+ *
+ * `qr_code` (the `otpauth://` URI speakeasy builds) is rendered here into
+ * `qr_code_image`, a PNG data URL - an authenticator app scans an image, not
+ * a URI. The raw URI still ships too, as the fallback for "can't scan, let
+ * me type it in" (most authenticator apps accept the URI or the secret
+ * pasted directly); `secret` is that same fallback in its bare base32 form.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import QRCode from 'qrcode';
 import { db } from '@/db/client';
 import { generateTOTPSecret } from '@/lib/auth';
 import { getAuthContextFromRequest } from '@/lib/auth-context';
@@ -56,9 +63,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       SETUP_TOKEN_MAX_AGE_SECONDS
     );
 
+    // Rendering can fail (it's the one external-library call in this
+    // route), but that must never block enrollment outright - the raw URI
+    // and the bare secret are both still usable without it.
+    let qrCodeImage: string | null = null;
+    try {
+      qrCodeImage = await QRCode.toDataURL(qrCode);
+    } catch (error) {
+      console.error('[totp-setup] kon QR-afbeelding niet renderen', error);
+    }
+
     return NextResponse.json({
       success: true,
-      data: { setup_token: setupToken, qr_code: qrCode, secret },
+      data: { setup_token: setupToken, qr_code: qrCode, qr_code_image: qrCodeImage, secret },
     });
   } catch (error) {
     return internalErrorResponse('totp-setup', error);

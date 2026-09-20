@@ -295,7 +295,6 @@ Show live in settings screen with interpretation in plain Dutch/English.
 2. **Password + TOTP** (planner/admin)
    - bcrypt (the native binding) for password hashing
    - Speakeasy for TOTP generation
-   - QR code shown at setup
    - No email required (pseudonymous)
    - The password is changed through POST /api/auth/change-password
      ("Wachtwoord wijzigen" on the period list), which requires the
@@ -305,6 +304,19 @@ Show live in settings screen with interpretation in plain Dutch/English.
      deliberate, so a seeded database is immediately usable while this is
      being built. The app logs a warning on every start while an account
      still has it.
+   - TOTP is self-service, mirroring the password: "Tweestapsverificatie"
+     on the period list opens `TotpSettingsDialog`, which calls
+     `/api/auth/totp/setup` (a fresh secret + a server-rendered QR PNG,
+     `qrcode` renders the `otpauth://` URI - nothing is persisted yet) and
+     `/api/auth/totp/confirm` (a live code from that secret is what
+     actually writes `totp_secret`). `/api/auth/totp/disable` is the way
+     back - current password only, deliberately never a fresh TOTP code,
+     since "I no longer have a code to give" is the ordinary reason to
+     call it, not an edge case. All three routes, plus `/api/auth/me`'s
+     `totp_enrolled` flag the dialog reads its own state from, existed
+     server-side since Phase 0 but had no screen calling any of them until
+     this was wired up - `qrcode` sat in package.json unused the whole
+     time.
 
 **Session revocation**
 
