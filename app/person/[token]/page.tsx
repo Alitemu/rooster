@@ -16,6 +16,7 @@ import { AbsenceManager, type Absence } from '@/components/AbsenceManager';
 import { PreferencesConfirmation } from '@/components/PreferencesConfirmation';
 import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
+import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 
 type Step = 'calendar' | 'parttime' | 'confirmation' | 'submitted' | 'roster';
 
@@ -386,11 +387,24 @@ function PersonalLinkPageContent() {
     );
   }
 
-  // Deadline is the actual cutoff for input, independent of whether the
-  // planner has gotten around to closing the period yet - see
-  // lib/periodInputGate.ts, which the server-side routes enforce this
-  // same way. Viewing what was entered is never blocked, only changing it.
+  // Deadline is one cutoff for input, independent of whether the planner
+  // has gotten around to closing the period yet. Viewing what was entered
+  // is never blocked, only changing it. Still used on its own for the
+  // deeltijd/afwezigheid editors below: those are the participant's own
+  // standing data, not scoped to one period, and their routes accept a
+  // change whatever this period's status is (they warn instead - see
+  // lib/periodInputGate.ts's buildDeadlinePassedWarning).
   const deadlinePassed = period.status !== 'GEPUBLICEERD' && new Date() > new Date(period.deadline);
+
+  // The voorkeurenkalender and the bevestigingsstap are different: their
+  // routes run checkPeriodAcceptsInput, which refuses a change once the
+  // period leaves OPEN *or* the deadline passes. Reading only the deadline
+  // here left every cell clickable on a period the planner had closed
+  // early - and closing early is the normal flow, since generating needs
+  // GESLOTEN. Each click then failed with a 403 the screen never showed,
+  // so preferences appeared to be editable and silently were not.
+  const inputGate = checkPeriodAcceptsInput(period);
+  const inputClosed = period.status !== 'GEPUBLICEERD' && !inputGate.allowed;
 
   // The sync from preferences/absences/deeltijd into the solver's input
   // only runs while a period is OPEN (lib/absenceSync.ts, lib/parttimeSync.ts)
@@ -452,11 +466,12 @@ function PersonalLinkPageContent() {
         </div>
       </div>
 
-      {deadlinePassed && (
+      {inputClosed && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-900">
-            ⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt
-            ingevuld, maar wijzigen kan niet meer.
+            {deadlinePassed
+              ? '⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'
+              : '🔒 De roosteraar heeft deze periode gesloten. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer. Neem contact op met de roosteraar als er nog iets aangepast moet worden.'}
           </p>
         </div>
       )}
@@ -620,7 +635,7 @@ function PersonalLinkPageContent() {
           <PreferencesCalendar
             personId={personId}
             periodId={period.id}
-            readOnly={deadlinePassed}
+            readOnly={inputClosed}
             onPreferencesChange={setPreferencesChanged}
             onCoverageUpdate={noopCoverageUpdate}
           />
@@ -652,7 +667,7 @@ function PersonalLinkPageContent() {
             blockedDays={blockedDays}
             voorkeurDays={voorkeurDays.total}
             parttimeConfirmed={parttimeConfirmed}
-            readOnly={deadlinePassed}
+            readOnly={inputClosed}
             onSubmit={handleSubmitSuccess}
           />
           <button

@@ -131,8 +131,19 @@ already running (`npm run seed`, `uvicorn main:app --port 8000` from
 - `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its
   own period/assignments fixture per file (`tests/e2e/setup.ts`), so it does
   not read the seeded period, only the pool and shift types it finds.
-- `node scripts/full-check.mjs` - the API lifecycle against real data.
+- `node scripts/full-check.mjs` - the API lifecycle against real data,
+  including the solver's own hard rules on its untouched output (no
+  ABSOLUUT violation, nobody twice in one ISO week, nobody's window rule
+  broken, nobody past their streefbereik).
 - `node scripts/ui-check.mjs` - the two screens people use most.
+
+`node scripts/schema-drift.mjs` needs nothing running. It builds one
+database from the seed and one from the migrations and compares them
+column by column, index by index, foreign key by foreign key. Run it after
+any schema change: SEED_ON_START defaults to true, so on a real deployment
+it is scripts/seed.ts - not db/migrations - that builds the schema, and
+the two drifting apart means production quietly runs a different one than
+every test does.
 
 Two things these get wrong easily, and both cost a day to diagnose:
 - **Assert on Dutch.** Every user-facing string is Dutch; a selector looking

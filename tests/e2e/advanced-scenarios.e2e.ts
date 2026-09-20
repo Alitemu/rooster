@@ -279,6 +279,63 @@ test.describe('Error Handling - E2E', () => {
   });
 });
 
+test.describe('Input gate - E2E', () => {
+  /**
+   * The screen must never invite an edit the API will refuse.
+   *
+   * Two independent things close a participant's input (see
+   * lib/periodInputGate.ts): the deadline passing, and the period leaving
+   * OPEN. The page used to look at the deadline only, so a period the
+   * planner had closed early - the normal route to generating a roster -
+   * left every preference cell clickable, and each click failed with a 403
+   * the participant never saw.
+   */
+  let testData: ReturnType<typeof createTestPeriod>;
+
+  test.afterEach(() => {
+    if (testData) cleanupTestData(testData.period.id, testData.users.map((u) => u.id));
+  });
+
+  test('a closed period shows read-only preferences, with the reason', async ({ page }) => {
+    // GESLOTEN with a deadline still in the future: the case where the two
+    // conditions genuinely disagree.
+    testData = createTestPeriod('GESLOTEN');
+    const user = testData.users[0];
+
+    await page.goto(getPersonalLinkUrl(user.token));
+    await page.waitForLoadState('networkidle');
+    const calendarTab = page.getByRole('button', { name: /Voorkeuren/ }).first();
+    if (await calendarTab.count()) {
+      await calendarTab.click();
+      await page.waitForLoadState('networkidle');
+    }
+
+    const cells = page.locator('button[title*="rechtsklik voor opties"]');
+    await expect(cells.first()).toBeVisible();
+    expect(await cells.count()).toBeGreaterThan(0);
+    // Not one of them may be pressable.
+    expect(await page.locator('button[title*="rechtsklik voor opties"]:not([disabled])').count()).toBe(0);
+
+    await expect(page.getByText(/De roosteraar heeft deze periode gesloten/)).toBeVisible();
+  });
+
+  test('an open period leaves the preferences editable', async ({ page }) => {
+    testData = createTestPeriod('OPEN');
+    const user = testData.users[0];
+
+    await page.goto(getPersonalLinkUrl(user.token));
+    await page.waitForLoadState('networkidle');
+    const calendarTab = page.getByRole('button', { name: /Voorkeuren/ }).first();
+    if (await calendarTab.count()) {
+      await calendarTab.click();
+      await page.waitForLoadState('networkidle');
+    }
+
+    expect(await page.locator('button[title*="rechtsklik voor opties"]:not([disabled])').count()).toBeGreaterThan(0);
+    await expect(page.getByText(/De roosteraar heeft deze periode gesloten/)).toHaveCount(0);
+  });
+});
+
 test.describe('Mobile Responsiveness - E2E', () => {
   let testData: ReturnType<typeof createTestPeriod>;
 

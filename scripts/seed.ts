@@ -88,11 +88,21 @@ const db = new Database(dbPath);
 // Enable WAL mode
 db.pragma('journal_mode = WAL');
 
-// Create tables (mirror schema.ts)
+/**
+ * Create tables (mirror schema.ts).
+ *
+ * `id TEXT PRIMARY KEY NOT NULL` is not redundant, however much it reads
+ * like it. SQLite only rejects a NULL primary key for an INTEGER PRIMARY
+ * KEY; for every other type it accepts one, a documented quirk kept for
+ * backwards compatibility. Without the explicit NOT NULL these tables
+ * accepted a row with no id at all - and since SEED_ON_START defaults to
+ * true, this file, not db/migrations, is what builds the schema on a real
+ * deployment. scripts/schema-drift.mjs compares the two.
+ */
 async function createTables() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS dienstrooster_person (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       codenaam TEXT NOT NULL UNIQUE,
       rol TEXT NOT NULL CHECK(rol IN ('ADMIN', 'PLANNER', 'DEELNEMER')),
       actief INTEGER NOT NULL DEFAULT 1,
@@ -103,7 +113,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_person_access_link (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       token_hash TEXT NOT NULL UNIQUE,
       geldt_voor_periode_id TEXT REFERENCES dienstrooster_schedule_period(id),
@@ -116,11 +126,11 @@ async function createTables() {
       ON dienstrooster_person_access_link(person_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_pool (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       naam TEXT NOT NULL,
       type TEXT NOT NULL DEFAULT 'ACHTERWACHT'
         CHECK(type IN ('ACHTERWACHT', 'NEURO', 'KINDER', 'INTERVENTIE', 'AIOS')),
-      ruleset_id TEXT NOT NULL,
+      ruleset_id TEXT NOT NULL REFERENCES dienstrooster_ruleset(id),
       verdeelmodus TEXT NOT NULL DEFAULT 'GELIJK'
         CHECK(verdeelmodus IN ('GELIJK', 'NAAR_RATO')),
       actief INTEGER NOT NULL DEFAULT 1,
@@ -128,7 +138,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_ruleset (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       naam TEXT NOT NULL,
       config_json TEXT NOT NULL,
       versie INTEGER NOT NULL DEFAULT 1,
@@ -136,7 +146,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_pool_membership (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       pool_id TEXT NOT NULL REFERENCES dienstrooster_pool(id),
       deelnamefactor REAL NOT NULL DEFAULT 1.0,
@@ -148,7 +158,7 @@ async function createTables() {
       ON dienstrooster_pool_membership(person_id, pool_id, geldig_vanaf, geldig_tot);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_schedule_period (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       pool_id TEXT NOT NULL REFERENCES dienstrooster_pool(id),
       naam TEXT NOT NULL,
       start_datum TEXT NOT NULL,
@@ -166,7 +176,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_excluded_day (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
       datum TEXT NOT NULL,
       reden TEXT NOT NULL,
@@ -177,7 +187,7 @@ async function createTables() {
       ON dienstrooster_period_excluded_day(period_id, datum);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_prior_assignment (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
       datum TEXT NOT NULL,
       iso_jaar INTEGER NOT NULL,
@@ -194,7 +204,7 @@ async function createTables() {
       ON dienstrooster_prior_assignment(period_id, datum, teller);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_shift_type (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       pool_id TEXT NOT NULL REFERENCES dienstrooster_pool(id),
       naam TEXT NOT NULL,
       teller TEXT NOT NULL CHECK(teller IN ('AVOND', 'WEEKEND', 'FEESTDAG')),
@@ -203,7 +213,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_shift_slot (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
       shift_type_id TEXT NOT NULL REFERENCES dienstrooster_shift_type(id),
       datum TEXT NOT NULL,
@@ -222,7 +232,7 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS slot_datum_idx ON dienstrooster_shift_slot(datum);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_ledger_entry (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       pool_id TEXT NOT NULL REFERENCES dienstrooster_pool(id),
       teller TEXT NOT NULL CHECK(teller IN ('AVOND', 'WEEKEND', 'FEESTDAG')),
@@ -239,7 +249,7 @@ async function createTables() {
       ON dienstrooster_ledger_entry(person_id, geldt_voor_periode_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_holiday_history (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       feestdag_groep TEXT NOT NULL
         CHECK(feestdag_groep IN ('NIEUWJAAR', 'PASEN', 'KONINGSDAG', 'BEVRIJDINGSDAG', 'HEMELVAART', 'PINKSTEREN', 'KERST')),
@@ -252,7 +262,7 @@ async function createTables() {
       ON dienstrooster_holiday_history(person_id, feestdag_groep, jaar);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_notification_template (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       sleutel TEXT NOT NULL UNIQUE CHECK(sleutel IN (
         'PERIOD_OPENED', 'PARTTIME_CHECK', 'REMINDER', 'FINAL_WARNING',
         'DEADLINE_PASSED', 'BLOCK_OVERRIDDEN', 'SCHEDULE_PUBLISHED',
@@ -263,14 +273,14 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_reminder_schedule (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
       dagen_voor_deadline INTEGER NOT NULL,
       actief INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_notification_log (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       period_id TEXT REFERENCES dienstrooster_schedule_period(id),
       type TEXT NOT NULL CHECK(type IN (
@@ -287,7 +297,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_import_run (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       soort TEXT NOT NULL CHECK(soort IN ('BEGINSALDI', 'FEESTDAG_HISTORIE')),
       bestandsnaam TEXT NOT NULL,
       aantal_regels INTEGER NOT NULL,
@@ -298,7 +308,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_audit_log (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       actor_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       entiteit TEXT NOT NULL,
       entiteit_id TEXT NOT NULL,
@@ -313,7 +323,7 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS audit_entiteit_idx ON dienstrooster_audit_log(entiteit, entiteit_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_parttime_pattern (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       weekdag TEXT NOT NULL CHECK(weekdag IN ('MA', 'DI', 'WO', 'DO', 'VR', 'ZA', 'ZO')),
       frequentie TEXT NOT NULL CHECK(frequentie IN ('ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN')),
@@ -332,7 +342,7 @@ async function createTables() {
       ON dienstrooster_parttime_pattern(person_id, weekdag, geldig_vanaf, geldig_tot);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_absence (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       van_datum TEXT NOT NULL,
       tot_datum TEXT NOT NULL,
@@ -344,7 +354,7 @@ async function createTables() {
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_availability (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
       blocking_level TEXT CHECK(blocking_level IN ('ABSOLUUT', 'LIEVER_NIET', 'VOORKEUR')),
@@ -358,7 +368,7 @@ async function createTables() {
       ON dienstrooster_availability(person_id, slot_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_submission (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       schedule_period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
       status TEXT NOT NULL CHECK(status IN ('NIET_BEGONNEN', 'BEZIG', 'BEVESTIGD')),
@@ -371,7 +381,7 @@ async function createTables() {
       ON dienstrooster_submission(person_id, schedule_period_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_assignment (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       schedule_version_id TEXT NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
@@ -384,7 +394,7 @@ async function createTables() {
       ON dienstrooster_assignment(schedule_version_id, slot_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_swap_request (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       periode_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
       aanvrager_person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       aangeboden_slot_id TEXT NOT NULL REFERENCES dienstrooster_shift_slot(id),
@@ -402,7 +412,7 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS swap_request_status_idx ON dienstrooster_swap_request(status);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_notification (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       periode_id TEXT REFERENCES dienstrooster_schedule_period(id),
       type TEXT NOT NULL CHECK(type IN ('ROSTER_GEREED', 'TOEWIJZING', 'RUILVERZOEK', 'RUIL_GOEDGEKEURD', 'RUIL_AFGEWEZEN', 'PUBLICATIE_BERICHT', 'BLOCK_OVERRIDDEN')),
@@ -417,7 +427,7 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS notification_type_idx ON dienstrooster_notification(type);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_assignment_edit (
-      id TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY NOT NULL,
       -- no FK to assignment: this row records deletions too and must outlive them
       toewijzing_id TEXT NOT NULL,
       periode_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),

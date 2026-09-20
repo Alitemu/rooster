@@ -17,9 +17,14 @@
  */
 import Database from 'better-sqlite3';
 
+import { execFileSync } from 'child_process';
 import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
+
+// This script lives in scripts/, and one check below shells out to tsx to
+// reuse a TypeScript module from the app itself.
+const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..');
 
 const BASE = 'http://localhost:3000';
 
@@ -276,13 +281,61 @@ async function main() {
     WHERE a.schedule_version_id=? AND av.blocking_level='ABSOLUUT'`).get(period.id);
   rec('HARD RULE: zero ABSOLUUT violations even under scarcity', hardViol.c === 0, `${hardViol.c} violations`);
 
+  // iso_jaar as well as iso_week: comparing the week number alone makes
+  // week 5 of one year look like week 5 of the next, so a period spanning a
+  // new year would report violations that are a year apart. Harmless on the
+  // seeded period (one calendar year), wrong the moment that changes.
   const windowViol = db.prepare(`
     SELECT COUNT(*) c FROM dienstrooster_assignment a1
     JOIN dienstrooster_shift_slot s1 ON s1.id=a1.slot_id
     JOIN dienstrooster_assignment a2 ON a2.person_id=a1.person_id AND a2.id<>a1.id AND a2.schedule_version_id=a1.schedule_version_id
     JOIN dienstrooster_shift_slot s2 ON s2.id=a2.slot_id
-    WHERE a1.schedule_version_id=? AND s1.iso_week=s2.iso_week AND s1.id<>s2.id`).get(period.id);
+    WHERE a1.schedule_version_id=? AND s1.iso_jaar=s2.iso_jaar AND s1.iso_week=s2.iso_week AND s1.id<>s2.id`).get(period.id);
   rec('HARD RULE: no person twice in one ISO week', windowViol.c === 0, `${windowViol.c} violations`);
+
+  // The window rule proper - "no second shift within windowWeeks", which is
+  // stricter than the same-week check above and is the rule the whole
+  // fairness model rests on. Asserted here, on the solver's own untouched
+  // output and before any deliberate manual override below, through the
+  // app's own publication check rather than a second implementation of the
+  // rule in this script: two implementations would be free to agree with
+  // each other and both be wrong.
+  //
+  const cleanCheck = await req('GET', `/api/planner/period/${period.id}/publication-check`, { jar: planner });
+  const checks = cleanCheck.json?.data?.checks;
+  rec('HARD RULE: the solver breaks nobody\'s window rule',
+      checks?.window_compliance === true,
+      `window_compliance=${checks?.window_compliance}`);
+
+  // Deliberately NOT publication-check's band_compliance: that flag is
+  // false whenever anyone sits outside their bereik at all, and on this
+  // scarce fixture almost everyone is *below* the minimum simply because
+  // there are not enough fillable diensten. The solver never promised to
+  // reach the minimum - MAX_BAND_OVERSHOOT in constraints.py promises the
+  // other end: it may leave a dienst unfilled, but it may never push
+  // anyone past their ceiling. That is the half worth asserting.
+  //
+  // Through the app's own computeBandStatusByPerson, which already folds
+  // in coverage, deelnamefactor and the ledger delta the way the solver
+  // does. Recomputing that here would be a second implementation free to
+  // agree with itself and be wrong.
+  const overBand = JSON.parse(
+    execFileSync('npx', ['tsx', '-e', `
+      import { computeBandStatusByPerson, TELLERS } from './lib/rosterBands';
+      const status = computeBandStatusByPerson(${JSON.stringify(period.id)});
+      const over = [];
+      for (const [personId, byTeller] of status) {
+        for (const teller of TELLERS) {
+          const s = byTeller[teller];
+          if (s.count > s.max) over.push(\`\${personId} \${teller} \${s.count}>\${s.max}\`);
+        }
+      }
+      console.log(JSON.stringify(over));
+    `], { cwd: repoRoot, encoding: 'utf8' })
+  );
+  rec('HARD RULE: the solver pushes nobody past their streefbereik',
+      overBand.length === 0,
+      overBand.length === 0 ? 'nobody over their ceiling' : overBand.slice(0, 3).join(' | '));
 
   const unf = await req('GET', `/api/planner/period/${period.id}/unfilled-slots`, { jar: planner });
   rec('Unfilled-slots lists gaps with eligible people', unf.status === 200 && Array.isArray(unf.json?.data),
