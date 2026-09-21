@@ -296,6 +296,65 @@ een echt verse database. Zet `SEED_ON_START=false` in `.env` voor een
 installatie zonder automatisch aangemaakte voorbeelddeelnemers en
 -periode.
 
+#### TLS-certificaat vertrouwen (de browserwaarschuwing oplossen)
+
+Caddy geeft zelf certificaten uit vanuit een eigen, interne CA
+(`pki { ca internal ... }` in `Caddyfile`) - bewust, want deze installatie
+heeft geen vaste domeinnaam en is alleen bedoeld voor het interne
+netwerk (alleen `caddy` publiceert een poort, zie `docker-compose.yml`).
+Browsers kennen die CA nog niet, vandaar de "niet veilig"-waarschuwing.
+Er is niets mis met de verbinding zelf - alleen het vertrouwen ontbreekt.
+
+**Optie 1 - het interne CA-certificaat vertrouwen (past bij dit ontwerp).**
+Geen domeinnaam of internetverbinding nodig. Eenmalig per apparaat dat de
+app gaat gebruiken:
+
+1. Haal het root-certificaat uit de `caddy_data`-volume:
+   ```bash
+   docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt > dienstrooster-ca.crt
+   ```
+2. Installeer dat bestand als vertrouwde basis-CA:
+   - **Windows:** dubbelklik → "Certificaat installeren" → "Lokale
+     computer" → "Alle certificaten in het volgende archief opslaan" →
+     "Vertrouwde basiscertificeringsinstanties"
+   - **macOS:** open in Sleutelhangertoegang → sleep naar de
+     "Systeem"-sleutelhanger → dubbelklik → "Vertrouwen" → "Altijd
+     vertrouwen"
+   - **Android:** Instellingen → Beveiliging → Certificaat installeren →
+     CA-certificaat
+   - **iOS:** installeer het bestand als configuratieprofiel (Instellingen
+     → Algemeen → VPN en apparaatbeheer), zet daarna Instellingen →
+     Algemeen → Info → Certificaatvertrouwensinstellingen aan voor dit
+     certificaat
+   - **Linux:** kopieer naar `/usr/local/share/ca-certificates/`, dan
+     `sudo update-ca-certificates`
+
+Let op een paar dingen:
+- Dit moet op **elk** apparaat (pc, laptop, telefoon) dat de app gaat
+  gebruiken, eenmalig gebeuren - elk besturingssysteem houdt zijn eigen
+  lijst met vertrouwde CA's bij.
+- **Firefox is een uitzondering** op elk platform: die gebruikt niet de
+  CA-lijst van het besturingssysteem maar een eigen lijst, dus daar moet
+  het certificaat apart geïmporteerd worden (Instellingen → Privacy &
+  Beveiliging → Certificaten → Certificaten bekijken → Autoriteiten →
+  Importeren).
+- De CA blijft hetzelfde zolang de `caddy_data`-volume blijft bestaan
+  (dus ook na een herstart van de server) - dit is dus eenmalig per
+  apparaat, niet iets dat bij elke herstart opnieuw moet.
+- Bij 20-40 medewerkers is het meestal efficiënter om dit certificaat
+  centraal uit te rollen via de IT-afdeling (Group Policy/Active
+  Directory voor Windows, of een MDM-oplossing zoals Intune/Jamf voor
+  telefoons) dan om het per apparaat handmatig te doen.
+
+**Optie 2 - een echt, publiek vertrouwd certificaat (Let's Encrypt).**
+Alleen mogelijk met een eigen domeinnaam die vanaf het publieke internet
+bereikbaar is op poort 80/443 - wat haaks staat op het huidige
+"alleen intern netwerk"-ontwerp. Vervang in dat geval in `Caddyfile` de
+regel `https://:{$APP_PORT:8010}` door `https://jouw-domein.voorbeeld.nl`
+en verwijder het blok `tls internal { on_demand }`; Caddy vraagt dan zelf
+automatisch een Let's Encrypt-certificaat aan en vernieuwt dat ook zelf.
+Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
+
 #### Productie
 
 1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist)
