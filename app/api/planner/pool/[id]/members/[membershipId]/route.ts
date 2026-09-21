@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateMembershipRequest {
@@ -67,6 +68,27 @@ export async function PATCH(
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'NO_UPDATES', message: 'Geen velden om bij te werken' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // Before the range check, not after: `>` on two strings compares them
+    // alphabetically, so a value that is not a date at all ("xx" vs "yy")
+    // sails straight through it - the same gap POST .../members already
+    // closes for a new membership. This column drives every "is this
+    // person actually in the pool for this period" query in the app
+    // (capacity, generate-roster's headcount, band scaling, the dashboard's
+    // progress list) via a plain string comparison against period dates,
+    // so a corrupted value here doesn't error anywhere downstream - it
+    // just makes that comparison false for every real period, silently
+    // dropping the person out of the pool with nothing to say why.
+    if (
+      (body.geldig_vanaf !== undefined && !isValidIsoDate(geldig_vanaf)) ||
+      (body.geldig_tot !== undefined && !isValidIsoDate(geldig_tot))
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DATE', message: 'Datums moeten in het formaat JJJJ-MM-DD staan' },
       };
       return NextResponse.json(response, { status: 400 });
     }

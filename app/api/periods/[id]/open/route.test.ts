@@ -107,6 +107,10 @@ const VALID_RULESET = {
 };
 
 function open(periodId: string, staffId: string, ruleset: Record<string, unknown>) {
+  return openWithBody(periodId, staffId, { start_datum: START, eind_datum: END, ruleset });
+}
+
+function openWithBody(periodId: string, staffId: string, overrides: Record<string, unknown>) {
   const token = createSessionToken(
     { kind: 'staff', personId: staffId, sessionVersion: getSessionVersion(staffId)! } as never,
     STAFF_SESSION_MAX_AGE_SECONDS
@@ -116,10 +120,8 @@ function open(periodId: string, staffId: string, ruleset: Record<string, unknown
     headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       naam: 'Testperiode',
-      start_datum: START,
-      eind_datum: END,
       deadline: DEADLINE,
-      ruleset,
+      ...overrides,
     }),
   });
   return POST(req, { params: Promise.resolve({ id: periodId }) });
@@ -212,5 +214,59 @@ describe('POST /api/periods/[id]/open — ruleset validation', () => {
     const res = await open(periodId, createStaff(), withoutOneBand);
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe('INVALID_BAND');
+  });
+});
+
+describe('POST /api/periods/[id]/open — date validation', () => {
+  /**
+   * parseISO does not reject a bad string, it returns Invalid Date -
+   * dateToISO(Invalid Date) is the literal string "NaN-NaN-NaN", and
+   * comparing two Invalid Dates with >= is always false. Nothing else in
+   * this route re-checked that start_datum/eind_datum were real dates
+   * before freezing them onto the period, so both a garbage value and a
+   * value that merely parses wrong (Dutch day-first notation, a bare
+   * year) used to sail straight through into the one column every
+   * membership/capacity/slot-generation query in the app compares against
+   * from then on.
+   */
+  it.each([
+    ['plain nonsense', 'xx', '2029-02-25'],
+    ['Dutch day-first notation', '01-03-2029', '2029-02-25'],
+    ['a year on its own', '2029', '2029-02-25'],
+    ['a day that does not exist', '2029-02-30', '2029-03-15'],
+  ])('refuses %s as start_datum, and leaves the period in CONCEPT', async (_label, start_datum, eind_datum) => {
+    const poolId = createPool();
+    createMembers(poolId, 20);
+    const periodId = createConceptPeriod(poolId);
+
+    const res = await openWithBody(periodId, createStaff(), {
+      start_datum,
+      eind_datum,
+      ruleset: VALID_RULESET,
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('INVALID_DATE');
+
+    const row = db
+      .prepare('SELECT status, start_datum FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(periodId) as { status: string; start_datum: string };
+    expect(row.status).toBe('CONCEPT');
+    // The actual failure mode this guards: the corrupted value must never
+    // reach the period row, not even as a rejected-but-written attempt.
+    expect(row.start_datum).not.toBe('NaN-NaN-NaN');
+  });
+
+  it('refuses a garbage eind_datum the same way', async () => {
+    const poolId = createPool();
+    createMembers(poolId, 20);
+    const periodId = createConceptPeriod(poolId);
+
+    const res = await openWithBody(periodId, createStaff(), {
+      start_datum: START,
+      eind_datum: 'niet-een-datum',
+      ruleset: VALID_RULESET,
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('INVALID_DATE');
   });
 });

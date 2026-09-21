@@ -15,6 +15,7 @@ import {
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PriorAssignment {
@@ -184,6 +185,26 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
           code: 'INVALID_INPUT',
           message: 'Verplichte velden ontbreken: datum, teller',
         },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // The UPDATE below matches on `datum = ?`, so a value that merely looks
+    // like a date just matches nothing there - harmless by itself. But the
+    // INSERT it falls through to on no match feeds the same value into
+    // getISOWeek(parseISO(datum)): a non-date produces NaN for both
+    // iso_jaar/iso_week, which better-sqlite3 silently binds as NULL - and
+    // those two columns are NOT NULL, so this used to surface as a raw 500
+    // rather than the actual problem (a bad date). Whether or not it
+    // crashed, iso_jaar/iso_week are exactly what the window rule and
+    // holiday-spread checks use to place this row against the next
+    // period's own slots (see lib/windowRule.ts) - a corrupted value here
+    // wouldn't just fail loudly, it could poison next period's fairness
+    // check for this person entirely.
+    if (!isValidIsoDate(datum)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DATE', message: 'Datum moet in het formaat JJJJ-MM-DD staan' },
       };
       return NextResponse.json(response, { status: 400 });
     }

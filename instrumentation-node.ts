@@ -96,12 +96,20 @@ async function warnAboutSeededPassword(): Promise<void> {
     const { verifyPassword } = await import('./lib/auth');
     const { DEFAULT_TEST_PASSWORD } = await import('./lib/seedPassword');
 
-    const stillDefault: string[] = [];
-    for (const account of staff) {
-      if (await verifyPassword(DEFAULT_TEST_PASSWORD, account.wachtwoord_hash)) {
-        stillDefault.push(account.codenaam);
-      }
-    }
+    // In parallel, not one account at a time: bcrypt.compare at cost 12 is
+    // ~200-300ms by design, and this whole check runs on every server
+    // boot/restart - Next.js awaits instrumentation's register() before
+    // accepting a request, so a sequential loop here added that cost once
+    // per staff account to every single restart. This check exists to
+    // print a warning, never to gate startup, so there is no reason its
+    // own accounts should be compared one after another.
+    const results = await Promise.all(
+      staff.map(async (account) => ({
+        codenaam: account.codenaam,
+        stillDefault: await verifyPassword(DEFAULT_TEST_PASSWORD, account.wachtwoord_hash),
+      }))
+    );
+    const stillDefault = results.filter((r) => r.stillDefault).map((r) => r.codenaam);
     if (stillDefault.length === 0) return;
 
     console.warn(

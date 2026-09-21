@@ -17,6 +17,7 @@ import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holiday
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
+import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
 interface BlockBudgetPerTeller {
@@ -85,6 +86,25 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           code: 'MISSING_FIELDS',
           message: 'naam, start_datum, eind_datum, deadline en ruleset zijn allemaal verplicht',
         },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    // Before anything touches these: parseISO doesn't reject a bad string,
+    // it produces an Invalid Date, and every downstream step trusted it
+    // silently rather than erroring on it. dateToISO(Invalid Date) is the
+    // literal string "NaN-NaN-NaN", not a thrown error - and comparing two
+    // Invalid Dates with >= is always false, so the "start before end"
+    // check just below would have waved it through instead of catching it.
+    // start_datum/eind_datum end up as this period's own row - the one
+    // value every membership, capacity and slot-generation query in the
+    // app compares against from here on - so a value that merely looks
+    // like a date is exactly the kind of input this route is not allowed
+    // to trust.
+    if (!isValidIsoDate(start_datum) || !isValidIsoDate(eind_datum)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_DATE', message: 'Datums moeten in het formaat JJJJ-MM-DD staan' },
       };
       return NextResponse.json(response, { status: 400 });
     }
