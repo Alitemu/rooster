@@ -720,37 +720,52 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
         </div>
       </Section>
 
-      {/* Adding pool members has no period-status restriction server-side;
-          GEPUBLICEERD stays excluded since its ruleset is frozen - same
-          gate the page-level link used before this moved here. Links to
-          the standalone pool-wide staff page (not the setup wizard's
-          "Personeel" step) - that step only exists to walk through when
-          opening a new period, and dropping a planner into it mid-tab for
-          an already-open period made it look like part of a multi-step
-          flow they still needed to click through, rather than a direct
-          edit. */}
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(dashboard.status) && (
-        <Section
-          title="Personeel beheren"
-          isOpen={openSections.has('personeelbeheren')}
-          pinned={pinnedSections.has('personeelbeheren')}
-          onToggleOpen={() => toggleSectionOpen('personeelbeheren')}
-          onTogglePin={() => toggleSectionPin('personeelbeheren')}
-        >
-          <p className="text-sm text-neutral-600 mb-4">
-            Hier voeg je personeel toe of verwijder je ze, en pas je per persoon de
-            geldigheidsperiode of deelnamefactor aan. Dit staat los van deze periode - handig om
-            iemand te onboarden of offboarden zonder dat daar eerst een periode voor hoeft te
-            bestaan.
-          </p>
+      {/* Always shown, regardless of period status - unlike the ruleset,
+          pool membership was never actually period-scoped server-side.
+          getEligiblePeopleForSlot (lib/rosterGaps.ts) only checks whether
+          someone's geldig_vanaf/geldig_tot overlaps this period's dates,
+          nothing about the period's own status - so adding someone here
+          after publication (a fellow starting partway through the year,
+          say) makes them show up in the manual-assign dropdown right away,
+          exactly when a planner needs to hand-schedule them into the rest
+          of an already-published roster. Hiding this for GEPUBLICEERD
+          (as an earlier version of this section did, reasoning from the
+          ruleset being frozen - a real but unrelated restriction) would
+          have blocked exactly that. Links to the standalone pool-wide
+          staff page (not the setup wizard's "Personeel" step) - that step
+          only exists to walk through when opening a new period, and
+          dropping a planner into it mid-tab for an already-open period
+          made it look like part of a multi-step flow they still needed to
+          click through, rather than a direct edit. */}
+      <Section
+        title="Personeel beheren"
+        isOpen={openSections.has('personeelbeheren')}
+        pinned={pinnedSections.has('personeelbeheren')}
+        onToggleOpen={() => toggleSectionOpen('personeelbeheren')}
+        onTogglePin={() => toggleSectionPin('personeelbeheren')}
+      >
+        {/* Text and button stacked, not side-by-side - this paragraph is
+            long enough to wrap at normal card widths, and a wrapped
+            justify-between row drops the button onto its own line flush
+            LEFT (nothing left to space it against there), not right. A
+            dedicated justify-end row underneath keeps it at the right
+            regardless of how many lines the text takes. */}
+        <p className="text-sm text-neutral-600 mb-3">
+          Voeg hier personeel toe of verwijder ze, en pas per persoon de geldigheidsperiode of
+          deelnamefactor aan. Dit werkt op elk moment, ook in een al gepubliceerd rooster - handig
+          als iemand halverwege start: voeg diegene hier toe met de juiste geldig-vanaf-datum, en
+          die persoon verschijnt meteen in de keuzelijst bij het handmatig toewijzen van diensten
+          in deze periode.
+        </p>
+        <div className="flex justify-end">
           <Link
             href={`/planner/pool/${dashboard.pool_id}/staff`}
-            className="inline-block px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
           >
             👥 Personeel beheren
           </Link>
-        </Section>
-      )}
+        </div>
+      </Section>
 
       <Section
         title="Exporteren & communicatie"
