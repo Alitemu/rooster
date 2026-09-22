@@ -16,8 +16,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { useParams } from 'next/navigation';
-import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
 
 interface Pool {
   id: string;
@@ -38,6 +37,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export default function PoolStaffPage() {
   const params = useParams();
+  const router = useRouter();
   const poolId = params.id as string;
 
   const [pool, setPool] = useState<Pool | null>(null);
@@ -237,9 +237,13 @@ export default function PoolStaffPage() {
   return (
     <div className="container-main py-8 space-y-6">
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
-        <Link href="/planner" className="text-sm text-blue-700 hover:underline">
-          ← Terug naar periodes
-        </Link>
+        {/* Browser-history back, not a fixed destination - this page is
+            reached from several places (the period dashboard's "Personeel
+            beheren" section, possibly a direct link), so "terug naar
+            periodes" was often simply wrong about where "back" should go. */}
+        <button onClick={() => router.back()} className="text-sm text-blue-700 hover:underline">
+          ← Vorige
+        </button>
         <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Personeel beheren</h1>
         <p className="text-neutral-600">{pool.naam}</p>
       </div>

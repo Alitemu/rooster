@@ -9,7 +9,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { parseCsv } from '@/lib/csv';
 
 interface PriorAssignment {
@@ -54,6 +54,7 @@ const BRON_LABELS: Record<string, string> = {
 
 export default function PriorAssignmentsPage() {
   const params = useParams();
+  const router = useRouter();
   const periodId = params.id as string;
 
   const [period, setPeriod] = useState<Period | null>(null);
@@ -269,7 +270,10 @@ export default function PriorAssignmentsPage() {
   return (
     <div className="container-main py-8 space-y-6">
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
-        <h1 className="text-2xl font-bold text-neutral-900 mb-1">Eerdere toewijzingen</h1>
+        <button onClick={() => router.back()} className="text-sm text-blue-700 hover:underline">
+          ← Vorige
+        </button>
+        <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Eerdere toewijzingen</h1>
         <p className="text-neutral-600">
           {period.naam} · overloopvenster {data.date_range[0]} t/m {data.date_range[1]}
         </p>
