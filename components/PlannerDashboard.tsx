@@ -13,7 +13,7 @@
  * - Generate roster button
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
@@ -58,6 +58,39 @@ interface DashboardData {
   total_staff: number;
   staff_with_parttime: number;
   assignment_count: number;
+}
+
+/**
+ * A collapsible card used to group secondary dashboard content (staff
+ * status, export actions, rebalance suggestions) so the period page isn't
+ * one long scroll of always-expanded cards. Starts closed - `open` is
+ * native <details> state, not tracked in React, since nothing here needs
+ * to force a section open/closed from outside a planner's own click.
+ */
+function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+  return (
+    <details className="card group overflow-hidden">
+      <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none hover:bg-neutral-50 list-none [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2 font-bold text-neutral-900">
+          <svg
+            className="w-4 h-4 text-neutral-500 shrink-0 transition-transform group-open:rotate-90"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+              clipRule="evenodd"
+            />
+          </svg>
+          {title}
+        </span>
+        {hint && <span className="text-sm text-neutral-500 text-right">{hint}</span>}
+      </summary>
+      <div className="border-t border-neutral-100 p-4">{children}</div>
+    </details>
+  );
 }
 
 interface Props {
@@ -128,6 +161,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   const [pendingUndo, setPendingUndo] = useState<{ label: string } | null>(null);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
+  // null = not known yet (still loading, or load failed) - the "Voorstellen
+  // voor herverdeling" section stays visible in that case, so a load error
+  // is never silently hidden. Only a confirmed 0 hides the section, so an
+  // empty result doesn't cost a permanently-visible empty-state card (see
+  // RebalanceSuggestions' own onCountChange call).
+  const [suggestionCount, setSuggestionCount] = useState<number | null>(null);
 
   // Called unconditionally, above every early return below (loading/error/
   // !dashboard) - both hooks are no-ops while showUnpublishConfirm is
@@ -186,6 +225,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   };
 
   useEffect(() => {
+    setSuggestionCount(null);
     loadData();
   }, [periodId]);
 
@@ -333,38 +373,30 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   };
 
   return (
-    <div className="space-y-6">
-      {/* Submission Progress Summary */}
-      <div className="card p-6">
-        <h3 className="font-bold text-lg mb-4">Voortgang indiening</h3>
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="text-center">
-            <div className="text-3xl font-bold text-blue-600">{stats.not_started}</div>
-            <div className="text-sm text-neutral-600">Niet begonnen</div>
+    <div className="space-y-4">
+      {/* Condensed stats row - replaces what used to be three separate
+          always-expanded cards (Voortgang indiening / Totaal personeel /
+          Met deeltijdpatroon) with the same numbers on one line. The detail
+          behind the first number (the progress bar and the per-person
+          breakdown) lives in the "Personeel & voortgang" section below. */}
+      <div className="card p-4">
+        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+          <div>
+            <span className="font-semibold text-neutral-900">{submissionProgress}%</span>{' '}
+            <span className="text-neutral-600">
+              bevestigd ({stats.confirmed} van {totalSubmissions})
+            </span>
           </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-amber-600">{stats.in_progress}</div>
-            <div className="text-sm text-neutral-600">Bezig</div>
-          </div>
-          <div className="text-center">
-            <div className="text-3xl font-bold text-green-600">{stats.confirmed}</div>
-            <div className="text-sm text-neutral-600">Bevestigd</div>
+          <div>
+            <span className="font-semibold text-neutral-900">{dashboard.total_staff}</span>{' '}
+            <span className="text-neutral-600">personeel, {dashboard.staff_with_parttime} deeltijd</span>
           </div>
         </div>
-
-        {/* Progress bar */}
-        <div className="w-full bg-neutral-200 rounded-full h-2 mb-2">
-          <div
-            className="bg-green-600 h-2 rounded-full transition-all"
-            style={{ width: `${submissionProgress}%` }}
-          />
-        </div>
-        <p className="text-sm text-neutral-600 text-center">
-          {submissionProgress}% bevestigd ({stats.confirmed} van {totalSubmissions})
-        </p>
       </div>
 
-      {/* Large Imbalances */}
+      {/* Large Imbalances - an actionable warning, not a summary stat, so
+          unlike the rest of this reorganization it stays directly visible
+          instead of behind a click. */}
       {dashboard.large_imbalances.length > 0 && (
         <div className="card p-6 bg-amber-50 border border-amber-200">
           <h3 className="font-bold text-lg mb-3">
@@ -388,21 +420,83 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         </div>
       )}
 
-      {/* Pool Info */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="card p-4">
-          <p className="text-sm text-neutral-600">Totaal personeel</p>
-          <p className="text-2xl font-bold text-neutral-900">{dashboard.total_staff}</p>
+      {/* Primary actions - the buttons a planner reaches for on every visit,
+          kept in one row rather than spread across multiple cards. */}
+      <div className="card p-4">
+        <div className="flex gap-3 flex-wrap">
+          <button
+            onClick={() => {
+              if (hasUnappliedFillGapsDraft(periodId)) {
+                setShowUnappliedDraftWarning(true);
+              } else {
+                setRosterDialogOpen(true);
+              }
+            }}
+            disabled={dashboard.status === 'GEPUBLICEERD'}
+            title={
+              dashboard.status === 'GEPUBLICEERD'
+                ? 'Een gepubliceerd rooster is bevroren en kan niet meer opnieuw gegenereerd worden'
+                : undefined
+            }
+            className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
+          >
+            {generateButtonLabel[rosterFillState]}
+          </button>
+          {dashboard.status === 'GEGENEREERD' && (
+            <button
+              onClick={() => setPublicationDialogOpen(true)}
+              className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+            >
+              ✅ Rooster publiceren
+            </button>
+          )}
+          {dashboard.status === 'GEPUBLICEERD' && (
+            <button
+              onClick={() => {
+                setUnpublishError(null);
+                setShowUnpublishConfirm(true);
+              }}
+              className="px-4 py-2 rounded font-medium bg-white border border-red-300 text-red-700 hover:bg-red-50 transition-colors"
+            >
+              ↩️ Publicatie intrekken
+            </button>
+          )}
         </div>
-        <div className="card p-4">
-          <p className="text-sm text-neutral-600">Met deeltijdpatroon</p>
-          <p className="text-2xl font-bold text-neutral-900">{dashboard.staff_with_parttime}</p>
-        </div>
+        <p className="text-xs text-neutral-500 mt-2">
+          Status: <span className="font-semibold">{dashboard.status}</span>
+        </p>
       </div>
 
-      {/* Staff Status Table */}
-      <div className="card p-6">
-        <h3 className="font-bold text-lg mb-4">Status personeel</h3>
+      <Section
+        title="Personeel & voortgang"
+        hint={`${dashboard.total_staff} personen · ${stats.confirmed} bevestigd, ${stats.in_progress} bezig, ${stats.not_started} niet begonnen`}
+      >
+        <div className="grid grid-cols-3 gap-4 mb-4">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-blue-600">{stats.not_started}</div>
+            <div className="text-sm text-neutral-600">Niet begonnen</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-amber-600">{stats.in_progress}</div>
+            <div className="text-sm text-neutral-600">Bezig</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-green-600">{stats.confirmed}</div>
+            <div className="text-sm text-neutral-600">Bevestigd</div>
+          </div>
+        </div>
+
+        {/* Progress bar */}
+        <div className="w-full bg-neutral-200 rounded-full h-2 mb-2">
+          <div
+            className="bg-green-600 h-2 rounded-full transition-all"
+            style={{ width: `${submissionProgress}%` }}
+          />
+        </div>
+        <p className="text-sm text-neutral-600 text-center mb-4">
+          {submissionProgress}% bevestigd ({stats.confirmed} van {totalSubmissions})
+        </p>
+
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b">
@@ -478,57 +572,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
             </tbody>
           </table>
         </div>
-      </div>
+      </Section>
 
-      {/* Roster Generation & Export */}
-      <div className="card p-6">
-        <h3 className="font-bold text-lg mb-4">Rooster genereren</h3>
-        <div className="mb-6">
-          <div className="flex gap-3 flex-wrap">
-            <button
-              onClick={() => {
-                if (hasUnappliedFillGapsDraft(periodId)) {
-                  setShowUnappliedDraftWarning(true);
-                } else {
-                  setRosterDialogOpen(true);
-                }
-              }}
-              disabled={dashboard.status === 'GEPUBLICEERD'}
-              title={
-                dashboard.status === 'GEPUBLICEERD'
-                  ? 'Een gepubliceerd rooster is bevroren en kan niet meer opnieuw gegenereerd worden'
-                  : undefined
-              }
-              className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
-            >
-              {generateButtonLabel[rosterFillState]}
-            </button>
-            {dashboard.status === 'GEGENEREERD' && (
-              <button
-                onClick={() => setPublicationDialogOpen(true)}
-                className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
-              >
-                ✅ Rooster publiceren
-              </button>
-            )}
-            {dashboard.status === 'GEPUBLICEERD' && (
-              <button
-                onClick={() => {
-                  setUnpublishError(null);
-                  setShowUnpublishConfirm(true);
-                }}
-                className="px-4 py-2 rounded font-medium bg-white border border-red-300 text-red-700 hover:bg-red-50 transition-colors"
-              >
-                ↩️ Publicatie intrekken
-              </button>
-            )}
-          </div>
-          <p className="text-xs text-neutral-500 mt-2">
-            Status: <span className="font-semibold">{dashboard.status}</span>
-          </p>
-        </div>
-
-        <h3 className="font-bold text-lg mb-4">Exporteren en communicatie</h3>
+      <Section title="Exporteren & communicatie" hint="uitnodigingen, herinneringen, statusrapport">
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setExportDialogOpen(true)}
@@ -543,16 +589,27 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
             📋 Statusrapport downloaden
           </a>
         </div>
-      </div>
+      </Section>
 
       {/* Only meaningful once there's an actual roster to rebalance -
-          suggestions need existing assignments to move around. */}
-      {dashboard.assignment_count > 0 && (
-        <RebalanceSuggestions
-          periodId={periodId}
-          isPublished={dashboard.status === 'GEPUBLICEERD'}
-          onApplied={loadData}
-        />
+          suggestions need existing assignments to move around. Also hidden
+          once RebalanceSuggestions has confirmed there's nothing to show
+          (suggestionCount === 0) - a permanently-visible empty-state card
+          was exactly the kind of clutter this reorganization removes
+          elsewhere; suggestionCount stays null (so this stays visible)
+          while that hasn't been confirmed yet, including on a load error. */}
+      {dashboard.assignment_count > 0 && suggestionCount !== 0 && (
+        <Section
+          title="Voorstellen voor herverdeling"
+          hint={suggestionCount ? `${suggestionCount} voorstel${suggestionCount === 1 ? '' : 'len'}` : undefined}
+        >
+          <RebalanceSuggestions
+            periodId={periodId}
+            isPublished={dashboard.status === 'GEPUBLICEERD'}
+            onApplied={loadData}
+            onCountChange={setSuggestionCount}
+          />
+        </Section>
       )}
 
       {/* Assignments - visible from OPEN onward (not just after the solver

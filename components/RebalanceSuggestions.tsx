@@ -5,6 +5,11 @@
  * itself: accepting a suggestion is a normal reassign, so warnings (a
  * liever-niet day, a broken vensterblok) and the published-period reason
  * requirement work exactly like they already do in the assignments grid.
+ *
+ * Renders as bare content (no card/heading of its own) - the caller
+ * (PlannerDashboard) wraps this in a collapsible Section that already
+ * supplies the title, and decides via onCountChange whether to show that
+ * section at all once the suggestion count is known.
  */
 
 'use client';
@@ -38,9 +43,13 @@ interface Props {
   periodId: string;
   isPublished: boolean;
   onApplied?: () => void;
+  /** Called with the loaded suggestion count once a load succeeds - not on
+   *  every render, and not on error, so the caller can tell "confirmed
+   *  empty" apart from "not known yet" (see this component's docstring). */
+  onCountChange?: (count: number) => void;
 }
 
-export function RebalanceSuggestions({ periodId, isPublished, onApplied }: Props) {
+export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCountChange }: Props) {
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -54,13 +63,15 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied }: Props
       const res = await fetch(`/api/planner/period/${periodId}/rebalance-suggestions`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Laden van voorstellen mislukt');
-      setSuggestions(data.data || []);
+      const loaded: Suggestion[] = data.data || [];
+      setSuggestions(loaded);
+      onCountChange?.(loaded.length);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Laden van voorstellen mislukt');
     } finally {
       setLoading(false);
     }
-  }, [periodId]);
+  }, [periodId, onCountChange]);
 
   useEffect(() => {
     load();
@@ -99,38 +110,21 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied }: Props
   };
 
   if (loading) {
-    return (
-      <div className="card p-6">
-        <h3 className="font-bold text-lg mb-2">Voorstellen voor herverdeling</h3>
-        <p className="text-sm text-neutral-600">Voorstellen laden...</p>
-      </div>
-    );
+    return <p className="text-sm text-neutral-600">Voorstellen laden...</p>;
   }
 
   if (loadError) {
-    return (
-      <div className="card p-6">
-        <h3 className="font-bold text-lg mb-2">Voorstellen voor herverdeling</h3>
-        <p className="text-sm text-red-700">{loadError}</p>
-      </div>
-    );
+    return <p className="text-sm text-red-700">{loadError}</p>;
   }
 
   if (!suggestions || suggestions.length === 0) {
-    return (
-      <div className="card p-6">
-        <h3 className="font-bold text-lg mb-2">Voorstellen voor herverdeling</h3>
-        <p className="text-sm text-neutral-600">
-          Geen voorstellen op dit moment - niemand zit boven zijn streefbereik, of er is niemand
-          met ruimte om een dienst over te nemen.
-        </p>
-      </div>
-    );
+    // The caller hides its wrapping section once onCountChange reports 0 -
+    // this only ever renders in the brief window before that happens.
+    return null;
   }
 
   return (
-    <div className="card p-6">
-      <h3 className="font-bold text-lg mb-1">Voorstellen voor herverdeling</h3>
+    <div>
       <p className="text-xs text-neutral-500 mb-4">
         Diensten die verschoven kunnen worden naar iemand met nog ruimte in zijn streefbereik.
         Niets wordt automatisch aangepast - controleer elk voorstel en pas toe wat je wilt
