@@ -158,6 +158,31 @@ const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1'
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
 
+// "Rooster vooraf invullen" only stages picks in this browser's localStorage
+// (FillGapsPanel.tsx) - nothing reaches the server, and so nothing reaches
+// the solver, until "Alle toewijzingen toepassen" is clicked. Clicking
+// "Rooster genereren" while a staged pick is still sitting there used to
+// silently generate without it, discarding real planner intent with no
+// warning at all - see hasUnappliedFillGapsDraft in FillGapsPanel.tsx.
+await page.evaluate((periodId) => {
+  localStorage.setItem(`dienstrooster-fillgaps-draft-${periodId}`, JSON.stringify({ 'fake-slot-id': 'fake-person-id' }));
+}, period.id);
+await page.locator('button', { hasText: /Rooster.*genereren/i }).first().click();
+await page.waitForTimeout(500);
+const draftWarning = page.locator('[role="dialog"][aria-label="Niet-toegepaste toewijzingen"]');
+rec('Generating with an unapplied "Rooster vooraf invullen" draft warns first', await draftWarning.isVisible().catch(() => false));
+await page.click('text=Ga naar Rooster vooraf invullen');
+await page.waitForTimeout(500);
+rec(
+  '"Ga naar Rooster vooraf invullen" navigates to the fill-gaps page',
+  page.url() === `${BASE}/planner/period/${period.id}/fill-gaps`,
+  page.url()
+);
+await page.evaluate((periodId) => {
+  localStorage.removeItem(`dienstrooster-fillgaps-draft-${periodId}`);
+}, period.id);
+await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
+
 // The period page's roster panel at 375px (CLAUDE.md: "must remain readable
 // on 375px width"). Two regressions found by hand here, neither visible at
 // the desktop width every other check in this script uses:

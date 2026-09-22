@@ -24,6 +24,7 @@ import { AssignmentCalendar } from './AssignmentCalendar';
 import { StaffingOverview } from './StaffingOverview';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
 import { RebalanceSuggestions } from './RebalanceSuggestions';
+import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
 
 interface PersonProgress {
   person_id: string;
@@ -100,6 +101,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
+  // Shown instead of opening rosterDialogOpen when this browser is holding
+  // staged-but-unapplied picks from "Rooster vooraf invullen" - see
+  // hasUnappliedFillGapsDraft's own docstring for why generating without
+  // applying them first silently throws them away.
+  const [showUnappliedDraftWarning, setShowUnappliedDraftWarning] = useState(false);
   const [publicationDialogOpen, setPublicationDialogOpen] = useState(false);
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
@@ -118,6 +124,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   // false, but React requires the call itself to happen on every render.
   useBodyScrollLock(showUnpublishConfirm);
   const dismissUnpublishBackdrop = useDialogDismiss(showUnpublishConfirm, () => setShowUnpublishConfirm(false), !unpublishing);
+  useBodyScrollLock(showUnappliedDraftWarning);
+  const dismissUnappliedDraftBackdrop = useDialogDismiss(showUnappliedDraftWarning, () => setShowUnappliedDraftWarning(false));
 
   const loadData = async () => {
     try {
@@ -414,7 +422,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         <div className="mb-6">
           <div className="flex gap-3 flex-wrap">
             <button
-              onClick={() => setRosterDialogOpen(true)}
+              onClick={() => {
+                if (hasUnappliedFillGapsDraft(periodId)) {
+                  setShowUnappliedDraftWarning(true);
+                } else {
+                  setRosterDialogOpen(true);
+                }
+              }}
               disabled={dashboard.status === 'GEPUBLICEERD'}
               title={
                 dashboard.status === 'GEPUBLICEERD'
@@ -652,6 +666,42 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
                 className="flex-1 py-2 px-4 rounded font-medium bg-red-700 text-white hover:bg-red-800 transition-colors disabled:opacity-50"
               >
                 {unpublishing ? 'Bezig...' : 'Ja, publicatie intrekken'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUnappliedDraftWarning && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Niet-toegepaste toewijzingen"
+          onClick={dismissUnappliedDraftBackdrop}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        >
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold mb-2 text-amber-800">⚠️ Niet-toegepaste toewijzingen</h2>
+            <p className="text-sm text-neutral-700 mb-4">
+              Bij &quot;Rooster vooraf invullen&quot; staan nog keuzes klaar die niet zijn toegepast.
+              De solver ziet deze pas zodra je op &quot;Alle toewijzingen toepassen&quot; hebt geklikt
+              - ga je nu verder met genereren, dan worden deze keuzes genegeerd.
+            </p>
+            <div className="flex gap-3">
+              <Link
+                href={`/planner/period/${periodId}/fill-gaps`}
+                className="flex-1 py-2 px-4 rounded font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors text-center"
+              >
+                📝 Ga naar Rooster vooraf invullen
+              </Link>
+              <button
+                onClick={() => {
+                  setShowUnappliedDraftWarning(false);
+                  setRosterDialogOpen(true);
+                }}
+                className="flex-1 py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+              >
+                Toch doorgaan
               </button>
             </div>
           </div>

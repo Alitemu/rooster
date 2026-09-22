@@ -122,6 +122,25 @@ function draftStorageKey(periodId: string): string {
   return `dienstrooster-fillgaps-draft-${periodId}`;
 }
 
+/**
+ * Whether this browser is holding staged-but-not-yet-applied picks for
+ * this period - the same localStorage draft this panel itself reads/writes
+ * above. Exported so PlannerDashboard can warn before opening the roster
+ * generation dialog: the solver never sees a staged pick until "Alle
+ * toewijzingen toepassen" sends it to the server, so generating while picks
+ * are still sitting in this draft silently ignores them.
+ */
+export function hasUnappliedFillGapsDraft(periodId: string): boolean {
+  try {
+    const raw = localStorage.getItem(draftStorageKey(periodId));
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null && Object.keys(parsed).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: Props) {
   const [slots, setSlots] = useState<UnfilledSlot[] | null>(null);
   // slot_id -> staged (not yet applied) person_id.
