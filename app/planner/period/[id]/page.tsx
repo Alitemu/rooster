@@ -9,7 +9,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
-import { ExportDialog } from '@/components/ExportDialog';
 import { FillGapsSummary } from '@/components/FillGapsSummary';
 
 interface Period {
@@ -31,7 +30,6 @@ export default function PlannerPeriodPage() {
   const [period, setPeriod] = useState<Period | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [reminderDialogOpen, setReminderDialogOpen] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeConfirmArmed, setCloseConfirmArmed] = useState(false);
@@ -262,12 +260,6 @@ export default function PlannerPeriodPage() {
         <div className="space-y-2">
           <div className="flex gap-3">
             <button
-              onClick={() => setReminderDialogOpen(true)}
-              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-            >
-              📧 Deadlineherinnering versturen
-            </button>
-            <button
               onClick={handleClosePeriod}
               disabled={closing}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
@@ -321,14 +313,6 @@ export default function PlannerPeriodPage() {
           👥 Personeel beheren
         </a>
       )}
-
-      <ExportDialog
-        periodId={periodId}
-        periodName={period.naam}
-        isOpen={reminderDialogOpen}
-        onClose={() => setReminderDialogOpen(false)}
-        initialType="reminders"
-      />
 
       {/* Dashboard */}
       <PlannerDashboard

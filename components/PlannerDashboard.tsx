@@ -199,6 +199,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   const [actionError, setActionError] = useState<{ personId: string; message: string } | null>(null);
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  // Which screen ExportDialog opens straight to - null shows its own picker
+  // (uitnodigingen/herinneringen/audit-trail). "Deadlineherinnering
+  // versturen" below is a shortcut straight past that picker into
+  // reminders, the same jump the period page used to offer on its own,
+  // separate from this dashboard.
+  const [exportInitialType, setExportInitialType] = useState<'invitations' | 'reminders' | 'audit-trail' | null>(
+    null
+  );
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
   // Shown instead of opening rosterDialogOpen when this browser is holding
   // staged-but-unapplied picks from "Rooster vooraf invullen" - see
@@ -693,11 +701,28 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
       >
         <div className="flex gap-3 flex-wrap">
           <button
-            onClick={() => setExportDialogOpen(true)}
+            onClick={() => {
+              setExportInitialType(null);
+              setExportDialogOpen(true);
+            }}
             className="px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
           >
             📧 Uitnodigingen en herinneringen
           </button>
+          {/* Herinneren heeft alleen zin zolang de periode nog open staat
+              voor indiening - zelfde voorwaarde als "Periode sluiten" op de
+              periodepagina zelf. */}
+          {dashboard.status === 'OPEN' && (
+            <button
+              onClick={() => {
+                setExportInitialType('reminders');
+                setExportDialogOpen(true);
+              }}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            >
+              📧 Deadlineherinnering versturen
+            </button>
+          )}
           <a
             href={`/api/exports/status-report/${periodId}`}
             className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
@@ -914,6 +939,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         periodName={dashboard.period_name}
         isOpen={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
+        initialType={exportInitialType}
       />
 
       {/* Unpublish confirmation - the one way back out of GEPUBLICEERD.
