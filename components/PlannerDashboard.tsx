@@ -62,18 +62,52 @@ interface DashboardData {
 
 /**
  * A collapsible card used to group secondary dashboard content (staff
- * status, export actions, rebalance suggestions) so the period page isn't
- * one long scroll of always-expanded cards. Starts closed - `open` is
- * native <details> state, not tracked in React, since nothing here needs
- * to force a section open/closed from outside a planner's own click.
+ * status, export actions, rebalance suggestions, the roster itself) so the
+ * period page isn't one long scroll of always-expanded cards.
+ *
+ * Fully controlled (open/pinned come from the parent, via PlannerDashboard's
+ * openSections/pinnedSections) rather than native <details> state, because
+ * the accordion behavior spans siblings - opening one section closes any
+ * other open-but-unpinned one, which a single <details> element can't know
+ * about on its own. The pin button only appears while open: pinning is a
+ * "keep this open too" decision, meaningless on a section that's already
+ * closed.
  */
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+function Section({
+  title,
+  hint,
+  isOpen,
+  pinned,
+  onToggleOpen,
+  onTogglePin,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  isOpen: boolean;
+  pinned: boolean;
+  onToggleOpen: () => void;
+  onTogglePin: () => void;
+  children: ReactNode;
+}) {
   return (
-    <details className="card group overflow-hidden">
-      <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none hover:bg-neutral-50 list-none [&::-webkit-details-marker]:hidden">
+    <div className="card overflow-hidden">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggleOpen}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggleOpen();
+          }
+        }}
+        aria-expanded={isOpen}
+        className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none hover:bg-neutral-50"
+      >
         <span className="flex items-center gap-2 font-bold text-neutral-900">
           <svg
-            className="w-4 h-4 text-neutral-500 shrink-0 transition-transform group-open:rotate-90"
+            className={`w-4 h-4 text-neutral-500 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
             viewBox="0 0 20 20"
             fill="currentColor"
             aria-hidden="true"
@@ -86,12 +120,44 @@ function Section({ title, hint, children }: { title: string; hint?: string; chil
           </svg>
           {title}
         </span>
-        {hint && <span className="text-sm text-neutral-500 text-right">{hint}</span>}
-      </summary>
-      <div className="border-t border-neutral-100 p-4">{children}</div>
-    </details>
+        <span className="flex items-center gap-3 shrink-0">
+          {hint && <span className="text-sm text-neutral-500 text-right">{hint}</span>}
+          {isOpen && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin();
+              }}
+              title={
+                pinned
+                  ? 'Losmaken - klapt dicht zodra je een andere sectie opent'
+                  : 'Vastzetten - blijft open, ook als je een andere sectie opent'
+              }
+              aria-pressed={pinned}
+              className={`px-1.5 py-1 rounded transition-colors ${
+                pinned ? 'text-blue-600 hover:text-blue-800' : 'text-neutral-300 hover:text-neutral-500'
+              }`}
+            >
+              {/* A plain 📌 emoji doesn't work here - emoji glyphs carry
+                  their own fixed color and ignore the text-color classes
+                  above, so pinned/unpinned would look identical. This SVG
+                  uses currentColor instead, so the color toggle above is
+                  actually visible. */}
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <circle cx="10" cy="7" r="4" />
+                <rect x="9" y="10" width="2" height="7" rx="1" />
+              </svg>
+            </button>
+          )}
+        </span>
+      </div>
+      {isOpen && <div className="border-t border-neutral-100 p-4">{children}</div>}
+    </div>
   );
 }
+
+type SectionKey = 'personeel' | 'export' | 'voorstellen' | 'rooster';
 
 interface Props {
   periodId: string;
@@ -143,7 +209,46 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
   const [unpublishError, setUnpublishError] = useState<string | null>(null);
-  const [showAssignments, setShowAssignments] = useState(false);
+  // Accordion state for the four collapsible sections below (Personeel &
+  // voortgang / Exporteren & communicatie / Voorstellen voor herverdeling /
+  // Dienstrooster). At most one unpinned section is open at a time - opening
+  // a section closes every other section that isn't pinned; a pinned one
+  // stays open regardless of what else gets opened. Both start empty (every
+  // section closed, nothing pinned) so the page loads as short as possible.
+  const [openSections, setOpenSections] = useState<Set<SectionKey>>(() => new Set());
+  const [pinnedSections, setPinnedSections] = useState<Set<SectionKey>>(() => new Set());
+
+  const toggleSectionOpen = (key: SectionKey) => {
+    setOpenSections((prev) => {
+      if (prev.has(key)) {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      }
+      // Opening: keep whichever currently-open sections are pinned, drop
+      // the rest, add this one.
+      const next = new Set<SectionKey>();
+      prev.forEach((k) => {
+        if (pinnedSections.has(k)) next.add(k);
+      });
+      next.add(key);
+      return next;
+    });
+  };
+
+  const toggleSectionPin = (key: SectionKey) => {
+    // Pinning/unpinning never itself opens or closes anything - it only
+    // changes what happens the next time some OTHER section is opened (see
+    // toggleSectionOpen above). Unpinning an already-open section leaves it
+    // open until that moment.
+    setPinnedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   // Forces AssignmentGrid/AssignmentCalendar to remount (and so refetch)
   // after any roster (re)generation - their own fetch effects only depend
   // on periodId, which never changes across a regenerate, so without this
@@ -470,6 +575,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
       <Section
         title="Personeel & voortgang"
         hint={`${dashboard.total_staff} personen · ${stats.confirmed} bevestigd, ${stats.in_progress} bezig, ${stats.not_started} niet begonnen`}
+        isOpen={openSections.has('personeel')}
+        pinned={pinnedSections.has('personeel')}
+        onToggleOpen={() => toggleSectionOpen('personeel')}
+        onTogglePin={() => toggleSectionPin('personeel')}
       >
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center">
@@ -574,7 +683,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         </div>
       </Section>
 
-      <Section title="Exporteren & communicatie" hint="uitnodigingen, herinneringen, statusrapport">
+      <Section
+        title="Exporteren & communicatie"
+        hint="uitnodigingen, herinneringen, statusrapport"
+        isOpen={openSections.has('export')}
+        pinned={pinnedSections.has('export')}
+        onToggleOpen={() => toggleSectionOpen('export')}
+        onTogglePin={() => toggleSectionPin('export')}
+      >
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => setExportDialogOpen(true)}
@@ -602,6 +718,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         <Section
           title="Voorstellen voor herverdeling"
           hint={suggestionCount ? `${suggestionCount} voorstel${suggestionCount === 1 ? '' : 'len'}` : undefined}
+          isOpen={openSections.has('voorstellen')}
+          pinned={pinnedSections.has('voorstellen')}
+          onToggleOpen={() => toggleSectionOpen('voorstellen')}
+          onTogglePin={() => toggleSectionPin('voorstellen')}
         >
           <RebalanceSuggestions
             periodId={periodId}
@@ -612,155 +732,151 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         </Section>
       )}
 
-      {/* Assignments - visible from OPEN onward (not just after the solver
-          has run) so a planner can pre-fill strong preferences by hand
-          before generating; CONCEPT stays excluded since no shift_slot
-          rows exist yet at that point. */}
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
-        <div className="card p-6">
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
-            <h3 className="font-bold text-lg">{rosterHeading[rosterFillState]}</h3>
-            {/* min-w-0 is load-bearing here: a flex item's default min-width
-                is auto (its content's own width), not 0 - without it,
-                overflow-x-auto below has nothing to actually clip, because
-                this div never shrinks below the tab group + Tonen button's
-                combined natural width (359px), wider than a 375px screen
-                has room for once the card's own padding is subtracted. That
-                pushed the whole page 21px wider than the viewport instead
-                of scrolling just this row. */}
-            <div className="flex items-center gap-2 min-w-0 overflow-x-auto">
-              {showAssignments && (
-                <div className="inline-flex rounded overflow-hidden border border-neutral-300">
-                  <button
-                    onClick={() => setAssignmentsView('list')}
-                    className={`px-3 py-1 text-sm font-medium transition-colors ${
-                      assignmentsView === 'list'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-neutral-700 hover:bg-neutral-100'
-                    }`}
-                  >
-                    📋 Lijst
-                  </button>
-                  <button
-                    onClick={() => setAssignmentsView('calendar')}
-                    className={`px-3 py-1 text-sm font-medium transition-colors border-l border-neutral-300 ${
-                      assignmentsView === 'calendar'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-neutral-700 hover:bg-neutral-100'
-                    }`}
-                  >
-                    📅 Kalender
-                  </button>
-                  <button
-                    onClick={() => setAssignmentsView('dienstdoende')}
-                    className={`px-3 py-1 text-sm font-medium transition-colors border-l border-neutral-300 ${
-                      assignmentsView === 'dienstdoende'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-neutral-700 hover:bg-neutral-100'
-                    }`}
-                  >
-                    🧑‍⚕️ Dienstdoende
-                  </button>
-                </div>
-              )}
+      {/* Undo banner - kept outside the Dienstrooster section (not inside
+          its collapsible body) so a reversible change stays visible and
+          actionable even while that section is collapsed, the same way
+          "Grote verschillen" above stays outside every section. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && pendingUndo && (
+        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-blue-900">
+            <span className="font-medium">Laatst gewijzigd:</span> {pendingUndo.label}
+          </p>
+          {undoReasonPromptOpen ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={undoReason}
+                onChange={(e) => setUndoReason(e.target.value)}
+                placeholder="Reden (verplicht bij gepubliceerd rooster)"
+                className="px-2 py-1 border rounded text-sm"
+                autoFocus
+              />
               <button
-                onClick={() => setShowAssignments(!showAssignments)}
-                className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                onClick={() => handleUndoLast(undoReason)}
+                disabled={undoing || !undoReason.trim()}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {showAssignments ? 'Verbergen' : 'Tonen'}
+                {undoing ? 'Bezig…' : 'Bevestigen'}
+              </button>
+              <button
+                onClick={() => {
+                  setUndoReasonPromptOpen(false);
+                  setUndoReason('');
+                }}
+                disabled={undoing}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+              >
+                Annuleren
               </button>
             </div>
-          </div>
-
-          {pendingUndo && (
-            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-sm text-blue-900">
-                <span className="font-medium">Laatst gewijzigd:</span> {pendingUndo.label}
-              </p>
-              {undoReasonPromptOpen ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input
-                    type="text"
-                    value={undoReason}
-                    onChange={(e) => setUndoReason(e.target.value)}
-                    placeholder="Reden (verplicht bij gepubliceerd rooster)"
-                    className="px-2 py-1 border rounded text-sm"
-                    autoFocus
-                  />
-                  <button
-                    onClick={() => handleUndoLast(undoReason)}
-                    disabled={undoing || !undoReason.trim()}
-                    className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {undoing ? 'Bezig…' : 'Bevestigen'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setUndoReasonPromptOpen(false);
-                      setUndoReason('');
-                    }}
-                    disabled={undoing}
-                    className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
-                  >
-                    Annuleren
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => handleUndoLast()}
-                  disabled={undoing}
-                  className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                >
-                  {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
-                </button>
-              )}
-            </div>
-          )}
-          {undoError && (
-            <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">{undoError}</div>
-          )}
-
-          {showAssignments && (
-            assignmentsView === 'list' ? (
-              <AssignmentGrid
-                key={assignmentsRefreshKey}
-                periodId={periodId}
-                periodStatus={dashboard.status}
-                onChanged={() => {
-                  // A reassign/remove here can open (or close) a gap -
-                  // FillGapsPanel lives outside this component and has no
-                  // other way to find out (see onRosterChanged's own
-                  // docstring). loadData(false) also refreshes this
-                  // dashboard's own imbalance/staff-status numbers, which a
-                  // reassign can change too - false because AssignmentGrid
-                  // already reloaded its own rows before calling this, so
-                  // remounting it here on top of that would throw that away
-                  // and fetch it all over again for nothing.
-                  loadData(false);
-                  onRosterChanged?.();
-                }}
-              />
-            ) : assignmentsView === 'calendar' ? (
-              <AssignmentCalendar
-                key={assignmentsRefreshKey}
-                periodId={periodId}
-                periodStatus={dashboard.status}
-                onChanged={() => {
-                  // Same reasoning as AssignmentGrid's onChanged above - a
-                  // right-click assign/reassign/remove here can open or
-                  // close a gap FillGapsPanel needs to know about, and can
-                  // change this dashboard's own imbalance/staff numbers.
-                  // false because AssignmentCalendar already reloaded its
-                  // own slots before calling this.
-                  loadData(false);
-                  onRosterChanged?.();
-                }}
-              />
-            ) : (
-              <StaffingOverview key={assignmentsRefreshKey} periodId={periodId} />
-            )
+          ) : (
+            <button
+              onClick={() => handleUndoLast()}
+              disabled={undoing}
+              className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
+            </button>
           )}
         </div>
+      )}
+      {undoError && (
+        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">{undoError}</div>
+      )}
+
+      {/* Dienstrooster - visible from OPEN onward (not just after the
+          solver has run) so a planner can pre-fill strong preferences by
+          hand before generating; CONCEPT stays excluded since no
+          shift_slot rows exist yet at that point. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
+        <Section
+          title={rosterHeading[rosterFillState]}
+          isOpen={openSections.has('rooster')}
+          pinned={pinnedSections.has('rooster')}
+          onToggleOpen={() => toggleSectionOpen('rooster')}
+          onTogglePin={() => toggleSectionPin('rooster')}
+        >
+          {/* overflow-x-auto on its own is enough here (unlike the old
+              header-row version of this button group) - this is a plain
+              block-level div now, not a flex sibling fighting a title for
+              space, so it doesn't need the min-w-0 workaround too. Still
+              needed at all: the three buttons together (~359px) are wider
+              than a 375px screen's content width once this section's own
+              padding is subtracted. */}
+          <div className="overflow-x-auto mb-4">
+          <div className="inline-flex rounded overflow-hidden border border-neutral-300">
+            <button
+              onClick={() => setAssignmentsView('list')}
+              className={`px-3 py-1 text-sm font-medium transition-colors ${
+                assignmentsView === 'list'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-neutral-700 hover:bg-neutral-100'
+              }`}
+            >
+              📋 Lijst
+            </button>
+            <button
+              onClick={() => setAssignmentsView('calendar')}
+              className={`px-3 py-1 text-sm font-medium transition-colors border-l border-neutral-300 ${
+                assignmentsView === 'calendar'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-neutral-700 hover:bg-neutral-100'
+              }`}
+            >
+              📅 Kalender
+            </button>
+            <button
+              onClick={() => setAssignmentsView('dienstdoende')}
+              className={`px-3 py-1 text-sm font-medium transition-colors border-l border-neutral-300 ${
+                assignmentsView === 'dienstdoende'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-neutral-700 hover:bg-neutral-100'
+              }`}
+            >
+              🧑‍⚕️ Dienstdoende
+            </button>
+          </div>
+          </div>
+
+          {assignmentsView === 'list' ? (
+            <AssignmentGrid
+              key={assignmentsRefreshKey}
+              periodId={periodId}
+              periodStatus={dashboard.status}
+              onChanged={() => {
+                // A reassign/remove here can open (or close) a gap -
+                // FillGapsPanel lives outside this component and has no
+                // other way to find out (see onRosterChanged's own
+                // docstring). loadData(false) also refreshes this
+                // dashboard's own imbalance/staff-status numbers, which a
+                // reassign can change too - false because AssignmentGrid
+                // already reloaded its own rows before calling this, so
+                // remounting it here on top of that would throw that away
+                // and fetch it all over again for nothing.
+                loadData(false);
+                onRosterChanged?.();
+              }}
+            />
+          ) : assignmentsView === 'calendar' ? (
+            <AssignmentCalendar
+              key={assignmentsRefreshKey}
+              periodId={periodId}
+              periodStatus={dashboard.status}
+              onChanged={() => {
+                // Same reasoning as AssignmentGrid's onChanged above - a
+                // right-click assign/reassign/remove here can open or
+                // close a gap FillGapsPanel needs to know about, and can
+                // change this dashboard's own imbalance/staff numbers.
+                // false because AssignmentCalendar already reloaded its
+                // own slots before calling this.
+                loadData(false);
+                onRosterChanged?.();
+              }}
+            />
+          ) : (
+            <StaffingOverview key={assignmentsRefreshKey} periodId={periodId} />
+          )}
+        </Section>
       )}
 
       {/* Roster Generation Dialog */}

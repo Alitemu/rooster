@@ -158,6 +158,42 @@ const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1'
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
 
+// Accordion sections (PlannerDashboard's Section component): opening one
+// closes any other open-but-unpinned section, and pinning (📌, shown only
+// while a section is open) keeps it open even when another section opens.
+await page.click('[role="button"]:has-text("Personeel & voortgang")');
+await page.waitForTimeout(300);
+const staffTableVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
+rec('Opening "Personeel & voortgang" shows its content', staffTableVisible);
+
+await page.click('[role="button"]:has-text("Exporteren & communicatie")');
+await page.waitForTimeout(300);
+const staffTableStillVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
+const exportVisible = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
+rec(
+  'Opening a second section closes the first one (not pinned)',
+  !staffTableStillVisible && exportVisible,
+  `staff-still-visible=${staffTableStillVisible} export-visible=${exportVisible}`
+);
+
+// Reopen "Personeel & voortgang" and pin it before opening the export section again.
+await page.click('[role="button"]:has-text("Personeel & voortgang")');
+await page.waitForTimeout(300);
+await page.click('[role="button"]:has-text("Personeel & voortgang") button[aria-pressed]');
+await page.waitForTimeout(200);
+await page.click('[role="button"]:has-text("Exporteren & communicatie")');
+await page.waitForTimeout(300);
+const staffTableVisibleAfterPin = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
+const exportVisibleToo = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
+rec(
+  'A pinned section stays open when another section is opened',
+  staffTableVisibleAfterPin && exportVisibleToo,
+  `staff-visible=${staffTableVisibleAfterPin} export-visible=${exportVisibleToo}`
+);
+
+// Reload so the rest of this script starts from a clean accordion/pin state.
+await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
+
 // Assigning a shift from the calendar's right-click menu used to force a
 // full remount of the whole assignments panel (PlannerDashboard bumped
 // assignmentsRefreshKey on every single change, not just a real
@@ -167,7 +203,11 @@ rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(aw
 // the same manual action by hand - see lib/pendingUndo.ts.
 let calendarNavCount = 0;
 page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) calendarNavCount++; });
-await page.click('button:has-text("Tonen")');
+// The Dienstrooster section is a collapsible header now (PlannerDashboard's
+// Section component), same mechanism as "Personeel & voortgang" etc. -
+// there's no separate "Tonen" button anymore, clicking the header itself
+// opens it.
+await page.click('[role="button"]:has-text("Dienstrooster")');
 await page.waitForTimeout(500);
 await page.click('button:has-text("Kalender")');
 await page.waitForTimeout(800);
@@ -227,12 +267,16 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 // on 375px width"). Two regressions found by hand here, neither visible at
 // the desktop width every other check in this script uses:
 //
-// 1. The Lijst/Kalender/Dienstdoende tab row + Tonen/Verbergen button sits
-//    in a flex child with no min-w-0 - a flex item's default min-width is
-//    its own content width, not 0, so that row (359px) refused to shrink
+// 1. The Lijst/Kalender/Dienstdoende tab row (359px) refused to shrink
 //    below its natural size even though its own overflow-x-auto could only
-//    do anything once it did. It pushed the whole PAGE 21px wider than the
-//    viewport instead of just scrolling itself.
+//    do anything once it did - originally because it sat in a flex child
+//    with no min-w-0 (a flex item's default min-width is its own content
+//    width, not 0). It pushed the whole PAGE 21px wider than the viewport
+//    instead of just scrolling itself. The tab row has since moved out of
+//    that flex layout entirely (into the Dienstrooster section's own
+//    collapsible body, a plain block), but this check stays as the
+//    regression test for the underlying "doesn't push the page wider"
+//    requirement, however the markup gets there.
 // 2. The calendar's right-click menu closes on ANY 'scroll' event caught by
 //    its window-level capture-phase listener - including the menu's own
 //    candidate list scrolling, since that's a 'scroll' event too. Every
@@ -255,7 +299,7 @@ await (async () => {
 })();
 
 await mpage.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await mpage.click('button:has-text("Tonen")');
+await mpage.click('[role="button"]:has-text("Dienstrooster")');
 await mpage.waitForTimeout(500);
 const mobileScrollWidth = await mpage.evaluate(() => document.documentElement.scrollWidth);
 rec('No horizontal page overflow at 375px once the roster panel is shown', mobileScrollWidth === 375, `scrollWidth=${mobileScrollWidth}`);
