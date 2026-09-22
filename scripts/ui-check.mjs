@@ -71,6 +71,68 @@ async function signIn(context, body) {
   return res.status;
 }
 
+// The real login form, once, before signIn()'s cookie-injection shortcut
+// takes over for every check below it. Two things only the actual form -
+// not the API - can catch:
+//
+// 1. className="input"/"label" on the codenaam/wachtwoord fields never
+//    matched any CSS rule (only .input-base/.label-base existed), so
+//    Tailwind's preflight reset left them at border-width:0 and padding:0 -
+//    invisible until a browser's own focus outline gave them away on click.
+// 2. /planner is prefetched by a shared layout link while still on this
+//    page - unauthenticated, so that prefetch caches proxy.ts's redirect
+//    back to /planner/login. router.push() after a successful login used
+//    to serve that stale cached redirect straight back to this same empty
+//    form, with no error and no indication anything had gone wrong - which
+//    reads as the login endlessly doing nothing ("duurt heel lang"). Only
+//    a real browser has a router cache to go stale in the first place, so
+//    only a real login through this form - not signIn()'s cookie injection
+//    - can catch a regression back to router.push().
+const loginFormPage = await ctx.newPage();
+await loginFormPage.goto(`${BASE}/planner/login`, { waitUntil: 'networkidle' });
+const codenaamStyle = await loginFormPage.locator('#codenaam').evaluate((el) => {
+  const s = getComputedStyle(el);
+  return { borderWidth: s.borderWidth, padding: s.padding };
+});
+rec(
+  'Codenaam field has a visible border/padding before being clicked',
+  codenaamStyle.borderWidth !== '0px' && codenaamStyle.padding !== '0px',
+  JSON.stringify(codenaamStyle)
+);
+
+await loginFormPage.fill('#codenaam', 'planner');
+await loginFormPage.fill('#password', 'Password123!');
+await loginFormPage.click('button[type="submit"]');
+try {
+  await loginFormPage.waitForURL('**/planner', { timeout: 8000 });
+  rec('A real login through the form reaches /planner (no stale-prefetch redirect loop)', true);
+} catch {
+  rec('A real login through the form reaches /planner (no stale-prefetch redirect loop)', false, loginFormPage.url());
+}
+
+// The `redirect` query param is attacker-controlled (anyone can send a
+// colleague /planner/login?redirect=https://evil.example) - window.location
+// .href, unlike the router.push() it replaced, executes whatever it's
+// given, so a rejected target must fall back to /planner rather than
+// leaving the tab.
+await loginFormPage.goto(`${BASE}/planner/login?redirect=https%3A%2F%2Fevil.example%2Fphish`, {
+  waitUntil: 'networkidle',
+});
+await loginFormPage.fill('#codenaam', 'planner');
+await loginFormPage.fill('#password', 'Password123!');
+await loginFormPage.click('button[type="submit"]');
+try {
+  await loginFormPage.waitForURL('**/planner', { timeout: 8000 });
+} catch {
+  /* checked below regardless of how it settled */
+}
+rec(
+  'An external redirect= target is rejected, not navigated to',
+  loginFormPage.url() === `${BASE}/planner`,
+  loginFormPage.url()
+);
+await loginFormPage.close();
+
 const loginStatus = await signIn(ctx, { codenaam: 'planner', password: 'Password123!' });
 await page.goto(`${BASE}/planner`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1500);
@@ -95,6 +157,30 @@ await page.click('button:has-text("Annuleren")');
 const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1').get();
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
+
+// Setup wizard, step 3 ("Venster en budgetten"): lib/blockBudget.ts's
+// normalizeConfig() already falls back to true when parttimeExempt is
+// missing (matching scripts/seed.ts), so the wizard's own initial React
+// state was the one place still defaulting to false - a freshly opened
+// wizard showed this checkbox unchecked even though every other part of
+// the app treats "on" as the default. Needs its own fresh CONCEPT period:
+// the shared seeded one has usually moved past CONCEPT by the time this
+// script runs after full-check.mjs.
+const wizardPoolId = db.prepare('SELECT id FROM dienstrooster_pool LIMIT 1').get().id;
+const wizardPeriodId = nodeCrypto.randomUUID();
+db.prepare(
+  `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)
+   VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+).run(wizardPeriodId, wizardPoolId, 'UI-check wizard periode', '2028-01-03', '2028-01-16', '2027-12-20T00:00:00Z');
+
+await page.goto(`${BASE}/planner/setup/${wizardPeriodId}`, { waitUntil: 'networkidle' });
+await page.click('button:has-text("3. Venster")');
+await page.waitForSelector('text=Parttime-vrije dagen tellen niet mee voor het budget', { timeout: 5000 });
+const exemptChecked = await page
+  .locator('label:has-text("Parttime-vrije dagen tellen niet mee voor het budget") input[type=checkbox]')
+  .isChecked();
+rec('"Parttime-vrije dagen tellen niet mee voor het budget" is checked by default', exemptChecked);
+db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(wizardPeriodId);
 
 // ---- participant
 const s1 = db.prepare("SELECT id FROM dienstrooster_person WHERE codenaam='Persoon-01'").get();

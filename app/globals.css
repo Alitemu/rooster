@@ -37,19 +37,25 @@
     @apply btn text-blue-600 hover:bg-blue-50 active:bg-blue-100;
   }
 
-  .input-base {
+  /* Named .input/.label (not .input-base/.label-base) because every
+     consumer - app/planner/login/page.tsx, app/planner/page.tsx - has
+     always referenced className="input"/"label". Those names never
+     existed as Tailwind utilities, so the fields rendered with zero
+     border/background/padding: invisible until a browser's own focus
+     outline gave them away on click. */
+  .input {
     @apply px-3 py-2 border border-neutral-300 rounded-md bg-white text-neutral-900;
   }
 
-  .input-base:focus {
+  .input:focus {
     @apply outline-none border-blue-500 ring-1 ring-blue-500;
   }
 
-  .input-base:disabled {
+  .input:disabled {
     @apply bg-neutral-100 text-neutral-400 cursor-not-allowed;
   }
 
-  .label-base {
+  .label {
     @apply block text-sm font-medium text-neutral-900 mb-2;
   }
 

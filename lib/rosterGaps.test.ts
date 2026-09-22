@@ -502,5 +502,31 @@ describe('rosterGaps', () => {
       for (const p of eligible) byCategory2[p.category]++;
       expect(Object.values(byCategory2).reduce((sum, n) => sum + n, 0)).toBe(personCount - 1);
     });
+
+    it('lists candidates alphabetically by codenaam, not in the order they were added to the pool', () => {
+      const f = createFixture(0, '2027-03-01', '2027-03-14');
+
+      // Deliberately scrambled insertion order - Zulu joins first, Alpha
+      // last - so a query without its own ORDER BY (as
+      // dienstrooster_pool_membership's join used to have) would return
+      // them in that same scrambled order instead.
+      const names = ['Zulu-01', 'Mike-02', 'Alpha-03'];
+      for (const codenaam of names) {
+        const personId = crypto.randomUUID();
+        db.prepare(
+          `INSERT INTO dienstrooster_person (id, codenaam, rol, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', datetime('now'))`
+        ).run(personId, codenaam);
+        db.prepare(
+          `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+           VALUES (?, ?, ?, '2020-01-01', '2030-12-31')`
+        ).run(crypto.randomUUID(), personId, f.poolId);
+      }
+
+      const gap = findUnfilledSlots(f.periodId)[0];
+      expect(gap!.eligible_people.map((p) => p.codenaam)).toEqual(['Alpha-03', 'Mike-02', 'Zulu-01']);
+
+      const eligible = getEligiblePeopleForSlot(f.periodId, f.slotIds[0]);
+      expect(eligible.map((p) => p.codenaam)).toEqual(['Alpha-03', 'Mike-02', 'Zulu-01']);
+    });
   });
 });

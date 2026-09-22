@@ -7,7 +7,22 @@
 'use client';
 
 import { Suspense, useState, useEffect, FormEvent } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+
+/**
+ * `redirect` is a URL query param, so it's attacker-controlled - anyone can
+ * send a colleague a link like /planner/login?redirect=https://evil.example.
+ * router.push() previously treated it as an internal route, harmless by
+ * construction; window.location.href (needed below to escape the stale
+ * router-cache redirect loop) executes whatever it's given, so this has to
+ * reject anything that isn't a same-origin, single-leading-slash path
+ * before it's ever used for navigation. A leading "//" is rejected too -
+ * browsers treat that as scheme-relative and happily navigate off-site.
+ */
+function safeRedirectTarget(raw: string | null): string {
+  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw;
+  return '/planner';
+}
 
 export default function PlannerLoginPage() {
   return (
@@ -183,9 +198,8 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
 }
 
 function PlannerLoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/planner';
+  const redirectTo = safeRedirectTarget(searchParams.get('redirect'));
 
   const [codenaam, setCodenaam] = useState('');
   const [password, setPassword] = useState('');
@@ -219,8 +233,29 @@ function PlannerLoginForm() {
         return;
       }
 
-      router.push(redirectTo);
-      router.refresh();
+      // Belt and braces: staff-login succeeding doesn't by itself prove the
+      // session cookie actually landed in the browser (e.g. a client that
+      // blocks third-party/insecure cookies outright) - checked explicitly
+      // so a genuine failure here shows a clear message instead of the
+      // silent bounce-back described below.
+      const meRes = await fetch('/api/auth/me');
+      const meData = await meRes.json();
+      if (!meData.data?.authenticated) {
+        setError('Inloggen is gelukt, maar de sessie kon niet worden opgeslagen. Probeer het opnieuw.');
+        setLoading(false);
+        return;
+      }
+
+      // A hard navigation, not router.push(): /planner is a route Next.js
+      // prefetches automatically while still on this page (a shared layout
+      // links to it), and that prefetch runs before login - unauthenticated,
+      // so it caches proxy.ts's redirect back to this very login page.
+      // router.push() served that stale cached redirect even after a
+      // genuinely successful login (confirmed valid by the check above),
+      // which looked exactly like the login endlessly doing nothing -
+      // reported as "inloggen duurt heel lang". window.location.href always
+      // issues a fresh request instead of reading the client router cache.
+      window.location.href = redirectTo;
     } catch {
       setError('Inloggen mislukt. Probeer het opnieuw.');
       setLoading(false);

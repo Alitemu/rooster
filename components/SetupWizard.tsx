@@ -285,7 +285,13 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [blockBudgetConfig, setBlockBudgetConfig] = useState<BlockBudgetConfig>({
     hardPercent: 100,
     softPercent: 100,
-    parttimeExempt: false,
+    // Matches the server-side default (lib/blockBudget.ts's normalizeConfig
+    // falls back to true when the field is missing, same as scripts/seed.ts)
+    // - the wizard's own initial state was the one place still defaulting
+    // to false, so a freshly opened wizard showed the checkbox unchecked
+    // even though every other part of the app already treats "on" as the
+    // default.
+    parttimeExempt: true,
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [balanceParseWarnings, setBalanceParseWarnings] = useState<string[]>([]);
