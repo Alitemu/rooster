@@ -9,7 +9,6 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
-import { FillGapsSummary } from '@/components/FillGapsSummary';
 
 interface Period {
   id: string;
@@ -37,13 +36,6 @@ export default function PlannerPeriodPage() {
   const [deadlineInput, setDeadlineInput] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
-  // Bumped whenever PlannerDashboard's "rooster genereren met solver" dialog
-  // (re)generates a roster, or a reassign/remove in its own assignments
-  // list changes the gap count - FillGapsSummary lives here, on the page,
-  // and its own fetch effect only depends on periodId (never changes
-  // across a regenerate), so without this signal it would keep showing a
-  // stale unfilled-slot count.
-  const [rosterVersion, setRosterVersion] = useState(0);
 
   const loadPeriod = async () => {
     try {
@@ -288,10 +280,6 @@ export default function PlannerPeriodPage() {
         </div>
       )}
 
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status) && (
-        <FillGapsSummary key={rosterVersion} periodId={periodId} />
-      )}
-
       {period.status !== 'CONCEPT' && (
         <a
           href={`/planner/period/${periodId}/prior-assignments`}
@@ -315,11 +303,7 @@ export default function PlannerPeriodPage() {
       )}
 
       {/* Dashboard */}
-      <PlannerDashboard
-        periodId={periodId}
-        onPeriodChanged={loadPeriod}
-        onRosterChanged={() => setRosterVersion((v) => v + 1)}
-      />
+      <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} />
     </div>
   );
 }

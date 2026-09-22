@@ -3,8 +3,8 @@
 /**
  * Fill Gaps Summary
  *
- * Compact stand-in for the full FillGapsPanel on the period dashboard - a
- * freshly opened period has every one of its slots unfilled (the solver
+ * The content behind PlannerDashboard's "Rooster vooraf invullen" section -
+ * a freshly opened period has every one of its slots unfilled (the solver
  * hasn't run yet), so showing the full per-slot pick-someone list
  * immediately and unconditionally meant a planner opening a brand new
  * period saw a wall of a hundred-plus rows before anything else on the
@@ -12,6 +12,10 @@
  * (/planner/period/[id]/fill-gaps) with the full list, so reviewing gaps
  * is something a planner navigates to on purpose rather than something
  * dropped in front of them by default.
+ *
+ * Renders as bare content (no card of its own) - the caller wraps this in
+ * a collapsible Section that already supplies the title, and reads
+ * onCountChange to build that section's always-visible hint text.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -19,9 +23,10 @@ import Link from 'next/link';
 
 interface Props {
   periodId: string;
+  onCountChange?: (count: number) => void;
 }
 
-export function FillGapsSummary({ periodId }: Props) {
+export function FillGapsSummary({ periodId, onCountChange }: Props) {
   const [count, setCount] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -32,10 +37,13 @@ export function FillGapsSummary({ periodId }: Props) {
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Laden van openstaande diensten mislukt');
       setLoadError(null);
       setCount(data.data.count);
+      onCountChange?.(data.data.count);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Laden van openstaande diensten mislukt');
     }
-  }, [periodId]);
+    // onCountChange is PlannerDashboard's stable setState setter (see
+    // RebalanceSuggestions' identical reasoning for its own onCountChange).
+  }, [periodId, onCountChange]);
 
   useEffect(() => {
     load();
@@ -43,7 +51,7 @@ export function FillGapsSummary({ periodId }: Props) {
 
   if (loadError) {
     return (
-      <div className="card p-4 bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+      <div className="p-3 rounded bg-red-50 border border-red-200 flex items-center justify-between gap-3">
         <p className="text-sm text-red-800">⚠️ {loadError}</p>
         <button
           onClick={() => load()}
@@ -56,12 +64,12 @@ export function FillGapsSummary({ periodId }: Props) {
   }
 
   if (count === null) {
-    return null;
+    return <p className="text-sm text-neutral-600">Laden...</p>;
   }
 
   if (count === 0) {
     return (
-      <div className="card p-4 bg-green-50 border border-green-200">
+      <div className="p-3 rounded bg-green-50 border border-green-200">
         <p className="text-sm text-green-900 font-medium">
           ✓ Elke dienst in dit rooster is ingevuld.
         </p>
@@ -70,7 +78,7 @@ export function FillGapsSummary({ periodId }: Props) {
   }
 
   return (
-    <div className="card p-4 bg-amber-50 border border-amber-200 flex items-center justify-between gap-3 flex-wrap">
+    <div className="p-3 rounded bg-amber-50 border border-amber-200 flex items-center justify-between gap-3 flex-wrap">
       <div>
         <p className="text-sm font-semibold text-amber-900">
           ⚠️ {count} dienst{count === 1 ? '' : 'en'} nog niet ingevuld

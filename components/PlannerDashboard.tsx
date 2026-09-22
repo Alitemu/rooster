@@ -24,6 +24,7 @@ import { AssignmentCalendar } from './AssignmentCalendar';
 import { StaffingOverview } from './StaffingOverview';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
 import { RebalanceSuggestions } from './RebalanceSuggestions';
+import { FillGapsSummary } from './FillGapsSummary';
 import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
 
 interface PersonProgress {
@@ -80,6 +81,7 @@ function Section({
   pinned,
   onToggleOpen,
   onTogglePin,
+  keepMounted = false,
   children,
 }: {
   title: string;
@@ -88,6 +90,19 @@ function Section({
   pinned: boolean;
   onToggleOpen: () => void;
   onTogglePin: () => void;
+  /**
+   * Keep the body mounted (visually hidden via `hidden`, not unmounted)
+   * while closed. Needed when a child fetches data this section's own
+   * `hint` depends on (or, for "Voorstellen voor herverdeling", data that
+   * decides whether the section should even render at all) - a child that
+   * only mounts once the planner opens the section would never get the
+   * chance to report anything before that, so the hint would stay blank
+   * (or an empty-state section would never learn it's empty) until opened
+   * at least once. Left false everywhere else, so heavier content
+   * (Dienstrooster's AssignmentGrid/Calendar) still only loads once
+   * actually opened.
+   */
+  keepMounted?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -136,7 +151,7 @@ function Section({
               }
               aria-pressed={pinned}
               className={`px-1.5 py-1 rounded transition-colors ${
-                pinned ? 'text-blue-600 hover:text-blue-800' : 'text-neutral-300 hover:text-neutral-500'
+                pinned ? 'text-red-600 hover:text-red-800' : 'text-neutral-300 hover:text-neutral-500'
               }`}
             >
               {/* A plain 📌 emoji doesn't work here - emoji glyphs carry
@@ -152,12 +167,14 @@ function Section({
           )}
         </span>
       </div>
-      {isOpen && <div className="border-t border-neutral-100 p-4">{children}</div>}
+      {(isOpen || keepMounted) && (
+        <div className={isOpen ? 'border-t border-neutral-100 p-4' : 'hidden'}>{children}</div>
+      )}
     </div>
   );
 }
 
-type SectionKey = 'personeel' | 'export' | 'voorstellen' | 'rooster';
+type SectionKey = 'vooraf' | 'personeel' | 'export' | 'voorstellen' | 'rooster';
 
 interface Props {
   periodId: string;
@@ -168,16 +185,9 @@ interface Props {
    * until a manual reload - you publish and the badge still says "Generated".
    */
   onPeriodChanged?: () => void;
-  /**
-   * Called when this dashboard's "rooster genereren met solver" dialog
-   * (re)generates a roster - for page-level pieces (e.g. FillGapsSummary)
-   * that have the same "only knows about periodId, so never notices a
-   * regenerate" staleness problem but live outside this component.
-   */
-  onRosterChanged?: () => void;
 }
 
-export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }: Props) {
+export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [progress, setProgress] = useState<PersonProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -280,6 +290,17 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   // empty result doesn't cost a permanently-visible empty-state card (see
   // RebalanceSuggestions' own onCountChange call).
   const [suggestionCount, setSuggestionCount] = useState<number | null>(null);
+  // Unfilled-slot count behind the "Rooster vooraf invullen" section hint,
+  // reported by FillGapsSummary itself (its own dedicated endpoint, not
+  // part of the /dashboard payload above).
+  const [fillGapsCount, setFillGapsCount] = useState<number | null>(null);
+  // Remounts FillGapsSummary so it refetches. Deliberately separate from
+  // assignmentsRefreshKey: a single reassign/remove (AssignmentGrid/
+  // AssignmentCalendar's onChanged) can open or close a gap and so change
+  // this count, but must NOT bump assignmentsRefreshKey too - that would
+  // remount the assignments list/calendar on every pick, the exact
+  // page-refresh-on-assign bug fixed earlier (see loadData's own comment).
+  const [fillGapsRefreshKey, setFillGapsRefreshKey] = useState(0);
 
   // Called unconditionally, above every early return below (loading/error/
   // !dashboard) - both hooks are no-ops while showUnpublishConfirm is
@@ -487,25 +508,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
 
   return (
     <div className="space-y-4">
-      {/* Condensed stats row - replaces what used to be three separate
-          always-expanded cards (Voortgang indiening / Totaal personeel /
-          Met deeltijdpatroon) with the same numbers on one line. The detail
-          behind the first number (the progress bar and the per-person
-          breakdown) lives in the "Personeel & voortgang" section below. */}
-      <div className="card p-4">
-        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-          <div>
-            <span className="font-semibold text-neutral-900">{submissionProgress}%</span>{' '}
-            <span className="text-neutral-600">
-              bevestigd ({stats.confirmed} van {totalSubmissions})
-            </span>
-          </div>
-          <div>
-            <span className="font-semibold text-neutral-900">{dashboard.total_staff}</span>{' '}
-            <span className="text-neutral-600">personeel, {dashboard.staff_with_parttime} deeltijd</span>
-          </div>
-        </div>
-      </div>
+      {/* No separate stats-summary card here anymore - it duplicated
+          exactly what "Personeel & voortgang" already shows in its own
+          section hint below (visible whether that section is open or
+          closed), just phrased slightly differently. */}
 
       {/* Large Imbalances - an actionable warning, not a summary stat, so
           unlike the rest of this reorganization it stays directly visible
@@ -579,6 +585,28 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
           Status: <span className="font-semibold">{dashboard.status}</span>
         </p>
       </div>
+
+      {/* Same status gate as Dienstrooster below - a CONCEPT period has no
+          shift_slot rows yet, so "unfilled slots" is meaningless there. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
+        <Section
+          title="Rooster vooraf invullen"
+          hint={
+            fillGapsCount === null
+              ? undefined
+              : fillGapsCount === 0
+                ? 'alles ingevuld'
+                : `${fillGapsCount} dienst${fillGapsCount === 1 ? '' : 'en'} nog niet ingevuld`
+          }
+          isOpen={openSections.has('vooraf')}
+          pinned={pinnedSections.has('vooraf')}
+          onToggleOpen={() => toggleSectionOpen('vooraf')}
+          onTogglePin={() => toggleSectionPin('vooraf')}
+          keepMounted
+        >
+          <FillGapsSummary key={fillGapsRefreshKey} periodId={periodId} onCountChange={setFillGapsCount} />
+        </Section>
+      )}
 
       <Section
         title="Personeel & voortgang"
@@ -747,6 +775,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
           pinned={pinnedSections.has('voorstellen')}
           onToggleOpen={() => toggleSectionOpen('voorstellen')}
           onTogglePin={() => toggleSectionPin('voorstellen')}
+          keepMounted
         >
           <RebalanceSuggestions
             periodId={periodId}
@@ -869,17 +898,16 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
               periodId={periodId}
               periodStatus={dashboard.status}
               onChanged={() => {
-                // A reassign/remove here can open (or close) a gap -
-                // FillGapsPanel lives outside this component and has no
-                // other way to find out (see onRosterChanged's own
-                // docstring). loadData(false) also refreshes this
+                // A reassign/remove here can open (or close) a gap - the
+                // "Rooster vooraf invullen" section's count has no other way
+                // to find out. loadData(false) also refreshes this
                 // dashboard's own imbalance/staff-status numbers, which a
                 // reassign can change too - false because AssignmentGrid
                 // already reloaded its own rows before calling this, so
                 // remounting it here on top of that would throw that away
                 // and fetch it all over again for nothing.
                 loadData(false);
-                onRosterChanged?.();
+                setFillGapsRefreshKey((k) => k + 1);
               }}
             />
           ) : assignmentsView === 'calendar' ? (
@@ -889,13 +917,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
               periodStatus={dashboard.status}
               onChanged={() => {
                 // Same reasoning as AssignmentGrid's onChanged above - a
-                // right-click assign/reassign/remove here can open or
-                // close a gap FillGapsPanel needs to know about, and can
-                // change this dashboard's own imbalance/staff numbers.
-                // false because AssignmentCalendar already reloaded its
-                // own slots before calling this.
+                // right-click assign/reassign/remove here can open or close
+                // a gap the "Rooster vooraf invullen" count needs to know
+                // about, and can change this dashboard's own
+                // imbalance/staff numbers. false because AssignmentCalendar
+                // already reloaded its own slots before calling this.
                 loadData(false);
-                onRosterChanged?.();
+                setFillGapsRefreshKey((k) => k + 1);
               }}
             />
           ) : (
@@ -917,7 +945,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
           // own "Sluiten" button is how they dismiss it once they've seen it.
           loadData();
           onPeriodChanged?.();
-          onRosterChanged?.();
+          setFillGapsRefreshKey((k) => k + 1);
         }}
       />
 
