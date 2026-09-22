@@ -15,8 +15,7 @@
  * the same way (`issues`, hard-blocking `valid = false`):
  *
  *   - `issues` - the roster is genuinely not finished: slots nobody was
- *     assigned to, or someone outside their streefbereik. Publishing stays
- *     blocked until these are actually fixed.
+ *     assigned to. Publishing stays blocked until these are actually fixed.
  *   - `warnings` - a rule the roster deliberately breaks, on a planner's own
  *     say-so. The solver itself can never produce an ABSOLUUT violation or a
  *     window-rule violation - both are hard constraints on its side - so
@@ -28,6 +27,22 @@
  *     override at all. These require explicit confirmation
  *     (`requiresConfirmation`) before /publish will proceed, but do not by
  *     themselves make `valid` false.
+ *
+ *     A band violation (someone outside their streefbereik) belongs here
+ *     too, not in `issues` - and for a similar, if not identical, reason.
+ *     The band's upper bound genuinely is a hard constraint on the solver's
+ *     side (MAX_BAND_OVERSHOOT = 0, solver/constraints.py), so going over
+ *     max can only come from a manual override afterward, same as an
+ *     ABSOLUUT or window-rule violation. Going under the minimum is
+ *     different again: the solver leaves `under` fully soft on purpose
+ *     ("a hard minimum could make the whole model infeasible outright when
+ *     demand and supply don't line up", per that same file) - so a roster
+ *     can legitimately come straight out of the solver with someone short
+ *     of their target, when there simply isn't enough coverage to go
+ *     around. Either way, a planner may have a real reason to ship the
+ *     roster anyway (nobody else available, a promise to make it up next
+ *     period) - and until now there was no way to do that at all, only to
+ *     go back and reassign shifts by hand until the numbers lined up.
  */
 
 import { db } from '@/db/client';
@@ -199,14 +214,23 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
       naarRato ? 'bij naar-rato-verdeling geschaald naar ieders deelnamefactor' : null,
     ].filter((note): note is string => note !== null);
 
-    issues.push(
+    // A warning, not an issue: going over the band max can only be a
+    // deliberate manual override (the solver itself never assigns past
+    // it), and going under the min can be a genuine, unavoidable solver
+    // outcome when there simply isn't enough coverage to go around (see
+    // this module's own doc comment) - either way, blocking publication
+    // outright leaves no way to ship the roster except reassigning shifts
+    // by hand until the numbers line up, even when a planner has already
+    // decided that's not worth it (nobody else available, made up next
+    // period, etc.).
+    warnings.push(
       `${bandViolations}x valt een persoon buiten het streefbereik voor een diensttype ` +
         `(avond ${bands.AVOND[0]}-${bands.AVOND[1]}, ` +
         `weekend ${bands.WEEKEND[0]}-${bands.WEEKEND[1]}, ` +
         `feestdag ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]}` +
         (scalingNotes.length > 0 ? ` - ${scalingNotes.join(', en ')}` : '') +
-        `). Pas het streefbereik aan bij de instellingen van deze periode, of wissel handmatig ` +
-        `wie welke dienst draait, en genereer daarna opnieuw`
+        `) - controleer of dit bewust is, pas anders het streefbereik aan bij de instellingen ` +
+        `van deze periode of wissel handmatig wie welke dienst draait`
     );
   }
 

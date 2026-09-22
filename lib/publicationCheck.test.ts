@@ -272,7 +272,12 @@ describe('runPublicationCheck', () => {
     expect(result.warnings).toEqual([]);
   });
 
-  it('refuses a roster where one person is over the band by a single shift', () => {
+  it('warns, but does not block, a roster where one person is over the band by a single shift', () => {
+    // A band violation is a warning, not an issue (see this module's own
+    // doc comment for why: the solver never lets anyone over the max
+    // itself, so this can only be a deliberate manual override, and a
+    // planner may have a real reason to ship it anyway) - same shape as
+    // the ABSOLUUT-override test above, not the same as an unfilled slot.
     const ctx = createPool(7, { bandAvond: [4, 4] });
     const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4] });
 
@@ -288,13 +293,20 @@ describe('runPublicationCheck', () => {
 
     expect(result.checks.slots_filled).toBe(true);
     expect(result.checks.band_compliance).toBe(false);
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
+    expect(result.requiresConfirmation).toBe(true);
+    expect(result.issues).toEqual([]);
+    expect(result.warnings.join(' ')).toContain('streefbereik');
   });
 
-  it('counts a pool member with no assignments at all as a band violation', () => {
+  it('counts a pool member with no assignments at all as a band violation (a warning, still publishable with confirmation)', () => {
     // The regression this guards: counting only people who appear in the
     // assignment table means somebody scheduled zero times is invisible,
-    // which is precisely what a band's lower bound exists to catch.
+    // which is precisely what a band's lower bound exists to catch. Being
+    // under the band minimum is, if anything, the more legitimate of the
+    // two directions - the solver leaves `under` fully soft on purpose, so
+    // this can come straight out of a tight-on-coverage generate, not just
+    // a manual override (see this module's own doc comment).
     const ctx = createPool(8, { bandAvond: [3, 4] });
     const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [3, 4] });
 
@@ -305,7 +317,9 @@ describe('runPublicationCheck', () => {
 
     expect(result.checks.slots_filled).toBe(true);
     expect(result.checks.band_compliance).toBe(false);
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
+    expect(result.requiresConfirmation).toBe(true);
+    expect(result.issues).toEqual([]);
   });
 
   it('uses the period frozen ruleset, not the pool current one', () => {
@@ -527,11 +541,13 @@ describe('runPublicationCheck', () => {
     expect(result.checks.no_hard_blocking).toBe(false);
     expect(result.valid).toBe(false); // slots_filled alone already blocks
     expect(result.requiresConfirmation).toBe(true);
-    // At least the slots_filled issue - going one slot short of an evenly
-    // round-robinned roster can also throw one person under their band, an
-    // incidental second issue that isn't the point of this test.
-    expect(result.issues.length).toBeGreaterThanOrEqual(1);
-    expect(result.warnings.length).toBe(1);
+    // Exactly the slots_filled issue - band violations are warnings now,
+    // not issues, so they can no longer land here even incidentally.
+    expect(result.issues.length).toBe(1);
+    // At least the ABSOLUUT-override warning - going one slot short of an
+    // evenly round-robinned roster can also throw one person under their
+    // band, an incidental second warning that isn't the point of this test.
+    expect(result.warnings.length).toBeGreaterThanOrEqual(1);
   });
 
   it('warns about a window-rule violation without blocking, the same way as the ABSOLUUT override', () => {

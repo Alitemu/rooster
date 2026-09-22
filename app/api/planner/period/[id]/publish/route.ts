@@ -17,8 +17,10 @@ import { renderNotificationTemplate, insertNotification } from '@/lib/notificati
 interface PublishRequest {
   /**
    * Required when runPublicationCheck() reports warnings (an ABSOLUUT or
-   * window-rule override a planner deliberately made via manual-assign).
-   * Absent or false, publish stops and hands back the warnings for the
+   * window-rule override a planner deliberately made via manual-assign, or
+   * someone left outside their streefbereik - see lib/publicationCheck.ts
+   * for why a band violation is a warning, not a blocking issue). Absent
+   * or false, publish stops and hands back the warnings for the
    * confirmation screen instead of shipping the roster.
    */
   confirmOverrides?: boolean;
@@ -59,8 +61,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Enforce the same validation the planner saw, rather than assuming the
     // dialog ran it. Publishing freezes the roster and tells every pool
     // member these are their shifts, so a direct POST must not be able to
-    // ship one with unfilled slots or a band violation - which it could:
-    // the disabled button in the UI was the only thing standing in the way.
+    // ship one with unfilled slots - which it could: the disabled button
+    // in the UI was the only thing standing in the way.
     const check = runPublicationCheck(period);
     if (!check.valid) {
       return NextResponse.json(

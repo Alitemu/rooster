@@ -65,6 +65,11 @@ export default function PriorAssignmentsPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<string | null>(null);
+  // Feedback for "Automatisch afleiden uit vorige periode" - a 0-derived
+  // result (no previous published period, or nothing new to pull in) is
+  // still a normal, successful response (res.ok), so without this the
+  // button visibly did nothing and gave no clue why.
+  const [deriveInfo, setDeriveInfo] = useState<string | null>(null);
   // CSV upload (fallback for when auto-derive can't reach the previous
   // period's own live data - see the "Eerdere toewijzingen" section's own
   // explanation on the dashboard). Rows are pre-filtered to the overloop
@@ -119,12 +124,14 @@ export default function PriorAssignmentsPage() {
   const handleAutoDerive = async () => {
     setDeriving(true);
     setError(null);
+    setDeriveInfo(null);
     try {
       const res = await fetch(`/api/periods/${periodId}/prior-assignments/auto-derive`, {
         method: 'POST',
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error?.message || 'Automatisch afleiden mislukt');
+      setDeriveInfo(result.data.message);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Automatisch afleiden mislukt');
@@ -273,18 +280,25 @@ export default function PriorAssignmentsPage() {
         )}
       </div>
 
-      <div className="card p-4 flex items-center justify-between">
-        <p className="text-sm font-medium">
-          {knownCount} van {data.total_entries} ingevuld{' '}
-          {data.status === 'complete' ? '(alle gegevens compleet)' : '(gegevens ontbreken nog)'}
-        </p>
-        <button
-          onClick={handleAutoDerive}
-          disabled={deriving}
-          className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
-        >
-          {deriving ? 'Bezig met afleiden...' : 'Automatisch afleiden uit vorige periode'}
-        </button>
+      <div className="card p-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium">
+            {knownCount} van {data.total_entries} ingevuld{' '}
+            {data.status === 'complete' ? '(alle gegevens compleet)' : '(gegevens ontbreken nog)'}
+          </p>
+          <button
+            onClick={handleAutoDerive}
+            disabled={deriving}
+            className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
+          >
+            {deriving ? 'Bezig met afleiden...' : 'Automatisch afleiden uit vorige periode'}
+          </button>
+        </div>
+        {/* result.data.message is a normal (200 OK) response even at 0
+            derived - no previous published period, or nothing new to pull
+            in are both ordinary outcomes, not errors, so this is shown
+            regardless of the count instead of only surfacing a failure. */}
+        {deriveInfo && <p className="text-xs text-neutral-600 mt-2">{deriveInfo}</p>}
       </div>
 
       {/* Fallback voor als de vorige periode zelf niet meer opvraagbaar is

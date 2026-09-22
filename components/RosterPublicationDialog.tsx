@@ -9,14 +9,15 @@
  * lib/publicationCheck.ts's module doc for why they are not the same
  * thing:
  *
- *   - issues: the roster genuinely is not finished (an unfilled slot, a
- *     band violation). Publish stays disabled until these are fixed.
+ *   - issues: the roster genuinely is not finished (an unfilled slot).
+ *     Publish stays disabled until these are fixed.
  *   - warnings: a rule the roster deliberately breaks, on the planner's own
- *     say-so via manual-assign (an ABSOLUUT override, a window-rule
- *     override). These require ticking a confirmation box before Publish
- *     enables, but do not block it outright - blocking on the same
- *     override a planner just made on purpose left no way to ever publish
- *     a roster that used it.
+ *     say-so (an ABSOLUUT override, a window-rule override, or a band/
+ *     streefbereik violation - see lib/publicationCheck.ts for why a band
+ *     violation belongs here and not among issues). These require ticking
+ *     a confirmation box before Publish enables, but do not block it
+ *     outright - blocking on the same override a planner just made on
+ *     purpose left no way to ever publish a roster that used it.
  */
 
 import { useState, useEffect } from 'react';
@@ -261,8 +262,8 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
                     Geen overtredingen van het venster
                   </label>
                   <label className="flex items-center gap-2 text-sm">
-                    <span className={checkResult.checks.band_compliance ? 'text-green-700' : 'text-red-700'}>
-                      {checkResult.checks.band_compliance ? '✓' : '✗'}
+                    <span className={checkResult.checks.band_compliance ? 'text-green-700' : 'text-amber-700'}>
+                      {checkResult.checks.band_compliance ? '✓' : '⚠️'}
                     </span>
                     Binnen bereik
                   </label>

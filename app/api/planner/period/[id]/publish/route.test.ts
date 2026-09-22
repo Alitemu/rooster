@@ -9,11 +9,13 @@ import { POST } from './route';
 /**
  * The hard rule this route enforces, in three parts:
  *
- *   1. A genuine issue (an unfilled slot, a band violation) always blocks
- *      publishing, confirmOverrides or not.
+ *   1. A genuine issue (an unfilled slot) always blocks publishing,
+ *      confirmOverrides or not.
  *   2. A warning (a deliberate ABSOLUUT/window-rule override a planner
- *      already made via manual-assign) stops publish once, asking for
- *      confirmOverrides, rather than shipping silently.
+ *      already made via manual-assign, or someone left outside their
+ *      streefbereik - see lib/publicationCheck.ts for why a band violation
+ *      is a warning too) stops publish once, asking for confirmOverrides,
+ *      rather than shipping silently.
  *   3. With confirmOverrides: true, that same roster does publish, and the
  *      audit trail records which warnings were confirmed.
  *
@@ -213,6 +215,40 @@ describe('POST /api/planner/period/[id]/publish', () => {
     const { periodId, slotIds } = createPeriod(ctx, { bandAvond: [7, 7] });
     fillAllWith(periodId, ctx.personIds[0], slotIds);
     block(ctx.personIds[0], slotIds[0]);
+
+    const res = await post(periodId, planner, { confirmOverrides: true });
+    expect(res.status).toBe(200);
+    expect(periodStatus(periodId)).toBe('GEPUBLICEERD');
+  });
+
+  it('stops once for a band violation too, asking for confirmation rather than refusing outright', async () => {
+    // The actual feature this route exists to support now: a band
+    // violation used to always be a blocking issue (`always blocks on a
+    // genuine issue` above tests that path with an unfilled slot instead)
+    // - now it's a warning, same as ABSOLUUT/window-rule, so a planner who
+    // has a real reason to ship it anyway (nobody else available, made up
+    // next period) can, instead of being stuck reassigning shifts by hand
+    // until the numbers line up.
+    const ctx = createPool(2);
+    const planner = createPlanner();
+    const { periodId, slotIds } = createPeriod(ctx, { bandAvond: [4, 4] });
+    // All 7 slots to person 0 (band max 4) - person 1 gets none (band min 4).
+    fillAllWith(periodId, ctx.personIds[0], slotIds);
+
+    const res = await post(periodId, planner);
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.error.code).toBe('CONFIRMATION_REQUIRED');
+    expect(body.data.warnings.join(' ')).toContain('streefbereik');
+    expect(periodStatus(periodId)).toBe('GEGENEREERD');
+  });
+
+  it('publishes the same band violation once confirmOverrides is true', async () => {
+    const ctx = createPool(2);
+    const planner = createPlanner();
+    const { periodId, slotIds } = createPeriod(ctx, { bandAvond: [4, 4] });
+    fillAllWith(periodId, ctx.personIds[0], slotIds);
 
     const res = await post(periodId, planner, { confirmOverrides: true });
     expect(res.status).toBe(200);
