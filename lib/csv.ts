@@ -40,3 +40,56 @@ export function csvField(value: string | number | null | undefined): string {
 export function sanitizeFilenamePart(value: string): string {
   return value.replace(/[\r\n"\\]/g, '_');
 }
+
+/**
+ * Parse uploaded CSV text into rows of raw string cells (client-side, no
+ * server round-trip - matches this app's other CSV imports, e.g.
+ * import-balances/import-holidays, which parse in the browser and send
+ * already-structured rows to the API rather than a raw file).
+ *
+ * A plain split(',') cuts a quoted field containing a comma (e.g. a
+ * codenaam or note exported from Excel as `"foo, bar"`) into two cells,
+ * silently misaligning every column after it. This handles the common
+ * double-quote CSV convention (a "" inside a quoted field is a literal
+ * quote) without pulling in a full CSV library for what's still a simple,
+ * few-column import.
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const cells: string[] = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (inQuotes) {
+        if (char === '"') {
+          if (line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          current += char;
+        }
+      } else if (char === '"' && current === '') {
+        // Only a quote at the very start of a cell opens quoted mode (RFC
+        // 4180) - a stray `"` typed mid-field (e.g. `Persoon"05`) must stay
+        // a literal character, not swallow the next comma as part of the
+        // "quoted" text and silently merge two columns.
+        inQuotes = true;
+      } else if (char === ',') {
+        cells.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    cells.push(current.trim());
+    rows.push(cells);
+  }
+  return rows;
+}

@@ -16,6 +16,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
+import { parseCsv } from '@/lib/csv';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'holidays' | 'confirm';
 
@@ -643,52 +644,6 @@ export function SetupWizard({ period, onComplete }: Props) {
     } finally {
       setTogglingMembershipId(null);
     }
-  };
-
-  // A plain split(',') cuts a quoted field containing a comma (e.g. a
-  // codenaam or note exported from Excel as `"foo, bar"`) into two cells,
-  // silently misaligning every column after it. This handles the common
-  // double-quote CSV convention (a "" inside a quoted field is a literal
-  // quote) without pulling in a full CSV library for what's still a
-  // simple, few-column import.
-  const parseCsv = (text: string): string[][] => {
-    const rows: string[][] = [];
-    for (const rawLine of text.split(/\r?\n/)) {
-      const line = rawLine.trim();
-      if (!line) continue;
-      const cells: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (inQuotes) {
-          if (char === '"') {
-            if (line[i + 1] === '"') {
-              current += '"';
-              i++;
-            } else {
-              inQuotes = false;
-            }
-          } else {
-            current += char;
-          }
-        } else if (char === '"' && current === '') {
-          // Only a quote at the very start of a cell opens quoted mode
-          // (RFC 4180) - a stray `"` typed mid-field (e.g. `Persoon"05`)
-          // must stay a literal character, not swallow the next comma as
-          // part of the "quoted" text and silently merge two columns.
-          inQuotes = true;
-        } else if (char === ',') {
-          cells.push(current.trim());
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      cells.push(current.trim());
-      rows.push(cells);
-    }
-    return rows;
   };
 
   // A missing cell means "no delta" (0) - intentional and silent. A cell

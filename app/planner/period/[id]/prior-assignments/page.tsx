@@ -10,6 +10,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
+import { parseCsv } from '@/lib/csv';
 
 interface PriorAssignment {
   datum: string;
@@ -64,6 +65,24 @@ export default function PriorAssignmentsPage() {
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmResult, setConfirmResult] = useState<string | null>(null);
+  // CSV upload (fallback for when auto-derive can't reach the previous
+  // period's own live data - see the "Eerdere toewijzingen" section's own
+  // explanation on the dashboard). Rows are pre-filtered to the overloop
+  // window client-side so the planner sees exactly what will import before
+  // confirming, but the server re-filters independently - see
+  // import-csv/route.ts's own docstring for why that's not redundant.
+  const [csvRows, setCsvRows] = useState<Array<{ datum: string; teller: string; codenaam: string }> | null>(null);
+  const [csvOutOfRangeCount, setCsvOutOfRangeCount] = useState(0);
+  const [csvParseWarnings, setCsvParseWarnings] = useState<string[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string | null>(null);
+  // Which row's "Toegewezen aan" is being edited via "Wisselen" - same
+  // reveal-an-inline-editor pattern as AssignmentGrid.tsx's own Acties
+  // column, so a swap that already happened in real life (but isn't in
+  // whatever auto-derive or a CSV produced) reads and works the same way
+  // here as it does on the live roster.
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editCodenaam, setEditCodenaam] = useState('');
 
   const load = async () => {
     try {
@@ -129,10 +148,75 @@ export default function PriorAssignmentsPage() {
         throw new Error(result.error?.message || 'Opslaan mislukt');
       }
       await load();
+      // Only closes the inline editor on success - a rejected save leaves
+      // it open so the planner can see the error next to what they just
+      // tried, and retry without picking the person again.
+      setEditingKey(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Opslaan mislukt');
     } finally {
       setSavingKey(null);
+    }
+  };
+
+  // Header row is Datum,Week,Diensttype,Codenaam (see
+  // /api/exports/assignments/[period-id] - built to match this exactly),
+  // but only Datum/Diensttype/Codenaam matter here; Week is derived
+  // server-side from Datum regardless of what a hand-edited file says.
+  const handleCsvFile = async (file: File) => {
+    if (!data) return;
+    const text = await file.text();
+    const [, ...dataLines] = parseCsv(text); // skip header row
+    const inRange: Array<{ datum: string; teller: string; codenaam: string }> = [];
+    const warnings: string[] = [];
+    let outOfRange = 0;
+    dataLines.forEach(([datum, , diensttype, codenaam], i) => {
+      const rowNum = i + 2; // header is row 1
+      if (!datum) return;
+      const teller = (diensttype || '').trim().toUpperCase();
+      if (!['AVOND', 'WEEKEND', 'FEESTDAG'].includes(teller)) {
+        warnings.push(`Rij ${rowNum}: onbekend diensttype "${diensttype}", overgeslagen`);
+        return;
+      }
+      // Automatisch de juiste week selecteren: alles buiten het
+      // overloopvenster hierboven wordt hier al genegeerd, niet pas na
+      // een importpoging.
+      if (datum < data.date_range[0] || datum > data.date_range[1]) {
+        outOfRange++;
+        return;
+      }
+      inRange.push({ datum, teller, codenaam: (codenaam || '').trim() });
+    });
+    setCsvRows(inRange);
+    setCsvOutOfRangeCount(outOfRange);
+    setCsvParseWarnings(warnings);
+    setImportResult(null);
+  };
+
+  const handleImportCsv = async () => {
+    if (!csvRows || csvRows.length === 0) return;
+    setImporting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/periods/${periodId}/prior-assignments/import-csv`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: csvRows }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error?.message || 'Importeren mislukt');
+      setImportResult(
+        `${result.data.imported} van ${csvRows.length} regel${csvRows.length === 1 ? '' : 's'} geïmporteerd` +
+          (result.data.errors.length > 0 ? ` (${result.data.errors.length} waarschuwing${result.data.errors.length === 1 ? '' : 'en'}, zie details in het bestand)` : '.')
+      );
+      setCsvRows(null);
+      setCsvOutOfRangeCount(0);
+      setCsvParseWarnings([]);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Importeren mislukt');
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -203,6 +287,67 @@ export default function PriorAssignmentsPage() {
         </button>
       </div>
 
+      {/* Fallback voor als de vorige periode zelf niet meer opvraagbaar is
+          in deze applicatie (bijv. verwijderd, of een andere installatie) -
+          "Automatisch afleiden" hierboven werkt alleen zolang die data hier
+          nog live staat. */}
+      <div className="card p-4">
+        <p className="text-sm font-medium mb-1">Of: CSV-bestand uploaden</p>
+        <p className="text-xs text-neutral-500 mb-3">
+          Gebruik idealiter een eerder gedownload &quot;Rooster downloaden (CSV)&quot;-bestand
+          (kolommen Datum, Week, Diensttype, Codenaam) - regels buiten het overloopvenster
+          hierboven ({data.date_range[0]} t/m {data.date_range[1]}) worden automatisch genegeerd,
+          je hoeft dus niet zelf de juiste week eruit te knippen.
+        </p>
+        <input
+          type="file"
+          accept=".csv"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleCsvFile(file);
+            e.target.value = '';
+          }}
+          className="text-sm"
+        />
+        {csvRows !== null && (
+          <div className="mt-3 p-3 rounded bg-blue-50 border border-blue-200 text-sm">
+            <p className="text-blue-900">
+              {csvRows.length} regel{csvRows.length === 1 ? '' : 's'} binnen het overloopvenster
+              gevonden
+              {csvOutOfRangeCount > 0 && `, ${csvOutOfRangeCount} daarbuiten genegeerd`}.
+            </p>
+            {csvParseWarnings.length > 0 && (
+              <ul className="list-disc list-inside text-amber-700 mt-1 text-xs">
+                {csvParseWarnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </ul>
+            )}
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                onClick={handleImportCsv}
+                disabled={importing || csvRows.length === 0}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
+              >
+                {importing ? 'Bezig…' : `${csvRows.length} regel${csvRows.length === 1 ? '' : 's'} importeren`}
+              </button>
+              <button
+                onClick={() => {
+                  setCsvRows(null);
+                  setCsvOutOfRangeCount(0);
+                  setCsvParseWarnings([]);
+                }}
+                disabled={importing}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+              >
+                Annuleren
+              </button>
+            </div>
+          </div>
+        )}
+        {importResult && <p className="text-sm text-green-700 mt-3">✓ {importResult}</p>}
+      </div>
+
       {error && (
         <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>
       )}
@@ -221,6 +366,7 @@ export default function PriorAssignmentsPage() {
               <th className="px-3 py-2 text-left">Dienst</th>
               <th className="px-3 py-2 text-left">Toegewezen aan</th>
               <th className="px-3 py-2 text-left">Bron</th>
+              <th className="px-3 py-2 text-left">Acties</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -232,29 +378,64 @@ export default function PriorAssignmentsPage() {
                   <td className="px-3 py-2">W{a.iso_week}</td>
                   <td className="px-3 py-2">{TELLER_LABELS[a.teller] || a.teller}</td>
                   <td className="px-3 py-2">
-                    <select
-                      value={a.person_codenaam || ''}
-                      disabled={savingKey === key}
-                      onChange={(e) => handleAssign(a.datum, a.teller, e.target.value || null)}
-                      className="px-2 py-1 border rounded text-sm w-full"
-                    >
-                      <option value="">Onbekend</option>
-                      {staff.map((s) => (
-                        <option key={s.person_id} value={s.codenaam}>
-                          {s.codenaam}
-                        </option>
-                      ))}
-                    </select>
+                    {a.person_codenaam || <span className="text-neutral-400 italic">Onbekend</span>}
                   </td>
                   <td className="px-3 py-2 text-xs text-neutral-600">
                     {BRON_LABELS[a.bron] || a.bron}
+                  </td>
+                  <td className="px-3 py-2">
+                    {/* Same "Wisselen" reveal-an-inline-editor pattern as
+                        AssignmentGrid.tsx's Acties column, so processing a
+                        swap that already happened in real life (but isn't
+                        in whatever auto-derive or a CSV produced) reads
+                        the same here as it does on the live roster. */}
+                    {editingKey === key ? (
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={editCodenaam}
+                          onChange={(e) => setEditCodenaam(e.target.value)}
+                          className="text-xs border border-neutral-300 rounded px-2 py-1"
+                        >
+                          <option value="">Onbekend</option>
+                          {staff.map((s) => (
+                            <option key={s.person_id} value={s.codenaam}>
+                              {s.codenaam}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleAssign(a.datum, a.teller, editCodenaam || null)}
+                          disabled={savingKey === key}
+                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300"
+                        >
+                          {savingKey === key ? 'Bezig…' : 'Bevestigen'}
+                        </button>
+                        <button
+                          onClick={() => setEditingKey(null)}
+                          disabled={savingKey === key}
+                          className="text-xs px-2 py-1 rounded bg-neutral-200 hover:bg-neutral-300"
+                        >
+                          Annuleren
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setEditingKey(key);
+                          setEditCodenaam(a.person_codenaam || '');
+                        }}
+                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                      >
+                        Wisselen
+                      </button>
+                    )}
                   </td>
                 </tr>
               );
             })}
             {data.assignments.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-neutral-500">
+                <td colSpan={6} className="px-3 py-8 text-center text-neutral-500">
                   Nog geen gegevens - probeer automatisch af te leiden uit de vorige periode
                 </td>
               </tr>

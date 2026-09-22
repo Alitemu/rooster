@@ -285,15 +285,6 @@ export default function PlannerPeriodPage() {
         </div>
       )}
 
-      {period.status !== 'CONCEPT' && (
-        <a
-          href={`/planner/period/${periodId}/prior-assignments`}
-          className="inline-block px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-        >
-          🔁 Eerdere toewijzingen
-        </a>
-      )}
-
       {/* Dashboard */}
       <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} />
     </div>

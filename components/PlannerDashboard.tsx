@@ -175,7 +175,7 @@ function Section({
   );
 }
 
-type SectionKey = 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'voorstellen' | 'rooster';
+type SectionKey = 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'voorstellen' | 'rooster';
 
 interface Props {
   periodId: string;
@@ -587,6 +587,36 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
         </p>
       </div>
 
+      {/* Same status gate as the page's old link used ("niet CONCEPT") -
+          equivalent to Dienstrooster's own gate below, since a CONCEPT
+          period has no shift_slot rows yet either. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
+        <Section
+          title="Eerdere toewijzingen"
+          isOpen={openSections.has('overloop')}
+          pinned={pinnedSections.has('overloop')}
+          onToggleOpen={() => toggleSectionOpen('overloop')}
+          onTogglePin={() => toggleSectionPin('overloop')}
+        >
+          <p className="text-sm text-neutral-600 mb-3">
+            De vensterregel (niemand twee keer binnen het ingestelde venster) geldt ook over de
+            grens van de vorige periode heen - de solver moet dus weten wie aan het eind daarvan
+            welke dienst had. Hier leg je dat vast: automatisch afgeleid uit de vorige gepubliceerde
+            periode, met CSV-upload als terugvaloptie, of handmatig aangevuld. Bevestigen is
+            verplicht voordat je het rooster kunt genereren - alleen de allereerste periode van een
+            team slaat dit over, want die heeft niets om over te dragen.
+          </p>
+          <div className="flex justify-end">
+            <Link
+              href={`/planner/period/${periodId}/prior-assignments`}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            >
+              🔁 Eerdere toewijzingen
+            </Link>
+          </div>
+        </Section>
+      )}
+
       {/* Same status gate as Dienstrooster below - a CONCEPT period has no
           shift_slot rows yet, so "unfilled slots" is meaningless there. */}
       {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
@@ -805,6 +835,19 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           >
             📋 Statusrapport downloaden
           </a>
+          {/* Only meaningful once there's something in it - bewaar dit
+              bestand ergens veilig: het is de aanbevolen manier om een
+              toekomstige periode's "Eerdere toewijzingen" in te vullen als
+              deze periode dan zelf niet meer opvraagbaar is (zie de
+              uitleg bij dat kopje). */}
+          {dashboard.assignment_count > 0 && (
+            <a
+              href={`/api/exports/assignments/${periodId}`}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            >
+              📅 Rooster downloaden (CSV)
+            </a>
+          )}
         </div>
       </Section>
 

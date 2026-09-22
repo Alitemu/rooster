@@ -238,6 +238,81 @@ rec(
 );
 rec('The undo banner disappears once used', !(await undoBanner.isVisible().catch(() => false)));
 
+// "Eerdere toewijzingen": CSV upload is the fallback for when auto-derive
+// can't reach the previous period's own live data - rows outside the
+// carry-over window must be silently ignored ("automatisch de juiste week
+// selecteren"), and the imported list must offer the same "Wisselen"
+// inline-editor pattern as the live roster (AssignmentGrid.tsx), so a
+// swap that happened in real life after a CSV was made can still be
+// corrected by hand.
+await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
+await page.click('[role="button"]:has-text("Eerdere toewijzingen")');
+await page.waitForTimeout(300);
+rec(
+  'The "Eerdere toewijzingen" section explains why it is needed',
+  await page.locator('text=vensterregel').isVisible().catch(() => false)
+);
+await Promise.all([
+  page.waitForURL('**/prior-assignments'),
+  page.locator('a:has-text("Eerdere toewijzingen")').click(),
+]);
+await page.waitForLoadState('networkidle');
+
+// Runs inside the page's own browser context so the session cookie is
+// sent automatically, same-origin - no need to re-derive it by hand.
+const overloopRange = await page.evaluate(
+  async (url) => (await fetch(url)).json(),
+  `${BASE}/api/periods/${period.id}/prior-assignments`
+);
+const [rangeStart] = overloopRange.data.date_range;
+const csvContent = [
+  'Datum,Week,Diensttype,Codenaam',
+  `"${rangeStart}",1,"Avond","Persoon-01"`,
+  `"1999-01-01",1,"Avond","Persoon-02"`, // well before the window - must be ignored
+].join('\n');
+const priorCountBefore = db.prepare('SELECT COUNT(*) c FROM dienstrooster_prior_assignment WHERE period_id = ?').get(period.id).c;
+await page.setInputFiles('input[type="file"]', {
+  name: 'overloop.csv',
+  mimeType: 'text/csv',
+  buffer: Buffer.from(csvContent),
+});
+await page.waitForTimeout(500);
+rec(
+  'Uploading a CSV previews only the row(s) inside the carry-over window',
+  await page.locator('text=1 regel binnen het overloopvenster gevonden, 1 daarbuiten genegeerd').isVisible().catch(() => false)
+);
+await page.click('button:has-text("regel importeren")');
+await page.waitForTimeout(600);
+const priorCountAfter = db.prepare('SELECT COUNT(*) c FROM dienstrooster_prior_assignment WHERE period_id = ?').get(period.id).c;
+rec(
+  'Importing writes exactly the in-range row, not the out-of-range one',
+  priorCountAfter === priorCountBefore + 1,
+  `before=${priorCountBefore} after=${priorCountAfter}`
+);
+
+await page.click('button:has-text("Wisselen") >> nth=0');
+await page.waitForTimeout(200);
+await page.selectOption('table select', { label: 'Persoon-02' });
+await page.click('table button:has-text("Bevestigen")');
+await page.waitForTimeout(600);
+const swappedRow = db
+  .prepare(
+    `SELECT p.codenaam FROM dienstrooster_prior_assignment pa
+     JOIN dienstrooster_person p ON p.id = pa.person_id
+     WHERE pa.period_id = ? AND pa.datum = ?`
+  )
+  .get(period.id, rangeStart);
+rec(
+  '"Wisselen" on an imported row saves the new person, matching AssignmentGrid\'s own pattern',
+  swappedRow?.codenaam === 'Persoon-02',
+  swappedRow?.codenaam
+);
+
+db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ? AND datum = ?').run(period.id, rangeStart);
+
+// Back to the period page - the rest of this script continues there.
+await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
+
 // "Rooster vooraf invullen" only stages picks in this browser's localStorage
 // (FillGapsPanel.tsx) - nothing reaches the server, and so nothing reaches
 // the solver, until "Alle toewijzingen toepassen" is clicked. Clicking

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { csvField, sanitizeFilenamePart } from './csv';
+import { csvField, sanitizeFilenamePart, parseCsv } from './csv';
 
 /**
  * The hard rule: nothing that leaves here can act as anything other than
@@ -64,6 +64,41 @@ describe('csvField', () => {
     // anyway (CLAUDE.md), so nothing legitimate depends on -1 staying
     // numeric here.
     expect(csvField(-1)).toBe(`"'-1"`);
+  });
+});
+
+describe('parseCsv', () => {
+  /**
+   * The hard rule this side of the module exists for: a plain split(',')
+   * would cut a quoted field's own embedded comma into two cells,
+   * silently misaligning every column after it for the rest of the row -
+   * exactly what happens to a codenaam or note round-tripped through
+   * Excel as `"foo, bar"`.
+   */
+  it('does not split a comma inside a quoted field', () => {
+    expect(parseCsv('a,"b, c",d')).toEqual([['a', 'b, c', 'd']]);
+  });
+
+  it('un-escapes a doubled quote inside a quoted field, per RFC 4180', () => {
+    expect(parseCsv('a,"she said ""hi""",b')).toEqual([['a', 'she said "hi"', 'b']]);
+  });
+
+  it('treats a quote that is not at the very start of a cell as a literal character', () => {
+    // A stray `"` typed mid-field (e.g. Persoon"05) must not open quoted
+    // mode and swallow the next comma as part of the field.
+    expect(parseCsv('Persoon"05,x')).toEqual([['Persoon"05', 'x']]);
+  });
+
+  it('splits into rows on both \\n and \\r\\n, skipping blank lines', () => {
+    expect(parseCsv('a,b\r\nc,d\n\ne,f')).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+      ['e', 'f'],
+    ]);
+  });
+
+  it('trims whitespace around unquoted cells', () => {
+    expect(parseCsv(' a , b ,c')).toEqual([['a', 'b', 'c']]);
   });
 });
 
