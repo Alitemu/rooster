@@ -301,6 +301,11 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
         toewijzingen toepassen&quot; klikt, dus je kunt gerust wachten op een reactie voordat je
         doorgaat.
       </p>
+      <p className="text-xs text-amber-700 mb-4">
+        Het getal achter een naam, bijv. <span className="font-medium">(0 van 1)</span>, toont
+        hoeveel diensten van dit type die persoon al heeft ten opzichte van zijn of haar
+        streefbereik voor deze periode - puur ter informatie, het houdt niemand tegen.
+      </p>
 
       {error && (
         <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">
@@ -356,6 +361,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                     )}
                     <select
                       className="text-sm border border-neutral-300 rounded px-2 py-1"
+                      title="Het getal achter een naam toont het aantal diensten van dit type dat iemand al heeft, ten opzichte van zijn of haar streefbereik"
                       value={selection[slot.slot_id] || ''}
                       disabled={applying}
                       onChange={(e) =>
