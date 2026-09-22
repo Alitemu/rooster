@@ -29,6 +29,7 @@ interface DashboardData {
   period_id: string;
   period_name: string;
   status: string;
+  pool_id: string;
   submission_stats: SubmissionStats;
   large_imbalances: ImbalanceItem[];
   large_balance_threshold: number;
@@ -163,6 +164,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
         period_id: period.id,
         period_name: period.naam,
         status: period.status,
+        pool_id: period.pool_id,
         submission_stats: {
           not_started: stats.not_started || 0,
           in_progress: stats.in_progress || 0,

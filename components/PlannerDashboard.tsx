@@ -49,6 +49,7 @@ interface DashboardData {
   period_id: string;
   period_name: string;
   status: string;
+  pool_id: string;
   submission_stats: {
     not_started: number;
     in_progress: number;
@@ -174,7 +175,7 @@ function Section({
   );
 }
 
-type SectionKey = 'vooraf' | 'personeel' | 'export' | 'voorstellen' | 'rooster';
+type SectionKey = 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'voorstellen' | 'rooster';
 
 interface Props {
   periodId: string;
@@ -718,6 +719,38 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           </table>
         </div>
       </Section>
+
+      {/* Adding pool members has no period-status restriction server-side;
+          GEPUBLICEERD stays excluded since its ruleset is frozen - same
+          gate the page-level link used before this moved here. Links to
+          the standalone pool-wide staff page (not the setup wizard's
+          "Personeel" step) - that step only exists to walk through when
+          opening a new period, and dropping a planner into it mid-tab for
+          an already-open period made it look like part of a multi-step
+          flow they still needed to click through, rather than a direct
+          edit. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(dashboard.status) && (
+        <Section
+          title="Personeel beheren"
+          isOpen={openSections.has('personeelbeheren')}
+          pinned={pinnedSections.has('personeelbeheren')}
+          onToggleOpen={() => toggleSectionOpen('personeelbeheren')}
+          onTogglePin={() => toggleSectionPin('personeelbeheren')}
+        >
+          <p className="text-sm text-neutral-600 mb-4">
+            Hier voeg je personeel toe of verwijder je ze, en pas je per persoon de
+            geldigheidsperiode of deelnamefactor aan. Dit staat los van deze periode - handig om
+            iemand te onboarden of offboarden zonder dat daar eerst een periode voor hoeft te
+            bestaan.
+          </p>
+          <Link
+            href={`/planner/pool/${dashboard.pool_id}/staff`}
+            className="inline-block px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+          >
+            👥 Personeel beheren
+          </Link>
+        </Section>
+      )}
 
       <Section
         title="Exporteren & communicatie"
