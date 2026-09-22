@@ -214,15 +214,20 @@ export default function PlannerPeriodPage() {
               }
             })()}
           </div>
-          <div>
+          {/* items-start (not the row's own items-start, a fresh flex
+              column here) keeps the status badge and "Periode sluiten"
+              only as wide as their own content and left-aligned to each
+              other, so their left edges line up vertically regardless of
+              which is wider. */}
+          <div className="flex flex-col items-start gap-2">
             <div className={`px-4 py-2 rounded font-semibold ${statusColor.bg} ${statusColor.text}`}>
-              {period.status === 'CONCEPT' && '⚙️ Concept'}
-              {period.status === 'OPEN' && '📖 Open'}
-              {period.status === 'GESLOTEN' && '🔒 Gesloten'}
-              {period.status === 'GEGENEREERD' && '🤖 Gegenereerd'}
+              {period.status === 'CONCEPT' && '⚙️ Status: Concept'}
+              {period.status === 'OPEN' && '📖 Status: Open'}
+              {period.status === 'GESLOTEN' && '🔒 Status: Gesloten'}
+              {period.status === 'GEGENEREERD' && '🤖 Status: Gegenereerd'}
               {period.status === 'GEPUBLICEERD' && (
                 <>
-                  ✅ Gepubliceerd
+                  ✅ Status: Gepubliceerd
                   {period.gepubliceerd_op && (
                     <span className="ml-2 font-normal text-sm">
                       · Gepubliceerd op {new Date(period.gepubliceerd_op).toLocaleString('nl-NL')}
@@ -231,6 +236,29 @@ export default function PlannerPeriodPage() {
                 </>
               )}
             </div>
+
+            {period.status === 'OPEN' && (
+              <div className="flex flex-col items-start gap-2">
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleClosePeriod}
+                    disabled={closing}
+                    className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
+                  >
+                    {closing ? 'Bezig met sluiten...' : closeConfirmArmed ? 'Zeker weten? Nogmaals klikken' : '🔒 Periode sluiten'}
+                  </button>
+                  {closeConfirmArmed && (
+                    <button
+                      onClick={() => setCloseConfirmArmed(false)}
+                      className="px-4 py-2 rounded font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                  )}
+                </div>
+                {closeError && <p className="text-sm text-red-600">{closeError}</p>}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -245,29 +273,6 @@ export default function PlannerPeriodPage() {
             </a>{' '}
             om deze in te stellen en te openen.
           </p>
-        </div>
-      )}
-
-      {period.status === 'OPEN' && (
-        <div className="space-y-2">
-          <div className="flex gap-3">
-            <button
-              onClick={handleClosePeriod}
-              disabled={closing}
-              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
-            >
-              {closing ? 'Bezig met sluiten...' : closeConfirmArmed ? 'Zeker weten? Nogmaals klikken' : '🔒 Periode sluiten'}
-            </button>
-            {closeConfirmArmed && (
-              <button
-                onClick={() => setCloseConfirmArmed(false)}
-                className="px-4 py-2 rounded font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
-              >
-                Annuleren
-              </button>
-            )}
-          </div>
-          {closeError && <p className="text-sm text-red-600">{closeError}</p>}
         </div>
       )}
 
