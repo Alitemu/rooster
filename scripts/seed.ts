@@ -322,6 +322,19 @@ async function createTables() {
     CREATE INDEX IF NOT EXISTS audit_actor_idx ON dienstrooster_audit_log(actor_id);
     CREATE INDEX IF NOT EXISTS audit_entiteit_idx ON dienstrooster_audit_log(entiteit, entiteit_id);
 
+    CREATE TABLE IF NOT EXISTS dienstrooster_pending_undo (
+      id TEXT PRIMARY KEY NOT NULL,
+      scope TEXT NOT NULL CHECK(scope IN ('PERIOD_ASSIGNMENT', 'POOL_MEMBERSHIP')),
+      scope_id TEXT NOT NULL,
+      action_type TEXT NOT NULL CHECK(action_type IN ('ASSIGN', 'REASSIGN', 'REMOVE', 'MEMBERSHIP_DELETE')),
+      payload_json TEXT NOT NULL,
+      label TEXT NOT NULL,
+      actor_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      aangemaakt_op TEXT NOT NULL
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS pending_undo_scope_id_uniq ON dienstrooster_pending_undo(scope_id);
+
     CREATE TABLE IF NOT EXISTS dienstrooster_parttime_pattern (
       id TEXT PRIMARY KEY NOT NULL,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
@@ -526,6 +539,21 @@ function wipe() {
   db.pragma('foreign_keys = OFF');
   const clear = db.transaction(() => {
     for (const table of SEEDED_TABLES) db.prepare(`DELETE FROM ${table}`).run();
+    // db/client.ts skips its own migration step for a database with every
+    // table but no migration ledger (schemaAlreadyExistsWithoutLedger) -
+    // that's what lets a seed-built database and a migration-built one
+    // coexist as two ways to reach the same schema. If this database was
+    // ever ALSO started once through `npm start` (e.g. testing both paths
+    // during development), that run leaves a __drizzle_migrations table
+    // behind - --reset only used to clear rows, never that table, so a
+    // schema change added after that point (a new migration file plus its
+    // seed.ts counterpart, like dienstrooster_pending_undo) made the next
+    // `npm start` try to re-run that one migration against a table
+    // seed.ts's own CREATE TABLE IF NOT EXISTS had already created,
+    // crashing every request with "table already exists". Dropping it here
+    // puts a reset database back in the same ledger-free state a genuinely
+    // fresh seed would produce.
+    db.prepare(`DROP TABLE IF EXISTS __drizzle_migrations`).run();
   });
   clear();
   db.pragma('foreign_keys = ON');

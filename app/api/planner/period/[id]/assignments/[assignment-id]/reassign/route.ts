@@ -23,6 +23,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
+import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
@@ -113,6 +114,10 @@ export async function POST(
         { status: 404 }
       );
     }
+
+    const oldPerson = db
+      .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(assignment.person_id) as { codenaam: string } | undefined;
 
     // Not a hard block - a swap is a deliberate planner exception, made in
     // consultation with the person taking the shift, so this must never
@@ -225,6 +230,24 @@ export async function POST(
         }),
         now
       );
+
+      // Undoing this means swapping newAssignmentId back to the person who
+      // had it before - the staleness check in undo-last/route.ts refuses
+      // unless newAssignmentId still holds newPersonId, exactly the state
+      // this reassign just produced.
+      setPendingUndo({
+        scope: 'PERIOD_ASSIGNMENT',
+        scopeId: periodId,
+        actionType: 'REASSIGN',
+        payload: {
+          assignment_id: newAssignmentId,
+          slot_id: assignment.slot_id,
+          current_person_id: newPersonId,
+          previous_person_id: assignment.person_id,
+        },
+        label: `${oldPerson?.codenaam ?? 'iemand'} → ${newPerson.codenaam} gewisseld op ${assignmentSlotLabel(slot.datum, slot.teller)}`,
+        actorId,
+      });
     });
 
     run();

@@ -10,6 +10,7 @@ import { v4 as uuid } from 'uuid';
 import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
 
 export async function DELETE(
   request: NextRequest,
@@ -62,6 +63,18 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    const removedPerson = db
+      .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(assignment.person_id) as { codenaam: string } | undefined;
+    const removedSlot = db
+      .prepare(
+        `SELECT s.datum, st.teller
+         FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.id = ?`
+      )
+      .get(assignment.slot_id) as { datum: string; teller: string } | undefined;
 
     // Solver-produced assignments are removable too. A ward has to be able
     // to take someone off a shift they were scheduled for - illness, a swap
@@ -122,6 +135,21 @@ export async function DELETE(
         null,
         now
       );
+
+      // Undoing this means re-creating an assignment for this exact
+      // person/slot - the staleness check in undo-last/route.ts refuses
+      // unless the slot is still empty, exactly the state this delete just
+      // produced.
+      if (removedPerson && removedSlot) {
+        setPendingUndo({
+          scope: 'PERIOD_ASSIGNMENT',
+          scopeId: periodId,
+          actionType: 'REMOVE',
+          payload: { slot_id: assignment.slot_id, person_id: assignment.person_id, bron: assignment.bron },
+          label: `${removedPerson.codenaam} verwijderd van ${assignmentSlotLabel(removedSlot.datum, removedSlot.teller)}`,
+          actorId,
+        });
+      }
     })();
 
     return NextResponse.json({

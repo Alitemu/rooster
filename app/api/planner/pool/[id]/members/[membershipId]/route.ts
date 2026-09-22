@@ -13,6 +13,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { isValidIsoDate } from '@/lib/isoDate';
+import { setPendingUndo } from '@/lib/pendingUndo';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateMembershipRequest {
@@ -163,7 +164,34 @@ export async function DELETE(
       return NextResponse.json(response, { status: 404 });
     }
 
-    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE id = ?').run(membershipId);
+    const person = db
+      .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(membership.person_id) as { codenaam: string } | undefined;
+
+    db.transaction(() => {
+      db.prepare('DELETE FROM dienstrooster_pool_membership WHERE id = ?').run(membershipId);
+
+      // Undoing this means re-creating the exact same membership row - the
+      // staleness check in the pool's own undo-last route refuses unless
+      // this person genuinely has no membership in this pool right now,
+      // exactly the state this delete just produced.
+      if (person) {
+        setPendingUndo({
+          scope: 'POOL_MEMBERSHIP',
+          scopeId: poolId,
+          actionType: 'MEMBERSHIP_DELETE',
+          payload: {
+            person_id: membership.person_id,
+            pool_id: poolId,
+            geldig_vanaf: membership.geldig_vanaf,
+            geldig_tot: membership.geldig_tot,
+            deelnamefactor: membership.deelnamefactor,
+          },
+          label: `${person.codenaam} verwijderd uit de pool (${membership.geldig_vanaf} t/m ${membership.geldig_tot})`,
+          actorId: auth!.userId,
+        });
+      }
+    })();
 
     const response: ApiSuccessResponse<{ deleted: boolean }> = {
       success: true,

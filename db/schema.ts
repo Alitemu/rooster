@@ -411,6 +411,59 @@ export const auditLog = sqliteTable(
 );
 
 // ============================================================================
+// PENDING UNDO
+// ============================================================================
+
+// One reversible action per scope, replaced (not accumulated) by the next
+// one - a single "ongedaan maken" button, not a full undo stack. Deliberately
+// its own table rather than reconstructed from dienstrooster_audit_log or
+// dienstrooster_assignment_edit: a reassign is one undo unit but two rows in
+// each of those (delete the old side, create the new side), and manual-assign
+// never wrote to assignment_edit at all - parsing that back into "what
+// exactly do I reverse" is fragile. Written explicitly by the route that
+// just made the change, so it always says precisely what to undo.
+//
+// Row-per-scope (not per-action) is what makes this survive a reload or a
+// different tab/session picking the page back up later: it's read from the
+// database like anything else here, not kept in browser memory. It stops
+// being available the moment ANYTHING else touches that same scope (the
+// affected slot/membership no longer matches what this row expects) - see
+// each undo-last route's own staleness check - so "ongedaan maken" can
+// never silently clobber a change made after it, by this planner or another
+// one, regardless of how long ago the row was written.
+export const pendingUndo = sqliteTable(
+  'dienstrooster_pending_undo',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    // periodId for PERIOD_ASSIGNMENT, poolId for POOL_MEMBERSHIP - never
+    // compared across scopes, so nothing requires the two id spaces to be
+    // disjoint, but the scope column is still stored for clarity when
+    // reading the table directly.
+    scope: text('scope', { enum: ['PERIOD_ASSIGNMENT', 'POOL_MEMBERSHIP'] }).notNull(),
+    scope_id: text('scope_id').notNull().unique(),
+    action_type: text('action_type', {
+      enum: ['ASSIGN', 'REASSIGN', 'REMOVE', 'MEMBERSHIP_DELETE'],
+    }).notNull(),
+    payload_json: text('payload_json').notNull(),
+    // Dutch, human-readable - shown on the button itself, so a planner
+    // knows exactly what "ongedaan maken" is about to do before clicking it.
+    label: text('label').notNull(),
+    actor_id: text('actor_id').notNull().references(() => person.id),
+    aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+  },
+  (table) => ({
+    scopeCheck: check(
+      'pending_undo_scope_check',
+      sql`${table.scope} IN ('PERIOD_ASSIGNMENT', 'POOL_MEMBERSHIP')`
+    ),
+    actionTypeCheck: check(
+      'pending_undo_action_type_check',
+      sql`${table.action_type} IN ('ASSIGN', 'REASSIGN', 'REMOVE', 'MEMBERSHIP_DELETE')`
+    ),
+  })
+);
+
+// ============================================================================
 // IMPORTS
 // ============================================================================
 

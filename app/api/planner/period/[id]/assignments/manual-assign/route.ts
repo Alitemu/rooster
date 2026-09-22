@@ -22,6 +22,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
+import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
@@ -208,6 +209,18 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         }),
         now
       );
+
+      // Undoing this means removing exactly this new assignment - nothing
+      // existed on this slot before it (the existing-assignment check above
+      // already refused the request otherwise).
+      setPendingUndo({
+        scope: 'PERIOD_ASSIGNMENT',
+        scopeId: periodId,
+        actionType: 'ASSIGN',
+        payload: { assignment_id: assignmentId, slot_id, person_id },
+        label: `${person.codenaam} toegewezen aan ${assignmentSlotLabel(slot.datum, slot.teller)}`,
+        actorId,
+      });
     })();
 
     // Prepared for when there's a way to reach the participant outside the

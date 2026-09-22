@@ -118,6 +118,16 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   // happened to remount them.
   const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
   const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar' | 'dienstdoende'>('list');
+  // The single most recent reversible assign/reassign/remove for this
+  // period, read from the server (lib/pendingUndo.ts) rather than kept in
+  // this component's own state - that's what makes it still show up after
+  // a reload, in a different tab, or for a different planner who opens
+  // this same period later, and what makes undoing it a real button
+  // instead of a client-only ctrl+z that only the person who made the
+  // change could ever use.
+  const [pendingUndo, setPendingUndo] = useState<{ label: string } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
 
   // Called unconditionally, above every early return below (loading/error/
   // !dashboard) - both hooks are no-ops while showUnpublishConfirm is
@@ -127,7 +137,21 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
   useBodyScrollLock(showUnappliedDraftWarning);
   const dismissUnappliedDraftBackdrop = useDialogDismiss(showUnappliedDraftWarning, () => setShowUnappliedDraftWarning(false));
 
-  const loadData = async () => {
+  // bumpAssignmentsKey defaults to true - a full dashboard reload (mount,
+  // submit-on-behalf, or the roster dialog's own onSuccess) means the
+  // assignments list/calendar's data could be stale in a way its own
+  // fetch effect won't notice on its own (a genuinely new dataset after
+  // regeneration), so remounting them is the safe default there.
+  //
+  // AssignmentGrid/AssignmentCalendar's own onChanged (a single right-click
+  // assign/reassign/remove) passes false: both already call their own
+  // load()/loadSlots() and update in place before calling onChanged, so
+  // remounting them here on top of that threw away the state they'd just
+  // fetched and fetched it again from scratch - visible as the whole
+  // calendar/list flashing to a loading state and back on every single
+  // pick, which read as "the page refreshes" even though no navigation
+  // happened.
+  const loadData = async (bumpAssignmentsKey: boolean = true) => {
     try {
       const [dashRes, progRes] = await Promise.all([
         fetch(`/api/planner/period/${periodId}/dashboard`),
@@ -143,20 +167,60 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
       setDashboard(dashData.data);
       setProgress(progData.data);
       setLoading(false);
-      // Any dashboard reload - mount, submit-on-behalf, or the roster
-      // dialog's own onSuccess - also means the assignments list/calendar
-      // could be stale, so remount them together with it rather than
-      // tracking each trigger separately.
-      setAssignmentsRefreshKey((k) => k + 1);
+      if (bumpAssignmentsKey) setAssignmentsRefreshKey((k) => k + 1);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Laden van dashboard mislukt');
       setLoading(false);
+    }
+
+    // Best-effort, on its own: this is an auxiliary affordance, not core
+    // dashboard data, so a failure here must never block the rest of the
+    // page from loading the way the checks above do.
+    try {
+      const pendingRes = await fetch(`/api/planner/period/${periodId}/assignments/pending-undo`);
+      const pendingData = await pendingRes.json();
+      setPendingUndo(pendingRes.ok ? pendingData.data?.pending ?? null : null);
+    } catch {
+      setPendingUndo(null);
     }
   };
 
   useEffect(() => {
     loadData();
   }, [periodId]);
+
+  // Only asked for on a GEPUBLICEERD period - every route this calls
+  // requires a reason there, same as a direct reassign/remove would.
+  const [undoReasonPromptOpen, setUndoReasonPromptOpen] = useState(false);
+  const [undoReason, setUndoReason] = useState('');
+
+  const handleUndoLast = async (reason?: string) => {
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      const res = await fetch(`/api/planner/period/${periodId}/assignments/undo-last`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.error?.code === 'REASON_REQUIRED') {
+          setUndoReasonPromptOpen(true);
+          return;
+        }
+        throw new Error(data.error?.message || 'Ongedaan maken mislukt');
+      }
+      setUndoReasonPromptOpen(false);
+      setUndoReason('');
+      await loadData(false);
+      setAssignmentsRefreshKey((k) => k + 1);
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : 'Ongedaan maken mislukt');
+    } finally {
+      setUndoing(false);
+    }
+  };
 
   const handleUnpublish = async () => {
     setUnpublishing(true);
@@ -218,7 +282,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
       <div className="card p-8 bg-red-50 border border-red-200 flex items-center justify-between gap-3">
         <p className="text-red-700">{loadError}</p>
         <button
-          onClick={loadData}
+          onClick={() => loadData()}
           className="shrink-0 px-3 py-1.5 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700"
         >
           Opnieuw proberen
@@ -550,6 +614,55 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
               </button>
             </div>
           </div>
+
+          {pendingUndo && (
+            <div className="mb-4 p-3 rounded bg-blue-50 border border-blue-200 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-sm text-blue-900">
+                <span className="font-medium">Laatst gewijzigd:</span> {pendingUndo.label}
+              </p>
+              {undoReasonPromptOpen ? (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    type="text"
+                    value={undoReason}
+                    onChange={(e) => setUndoReason(e.target.value)}
+                    placeholder="Reden (verplicht bij gepubliceerd rooster)"
+                    className="px-2 py-1 border rounded text-sm"
+                    autoFocus
+                  />
+                  <button
+                    onClick={() => handleUndoLast(undoReason)}
+                    disabled={undoing || !undoReason.trim()}
+                    className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {undoing ? 'Bezig…' : 'Bevestigen'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setUndoReasonPromptOpen(false);
+                      setUndoReason('');
+                    }}
+                    disabled={undoing}
+                    className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+                  >
+                    Annuleren
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => handleUndoLast()}
+                  disabled={undoing}
+                  className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                >
+                  {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
+                </button>
+              )}
+            </div>
+          )}
+          {undoError && (
+            <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">{undoError}</div>
+          )}
+
           {showAssignments && (
             assignmentsView === 'list' ? (
               <AssignmentGrid
@@ -560,10 +673,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
                   // A reassign/remove here can open (or close) a gap -
                   // FillGapsPanel lives outside this component and has no
                   // other way to find out (see onRosterChanged's own
-                  // docstring). loadData() also refreshes this dashboard's
-                  // own imbalance/staff-status numbers, which a reassign
-                  // can change too.
-                  loadData();
+                  // docstring). loadData(false) also refreshes this
+                  // dashboard's own imbalance/staff-status numbers, which a
+                  // reassign can change too - false because AssignmentGrid
+                  // already reloaded its own rows before calling this, so
+                  // remounting it here on top of that would throw that away
+                  // and fetch it all over again for nothing.
+                  loadData(false);
                   onRosterChanged?.();
                 }}
               />
@@ -577,7 +693,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
                   // right-click assign/reassign/remove here can open or
                   // close a gap FillGapsPanel needs to know about, and can
                   // change this dashboard's own imbalance/staff numbers.
-                  loadData();
+                  // false because AssignmentCalendar already reloaded its
+                  // own slots before calling this.
+                  loadData(false);
                   onRosterChanged?.();
                 }}
               />

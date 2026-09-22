@@ -61,6 +61,16 @@ export default function PoolStaffPage() {
   const [savingMembership, setSavingMembership] = useState(false);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
 
+  // The single most recently removed membership for this pool, read from
+  // the server (lib/pendingUndo.ts) so it's still there after a reload or
+  // for a different planner who opens this page later - only removals get
+  // this, not date/deelnamefactor edits: a misclick that removes someone
+  // is the one mistake here that isn't just as fast to fix by opening the
+  // edit form again and typing the old value back in.
+  const [pendingUndo, setPendingUndo] = useState<{ label: string } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+
   // No GET /api/planner/pools/[id] exists (only PATCH) - the list endpoint
   // already carries naam for every pool, so find this one in it rather
   // than adding a single-pool route for one field.
@@ -94,9 +104,36 @@ export default function PoolStaffPage() {
     }
   }, [poolId]);
 
+  const loadPendingUndo = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/planner/pool/${poolId}/members/pending-undo`);
+      const data = await res.json();
+      setPendingUndo(res.ok ? data.data?.pending ?? null : null);
+    } catch {
+      setPendingUndo(null);
+    }
+  }, [poolId]);
+
   useEffect(() => {
     loadStaff();
-  }, [loadStaff]);
+    loadPendingUndo();
+  }, [loadStaff, loadPendingUndo]);
+
+  const handleUndoLast = async () => {
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      const res = await fetch(`/api/planner/pool/${poolId}/members/undo-last`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Ongedaan maken mislukt');
+      await loadStaff({ silent: true });
+      await loadPendingUndo();
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : 'Ongedaan maken mislukt');
+    } finally {
+      setUndoing(false);
+    }
+  };
 
   const handleAddMember = async () => {
     if (!newMember.codenaam.trim() || !newMember.geldig_vanaf || !newMember.geldig_tot) {
@@ -171,6 +208,7 @@ export default function PoolStaffPage() {
       if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
 
       await loadStaff({ silent: true });
+      await loadPendingUndo();
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Verwijderen mislukt');
     } finally {
@@ -205,6 +243,24 @@ export default function PoolStaffPage() {
         <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Personeel beheren</h1>
         <p className="text-neutral-600">{pool.naam}</p>
       </div>
+
+      {pendingUndo && (
+        <div className="card p-4 bg-blue-50 border border-blue-200 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-blue-900">
+            <span className="font-medium">Laatst gewijzigd:</span> {pendingUndo.label}
+          </p>
+          <button
+            onClick={handleUndoLast}
+            disabled={undoing}
+            className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
+          </button>
+        </div>
+      )}
+      {undoError && (
+        <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{undoError}</div>
+      )}
 
       <div className="card card-padding space-y-4">
         <p className="text-sm text-neutral-600">

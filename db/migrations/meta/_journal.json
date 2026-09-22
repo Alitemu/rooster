@@ -85,6 +85,13 @@
       "when": 1788800600000,
       "tag": "0011_person_sessie_versie",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1788800700000,
+      "tag": "0012_pending_undo",
+      "breakpoints": true
     }
   ]
 }

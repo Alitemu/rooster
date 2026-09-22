@@ -158,6 +158,46 @@ const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1'
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
 
+// Assigning a shift from the calendar's right-click menu used to force a
+// full remount of the whole assignments panel (PlannerDashboard bumped
+// assignmentsRefreshKey on every single change, not just a real
+// regenerate) - visible as the calendar flashing to a loading state and
+// back, which read as the page refreshing even though no navigation
+// happened. And nothing offered a way to undo a misclick except redoing
+// the same manual action by hand - see lib/pendingUndo.ts.
+let calendarNavCount = 0;
+page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) calendarNavCount++; });
+await page.click('button:has-text("Tonen")');
+await page.waitForTimeout(500);
+await page.click('button:has-text("Kalender")');
+await page.waitForTimeout(800);
+calendarNavCount = 0;
+
+const emptyCell = page.locator('[role="button"][title*="nog niemand toegewezen"]').first();
+await emptyCell.scrollIntoViewIfNeeded();
+await emptyCell.click({ button: 'right' });
+await page.waitForTimeout(500);
+const candidate = page.locator('[role="menu"] button[role="menuitem"]').filter({ hasText: /van/ }).first();
+const assignedCount = db.prepare('SELECT COUNT(*) c FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(period.id).c;
+await candidate.click();
+await page.waitForTimeout(800);
+
+rec('Assigning from the calendar does not navigate/refresh the page', calendarNavCount === 0, `navigations=${calendarNavCount}`);
+
+const undoBanner = page.locator('text=Laatst gewijzigd:');
+rec('An "Ongedaan maken" banner appears after the assignment', await undoBanner.isVisible().catch(() => false));
+
+const assignedCountAfter = db.prepare('SELECT COUNT(*) c FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(period.id).c;
+await page.click('button:has-text("Ongedaan maken")');
+await page.waitForTimeout(800);
+const assignedCountUndone = db.prepare('SELECT COUNT(*) c FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(period.id).c;
+rec(
+  'Undo removes exactly the one assignment it just added, nothing else',
+  assignedCountAfter === assignedCount + 1 && assignedCountUndone === assignedCount,
+  `before=${assignedCount} after-assign=${assignedCountAfter} after-undo=${assignedCountUndone}`
+);
+rec('The undo banner disappears once used', !(await undoBanner.isVisible().catch(() => false)));
+
 // "Rooster vooraf invullen" only stages picks in this browser's localStorage
 // (FillGapsPanel.tsx) - nothing reaches the server, and so nothing reaches
 // the solver, until "Alle toewijzingen toepassen" is clicked. Clicking
@@ -266,6 +306,35 @@ const exemptChecked = await page
   .isChecked();
 rec('"Parttime-vrije dagen tellen niet mee voor het budget" is checked by default', exemptChecked);
 db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(wizardPeriodId);
+
+// "Personeel beheren" (medewerkers): removing someone from the pool is a
+// hard DELETE with no side effects to worry about (see lib/pendingUndo.ts's
+// MEMBERSHIP_DELETE branch), unlike an edit to their dates/deelnamefactor -
+// which is just as fast to fix by reopening the edit form and typing the
+// old value back in, so only removal gets an undo button here.
+await page.goto(`${BASE}/planner/pool/${wizardPoolId}/staff`, { waitUntil: 'networkidle' });
+const membershipCountBefore = db
+  .prepare('SELECT COUNT(*) c FROM dienstrooster_pool_membership WHERE pool_id = ?')
+  .get(wizardPoolId).c;
+await page.click('button:has-text("Verwijderen")');
+await page.waitForTimeout(300);
+await page.click('button:has-text("Zeker weten?")');
+await page.waitForTimeout(800);
+const membershipCountAfter = db
+  .prepare('SELECT COUNT(*) c FROM dienstrooster_pool_membership WHERE pool_id = ?')
+  .get(wizardPoolId).c;
+const staffUndoBanner = page.locator('text=Laatst gewijzigd:');
+rec('Removing a staff member shows an "Ongedaan maken" banner', await staffUndoBanner.isVisible().catch(() => false));
+await page.click('button:has-text("Ongedaan maken")');
+await page.waitForTimeout(800);
+const membershipCountRestored = db
+  .prepare('SELECT COUNT(*) c FROM dienstrooster_pool_membership WHERE pool_id = ?')
+  .get(wizardPoolId).c;
+rec(
+  'Undo restores exactly the one membership that was just removed',
+  membershipCountAfter === membershipCountBefore - 1 && membershipCountRestored === membershipCountBefore,
+  `before=${membershipCountBefore} after-remove=${membershipCountAfter} after-undo=${membershipCountRestored}`
+);
 
 // ---- participant
 const s1 = db.prepare("SELECT id FROM dienstrooster_person WHERE codenaam='Persoon-01'").get();
