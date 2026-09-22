@@ -158,6 +158,66 @@ const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1'
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
 
+// The period page's roster panel at 375px (CLAUDE.md: "must remain readable
+// on 375px width"). Two regressions found by hand here, neither visible at
+// the desktop width every other check in this script uses:
+//
+// 1. The Lijst/Kalender/Dienstdoende tab row + Tonen/Verbergen button sits
+//    in a flex child with no min-w-0 - a flex item's default min-width is
+//    its own content width, not 0, so that row (359px) refused to shrink
+//    below its natural size even though its own overflow-x-auto could only
+//    do anything once it did. It pushed the whole PAGE 21px wider than the
+//    viewport instead of just scrolling itself.
+// 2. The calendar's right-click menu closes on ANY 'scroll' event caught by
+//    its window-level capture-phase listener - including the menu's own
+//    candidate list scrolling, since that's a 'scroll' event too. Every
+//    mouse-wheel tick, touch drag or scrollbar drag over a menu long enough
+//    to need scrolling closed it before anything visibly moved, making a
+//    slot with many eligible candidates impossible to fully browse or pick
+//    from on the calendar - not simply a mobile issue, but far more likely
+//    to bite when the menu is opened near the mobile viewport's own smaller
+//    max-height budget.
+const mctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+const mpage = await mctx.newPage();
+await (async () => {
+  const res = await fetch(`${BASE}/api/auth/staff-login`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ codenaam: 'planner', password: 'Password123!' }),
+  });
+  const raw = res.headers.getSetCookie().find((c) => c.startsWith('dienstrooster_session='));
+  const value = raw.split(';')[0].split('=')[1];
+  await mctx.addCookies([{ name: 'dienstrooster_session', value, domain: 'localhost', path: '/', httpOnly: true, secure: false, sameSite: 'Lax' }]);
+})();
+
+await mpage.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
+await mpage.click('button:has-text("Tonen")');
+await mpage.waitForTimeout(500);
+const mobileScrollWidth = await mpage.evaluate(() => document.documentElement.scrollWidth);
+rec('No horizontal page overflow at 375px once the roster panel is shown', mobileScrollWidth === 375, `scrollWidth=${mobileScrollWidth}`);
+
+await mpage.click('button:has-text("Kalender")');
+await mpage.waitForTimeout(800);
+const mobileCell = mpage.locator('[role="button"][title*="rechtsklik"]').first();
+await mobileCell.scrollIntoViewIfNeeded();
+await mobileCell.click({ button: 'right' });
+await mpage.waitForTimeout(500);
+const mobileMenu = mpage.locator('[role="menu"]');
+const scrollTopBefore = await mobileMenu.evaluate((el) => el.scrollTop).catch(() => null);
+const menuBox = await mobileMenu.boundingBox();
+if (menuBox) {
+  await mpage.mouse.move(menuBox.x + menuBox.width / 2, menuBox.y + menuBox.height / 2);
+  await mpage.mouse.wheel(0, 150);
+  await mpage.waitForTimeout(300);
+}
+const menuStillOpen = await mobileMenu.isVisible().catch(() => false);
+const scrollTopAfter = menuStillOpen ? await mobileMenu.evaluate((el) => el.scrollTop).catch(() => null) : null;
+rec(
+  'Scrolling inside the right-click menu moves its list instead of closing it',
+  menuStillOpen && scrollTopBefore === 0 && scrollTopAfter > 0,
+  `before=${scrollTopBefore} after=${scrollTopAfter} stillOpen=${menuStillOpen}`
+);
+await mctx.close();
+
 // Setup wizard, step 3 ("Venster en budgetten"): lib/blockBudget.ts's
 // normalizeConfig() already falls back to true when parttimeExempt is
 // missing (matching scripts/seed.ts), so the wizard's own initial React

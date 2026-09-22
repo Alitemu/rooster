@@ -485,7 +485,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged, onRosterChanged }:
         <div className="card p-6">
           <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h3 className="font-bold text-lg">{rosterHeading[rosterFillState]}</h3>
-            <div className="flex items-center gap-2">
+            {/* min-w-0 is load-bearing here: a flex item's default min-width
+                is auto (its content's own width), not 0 - without it,
+                overflow-x-auto below has nothing to actually clip, because
+                this div never shrinks below the tab group + Tonen button's
+                combined natural width (359px), wider than a 375px screen
+                has room for once the card's own padding is subtracted. That
+                pushed the whole page 21px wider than the viewport instead
+                of scrolling just this row. */}
+            <div className="flex items-center gap-2 min-w-0 overflow-x-auto">
               {showAssignments && (
                 <div className="inline-flex rounded overflow-hidden border border-neutral-300">
                   <button
