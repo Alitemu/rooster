@@ -31,6 +31,26 @@ mail. Daar hoef je niets voor te doen, want het gaat via dezelfde stroom:
   aanvrager krijgt een bevestiging.
 - Bij goedkeuren of afwijzen krijgt de aanvrager de uitkomst. Bij een
   afwijzing staat de reden erbij.
+- Trekt de aanvrager een verzoek in, dan krijgt de collega een mail dat het
+  verzoek is ingetrokken en dat er niets meer hoeft te gebeuren.
+
+**Eén dienst aan meerdere collega's aanbieden.** Een deelnemer mag dezelfde
+dienst tegelijk aan meerdere collega's aanbieden, om de kans op een ruil zo
+groot mogelijk te maken. Wie het eerst goedkeurt, ruilt:
+
+- De aanvrager krijgt de bevestiging van de ruil. Daarin staat ook hoeveel
+  andere verzoeken voor die dienst zijn ingetrokken.
+- De andere verzoeken van de aanvrager worden vanzelf ingetrokken. Die
+  collega's krijgen een mail dat het verzoek is ingetrokken, met de reden "De
+  dienst is al met een andere collega geruild." De aanvrager krijgt daar
+  geen losse mails over.
+- Had iemand anders ook een verzoek lopen voor een van de twee geruilde
+  diensten, dan vervalt dat verzoek. De aanvrager en de collega van dat
+  verzoek krijgen er allebei bericht van.
+
+Dezelfde collega twee keer vragen voor dezelfde dienst kan niet. In het
+venster voor een ruilverzoek staat wie al gevraagd is, en die collega is
+niet nog eens te kiezen.
 
 In elke mail staat wat de lezer zelf afgeeft en krijgt, met de datum voluit,
 en een persoonlijke link om het verzoek te openen. Zo'n verzoek geldt als een
