@@ -15,6 +15,7 @@ import { swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
+import { optionalFreeText } from '@/lib/freeText';
 import { swapWindowConflicts } from '@/lib/swapWindowRule';
 
 const TELLER_LABELS: Record<string, string> = {
@@ -119,8 +120,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     if (denied) return denied;
 
     const body = await parseJsonBody(request);
-    const { period_id, offered_slot_id, requested_slot_id, notes } = body;
+    const { period_id, offered_slot_id, requested_slot_id } = body;
     const now = new Date().toISOString();
+
+    const notesCheck = optionalFreeText(body.notes, 'De toelichting');
+    if (!notesCheck.ok) {
+      return NextResponse.json({ success: false, error: notesCheck.message }, { status: 400 });
+    }
+    const notes = notesCheck.value;
 
     if (!period_id || !offered_slot_id || !requested_slot_id) {
       return NextResponse.json(
@@ -212,6 +219,21 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // lib/swapWindowRule.ts). The dialog already warned the requester, and
     // the colleague sees the same warning with the request before approving.
 
+    // The same request twice would only mail the colleague twice: every
+    // request sends a mail now (lib/meldingMail.ts).
+    const alreadyPending = db
+      .prepare(
+        `SELECT 1 FROM dienstrooster_swap_request
+         WHERE aanvrager_person_id = ? AND aangeboden_slot_id = ? AND gevraagde_slot_id = ? AND status = 'PENDING'`
+      )
+      .get(personId, offered_slot_id, requested_slot_id);
+    if (alreadyPending) {
+      return NextResponse.json(
+        { success: false, error: 'Je hebt dit ruilverzoek al ingediend. Het wacht nog op antwoord.' },
+        { status: 409 }
+      );
+    }
+
     // Create swap request
     const swapId = uuid();
 
@@ -286,7 +308,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         collega: respondent?.codenaam ?? '',
         aangeboden: offeredSlot ?? { datum: '', teller: '' },
         gevraagd: requestedSlot ?? { datum: '', teller: '' },
-        toelichting: typeof notes === 'string' ? notes : null,
+        toelichting: notes,
         kortOpElkaar,
       });
 

@@ -1085,7 +1085,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 </p>
               ) : progress ? (
                 <p className="text-xs text-center text-neutral-500">
-                  Je kunt dit scherm open laten staan of later terugkomen, of tussentijds stoppen
+                  Je kunt dit scherm open laten staan of later terugkomen. Tussentijds stoppen kan
                   hieronder.
                 </p>
               ) : (

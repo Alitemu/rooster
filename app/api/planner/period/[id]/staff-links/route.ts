@@ -129,7 +129,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         success: false,
         error: {
           code: 'PERSON_NOT_FOUND',
-          message: 'Persoon niet gevonden, niet actief, of geen lid van deze pool voor deze periode',
+          message: 'Persoon niet gevonden, niet actief of geen lid van deze pool voor deze periode',
         },
       };
       return NextResponse.json(response, { status: 404 });

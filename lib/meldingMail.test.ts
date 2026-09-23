@@ -7,6 +7,7 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { POST as createSwap } from '@/app/api/person/[id]/swap-requests/route';
 import { POST as approveSwap } from '@/app/api/person/[id]/swap-requests/[swap-id]/approve/route';
 import { POST as rejectSwap } from '@/app/api/person/[id]/swap-requests/[swap-id]/reject/route';
+import { POST as cancelSwap } from '@/app/api/person/[id]/swap-requests/[swap-id]/cancel/route';
 import {
   startSmtpSink,
   configureSmtp,
@@ -128,7 +129,10 @@ function createFixture() {
   // Weeks 10 and 16: far enough apart that nobody ends up close together.
   const offered = shift(aanvrager, '2099-03-03', 10);
   const requested = shift(collega, '2099-04-14', 16);
-  return { periodId, aanvrager, collega, offered, requested };
+  // A third colleague with a shift of the same type, far from the others.
+  const derde = person();
+  const derdeShift = shift(derde, '2099-03-24', 13);
+  return { periodId, aanvrager, collega, offered, requested, derde, derdeShift };
 }
 
 function codenaam(id: string) {
@@ -305,6 +309,151 @@ describe('mail about swap requests', () => {
     expect(row.status).toBe('PENDING');
     await new Promise((r) => setTimeout(r, 300));
     expect(sink.received).toHaveLength(0);
+  });
+});
+
+describe('what a participant types into a swap', () => {
+  const post = (f: ReturnType<typeof createFixture>, body: Record<string, unknown>) =>
+    createSwap(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager), 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          period_id: f.periodId,
+          offered_slot_id: f.offered,
+          requested_slot_id: f.requested,
+          ...body,
+        }),
+      }),
+      { params: Promise.resolve({ id: f.aanvrager }) }
+    );
+  const pendingCount = (f: ReturnType<typeof createFixture>) =>
+    (
+      db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_swap_request WHERE periode_id = ?').get(f.periodId) as {
+        n: number;
+      }
+    ).n;
+
+  it('reaches the colleague as text, never as markup', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    await requestSwap(f, '<a href="https://nep.test">Bevestig hier</a>');
+    await waitForMails(sink, 2);
+    const [b] = berichtenFor(f.collega);
+    expect(b.tekst).toContain('<a href="https://nep.test">');
+    expect(b.html).toContain('&lt;a href=&quot;https://nep.test&quot;&gt;');
+    expect(b.html).not.toMatch(/<a /);
+  });
+
+  it('refuses a toelichting that is not text or is too long, and stores nothing', async () => {
+    const f = createFixture();
+    expect((await post(f, { notes: { a: 1 } })).status).toBe(400);
+    expect((await post(f, { notes: 'x'.repeat(1001) })).status).toBe(400);
+    expect(pendingCount(f)).toBe(0);
+    expect((await post(f, { notes: 'x'.repeat(1000) })).status).toBe(200);
+  });
+
+  it('refuses the same request a second time while the first is still open', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    await requestSwap(f);
+    await waitForMails(sink, 2);
+    const again = await post(f, {});
+    expect(again.status).toBe(409);
+    expect(pendingCount(f)).toBe(1);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(sink.received).toHaveLength(2);
+  });
+
+  it('refuses a rejection reason that is not text', async () => {
+    const f = createFixture();
+    const swapId = await requestSwap(f);
+    const res = await rejectSwap(
+      new NextRequest(`http://localhost/api/person/${f.collega}/swap-requests/${swapId}/reject`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.collega), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: ['a'] }),
+      }),
+      { params: Promise.resolve({ id: f.collega, 'swap-id': swapId }) }
+    );
+    expect(res.status).toBe(400);
+    const row = db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(swapId) as {
+      status: string;
+    };
+    expect(row.status).toBe('PENDING');
+  });
+});
+
+describe('a swap request that is withdrawn or lapses', () => {
+  const inApp = (personId: string) =>
+    db
+      .prepare('SELECT onderwerp, inhoud FROM dienstrooster_notification WHERE person_id = ? ORDER BY aangemaakt_op')
+      .all(personId) as Array<{ onderwerp: string; inhoud: string }>;
+
+  it('tells the colleague when the requester withdraws it', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    const swapId = await requestSwap(f);
+    await waitForMails(sink, 2);
+
+    const res = await cancelSwap(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests/${swapId}/cancel`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager) },
+      }),
+      { params: Promise.resolve({ id: f.aanvrager, 'swap-id': swapId }) }
+    );
+    expect(res.status).toBe(200);
+    await waitForMails(sink, 3);
+
+    const bericht = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
+    expect(bericht.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.aanvrager)} is ingetrokken`);
+    expect(bericht.tekst).toContain('Je hoeft er niets meer mee te doen.');
+    expect(bericht.tekst).toContain(`${codenaam(f.aanvrager)} vroeg je avonddienst op dinsdag 14 april 2099 te ruilen`);
+    expect(inApp(f.collega).map((n) => n.onderwerp)).toContain(
+      `Het ruilverzoek van ${codenaam(f.aanvrager)} is ingetrokken`
+    );
+  });
+
+  it('closes other open requests for a shift that was just swapped, and tells both sides', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    const eerste = await requestSwap(f);
+    // The third colleague asks for the same shift of the colleague.
+    const tweedeRes = await createSwap(
+      new NextRequest(`http://localhost/api/person/${f.derde}/swap-requests`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.derde), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_id: f.periodId, offered_slot_id: f.derdeShift, requested_slot_id: f.requested }),
+      }),
+      { params: Promise.resolve({ id: f.derde }) }
+    );
+    const tweede = (await tweedeRes.json()).data.swap_request_id as string;
+    await waitForMails(sink, 4);
+
+    await approveSwap(
+      new NextRequest(`http://localhost/api/person/${f.collega}/swap-requests/${eerste}/approve`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.collega) },
+      }),
+      { params: Promise.resolve({ id: f.collega, 'swap-id': eerste }) }
+    );
+    // Outcome to the first requester, plus both sides of the lapsed one.
+    await waitForMails(sink, 7);
+
+    const row = db.prepare('SELECT status, reden_afwijzing FROM dienstrooster_swap_request WHERE id = ?').get(tweede) as {
+      status: string;
+      reden_afwijzing: string;
+    };
+    expect(row.status).toBe('AFGEWEZEN');
+    expect(row.reden_afwijzing).toContain('intussen al met iemand anders geruild');
+
+    const naarDerde = berichtenFor(f.derde).find((b) => b.onderwerp === 'Je ruilverzoek is vervallen')!;
+    expect(naarDerde.tekst).toContain('Je rooster blijft zoals het was.');
+    expect(inApp(f.derde).map((n) => n.onderwerp)).toContain('Je ruilverzoek is vervallen');
+
+    const naarCollega = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
+    expect(naarCollega.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.derde)} is vervallen`);
   });
 });
 

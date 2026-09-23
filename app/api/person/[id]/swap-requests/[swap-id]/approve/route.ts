@@ -13,6 +13,7 @@ import { internalErrorResponse } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding } from '@/lib/meldingMail';
+import { closeLapsedSwaps } from '@/lib/swapLifecycle';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { swapStatusLabel } from '@/lib/statusLabels';
@@ -164,6 +165,8 @@ export async function POST(
     // before the second) would otherwise leave the respondent holding both
     // shifts and the requester holding neither, with the request still
     // PENDING and no audit trail of what happened.
+    const baseUrl = resolveBaseUrl(request);
+    const lapsed: Array<{ send: () => void }> = [];
     const approveTx = db.transaction(() => {
       db.prepare(
         'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
@@ -211,8 +214,13 @@ export async function POST(
         JSON.stringify({ status: 'GOEDGEKEURD' }),
         now
       );
+
+      // Other open requests for either of these two shifts can never be
+      // approved now: close them and tell those involved.
+      lapsed.push(...closeLapsedSwaps(swapRequest, now, baseUrl));
     });
     approveTx();
+    lapsed.forEach((m) => m.send());
 
     // Also by mail - see the same call in ../../route.ts.
     const collega = db
@@ -235,7 +243,7 @@ export async function POST(
       anderen: [collega?.codenaam ?? ''],
       soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
-      baseUrl: resolveBaseUrl(request),
+      baseUrl,
     });
 
     return NextResponse.json({

@@ -10,6 +10,7 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+import { optionalFreeText } from '@/lib/freeText';
 import { swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding } from '@/lib/meldingMail';
 import { resolveBaseUrl } from '@/lib/baseUrl';
@@ -37,7 +38,11 @@ export async function POST(
 
     const swapId = params['swap-id'];
     const body = await parseJsonBody(request);
-    const { reason } = body;
+    const reasonCheck = optionalFreeText(body.reason, 'De reden');
+    if (!reasonCheck.ok) {
+      return NextResponse.json({ success: false, error: reasonCheck.message }, { status: 400 });
+    }
+    const reason = reasonCheck.value;
     const now = new Date().toISOString();
 
     // Verify swap request exists and person is respondent
@@ -154,7 +159,7 @@ export async function POST(
           aangeboden: offeredSlot ?? { datum: '', teller: '' },
           gevraagd: requestedSlot ?? { datum: '', teller: '' },
           afgewezen: true,
-          redenAfwijzing: typeof reason === 'string' ? reason : null,
+          redenAfwijzing: reason,
         }),
       },
       anderen: [collega?.codenaam ?? ''],

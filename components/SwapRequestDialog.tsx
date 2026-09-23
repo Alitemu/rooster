@@ -332,6 +332,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                 </label>
                 <textarea
                   name="notes"
+                  maxLength={1000}
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                   placeholder="Waarom wil je deze ruil? (optioneel)"

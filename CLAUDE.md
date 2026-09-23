@@ -15,7 +15,7 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Frontend + Backend | Next.js App Router | 15.0+ |
+| Frontend + Backend | Next.js App Router | 16.3 |
 | Language | TypeScript | 5.5+ |
 | Styling | Tailwind CSS + shadcn/ui | 3.3+ |
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |
@@ -208,7 +208,7 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - `pool` - shift pool (name, type, settings reference)
 - `pool_membership` - who's in which pool when
 - `ruleset` - configuration and rules (frozen when period opens)
-- `schedule_period` - time periods (CONCEPT, OPEN, CLOSED, GENERATED, PUBLISHED)
+- `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
 - `shift_type` - shift definitions (evening, weekend, holiday)
 - `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type)
 - `holiday_history` - holiday group assignments across years
@@ -370,7 +370,16 @@ out from the reader's side (lib/swapMailDetails.ts). Started after the
 commit and never awaited, so a mail failure can't fail or slow the swap;
 without SMTP configured it does nothing, not even issue a link. Every
 bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
-RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST).
+RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN) and an
+`html` field: `tekst` escaped with <br> for line breaks (tekstNaarHtml).
+The flow must use `html` as the mail body, never build HTML from `tekst`:
+the text can hold words a participant typed (swap toelichting, rejection
+reason, both capped at 1000 characters by lib/freeText.ts). Withdrawing a
+swap tells the colleague; approving one closes every other PENDING request
+on either shift as AFGEWEZEN ("vervallen") and tells both sides
+(lib/swapLifecycle.ts). Invitations go out only for an OPEN period before
+its deadline, like reminders (lib/reminderGate.ts); the CSV of links is
+not gated. SMTP on any port but 465 requires STARTTLS (requireTLS).
 
 Automatic reminders (lib/autoReminders.ts, run every hour from
 instrumentation-node.ts): for an OPEN period with `auto_herinneren` on,

@@ -45,7 +45,10 @@ export function swapMailDetails(params: {
   toelichting?: string | null;
   /** The reader would end up with two shifts close together. */
   kortOpElkaar?: boolean;
-  /** A rejected request: nothing changes, so it is described as what was asked. */
+  /**
+   * The swap did not go through (rejected, withdrawn or lapsed): nothing
+   * changes, so it is described as what was asked.
+   */
   afgewezen?: boolean;
   redenAfwijzing?: string | null;
 }): string {
@@ -53,7 +56,9 @@ export function swapMailDetails(params: {
   let regels: string[];
   if (params.afgewezen) {
     regels = [
-      `Je vroeg je ${shift(params.aangeboden)} te ruilen tegen de ${shift(params.gevraagd)} van ${params.collega}.`,
+      aanvrager
+        ? `Je vroeg je ${shift(params.aangeboden)} te ruilen tegen de ${shift(params.gevraagd)} van ${params.collega}.`
+        : `${params.aanvrager} vroeg je ${shift(params.gevraagd)} te ruilen tegen de ${shift(params.aangeboden)} van ${params.aanvrager}.`,
       'Je rooster blijft zoals het was.',
     ];
   } else if (aanvrager) {

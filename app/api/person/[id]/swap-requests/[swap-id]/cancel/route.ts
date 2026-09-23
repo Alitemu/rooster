@@ -15,6 +15,8 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { swapStatusLabel } from '@/lib/statusLabels';
+import { noticeWithdrawn } from '@/lib/swapLifecycle';
+import { resolveBaseUrl } from '@/lib/baseUrl';
 
 class SwapAlreadyHandledError extends Error {}
 
@@ -58,6 +60,8 @@ export async function POST(
       );
     }
 
+    const baseUrl = resolveBaseUrl(request);
+    const meldingen: Array<{ send: () => void }> = [];
     const cancelTx = db.transaction(() => {
       const swapUpdate = db.prepare(
         `UPDATE dienstrooster_swap_request
@@ -83,8 +87,12 @@ export async function POST(
         JSON.stringify({ status: 'INGETROKKEN' }),
         now
       );
+
+      // The colleague was told about the request, so they're told it's off.
+      meldingen.push(noticeWithdrawn(swapRequest, baseUrl));
     });
     cancelTx();
+    meldingen.forEach((m) => m.send());
 
     return NextResponse.json({
       success: true,

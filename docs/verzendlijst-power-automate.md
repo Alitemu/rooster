@@ -158,14 +158,23 @@ versie iets verschillen.
             "codenaam": "Persoon-03",
             "personen": ["Persoon-03"],
             "onderwerp": "Laatste herinnering: geef je voorkeuren voor Voorjaar 2027 door",
-            "tekst": "Hoi Persoon-03, ..."
+            "tekst": "Hoi Persoon-03, ...",
+            "html": "Hoi Persoon-03,<br><br>..."
           }
         ]
       }
       ```
 
       - `soort`: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
-        `RUILVERZOEK`, `RUIL_BEVESTIGING` of `RUIL_UITKOMST`.
+        `RUILVERZOEK`, `RUIL_BEVESTIGING`, `RUIL_UITKOMST` of
+        `RUIL_INGETROKKEN`.
+      - `html` is dezelfde tekst, klaar om als hoofdtekst van de mail te
+        gebruiken: regels als `<br>` en alle tekens veilig gemaakt. Gebruik
+        altijd `html` als hoofdtekst en nooit zelf `tekst` met een
+        `replace`. In `tekst` kunnen woorden staan die een deelnemer zelf
+        typte (de toelichting bij een ruilverzoek). Als HTML zou daar een
+        nagemaakte link of knop in kunnen staan, verstuurd vanuit jouw
+        mailbox.
       - `automatisch`: `true` als Dienstrooster het zelf verstuurde (een
         geplande herinnering, een ruilverzoek), `false` als jij op een knop
         drukte.
@@ -197,7 +206,8 @@ versie iets verschillen.
                 "codenaam": { "type": "string" },
                 "personen": { "type": "array", "items": { "type": "string" } },
                 "onderwerp": { "type": "string" },
-                "tekst": { "type": "string" }
+                "tekst": { "type": "string" },
+                "html": { "type": "string" }
               },
               "required": ["codenaam", "onderwerp", "tekst"]
             }
@@ -213,9 +223,7 @@ versie iets verschillen.
         3, tabel `Adressen`, sleutelkolom `Codenaam`, sleutelwaarde
         *codenaam*.
       - **Een e-mail verzenden (V2)**: Aan = *Email* uit *Een rij ophalen*,
-        Onderwerp = *onderwerp*, Hoofdtekst als expressie
-        `replace(items('Toepassen_op_elk_2')?['tekst'], decodeUriComponent('%0A'), '<br>')`
-        zodat de regels van de tekst behouden blijven.
+        Onderwerp = *onderwerp*, Hoofdtekst = *html*.
 
    c. Optioneel: **een samenvatting voor jezelf**. Zet ná de lus van stap b
       (dus nog binnen de lus over de bijlagen) een **Voorwaarde**, bijvoorbeeld
@@ -252,7 +260,7 @@ dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
 3. Zet in de binnenste lus (over de berichten), vóór *Een e-mail verzenden*:
 
    a. **Variabele instellen**: `onderwerp` = *onderwerp* van het bericht.
-      Nog een keer: `tekst` = *tekst* van het bericht.
+      Nog een keer: `tekst` = *html* van het bericht.
 
    b. **Toepassen op elk** over *personen* van het bericht. Daarbinnen:
 
@@ -276,8 +284,10 @@ dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
       toestaat dat een variabele in één stap naar zichzelf verwijst.
 
    c. Gebruik in **Een e-mail verzenden (V2)** voortaan de variabelen:
-      Onderwerp = `variables('onderwerp')`, Hoofdtekst =
-      `replace(variables('tekst'), decodeUriComponent('%0A'), '<br>')`.
+      Onderwerp = `variables('onderwerp')`, Hoofdtekst = `variables('tekst')`.
+
+   Gebruik in de kolom `Naam` gewone namen, zonder tekens als `<` of `>`: de
+   naam komt zo in de HTML-tekst.
 
 4. Zet bij beide *Toepassen op elk*-lussen die berichten en personen
    verwerken onder *Instellingen* het **Gelijktijdigheidsbeheer uit**. De
@@ -292,12 +302,17 @@ geen naam, dan blijft de codenaam gewoon staan.
 
 Tot en met september 2026 was de bijlage een losse lijst berichten. Nu staat
 die lijst in `berichten`, met de samenvatting eromheen. Pas in een bestaande
-stroom twee dingen aan, op hetzelfde moment dat je de nieuwe versie van
+stroom drie dingen aan, op hetzelfde moment dat je de nieuwe versie van
 Dienstrooster installeert:
 
 1. Vervang bij **JSON parseren** het schema door het schema uit stap 4.
 2. Laat de lus van stap 4b lopen over *berichten* van *JSON parseren* in
    plaats van over *Hoofdtekst*.
+3. Zet bij **Een e-mail verzenden (V2)** als hoofdtekst het veld *html*, in
+   plaats van de expressie met `replace(... 'tekst' ...)`. Gebruik je echte
+   namen (stap 5), zet de variabele `tekst` dan op *html* en gebruik als
+   hoofdtekst `variables('tekst')` zonder `replace`. Dit is belangrijk voor
+   de veiligheid, zie stap 4.
 
 De stappen binnen de lus (rij ophalen, mail versturen, echte namen) blijven
 gewoon werken.

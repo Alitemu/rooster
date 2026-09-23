@@ -407,6 +407,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   </label>
                   <textarea
                     name="rejection-reason"
+                    maxLength={1000}
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
                     className="w-full px-3 py-2 border rounded-lg text-sm"

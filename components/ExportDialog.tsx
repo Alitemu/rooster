@@ -298,6 +298,39 @@ export function ExportDialog({
     }
   };
 
+  // Shared by invitations and reminders: both name the deadline, so past
+  // it neither can go out until a new one is set.
+  const deadlineEditor = (waarom: string, daarna: string) => (
+    <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6 space-y-3">
+      <p className="text-sm font-semibold text-amber-900">De deadline is al voorbij</p>
+      <p className="text-sm text-amber-900">
+        De deadline was {formatDeadline(deadline)}. {waarom} Stel eerst een nieuwe deadline in. {daarna}
+      </p>
+      <label className="block text-xs font-semibold text-amber-900" htmlFor="nieuwe-deadline">
+        Nieuwe deadline
+      </label>
+      <input
+        id="nieuwe-deadline"
+        type="datetime-local"
+        value={newDeadline}
+        onChange={(e) => setNewDeadline(e.target.value)}
+        className="w-full px-3 py-2 border rounded text-sm bg-white"
+      />
+      {deadlineError && (
+        <p role="alert" className="text-sm text-red-700">
+          {deadlineError}
+        </p>
+      )}
+      <button
+        onClick={saveDeadline}
+        disabled={!newDeadline || savingDeadline}
+        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+      >
+        {savingDeadline ? 'Bezig met opslaan...' : 'Deadline opslaan'}
+      </button>
+    </div>
+  );
+
   useBodyScrollLock(isOpen);
   // No loading-based guard here - the existing Sluiten button below has
   // none either (unlike the other dialogs), so Escape/backdrop-click stay
@@ -364,8 +397,17 @@ export function ExportDialog({
             <h2 className="text-2xl font-bold mb-4">Uitnodigingen versturen</h2>
             {autoSendAvailable === null ? (
               <p className="text-center text-neutral-600 mb-4">Laden...</p>
-            ) : autoSendAvailable ? (
+            ) : !autoSendAvailable ? (
+              <NotConfiguredNotice />
+            ) : periodStatus !== 'OPEN' ? (
+              <NotOpenNotice wat="Uitnodigingen" />
+            ) : deadlineIsPast ? (
+              deadlineEditor('Een uitnodiging met die datum heeft geen zin.', 'De uitnodigingen noemen daarna de nieuwe deadline.')
+            ) : (
               <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 space-y-3">
+                <p className="text-sm text-green-900 mb-2">
+                  De uitnodigingen noemen de huidige deadline: {formatDeadline(deadline)}.
+                </p>
                 <p className="text-sm text-green-900">
                   De server maakt voor iedereen een nieuwe persoonlijke link aan en stuurt de uitnodigingen
                   als verzendlijst naar de mailbox van de Power Automate-stroom. Die stuurt iedereen de
@@ -377,8 +419,6 @@ export function ExportDialog({
                 </p>
                 <SendButton label="✉️ Uitnodigingen versturen" state={sendState} onClick={sendInvitations} />
               </div>
-            ) : (
-              <NotConfiguredNotice />
             )}
 
             <button
@@ -468,41 +508,9 @@ export function ExportDialog({
               // Generating would issue everyone a link that nothing can send.
               <NotConfiguredNotice />
             ) : periodStatus !== 'OPEN' ? (
-              <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
-                <p className="text-sm text-amber-900">
-                  Herinneringen kunnen alleen verstuurd worden zolang de periode open staat voor voorkeuren.
-                </p>
-              </div>
+              <NotOpenNotice wat="Herinneringen" />
             ) : deadlineIsPast ? (
-              <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6 space-y-3">
-                <p className="text-sm font-semibold text-amber-900">De deadline is al voorbij</p>
-                <p className="text-sm text-amber-900">
-                  De deadline was {formatDeadline(deadline)}. Een herinnering met die datum heeft geen zin meer.
-                  Stel eerst een nieuwe deadline in. De herinneringen noemen daarna de nieuwe deadline.
-                </p>
-                <label className="block text-xs font-semibold text-amber-900" htmlFor="nieuwe-deadline">
-                  Nieuwe deadline
-                </label>
-                <input
-                  id="nieuwe-deadline"
-                  type="datetime-local"
-                  value={newDeadline}
-                  onChange={(e) => setNewDeadline(e.target.value)}
-                  className="w-full px-3 py-2 border rounded text-sm bg-white"
-                />
-                {deadlineError && (
-                  <p role="alert" className="text-sm text-red-700">
-                    {deadlineError}
-                  </p>
-                )}
-                <button
-                  onClick={saveDeadline}
-                  disabled={!newDeadline || savingDeadline}
-                  className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
-                >
-                  {savingDeadline ? 'Bezig met opslaan...' : 'Deadline opslaan'}
-                </button>
-              </div>
+              deadlineEditor('Een herinnering met die datum heeft geen zin meer.', 'De herinneringen noemen daarna de nieuwe deadline.')
             ) : !remindersLoaded ? (
               <>
                 <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
@@ -687,6 +695,16 @@ function NotConfiguredNotice() {
         De server kan nog geen mail naar de Power Automate-stroom sturen. De beheerder stelt dat in met
         SMTP_USER, SMTP_PASS en VERZENDLIJST_AAN in het .env-bestand. De stappen staan in
         docs/verzendlijst-power-automate.md.
+      </p>
+    </div>
+  );
+}
+
+function NotOpenNotice({ wat }: { wat: 'Uitnodigingen' | 'Herinneringen' }) {
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
+      <p className="text-sm text-amber-900">
+        {wat} kunnen alleen verstuurd worden zolang de periode open staat voor voorkeuren.
       </p>
     </div>
   );

@@ -15,6 +15,7 @@ import { resolveBaseUrl } from '@/lib/baseUrl';
 import { getInvitationPeriod, issuePeriodLinks, invitationBericht, rememberBaseUrl } from '@/lib/periodInvitations';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { buildVerzendlijst } from '@/lib/verzendlijst';
+import { checkInvitationsAllowed } from '@/lib/reminderGate';
 
 function fail(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ success: false, error: { code, message } }, { status });
@@ -30,6 +31,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     if (!verzendlijstMailConfigured()) {
       return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is niet ingesteld op de server.');
     }
+
+    // Checked before any link is issued (lib/reminderGate.ts).
+    const gate = checkInvitationsAllowed(period);
+    if (!gate.allowed) return fail(409, gate.code, gate.message);
 
     const baseUrl = resolveBaseUrl(req);
     rememberBaseUrl(period.id, baseUrl);

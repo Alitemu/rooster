@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
-import { verzendlijstPersonen } from './verzendlijst';
+import { tekstNaarHtml, verzendlijstPersonen } from './verzendlijst';
 
 /**
  * The rule: a flow that replaces each codenaam in `personen` by a real
@@ -37,6 +37,40 @@ describe('verzendlijstPersonen', () => {
         const naam = (c: string) => [...c].reverse().join('');
         const verwacht = personen.map((c) => `[${naam(c)}]`).join(' ');
         expect(replaceInOrder(tekst, personen, naam)).toBe(verwacht);
+      })
+    );
+  });
+});
+
+/**
+ * The rule: whatever the text holds - including words a participant typed -
+ * the html field can only ever produce text and line breaks, never markup.
+ */
+describe('tekstNaarHtml', () => {
+  it('turns a link a participant typed into harmless text', () => {
+    expect(tekstNaarHtml('<a href="https://x.test">Klik</a> & zo')).toBe(
+      '&lt;a href=&quot;https://x.test&quot;&gt;Klik&lt;/a&gt; &amp; zo'
+    );
+  });
+
+  it('keeps the line breaks as <br>', () => {
+    expect(tekstNaarHtml('Hoi,\n\nregel\r\nnog een')).toBe('Hoi,<br><br>regel<br>nog een');
+  });
+
+  it('never lets any text produce a tag other than <br>', () => {
+    fc.assert(
+      fc.property(fc.string({ unit: 'binary' }), (tekst) => {
+        const html = tekstNaarHtml(tekst).replace(/<br>/g, '');
+        expect(html).not.toMatch(/[<>"']/);
+        // Decoding gives the original back (line breaks aside): nothing lost.
+        const terug = tekstNaarHtml(tekst)
+          .replace(/<br>/g, '\n')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'")
+          .replace(/&amp;/g, '&');
+        expect(terug).toBe(tekst.replace(/\r\n/g, '\n'));
       })
     );
   });

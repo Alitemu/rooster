@@ -6,7 +6,7 @@
 
 import { SMTPServer } from 'smtp-server';
 import type { AddressInfo } from 'net';
-import type { Verzendlijst, VerzendlijstBericht } from '@/lib/verzendlijst';
+import type { Verzendlijst, VerzendlijstBerichtUit } from '@/lib/verzendlijst';
 
 export const SMTP_SINK_USER = 'rooster@example.test';
 export const SMTP_SINK_PASSWORD = 'app-wachtwoord';
@@ -20,17 +20,27 @@ export interface ReceivedMail {
 export interface SmtpSink {
   port: number;
   received: ReceivedMail[];
+  /** Every login attempt, so a test can see that none happened. */
+  logins: string[];
   close(): Promise<void>;
 }
 
-export async function startSmtpSink(): Promise<SmtpSink> {
+/**
+ * `starttls: false` makes a server that never offers encryption: the app
+ * must then refuse to log in at all (lib/verzendlijstMail.ts requireTLS).
+ * With STARTTLS the server uses smtp-server's own self-signed certificate,
+ * which configureSmtp tells Node to accept for the test.
+ */
+export async function startSmtpSink(opts: { starttls?: boolean } = {}): Promise<SmtpSink> {
   const received: ReceivedMail[] = [];
+  const logins: string[] = [];
   const server = new SMTPServer({
     authOptional: false,
-    allowInsecureAuth: true,
-    disabledCommands: ['STARTTLS'],
+    allowInsecureAuth: opts.starttls === false,
+    disabledCommands: opts.starttls === false ? ['STARTTLS'] : [],
     logger: false,
     onAuth(auth, _session, callback) {
+      logins.push(auth.username ?? '');
       if (auth.username === SMTP_SINK_USER && auth.password === SMTP_SINK_PASSWORD) {
         callback(null, { user: auth.username });
       } else {
@@ -54,6 +64,7 @@ export async function startSmtpSink(): Promise<SmtpSink> {
   return {
     port: (server.server.address() as AddressInfo).port,
     received,
+    logins,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 }
@@ -62,6 +73,9 @@ const ENV_KEYS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM
 
 /** Points lib/verzendlijstMail.ts at the sink. */
 export function configureSmtp(sink: SmtpSink, overrides: Partial<Record<(typeof ENV_KEYS)[number], string>> = {}) {
+  // The sink's certificate is self-signed; checking certificates is not
+  // what these tests are about. Undone by clearSmtpConfig.
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   Object.assign(process.env, {
     SMTP_HOST: '127.0.0.1',
     SMTP_PORT: String(sink.port),
@@ -75,6 +89,7 @@ export function configureSmtp(sink: SmtpSink, overrides: Partial<Record<(typeof 
 
 export function clearSmtpConfig() {
   for (const key of ENV_KEYS) delete process.env[key];
+  delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
 }
 
 /** The whole verzendlijst (summary fields and berichten), decoded from a raw MIME message. */
@@ -90,7 +105,7 @@ export function verzendlijstPayload(raw: string): Verzendlijst {
 }
 
 /** Just the berichten of a verzendlijst. */
-export function verzendlijstAttachment(raw: string): VerzendlijstBericht[] {
+export function verzendlijstAttachment(raw: string): VerzendlijstBerichtUit[] {
   return verzendlijstPayload(raw).berichten;
 }
 

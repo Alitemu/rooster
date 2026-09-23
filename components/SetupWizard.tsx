@@ -1714,7 +1714,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
               Corrigeer hier het saldo van een medewerker voor een uitzonderlijke situatie, bijvoorbeeld
-              het laatste moment overnemen van een dienst, of een ongelijke ruil. De gewone overloop
+              het laatste moment overnemen van een dienst of een ongelijke ruil. De gewone overloop
               tussen periodes gebeurt al automatisch en hoeft hier niet.
             </p>
 

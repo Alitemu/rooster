@@ -46,3 +46,30 @@ export function checkRemindersAllowed(
   }
   return { allowed: true };
 }
+
+/**
+ * Invitations name the deadline just the same ("uiterlijk ..."), and a
+ * participant can only fill in preferences while the period is open, so
+ * they go out under the same two conditions. (The CSV of links is not
+ * gated: a link also opens the published roster later on.)
+ */
+export function checkInvitationsAllowed(
+  period: { status: string; deadline: string },
+  now: Date = new Date()
+): ReminderGateResult {
+  if (period.status !== 'OPEN') {
+    return {
+      allowed: false,
+      code: 'PERIOD_NOT_OPEN',
+      message: 'Uitnodigingen kunnen alleen verstuurd worden zolang de periode open staat voor voorkeuren.',
+    };
+  }
+  if (deadlinePassed(period.deadline, now)) {
+    return {
+      allowed: false,
+      code: 'DEADLINE_PASSED',
+      message: 'De deadline is al voorbij. Pas eerst de deadline aan en verstuur de uitnodigingen daarna.',
+    };
+  }
+  return { allowed: true };
+}

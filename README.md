@@ -45,8 +45,9 @@ npm run test
 
 ### Toegang
 
-- **Web:** https://localhost (via Caddy, interne TLS-certificaten)
-- **Health check:** https://localhost/health
+- **Web:** https://localhost:8010 (via Caddy, interne TLS-certificaten; de
+  poort is `APP_PORT` in `.env`)
+- **Health check:** https://localhost:8010/health
 - **Solver:** http://localhost:8000 (alleen intern netwerk, geen publieke poort)
 
 ### Testgebruikers

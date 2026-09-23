@@ -37,7 +37,8 @@ export type VerzendlijstSoort =
   | 'LAATSTE_HERINNERING'
   | 'RUILVERZOEK'
   | 'RUIL_BEVESTIGING'
-  | 'RUIL_UITKOMST';
+  | 'RUIL_UITKOMST'
+  | 'RUIL_INGETROKKEN';
 
 export interface VerzendlijstBericht {
   soort: VerzendlijstSoort;
@@ -45,6 +46,28 @@ export interface VerzendlijstBericht {
   personen: string[];
   onderwerp: string;
   tekst: string;
+}
+
+/**
+ * A bericht as it goes out: `html` is `tekst` made safe to put straight
+ * into an HTML mail body (every <, >, &, " and ' escaped, line breaks as
+ * <br>). The text can hold words a participant typed (a swap toelichting,
+ * a rejection reason); put into the mail as raw HTML they could plant a
+ * convincing link or button in a mail sent from the planner's own mailbox.
+ * The flow uses `html` and never needs to build HTML itself.
+ */
+export interface VerzendlijstBerichtUit extends VerzendlijstBericht {
+  html: string;
+}
+
+export function tekstNaarHtml(tekst: string): string {
+  return tekst
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\r?\n/g, '<br>');
 }
 
 export interface Verzendlijst {
@@ -61,7 +84,7 @@ export interface Verzendlijst {
   nog_niets_ingevuld: number | null;
   nog_niet_ingediend: number | null;
   verstuurd_op: string;
-  berichten: VerzendlijstBericht[];
+  berichten: VerzendlijstBerichtUit[];
 }
 
 export function buildVerzendlijst(
@@ -85,7 +108,7 @@ export function buildVerzendlijst(
     nog_niets_ingevuld: meta.groepen?.nog_niets_ingevuld ?? null,
     nog_niet_ingediend: meta.groepen?.nog_niet_ingediend ?? null,
     verstuurd_op: now.toISOString(),
-    berichten,
+    berichten: berichten.map((b) => ({ ...b, html: tekstNaarHtml(b.tekst) })),
   };
 }
 

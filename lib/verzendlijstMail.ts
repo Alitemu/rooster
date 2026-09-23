@@ -66,6 +66,12 @@ function explainSmtpError(error: unknown): string {
   if (code === 'ECONNECTION' || code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'EDNS') {
     return 'De mailserver is niet bereikbaar. Controleer SMTP_HOST en SMTP_PORT en of de server internet heeft.';
   }
+  if (code === 'ETLS') {
+    return (
+      'De mailserver biedt geen versleutelde verbinding aan, dus het wachtwoord is niet verstuurd. ' +
+      'Controleer SMTP_HOST en SMTP_PORT. Bij Gmail is dat smtp.gmail.com met poort 465.'
+    );
+  }
   if (code === 'EENVELOPE') {
     return 'De mailserver weigerde het adres. Controleer VERZENDLIJST_AAN en SMTP_FROM.';
   }
@@ -88,7 +94,10 @@ async function sendJsonMail(mail: {
     host: config.host,
     port: config.port,
     // 465 speaks TLS from the first byte; 587/25 start plain and upgrade.
+    // That upgrade is required, not optional: a server that doesn't offer
+    // STARTTLS would otherwise get the password in plain text.
     secure: config.port === 465,
+    requireTLS: config.port !== 465,
     auth: { user: config.user, pass: config.pass },
     connectionTimeout: 15_000,
     greetingTimeout: 15_000,

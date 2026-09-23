@@ -185,7 +185,7 @@ describe('verzendlijst over SMTP', () => {
     expect(res.status).toBe(200);
     // soort and personen are set by the server: a reminder names only its recipient.
     expect(attachment(sink.received[0].raw)).toEqual([
-      { ...berichten[0], soort: 'HERINNERING', personen: [codenaam(f.a)] },
+      { ...berichten[0], soort: 'HERINNERING', personen: [codenaam(f.a)], html: 'Hoi, je link: https://x/person/abc' },
     ]);
     // Nobody handed in or started in this fixture: all in the first group.
     expect(verzendlijstPayload(sink.received[0].raw)).toMatchObject({
@@ -279,5 +279,46 @@ describe('verzendlijst over SMTP', () => {
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe('DEADLINE_PASSED');
     expect(sink.received).toHaveLength(0);
+  });
+
+  it('sends no invitations, and issues no links, for a period that is not open or past its deadline', async () => {
+    configure();
+    for (const [status, deadline] of [
+      ['CONCEPT', '2099-02-01T17:00'],
+      ['GEPUBLICEERD', '2099-02-01T17:00'],
+      ['OPEN', '2020-01-01T17:00'],
+    ]) {
+      const f = createFixture();
+      db.prepare('UPDATE dienstrooster_schedule_period SET status = ?, deadline = ? WHERE id = ?').run(
+        status,
+        deadline,
+        f.periodId
+      );
+      const res = await sendInvitations(
+        plannerRequest(`http://localhost/api/exports/invitations/${f.periodId}/send`, f.planner),
+        { params: Promise.resolve({ 'period-id': f.periodId }) }
+      );
+      expect(res.status).toBe(409);
+      expect(linkCount(f.a, f.periodId)).toBe(0);
+    }
+    expect(sink.received).toHaveLength(0);
+  });
+
+  it('never sends the password to a mail server that offers no encryption', async () => {
+    const plain = await startSmtpSink({ starttls: false });
+    try {
+      configureSmtp(plain);
+      const f = createFixture();
+      const res = await sendInvitations(
+        plannerRequest(`http://localhost/api/exports/invitations/${f.periodId}/send`, f.planner),
+        { params: Promise.resolve({ 'period-id': f.periodId }) }
+      );
+      expect(res.status).toBe(502);
+      expect((await res.json()).error.message).toMatch(/versleutel/);
+      expect(plain.logins).toHaveLength(0);
+      expect(plain.received).toHaveLength(0);
+    } finally {
+      await plain.close();
+    }
   });
 });

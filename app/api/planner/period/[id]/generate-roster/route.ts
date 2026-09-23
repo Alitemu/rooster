@@ -726,7 +726,7 @@ async function callSolver(
     const status = output.diagnostics?.solver_status;
     const statusExplanation: Record<string, string> = {
       INFEASIBLE: 'Er is geen enkele geldige indeling mogelijk binnen de harde regels (bijv. geblokkeerde dagen of het minimumvenster tussen diensten). Versoepel de instellingen of vraag deelnemers hun blokkades te herzien.',
-      UNKNOWN: 'De solver kon binnen de tijdslimiet geen oplossing vinden. Probeer het opnieuw, of versoepel de instellingen als dit blijft gebeuren.',
+      UNKNOWN: 'De solver kon binnen de tijdslimiet geen oplossing vinden. Probeer het opnieuw. Blijft dit gebeuren, versoepel dan de instellingen.',
       ERROR: 'Er is een onverwachte fout opgetreden in de solver.',
     };
     const message = statusExplanation[status] || 'De solver kon geen rooster genereren. Probeer het opnieuw of neem contact op met de beheerder.';
