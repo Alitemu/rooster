@@ -126,13 +126,18 @@ async function warnAboutSeededPassword(): Promise<void> {
   }
 }
 
-const AUTO_REMINDER_INTERVAL_MS = 15 * 60 * 1000;
+const AUTO_REMINDER_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
- * Checks every 15 minutes whether an automatic reminder is due (see
+ * Checks every hour whether an automatic reminder is due (see
  * lib/autoReminders.ts, which decides what and whether). The server is the
  * only thing running on the NAS, so the schedule lives in it rather than in
  * a separate cron job someone would have to set up.
+ *
+ * Hourly by the planner's choice: nothing about a reminder is urgent to the
+ * minute. The price is that one due at 09:00 goes out somewhere before
+ * 10:00, so the last one can leave a little under 24 hours before a
+ * deadline that falls just after the hour.
  *
  * Never during `next build`, and one check at a time: a slow mail server
  * must not let the next tick start the same send again (the claim in

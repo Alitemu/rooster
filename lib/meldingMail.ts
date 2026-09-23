@@ -18,7 +18,7 @@ import { db } from '@/db/client';
 import { issuePersonLink } from './periodInvitations';
 import { renderNotificationTemplate, renderTemplate } from './notifications';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
-import { verzendlijstPersonen, type VerzendlijstSoort } from './verzendlijst';
+import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstSoort } from './verzendlijst';
 
 export interface MeldingMail {
   personId: string;
@@ -62,17 +62,21 @@ export async function mailMelding(melding: MeldingMail): Promise<void> {
           };
     if (!rendered) return;
 
-    const result = await sendVerzendlijst(period.naam, [
-      {
-        soort: melding.soort,
-        codenaam: person.codenaam,
-        personen: verzendlijstPersonen(person.codenaam, melding.anderen),
-        onderwerp: rendered.onderwerp,
-        // The templates use **bold** for the in-app view; a plain-text
-        // mail would show the asterisks.
-        tekst: rendered.inhoud.replace(/\*\*(.+?)\*\*/g, '$1'),
-      },
-    ]);
+    const result = await sendVerzendlijst(
+      // Automatisch: it goes out because a participant did something, not
+      // because the planner pressed a button.
+      buildVerzendlijst({ soort: melding.soort, automatisch: true, periode: period.naam }, [
+        {
+          soort: melding.soort,
+          codenaam: person.codenaam,
+          personen: verzendlijstPersonen(person.codenaam, melding.anderen),
+          onderwerp: rendered.onderwerp,
+          // The templates use **bold** for the in-app view; a plain-text
+          // mail would show the asterisks.
+          tekst: rendered.inhoud.replace(/\*\*(.+?)\*\*/g, '$1'),
+        },
+      ])
+    );
     if (!result.ok) console.error(`[melding-mail] ${templateName(melding)} not sent: ${result.message}`);
   } catch (error) {
     console.error(`[melding-mail] ${templateName(melding)} failed`, error);

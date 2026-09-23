@@ -4,10 +4,11 @@
  * the planner doing anything.
  *
  * When: one moment per milestone in the period's reminder schedule
- * (lib/reminderSchedule.ts, 7 and 1 days by default), always at 09:00. For
- * a milestone of N days that is the last 09:00 at least N*24 hours before
- * the deadline, so the final reminder always lands between 24 and 48 hours
- * before it.
+ * (lib/reminderSchedule.ts, 7 and 1 days by default), due at 09:00. For a
+ * milestone of N days that is the last 09:00 at least N*24 hours before
+ * the deadline, so the final reminder is due between 24 and 48 hours
+ * before it. It goes out at the first hourly check after that
+ * (instrumentation-node.ts), so before 10:00.
  *
  * Who, each group with its own text:
  * - NIET_BEGONNEN: nothing entered yet (no submission row counts as that)
@@ -25,16 +26,22 @@
  * - moving the deadline changes the key, so the new deadline gets its own
  *   moments. Those already behind it are skipped, not fired all at once.
  *
- * After each send the planner gets a DIENSTROOSTER-SAMENVATTING mail with
- * the kind of reminder and the counts as JSON (lib/verzendlijstMail.ts).
+ * The verzendlijst itself carries the summary (soort, counts per group),
+ * so the flow can report back to the planner; see lib/verzendlijst.ts.
  */
 
 import { db } from '@/db/client';
 import { getActiveReminderMilestones } from './reminderSchedule';
 import { deadlinePassed } from './periodInputGate';
 import { issuePersonLink } from './periodInvitations';
-import { sendSamenvatting, sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
-import { verzendlijstPersonen, type VerzendlijstBericht, type VerzendlijstSoort } from './verzendlijst';
+import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
+import {
+  buildVerzendlijst,
+  deadlineTekst,
+  verzendlijstPersonen,
+  type VerzendlijstBericht,
+  type VerzendlijstSoort,
+} from './verzendlijst';
 
 export const REMINDER_HOUR = 9;
 const HOUR_MS = 60 * 60 * 1000;
@@ -51,10 +58,6 @@ export function reminderMoment(deadline: Date, dagen: number): Date {
   moment.setHours(REMINDER_HOUR, 0, 0, 0);
   if (moment > latest) moment.setDate(moment.getDate() - 1);
   return moment;
-}
-
-export function formatDeadlineLong(deadline: string): string {
-  return new Date(deadline).toLocaleString('nl-NL', { dateStyle: 'full', timeStyle: 'short' });
 }
 
 export type ReminderGroep = 'NIET_BEGONNEN' | 'BEZIG';
@@ -107,6 +110,21 @@ export function reminderRecipients(period: AutoPeriod, now: Date): Ontvanger[] {
   }));
 }
 
+/** How many of these people haven't entered anything, and how many haven't handed in. */
+export function reminderGroupCounts(
+  periodId: string,
+  personIds: string[]
+): { nog_niets_ingevuld: number; nog_niet_ingediend: number } {
+  const statusOf = db.prepare(
+    'SELECT status FROM dienstrooster_submission WHERE person_id = ? AND schedule_period_id = ?'
+  );
+  let bezig = 0;
+  for (const id of personIds) {
+    if ((statusOf.get(id, periodId) as { status: string } | undefined)?.status === 'BEZIG') bezig++;
+  }
+  return { nog_niets_ingevuld: personIds.length - bezig, nog_niet_ingediend: bezig };
+}
+
 /** Records that these people were mailed a reminder, so nobody gets two within a day. */
 export function logRemindersSent(personIds: string[], periodId: string, laatste: boolean, now: Date): void {
   const insert = db.prepare(
@@ -127,7 +145,7 @@ export function reminderBericht(
   link: string,
   laatste: boolean
 ): VerzendlijstBericht {
-  const deadline = formatDeadlineLong(period.deadline);
+  const deadline = deadlineTekst(period.deadline);
   const soort: VerzendlijstSoort = laatste ? 'LAATSTE_HERINNERING' : 'HERINNERING';
   const voorvoegsel = laatste ? 'Laatste herinnering' : 'Herinnering';
   const slot = laatste ? 'Dit is de laatste herinnering. Na de deadline kun je niets meer aanpassen.\n\n' : '';
@@ -271,7 +289,19 @@ export async function runAutoReminders(
     const berichten = ontvangers.map((o) =>
       reminderBericht(period, o, issuePersonLink(o.person_id, period.id, baseUrl), laatste)
     );
-    const sent = await sendVerzendlijst(period.naam, berichten);
+    const sent = await sendVerzendlijst(
+      buildVerzendlijst(
+        {
+          soort: laatste ? 'LAATSTE_HERINNERING' : 'HERINNERING',
+          automatisch: true,
+          periode: period.naam,
+          deadline: period.deadline,
+          groepen: { nog_niets_ingevuld: nietBegonnen.length, nog_niet_ingediend: bezig.length },
+        },
+        berichten,
+        now
+      )
+    );
     if (!sent.ok) {
       db.prepare('DELETE FROM dienstrooster_reminder_run WHERE id = ?').run(claimId);
       console.error(`[auto-herinneringen] ${period.naam}: niet verstuurd, volgende keer opnieuw: ${sent.message}`);
@@ -286,23 +316,6 @@ export async function runAutoReminders(
     );
     results.push({ periodId: period.id, dagen: send.dagen, uitkomst: 'VERSTUURD', aantal: ontvangers.length });
 
-    const samenvatting = await sendSamenvatting({
-      soort: laatste ? 'LAATSTE_HERINNERING' : 'HERINNERING',
-      automatisch: true,
-      periode: period.naam,
-      deadline: period.deadline,
-      deadline_tekst: formatDeadlineLong(period.deadline),
-      dagen_voor_deadline: send.dagen,
-      aantal: ontvangers.length,
-      nog_niets_ingevuld: nietBegonnen.length,
-      nog_niet_ingediend: bezig.length,
-      ontvangers: {
-        nog_niets_ingevuld: nietBegonnen.map((o) => o.codenaam),
-        nog_niet_ingediend: bezig.map((o) => o.codenaam),
-      },
-      verstuurd_op: now.toISOString(),
-    });
-    if (!samenvatting.ok) console.error(`[auto-herinneringen] samenvatting niet verstuurd: ${samenvatting.message}`);
   }
   return results;
 }

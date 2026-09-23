@@ -10,6 +10,7 @@ import {
   configureSmtp,
   clearSmtpConfig,
   verzendlijstAttachment as attachment,
+  verzendlijstPayload,
   type SmtpSink,
 } from '@/tests/smtpSink';
 import { POST as sendInvitations } from '@/app/api/exports/invitations/[period-id]/send/route';
@@ -158,6 +159,16 @@ describe('verzendlijst over SMTP', () => {
       expect(bericht.personen).toEqual([bericht.codenaam]);
     }
     expect(linkCount(f.gone, f.periodId)).toBe(0);
+
+    expect(verzendlijstPayload(mail.raw)).toMatchObject({
+      soort: 'UITNODIGING',
+      automatisch: false,
+      periode: 'Voorjaar 2099',
+      deadline: '2099-02-01T17:00',
+      aantal: 2,
+      nog_niets_ingevuld: null,
+      nog_niet_ingediend: null,
+    });
   });
 
   it('sends the reminders exactly as the planner edited them', async () => {
@@ -176,6 +187,14 @@ describe('verzendlijst over SMTP', () => {
     expect(attachment(sink.received[0].raw)).toEqual([
       { ...berichten[0], soort: 'HERINNERING', personen: [codenaam(f.a)] },
     ]);
+    // Nobody handed in or started in this fixture: all in the first group.
+    expect(verzendlijstPayload(sink.received[0].raw)).toMatchObject({
+      soort: 'HERINNERING',
+      automatisch: false,
+      aantal: 1,
+      nog_niets_ingevuld: 1,
+      nog_niet_ingediend: 0,
+    });
   });
 
   it('refuses a codenaam that does not take part in the period, and sends nothing', async () => {

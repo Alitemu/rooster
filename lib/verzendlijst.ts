@@ -6,8 +6,14 @@
  * CLAUDE.md). The mapping codenaam -> address lives in an Excel sheet on
  * the planner's side, and a Power Automate flow joins the two: it triggers
  * on an e-mail with exactly VERZENDLIJST_SUBJECT as its subject, reads the
- * JSON attachment (a list of VerzendlijstBericht), looks each codenaam up
- * in the sheet and sends that person their own onderwerp + tekst.
+ * JSON attachment (a Verzendlijst), looks each bericht's codenaam up in the
+ * sheet and sends that person their own onderwerp + tekst.
+ *
+ * The fields around the berichten are the summary: what kind of mailing it
+ * was, for which period, how many, and for reminders how many in each
+ * group. The flow uses them to report back to the planner itself, so there
+ * is no separate summary mail. (The attachment used to be a bare list of
+ * berichten; a flow built for that reads `berichten` now.)
  *
  * `personen` lists every codenaam that appears in onderwerp/tekst, the
  * recipient's own included, so a flow that also keeps real names in its
@@ -23,9 +29,6 @@
 
 /** Must match the flow's subject filter exactly. */
 export const VERZENDLIJST_SUBJECT = 'DIENSTROOSTER-VERZENDLIJST';
-
-/** A report for the planner (lib/verzendlijstMail.ts sendSamenvatting). Never a verzendlijst. */
-export const SAMENVATTING_SUBJECT = 'DIENSTROOSTER-SAMENVATTING';
 
 /** What a bericht is about, so a flow can treat kinds differently if it wants to. */
 export type VerzendlijstSoort =
@@ -44,6 +47,53 @@ export interface VerzendlijstBericht {
   tekst: string;
 }
 
+export interface Verzendlijst {
+  /** What this mailing is. Every bericht in it has the same soort. */
+  soort: VerzendlijstSoort;
+  /** Sent without the planner pressing a button (a scheduled reminder, a swap). */
+  automatisch: boolean;
+  periode: string;
+  /** As stored, and written out in Dutch; null where a deadline doesn't apply (swaps). */
+  deadline: string | null;
+  deadline_tekst: string | null;
+  aantal: number;
+  /** Reminders only, otherwise null: how many haven't entered anything / haven't handed in. */
+  nog_niets_ingevuld: number | null;
+  nog_niet_ingediend: number | null;
+  verstuurd_op: string;
+  berichten: VerzendlijstBericht[];
+}
+
+export function buildVerzendlijst(
+  meta: {
+    soort: VerzendlijstSoort;
+    automatisch: boolean;
+    periode: string;
+    deadline?: string | null;
+    groepen?: { nog_niets_ingevuld: number; nog_niet_ingediend: number };
+  },
+  berichten: VerzendlijstBericht[],
+  now: Date = new Date()
+): Verzendlijst {
+  return {
+    soort: meta.soort,
+    automatisch: meta.automatisch,
+    periode: meta.periode,
+    deadline: meta.deadline ?? null,
+    deadline_tekst: meta.deadline ? deadlineTekst(meta.deadline) : null,
+    aantal: berichten.length,
+    nog_niets_ingevuld: meta.groepen?.nog_niets_ingevuld ?? null,
+    nog_niet_ingediend: meta.groepen?.nog_niet_ingediend ?? null,
+    verstuurd_op: now.toISOString(),
+    berichten,
+  };
+}
+
+/** "donderdag 24 september 2026 om 22:00" */
+export function deadlineTekst(deadline: string): string {
+  return new Date(deadline).toLocaleString('nl-NL', { dateStyle: 'full', timeStyle: 'short' });
+}
+
 /** The recipient plus anyone else named in the message: unique, longest first. */
 export function verzendlijstPersonen(codenaam: string, anderen: string[] = []): string[] {
   return [...new Set([codenaam, ...anderen].filter((c) => c.length > 0))].sort(
@@ -55,6 +105,6 @@ export function verzendlijstFilename(periodName: string): string {
   return `dienstrooster-meldingen_${periodName.replace(/[^\p{L}\p{N}_-]+/gu, '_')}.json`;
 }
 
-export function verzendlijstJson(berichten: VerzendlijstBericht[]): string {
-  return JSON.stringify(berichten, null, 2);
+export function verzendlijstJson(lijst: Verzendlijst): string {
+  return JSON.stringify(lijst, null, 2);
 }

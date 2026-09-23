@@ -16,13 +16,7 @@
  */
 
 import nodemailer from 'nodemailer';
-import {
-  SAMENVATTING_SUBJECT,
-  VERZENDLIJST_SUBJECT,
-  verzendlijstFilename,
-  verzendlijstJson,
-  type VerzendlijstBericht,
-} from './verzendlijst';
+import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
 interface MailConfig {
   host: string;
@@ -118,35 +112,14 @@ async function sendJsonMail(mail: {
   }
 }
 
-export async function sendVerzendlijst(
-  periodName: string,
-  berichten: VerzendlijstBericht[]
-): Promise<VerzendlijstMailResult> {
+export async function sendVerzendlijst(lijst: Verzendlijst): Promise<VerzendlijstMailResult> {
   const result = await sendJsonMail({
     subject: VERZENDLIJST_SUBJECT,
     text:
-      `Verzendlijst voor ${periodName}: ${berichten.length} berichten in de bijlage.\n` +
+      `Verzendlijst voor ${lijst.periode}: ${lijst.aantal} berichten in de bijlage.\n` +
       'Deze mail is automatisch verstuurd door Dienstrooster voor de Power Automate-stroom.',
-    filename: verzendlijstFilename(periodName),
-    json: verzendlijstJson(berichten),
+    filename: verzendlijstFilename(lijst.periode),
+    json: verzendlijstJson(lijst),
   });
-  return result.ok ? { ok: true, aantal: berichten.length } : result;
-}
-
-/**
- * A report for the planner, as JSON so a (second) Power Automate flow can
- * turn it into a mail of its own. Its own subject, so the flow that mails
- * participants never mistakes it for a verzendlijst.
- */
-export async function sendSamenvatting(
-  samenvatting: Record<string, unknown> & { soort: string; periode: string }
-): Promise<{ ok: true } | { ok: false; message: string }> {
-  return sendJsonMail({
-    subject: SAMENVATTING_SUBJECT,
-    text:
-      `Samenvatting van Dienstrooster voor ${samenvatting.periode} (${samenvatting.soort}). ` +
-      'De gegevens staan in de bijlage.',
-    filename: 'dienstrooster-samenvatting.json',
-    json: JSON.stringify(samenvatting, null, 2),
-  });
+  return result.ok ? { ok: true, aantal: lijst.aantal } : result;
 }

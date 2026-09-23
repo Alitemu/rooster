@@ -6,7 +6,7 @@
 
 import { SMTPServer } from 'smtp-server';
 import type { AddressInfo } from 'net';
-import type { VerzendlijstBericht } from '@/lib/verzendlijst';
+import type { Verzendlijst, VerzendlijstBericht } from '@/lib/verzendlijst';
 
 export const SMTP_SINK_USER = 'rooster@example.test';
 export const SMTP_SINK_PASSWORD = 'app-wachtwoord';
@@ -77,8 +77,8 @@ export function clearSmtpConfig() {
   for (const key of ENV_KEYS) delete process.env[key];
 }
 
-/** The verzendlijst JSON attachment, decoded from a raw MIME message. */
-export function verzendlijstAttachment(raw: string): VerzendlijstBericht[] {
+/** The whole verzendlijst (summary fields and berichten), decoded from a raw MIME message. */
+export function verzendlijstPayload(raw: string): Verzendlijst {
   const part = raw.split(/\r?\n--/).find((p) => /Content-Type: application\/json/i.test(p));
   if (!part) throw new Error('no JSON attachment');
   const [headers, ...rest] = part.split(/\r?\n\r?\n/);
@@ -87,6 +87,11 @@ export function verzendlijstAttachment(raw: string): VerzendlijstBericht[] {
     ? Buffer.from(body.replace(/\s+/g, ''), 'base64').toString('utf8')
     : body;
   return JSON.parse(text);
+}
+
+/** Just the berichten of a verzendlijst. */
+export function verzendlijstAttachment(raw: string): VerzendlijstBericht[] {
+  return verzendlijstPayload(raw).berichten;
 }
 
 /** Waits until the sink holds `count` mails (mail sent in the background). */

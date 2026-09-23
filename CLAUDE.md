@@ -351,8 +351,8 @@ Raising it invalidates every token issued for that person in one UPDATE.
 
 The app never stores e-mail addresses, so it never mails participants
 itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
-`DIENSTROOSTER-VERZENDLIJST` + a JSON attachment of
-`{codenaam, personen, onderwerp, tekst}`; `personen` = every codenaam
+`DIENSTROOSTER-VERZENDLIJST` + a JSON attachment: summary fields plus
+`berichten`, each `{soort, codenaam, personen, onderwerp, tekst}`; `personen` = every codenaam
 the text names, longest first, so a flow can swap in real names from its
 sheet without "Persoon-1" matching inside "Persoon-10") to a Power Automate flow on the planner's
 side, which looks each codenaam up in its own Excel list and sends the
@@ -372,7 +372,7 @@ without SMTP configured it does nothing, not even issue a link. Every
 bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
 RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST).
 
-Automatic reminders (lib/autoReminders.ts, run every 15 minutes from
+Automatic reminders (lib/autoReminders.ts, run every hour from
 instrumentation-node.ts): for an OPEN period with `auto_herinneren` on,
 one moment per reminder_schedule milestone (7 and 1 days by default) at
 the last 09:00 at least N*24h before the deadline, to everyone not
@@ -383,8 +383,11 @@ keyed on (period, milestone, deadline) before sending and released if the
 send fails; a moment more than 12h late, or due together with a more
 urgent one, is recorded as OVERGESLAGEN instead. Links use BASE_URL or the
 period's `basis_url`, remembered from the planner's last export request.
-After a send the planner gets a DIENSTROOSTER-SAMENVATTING mail (JSON with
-soort and counts). runAutoReminders takes `onlyPeriodIds` for tests: the
+There is no separate summary mail: every verzendlijst is an object
+(lib/verzendlijst.ts `Verzendlijst`) whose fields around `berichten` -
+soort, automatisch, periode, deadline, aantal, and for reminders
+nog_niets_ingevuld/nog_niet_ingediend - let the flow report back to the
+planner itself. runAutoReminders takes `onlyPeriodIds` for tests: the
 test database is shared across test files. Setup for the operator, in
 Dutch: docs/verzendlijst-power-automate.md.
 

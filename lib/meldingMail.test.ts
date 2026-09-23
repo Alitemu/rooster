@@ -12,6 +12,7 @@ import {
   configureSmtp,
   clearSmtpConfig,
   verzendlijstAttachment,
+  verzendlijstPayload,
   waitForMails,
   type SmtpSink,
 } from '@/tests/smtpSink';
@@ -223,6 +224,14 @@ describe('mail about swap requests', () => {
     expect(bevestiging.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 14 april 2099 van ${codenaam(f.collega)}`);
     expect(linkOwner(bevestiging.tekst)).toBe(f.aanvrager);
     expect([...bevestiging.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
+
+    // Each mail is its own verzendlijst, summarised as one automatic message
+    // without a deadline.
+    const soorten = sink.received.map((m) => verzendlijstPayload(m.raw));
+    for (const lijst of soorten) {
+      expect(lijst).toMatchObject({ automatisch: true, aantal: 1, deadline: null, nog_niets_ingevuld: null });
+    }
+    expect(soorten.map((l) => l.soort).sort()).toEqual(['RUILVERZOEK', 'RUIL_BEVESTIGING']);
 
     // Only ever to the flow's mailbox.
     expect(sink.received.every((m) => m.to.join() === 'stroom@example.test')).toBe(true);

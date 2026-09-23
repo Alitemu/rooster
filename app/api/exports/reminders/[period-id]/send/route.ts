@@ -16,9 +16,9 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { getInvitationPeriod } from '@/lib/periodInvitations';
-import { verzendlijstPersonen } from '@/lib/verzendlijst';
+import { buildVerzendlijst, verzendlijstPersonen } from '@/lib/verzendlijst';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
-import { logRemindersSent } from '@/lib/autoReminders';
+import { logRemindersSent, reminderGroupCounts } from '@/lib/autoReminders';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 
 const bodySchema = z.object({
@@ -75,20 +75,24 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       return fail(400, 'UNKNOWN_PERSON', `Deze codenamen doen niet mee in deze periode: ${unknown.join(', ')}.`);
     }
 
-    // Set here rather than trusted from the client: a reminder only ever
-    // names its own recipient.
+    // soort and personen set here rather than trusted from the client: a
+    // reminder only ever names its own recipient.
+    const personIds = berichten.map((b) => members.get(b.codenaam)!);
     const result = await sendVerzendlijst(
-      period.naam,
-      berichten.map((b) => ({ ...b, soort: 'HERINNERING' as const, personen: verzendlijstPersonen(b.codenaam) }))
+      buildVerzendlijst(
+        {
+          soort: 'HERINNERING',
+          automatisch: false,
+          periode: period.naam,
+          deadline: period.deadline,
+          groepen: reminderGroupCounts(period.id, personIds),
+        },
+        berichten.map((b) => ({ ...b, soort: 'HERINNERING' as const, personen: verzendlijstPersonen(b.codenaam) }))
+      )
     );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
     // So the automatic reminders leave these people alone for a day.
-    logRemindersSent(
-      berichten.map((b) => members.get(b.codenaam)!),
-      period.id,
-      false,
-      new Date()
-    );
+    logRemindersSent(personIds, period.id, false, new Date());
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
     return internalErrorResponse('export-reminders-send', error);

@@ -7,9 +7,9 @@ import {
   configureSmtp,
   clearSmtpConfig,
   verzendlijstAttachment,
+  verzendlijstPayload,
   type SmtpSink,
 } from '@/tests/smtpSink';
-import { SAMENVATTING_SUBJECT } from './verzendlijst';
 import { reminderMoment, runAutoReminders, logRemindersSent, CATCH_UP_MS, autoReminderStatus } from './autoReminders';
 
 /**
@@ -23,7 +23,7 @@ import { reminderMoment, runAutoReminders, logRemindersSent, CATCH_UP_MS, autoRe
  *   more than the catch-up window, and never together with an older one.
  * - moving the deadline gives it its own moments.
  * - paused, not set up to mail, or reminded by hand within the day: nothing.
- * - the planner gets a summary with the kind of reminder and the counts.
+ * - the verzendlijst carries the summary: the kind of reminder and the counts.
  */
 
 let sink: SmtpSink;
@@ -91,8 +91,7 @@ function codenaam(id: string) {
   return (db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(id) as { codenaam: string }).codenaam;
 }
 
-const verzendlijsten = () => sink.received.filter((m) => !m.raw.includes(`Subject: ${SAMENVATTING_SUBJECT}`));
-const samenvattingen = () => sink.received.filter((m) => m.raw.includes(`Subject: ${SAMENVATTING_SUBJECT}`));
+const verzendlijsten = () => sink.received;
 const moment = (dagen: number, deadline = DEADLINE) => reminderMoment(new Date(deadline), dagen);
 /** Only this file's periods: the test database is shared with other files. */
 const run = (now: Date) => runAutoReminders(now, { onlyPeriodIds: created.periods });
@@ -201,30 +200,25 @@ describe('runAutoReminders', () => {
     }
   });
 
-  it('sends the planner a summary with the kind of reminder and the counts', async () => {
+  it('carries the summary for the planner in the verzendlijst itself: kind and counts', async () => {
     configureSmtp(sink);
-    const f = createFixture();
+    createFixture();
     await run(moment(1));
 
-    expect(samenvattingen()).toHaveLength(1);
-    const raw = samenvattingen()[0].raw;
-    const part = raw.split(/\r?\n--/).find((p) => /application\/json/i.test(p))!;
-    const [headers, ...rest] = part.split(/\r?\n\r?\n/);
-    const body = rest.join('\n\n').trim();
-    const json = JSON.parse(
-      /base64/i.test(headers) ? Buffer.from(body.replace(/\s+/g, ''), 'base64').toString('utf8') : body
-    );
-    expect(json).toMatchObject({
+    // One mail: no separate summary.
+    expect(sink.received).toHaveLength(1);
+    const lijst = verzendlijstPayload(sink.received[0].raw);
+    expect(lijst).toMatchObject({
       soort: 'LAATSTE_HERINNERING',
       automatisch: true,
       periode: 'Voorjaar 2099',
       deadline: DEADLINE,
-      dagen_voor_deadline: 1,
+      deadline_tekst: 'woensdag 11 maart 2099 om 17:00',
       aantal: 3,
       nog_niets_ingevuld: 2,
       nog_niet_ingediend: 1,
     });
-    expect(json.ontvangers.nog_niet_ingediend).toEqual([codenaam(f.bezig)]);
+    expect(lijst.berichten).toHaveLength(3);
   });
 
   it('marks the last moment as the last reminder', async () => {

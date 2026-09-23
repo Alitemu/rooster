@@ -9,10 +9,12 @@ buiten de app, in een Excel-lijst die alleen jij beheert. Zo gaat het:
    je aan iedereen tegelijk sturen of per persoon.
 2. De server maakt voor iedereen een nieuwe persoonlijke link aan en mailt
    één e-mail via Gmail naar jouw mailbox. Het onderwerp is altijd
-   `DIENSTROOSTER-VERZENDLIJST`. De bijlage is een JSON-bestand met per
-   persoon de codenaam, het onderwerp en de tekst (met de eigen link erin).
-   Het veld `personen` noemt elke codenaam die in onderwerp of tekst staat.
-   Dat heb je alleen nodig als je echte namen wilt gebruiken (stap 5).
+   `DIENSTROOSTER-VERZENDLIJST`. De bijlage is een JSON-bestand met bovenaan
+   een samenvatting (wat voor verzending het is, voor welke periode en hoeveel
+   berichten) en daaronder in `berichten` per persoon de codenaam, het
+   onderwerp en de tekst (met de eigen link erin). Het veld `personen` noemt
+   elke codenaam die in onderwerp of tekst staat. Dat heb je alleen nodig als
+   je echte namen wilt gebruiken (stap 5).
 3. Die e-mail start je Power Automate-stroom. De stroom verplaatst de mail
    naar een map, zoekt elke codenaam op in je Excel-lijst en stuurt die
    persoon het eigen bericht.
@@ -43,8 +45,9 @@ het versturen niet, dan gaat het ruilverzoek gewoon door.
 Is versturen ingesteld, dan stuurt Dienstrooster zelf herinneringen zolang
 een periode open staat:
 
-- 7 dagen en 1 dag voor de deadline, om 09:00. De laatste valt altijd
-  tussen 24 en 48 uur voor de deadline.
+- 7 dagen en 1 dag voor de deadline, om 09:00. De server kijkt elk uur, dus
+  de mail vertrekt tussen 09:00 en 10:00. De laatste staat altijd tussen 24
+  en 48 uur voor de deadline gepland.
 - Alleen aan wie nog niet heeft ingediend, in twee groepen met elk een eigen
   tekst: wie nog niets heeft ingevuld en wie wel begonnen is maar nog niet op
   *Bevestigen en indienen* heeft geklikt.
@@ -136,26 +139,75 @@ versie iets verschillen.
 
    a. **JSON parseren**. Inhoud (als expressie):
       `base64ToString(items('Toepassen_op_elk')?['contentBytes'])`.
+      De bijlage ziet er bijvoorbeeld zo uit:
+
+      ```json
+      {
+        "soort": "LAATSTE_HERINNERING",
+        "automatisch": true,
+        "periode": "Voorjaar 2027",
+        "deadline": "2026-12-20T17:00",
+        "deadline_tekst": "zondag 20 december 2026 om 17:00",
+        "aantal": 12,
+        "nog_niets_ingevuld": 8,
+        "nog_niet_ingediend": 4,
+        "verstuurd_op": "2026-12-19T08:00:00.000Z",
+        "berichten": [
+          {
+            "soort": "LAATSTE_HERINNERING",
+            "codenaam": "Persoon-03",
+            "personen": ["Persoon-03"],
+            "onderwerp": "Laatste herinnering: geef je voorkeuren voor Voorjaar 2027 door",
+            "tekst": "Hoi Persoon-03, ..."
+          }
+        ]
+      }
+      ```
+
+      - `soort`: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
+        `RUILVERZOEK`, `RUIL_BEVESTIGING` of `RUIL_UITKOMST`.
+      - `automatisch`: `true` als Dienstrooster het zelf verstuurde (een
+        geplande herinnering, een ruilverzoek), `false` als jij op een knop
+        drukte.
+      - `deadline` en `deadline_tekst` zijn leeg (`null`) bij ruilverzoeken.
+      - `nog_niets_ingevuld` en `nog_niet_ingediend` zijn alleen gevuld bij
+        herinneringen, anders `null`.
+
       Schema:
 
       ```json
       {
-        "type": "array",
-        "items": {
-          "type": "object",
-          "properties": {
-            "soort": { "type": "string" },
-            "codenaam": { "type": "string" },
-            "personen": { "type": "array", "items": { "type": "string" } },
-            "onderwerp": { "type": "string" },
-            "tekst": { "type": "string" }
-          },
-          "required": ["codenaam", "onderwerp", "tekst"]
-        }
+        "type": "object",
+        "properties": {
+          "soort": { "type": "string" },
+          "automatisch": { "type": "boolean" },
+          "periode": { "type": "string" },
+          "deadline": { "type": ["string", "null"] },
+          "deadline_tekst": { "type": ["string", "null"] },
+          "aantal": { "type": "integer" },
+          "nog_niets_ingevuld": { "type": ["integer", "null"] },
+          "nog_niet_ingediend": { "type": ["integer", "null"] },
+          "verstuurd_op": { "type": "string" },
+          "berichten": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "soort": { "type": "string" },
+                "codenaam": { "type": "string" },
+                "personen": { "type": "array", "items": { "type": "string" } },
+                "onderwerp": { "type": "string" },
+                "tekst": { "type": "string" }
+              },
+              "required": ["codenaam", "onderwerp", "tekst"]
+            }
+          }
+        },
+        "required": ["soort", "aantal", "berichten"]
       }
       ```
 
-   b. **Toepassen op elk** over *Hoofdtekst* van *JSON parseren*. Daarbinnen:
+   b. **Toepassen op elk** over *berichten* van *JSON parseren*. Daarbinnen:
 
       - **Een rij ophalen** (Excel Online (Business)): het bestand uit stap
         3, tabel `Adressen`, sleutelkolom `Codenaam`, sleutelwaarde
@@ -164,6 +216,16 @@ versie iets verschillen.
         Onderwerp = *onderwerp*, Hoofdtekst als expressie
         `replace(items('Toepassen_op_elk_2')?['tekst'], decodeUriComponent('%0A'), '<br>')`
         zodat de regels van de tekst behouden blijven.
+
+   c. Optioneel: **een samenvatting voor jezelf**. Zet ná de lus van stap b
+      (dus nog binnen de lus over de bijlagen) een **Voorwaarde**, bijvoorbeeld
+      *soort* van *JSON parseren* `bevat` `HERINNERING`. Dat geldt voor gewone
+      en laatste herinneringen. Zet in de *Ja*-tak **Een e-mail verzenden
+      (V2)** aan jezelf, met als onderwerp
+      `@{body('JSON_parseren')?['soort']} verstuurd voor @{body('JSON_parseren')?['periode']}`
+      en in de tekst *aantal*, *nog_niets_ingevuld*, *nog_niet_ingediend*,
+      *deadline_tekst* en *automatisch*. Wil je voor elke verzending een
+      samenvatting, laat de voorwaarde dan weg.
 
 4. Optioneel maar handig: voeg na *Een rij ophalen* een parallelle tak toe
    die alleen draait als die actie **mislukt** (*Uitvoeren na* > *is
@@ -226,46 +288,19 @@ vooraan. Zo wordt "Persoon-10" altijd vervangen voordat "Persoon-1" erin
 gevonden zou kunnen worden. Staat iemand niet in de lijst of heeft iemand
 geen naam, dan blijft de codenaam gewoon staan.
 
-## Stap 6 (optioneel). Een samenvatting voor jezelf
+## Had je de stroom al gebouwd?
 
-Na elke automatische herinnering stuurt Dienstrooster ook een mail met
-onderwerp `DIENSTROOSTER-SAMENVATTING` naar dezelfde mailbox. De bijlage
-`dienstrooster-samenvatting.json` ziet er zo uit:
+Tot en met september 2026 was de bijlage een losse lijst berichten. Nu staat
+die lijst in `berichten`, met de samenvatting eromheen. Pas in een bestaande
+stroom twee dingen aan, op hetzelfde moment dat je de nieuwe versie van
+Dienstrooster installeert:
 
-```json
-{
-  "soort": "LAATSTE_HERINNERING",
-  "automatisch": true,
-  "periode": "Voorjaar 2027",
-  "deadline": "2026-12-20T17:00",
-  "deadline_tekst": "zondag 20 december 2026 om 17:00",
-  "dagen_voor_deadline": 1,
-  "aantal": 12,
-  "nog_niets_ingevuld": 8,
-  "nog_niet_ingediend": 4,
-  "ontvangers": {
-    "nog_niets_ingevuld": ["Persoon-03", "..."],
-    "nog_niet_ingediend": ["Persoon-11", "..."]
-  },
-  "verstuurd_op": "2026-12-19T08:00:00.000Z"
-}
-```
+1. Vervang bij **JSON parseren** het schema door het schema uit stap 4.
+2. Laat de lus van stap 4b lopen over *berichten* van *JSON parseren* in
+   plaats van over *Hoofdtekst*.
 
-Je bestaande stroom doet hier niets mee, want het onderwerp is anders. Maak
-er een tweede, kleine stroom voor:
-
-1. **Wanneer een nieuwe e-mail binnenkomt (V3)**, met onderwerpfilter
-   `DIENSTROOSTER-SAMENVATTING`, Van = je Dienstrooster-Gmail en bijlagen
-   opnemen.
-2. **E-mail verplaatsen (V2)** naar dezelfde map als de verzendlijsten.
-3. **JSON parseren** met als inhoud
-   `base64ToString(first(triggerOutputs()?['body/attachments'])?['contentBytes'])`.
-   Klik op *Voorbeeldpayload gebruiken om schema te genereren* en plak het
-   voorbeeld hierboven.
-4. **Een e-mail verzenden (V2)** aan jezelf, bijvoorbeeld met onderwerp
-   `Herinnering verstuurd: @{body('JSON_parseren')?['periode']}` en in de
-   tekst *aantal*, *nog_niets_ingevuld*, *nog_niet_ingediend* en
-   *deadline_tekst*.
+De stappen binnen de lus (rij ophalen, mail versturen, echte namen) blijven
+gewoon werken.
 
 ## Veiligheid
 

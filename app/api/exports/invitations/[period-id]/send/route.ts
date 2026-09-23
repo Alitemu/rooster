@@ -14,6 +14,7 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { getInvitationPeriod, issuePeriodLinks, invitationBericht, rememberBaseUrl } from '@/lib/periodInvitations';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
+import { buildVerzendlijst } from '@/lib/verzendlijst';
 
 function fail(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ success: false, error: { code, message } }, { status });
@@ -37,7 +38,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     );
     if (berichten.length === 0) return fail(400, 'EMPTY', 'Er doet niemand mee in deze periode.');
 
-    const result = await sendVerzendlijst(period.naam, berichten);
+    const result = await sendVerzendlijst(
+      buildVerzendlijst(
+        { soort: 'UITNODIGING', automatisch: false, periode: period.naam, deadline: period.deadline },
+        berichten
+      )
+    );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
