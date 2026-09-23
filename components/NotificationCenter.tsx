@@ -160,7 +160,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
           <p className="text-red-700 text-sm">{actionError}</p>
           <button
             onClick={() => setActionError(null)}
-            className="text-red-700 hover:text-red-900 text-sm font-medium shrink-0"
+            className="shrink-0 px-3 py-1 rounded border border-red-300 bg-white text-red-700 text-sm font-medium hover:bg-red-100"
           >
             Sluiten
           </button>

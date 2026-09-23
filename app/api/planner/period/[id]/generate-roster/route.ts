@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
 import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBands';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
@@ -212,8 +212,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         // runGeneration reports its own failures via failRosterGenerationJob;
         // this only catches a genuinely unexpected throw that slipped past
         // that, so a job never gets stuck at RUNNING forever.
-        console.error('[generate-roster] unhandled error in background job', error);
-        failRosterGenerationJob(jobId, 'Er is iets misgegaan. Probeer het opnieuw.');
+        const code = errorReference();
+        console.error(`[generate-roster] foutcode ${code} unhandled error in background job`, error);
+        failRosterGenerationJob(jobId, internalErrorMessage(code));
       }
     );
 
@@ -667,8 +668,9 @@ async function runGeneration(args: {
       ...(stoppedReason !== undefined ? { stopped_reason: stoppedReason } : {}),
     });
   } catch (error) {
-    console.error('[generate-roster]', error);
-    failRosterGenerationJob(jobId, 'Er is iets misgegaan. Probeer het opnieuw.');
+    const code = errorReference();
+    console.error(`[generate-roster] foutcode ${code}`, error);
+    failRosterGenerationJob(jobId, internalErrorMessage(code));
   }
 }
 

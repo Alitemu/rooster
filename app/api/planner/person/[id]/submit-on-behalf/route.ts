@@ -54,16 +54,30 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // `verwijderd_op IS NULL`: a period in the trash is on its way out, so
     // recording a confirmed submission against it is recording something
     // that is about to disappear.
-    if (
-      !db
-        .prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
-        .get(body.period_id)
-    ) {
+    const period = db
+      .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
+      .get(body.period_id) as { status: string } | undefined;
+    if (!period) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${body.period_id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // OPEN and GESLOTEN are both fine - collecting the last stragglers
+    // after closing, before generating, is exactly what this is for. Once
+    // the roster exists, a confirmation changes nothing any more; saying
+    // so beats recording a submission nobody will ever act on.
+    if (period.status === 'GEGENEREERD' || period.status === 'GEPUBLICEERD') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'ROSTER_ALREADY_GENERATED',
+          message: 'Het rooster is al gemaakt, dus namens iemand indienen heeft geen effect meer.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // Check if person has blocking preferences
@@ -130,9 +144,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       } else {
         db.prepare(
           `INSERT INTO dienstrooster_submission
-             (id, person_id, schedule_period_id, status, ingediend_op, row_version)
-           VALUES (?, ?, ?, 'BEVESTIGD', ?, 1)`
-        ).run(crypto.randomUUID(), personId, body.period_id, now);
+             (id, person_id, schedule_period_id, status, ingediend_op, row_version, aangemaakt_op)
+           VALUES (?, ?, ?, 'BEVESTIGD', ?, 1, ?)`
+        ).run(crypto.randomUUID(), personId, body.period_id, now, now);
       }
 
       db.prepare(

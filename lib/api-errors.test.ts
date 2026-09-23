@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { parseJsonBody } from './api-errors';
+import { parseJsonBody, internalErrorResponse } from './api-errors';
 
 /**
  * The hard rule: a request body a client controls can never reach a route
@@ -54,5 +54,25 @@ describe('parseJsonBody', () => {
   it('turns a missing body into an empty object', async () => {
     const req = new NextRequest('http://localhost/api/test', { method: 'POST' });
     expect(await parseJsonBody(req)).toEqual({});
+  });
+});
+
+describe('internalErrorResponse', () => {
+  // The message used to be "Er is iets misgegaan. Probeer het opnieuw." -
+  // nothing to go on, and advice that is wrong for a bug that fails the
+  // same way every time. It now carries a reference code that is printed in
+  // the server log beside the real error, and never the error itself.
+  it('gives the client a reference code that also appears in the server log, and no internals', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const res = internalErrorResponse('test-context', new Error('SQLITE_CONSTRAINT_NOTNULL geheim detail'));
+    const body = await res.json();
+    const code = /foutcode ([0-9A-F]{6})/.exec(body.error.message)?.[1];
+
+    expect(res.status).toBe(500);
+    expect(code).toBeDefined();
+    expect(body.error.message).not.toMatch(/SQLITE|geheim/);
+    expect(body.error.message).not.toMatch(/Probeer het opnieuw/);
+    expect(String(log.mock.calls[0][0])).toContain(`foutcode ${code}`);
+    log.mockRestore();
   });
 });

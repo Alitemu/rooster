@@ -5,6 +5,7 @@
  * client - log the full error server-side and return a generic message.
  */
 
+import { randomBytes } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -57,14 +58,38 @@ export function isUniqueViolation(error: unknown): boolean {
   return false;
 }
 
+/**
+ * The response for an unexpected server-side failure.
+ *
+ * The real error stays in the server log (never sent to the client), but
+ * the message used to be a bare "Er is iets misgegaan. Probeer het
+ * opnieuw." - which says nothing about what failed, and whose advice is
+ * wrong for the usual cause, a bug that fails the same way every time. A
+ * short reference code, printed in the log beside the real error, lets the
+ * planner pass on something that finds that exact error again.
+ */
 export function internalErrorResponse(context: string, error: unknown, status = 500): NextResponse {
-  console.error(`[${context}]`, error);
+  const code = errorReference();
+  console.error(`[${context}] foutcode ${code}`, error);
   return NextResponse.json(
     {
       success: false,
-      error: { code: 'INTERNAL_ERROR', message: 'Er is iets misgegaan. Probeer het opnieuw.' },
+      error: { code: 'INTERNAL_ERROR', message: internalErrorMessage(code) },
     },
     { status }
+  );
+}
+
+/** A short, readable reference (e.g. "7F3A9C") to find one error in the server log. */
+export function errorReference(): string {
+  return randomBytes(3).toString('hex').toUpperCase();
+}
+
+/** The Dutch text shown for an unexpected server error with this reference code. */
+export function internalErrorMessage(code: string): string {
+  return (
+    `Er ging iets mis op de server (foutcode ${code}). Opnieuw proberen helpt dan meestal niet. ` +
+    'Geef de foutcode door aan de beheerder: daarmee is de oorzaak terug te vinden in de serverlog.'
   );
 }
 

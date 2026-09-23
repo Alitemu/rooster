@@ -723,7 +723,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                     )}
                   </td>
                   <td className="px-3 py-2 text-center">
-                    {(!person.submission_status || person.submission_status === 'NIET_BEGONNEN') && (
+                    {/* Only while preferences still matter: once the roster is
+                        generated, confirming for someone changes nothing (the
+                        API refuses it too, see submit-on-behalf). */}
+                    {(dashboard.status === 'OPEN' || dashboard.status === 'GESLOTEN') &&
+                      (!person.submission_status || person.submission_status === 'NIET_BEGONNEN') && (
                       <>
                         <button
                           onClick={() => handleSubmitOnBehalf(person.person_id)}
@@ -733,11 +737,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                           {submittingFor === person.person_id ? 'Bezig...' : 'Indienen'}
                         </button>
                         {actionError?.personId === person.person_id && (
-                          <div className="mt-1 flex items-center justify-center gap-2">
-                            <p className="text-xs text-red-700">{actionError.message}</p>
+                          <div className="mt-2 p-2 rounded border border-red-200 bg-red-50 text-left flex items-start gap-2 max-w-xs mx-auto">
+                            <p className="text-xs text-red-800">{actionError.message}</p>
                             <button
                               onClick={() => setActionError(null)}
-                              className="text-red-700 hover:text-red-900 text-xs font-medium shrink-0"
+                              className="shrink-0 px-2 py-0.5 rounded border border-red-300 bg-white text-red-700 text-xs font-medium hover:bg-red-100"
                             >
                               Sluiten
                             </button>

@@ -122,11 +122,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     } else {
       const insertStmt = db.prepare(`
         INSERT INTO dienstrooster_submission
-        (id, person_id, schedule_period_id, status, ingediend_op, row_version)
-        VALUES (?, ?, ?, 'BEVESTIGD', ?, 1)
+        (id, person_id, schedule_period_id, status, ingediend_op, row_version, aangemaakt_op)
+        VALUES (?, ?, ?, 'BEVESTIGD', ?, 1, ?)
       `);
 
-      insertStmt.run(crypto.randomUUID(), id, period_id, now);
+      insertStmt.run(crypto.randomUUID(), id, period_id, now, now);
     }
 
     try {
