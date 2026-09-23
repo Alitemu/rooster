@@ -51,4 +51,15 @@ test.describe('Exporteren & communicatie', () => {
     await expect(dialog.locator('a[href^="mailto:"]')).toHaveCount(0);
     await expect(dialog.getByText(/JSON/)).toHaveCount(0);
   });
+
+  test('automatische herinneringen: zonder mailinstelling staat er dat ze uit staan', async ({ page }) => {
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
+    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    const panel = page.getByTestId('auto-herinneringen');
+    await expect(panel).toContainText('Automatische herinneringen');
+    await expect(panel).toContainText('versturen is nog niet ingesteld op de server');
+    await expect(panel.getByRole('button', { name: 'Pauzeren' })).toHaveCount(0);
+  });
 });

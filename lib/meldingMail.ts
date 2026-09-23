@@ -18,7 +18,7 @@ import { db } from '@/db/client';
 import { issuePersonLink } from './periodInvitations';
 import { renderNotificationTemplate, renderTemplate } from './notifications';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
-import { verzendlijstPersonen } from './verzendlijst';
+import { verzendlijstPersonen, type VerzendlijstSoort } from './verzendlijst';
 
 export interface MeldingMail {
   personId: string;
@@ -32,6 +32,7 @@ export interface MeldingMail {
   placeholders: Record<string, string>;
   /** Other people's codenamen the text mentions (the reader's own is added). */
   anderen: string[];
+  soort: VerzendlijstSoort;
   /** The sentence above the link, e.g. "Bekijk het verzoek via je persoonlijke link:". */
   linkIntro: string;
   baseUrl: string;
@@ -63,6 +64,7 @@ export async function mailMelding(melding: MeldingMail): Promise<void> {
 
     const result = await sendVerzendlijst(period.naam, [
       {
+        soort: melding.soort,
         codenaam: person.codenaam,
         personen: verzendlijstPersonen(person.codenaam, melding.anderen),
         onderwerp: rendered.onderwerp,

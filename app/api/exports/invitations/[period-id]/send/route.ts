@@ -12,7 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
-import { getInvitationPeriod, issuePeriodLinks, invitationBericht } from '@/lib/periodInvitations';
+import { getInvitationPeriod, issuePeriodLinks, invitationBericht, rememberBaseUrl } from '@/lib/periodInvitations';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 
 function fail(status: number, code: string, message: string): NextResponse {
@@ -30,7 +30,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is niet ingesteld op de server.');
     }
 
-    const berichten = issuePeriodLinks(period, resolveBaseUrl(req)).map((link) =>
+    const baseUrl = resolveBaseUrl(req);
+    rememberBaseUrl(period.id, baseUrl);
+    const berichten = issuePeriodLinks(period, baseUrl).map((link) =>
       invitationBericht(period, link.codenaam, link.personalLink)
     );
     if (berichten.length === 0) return fail(400, 'EMPTY', 'Er doet niemand mee in deze periode.');

@@ -115,6 +115,7 @@ afterEach(() => {
       id: string;
     }>) {
       db.prepare('DELETE FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').run(id);
+      db.prepare('DELETE FROM dienstrooster_notification_log WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(id);
     }
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(poolId);
@@ -171,8 +172,10 @@ describe('verzendlijst over SMTP', () => {
       { params: Promise.resolve({ 'period-id': f.periodId }) }
     );
     expect(res.status).toBe(200);
-    // personen is set by the server: a reminder names only its recipient.
-    expect(attachment(sink.received[0].raw)).toEqual([{ ...berichten[0], personen: [codenaam(f.a)] }]);
+    // soort and personen are set by the server: a reminder names only its recipient.
+    expect(attachment(sink.received[0].raw)).toEqual([
+      { ...berichten[0], soort: 'HERINNERING', personen: [codenaam(f.a)] },
+    ]);
   });
 
   it('refuses a codenaam that does not take part in the period, and sends nothing', async () => {

@@ -172,7 +172,9 @@ async function createTables() {
       gepubliceerd_door_person_id TEXT REFERENCES dienstrooster_person(id),
       row_version INTEGER NOT NULL DEFAULT 1,
       aangemaakt_op TEXT NOT NULL,
-      verwijderd_op TEXT
+      verwijderd_op TEXT,
+      auto_herinneren INTEGER NOT NULL DEFAULT 1,
+      basis_url TEXT
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_excluded_day (
@@ -278,6 +280,20 @@ async function createTables() {
       dagen_voor_deadline INTEGER NOT NULL,
       actief INTEGER NOT NULL DEFAULT 1
     );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_reminder_run (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      dagen_voor_deadline INTEGER NOT NULL,
+      deadline TEXT NOT NULL,
+      moment TEXT NOT NULL,
+      uitkomst TEXT NOT NULL CHECK(uitkomst IN ('VERSTUURD', 'OVERGESLAGEN')),
+      aantal_niet_begonnen INTEGER NOT NULL DEFAULT 0,
+      aantal_bezig INTEGER NOT NULL DEFAULT 0,
+      aangemaakt_op TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS reminder_run_moment_uniq
+      ON dienstrooster_reminder_run(period_id, dagen_voor_deadline, deadline);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_notification_log (
       id TEXT PRIMARY KEY NOT NULL,
@@ -477,6 +493,7 @@ const SEEDED_TABLES = [
   'dienstrooster_audit_log',
   'dienstrooster_import_run',
   'dienstrooster_reminder_schedule',
+  'dienstrooster_reminder_run',
   'dienstrooster_notification_template',
   'dienstrooster_holiday_history',
   'dienstrooster_ledger_entry',
@@ -517,6 +534,10 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_swap_request: {
     reden_afwijzing: 'TEXT',
     melding_id: 'TEXT',
+  },
+  dienstrooster_schedule_period: {
+    auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
+    basis_url: 'TEXT',
   },
 };
 
@@ -888,9 +909,9 @@ async function seed() {
     }
 
     console.log('Creating reminder schedule...');
-    // Gentle nudge three weeks out, a firmer one a week before, a last
-    // call the day before.
-    for (const dagen of [21, 7, 1]) {
+    // A week before and a last call the day before - the same moments
+    // lib/reminderSchedule.ts falls back to for a period without rows.
+    for (const dagen of [7, 1]) {
       db.prepare(`
         INSERT INTO dienstrooster_reminder_schedule (id, period_id, dagen_voor_deadline, actief)
         VALUES (?, ?, ?, 1)

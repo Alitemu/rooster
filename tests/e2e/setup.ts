@@ -219,6 +219,9 @@ export function cleanupTestData(periodId: string, userIds: string[]): void {
   // An invitations/reminders export issues links for everyone in the pool,
   // not just the fixture's users, and each one points at this period.
   db.prepare('DELETE FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').run(periodId);
+  // A reminder sent from the export dialog is logged per person and period.
+  db.prepare('DELETE FROM dienstrooster_notification_log WHERE period_id = ?').run(periodId);
+  db.prepare('DELETE FROM dienstrooster_reminder_run WHERE period_id = ?').run(periodId);
 
   // Delete test users (access links and audit log entries first - approving
   // or rejecting a swap writes an audit_log row with actor_id = the acting

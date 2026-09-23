@@ -13,6 +13,7 @@
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
-  const { runStartupBootstrap } = await import('./instrumentation-node');
+  const { runStartupBootstrap, startAutoReminderScheduler } = await import('./instrumentation-node');
   await runStartupBootstrap();
+  startAutoReminderScheduler();
 }

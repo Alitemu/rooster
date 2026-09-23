@@ -18,6 +18,7 @@ import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ExportDialog, type ExportType } from './ExportDialog';
+import { AutoReminderPanel } from './AutoReminderPanel';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
 import { AssignmentGrid } from './AssignmentGrid';
 import { AssignmentCalendar } from './AssignmentCalendar';
@@ -857,6 +858,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               📅 Rooster downloaden (CSV)
             </a>
           )}
+        </div>
+        <div className="mt-4">
+          {/* Reloaded after a new deadline, a submission or closing the
+              export dialog (a reminder sent by hand moves people out of
+              the next automatic one). */}
+          <AutoReminderPanel
+            periodId={periodId}
+            refreshKey={`${dashboard.deadline}|${dashboard.status}|${dashboard.submission_stats.confirmed}|${dashboard.submission_stats.in_progress}|${exportDialogOpen}`}
+          />
         </div>
       </Section>
 

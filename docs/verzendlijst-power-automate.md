@@ -38,6 +38,32 @@ Wel moet iedereen die kan ruilen in je Excel-lijst staan.
 De melding in de app blijft altijd bestaan. De mail komt er alleen bij. Lukt
 het versturen niet, dan gaat het ruilverzoek gewoon door.
 
+### Automatische herinneringen
+
+Is versturen ingesteld, dan stuurt Dienstrooster zelf herinneringen zolang
+een periode open staat:
+
+- 7 dagen en 1 dag voor de deadline, om 09:00. De laatste valt altijd
+  tussen 24 en 48 uur voor de deadline.
+- Alleen aan wie nog niet heeft ingediend, in twee groepen met elk een eigen
+  tekst: wie nog niets heeft ingevuld en wie wel begonnen is maar nog niet op
+  *Bevestigen en indienen* heeft geklikt.
+- Wie de afgelopen 24 uur al een herinnering kreeg (ook een die jij met de
+  hand verstuurde), wordt overgeslagen.
+- Verschuif je de deadline, dan tellen de momenten vanaf de nieuwe deadline.
+- Stond de server uit op het moment zelf, dan gaat de herinnering alsnog als
+  hij binnen 12 uur weer draait. Anders wordt dat moment overgeslagen.
+
+Op de periodepagina, onder *Exporteren & communicatie*, zie je wanneer de
+volgende herinnering gaat en naar hoeveel mensen. Daar kun je ze voor een
+periode ook pauzeren. Elk bericht heeft een veld `soort` (bijvoorbeeld
+`HERINNERING` of `LAATSTE_HERINNERING`), voor als je de stroom per soort iets
+anders wilt laten doen.
+
+De links in een automatische herinnering gebruiken het adres waarmee jij de
+uitnodigingen verstuurde. Verstuur dus eerst de uitnodigingen. Wil je een
+vast adres, zet dan `BASE_URL` in het `.env`-bestand.
+
 ## Stap 1. Gmail klaarzetten
 
 Gebruik bij voorkeur een apart Gmail-account alleen voor Dienstrooster.
@@ -118,6 +144,7 @@ versie iets verschillen.
         "items": {
           "type": "object",
           "properties": {
+            "soort": { "type": "string" },
             "codenaam": { "type": "string" },
             "personen": { "type": "array", "items": { "type": "string" } },
             "onderwerp": { "type": "string" },
@@ -198,6 +225,47 @@ De volgorde van `personen` is al goed: Dienstrooster zet langere codenamen
 vooraan. Zo wordt "Persoon-10" altijd vervangen voordat "Persoon-1" erin
 gevonden zou kunnen worden. Staat iemand niet in de lijst of heeft iemand
 geen naam, dan blijft de codenaam gewoon staan.
+
+## Stap 6 (optioneel). Een samenvatting voor jezelf
+
+Na elke automatische herinnering stuurt Dienstrooster ook een mail met
+onderwerp `DIENSTROOSTER-SAMENVATTING` naar dezelfde mailbox. De bijlage
+`dienstrooster-samenvatting.json` ziet er zo uit:
+
+```json
+{
+  "soort": "LAATSTE_HERINNERING",
+  "automatisch": true,
+  "periode": "Voorjaar 2027",
+  "deadline": "2026-12-20T17:00",
+  "deadline_tekst": "zondag 20 december 2026 om 17:00",
+  "dagen_voor_deadline": 1,
+  "aantal": 12,
+  "nog_niets_ingevuld": 8,
+  "nog_niet_ingediend": 4,
+  "ontvangers": {
+    "nog_niets_ingevuld": ["Persoon-03", "..."],
+    "nog_niet_ingediend": ["Persoon-11", "..."]
+  },
+  "verstuurd_op": "2026-12-19T08:00:00.000Z"
+}
+```
+
+Je bestaande stroom doet hier niets mee, want het onderwerp is anders. Maak
+er een tweede, kleine stroom voor:
+
+1. **Wanneer een nieuwe e-mail binnenkomt (V3)**, met onderwerpfilter
+   `DIENSTROOSTER-SAMENVATTING`, Van = je Dienstrooster-Gmail en bijlagen
+   opnemen.
+2. **E-mail verplaatsen (V2)** naar dezelfde map als de verzendlijsten.
+3. **JSON parseren** met als inhoud
+   `base64ToString(first(triggerOutputs()?['body/attachments'])?['contentBytes'])`.
+   Klik op *Voorbeeldpayload gebruiken om schema te genereren* en plak het
+   voorbeeld hierboven.
+4. **Een e-mail verzenden (V2)** aan jezelf, bijvoorbeeld met onderwerp
+   `Herinnering verstuurd: @{body('JSON_parseren')?['periode']}` en in de
+   tekst *aantal*, *nog_niets_ingevuld*, *nog_niet_ingediend* en
+   *deadline_tekst*.
 
 ## Veiligheid
 

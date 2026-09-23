@@ -37,6 +37,7 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { getActiveReminderMilestones, resolveReminderUrgency } from '@/lib/reminderSchedule';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
+import { rememberBaseUrl } from '@/lib/periodInvitations';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ReminderTemplate {
@@ -132,6 +133,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     `);
 
     const baseUrl = resolveBaseUrl(req);
+    rememberBaseUrl(periodId, baseUrl);
     const now = new Date().toISOString();
 
     const daysBeforeDeadline = daysBeforeDeadlineFromOverride(

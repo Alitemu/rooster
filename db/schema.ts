@@ -170,6 +170,13 @@ export const schedulePeriod = sqliteTable(
     gepubliceerd_op: text('gepubliceerd_op'), // Phase 3: when roster was published
     gepubliceerd_door_person_id: text('gepubliceerd_door_person_id').references(() => person.id), // Phase 3: who published
     row_version: integer('row_version').default(1).notNull(), // Optimistic locking
+    // Automatic reminders (lib/autoReminders.ts) on for this period. Off =
+    // paused by the planner; manual reminders still work.
+    auto_herinneren: integer('auto_herinneren', { mode: 'boolean' }).default(true).notNull(),
+    // The address personal links for this period were last issued under
+    // (from the planner's own request). Automatic reminders run without a
+    // request, so they use this unless BASE_URL pins one.
+    basis_url: text('basis_url'),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
     verwijderd_op: text('verwijderd_op'), // Soft-delete marker; null = not in trash. Purged 30 days after this.
   }
@@ -350,6 +357,31 @@ export const reminderSchedule = sqliteTable(
     dagen_voor_deadline: integer('dagen_voor_deadline').notNull(),
     actief: integer('actief', { mode: 'boolean' }).default(true).notNull(),
   }
+);
+
+/**
+ * One row per automatic reminder moment that has been dealt with, so a
+ * moment is never sent twice (not across restarts either). Keyed on the
+ * deadline it was computed from: moving the deadline starts a fresh set of
+ * moments. OVERGESLAGEN = its moment went by without sending (server down
+ * too long, or a more urgent moment was due at the same time).
+ */
+export const reminderRun = sqliteTable(
+  'dienstrooster_reminder_run',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id),
+    dagen_voor_deadline: integer('dagen_voor_deadline').notNull(),
+    deadline: text('deadline').notNull(),
+    moment: text('moment').notNull(), // ISO timestamp of the 09:00 it was due
+    uitkomst: text('uitkomst', { enum: ['VERSTUURD', 'OVERGESLAGEN'] }).notNull(),
+    aantal_niet_begonnen: integer('aantal_niet_begonnen').default(0).notNull(),
+    aantal_bezig: integer('aantal_bezig').default(0).notNull(),
+    aangemaakt_op: text('aangemaakt_op').notNull(),
+  },
+  (table) => ({
+    runUniq: uniqueIndex('reminder_run_moment_uniq').on(table.period_id, table.dagen_voor_deadline, table.deadline),
+  })
 );
 
 export const notificationLog = sqliteTable(

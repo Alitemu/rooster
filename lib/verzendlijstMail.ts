@@ -16,7 +16,13 @@
  */
 
 import nodemailer from 'nodemailer';
-import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type VerzendlijstBericht } from './verzendlijst';
+import {
+  SAMENVATTING_SUBJECT,
+  VERZENDLIJST_SUBJECT,
+  verzendlijstFilename,
+  verzendlijstJson,
+  type VerzendlijstBericht,
+} from './verzendlijst';
 
 interface MailConfig {
   host: string;
@@ -72,10 +78,13 @@ function explainSmtpError(error: unknown): string {
   return 'Versturen via de mailserver is mislukt.';
 }
 
-export async function sendVerzendlijst(
-  periodName: string,
-  berichten: VerzendlijstBericht[]
-): Promise<VerzendlijstMailResult> {
+/** One mail to VERZENDLIJST_AAN with a single JSON attachment. */
+async function sendJsonMail(mail: {
+  subject: string;
+  text: string;
+  filename: string;
+  json: string;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
   const config = readConfig();
   if (!config) {
     return { ok: false, message: 'Automatisch versturen is niet ingesteld op de server.' };
@@ -96,23 +105,48 @@ export async function sendVerzendlijst(
     await transport.sendMail({
       from: config.from,
       to: config.to,
-      subject: VERZENDLIJST_SUBJECT,
-      text:
-        `Verzendlijst voor ${periodName}: ${berichten.length} berichten in de bijlage.\n` +
-        'Deze mail is automatisch verstuurd door Dienstrooster voor de Power Automate-stroom.',
-      attachments: [
-        {
-          filename: verzendlijstFilename(periodName),
-          content: verzendlijstJson(berichten),
-          contentType: 'application/json',
-        },
-      ],
+      subject: mail.subject,
+      text: mail.text,
+      attachments: [{ filename: mail.filename, content: mail.json, contentType: 'application/json' }],
     });
-    return { ok: true, aantal: berichten.length };
+    return { ok: true };
   } catch (error) {
-    console.error('[verzendlijst-mail] sending failed', error);
+    console.error(`[verzendlijst-mail] ${mail.subject} failed`, error);
     return { ok: false, message: explainSmtpError(error) };
   } finally {
     transport.close();
   }
+}
+
+export async function sendVerzendlijst(
+  periodName: string,
+  berichten: VerzendlijstBericht[]
+): Promise<VerzendlijstMailResult> {
+  const result = await sendJsonMail({
+    subject: VERZENDLIJST_SUBJECT,
+    text:
+      `Verzendlijst voor ${periodName}: ${berichten.length} berichten in de bijlage.\n` +
+      'Deze mail is automatisch verstuurd door Dienstrooster voor de Power Automate-stroom.',
+    filename: verzendlijstFilename(periodName),
+    json: verzendlijstJson(berichten),
+  });
+  return result.ok ? { ok: true, aantal: berichten.length } : result;
+}
+
+/**
+ * A report for the planner, as JSON so a (second) Power Automate flow can
+ * turn it into a mail of its own. Its own subject, so the flow that mails
+ * participants never mistakes it for a verzendlijst.
+ */
+export async function sendSamenvatting(
+  samenvatting: Record<string, unknown> & { soort: string; periode: string }
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  return sendJsonMail({
+    subject: SAMENVATTING_SUBJECT,
+    text:
+      `Samenvatting van Dienstrooster voor ${samenvatting.periode} (${samenvatting.soort}). ` +
+      'De gegevens staan in de bijlage.',
+    filename: 'dienstrooster-samenvatting.json',
+    json: JSON.stringify(samenvatting, null, 2),
+  });
 }

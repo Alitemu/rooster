@@ -21,7 +21,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getInvitationPeriod, issuePeriodLinks, formatDeadline } from '@/lib/periodInvitations';
+import { getInvitationPeriod, issuePeriodLinks, formatDeadline, rememberBaseUrl } from '@/lib/periodInvitations';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
@@ -52,7 +52,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       return NextResponse.json(response, { status: 404 });
     }
 
-    const links = issuePeriodLinks(period, resolveBaseUrl(req));
+    const baseUrl = resolveBaseUrl(req);
+    rememberBaseUrl(period.id, baseUrl);
+    const links = issuePeriodLinks(period, baseUrl);
     const deadline = formatDeadline(period.deadline);
     const csvLines: string[] = [
       'Naam,Persoonlijke link,Deadline',

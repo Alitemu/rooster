@@ -125,3 +125,42 @@ async function warnAboutSeededPassword(): Promise<void> {
     // has not been migrated yet at this point.
   }
 }
+
+const AUTO_REMINDER_INTERVAL_MS = 15 * 60 * 1000;
+
+/**
+ * Checks every 15 minutes whether an automatic reminder is due (see
+ * lib/autoReminders.ts, which decides what and whether). The server is the
+ * only thing running on the NAS, so the schedule lives in it rather than in
+ * a separate cron job someone would have to set up.
+ *
+ * Never during `next build`, and one check at a time: a slow mail server
+ * must not let the next tick start the same send again (the claim in
+ * dienstrooster_reminder_run would stop it anyway, this just keeps it quiet).
+ */
+export function startAutoReminderScheduler(): void {
+  if (process.env.NEXT_PHASE === 'phase-production-build') return;
+  let running = false;
+  const tick = async () => {
+    if (running) return;
+    running = true;
+    try {
+      const { runAutoReminders } = await import('./lib/autoReminders');
+      // What was sent is on record (dienstrooster_reminder_run, the
+      // dashboard); only what didn't go out is worth a line in the log.
+      for (const result of await runAutoReminders()) {
+        if (result.uitkomst !== 'VERSTUURD') {
+          console.warn(`[auto-herinneringen] periode ${result.periodId}, ${result.dagen} dagen: ${result.uitkomst}`);
+        }
+      }
+    } catch (error) {
+      console.error('[auto-herinneringen] controle mislukt', error);
+    } finally {
+      running = false;
+    }
+  };
+  // First check shortly after start: a moment missed while the server was
+  // down is still sent if it's inside its catch-up window.
+  setTimeout(tick, 30_000).unref();
+  setInterval(tick, AUTO_REMINDER_INTERVAL_MS).unref();
+}

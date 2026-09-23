@@ -298,6 +298,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       template: { sleutel: 'SWAP_REQUESTED' },
       placeholders: { ...placeholders, details: mailDetails('collega', windowConflicts.respondentTooClose) },
       anderen: [aanvrager?.codenaam ?? ''],
+      soort: 'RUILVERZOEK',
       linkIntro: 'Bekijk het verzoek en geef antwoord via je persoonlijke link:',
       baseUrl: resolveBaseUrl(request),
     });
@@ -312,6 +313,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         details: mailDetails('aanvrager', windowConflicts.requesterTooClose),
       },
       anderen: [respondent?.codenaam ?? ''],
+      soort: 'RUIL_BEVESTIGING',
       linkIntro: 'Je kunt het verzoek volgen of intrekken via je persoonlijke link:',
       baseUrl: resolveBaseUrl(request),
     });

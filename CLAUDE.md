@@ -368,8 +368,25 @@ requester, and approve/reject mails the requester (SWAP_RESULT), each a
 one-bericht verzendlijst with a fresh personal link and the swap spelled
 out from the reader's side (lib/swapMailDetails.ts). Started after the
 commit and never awaited, so a mail failure can't fail or slow the swap;
-without SMTP configured it does nothing, not even issue a link. Setup for the operator, in Dutch:
-docs/verzendlijst-power-automate.md.
+without SMTP configured it does nothing, not even issue a link. Every
+bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
+RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST).
+
+Automatic reminders (lib/autoReminders.ts, run every 15 minutes from
+instrumentation-node.ts): for an OPEN period with `auto_herinneren` on,
+one moment per reminder_schedule milestone (7 and 1 days by default) at
+the last 09:00 at least N*24h before the deadline, to everyone not
+BEVESTIGD (own text for NIET_BEGONNEN/no row and for BEZIG), minus anyone
+with a REMINDER/FINAL_WARNING in notification_log in the last 24h (manual
+sends log there too). Each moment is claimed in dienstrooster_reminder_run
+keyed on (period, milestone, deadline) before sending and released if the
+send fails; a moment more than 12h late, or due together with a more
+urgent one, is recorded as OVERGESLAGEN instead. Links use BASE_URL or the
+period's `basis_url`, remembered from the planner's last export request.
+After a send the planner gets a DIENSTROOSTER-SAMENVATTING mail (JSON with
+soort and counts). runAutoReminders takes `onlyPeriodIds` for tests: the
+test database is shared across test files. Setup for the operator, in
+Dutch: docs/verzendlijst-power-automate.md.
 
 ## Deployment
 

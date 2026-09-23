@@ -3,8 +3,8 @@
  * is due, and how urgent its tone should be.
  *
  * dienstrooster_reminder_schedule holds the configured milestones per
- * period (seeded with a gentle nudge at 21 days, a firmer one at 7, a last
- * call at 1 - see scripts/seed.ts), but until now nothing ever read them:
+ * period (seeded with a reminder a week before and a last call the day
+ * before - see scripts/seed.ts), but until now nothing ever read them:
  * the reminders export computed urgency from two numbers (1 and 3) hardcoded
  * directly in its route, ignoring whatever the table said. This makes that
  * table the actual source of truth.
@@ -12,7 +12,7 @@
 
 import { db } from '@/db/client';
 
-const DEFAULT_MILESTONES = [21, 7, 1];
+const DEFAULT_MILESTONES = [7, 1];
 
 /** A period's active milestones (days-before-deadline), furthest-out first. */
 export function getActiveReminderMilestones(periodId: string): number[] {

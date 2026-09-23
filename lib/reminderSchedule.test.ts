@@ -58,9 +58,9 @@ afterEach(() => {
 });
 
 describe('getActiveReminderMilestones', () => {
-  it('falls back to 21/7/1 when a period has no configured milestones', () => {
+  it('falls back to 7/1 when a period has no configured milestones', () => {
     const periodId = createPeriod();
-    expect(getActiveReminderMilestones(periodId)).toEqual([21, 7, 1]);
+    expect(getActiveReminderMilestones(periodId)).toEqual([7, 1]);
   });
 
   it('returns configured milestones sorted furthest-out first, ignoring inactive rows', () => {

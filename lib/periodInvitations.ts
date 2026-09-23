@@ -52,6 +52,14 @@ export function issuePeriodLinks(
   )();
 }
 
+/**
+ * Remembers the address a planner issued this period's links under, for
+ * automatic reminders, which run without a request to take it from.
+ */
+export function rememberBaseUrl(periodId: string, baseUrl: string): void {
+  db.prepare('UPDATE dienstrooster_schedule_period SET basis_url = ? WHERE id = ?').run(baseUrl, periodId);
+}
+
 /** One fresh personal link for one person and period, added to any they already have. */
 export function issuePersonLink(personId: string, periodId: string, baseUrl: string): string {
   const token = generateAccessToken();
@@ -73,6 +81,7 @@ export function invitationBericht(
   personalLink: string
 ): VerzendlijstBericht {
   return {
+    soort: 'UITNODIGING',
     codenaam,
     personen: verzendlijstPersonen(codenaam),
     onderwerp: `Geef je voorkeuren door voor ${period.naam}`,

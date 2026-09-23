@@ -158,6 +158,7 @@ export async function POST(
         }),
       },
       anderen: [collega?.codenaam ?? ''],
+      soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
       baseUrl: resolveBaseUrl(request),
     });

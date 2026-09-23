@@ -24,7 +24,20 @@
 /** Must match the flow's subject filter exactly. */
 export const VERZENDLIJST_SUBJECT = 'DIENSTROOSTER-VERZENDLIJST';
 
+/** A report for the planner (lib/verzendlijstMail.ts sendSamenvatting). Never a verzendlijst. */
+export const SAMENVATTING_SUBJECT = 'DIENSTROOSTER-SAMENVATTING';
+
+/** What a bericht is about, so a flow can treat kinds differently if it wants to. */
+export type VerzendlijstSoort =
+  | 'UITNODIGING'
+  | 'HERINNERING'
+  | 'LAATSTE_HERINNERING'
+  | 'RUILVERZOEK'
+  | 'RUIL_BEVESTIGING'
+  | 'RUIL_UITKOMST';
+
 export interface VerzendlijstBericht {
+  soort: VerzendlijstSoort;
   codenaam: string;
   personen: string[];
   onderwerp: string;

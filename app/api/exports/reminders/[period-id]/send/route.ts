@@ -18,6 +18,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { getInvitationPeriod } from '@/lib/periodInvitations';
 import { verzendlijstPersonen } from '@/lib/verzendlijst';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
+import { logRemindersSent } from '@/lib/autoReminders';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 
 const bodySchema = z.object({
@@ -57,17 +58,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const gate = checkRemindersAllowed(period, { generatedFor: parsed.data.deadline });
     if (!gate.allowed) return fail(409, gate.code, gate.message);
 
-    const members = new Set(
+    const members = new Map(
       (
         db
           .prepare(
-            `SELECT DISTINCT p.codenaam
+            `SELECT DISTINCT p.id, p.codenaam
              FROM dienstrooster_pool_membership pm
              JOIN dienstrooster_person p ON p.id = pm.person_id
              WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
           )
-          .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ codenaam: string }>
-      ).map((row) => row.codenaam)
+          .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>
+      ).map((row) => [row.codenaam, row.id])
     );
     const unknown = berichten.filter((b) => !members.has(b.codenaam)).map((b) => b.codenaam);
     if (unknown.length > 0) {
@@ -78,9 +79,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     // names its own recipient.
     const result = await sendVerzendlijst(
       period.naam,
-      berichten.map((b) => ({ ...b, personen: verzendlijstPersonen(b.codenaam) }))
+      berichten.map((b) => ({ ...b, soort: 'HERINNERING' as const, personen: verzendlijstPersonen(b.codenaam) }))
     );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
+    // So the automatic reminders leave these people alone for a day.
+    logRemindersSent(
+      berichten.map((b) => members.get(b.codenaam)!),
+      period.id,
+      false,
+      new Date()
+    );
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
     return internalErrorResponse('export-reminders-send', error);
