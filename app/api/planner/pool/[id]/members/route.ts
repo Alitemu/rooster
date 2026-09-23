@@ -13,6 +13,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { syncAbsencesForPerson } from '@/lib/absenceSync';
+import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import { validateCodenaam } from '@/lib/codenaam';
@@ -157,8 +159,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       // pools, or rejoining after their previous membership ended) rather
       // than creating a duplicate - codenaam is globally unique.
       let person = db
-        .prepare('SELECT id FROM dienstrooster_person WHERE codenaam = ?')
-        .get(codenaam) as { id: string } | undefined;
+        .prepare('SELECT id, rol FROM dienstrooster_person WHERE codenaam = ?')
+        .get(codenaam) as { id: string; rol: string } | undefined;
+
+      // Only participants take shifts. Reusing by codenaam without this
+      // check let the planner's own login ("planner") be added as a pool
+      // member - it then showed up in the solver's headcount and bands
+      // like anyone else.
+      if (person && person.rol !== 'DEELNEMER') {
+        return { conflict: 'STAFF_ACCOUNT' as const };
+      }
 
       if (!person) {
         const personId = crypto.randomUUID();
@@ -166,7 +176,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           `INSERT INTO dienstrooster_person (id, codenaam, rol, aangemaakt_op)
            VALUES (?, ?, 'DEELNEMER', ?)`
         ).run(personId, codenaam, new Date().toISOString());
-        person = { id: personId };
+        person = { id: personId, rol: 'DEELNEMER' };
       }
 
       // A person can only be one row in this pool at any given date - two
@@ -180,7 +190,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         )
         .get(poolId, person.id, body.geldig_tot, body.geldig_vanaf);
       if (overlapping) {
-        return { conflict: true as const };
+        return { conflict: 'OVERLAP' as const };
       }
 
       const membershipId = crypto.randomUUID();
@@ -189,10 +199,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
          VALUES (?, ?, ?, ?, ?, ?)`
       ).run(membershipId, person.id, poolId, deelnamefactor, body.geldig_vanaf, body.geldig_tot);
 
-      return { conflict: false as const, membershipId, personId: person.id };
+      return { conflict: null, membershipId, personId: person.id };
     });
 
-    let result: { conflict: false; membershipId: string; personId: string } | { conflict: true };
+    let result:
+      | { conflict: null; membershipId: string; personId: string }
+      | { conflict: 'OVERLAP' }
+      | { conflict: 'STAFF_ACCOUNT' };
     try {
       result = addMember();
     } catch (error) {
@@ -209,7 +222,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       throw error;
     }
 
-    if (result.conflict) {
+    if (result.conflict === 'STAFF_ACCOUNT') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'STAFF_ACCOUNT',
+          message: 'Deze codenaam hoort bij een planner- of beheerdersaccount en kan geen diensten draaien - kies een andere codenaam',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
+    }
+
+    if (result.conflict === 'OVERLAP') {
       const response: ApiErrorResponse = {
         success: false,
         error: {
@@ -219,6 +243,14 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       };
       return NextResponse.json(response, { status: 409 });
     }
+
+    // Someone joining (or rejoining) while a period is already open: their
+    // existing absences and part-time patterns only ever reach a period
+    // through a sync, and the period's own backfill ran when it opened -
+    // before this membership existed. Without this their vacation would
+    // not block anything in that period until they happened to edit it.
+    syncAbsencesForPerson(result.personId);
+    syncPatternsForPerson(result.personId);
 
     const response: ApiSuccessResponse<{ id: string; person_id: string; codenaam: string }> = {
       success: true,

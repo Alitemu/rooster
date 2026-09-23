@@ -383,7 +383,6 @@ export function SetupWizard({ period, onComplete }: Props) {
     };
 
     loadCapacity();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, windowConfig.windowWeeksAvond, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
 
   // Membership is_active is purely date-range-based (geldig_vanaf/tot
@@ -544,7 +543,6 @@ export function SetupWizard({ period, onComplete }: Props) {
       };
     });
     lastAutoFilledDatesRef.current = { start: periodData.start_datum, end: periodData.eind_datum };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, periodData.pool_id, periodData.start_datum, periodData.eind_datum]);
 
   const handleAddMember = async () => {

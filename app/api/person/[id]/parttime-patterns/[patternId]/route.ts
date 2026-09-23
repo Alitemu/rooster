@@ -16,9 +16,11 @@ import {
   findDeadlinePassedOverlappingPeriods,
   PARTTIME_WEEKDAGEN,
 } from '@/lib/parttimeSync';
+import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
+import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePatternRequest {
@@ -81,6 +83,26 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
 
+    // Same checks as the create route - frequentie has a CHECK constraint
+    // (an unknown value was a 500 instead of a 400), and a non-date passes
+    // the string range check below and then silently matches no day.
+    if (body.frequentie && !['ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN'].includes(body.frequentie)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_FREQUENTIE', message: 'Onbekende frequentie' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+    for (const value of [body.geldig_vanaf, body.geldig_tot]) {
+      if (value && !isValidIsoDate(value)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'INVALID_DATE', message: 'Gebruik een geldige datum (JJJJ-MM-DD)' },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
+
     // Update fields
     const updates: Record<string, any> = {};
     if (body.weekdag) updates.weekdag = body.weekdag;
@@ -120,7 +142,11 @@ export async function PATCH(
 
     const updateAndSync = db.transaction(() => {
       updateStmt.run(...values);
-      return syncAvailabilityForPattern(patternId);
+      const result = syncAvailabilityForPattern(patternId);
+      // A shrunk or moved pattern can free a slot one of the person's
+      // absences would cover - same reclaim the delete route does.
+      syncAbsencesForPerson(id);
+      return result;
     });
 
     const syncResult = updateAndSync();
@@ -188,28 +214,34 @@ export async function DELETE(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // Remove generated availability rows first - bron_pattern_id has no
-    // ON DELETE clause and foreign_keys=ON, so deleting the pattern first
-    // would throw a constraint error.
-    const deleteStmt = db.prepare(`
-      DELETE FROM dienstrooster_parttime_pattern
-      WHERE id = ? AND person_id = ?
-    `);
-
-    const deletePatternAndAvailability = db.transaction(() => {
-      removePatternAvailability(patternId);
-      return deleteStmt.run(patternId, id);
-    });
-
-    const result = deletePatternAndAvailability();
-
-    if (result.changes === 0) {
+    // Ownership first, before touching any availability row - the release
+    // below used to run before the (correctly person-scoped) DELETE found
+    // nothing to delete, and the transaction still committed it: someone
+    // else's pattern id was enough to strip that person's part-time blocks
+    // out of every period still open for input. Same order the absence
+    // DELETE route already uses.
+    const owned = db
+      .prepare(`SELECT id FROM dienstrooster_parttime_pattern WHERE id = ? AND person_id = ?`)
+      .get(patternId, id);
+    if (!owned) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'PATTERN_NOT_FOUND', message: `Patroon ${patternId} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
     }
+
+    // Release generated availability rows first - bron_pattern_id has no
+    // ON DELETE clause and foreign_keys=ON, so deleting the pattern first
+    // would throw a constraint error.
+    db.transaction(() => {
+      removePatternAvailability(patternId);
+      db.prepare(`DELETE FROM dienstrooster_parttime_pattern WHERE id = ? AND person_id = ?`).run(patternId, id);
+      // A released slot may be one of the person's absences would cover
+      // but was skipped for while this pattern held it - see
+      // lib/absenceSync.ts's syncAbsencesForPerson.
+      syncAbsencesForPerson(id);
+    })();
 
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);

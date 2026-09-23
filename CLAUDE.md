@@ -246,12 +246,17 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 **Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
 
 - `runPublicationCheck` (lib/publicationCheck.ts) distinguishes two kinds
-  of finding: `issues` (an unfilled slot, a band violation - genuinely not
-  finished, always blocks) and `warnings` (an ABSOLUUT or window-rule
-  violation already sitting in the roster). The solver can never produce
-  either violation itself - both are hard constraints on its side - so a
-  warning always means a planner deliberately overrode it via manual-assign
-  ("in consultation with the person taking the shift"). Warnings require
+  of finding: `issues` (an unfilled slot - genuinely not finished, always
+  blocks) and `warnings` (an ABSOLUUT or window-rule violation already
+  sitting in the roster, or someone outside their streefbereik). The
+  solver can never produce an ABSOLUUT or window-rule violation itself -
+  both are hard constraints on its side - so those warnings always mean a
+  planner deliberately overrode it via manual-assign ("in consultation
+  with the person taking the shift"). A band violation is a warning too:
+  going over is hard-capped in the solver (MAX_BAND_OVERSHOOT = 0), so
+  that is always a manual choice, and going under is deliberately soft
+  there, so it can be a legitimate outcome when supply can't meet demand
+  - either way a planner may knowingly publish it. Warnings require
   `confirmOverrides: true` on `POST .../publish` (409 without it) but never
   block on their own - blocking on the same override a planner just made
   on purpose would mean no roster using it could ever be published.

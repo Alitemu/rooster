@@ -29,6 +29,14 @@ export interface PeriodScope {
  * period is already open, before any link has been exported for them.
  */
 export function isPeriodVisibleToPerson(personId: string, period: PeriodScope): boolean {
+  // A period in the trash is on its way to being purged: verify-link
+  // already stops resolving it, and a session opened before it was
+  // trashed must not keep reading it or writing preferences into it.
+  const trashed = db
+    .prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NOT NULL')
+    .get(period.id);
+  if (trashed) return false;
+
   const viaLink = db
     .prepare(
       `SELECT 1 FROM dienstrooster_person_access_link

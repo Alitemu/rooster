@@ -8,7 +8,7 @@
 'use client';
 
 import { Suspense, useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { SetupWizard } from '@/components/SetupWizard';
 
 interface Period {
@@ -23,6 +23,7 @@ interface Period {
 
 export default function SetupPage() {
   const params = useParams();
+  const router = useRouter();
   const periodId = params['period-id'] as string;
 
   const [loading, setLoading] = useState(true);
@@ -95,7 +96,7 @@ export default function SetupPage() {
           period={period}
           onComplete={() => {
             // Redirect to period dashboard
-            window.location.href = `/planner/period/${periodId}`;
+            router.push(`/planner/period/${periodId}`);
           }}
         />
       </Suspense>

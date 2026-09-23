@@ -109,7 +109,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error || 'Goedkeuren van ruil mislukt');
+        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Goedkeuren van ruil mislukt');
       }
 
       updateSwapStatus(swapId, 'GOEDGEKEURD');
@@ -130,7 +130,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error || 'Weigeren van ruil mislukt');
+        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Weigeren van ruil mislukt');
       }
 
       updateSwapStatus(swapId, 'AFGEWEZEN');
@@ -151,7 +151,7 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error(data?.error || 'Intrekken van ruilverzoek mislukt');
+        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Intrekken van ruilverzoek mislukt');
       }
 
       updateSwapStatus(swapId, 'INGETROKKEN');

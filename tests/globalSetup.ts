@@ -26,6 +26,10 @@ function resolveTestDbPath(): string {
 }
 
 export function setup(): void {
+  // See vitest.config.ts - the timezone the app runs in, unless a run
+  // deliberately asks for another one.
+  process.env.TZ = process.env.TZ || 'Europe/Amsterdam';
+
   const dbPath = resolveTestDbPath();
 
   // A stray DATABASE_URL in the shell (say, from running the app against a

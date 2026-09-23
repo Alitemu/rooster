@@ -9,6 +9,8 @@ import {
   syncAvailabilityForPattern,
   removePatternAvailability,
   syncAvailabilityForPeriod,
+  getOpenPeriodsForPerson,
+  findDeadlinePassedOverlappingPeriods,
   type PatternRule,
 } from '@/lib/parttimeSync';
 
@@ -430,6 +432,49 @@ describe('parttimeSync', () => {
         .prepare('SELECT COUNT(*) as count FROM dienstrooster_availability WHERE bron_pattern_id = ?')
         .get(patternId) as { count: number };
       expect(remaining.count).toBe(0);
+    });
+  });
+
+  describe('deadline (stored as a naive local datetime-local value)', () => {
+    // The planner's datetime-local input stores "2027-01-15T17:00" with no
+    // timezone - the ward's local time. Comparing that string against
+    // now.toISOString() (UTC) read it as UTC, so in Amsterdam absences and
+    // part-time patterns kept being written into the period for one hour
+    // (winter) or two (summer) after the deadline had passed on everyone's
+    // screen. The suite runs in Europe/Amsterdam (tests/globalSetup.ts),
+    // like docker-compose.yml pins for the app.
+
+    it('treats the period as closed for input half an hour after a winter deadline', () => {
+      const fixture = trackFixture(createFixture('2027-02-01', '2027-02-07'));
+      db.prepare(`UPDATE dienstrooster_schedule_period SET deadline = '2027-01-15T17:00' WHERE id = ?`).run(
+        fixture.periodId
+      );
+      const halfHourLate = new Date('2027-01-15T17:30:00+01:00');
+      const halfHourEarly = new Date('2027-01-15T16:30:00+01:00');
+
+      expect(getOpenPeriodsForPerson(fixture.personId, halfHourEarly)).toContain(fixture.periodId);
+      expect(getOpenPeriodsForPerson(fixture.personId, halfHourLate)).not.toContain(fixture.periodId);
+      expect(
+        findDeadlinePassedOverlappingPeriods(fixture.personId, '2027-02-01', '2027-02-07', halfHourLate).map((p) => p.id)
+      ).toContain(fixture.periodId);
+    });
+
+    it('does the same 1h45 after a summer deadline (UTC+2)', () => {
+      const fixture = trackFixture(createFixture('2027-07-05', '2027-07-11'));
+      db.prepare(`UPDATE dienstrooster_schedule_period SET deadline = '2027-06-15T17:00' WHERE id = ?`).run(
+        fixture.periodId
+      );
+      expect(getOpenPeriodsForPerson(fixture.personId, new Date('2027-06-15T18:45:00+02:00'))).not.toContain(
+        fixture.periodId
+      );
+    });
+
+    it('leaves a period in the trash out altogether', () => {
+      const fixture = trackFixture(createFixture('2027-02-01', '2027-02-07'));
+      db.prepare(`UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?`).run(
+        fixture.periodId
+      );
+      expect(getOpenPeriodsForPerson(fixture.personId)).not.toContain(fixture.periodId);
     });
   });
 });

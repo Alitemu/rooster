@@ -22,6 +22,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { validateLedgerDelta } from '@/lib/ledgerDelta';
 import { validateSingleLine } from '@/lib/vrijeTekst';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
 
@@ -73,7 +74,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         success: false,
         error: {
           code: 'INVALID_STATUS',
-          message: `Correcties kunnen niet meer toegepast worden op een periode in status ${period.status}`,
+          message: `Correcties kunnen niet meer toegepast worden op een periode in status "${periodStatusLabel(period.status)}"`,
         },
       };
       return NextResponse.json(response, { status: 400 });

@@ -16,7 +16,7 @@
  */
 
 import { db } from '@/db/client';
-import { getOpenPeriodsForPerson } from '@/lib/parttimeSync';
+import { getOpenPeriodsForPerson, releaseSourceAvailability } from '@/lib/parttimeSync';
 
 export interface AbsenceRow {
   id: string;
@@ -188,15 +188,13 @@ export function syncAbsencesForPerson(personId: string): SyncResult {
 }
 
 /**
- * Hard-removes every availability row this absence generated, in every
- * period regardless of status. Must run before deleting the absence row
- * itself - bron_absence_id has no ON DELETE clause and foreign_keys=ON.
+ * Releases this absence's availability rows before the absence row itself
+ * is deleted - removed where the period still accepts input, kept (just
+ * unlinked) where its input is already frozen. See
+ * lib/parttimeSync.ts's releaseSourceAvailability.
  */
-export function removeAbsenceAvailability(absenceId: string): { deleted: number } {
-  const result = db
-    .prepare('DELETE FROM dienstrooster_availability WHERE bron_absence_id = ?')
-    .run(absenceId);
-  return { deleted: result.changes };
+export function removeAbsenceAvailability(absenceId: string): { deleted: number; kept: number } {
+  return releaseSourceAvailability('bron_absence_id', absenceId);
 }
 
 /**

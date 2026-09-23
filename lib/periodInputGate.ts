@@ -10,6 +10,8 @@
  * happened to close the period exactly on time.
  */
 
+import { periodStatusLabel } from '@/lib/statusLabels';
+
 export interface PeriodForInputGate {
   status: string;
   deadline: string;
@@ -36,16 +38,28 @@ export function buildDeadlinePassedWarning(periods: Array<{ naam: string }>): st
     : `Let op: voor de periodes ${namen} is de deadline al verstreken - dit is daar niet in verwerkt.`;
 }
 
+/**
+ * The one place that decides whether a deadline has passed. A deadline is
+ * stored as the planner's datetime-local input sent it (no timezone, e.g.
+ * "2027-01-15T17:00"), which `new Date()` reads as local time - the ward's
+ * own clock, pinned via TZ in docker-compose.yml, and the same reading the
+ * participant's browser gives it. Never compare the stored string against
+ * an ISO timestamp as text: that silently treats it as UTC instead.
+ */
+export function deadlinePassed(deadline: string, now: Date = new Date()): boolean {
+  return now > new Date(deadline);
+}
+
 export function checkPeriodAcceptsInput(period: PeriodForInputGate, now: Date = new Date()): InputGateResult {
   if (period.status !== 'OPEN') {
     return {
       allowed: false,
       code: 'PERIOD_NOT_OPEN',
-      message: `Voorkeuren zijn alleen-lezen zodra de periode in status ${period.status} staat`,
+      message: `Voorkeuren zijn alleen-lezen zodra de periode de status "${periodStatusLabel(period.status)}" heeft`,
     };
   }
 
-  if (now > new Date(period.deadline)) {
+  if (deadlinePassed(period.deadline, now)) {
     return {
       allowed: false,
       code: 'DEADLINE_PASSED',

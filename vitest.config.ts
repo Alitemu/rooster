@@ -19,6 +19,15 @@ export default defineConfig({
     env: {
       DATABASE_URL: 'file:./.test-data/rooster.test.db',
     },
+    // The same timezone docker-compose.yml pins for the app. Deadlines are
+    // stored as naive local times (a datetime-local value), so date logic
+    // only means what it means in production when tests run in that zone
+    // too - under UTC a deadline bug that is an hour off in Amsterdam
+    // simply doesn't show. Set in globalSetup (the main process, before
+    // any worker starts): a timezone change made inside a worker thread
+    // does not reliably reach Date.
+    //
+    // (tests/globalSetup.ts)
     globalSetup: ['./tests/globalSetup.ts'],
     // Test files share one real SQLite database (CLAUDE.md: "No DB mocks -
     // use seed fixtures with real SQLite"), and SQLite in WAL mode allows a

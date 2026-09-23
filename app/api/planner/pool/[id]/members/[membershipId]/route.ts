@@ -14,6 +14,8 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { setPendingUndo } from '@/lib/pendingUndo';
+import { syncAbsencesForPerson } from '@/lib/absenceSync';
+import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateMembershipRequest {
@@ -131,6 +133,11 @@ export async function PATCH(
     db.prepare(
       `UPDATE dienstrooster_pool_membership SET geldig_vanaf = ?, geldig_tot = ?, deelnamefactor = ? WHERE id = ?`
     ).run(geldig_vanaf, geldig_tot, deelnamefactor, membershipId);
+
+    // A widened range can bring the person into a period that is already
+    // open - same backfill as adding a member (see members/route.ts).
+    syncAbsencesForPerson(membership.person_id);
+    syncPatternsForPerson(membership.person_id);
 
     const response: ApiSuccessResponse<{ id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }> = {
       success: true,

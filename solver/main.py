@@ -6,11 +6,13 @@ Phase 1: Infrastructure and data models
 Phase 2: Constraint implementation and solver execution
 """
 
+import asyncio
+import functools
 import logging
 import os
 import time
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from typing import Literal, Optional
@@ -394,6 +396,33 @@ class SolverOutput(BaseModel):
 # Endpoints
 # ============================================================================
 
+async def _run_in_thread(raw_request: Request, on_disconnect, work):
+    """
+    Run a blocking solve off the event loop, stopping it if the caller
+    hangs up.
+
+    Both endpoints used to be `async def` doing their CPU-bound work right
+    on the event loop, so for the whole of a solve (up to 600s) this
+    service answered nothing else: the Docker healthcheck timed out and
+    marked the container unhealthy, a second request queued behind the
+    first, and when Next.js gave up on a request (the planner pressing
+    "Annuleren") the solve still ran to its full time limit - burning CPU
+    and delaying the retry that usually follows straight after.
+
+    Now the work runs in a worker thread while this coroutine keeps the
+    loop free, checking once a second whether the client is still there.
+    Once it is gone, `on_disconnect` (RosterSolver.request_stop) is called
+    - repeatedly, until the thread finishes; see request_stop for why.
+    """
+    task = asyncio.ensure_future(asyncio.to_thread(work))
+    while True:
+        done, _ = await asyncio.wait({task}, timeout=1.0)
+        if done:
+            return task.result()
+        if on_disconnect is not None and await raw_request.is_disconnected():
+            on_disconnect()
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health():
     """Health check endpoint for orchestration"""
@@ -416,7 +445,7 @@ async def root():
 
 
 @app.post("/solve", response_model=SolverOutput)
-async def solve_roster(request: SolverInput):
+async def solve_roster(request: SolverInput, raw_request: Request):
     """
     Generate roster assignments using CP-SAT solver.
 
@@ -487,7 +516,8 @@ async def solve_roster(request: SolverInput):
 
         # Run solver
         solver = RosterSolver(time_limit_seconds=request.time_limit_seconds)
-        result = solver.generate_roster(
+        result = await _run_in_thread(raw_request, solver.request_stop, functools.partial(
+            solver.generate_roster,
             period_id=request.period_id,
             people=request.people,
             slots=[s.model_dump() for s in request.slots],
@@ -513,7 +543,7 @@ async def solve_roster(request: SolverInput):
             random_seed=request.rules.random_seed,
             window_weeks_avond=request.rules.window_weeks_avond,
             window_weeks_weekend_feestdag=request.rules.window_weeks_weekend_feestdag
-        )
+        ))
 
         if not result['success']:
             logger.warning(f"Solver did not find optimal solution: {result['diagnostics']}")
@@ -553,7 +583,7 @@ async def solve_roster(request: SolverInput):
 
 
 @app.post("/solve-greedy", response_model=SolverOutput)
-async def solve_roster_greedy(request: GreedySolverInput):
+async def solve_roster_greedy(request: GreedySolverInput, raw_request: Request):
     """
     One randomized greedy-construction attempt ("Gerandomiseerde planner") -
     see greedy.py's module docstring for the algorithm itself and why it
@@ -593,7 +623,10 @@ async def solve_roster_greedy(request: GreedySolverInput):
             'FEESTDAG': request.rules.band_feestdag,
         }
 
-        result = run_greedy_construction(
+        # A single greedy attempt is quick and has no search to interrupt -
+        # it only needs to stay off the event loop.
+        result = await _run_in_thread(raw_request, None, functools.partial(
+            run_greedy_construction,
             people=request.people,
             slots=[s.model_dump() for s in request.slots],
             blocked_slots=blocked_slots,
@@ -612,7 +645,7 @@ async def solve_roster_greedy(request: GreedySolverInput):
             random_seed=request.rules.random_seed,
             window_weeks_avond=request.rules.window_weeks_avond,
             window_weeks_weekend_feestdag=request.rules.window_weeks_weekend_feestdag,
-        )
+        ))
 
         assignments = [Assignment(**a) for a in result['assignments']]
         diagnostics = SolverDiagnostics(**result['diagnostics'])

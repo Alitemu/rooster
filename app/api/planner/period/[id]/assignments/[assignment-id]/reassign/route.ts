@@ -17,13 +17,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
 import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
+import { isEligibleForPeriod } from '@/lib/rosterGaps';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
@@ -47,7 +48,7 @@ export async function POST(
     const assignmentId = params['assignment-id'];
     const body = await parseJsonBody(request);
     const { person_id: newPersonId, reason } = body;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     if (!newPersonId) {
       return NextResponse.json(
@@ -72,7 +73,7 @@ export async function POST(
     // swapped to someone else before the solver ever runs.
     if (!['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
+        { success: false, error: `Toewijzingen aanpassen kan niet in status "${periodStatusLabel(period.status)}"` },
         { status: 400 }
       );
     }
@@ -112,6 +113,14 @@ export async function POST(
       return NextResponse.json(
         { success: false, error: 'Persoon niet gevonden' },
         { status: 404 }
+      );
+    }
+
+    // Same rule as manual-assign - see isEligibleForPeriod.
+    if (!isEligibleForPeriod(periodId, newPersonId as string)) {
+      return NextResponse.json(
+        { success: false, error: 'Deze persoon is in deze periode geen actief lid van de pool' },
+        { status: 400 }
       );
     }
 

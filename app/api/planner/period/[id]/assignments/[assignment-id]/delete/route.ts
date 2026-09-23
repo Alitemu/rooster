@@ -7,10 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 export async function DELETE(
   request: NextRequest,
@@ -28,7 +28,7 @@ export async function DELETE(
     const assignmentId = params['assignment-id'];
     const body = await parseJsonBody(request);
     const { reason } = body;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     // Verify period exists
     const period = db
@@ -47,7 +47,7 @@ export async function DELETE(
     // undone before the solver ever runs.
     if (!['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
+        { success: false, error: `Toewijzingen aanpassen kan niet in status "${periodStatusLabel(period.status)}"` },
         { status: 400 }
       );
     }

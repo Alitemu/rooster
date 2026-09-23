@@ -32,6 +32,7 @@ Two objective modes, selectable per period (RuleSet.objective_mode):
 """
 
 import logging
+import threading
 import time
 from ortools.sat.python import cp_model
 from typing import Optional
@@ -62,6 +63,29 @@ class RosterSolver:
         # on different (equally or less optimal) solutions instead of
         # deterministically reproducing the same one every time.
         self.random_seed: Optional[int] = None
+        # Set from another thread (main.py, when the caller hangs up) - see
+        # request_stop().
+        self._stop_event = threading.Event()
+
+    def request_stop(self) -> None:
+        """
+        Ask a running solve to stop as soon as possible. Safe to call from
+        another thread, and repeatedly: CpSolver.StopSearch() is itself
+        thread-safe, and the flag makes any phase that has not started its
+        own Solve() yet run with no time budget at all. main.py calls this
+        in a loop for as long as the solve is still running after the
+        client disconnected, which also covers the instant between a new
+        phase creating its CpSolver and actually entering Solve(), where
+        StopSearch() alone would be a no-op.
+        """
+        self._stop_event.set()
+        current = self.solver
+        if current is not None:
+            current.StopSearch()
+
+    def _apply_stop_request(self) -> None:
+        if self._stop_event.is_set():
+            self.solver.parameters.max_time_in_seconds = 0.0
 
     # ========================================================================
     # Model Building
@@ -330,6 +354,7 @@ class RosterSolver:
         # so it follows the service's own log level instead of being on
         # unconditionally.
         self.solver.parameters.log_search_progress = logger.isEnabledFor(logging.DEBUG)
+        self._apply_stop_request()
 
         self.status = self.solver.Solve(model_data['model'])
 
@@ -415,6 +440,7 @@ class RosterSolver:
             if self.random_seed is not None:
                 self.solver.parameters.random_seed = self.random_seed
             self.solver.parameters.log_search_progress = logger.isEnabledFor(logging.DEBUG)
+            self._apply_stop_request()
             self.status = self.solver.Solve(model)
             ok = self.status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
             value = self.solver.ObjectiveValue() if ok else None

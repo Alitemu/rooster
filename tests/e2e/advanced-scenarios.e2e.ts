@@ -331,7 +331,12 @@ test.describe('Input gate - E2E', () => {
       await page.waitForLoadState('networkidle');
     }
 
-    expect(await page.locator('button[title*="rechtsklik voor opties"]:not([disabled])').count()).toBeGreaterThan(0);
+    // Wait for the calendar first, like the closed-period test above does -
+    // count() does not wait, so counting straight after the tab switch
+    // raced the calendar's own data fetch and sometimes saw zero cells.
+    const editable = page.locator('button[title*="rechtsklik voor opties"]:not([disabled])');
+    await expect(editable.first()).toBeVisible();
+    expect(await editable.count()).toBeGreaterThan(0);
     await expect(page.getByText(/De roosteraar heeft deze periode gesloten/)).toHaveCount(0);
   });
 });

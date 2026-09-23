@@ -296,6 +296,42 @@ describe('absenceSync', () => {
         .get(absenceId) as { count: number };
       expect(remaining.count).toBe(0);
     });
+
+    it('keeps the blocks in a period whose input is frozen, only unlinked from the absence', () => {
+      // Deleting a vacation after the roster was generated used to strip
+      // its ABSOLUUT rows out of that roster's input too, so the
+      // publication check stopped flagging a shift planned on those days.
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+      const absenceId = createAbsence(fixture.personId, '2027-01-04', '2027-01-06');
+      syncAvailabilityForAbsence(absenceId);
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(fixture.periodId);
+
+      const result = removeAbsenceAvailability(absenceId);
+      db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(absenceId);
+
+      expect(result).toEqual({ deleted: 0, kept: 3 });
+      const rows = db
+        .prepare(
+          `SELECT a.blocking_level, a.source, a.bron_absence_id FROM dienstrooster_availability a
+           JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+           WHERE a.person_id = ? AND s.period_id = ?`
+        )
+        .all(fixture.personId, fixture.periodId) as Array<{ blocking_level: string; bron_absence_id: string | null }>;
+      expect(rows).toHaveLength(3);
+      expect(rows.every((r) => r.blocking_level === 'ABSOLUUT' && r.bron_absence_id === null)).toBe(true);
+    });
+
+    it('treats an OPEN period whose deadline has passed as frozen as well', () => {
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+      const absenceId = createAbsence(fixture.personId, '2027-01-04', '2027-01-04');
+      syncAvailabilityForAbsence(absenceId);
+      db.prepare(`UPDATE dienstrooster_schedule_period SET deadline = '2020-01-01T00:00' WHERE id = ?`).run(
+        fixture.periodId
+      );
+
+      expect(removeAbsenceAvailability(absenceId)).toEqual({ deleted: 0, kept: 1 });
+      db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(absenceId);
+    });
   });
 
   describe('syncAvailabilityForPeriod', () => {

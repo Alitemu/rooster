@@ -8,11 +8,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 interface PublishRequest {
   /**
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const publishedByPersonId = auth!.userId;
 
     const periodId = params.id;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
     const body = await parseJsonBody<PublishRequest>(request);
 
     // Verify period exists
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     if (period.status !== 'GEGENEREERD') {
       return NextResponse.json(
-        { success: false, error: `Periode kan niet gepubliceerd worden vanuit status ${period.status}` },
+        { success: false, error: `Periode kan niet gepubliceerd worden vanuit status "${periodStatusLabel(period.status)}"` },
         { status: 400 }
       );
     }

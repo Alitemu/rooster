@@ -18,34 +18,47 @@ interface StaffLoginRequest {
   totpCode?: string;
 }
 
-// 10 FAILED attempts per 15 minutes per client - enough for a human who
+// 10 FAILED attempts per 15 minutes per account - enough for a human who
 // fumbles a password or TOTP code a few times, tight enough that
 // brute-forcing either is impractical. Successful logins deliberately
 // don't count: every staff member shares one hospital NAT address, so
 // counting them meant the 11th ordinary login of the afternoon was
 // refused (see lib/rateLimit.ts).
+//
+// Counted per codenaam, not per client address alone: the whole hospital
+// reaches this through one NAT address, so with a single per-address
+// bucket anyone on the ward network could lock every planner out for 15
+// minutes with ten wrong guesses at a made-up account. Now wrong guesses
+// only count against the account they were aimed at. A second, wider
+// per-address bucket still caps guessing spread over many codenamen.
 const MAX_ATTEMPTS = 10;
+const MAX_ATTEMPTS_PER_CLIENT = 50;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const rateLimitKey = `staff-login:${getClientIp(req)}`;
-    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
-    }
-
     const body = await parseJsonBody<StaffLoginRequest>(req);
     const { codenaam, password, totpCode } = body;
 
-    if (!codenaam || !password) {
+    if (typeof codenaam !== 'string' || typeof password !== 'string' || !codenaam || !password) {
       return NextResponse.json(
         { success: false, error: { code: 'MISSING_FIELDS', message: 'Codenaam en wachtwoord zijn verplicht' } },
         { status: 400 }
       );
     }
 
+    const clientIp = getClientIp(req);
+    const clientKey = `staff-login-client:${clientIp}`;
+    const rateLimitKey = `staff-login:${clientIp}:${codenaam.toLowerCase()}`;
+    for (const [key, max] of [[rateLimitKey, MAX_ATTEMPTS], [clientKey, MAX_ATTEMPTS_PER_CLIENT]] as const) {
+      const rateLimit = checkRateLimit(key, max);
+      if (!rateLimit.allowed) {
+        return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
+      }
+    }
+
     const invalidCredentials = () => {
       recordAttempt(rateLimitKey);
+      recordAttempt(clientKey);
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Ongeldige inloggegevens' } },
         { status: 401 }
@@ -83,7 +96,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     if (person.totp_secret) {
-      if (!totpCode || !isValidTOTPFormat(totpCode)) {
+      if (typeof totpCode !== 'string' || !isValidTOTPFormat(totpCode)) {
         // Not counted: the password was right, this is the normal first
         // half of a two-step login, not a failed guess.
         return NextResponse.json(

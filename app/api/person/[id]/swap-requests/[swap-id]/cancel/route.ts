@@ -12,9 +12,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse } from '@/lib/api-errors';
+import { swapStatusLabel } from '@/lib/statusLabels';
 
 class SwapAlreadyHandledError extends Error {}
 
@@ -31,7 +31,7 @@ export async function POST(
     if (denied) return denied;
 
     const swapId = params['swap-id'];
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     const swapRequest = db
       .prepare('SELECT * FROM dienstrooster_swap_request WHERE id = ?')
@@ -53,7 +53,7 @@ export async function POST(
 
     if (swapRequest.status !== 'PENDING') {
       return NextResponse.json(
-        { success: false, error: `Kan een verzoek met status ${swapRequest.status} niet intrekken` },
+        { success: false, error: `Kan een verzoek met status "${swapStatusLabel(swapRequest.status)}" niet intrekken` },
         { status: 400 }
       );
     }

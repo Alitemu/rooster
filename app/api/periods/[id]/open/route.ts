@@ -19,6 +19,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 interface BlockBudgetPerTeller {
   AVOND: { maxFraction: number };
@@ -183,7 +184,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (period.status !== 'CONCEPT') {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_STATUS', message: `Periode kan niet geopend worden vanuit status ${period.status}` },
+        error: { code: 'INVALID_STATUS', message: `Periode kan niet geopend worden vanuit status "${periodStatusLabel(period.status)}"` },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -218,11 +219,37 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 400 });
     }
 
-    // Generate slots before touching the period row - if this fails (e.g.
-    // pool is missing a shift type), the period stays in CONCEPT rather
-    // than ending up OPEN with nothing for staff to block against.
-    const slotResult = persistSlotsForPeriod(id, period.pool_id, start_datum, eind_datum);
+    // One transaction for all of it: slots, the status change, the
+    // part-time/absence backfill and the carry-over. As separate steps, a
+    // failure after the status change left the period OPEN without its
+    // carry-over - and since this route only accepts CONCEPT, there was
+    // no way to retry it. The slots still go first inside it, so a
+    // missing shift type rolls everything back and leaves CONCEPT as is.
+    const opened = db.transaction(() => {
+      const slotResult = persistSlotsForPeriod(id, period.pool_id, start_datum, eind_datum);
+      if (!slotResult.success) return { slotResult, carryOverEntries: 0 };
 
+      db.prepare(
+        `UPDATE dienstrooster_schedule_period
+         SET naam = ?, start_datum = ?, eind_datum = ?, deadline = ?,
+             bevroren_ruleset_json = ?, status = 'OPEN', row_version = row_version + 1
+         WHERE id = ?`
+      ).run(naam, start_datum, eind_datum, deadline, JSON.stringify(ruleset), id);
+
+      // Backfill part-time blocking now that the period is OPEN and pool
+      // members can see it
+      syncAvailabilityForPeriod(id);
+      syncAbsenceAvailabilityForPeriod(id);
+
+      // Roll forward what people over- or under-worked in the pool's last
+      // published period. Done here rather than at publish time because the
+      // entries have to be booked against a period that exists, and when a
+      // period is published its successor usually hasn't been created yet.
+      const carryOverEntries = applyCarryOverForPeriod(id, auth!.userId);
+      return { slotResult, carryOverEntries };
+    })();
+
+    const { slotResult, carryOverEntries } = opened;
     if (!slotResult.success) {
       const response: ApiErrorResponse = {
         success: false,
@@ -230,24 +257,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       };
       return NextResponse.json(response, { status: 400 });
     }
-
-    db.prepare(
-      `UPDATE dienstrooster_schedule_period
-       SET naam = ?, start_datum = ?, eind_datum = ?, deadline = ?,
-           bevroren_ruleset_json = ?, status = 'OPEN', row_version = row_version + 1
-       WHERE id = ?`
-    ).run(naam, start_datum, eind_datum, deadline, JSON.stringify(ruleset), id);
-
-    // Backfill part-time blocking now that the period is OPEN and pool
-    // members can see it
-    syncAvailabilityForPeriod(id);
-    syncAbsenceAvailabilityForPeriod(id);
-
-    // Roll forward what people over- or under-worked in the pool's last
-    // published period. Done here rather than at publish time because the
-    // entries have to be booked against a period that exists, and when a
-    // period is published its successor usually hasn't been created yet.
-    const carryOverEntries = applyCarryOverForPeriod(id, auth!.userId);
 
     const response: ApiSuccessResponse<OpenPeriodResponse> = {
       success: true,

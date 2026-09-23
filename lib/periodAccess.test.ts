@@ -14,6 +14,7 @@ import { GET as periodDetail } from '@/app/api/periods/[id]/route';
 import { GET as preferences } from '@/app/api/person/[id]/preferences/[periodId]/route';
 import { GET as coverage } from '@/app/api/person/[id]/preferences/[periodId]/coverage/route';
 import { PATCH as setSlotPreference } from '@/app/api/person/[id]/preferences/slot/[slotId]/route';
+import { POST as submitPreferences } from '@/app/api/person/[id]/preferences/submission/route';
 
 /**
  * The hard rule: a participant reaches only the periods they belong to.
@@ -182,6 +183,20 @@ describe('isPeriodVisibleToPerson', () => {
     expect(isPeriodVisibleToPerson(outsider, period)).toBe(false);
   });
 
+  it('is false for a period in the trash, even for a member of its pool', () => {
+    // verify-link already stops resolving a trashed period; a session
+    // opened before it went to the trash must not keep reaching it.
+    const mine = createPoolWithPeriod();
+    const person = createMember(mine.poolId);
+    db.prepare(`UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?`).run(
+      mine.periodId
+    );
+    const period = db
+      .prepare('SELECT id, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(mine.periodId) as never;
+    expect(isPeriodVisibleToPerson(person, period)).toBe(false);
+  });
+
   it('is false for a membership whose dates do not overlap the period', () => {
     const pool = createPoolWithPeriod();
     const leaver = createMember(pool.poolId);
@@ -248,6 +263,24 @@ describe('another pool\'s period is out of reach', () => {
       .prepare('SELECT COUNT(*) AS c FROM dienstrooster_availability WHERE slot_id = ? AND person_id = ?')
       .get(theirs.slotId, outsider) as { c: number };
     expect(written.c).toBe(0);
+  });
+
+  it('when submitting preferences for it, and no submission is recorded', async () => {
+    const theirs = createPoolWithPeriod();
+    const outsider = createMember(createPoolWithPeriod().poolId);
+
+    const res = await submitPreferences(
+      request(outsider, `/api/person/${outsider}/preferences/submission`, {
+        method: 'POST',
+        body: JSON.stringify({ period_id: theirs.periodId, vacation_confirmed: true, parttime_confirmed: true }),
+      }),
+      { params: Promise.resolve({ id: outsider }) }
+    );
+    expect(res.status).toBe(404);
+    const count = db
+      .prepare('SELECT COUNT(*) AS c FROM dienstrooster_submission WHERE person_id = ?')
+      .get(outsider) as { c: number };
+    expect(count.c).toBe(0);
   });
 
   it('but their own period stays reachable on every one of those routes', async () => {

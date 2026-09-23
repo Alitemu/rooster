@@ -119,7 +119,6 @@ export default function PriorAssignmentsPage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodId]);
 
   const handleAutoDerive = async () => {

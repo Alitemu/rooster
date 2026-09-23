@@ -35,6 +35,20 @@ export async function PATCH(
     };
     const { level } = body; // ABSOLUUT, LIEVER_NIET, VOORKEUR, or null to clear
 
+    // An explicit null clears; anything else must be one of the three
+    // levels. A missing level used to fall through to the write below as
+    // a NULL blocking_level with source MANUAL - which, via its ON CONFLICT
+    // branch, silently took a slot over from an absence or part-time
+    // pattern and unblocked it. An unknown string hit the CHECK constraint
+    // and came back as a 500.
+    if (level !== null && level !== 'ABSOLUUT' && level !== 'LIEVER_NIET' && level !== 'VOORKEUR') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_LEVEL', message: 'Kies geblokkeerd, liever niet, voorkeur of leeg' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Verify person exists
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);
     if (!personStmt.get(id)) {

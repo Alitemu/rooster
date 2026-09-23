@@ -11,6 +11,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { syncAbsencesForPerson } from '@/lib/absenceSync';
+import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { getPendingUndo, clearPendingUndo } from '@/lib/pendingUndo';
@@ -76,6 +78,9 @@ export async function POST(
     }
 
     clearPendingUndo(poolId);
+    // Same backfill as adding a member - see members/route.ts.
+    syncAbsencesForPerson(payload.person_id);
+    syncPatternsForPerson(payload.person_id);
     const response: ApiSuccessResponse<{ undone: true; label: string }> = {
       success: true,
       data: { undone: true, label: pending.label },

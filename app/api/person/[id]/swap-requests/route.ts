@@ -8,7 +8,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
@@ -99,7 +98,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     const body = await parseJsonBody(request);
     const { period_id, offered_slot_id, requested_slot_id, notes } = body;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     if (!period_id || !offered_slot_id || !requested_slot_id) {
       return NextResponse.json(

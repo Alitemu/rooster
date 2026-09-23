@@ -17,7 +17,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { getPendingUndo, clearPendingUndo } from '@/lib/pendingUndo';
@@ -41,7 +40,7 @@ export async function POST(
     const periodId = params.id;
     const body = await parseJsonBody<UndoRequest>(request);
     const reason = body.reason?.trim() || null;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     const pending = getPendingUndo(periodId);
     if (!pending || pending.scope !== 'PERIOD_ASSIGNMENT') {

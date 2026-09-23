@@ -137,6 +137,29 @@ export function clearSolverAssignments(periodId: string): number {
  * already-assigned reassign flow in the assignments grid, so both offer the
  * same notion of "who is actually eligible".
  */
+/**
+ * True when this person is an active member of the period's pool for
+ * dates overlapping the period - exactly who getEligiblePeopleForSlot
+ * lists. The manual-assign and reassign routes check it too, so a request
+ * built by hand can't put someone on a roster the dropdown would never
+ * have offered (a deactivated person, one from another pool).
+ */
+export function isEligibleForPeriod(periodId: string, personId: string): boolean {
+  return Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM dienstrooster_schedule_period sp
+         JOIN dienstrooster_pool_membership pm ON pm.pool_id = sp.pool_id
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE sp.id = ? AND pm.person_id = ?
+           AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum
+           AND p.actief = 1
+         LIMIT 1`
+      )
+      .get(periodId, personId)
+  );
+}
+
 export function getEligiblePeopleForSlot(
   periodId: string,
   slotId: string,

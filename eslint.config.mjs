@@ -1,6 +1,6 @@
 import nextConfig from 'eslint-config-next';
 
-export default [
+const config = [
   ...nextConfig,
   {
     rules: {
@@ -14,4 +14,14 @@ export default [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
   },
+  {
+    // Command-line tools (seed, checks, maintenance): printing progress to
+    // the terminal is their whole output, not a leftover debug statement.
+    files: ['scripts/**', 'solver/**', 'tests/**'],
+    rules: {
+      'no-console': 'off',
+    },
+  },
 ];
+
+export default config;

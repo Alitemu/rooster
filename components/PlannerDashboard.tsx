@@ -26,6 +26,7 @@ import { RosterPublicationDialog } from './RosterPublicationDialog';
 import { RebalanceSuggestions } from './RebalanceSuggestions';
 import { FillGapsSummary } from './FillGapsSummary';
 import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 interface PersonProgress {
   person_id: string;
@@ -583,7 +584,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           )}
         </div>
         <p className="text-xs text-neutral-500 mt-2">
-          Status: <span className="font-semibold">{dashboard.status}</span>
+          Status: <span className="font-semibold">
+            {periodStatusLabel(dashboard.status).charAt(0).toUpperCase() + periodStatusLabel(dashboard.status).slice(1)}
+          </span>
         </p>
       </div>
 

@@ -7,10 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+import { swapStatusLabel } from '@/lib/statusLabels';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -35,7 +35,7 @@ export async function POST(
     const swapId = params['swap-id'];
     const body = await parseJsonBody(request);
     const { reason } = body;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     // Verify swap request exists and person is respondent
     const swapRequest = db
@@ -58,7 +58,7 @@ export async function POST(
 
     if (swapRequest.status !== 'PENDING') {
       return NextResponse.json(
-        { success: false, error: `Kan een verzoek met status ${swapRequest.status} niet weigeren` },
+        { success: false, error: `Kan een verzoek met status "${swapStatusLabel(swapRequest.status)}" niet weigeren` },
         { status: 400 }
       );
     }

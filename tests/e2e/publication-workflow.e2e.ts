@@ -138,8 +138,8 @@ test.describe('Roster Publication Workflow - E2E', () => {
     // the period, so a stale badge after publishing is a real regression.
     // Regex, not an exact string: the badge carries a nested span with the
     // publication timestamp beside the label.
-    await expect(page.getByText(/✅ Gepubliceerd/)).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Status: GEPUBLICEERD')).toBeVisible();
+    await expect(page.getByText(/✅ Status: Gepubliceerd/)).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText('Status: Gepubliceerd', { exact: true })).toBeVisible();
 
     const period = db
       .prepare(
@@ -177,7 +177,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
     expect(res.status()).toBe(400);
     const body = await res.json();
-    expect(String(body.error)).toMatch(/GEPUBLICEERD/);
+    expect(String(body.error)).toMatch(/status "gepubliceerd"/);
   });
 
   test('staff see their own shifts on a published roster', async ({ browser }) => {

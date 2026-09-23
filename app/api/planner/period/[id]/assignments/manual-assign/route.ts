@@ -16,13 +16,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
 import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
+import { isEligibleForPeriod } from '@/lib/rosterGaps';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const periodId = params.id;
     const body = await parseJsonBody(request);
     const { person_id, slot_id, reason } = body;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     if (!person_id || !slot_id) {
       return NextResponse.json(
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // afterward - see generate-roster/route.ts's manual_assignments handling.
     if (!['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Toewijzingen aanpassen kan niet in status ${period.status}` },
+        { success: false, error: `Toewijzingen aanpassen kan niet in status "${periodStatusLabel(period.status)}"` },
         { status: 400 }
       );
     }
@@ -107,10 +108,22 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       )
       .get(slot_id) as any;
 
-    if (!slot) {
+    // The slot has to belong to this period: the assignment row is filed
+    // under periodId (schedule_version_id), so a slot id from another
+    // period would otherwise produce an assignment that sits in this
+    // roster for a date it doesn't even cover.
+    if (!slot || slot.period_id !== periodId) {
       return NextResponse.json(
         { success: false, error: 'Dienst niet gevonden' },
         { status: 404 }
+      );
+    }
+
+    // Same people the planner's own dropdown offers - see isEligibleForPeriod.
+    if (!isEligibleForPeriod(periodId, person_id as string)) {
+      return NextResponse.json(
+        { success: false, error: 'Deze persoon is in deze periode geen actief lid van de pool' },
+        { status: 400 }
       );
     }
 

@@ -16,6 +16,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { parseISO } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 interface UpdateDeadlineRequest {
   deadline: string;
@@ -63,7 +64,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         success: false,
         error: {
           code: 'INVALID_STATUS',
-          message: `Deadline kan niet aangepast worden in status ${period.status}`,
+          message: `Deadline kan niet aangepast worden in status "${periodStatusLabel(period.status)}"`,
         },
       };
       return NextResponse.json(response, { status: 400 });

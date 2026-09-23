@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
@@ -76,9 +77,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
 
     // Verify period exists and still accepts submissions
-    const periodStmt = db.prepare(`SELECT id, status, deadline FROM dienstrooster_schedule_period WHERE id = ?`);
-    const period = periodStmt.get(period_id) as { id: string; status: string; deadline: string } | undefined;
-    if (!period) {
+    const periodStmt = db.prepare(
+      `SELECT id, status, deadline, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?`
+    );
+    const period = periodStmt.get(period_id) as
+      | { id: string; status: string; deadline: string; pool_id: string; start_datum: string; eind_datum: string }
+      | undefined;
+    // Same scoping as the slot route: submitting for a period you have
+    // nothing to do with (another pool's) is treated as not existing.
+    if (!period || (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(id, period))) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${period_id} niet gevonden` },

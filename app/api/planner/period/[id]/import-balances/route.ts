@@ -11,6 +11,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { validateLedgerDelta } from '@/lib/ledgerDelta';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 interface BalanceRow {
   codenaam: string;
@@ -56,7 +57,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         success: false,
         error: {
           code: 'INVALID_STATUS',
-          message: `Beginsaldi kunnen niet meer geïmporteerd worden voor een periode in status ${period.status}`,
+          message: `Beginsaldi kunnen niet meer geïmporteerd worden voor een periode in status "${periodStatusLabel(period.status)}"`,
         },
       };
       return NextResponse.json(response, { status: 400 });

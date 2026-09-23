@@ -266,4 +266,25 @@ describe('PATCH /api/person/[id]/preferences/slot/[slotId]', () => {
       .get(f.personId, f.periodId) as { status: string } | undefined;
     expect(submission?.status).toBe('BEZIG');
   });
+
+  it('refuses a request without a level, and leaves the pattern-owned block alone', async () => {
+    // A missing level used to be written as blocking_level NULL with
+    // source MANUAL - taking this slot over from the part-time pattern
+    // and so unblocking a part-time free day without anyone choosing to.
+    const f = createFixture();
+    const res = await patch(f.personId, f.mondaySlotId, undefined as never);
+    expect(res.status).toBe(400);
+    expect(row(f.personId, f.mondaySlotId)).toMatchObject({
+      blocking_level: 'ABSOLUUT',
+      source: 'PARTTIME',
+      bron_pattern_id: f.patternId,
+    });
+  });
+
+  it('refuses an unknown level with a 400, not a 500 from the CHECK constraint', async () => {
+    const f = createFixture();
+    const res = await patch(f.personId, f.mondaySlotId, 'ONBEKEND');
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('INVALID_LEVEL');
+  });
 });

@@ -15,6 +15,7 @@
 
 import { db } from '@/db/client';
 import { parseISO, dateToISO, getISOWeek } from '@/lib/holidays';
+import { deadlinePassed } from '@/lib/periodInputGate';
 
 export type Weekdag = 'MA' | 'DI' | 'WO' | 'DO' | 'VR' | 'ZA' | 'ZO';
 export type Frequentie = 'ELKE_WEEK' | 'EVEN_WEKEN' | 'ONEVEN_WEKEN';
@@ -229,19 +230,36 @@ function reconcilePatternForPeriod(pattern: ParttimePatternRow, periodId: string
 // has passed, even if the planner hasn't gotten around to closing it yet -
 // see lib/periodInputGate.ts, which the single-slot and submission routes
 // use for the same rule.
+//
+// The deadline is compared in JavaScript, not in SQL: it is stored exactly
+// as the planner's datetime-local input sent it ("2027-01-15T17:00", no
+// timezone), and a text comparison against now.toISOString() (UTC, with a
+// Z) read that as UTC - so for the first one or two hours after the
+// deadline this still wrote absences and part-time patterns into the
+// period, while periodInputGate (which parses it as local time, like the
+// participant's own screen does) already refused slot changes. Both now go
+// through the same deadlinePassed().
 export function getOpenPeriodsForPerson(personId: string, now: Date = new Date()): string[] {
-  const rows = db
+  return openPeriodsForPerson(personId)
+    .filter((p) => !deadlinePassed(p.deadline, now))
+    .map((p) => p.id);
+}
+
+function openPeriodsForPerson(personId: string): Array<{ id: string; naam: string; deadline: string; start_datum: string; eind_datum: string }> {
+  // A period in the trash is on its way to being purged - nothing should
+  // still be written into it (verify-link stops resolving it for the same
+  // reason, see app/api/auth/verify-link/route.ts).
+  return db
     .prepare(
-      `SELECT sp.id
+      `SELECT DISTINCT sp.id, sp.naam, sp.deadline, sp.start_datum, sp.eind_datum
        FROM dienstrooster_schedule_period sp
        JOIN dienstrooster_pool_membership pm ON pm.pool_id = sp.pool_id
        WHERE pm.person_id = ?
          AND sp.status = 'OPEN'
-         AND sp.deadline >= ?
+         AND sp.verwijderd_op IS NULL
          AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum`
     )
-    .all(personId, now.toISOString()) as Array<{ id: string }>;
-  return rows.map((r) => r.id);
+    .all(personId) as Array<{ id: string; naam: string; deadline: string; start_datum: string; eind_datum: string }>;
 }
 
 /**
@@ -260,18 +278,9 @@ export function findDeadlinePassedOverlappingPeriods(
   totDatum: string,
   now: Date = new Date()
 ): Array<{ id: string; naam: string }> {
-  return db
-    .prepare(
-      `SELECT sp.id, sp.naam
-       FROM dienstrooster_schedule_period sp
-       JOIN dienstrooster_pool_membership pm ON pm.pool_id = sp.pool_id
-       WHERE pm.person_id = ?
-         AND sp.status = 'OPEN'
-         AND sp.deadline < ?
-         AND sp.start_datum <= ? AND sp.eind_datum >= ?
-         AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum`
-    )
-    .all(personId, now.toISOString(), totDatum, vanDatum) as Array<{ id: string; naam: string }>;
+  return openPeriodsForPerson(personId)
+    .filter((p) => deadlinePassed(p.deadline, now) && p.start_datum <= totDatum && p.eind_datum >= vanDatum)
+    .map((p) => ({ id: p.id, naam: p.naam }));
 }
 
 /**
@@ -339,15 +348,58 @@ export function syncPatternsForPerson(personId: string): SyncResult {
 }
 
 /**
- * Hard-removes every availability row this pattern generated, in every
- * period regardless of status. Must run before deleting the pattern row
- * itself - bron_pattern_id has no ON DELETE clause and foreign_keys=ON.
+ * Releases every availability row one absence or pattern generated, ahead of
+ * deleting that absence/pattern row itself (bron_*_id has no ON DELETE
+ * clause and foreign_keys=ON, so the link has to go first).
+ *
+ * Only a period that still accepts input actually loses the block - the
+ * same "OPEN, not in the trash, deadline not passed" rule every sync here
+ * uses. In any other period the row stays exactly as it is, just no longer
+ * linked to its source: that period's input is frozen (closed, generated or
+ * published), and deleting a vacation afterwards used to strip its blocks
+ * out of a roster that was built - and possibly published - around them,
+ * so the publication check stopped seeing the override a planner had made
+ * on purpose. Editing an absence never did that (its sync only touches
+ * periods that still accept input); deleting one now behaves the same way.
  */
-export function removePatternAvailability(patternId: string): { deleted: number } {
-  const result = db
-    .prepare('DELETE FROM dienstrooster_availability WHERE bron_pattern_id = ?')
-    .run(patternId);
-  return { deleted: result.changes };
+export function releaseSourceAvailability(
+  column: 'bron_absence_id' | 'bron_pattern_id',
+  sourceId: string,
+  now: Date = new Date()
+): { deleted: number; kept: number } {
+  const rows = db
+    .prepare(
+      `SELECT a.id, sp.status, sp.deadline, sp.verwijderd_op
+       FROM dienstrooster_availability a
+       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+       JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
+       WHERE a.${column} = ?`
+    )
+    .all(sourceId) as Array<{ id: string; status: string; deadline: string; verwijderd_op: string | null }>;
+
+  const deleteStmt = db.prepare('DELETE FROM dienstrooster_availability WHERE id = ?');
+  const detachStmt = db.prepare(`UPDATE dienstrooster_availability SET ${column} = NULL WHERE id = ?`);
+
+  let deleted = 0;
+  let kept = 0;
+  db.transaction(() => {
+    for (const row of rows) {
+      const acceptsInput = row.status === 'OPEN' && !row.verwijderd_op && !deadlinePassed(row.deadline, now);
+      if (acceptsInput) {
+        deleteStmt.run(row.id);
+        deleted++;
+      } else {
+        detachStmt.run(row.id);
+        kept++;
+      }
+    }
+  })();
+  return { deleted, kept };
+}
+
+/** See releaseSourceAvailability. */
+export function removePatternAvailability(patternId: string): { deleted: number; kept: number } {
+  return releaseSourceAvailability('bron_pattern_id', patternId);
 }
 
 /**

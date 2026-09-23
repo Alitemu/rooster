@@ -10,6 +10,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (period.status !== 'OPEN') {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_STATUS', message: `Periode kan niet gesloten worden vanuit status ${period.status}` },
+        error: { code: 'INVALID_STATUS', message: `Periode kan niet gesloten worden vanuit status "${periodStatusLabel(period.status)}"` },
       };
       return NextResponse.json(response, { status: 400 });
     }

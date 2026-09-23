@@ -12,6 +12,7 @@ import { syncAvailabilityForPeriod as syncAbsenceAvailabilityForPeriod } from '@
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 interface SlotGenerationResponse {
   period_id: string;
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_STATUS', message: `Diensten kunnen niet gegenereerd worden vanuit status ${period.status}` },
+        error: { code: 'INVALID_STATUS', message: `Diensten kunnen niet gegenereerd worden vanuit status "${periodStatusLabel(period.status)}"` },
       };
       return NextResponse.json(response, { status: 400 });
     }

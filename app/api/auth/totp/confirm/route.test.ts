@@ -79,9 +79,13 @@ afterEach(() => {
   // than per person, so a login refused on purpose in one test (e.g. the
   // password-only attempt right after enrolling) can never count toward
   // another test's own login attempts.
-  clearRateLimit('staff-login:unknown');
+  clearRateLimit('staff-login-client:unknown');
   while (createdPersonIds.length > 0) {
     const personId = createdPersonIds.pop()!;
+    const row = db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(personId) as
+      | { codenaam: string }
+      | undefined;
+    if (row) clearRateLimit(`staff-login:unknown:${row.codenaam.toLowerCase()}`);
     clearRateLimit(`totp-setup:${personId}`);
     clearRateLimit(`totp-confirm:${personId}`);
     clearRateLimit(`totp-disable:${personId}`);

@@ -8,7 +8,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBands';
@@ -25,6 +24,7 @@ import {
   isRosterGenerationJobCancelRequested,
   type RosterGenerationStoppedReason,
 } from '@/lib/rosterGenerationJobs';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -36,7 +36,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const actorId = auth!.userId;
 
     const periodId = params.id;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     // Optional body: { time_limit_seconds } lets the planner ask for a
     // longer CP-SAT search after a first attempt comes back FEASIBLE
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // told about.
     if (!['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Rooster kan niet gegenereerd worden vanuit status ${period.status}` },
+        { success: false, error: `Rooster kan niet gegenereerd worden vanuit status "${periodStatusLabel(period.status)}"` },
         { status: 400 }
       );
     }
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }
 
     const jobId = createRosterGenerationJob(periodId);
-    runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, poolMembers, people }).catch(
+    runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people }).catch(
       (error) => {
         // runGeneration reports its own failures via failRosterGenerationJob;
         // this only catches a genuinely unexpected throw that slipped past
@@ -231,10 +231,11 @@ async function runGeneration(args: {
   timeLimitSeconds: number | undefined;
   period: any;
   slots: any[];
+  allSlots: any[];
   poolMembers: any[];
   people: string[];
 }): Promise<void> {
-  const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, poolMembers, people } = args;
+  const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people } = args;
   try {
     // Only consulted by the solver when distribution_mode is NAAR_RATO -
     // see lib/rosterBands's resolveRulesetConfig / the RuleSet comment.
@@ -314,8 +315,16 @@ async function runGeneration(args: {
     // publishing judges the roster by the same bands it was built with.
     const config = resolveRulesetConfig(period);
 
+    // Counted over ALL of the period's slots, including the ones a planner
+    // already filled by hand - not just the `slots` still sent to the
+    // solver. The solver already subtracts each person's own manual
+    // shifts from their band (constraints.py's add_band_constraints,
+    // via manual_assignments); deriving the default band from the reduced
+    // count as well took those shifts off twice, and made this band
+    // disagree with the one lib/publicationCheck.ts then judged the
+    // roster by (which counts every slot).
     const slotCountByTeller: Record<Teller, number> = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 };
-    for (const s of slots) {
+    for (const s of allSlots) {
       if (s.teller in slotCountByTeller) slotCountByTeller[s.teller as Teller]++;
     }
     const bands = resolveBands(config, slotCountByTeller, people.length);

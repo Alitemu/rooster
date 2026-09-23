@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { syncAvailabilityForAbsence, removeAbsenceAvailability } from '@/lib/absenceSync';
+import { removeAbsenceAvailability, syncAbsencesForPerson } from '@/lib/absenceSync';
 import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods, syncPatternsForPerson } from '@/lib/parttimeSync';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
@@ -132,7 +132,9 @@ export async function PATCH(
     const applyEdit = db.transaction(() => {
       updateStmt.run(...values);
 
-      syncAvailabilityForAbsence(absenceId);
+      // Every one of the person's absences, not just this one: a shrunk
+      // range can free a slot another, overlapping absence would cover.
+      syncAbsencesForPerson(id);
 
       // A shrunk or moved date range can free up a slot the person's own
       // part-time pattern would otherwise cover - see syncPatternsForPerson's
@@ -208,9 +210,11 @@ export async function DELETE(
       return NextResponse.json(response, { status: 404 });
     }
 
-    // All three together. Removing the availability rows has to happen
+    // All three together. Releasing the availability rows has to happen
     // before the absence row itself (bron_absence_id has no ON DELETE
-    // clause and foreign_keys=ON would reject the delete), but as separate
+    // clause and foreign_keys=ON would reject the delete) - removed only
+    // where the period still accepts input, kept as a plain block in a
+    // closed/generated/published one (see removeAbsenceAvailability). As separate
     // statements a crash in between left the absence still on the books
     // with nothing blocked for it any more - an afwezigheid that silently
     // stopped protecting its own dates, visible nowhere.
@@ -223,8 +227,21 @@ export async function DELETE(
       // Same reclaim as the PATCH route - a deleted absence can free up a
       // slot the person's own part-time pattern would otherwise cover.
       syncPatternsForPerson(id);
+      // ... or another of their absences that overlapped this one.
+      syncAbsencesForPerson(id);
     });
     deleteAbsence();
+
+    // Same as create/update: a deletion changes what's blocked, so it
+    // counts as a started submission and gets backed up too.
+    for (const periodId of getOpenPeriodsForPerson(id)) {
+      markSubmissionStarted(id, periodId);
+      try {
+        writePreferencesBackup(id, periodId);
+      } catch (backupError) {
+        console.error('preferences-backup-write-failed', backupError);
+      }
+    }
 
     const response: ApiSuccessResponse<{ deleted: boolean }> = {
       success: true,

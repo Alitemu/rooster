@@ -36,6 +36,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 interface BlockBudgetPerTeller {
   AVOND: { maxFraction: number };
@@ -93,7 +94,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         success: false,
         error: {
           code: 'INVALID_STATUS',
-          message: `Venster/streefbereik kan niet aangepast worden in status ${period.status}`,
+          message: `Venster/streefbereik kan niet aangepast worden in status "${periodStatusLabel(period.status)}"`,
         },
       };
       return NextResponse.json(response, { status: 400 });

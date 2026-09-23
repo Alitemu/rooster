@@ -35,10 +35,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { dateToISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { insertNotification } from '@/lib/notifications';
+import { periodStatusLabel } from '@/lib/statusLabels';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const actorId = auth!.userId;
 
     const periodId = params.id;
-    const now = dateToISO(new Date());
+    const now = new Date().toISOString();
 
     const period = db
       .prepare('SELECT * FROM dienstrooster_schedule_period WHERE id = ?')
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     if (period.status !== 'GEPUBLICEERD') {
       return NextResponse.json(
-        { success: false, error: `Alleen een gepubliceerde periode kan ingetrokken worden (huidige status: ${period.status})` },
+        { success: false, error: `Alleen een gepubliceerde periode kan ingetrokken worden (huidige status: ${periodStatusLabel(period.status)})` },
         { status: 400 }
       );
     }
