@@ -76,6 +76,15 @@ services:
       # directly from the process environment, so leaving it out here means
       # it's stuck at "disabled" no matter what a deployment's .env says.
       NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
+      # Automatic verzendlijst to the Power Automate mailbox - see
+      # .env.example and docs/verzendlijst-power-automate.md. All empty by
+      # default, which keeps the export dialog on the manual download.
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
+      VERZENDLIJST_AAN: "${VERZENDLIJST_AAN:-}"
       # Hardcoded true, not an override: in THIS compose file the app is
       # only ever reachable through Caddy, which replaces X-Real-IP with
       # the connecting peer's address (see Caddyfile), so the header can't

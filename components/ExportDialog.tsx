@@ -9,16 +9,15 @@
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type VerzendlijstBericht } from '@/lib/verzendlijst';
 
 type ExportType = 'invitations' | 'reminders' | 'audit-trail' | null;
 
-// Must match exactly the "Onderwerpfilter" configured on the Power
-// Automate-stroom's "Wanneer een nieuwe e-mail arriveert (V2)"-trigger -
-// see the "Automatisch versturen via Power Automate"-sectie hieronder.
-// Dienstrooster heeft verder geen weet van Power Automate of SharePoint;
-// het enige contract is deze vaste onderwerptekst plus de JSON-vorm van
-// het gedownloade bestand (een lijst van {codenaam, onderwerp, tekst}).
-const NOTIFICATION_TRIGGER_SUBJECT = 'DIENSTROOSTER-VERZENDLIJST';
+// The Power Automate contract (fixed subject + JSON attachment) lives in
+// lib/verzendlijst.ts. When the server has SMTP set up
+// (lib/verzendlijstMail.ts) it sends that mail itself; otherwise the
+// planner downloads the file and mails it to themselves.
+type SendState = { kind: 'idle' } | { kind: 'sending' } | { kind: 'sent'; aantal: number } | { kind: 'failed'; message: string };
 
 interface ReminderTemplate {
   person_id: string;
@@ -48,6 +47,10 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
   const [editedBody, setEditedBody] = useState('');
   const [remindersLoaded, setRemindersLoaded] = useState(false);
   const [remindersLoadFailed, setRemindersLoadFailed] = useState(false);
+  // null while unknown: neither the automatic nor the manual route is shown
+  // as "the" way until the server has said whether it can send.
+  const [autoSendAvailable, setAutoSendAvailable] = useState<boolean | null>(null);
+  const [sendState, setSendState] = useState<SendState>({ kind: 'idle' });
 
   useEffect(() => {
     if (exportType !== 'reminders') {
@@ -71,8 +74,49 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
       setEditedBody('');
       setRemindersLoaded(false);
       setRemindersLoadFailed(false);
+      setSendState({ kind: 'idle' });
     }
   }, [isOpen, periodId, initialType]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    fetch('/api/exports/verzendlijst-status')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled) setAutoSendAvailable(Boolean(data?.data?.ingesteld));
+      })
+      .catch(() => {
+        if (!cancelled) setAutoSendAvailable(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  // Switching between invitations and reminders starts a fresh send.
+  useEffect(() => {
+    setSendState({ kind: 'idle' });
+  }, [exportType]);
+
+  const postSend = async (url: string, body?: unknown) => {
+    setSendState({ kind: 'sending' });
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        setSendState({ kind: 'failed', message: data?.error?.message ?? 'Versturen is mislukt.' });
+        return;
+      }
+      setSendState({ kind: 'sent', aantal: data.data.aantal });
+    } catch {
+      setSendState({ kind: 'failed', message: 'Geen verbinding met de server. Controleer je netwerk.' });
+    }
+  };
 
   const loadReminders = async () => {
     setRemindersLoaded(true);
@@ -117,7 +161,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
     return `mailto:?subject=${encodeURIComponent(editedSubject)}&body=${encodeURIComponent(body)}`;
   };
 
-  const triggerMailto = `mailto:?subject=${encodeURIComponent(NOTIFICATION_TRIGGER_SUBJECT)}&body=${encodeURIComponent(
+  const triggerMailto = `mailto:?subject=${encodeURIComponent(VERZENDLIJST_SUBJECT)}&body=${encodeURIComponent(
     'Zie bijlage. Voeg het zojuist gedownloade JSON-bestand toe als bijlage voordat je deze e-mail verstuurt.'
   )}`;
 
@@ -125,17 +169,19 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
   // URL-encoding nodig - dit wordt een bestand, geen mailto-link) - zo
   // geldt een bewerking van onderwerp/bericht hierboven ook voor de
   // batch-download, net als voor de losse mailto-links per persoon.
-  const downloadBatchJson = () => {
-    const payload = reminders.map((reminder) => ({
+  const reminderBerichten = (): VerzendlijstBericht[] =>
+    reminders.map((reminder) => ({
       codenaam: reminder.codenaam,
       onderwerp: editedSubject,
       tekst: templateLink ? editedBody.split(templateLink).join(reminder.personal_link) : editedBody,
     }));
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+
+  const downloadBatchJson = () => {
+    const blob = new Blob([verzendlijstJson(reminderBerichten())], { type: 'application/json' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `dienstrooster-meldingen_${periodName.replace(/ /g, '_')}.json`;
+    a.download = verzendlijstFilename(periodName);
     document.body.appendChild(a);
     a.click();
     window.URL.revokeObjectURL(url);
@@ -240,7 +286,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
           </>
         ) : exportType === 'invitations' ? (
           <>
-            <h2 className="text-2xl font-bold mb-4">Uitnodigingen downloaden</h2>
+            <h2 className="text-2xl font-bold mb-4">Uitnodigingen</h2>
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
                 Het CSV-bestand bevat namen en persoonlijke links naar het voorkeurenformulier.
@@ -256,6 +302,22 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                 gebruiken.
               </p>
             </div>
+
+            {autoSendAvailable && (
+              <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 space-y-3">
+                <p className="text-sm font-semibold text-green-900">Automatisch versturen via Power Automate</p>
+                <p className="text-sm text-green-900">
+                  De server maakt voor iedereen een nieuwe persoonlijke link aan en stuurt de uitnodigingen
+                  als verzendlijst naar de mailbox van de Power Automate-stroom. Die stuurt iedereen de
+                  eigen persoonlijke link.
+                </p>
+                <SendButton
+                  label="✉️ Uitnodigingen automatisch versturen"
+                  state={sendState}
+                  onClick={() => postSend(`/api/exports/invitations/${periodId}/send`)}
+                />
+              </div>
+            )}
 
             <div className="flex gap-3">
               <button
@@ -367,9 +429,25 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                   )}
                 </div>
 
+                {autoSendAvailable && (
+                  <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 space-y-3">
+                    <p className="text-sm font-semibold text-green-900">Automatisch versturen via Power Automate</p>
+                    <p className="text-sm text-green-900">
+                      Stuurt alle {reminders.length} herinneringen met de tekst hierboven als verzendlijst naar
+                      de mailbox van de Power Automate-stroom.
+                    </p>
+                    <SendButton
+                      label="✉️ Herinneringen automatisch versturen"
+                      state={sendState}
+                      disabled={!linkPlaceholderIntact}
+                      onClick={() => postSend(`/api/exports/reminders/${periodId}/send`, { berichten: reminderBerichten() })}
+                    />
+                  </div>
+                )}
+
                 <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6 space-y-3">
                   <p className="text-sm font-semibold text-blue-900">
-                    Automatisch versturen via Power Automate
+                    {autoSendAvailable ? 'Of met de hand via Power Automate' : 'Versturen via Power Automate'}
                   </p>
                   <p className="text-sm text-blue-900">
                     Download het bestand hieronder en stuur het als bijlage naar jezelf. Dat
@@ -407,7 +485,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                   </div>
                   <p className="text-xs text-blue-800">
                     Onderwerp van deze e-mail moet exact{' '}
-                    <code className="font-mono bg-blue-100 px-1 rounded">{NOTIFICATION_TRIGGER_SUBJECT}</code>{' '}
+                    <code className="font-mono bg-blue-100 px-1 rounded">{VERZENDLIJST_SUBJECT}</code>{' '}
                     zijn, want daaraan herkent de Power Automate-stroom de mail. De knop hierboven vult dit
                     al goed in.
                   </p>
@@ -456,6 +534,44 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function SendButton({
+  label,
+  state,
+  disabled = false,
+  onClick,
+}: {
+  label: string;
+  state: SendState;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  // Once sent, the button stays disabled: a second click would mail
+  // everyone a second time (with yet another fresh link).
+  const done = state.kind === 'sent';
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={onClick}
+        disabled={disabled || done || state.kind === 'sending'}
+        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+      >
+        {state.kind === 'sending' ? 'Bezig met versturen...' : label}
+      </button>
+      {state.kind === 'sent' && (
+        <p role="status" className="text-sm text-green-900">
+          ✓ Verzendlijst met {state.aantal} {state.aantal === 1 ? 'bericht' : 'berichten'} verstuurd. De Power
+          Automate-stroom mailt iedereen nu de eigen persoonlijke link.
+        </p>
+      )}
+      {state.kind === 'failed' && (
+        <p role="alert" className="text-sm text-red-700">
+          {state.message}
+        </p>
+      )}
     </div>
   );
 }

@@ -347,6 +347,20 @@ Raising it invalidates every token issued for that person in one UPDATE.
 - A token from before the column existed carries no version and is
   refused, so everyone logs in once more after that upgrade.
 
+## Mailing personal links (verzendlijst)
+
+The app never stores e-mail addresses, so it never mails participants
+itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
+`DIENSTROOSTER-VERZENDLIJST` + a JSON attachment of
+`{codenaam, onderwerp, tekst}`) to a Power Automate flow on the planner's
+side, which looks each codenaam up in its own Excel list and sends the
+mail. That mail reaches the flow either by hand (download the JSON, mail it
+to yourself) or, when SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN are set,
+from the server itself (lib/verzendlijstMail.ts, Gmail with an app
+password by default). The recipient is always VERZENDLIJST_AAN, never
+anything from a request. Setup for the operator, in Dutch:
+docs/verzendlijst-power-automate.md.
+
 ## Deployment
 
 **Docker Compose (3 services):**
