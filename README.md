@@ -362,6 +362,19 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
 3. Handmatige back-updownload beschikbaar in het plannerdashboard
 4. Test een restore vóórdat de installatie echt in gebruik gaat
 
+### E-mail versturen (Gmail en Power Automate)
+
+Dienstrooster slaat geen e-mailadressen op. Uitnodigingen, herinneringen
+(ook de automatische) en meldingen over ruilverzoeken gaan als één
+verzendlijst naar je eigen mailbox. Een Power Automate-stroom zoekt daar elke
+codenaam op in jouw Excel-lijst en mailt de persoon.
+
+Hoe je Gmail, het `.env`-bestand, de Excel-lijst en de stroom instelt, staat
+stap voor stap in
+[docs/verzendlijst-power-automate.md](docs/verzendlijst-power-automate.md).
+Had je de stroom al gebouwd? Kijk dan onderaan die handleiding bij "Had je
+de stroom al gebouwd?".
+
 ### Beveiliging
 
 - **Geen inloggegevens in de repository** (`.env` staat in `.gitignore`)
@@ -415,3 +428,6 @@ Zie CLAUDE.md voor:
 
 Zie `/DIENSTROOSTER_PLAN_v14.md` voor de volledige oorspronkelijke
 requirements.
+
+Zie [docs/verzendlijst-power-automate.md](docs/verzendlijst-power-automate.md)
+voor het instellen van e-mail via Gmail en Power Automate.
