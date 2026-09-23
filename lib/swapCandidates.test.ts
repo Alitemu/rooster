@@ -7,8 +7,9 @@ import { getSwapCandidates } from './swapCandidates';
  * - every colleague is labelled by how they stand towards the day they
  *   would receive (the requester's offered shift): blocked, voorkeur,
  *   liever niet, already working that week, or nothing marked.
- * - a swap the window rule would refuse is labelled NIET_MOGELIJK, so the
- *   dialog never offers a request that can't go through.
+ * - a colleague who would end up with two shifts close together (same
+ *   week, or within the window) is labelled KORT_OP_ELKAAR - allowed, not
+ *   refused - and the requester's own proximity is flagged separately.
  * - past shifts and other shift types are not offered at all.
  */
 
@@ -115,8 +116,8 @@ describe('getSwapCandidates', () => {
     const neutralShift = f.shift(neutral, '2099-04-09', 15);
     const tooCloseShift = f.shift(tooClose, '2099-04-13', 16);
     // Giving up their week-16 shift for the offered week-10 one would put
-    // them a week from their own week-11 shift - the window rule refuses
-    // that. (Swapping that week-11 shift itself is fine: it goes away.)
+    // them a week from their own week-11 shift. (Swapping that week-11
+    // shift itself is fine: it goes away.)
     const tooCloseOther = f.shift(tooClose, '2099-03-09', 11);
 
     f.mark(blocked, f.offered, 'ABSOLUUT');
@@ -128,7 +129,7 @@ describe('getSwapCandidates', () => {
     expect(categoryOf(result, likesShift)).toBe('VOORKEUR');
     expect(categoryOf(result, ratherNotShift)).toBe('LIEVER_NIET');
     expect(categoryOf(result, neutralShift)).toBe('BESCHIKBAAR');
-    expect(categoryOf(result, tooCloseShift)).toBe('NIET_MOGELIJK');
+    expect(categoryOf(result, tooCloseShift)).toBe('KORT_OP_ELKAAR');
     expect(categoryOf(result, tooCloseOther)).toBe('BESCHIKBAAR');
   });
 
@@ -138,7 +139,7 @@ describe('getSwapCandidates', () => {
     const later = f.shift(busy, '2099-04-06', 15);
     f.shift(busy, '2099-03-05', 10);
 
-    expect(categoryOf(getSwapCandidates(f.requester, f.periodId, f.offered), later)).toBe('ZELFDE_WEEK');
+    expect(categoryOf(getSwapCandidates(f.requester, f.periodId, f.offered), later)).toBe('KORT_OP_ELKAAR');
   });
 
   it('leaves out past shifts and other shift types', () => {
@@ -151,6 +152,21 @@ describe('getSwapCandidates', () => {
     const result = getSwapCandidates(f.requester, f.periodId, f.offered);
     expect(categoryOf(result, pastShift)).toBeUndefined();
     expect(categoryOf(result, weekendShift)).toBeUndefined();
+  });
+
+  it('flags the requester separately when they would end up with two shifts close together', () => {
+    const f = createFixture(2);
+    // The requester keeps a week-16 shift; asking for a colleague's week-15
+    // shift puts those one week apart.
+    f.shift(f.requester, '2099-04-13', 16);
+    const colleague = f.person('Collega');
+    const theirs = f.shift(colleague, '2099-04-06', 15);
+
+    const result = getSwapCandidates(f.requester, f.periodId, f.offered);
+    if (!result.ok) throw new Error(result.message);
+    const candidate = result.candidates.find((c) => c.slot_id === theirs)!;
+    expect(candidate.requester_te_dichtbij).toBe(true);
+    expect(candidate.category).toBe('BESCHIKBAAR');
   });
 
   it("refuses a shift that isn't the requester's own", () => {

@@ -1,17 +1,15 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { db } from '@/db/client';
-import { checkSwapWindowRule } from './swapWindowRule';
+import { swapWindowConflicts } from './swapWindowRule';
 
 /**
- * The hard rule: a swap can never leave someone with two shifts closer
- * together than the window allows.
+ * The rule: a swap that would leave someone with two shifts closer
+ * together than the window allows is always detected, and attributed to
+ * the right person.
  *
- * The solver may not break this rule, and lib/windowRule.ts is
- * informational only because a planner overriding it does so knowingly. A
- * swap between two participants has no planner in it, so it has to be
- * refused rather than warned about - otherwise the published roster can
- * end up violating the one constraint the whole schedule is built on, with
- * nothing reporting it.
+ * It is not refused - two participants agreeing to it is their own call -
+ * but the swap dialog and the colleague's approval screen warn about it,
+ * and that warning is only as good as this detection.
  */
 
 const created = {
@@ -107,8 +105,8 @@ afterEach(() => {
   created.rulesets = [];
 });
 
-describe('checkSwapWindowRule', () => {
-  it('refuses a swap that would put the requester two shifts one week apart', () => {
+describe('swapWindowConflicts', () => {
+  it('flags the requester when they would end up with two shifts one week apart', () => {
     const poolId = createPool();
     const periodId = createPeriod(poolId);
     const avond = createShiftType(poolId, 'AVOND');
@@ -122,7 +120,7 @@ describe('checkSwapWindowRule', () => {
     const offered = createAssignedSlot(periodId, avond, 2, '2027-01-11', alice);
     const requested = createAssignedSlot(periodId, avond, 11, '2027-03-15', bob);
 
-    const result = checkSwapWindowRule({
+    const result = swapWindowConflicts({
       periodId,
       requesterPersonId: alice,
       respondentPersonId: bob,
@@ -130,11 +128,10 @@ describe('checkSwapWindowRule', () => {
       requestedSlotId: requested,
     });
 
-    expect(result.allowed).toBe(false);
-    expect(result.message).toContain('planner');
+    expect(result).toEqual({ requesterTooClose: true, respondentTooClose: false });
   });
 
-  it('refuses it the other way round too, when the respondent is the one who ends up too close', () => {
+  it('flags the respondent instead, when they are the one who ends up too close', () => {
     const poolId = createPool();
     const periodId = createPeriod(poolId);
     const avond = createShiftType(poolId, 'AVOND');
@@ -145,7 +142,7 @@ describe('checkSwapWindowRule', () => {
     const requested = createAssignedSlot(periodId, avond, 20, '2027-05-17', bob);
     createAssignedSlot(periodId, avond, 6, '2027-02-08', bob); // Bob's other shift
 
-    const result = checkSwapWindowRule({
+    const result = swapWindowConflicts({
       periodId,
       requesterPersonId: alice,
       respondentPersonId: bob,
@@ -153,10 +150,10 @@ describe('checkSwapWindowRule', () => {
       requestedSlotId: requested,
     });
 
-    expect(result.allowed).toBe(false);
+    expect(result).toEqual({ requesterTooClose: false, respondentTooClose: true });
   });
 
-  it('allows a swap where both people stay far enough from their other shifts', () => {
+  it('flags nobody where both people stay far enough from their other shifts', () => {
     const poolId = createPool();
     const periodId = createPeriod(poolId);
     const avond = createShiftType(poolId, 'AVOND');
@@ -167,7 +164,7 @@ describe('checkSwapWindowRule', () => {
     const offered = createAssignedSlot(periodId, avond, 10, '2027-03-08', alice);
     const requested = createAssignedSlot(periodId, avond, 20, '2027-05-17', bob);
 
-    const result = checkSwapWindowRule({
+    const result = swapWindowConflicts({
       periodId,
       requesterPersonId: alice,
       respondentPersonId: bob,
@@ -175,7 +172,7 @@ describe('checkSwapWindowRule', () => {
       requestedSlotId: requested,
     });
 
-    expect(result.allowed).toBe(true);
+    expect(result).toEqual({ requesterTooClose: false, respondentTooClose: false });
   });
 
   it('does not count the shift someone is giving up as a conflict with itself', () => {
@@ -191,7 +188,7 @@ describe('checkSwapWindowRule', () => {
     const offered = createAssignedSlot(periodId, avond, 10, '2027-03-08', alice);
     const requested = createAssignedSlot(periodId, avond, 11, '2027-03-15', bob);
 
-    const result = checkSwapWindowRule({
+    const result = swapWindowConflicts({
       periodId,
       requesterPersonId: alice,
       respondentPersonId: bob,
@@ -199,7 +196,7 @@ describe('checkSwapWindowRule', () => {
       requestedSlotId: requested,
     });
 
-    expect(result.allowed).toBe(true);
+    expect(result).toEqual({ requesterTooClose: false, respondentTooClose: false });
   });
 
   it('measures across a year boundary in calendar weeks, not by subtracting week numbers', () => {
@@ -225,7 +222,7 @@ describe('checkSwapWindowRule', () => {
     const offered = createAssignedSlot(periodId, avond, 20, '2027-05-17', alice);
     const requested = createAssignedSlot(periodId, avond, 1, '2027-01-04', bob);
 
-    const result = checkSwapWindowRule({
+    const result = swapWindowConflicts({
       periodId,
       requesterPersonId: alice,
       respondentPersonId: bob,
@@ -233,6 +230,6 @@ describe('checkSwapWindowRule', () => {
       requestedSlotId: requested,
     });
 
-    expect(result.allowed).toBe(false);
+    expect(result.requesterTooClose).toBe(true);
   });
 });

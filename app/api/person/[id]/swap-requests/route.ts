@@ -12,7 +12,7 @@ import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-contex
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
-import { checkSwapWindowRule } from '@/lib/swapWindowRule';
+import { swapWindowConflicts } from '@/lib/swapWindowRule';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -76,7 +76,26 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 
     query += ' ORDER BY sr.aangemaakt_op DESC';
 
-    const swapRequests = db.prepare(query).all(...params_list) as any[];
+    const rows = db.prepare(query).all(...params_list) as any[];
+
+    // For a request still waiting: would it leave either of them with two
+    // shifts close together? Not a reason to refuse (their own call), but
+    // both should see it before the swap happens - see lib/swapWindowRule.ts.
+    const swapRequests = rows.map((row) => {
+      if (row.status !== 'PENDING') return { ...row, aanvrager_te_dichtbij: false, respondent_te_dichtbij: false };
+      const conflicts = swapWindowConflicts({
+        periodId: row.periode_id,
+        requesterPersonId: row.aanvrager_person_id,
+        respondentPersonId: row.respondent_person_id,
+        offeredSlotId: row.aangeboden_slot_id,
+        requestedSlotId: row.gevraagde_slot_id,
+      });
+      return {
+        ...row,
+        aanvrager_te_dichtbij: conflicts.requesterTooClose,
+        respondent_te_dichtbij: conflicts.respondentTooClose,
+      };
+    });
 
     return NextResponse.json({
       success: true,
@@ -185,19 +204,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
-    // Checked here as well as at approval, so someone finds out now rather
-    // than after waiting for a colleague to agree to something that can
-    // never go through.
-    const windowCheck = checkSwapWindowRule({
-      periodId: period_id as string,
-      requesterPersonId: personId,
-      respondentPersonId: respondentAssignment.person_id,
-      offeredSlotId: offered_slot_id as string,
-      requestedSlotId: requested_slot_id as string,
-    });
-    if (!windowCheck.allowed) {
-      return NextResponse.json({ success: false, error: windowCheck.message }, { status: 400 });
-    }
+    // No window-rule check here on purpose: someone who wants two shifts
+    // close together may agree to that themselves (see
+    // lib/swapWindowRule.ts). The dialog already warned the requester, and
+    // the colleague sees the same warning with the request before approving.
 
     // Create swap request
     const swapId = uuid();

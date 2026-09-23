@@ -157,9 +157,9 @@ Two things these get wrong easily, and both cost a day to diagnose:
   never matches looks exactly like a passing test.
 - **Fixtures must obey the rules they are not testing.** A fixture that
   hands one person two shifts in the same ISO week has a window-rule
-  violation in it, so the publication check reports the roster as not ready
-  and every swap between those people is refused - failures that have
-  nothing to do with what the test meant to check.
+  violation in it, so the publication check flags a warning and every swap
+  between those people carries a "two shifts close together" warning -
+  noise that has nothing to do with what the test meant to check.
 
 **Test Files Must Cover:**
 1. Happy path (normal operation)
@@ -258,7 +258,10 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   solver can never produce an ABSOLUUT or window-rule violation itself -
   both are hard constraints on its side - so those warnings always mean a
   planner deliberately overrode it via manual-assign ("in consultation
-  with the person taking the shift"). A band violation is a warning too:
+  with the person taking the shift"), or, for the window rule, that two
+  participants agreed to a swap leaving one of them with two shifts close
+  together. That is their own call: swaps are never refused over the
+  window rule, only flagged to both sides (lib/swapWindowRule.ts). A band violation is a warning too:
   going over is hard-capped in the solver (MAX_BAND_OVERSHOOT = 0), so
   that is always a manual choice, and going under is deliberately soft
   there, so it can be a legitimate outcome when supply can't meet demand

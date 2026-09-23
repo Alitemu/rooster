@@ -1,19 +1,17 @@
 /**
- * Does a swap leave either participant violating the window rule?
+ * Would a swap leave either participant with two shifts close together?
  *
  * The window rule ("no second shift within N weeks of one you already
- * have") is a hard constraint for the solver. lib/windowRule.ts is
- * deliberately informational instead, because a planner filling a gap by
- * hand must be able to override it in consultation with the person taking
- * the shift.
+ * have") is a hard constraint for the solver. A swap is different: two
+ * participants agree between themselves, and someone who wants two shifts
+ * in one week is allowed to decide that for themselves - it is not the
+ * planner's call. So this only reports it: the swap dialog groups such a
+ * colleague separately and warns the requester, and the colleague sees a
+ * warning with the request before approving. Nothing refuses it.
  *
- * A participant-to-participant swap is neither of those. No planner is in
- * the loop and nobody is consulted, so an approved swap could quietly put
- * someone two shifts in the same week and leave the published roster
- * violating the one rule the solver is not allowed to break - with nothing
- * anywhere reporting it. This check closes that: the swap is refused, and
- * the message points at the planner, the same way an unequal (cross-teller)
- * trade already does.
+ * Once approved, a violation like that is flagged as a warning by the
+ * publication check (lib/publicationCheck.ts) - which is just a heads-up
+ * for a planner who unpublishes and republishes, not a block.
  */
 
 import { db } from '@/db/client';
@@ -28,9 +26,11 @@ interface SwapSides {
   requestedSlotId: string;
 }
 
-export interface SwapWindowResult {
-  allowed: boolean;
-  message?: string;
+export interface SwapWindowConflicts {
+  /** The requester would end up with the requested shift close to another shift of theirs. */
+  requesterTooClose: boolean;
+  /** The respondent would end up with the offered shift close to another shift of theirs. */
+  respondentTooClose: boolean;
 }
 
 interface SlotRow {
@@ -39,7 +39,7 @@ interface SlotRow {
   teller: string;
 }
 
-export function checkSwapWindowRule(sides: SwapSides): SwapWindowResult {
+export function swapWindowConflicts(sides: SwapSides): SwapWindowConflicts {
   const period = db
     .prepare(
       `SELECT id, pool_id, bevroren_ruleset_json
@@ -48,7 +48,7 @@ export function checkSwapWindowRule(sides: SwapSides): SwapWindowResult {
     .get(sides.periodId) as
     | { id: string; pool_id: string; bevroren_ruleset_json: string | null }
     | undefined;
-  if (!period) return { allowed: true };
+  if (!period) return { requesterTooClose: false, respondentTooClose: false };
 
   const windows = resolveWindowWeeks(resolveRulesetConfig(period));
 
@@ -60,7 +60,7 @@ export function checkSwapWindowRule(sides: SwapSides): SwapWindowResult {
   );
   const offered = slotStmt.get(sides.offeredSlotId) as SlotRow | undefined;
   const requested = slotStmt.get(sides.requestedSlotId) as SlotRow | undefined;
-  if (!offered || !requested) return { allowed: true };
+  if (!offered || !requested) return { requesterTooClose: false, respondentTooClose: false };
 
   // Each person is checked against the slot they would receive, with the
   // slot they are giving up excluded - otherwise the shift they are about
@@ -85,12 +85,5 @@ export function checkSwapWindowRule(sides: SwapSides): SwapWindowResult {
     sides.requestedSlotId
   );
 
-  if (!requesterConflicts && !respondentConflicts) return { allowed: true };
-
-  return {
-    allowed: false,
-    message:
-      'Door deze ruil zou iemand twee diensten te kort op elkaar krijgen. ' +
-      'Vraag de planner om deze ruil handmatig te verwerken.',
-  };
+  return { requesterTooClose: requesterConflicts, respondentTooClose: respondentConflicts };
 }

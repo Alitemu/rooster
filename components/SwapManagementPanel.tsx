@@ -24,6 +24,9 @@ interface SwapRequest {
   gevraagde_type: string;
   opmerkingen: string | null;
   reden_afwijzing: string | null;
+  // Only ever true for a request still waiting - see the list route.
+  aanvrager_te_dichtbij?: boolean;
+  respondent_te_dichtbij?: boolean;
 }
 
 interface Props {
@@ -344,6 +347,15 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                       &ldquo;{swap.opmerkingen}&rdquo;
                     </p>
                   )}
+
+                  {swap.status === 'PENDING' &&
+                    ((swap.respondent_person_id === personId && swap.respondent_te_dichtbij) ||
+                      (swap.aanvrager_person_id === personId && swap.aanvrager_te_dichtbij)) && (
+                      <p className="text-sm text-amber-800 mb-2">
+                        ⚠️ Na deze ruil heb je twee diensten kort op elkaar (binnen het venster tussen
+                        diensten). Dat mag, als je dat zelf wilt.
+                      </p>
+                    )}
 
                   {swap.reden_afwijzing && (
                     <p className="text-sm text-neutral-700 mb-2">

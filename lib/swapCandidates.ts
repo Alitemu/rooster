@@ -9,32 +9,32 @@
  * same-type shift in date order with none of that visible, so a requester
  * had no way to aim for a colleague likely to agree.
  *
- * NIET_MOGELIJK is not a hint but a certainty: the same window-rule check
- * the create and approve routes run (lib/swapWindowRule.ts) would refuse
- * it, so the dialog shows it greyed out rather than letting someone wait
- * on a request that can never go through.
+ * KORT_OP_ELKAAR: the colleague would end up with two shifts close
+ * together - in the same week, or within the window between shifts. That
+ * is allowed (their own call, see lib/swapWindowRule.ts), just less
+ * likely to get a yes. Whether the REQUESTER would end up that way is
+ * reported separately (requester_te_dichtbij): it is the requester's own
+ * choice, so it doesn't say anything about the colleague.
  */
 
 import { db } from '@/db/client';
 import { checkSwapAllowed } from './swapEligibility';
-import { checkSwapWindowRule } from './swapWindowRule';
+import { swapWindowConflicts } from './swapWindowRule';
 
 export type SwapCandidateCategory =
   | 'VOORKEUR'
   | 'BESCHIKBAAR'
   | 'LIEVER_NIET'
-  | 'ZELFDE_WEEK'
-  | 'GEBLOKKEERD'
-  | 'NIET_MOGELIJK';
+  | 'KORT_OP_ELKAAR'
+  | 'GEBLOKKEERD';
 
 /** Most promising first - the order the dialog groups them in. */
 export const SWAP_CANDIDATE_ORDER: SwapCandidateCategory[] = [
   'VOORKEUR',
   'BESCHIKBAAR',
   'LIEVER_NIET',
-  'ZELFDE_WEEK',
+  'KORT_OP_ELKAAR',
   'GEBLOKKEERD',
-  'NIET_MOGELIJK',
 ];
 
 export interface SwapCandidate {
@@ -44,6 +44,8 @@ export interface SwapCandidate {
   person_id: string;
   codenaam: string;
   category: SwapCandidateCategory;
+  /** The requester would end up with two shifts close together. */
+  requester_te_dichtbij: boolean;
 }
 
 export type SwapCandidatesResult =
@@ -87,7 +89,7 @@ export function getSwapCandidates(
        WHERE a.schedule_version_id = ? AND a.person_id != ? AND st.teller = ?
        ORDER BY s.datum`
     )
-    .all(periodId, requesterId, offered.teller) as Array<Omit<SwapCandidate, 'category'>>;
+    .all(periodId, requesterId, offered.teller) as Array<Omit<SwapCandidate, 'category' | 'requester_te_dichtbij'>>;
 
   const preferenceStmt = db.prepare(
     'SELECT blocking_level FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
@@ -106,35 +108,31 @@ export function getSwapCandidates(
     // swapped, so it is not offered at all.
     if (!checkSwapAllowed({ periodStatus: period.status, slotDates: [other.datum] }, now).allowed) continue;
 
-    const window = checkSwapWindowRule({
+    const conflicts = swapWindowConflicts({
       periodId,
       requesterPersonId: requesterId,
       respondentPersonId: other.person_id,
       offeredSlotId: offered.id,
       requestedSlotId: other.slot_id,
     });
+    const level = (preferenceStmt.get(other.person_id, offered.id) as { blocking_level: string | null } | undefined)
+      ?.blocking_level;
+    // Same week counts too, even when the window itself is set to 0.
+    const sameWeek = Boolean(
+      sameWeekStmt.get(periodId, other.person_id, other.slot_id, offered.iso_jaar, offered.iso_week)
+    );
 
-    let category: SwapCandidateCategory;
-    if (!window.allowed) {
-      category = 'NIET_MOGELIJK';
-    } else {
-      const level = (preferenceStmt.get(other.person_id, offered.id) as { blocking_level: string | null } | undefined)
-        ?.blocking_level;
-      const sameWeek = Boolean(
-        sameWeekStmt.get(periodId, other.person_id, other.slot_id, offered.iso_jaar, offered.iso_week)
-      );
-      category =
-        level === 'ABSOLUUT'
-          ? 'GEBLOKKEERD'
-          : sameWeek
-            ? 'ZELFDE_WEEK'
-            : level === 'LIEVER_NIET'
-              ? 'LIEVER_NIET'
-              : level === 'VOORKEUR'
-                ? 'VOORKEUR'
-                : 'BESCHIKBAAR';
-    }
-    candidates.push({ ...other, category });
+    const category: SwapCandidateCategory =
+      level === 'ABSOLUUT'
+        ? 'GEBLOKKEERD'
+        : conflicts.respondentTooClose || sameWeek
+          ? 'KORT_OP_ELKAAR'
+          : level === 'LIEVER_NIET'
+            ? 'LIEVER_NIET'
+            : level === 'VOORKEUR'
+              ? 'VOORKEUR'
+              : 'BESCHIKBAAR';
+    candidates.push({ ...other, category, requester_te_dichtbij: conflicts.requesterTooClose });
   }
 
   return { ok: true, candidates };

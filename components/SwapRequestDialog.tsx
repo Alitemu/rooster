@@ -18,7 +18,7 @@ interface Assignment {
   teller: string;
 }
 
-type CandidateCategory = 'VOORKEUR' | 'BESCHIKBAAR' | 'LIEVER_NIET' | 'ZELFDE_WEEK' | 'GEBLOKKEERD' | 'NIET_MOGELIJK';
+type CandidateCategory = 'VOORKEUR' | 'BESCHIKBAAR' | 'LIEVER_NIET' | 'KORT_OP_ELKAAR' | 'GEBLOKKEERD';
 
 interface Candidate {
   slot_id: string;
@@ -27,6 +27,8 @@ interface Candidate {
   datum: string;
   teller: string;
   category: CandidateCategory;
+  /** You would end up with two shifts close together yourself. */
+  requester_te_dichtbij: boolean;
 }
 
 // Most promising first. The colleague would get the shift you offer, so
@@ -36,18 +38,16 @@ const CATEGORY_ORDER: CandidateCategory[] = [
   'VOORKEUR',
   'BESCHIKBAAR',
   'LIEVER_NIET',
-  'ZELFDE_WEEK',
+  'KORT_OP_ELKAAR',
   'GEBLOKKEERD',
-  'NIET_MOGELIJK',
 ];
 
 const CATEGORY_LABELS: Record<CandidateCategory, string> = {
   VOORKEUR: 'Heeft voorkeur voor die dag',
   BESCHIKBAAR: 'Niets aangegeven voor die dag',
   LIEVER_NIET: 'Liever niet op die dag',
-  ZELFDE_WEEK: 'Heeft die week al een andere dienst',
-  GEBLOKKEERD: 'Heeft die dag geblokkeerd',
-  NIET_MOGELIJK: 'Niet mogelijk: te kort op een andere dienst',
+  KORT_OP_ELKAAR: 'Heeft dan twee diensten kort op elkaar',
+  GEBLOKKEERD: 'Heeft die dag geblokkeerd (ook parttime of afwezig)',
 };
 
 interface Props {
@@ -276,8 +276,9 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   {groupedCandidates.map(([category, list]) => (
                     <optgroup key={category} label={`${CATEGORY_LABELS[category]} (${list.length})`}>
                       {list.map((c) => (
-                        <option key={c.slot_id} value={c.slot_id} disabled={category === 'NIET_MOGELIJK'}>
+                        <option key={c.slot_id} value={c.slot_id}>
                           {c.codenaam}: {formatDatum(c.datum)} - {shiftTypeNames[c.teller]}
+                          {c.requester_te_dichtbij ? ' (jij hebt dan twee diensten kort op elkaar)' : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -305,14 +306,19 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                       Van: <span className="font-semibold">{getRequestedSlot()!.codenaam}</span>
                     </p>
                   </div>
-                  {['GEBLOKKEERD', 'LIEVER_NIET', 'ZELFDE_WEEK'].includes(getRequestedSlot()!.category) && (
+                  {getRequestedSlot()!.requester_te_dichtbij && (
+                    <p className="text-sm text-amber-800 mt-2">
+                      ⚠️ Na deze ruil heb je zelf twee diensten kort op elkaar. Dat mag, als je dat zelf wilt.
+                    </p>
+                  )}
+                  {['GEBLOKKEERD', 'LIEVER_NIET', 'KORT_OP_ELKAAR'].includes(getRequestedSlot()!.category) && (
                     <p className="text-sm text-amber-800 mt-2">
                       ⚠️ {getRequestedSlot()!.codenaam}{' '}
                       {getRequestedSlot()!.category === 'GEBLOKKEERD'
                         ? 'heeft die dag geblokkeerd'
                         : getRequestedSlot()!.category === 'LIEVER_NIET'
                           ? 'werkt die dag liever niet'
-                          : 'heeft die week al een andere dienst'}
+                          : 'heeft dan twee diensten kort op elkaar'}
                       . Het verzoek kan wel, maar de kans op een "ja" is kleiner.
                     </p>
                   )}

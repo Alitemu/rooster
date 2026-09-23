@@ -21,7 +21,10 @@
  *     window-rule violation - both are hard constraints on its side - so
  *     finding one here means a planner manually overrode it (manual-assign
  *     explicitly allows that, "in consultation with the person taking the
- *     shift" - see lib/windowRule.ts and the manual-assign route). Blocking
+ *     shift" - see lib/windowRule.ts and the manual-assign route), or, for
+ *     the window rule, two participants agreed to a swap that puts one of
+ *     them two shifts close together (their own call - see
+ *     lib/swapWindowRule.ts). Blocking
  *     publication on the same override the planner just made on purpose was
  *     a contradiction: there was no way to ship a roster that used that
  *     override at all. These require explicit confirmation
@@ -125,8 +128,9 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   const windowViolations = countWindowRuleViolations(periodId, resolveWindowWeeks(resolveRulesetConfig(period)));
   if (windowViolations > 0) {
     // Same reasoning as the ABSOLUUT check above: the solver never breaks
-    // the window rule, so a violation here is a deliberate manual-assign
-    // override too.
+    // the window rule, so a violation here is a deliberate choice - a
+    // planner's manual-assign override, or a swap two participants agreed
+    // to themselves (see lib/swapWindowRule.ts).
     warnings.push(
       `${windowViolations}x staat iemand twee diensten binnen het venster van elkaar. ` +
         `Controleer of dit bewust is afgesproken met de betrokkene(n).`
