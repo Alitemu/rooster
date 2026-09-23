@@ -54,7 +54,7 @@ interface EligiblePerson {
 // deliberately never blocked by that - so this is purely informational,
 // shown next to every candidate regardless of category, not a filter.
 function bandLabel(p: EligiblePerson): string {
-  const suffix = p.band_count >= p.band_max ? ' - vol' : '';
+  const suffix = p.band_count >= p.band_max ? ', vol' : '';
   return `${p.codenaam} (${p.band_count} van ${p.band_max}${suffix})`;
 }
 

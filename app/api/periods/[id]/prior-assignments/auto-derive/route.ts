@@ -159,7 +159,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         message:
           derivedCount > 0
             ? `${derivedCount} toewijzing${derivedCount === 1 ? '' : 'en'} afgeleid uit de vorige periode (${startDate} t/m ${endDate})`
-            : `Niets nieuws gevonden om af te leiden - de vorige periode had niets in het overloopvenster (${startDate} t/m ${endDate}), of alles stond al ingevuld`,
+            : `Niets nieuws gevonden om af te leiden. De vorige periode had niets in het overloopvenster (${startDate} t/m ${endDate}) of alles stond al ingevuld.`,
       },
     };
 

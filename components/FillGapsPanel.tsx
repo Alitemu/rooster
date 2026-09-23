@@ -48,7 +48,7 @@ interface EligiblePerson {
 // is deliberately never blocked by band status, so this is purely
 // informational, shown next to every candidate regardless of category.
 function bandLabel(p: EligiblePerson): string {
-  const suffix = p.band_count >= p.band_max ? ' - vol' : '';
+  const suffix = p.band_count >= p.band_max ? ', vol' : '';
   return `${p.codenaam} (${p.band_count} van ${p.band_max}${suffix})`;
 }
 
@@ -259,7 +259,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
     if (warnings.length > 0) setWarning(warnings.join(' · '));
     if (failures.length > 0) {
       setError(
-        `${failures.length} van de ${entries.length} toewijzingen zijn niet gelukt - de rest is toegepast. ${failures.join('; ')}`
+        `${failures.length} van de ${entries.length} toewijzingen zijn niet gelukt. De rest is toegepast. ${failures.join('; ')}`
       );
     }
 
@@ -314,16 +314,16 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
         ⚠️ {slots.length} dienst{slots.length === 1 ? '' : 'en'} nog niet ingevuld
       </h3>
       <p className="text-sm text-amber-800 mb-4">
-        Deze diensten hebben nog niemand toegewezen - bijvoorbeeld omdat de solver nog niet is
-        gedraaid, of omdat er binnen de ingestelde grenzen niemand beschikbaar was. Kies hieronder
-        rustig iemand per dienst - dit wordt pas echt toegewezen zodra je op &quot;Alle
+        Deze diensten hebben nog niemand toegewezen. Bijvoorbeeld omdat de solver nog niet is
+        gedraaid of omdat er binnen de ingestelde grenzen niemand beschikbaar was. Kies hieronder
+        rustig iemand per dienst. Dit wordt pas echt toegewezen zodra je op &quot;Alle
         toewijzingen toepassen&quot; klikt, dus je kunt gerust wachten op een reactie voordat je
         doorgaat.
       </p>
       <p className="text-xs text-amber-700 mb-4">
         Het getal achter een naam, bijv. <span className="font-medium">(0 van 1)</span>, toont
         hoeveel diensten van dit type die persoon al heeft ten opzichte van zijn of haar
-        streefbereik voor deze periode - puur ter informatie, het houdt niemand tegen.
+        streefbereik voor deze periode. Dit is puur ter informatie en houdt niemand tegen.
       </p>
 
       {error && (

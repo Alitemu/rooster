@@ -269,7 +269,7 @@ export default function PoolStaffPage() {
       <div className="card card-padding space-y-4">
         <p className="text-sm text-neutral-600">
           Wijzigingen hier gelden voor de hele pool en direct voor elke nieuwe periode die je
-          opent - los van welke periode nog loopt. &quot;Actief&quot; betekent actief vandaag.
+          opent, los van welke periode nog loopt. &quot;Actief&quot; betekent actief vandaag.
         </p>
 
         {staffError && (

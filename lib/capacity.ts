@@ -66,7 +66,7 @@ export function checkTotalCapacity(
       maxPerPerson: null,
       poolCapacity: null,
       slotsNeeded: totalSlots,
-      message: `Geen limiet per persoon bij een venster van 0 weken - altijd voldoende capaciteit voor ${totalSlots} diensten.`,
+      message: `Geen limiet per persoon bij een venster van 0 weken. Er is dus altijd voldoende capaciteit voor ${totalSlots} diensten.`,
     };
   }
 

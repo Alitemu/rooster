@@ -127,7 +127,7 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
     <div>
       <p className="text-xs text-neutral-500 mb-4">
         Diensten die verschoven kunnen worden naar iemand met nog ruimte in zijn streefbereik.
-        Niets wordt automatisch aangepast - controleer elk voorstel en pas toe wat je wilt
+        Niets wordt automatisch aangepast. Controleer elk voorstel en pas toe wat je wilt
         overnemen.
       </p>
       <div className="space-y-3">

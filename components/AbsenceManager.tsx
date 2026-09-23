@@ -153,8 +153,8 @@ export function AbsenceManager({
         <h3 className="font-bold text-lg mb-1">Afwezigheid opgeven</h3>
         <p className="text-sm text-neutral-600">
           Vakantie, ziekte of ander verlof: geef de periode hier op, dan wordt die automatisch
-          geblokkeerd. Dit is de enige plek waar vakantiedagen vandaan komen - blokkeer ze ook
-          altijd los in je voorkeurenkalender als extra controle.
+          geblokkeerd. Dit is de enige plek waar vakantiedagen vandaan komen. Blokkeer ze als extra controle
+          ook altijd los in je voorkeurenkalender.
         </p>
       </div>
 
@@ -190,7 +190,7 @@ export function AbsenceManager({
                   ) : (
                     <span className="text-amber-700 text-xs font-medium block sm:inline sm:ml-2">
                       ⚠ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen geblokkeerd in deze
-                      periode - de rest was al om een andere reden geblokkeerd
+                      periode. De rest was al om een andere reden geblokkeerd.
                     </span>
                   )
                 )}
@@ -220,7 +220,7 @@ export function AbsenceManager({
       {readOnly ? (
         <div className="border-t border-neutral-200 pt-4">
           <p className="text-sm text-neutral-600">
-            De deadline voor deze periode is verstreken - afwezigheid is nu alleen-lezen.
+            De deadline voor deze periode is verstreken. Afwezigheid kun je nu alleen nog bekijken.
           </p>
         </div>
       ) : (

@@ -94,8 +94,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           onderwerp: `${period.naam}: publicatie ingetrokken`,
           inhoud:
             `Het gepubliceerde rooster voor ${period.naam} is teruggetrokken door de roosteraar. ` +
-            `Beschouw je eerder getoonde diensten voorlopig niet meer als definitief - ` +
-            `je hoort opnieuw van ons zodra er een nieuwe versie gepubliceerd is.`,
+            `Beschouw je eerder getoonde diensten voorlopig niet meer als definitief. ` +
+            `Je hoort opnieuw van ons zodra er een nieuwe versie gepubliceerd is.`,
         });
       }
 

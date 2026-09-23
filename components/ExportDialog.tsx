@@ -227,7 +227,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <p className="font-semibold text-neutral-900">📄 Wijzigingsgeschiedenis downloaden</p>
-                <p className="text-sm text-neutral-600">CSV met alle handmatige toewijzingen, wisselingen en verwijderingen - voor verantwoording</p>
+                <p className="text-sm text-neutral-600">CSV met alle handmatige toewijzingen, wisselingen en verwijderingen, voor verantwoording achteraf</p>
               </button>
             </div>
 
@@ -252,7 +252,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
                 Downloaden maakt voor iedereen een nieuwe persoonlijke link aan. Eerder verstuurde
-                links blijven gewoon werken - wie de vorige mail nog heeft, kan die blijven
+                links blijven gewoon werken. Wie de vorige mail nog heeft, kan die blijven
                 gebruiken.
               </p>
             </div>
@@ -314,7 +314,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                 <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
                   <p className="text-sm text-blue-900">
                     Dit maakt voor iedereen die nog niet heeft bevestigd een nieuwe persoonlijke link aan.
-                    Eerder verstuurde links blijven gewoon werken - wie de uitnodigingsmail nog heeft,
+                    Eerder verstuurde links blijven gewoon werken. Wie de uitnodigingsmail nog heeft,
                     kan die link blijven gebruiken.
                   </p>
                 </div>
@@ -357,11 +357,11 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                   />
                   {linkPlaceholderIntact ? (
                     <p className="text-xs text-neutral-500 italic">
-                      Wijzigingen gelden voor elke herinnering hieronder - ieders eigen persoonlijke link blijft intact.
+                      Wijzigingen gelden voor elke herinnering hieronder. Ieders eigen persoonlijke link blijft intact.
                     </p>
                   ) : (
                     <p className="text-xs text-red-700 font-medium">
-                      ⚠️ De persoonlijke link is uit de tekst verdwenen - iedereen zou nu dezelfde (verkeerde) link
+                      ⚠️ De persoonlijke link is uit de tekst verdwenen. Iedereen zou nu dezelfde (verkeerde) link
                       krijgen. Zet de link terug in de tekst voordat je een mail verstuurt.
                     </p>
                   )}
@@ -372,7 +372,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                     Automatisch versturen via Power Automate
                   </p>
                   <p className="text-sm text-blue-900">
-                    Download het bestand hieronder en stuur het als bijlage naar jezelf - dat
+                    Download het bestand hieronder en stuur het als bijlage naar jezelf. Dat
                     start de Power Automate-stroom die alle {reminders.length} herinneringen
                     hieronder automatisch verstuurt.
                   </p>
@@ -408,7 +408,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                   <p className="text-xs text-blue-800">
                     Onderwerp van deze e-mail moet exact{' '}
                     <code className="font-mono bg-blue-100 px-1 rounded">{NOTIFICATION_TRIGGER_SUBJECT}</code>{' '}
-                    zijn - dat is wat de Power Automate-stroom herkent. De knop hierboven vult dit
+                    zijn, want daaraan herkent de Power Automate-stroom de mail. De knop hierboven vult dit
                     al goed in.
                   </p>
                 </div>

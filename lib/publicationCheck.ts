@@ -117,8 +117,8 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     // already in the audit trail. Blocking publication on it would mean
     // that override could never actually be shipped.
     warnings.push(
-      `${blockingViolations.count} toewijzing(en) staan op een dag die geblokkeerd is voor die persoon - ` +
-        `controleer of dit bewust is afgesproken met de betrokkene(n)`
+      `${blockingViolations.count} toewijzing(en) staan op een dag die geblokkeerd is voor die persoon. ` +
+        `Controleer of dit bewust is afgesproken met de betrokkene(n).`
     );
   }
 
@@ -128,8 +128,8 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     // the window rule, so a violation here is a deliberate manual-assign
     // override too.
     warnings.push(
-      `${windowViolations}x staat iemand twee diensten binnen het venster van elkaar - ` +
-        `controleer of dit bewust is afgesproken met de betrokkene(n)`
+      `${windowViolations}x staat iemand twee diensten binnen het venster van elkaar. ` +
+        `Controleer of dit bewust is afgesproken met de betrokkene(n).`
     );
   }
 
@@ -210,8 +210,8 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
 
   if (bandViolations > 0) {
     const scalingNotes = [
-      anyPartialCoverage ? 'voor wie een deel van de periode meedraait automatisch verlaagd naar rato' : null,
-      naarRato ? 'bij naar-rato-verdeling geschaald naar ieders deelnamefactor' : null,
+      anyPartialCoverage ? 'Voor wie een deel van de periode meedraait, is het bereik automatisch naar rato verlaagd.' : null,
+      naarRato ? 'Bij naar-rato-verdeling is het bereik geschaald naar ieders deelnamefactor.' : null,
     ].filter((note): note is string => note !== null);
 
     // A warning, not an issue: going over the band max can only be a
@@ -225,12 +225,12 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     // period, etc.).
     warnings.push(
       `${bandViolations}x valt een persoon buiten het streefbereik voor een diensttype ` +
-        `(avond ${bands.AVOND[0]}-${bands.AVOND[1]}, ` +
-        `weekend ${bands.WEEKEND[0]}-${bands.WEEKEND[1]}, ` +
-        `feestdag ${bands.FEESTDAG[0]}-${bands.FEESTDAG[1]}` +
-        (scalingNotes.length > 0 ? ` - ${scalingNotes.join(', en ')}` : '') +
-        `) - controleer of dit bewust is, pas anders het streefbereik aan bij de instellingen ` +
-        `van deze periode of wissel handmatig wie welke dienst draait`
+        `(avond ${bands.AVOND[0]} tot ${bands.AVOND[1]}, ` +
+        `weekend ${bands.WEEKEND[0]} tot ${bands.WEEKEND[1]}, ` +
+        `feestdag ${bands.FEESTDAG[0]} tot ${bands.FEESTDAG[1]}).` +
+        (scalingNotes.length > 0 ? ` ${scalingNotes.join(' ')}` : '') +
+        ` Controleer of dit bewust is. Is het dat niet, pas dan het streefbereik aan bij de instellingen ` +
+        `van deze periode of wissel handmatig wie welke dienst draait.`
     );
   }
 

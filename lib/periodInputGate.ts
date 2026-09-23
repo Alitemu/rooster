@@ -34,8 +34,8 @@ export function buildDeadlinePassedWarning(periods: Array<{ naam: string }>): st
   if (periods.length === 0) return undefined;
   const namen = periods.map((p) => `"${p.naam}"`).join(', ');
   return periods.length === 1
-    ? `Let op: voor periode ${namen} is de deadline al verstreken - dit is daar niet in verwerkt.`
-    : `Let op: voor de periodes ${namen} is de deadline al verstreken - dit is daar niet in verwerkt.`;
+    ? `Let op: voor periode ${namen} is de deadline al verstreken. Daar is dit niet in verwerkt.`
+    : `Let op: voor de periodes ${namen} is de deadline al verstreken. Daar is dit niet in verwerkt.`;
 }
 
 /**
@@ -63,7 +63,7 @@ export function checkPeriodAcceptsInput(period: PeriodForInputGate, now: Date = 
     return {
       allowed: false,
       code: 'DEADLINE_PASSED',
-      message: 'De deadline voor deze periode is verstreken - voorkeuren zijn nu alleen-lezen',
+      message: 'De deadline voor deze periode is verstreken. Voorkeuren kun je nu alleen nog bekijken.',
     };
   }
 

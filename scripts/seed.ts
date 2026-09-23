@@ -527,6 +527,48 @@ function applyMissingColumns() {
   }
 }
 
+/**
+ * Template texts that were reworded after databases had already been
+ * seeded with them. The seed only inserts templates into a fresh database,
+ * so without this an existing deployment would keep sending the old text.
+ * Each row is only touched while it still holds exactly the old text - an
+ * edit someone made by hand is never overwritten. Runs on every seed call,
+ * including the SEED_ON_START one at every container start, before the
+ * "already seeded" exit below.
+ */
+const REWORDED_TEMPLATES: Array<{ sleutel: string; oud: string; nieuw: string }> = [
+  {
+    sleutel: 'PERIOD_OPENED',
+    oud: 'Vergeet niet je vakantiedagen te blokkeren - die worden nergens anders vandaan gehaald.',
+    nieuw: 'Vergeet niet je vakantiedagen te blokkeren. Die worden nergens anders vandaan gehaald.',
+  },
+  {
+    sleutel: 'PARTTIME_CHECK',
+    oud: 'Controleer ze - vooral rond de jaarwisseling, waar weeknummers kunnen verschuiven.',
+    nieuw: 'Controleer ze goed, vooral rond de jaarwisseling. Daar kunnen weeknummers verschuiven.',
+  },
+  {
+    sleutel: 'FINAL_WARNING',
+    oud: 'De deadline voor **{{periode}}** is **{{deadline}}**, en je voorkeuren ontbreken nog.',
+    nieuw: 'De deadline voor **{{periode}}** is **{{deadline}}** en je voorkeuren ontbreken nog.',
+  },
+];
+
+function refreshRewordedTemplates() {
+  const rows = db
+    .prepare('SELECT id, sleutel, body_md FROM dienstrooster_notification_template')
+    .all() as Array<{ id: string; sleutel: string; body_md: string }>;
+  for (const row of rows) {
+    for (const change of REWORDED_TEMPLATES) {
+      if (row.sleutel === change.sleutel && row.body_md.includes(change.oud)) {
+        const body = row.body_md.replace(change.oud, change.nieuw);
+        db.prepare('UPDATE dienstrooster_notification_template SET body_md = ? WHERE id = ?').run(body, row.id);
+        console.log(`  Updated notification template text ${row.sleutel}`);
+      }
+    }
+  }
+}
+
 /** True once a previous seed run has populated this database. */
 function alreadySeeded(): boolean {
   const row = db
@@ -564,6 +606,7 @@ async function seed() {
     console.log('Creating tables...');
     createTables();
     applyMissingColumns();
+    refreshRewordedTemplates();
 
     // Re-running the seed used to die on `UNIQUE constraint failed:
     // dienstrooster_person.codenaam` - a raw SQLite error that says nothing
@@ -782,12 +825,12 @@ async function seed() {
       [
         'PERIOD_OPENED',
         '{{periode}}: voorkeuren staan open',
-        'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** staat open voor invoer.\n\nGeef de dagen waarop je niet kunt werken door vóór **{{deadline}}**.\n\n{{link}}\n\nVergeet niet je vakantiedagen te blokkeren - die worden nergens anders vandaan gehaald.',
+        'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** staat open voor invoer.\n\nGeef de dagen waarop je niet kunt werken door vóór **{{deadline}}**.\n\n{{link}}\n\nVergeet niet je vakantiedagen te blokkeren. Die worden nergens anders vandaan gehaald.',
       ],
       [
         'PARTTIME_CHECK',
         '{{periode}}: controleer je deeltijddagen',
-        'Hoi {{codenaam}},\n\nWe hebben je deeltijddagen voor **{{periode}}** gegenereerd op basis van je patroon.\n\nControleer ze - vooral rond de jaarwisseling, waar weeknummers kunnen verschuiven.\n\n{{link}}',
+        'Hoi {{codenaam}},\n\nWe hebben je deeltijddagen voor **{{periode}}** gegenereerd op basis van je patroon.\n\nControleer ze goed, vooral rond de jaarwisseling. Daar kunnen weeknummers verschuiven.\n\n{{link}}',
       ],
       [
         'REMINDER',
@@ -797,7 +840,7 @@ async function seed() {
       [
         'FINAL_WARNING',
         'Laatste kans: voorkeuren {{periode}} sluiten binnenkort',
-        'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is **{{deadline}}**, en je voorkeuren ontbreken nog.\n\nAls er niets binnenkomt, wordt het rooster gegenereerd zonder je geblokkeerde dagen.\n\n{{link}}',
+        'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is **{{deadline}}** en je voorkeuren ontbreken nog.\n\nAls er niets binnenkomt, wordt het rooster gegenereerd zonder je geblokkeerde dagen.\n\n{{link}}',
       ],
       [
         'DEADLINE_PASSED',

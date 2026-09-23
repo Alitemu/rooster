@@ -227,7 +227,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         success: false,
         error: {
           code: 'STAFF_ACCOUNT',
-          message: 'Deze codenaam hoort bij een planner- of beheerdersaccount en kan geen diensten draaien - kies een andere codenaam',
+          message: 'Deze codenaam hoort bij een planner- of beheerdersaccount en kan geen diensten draaien. Kies een andere codenaam.',
         },
       };
       return NextResponse.json(response, { status: 409 });

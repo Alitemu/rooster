@@ -64,7 +64,7 @@ function warningFor(category: EligibilityCategory, codenaam: string): string | n
     return `Let op: dit is een liever-niet-dag voor ${codenaam}.`;
   }
   if (category === 'VENSTERBLOK') {
-    return `Let op: doorbreekt het vensterblok - ${codenaam} krijgt hierdoor 2 diensten dicht bij elkaar (bijv. dezelfde week).`;
+    return `Let op: dit doorbreekt het vensterblok. ${codenaam} krijgt hierdoor 2 diensten dicht bij elkaar (bijv. dezelfde week).`;
   }
   return null;
 }

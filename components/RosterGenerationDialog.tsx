@@ -325,7 +325,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
             const notDone = (stats.not_started || 0) + (stats.in_progress || 0);
             setNotReadyWarning(
               notDone > 0
-                ? `${notDone} ${notDone === 1 ? 'personeelslid heeft zijn/haar voorkeuren' : 'personeelsleden hebben hun voorkeuren'} nog niet bevestigd, en de deadline is nog niet verstreken. Genereer je nu, dan tellen hun voorkeuren mogelijk niet (volledig) mee.`
+                ? `${notDone} ${notDone === 1 ? 'personeelslid heeft zijn/haar voorkeuren' : 'personeelsleden hebben hun voorkeuren'} nog niet bevestigd en de deadline is nog niet verstreken. Genereer je nu, dan tellen hun voorkeuren mogelijk niet (volledig) mee.`
                 : null
             );
           })
@@ -644,11 +644,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
               <div>
                 <h3 className="text-sm font-semibold text-neutral-800 mb-1">Venster en streefbereik</h3>
                 <p className="text-xs text-neutral-500 mb-3">
-                  Dit zijn de huidige instellingen voor deze periode - onveranderd levert opnieuw
-                  genereren hetzelfde resultaat op. Pas aan voor een ander resultaat. Boven het
+                  Dit zijn de huidige instellingen voor deze periode. Laat je ze ongewijzigd, dan levert
+                  opnieuw genereren hetzelfde resultaat op. Pas aan voor een ander resultaat. Boven het
                   maximum hieronder wijst de solver, bij elke methode, nooit iemand een extra
-                  dienst toe - ook niet als dat de enige manier is om een dienst te vullen. Zo'n
-                  dienst blijft dan open, om zelf in te vullen (zie &quot;Rooster vooraf
+                  dienst toe. Ook niet als dat de enige manier is om een dienst te vullen. Zo'n
+                  dienst blijft dan open. Je vult hem zelf in (zie &quot;Rooster vooraf
                   invullen&quot;) of via &quot;Voorstellen voor herverdeling&quot;.
                 </p>
 
@@ -742,7 +742,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                     </div>
                     {bandInvalid && (
                       <p className="text-xs text-red-600">
-                        Min mag niet groter zijn dan max - controleer de streefbereiken hierboven.
+                        Min mag niet groter zijn dan max. Controleer de streefbereiken hierboven.
                       </p>
                     )}
                   </div>
@@ -789,13 +789,13 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       </div>
                       <p className="text-xs text-neutral-500 mt-1">
                         {ruleset.objectiveMode === 'lexicographic' &&
-                          'Lost eerst dekking zo goed mogelijk op, dan pas een eerlijke verdeling, dan liever-niet-voorkeuren, en als laatste voorkeuren - elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'}
+                          'Lost eerst dekking zo goed mogelijk op. Daarna volgen een eerlijke verdeling, de liever-niet-voorkeuren en als laatste de voorkeuren. Elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'multi_start' &&
-                          'Is dezelfde Prioriteitenplanner, gewoon meerdere keren gedraaid met een andere toevalsvolgorde, en bewaart steeds het beste rooster tot nu toe. Op de meeste periodes levert dit precies hetzelfde rooster op als één keer de Prioriteitenplanner draaien - alleen op een krappe periode (weinig personeel, veel blokkades) kan een volgende poging een beter of compleet rooster vinden waar een eerdere poging bleef steken. Stopt vanzelf zodra een perfect rooster is gevonden (alles ingevuld, iedereen exact binnen bereik) of het aantal pogingen hieronder is bereikt. Kan langer duren dan de andere methodes; je kunt tussentijds stoppen. De punten hieronder gelden niet voor deze methode.'}
+                          'Is dezelfde Prioriteitenplanner, meerdere keren gedraaid met telkens een andere toevalsvolgorde. Het beste rooster tot nu toe wordt steeds bewaard. Op de meeste periodes levert dit precies hetzelfde rooster op als één keer de Prioriteitenplanner draaien. Alleen op een krappe periode (weinig personeel, veel blokkades) kan een volgende poging een beter of compleet rooster vinden waar een eerdere poging bleef steken. Stopt vanzelf zodra een perfect rooster is gevonden (alles ingevuld, iedereen exact binnen bereik) of het aantal pogingen hieronder is bereikt. Kan langer duren dan de andere methodes; je kunt tussentijds stoppen. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'randomized' &&
-                          'Vult diensten stap voor stap in met een steeds willekeurig geschud personeelslijstje in plaats van met de solver hierboven - geen teruggrabbelen als een keuze verderop tot een probleem leidt. Draait meerdere pogingen en bewaart steeds het beste rooster tot nu toe, net als de Herhaalplanner. Kan een minder eerlijke verdeling opleveren dan de Prioriteitenplanner. De punten hieronder gelden niet voor deze methode.'}
+                          'Vult diensten stap voor stap in met een steeds willekeurig geschud personeelslijstje in plaats van met de solver hierboven. Een keuze wordt niet teruggedraaid als die verderop tot een probleem leidt. Draait meerdere pogingen en bewaart steeds het beste rooster tot nu toe, net als de Herhaalplanner. Kan een minder eerlijke verdeling opleveren dan de Prioriteitenplanner. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'weighted' &&
-                          'Eén gecombineerde score van alle punten hieronder samen - de solver kiest wat die score het laagst maakt. Kan bij veel personeel of diensten een minder eerlijke verdeling opleveren dan de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
+                          'Eén gecombineerde score van alle punten hieronder samen. De solver kiest wat die score het laagst maakt. Kan bij veel personeel of diensten een minder eerlijke verdeling opleveren dan de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
                       </p>
                     </div>
 
@@ -861,7 +861,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                     <p className="text-xs text-neutral-500">
                       Dit zijn de punten waarmee de solver bepaalt hoe hij diensten verdeelt: hoe
                       hoger het getal, hoe zwaarder die actie meetelt. De standaardinstellingen
-                      werken voor vrijwel elke periode goed - pas dit alleen aan als je weet wat je
+                      werken voor vrijwel elke periode goed. Pas dit alleen aan als je weet wat je
                       doet.
                     </p>
 
@@ -891,9 +891,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         Buiten streefbereik (oplopende straf)
                       </label>
                       <p className="text-xs text-neutral-500 mb-1">
-                        Straf per dienst die iemand onder hun streefaantal blijft: de eerste,
-                        komma-gescheiden waarde geldt voor de eerste dienst eronder, de tweede voor
-                        de tweede, enzovoort - zo wordt een tekort liever over meerdere mensen
+                        Straf per dienst die iemand onder hun streefaantal blijft. De eerste
+                        waarde (gescheiden door komma's) geldt voor de eerste dienst eronder, de tweede
+                        voor de tweede enzovoort. Zo wordt een tekort liever over meerdere mensen
                         gespreid dan bij één persoon neergelegd. Het deel van deze instelling voor
                         boven het streefaantal heeft in de praktijk geen effect meer: de solver
                         wijst nooit meer iemand een dienst toe die hem boven zijn maximum brengt
@@ -1019,7 +1019,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
               </ul>
               <p className="text-xs text-neutral-500 pt-2">
                 De solver draait maximaal 2 minuten. Bij het bereiken van de tijdslimiet kan een
-                suboptimale oplossing worden teruggegeven - je kunt daarna alsnog langer laten
+                suboptimale oplossing worden teruggegeven. Je kunt daarna alsnog langer laten
                 doorzoeken.
               </p>
             </div>
@@ -1090,7 +1090,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 </p>
               ) : (
                 <p className="text-xs text-center text-neutral-500">
-                  Dit kan tot {formatDuration(pendingTimeLimitSeconds ?? 120)} duren - je kunt dit
+                  Dit kan tot {formatDuration(pendingTimeLimitSeconds ?? 120)} duren. Je kunt dit
                   scherm open laten staan of later terugkomen.
                 </p>
               )}

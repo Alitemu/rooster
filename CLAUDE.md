@@ -77,6 +77,12 @@ planner sees - labels, buttons, error messages, notification templates,
 exported CSV/mailto content - is in Dutch. English stays in code
 identifiers, DB fields, comments, and console/log output only.
 
+**Dutch writing style in user-facing text:**
+- No dash (" - ") to join two sentences or clauses. Write separate
+  sentences, or rephrase ("..., omdat ...", "Dat is handig als ...").
+- No comma before "en" in a list or between clauses (", en" is English
+  style). Same for "of".
+
 **Balance & Saldo Messaging:**
 - ❌ Never show raw numbers: `-1`, `+2`, `band: [7,8]`
 - ✅ Always in words:

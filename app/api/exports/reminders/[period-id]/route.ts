@@ -150,7 +150,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
 
       const urgencyLine =
         urgency === 'urgent'
-          ? `Dit is je laatste herinnering - je voorkeuren moeten uiterlijk ${deadline} binnen zijn.`
+          ? `Dit is je laatste herinnering. Je voorkeuren moeten uiterlijk ${deadline} binnen zijn.`
           : urgency === 'moderate'
             ? `Even een seintje: je hebt nog maar een paar dagen om je voorkeuren in te dienen, uiterlijk ${deadline}.`
             : `Dit is een herinnering dat je dienstvoorkeuren voor ${period.naam} uiterlijk ${deadline} binnen moeten zijn.`;

@@ -165,7 +165,7 @@ export function PartTimeCheckStep({
         <div className="bg-blue-50 border border-blue-200 rounded p-3">
           <p className="text-sm text-blue-900">
             Deze periode is nog niet geopend door de planner. De kalender hieronder toont daarom een
-            voorbeeld op basis van je deeltijdpatroon - zodra de planner de periode opent, worden
+            voorbeeld op basis van je deeltijdpatroon. Zodra de planner de periode opent, worden
             deze dagen automatisch echt geblokkeerd. Je hoeft dan niets opnieuw in te voeren.
           </p>
         </div>
@@ -190,7 +190,7 @@ export function PartTimeCheckStep({
           <p className="text-sm text-neutral-700">
             {blockedElsewhereDays.length} dag{blockedElsewhereDays.length === 1 ? '' : 'en'} die je
             patroon zou raken {blockedElsewhereDays.length === 1 ? 'is' : 'zijn'} hieronder grijs
-            gemarkeerd - die {blockedElsewhereDays.length === 1 ? 'is' : 'zijn'} al op een andere
+            gemarkeerd. {blockedElsewhereDays.length === 1 ? 'Die is' : 'Die zijn'} al op een andere
             manier geblokkeerd (bijvoorbeeld een eerder ingevoerde blokkade of afwezigheid), dus je
             patroon hoeft daar niets te doen.
           </p>
@@ -201,15 +201,15 @@ export function PartTimeCheckStep({
         <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-1">
           <p className="text-sm text-amber-900 font-medium">
             ⚠️ {boundaryDays.length} deeltijddag{boundaryDays.length === 1 ? '' : 'en'} val
-            {boundaryDays.length === 1 ? 't' : 'len'} rond de jaarwisseling (rood omrand hieronder) -
-            controleer die extra goed. Je hebt een patroon met &quot;even&quot; of &quot;oneven weken&quot;,
+            {boundaryDays.length === 1 ? 't' : 'len'} rond de jaarwisseling (rood omrand hieronder).
+            Controleer die extra goed. Je hebt een patroon met &quot;even&quot; of &quot;oneven weken&quot;
             en weeknummers maken daar een sprong: rond de jaarwisseling kan &quot;om de week&quot; een dag
             opleveren die je niet had verwacht.
           </p>
           <p className="text-sm text-amber-900">
             Klopt een dag hierboven niet? Pas de geldigheidsdatum (&quot;vanaf&quot;/&quot;tot en met&quot;)
-            van je patroon hierboven aan zodat de jaarwisseling erbuiten valt, en maak een tweede patroon
-            aan voor de rest van de periode - eventueel met de andere week gekozen, als de aansluiting
+            van je patroon hierboven aan zodat de jaarwisseling erbuiten valt. Maak daarna een tweede patroon
+            aan voor de rest van de periode. Kies daarbij eventueel de andere week, als de aansluiting
             na de jaarwisseling omgedraaid blijkt te zijn.
           </p>
         </div>
@@ -300,7 +300,7 @@ export function PartTimeCheckStep({
                                     : isAbsence
                                       ? 'Deze dag valt binnen een geregistreerde afwezigheid'
                                       : blockedElsewhere
-                                        ? 'Deze dag is al om een andere reden geblokkeerd - je patroon hoeft hier niets te doen'
+                                        ? 'Deze dag is al om een andere reden geblokkeerd. Je patroon hoeft hier niets te doen.'
                                         : undefined
                                 }
                               >
@@ -334,7 +334,7 @@ export function PartTimeCheckStep({
         />
         <span className="text-sm text-neutral-700">
           {patterns.length === 0 ? (
-            'Ik heb geen deeltijddagen - ik werk het volledige rooster. Ik heb mijn afwezigheid hierboven gecontroleerd en bevestig dat die klopt.'
+            'Ik heb geen deeltijddagen, ik werk het volledige rooster. Ik heb mijn afwezigheid hierboven gecontroleerd en bevestig dat die klopt.'
           ) : (
             <>
               Ik heb de deeltijddagen en de afwezigheid hierboven gecontroleerd en bevestig dat ze kloppen.

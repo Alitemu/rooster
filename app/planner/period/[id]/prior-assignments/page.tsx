@@ -312,9 +312,9 @@ export default function PriorAssignmentsPage() {
         <p className="text-sm font-medium mb-1">Of: CSV-bestand uploaden</p>
         <p className="text-xs text-neutral-500 mb-3">
           Gebruik idealiter een eerder gedownload &quot;Rooster downloaden (CSV)&quot;-bestand
-          (kolommen Datum, Week, Diensttype, Codenaam) - regels buiten het overloopvenster
-          hierboven ({data.date_range[0]} t/m {data.date_range[1]}) worden automatisch genegeerd,
-          je hoeft dus niet zelf de juiste week eruit te knippen.
+          (kolommen Datum, Week, Diensttype, Codenaam). Regels buiten het overloopvenster
+          hierboven ({data.date_range[0]} t/m {data.date_range[1]}) worden automatisch genegeerd.
+          Je hoeft dus niet zelf de juiste week eruit te knippen.
         </p>
         <input
           type="file"
@@ -453,7 +453,7 @@ export default function PriorAssignmentsPage() {
             {data.assignments.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-8 text-center text-neutral-500">
-                  Nog geen gegevens - probeer automatisch af te leiden uit de vorige periode
+                  Nog geen gegevens. Probeer ze automatisch af te leiden uit de vorige periode.
                 </td>
               </tr>
             )}

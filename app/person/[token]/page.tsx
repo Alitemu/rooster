@@ -293,7 +293,7 @@ function PersonalLinkPageContent() {
             // saved" and risk the participant re-entering (or skipping)
             // something that was already there.
             setDataLoadWarning(
-              `Kon ${failedParts.join(' en ')} niet laden - mogelijk niet up-to-date hieronder. Probeer de pagina te vernieuwen.`
+              `Kon ${failedParts.join(' en ')} niet laden. Wat hieronder staat, is mogelijk niet actueel. Probeer de pagina te vernieuwen.`
             );
           }
         }
@@ -690,7 +690,7 @@ function PersonalLinkPageContent() {
           <p className="text-sm text-green-700">
             {deadlinePassed
               ? `Je kunt dit venster sluiten. De deadline (${new Date(period.deadline).toLocaleString('nl-NL')}) is verstreken, dus wijzigen kan niet meer.`
-              : `Je kunt dit venster sluiten - maar je kunt ook nog iets aanpassen: zolang de deadline (${new Date(period.deadline).toLocaleString('nl-NL')}) niet verstreken is, tellen je laatste wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet opnieuw in te dienen.`}
+              : `Je kunt dit venster sluiten. Je kunt ook nog iets aanpassen: zolang de deadline (${new Date(period.deadline).toLocaleString('nl-NL')}) niet verstreken is, tellen je laatste wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet opnieuw in te dienen.`}
           </p>
           <button
             onClick={() => setCurrentStep('calendar')}

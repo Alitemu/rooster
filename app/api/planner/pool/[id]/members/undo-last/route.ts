@@ -71,7 +71,7 @@ export async function POST(
         success: false,
         error: {
           code: 'UNDO_STALE',
-          message: 'Deze verwijdering kan niet meer ongedaan gemaakt worden - deze persoon heeft intussen alweer een lidmaatschap in deze periode.',
+          message: 'Deze verwijdering kan niet meer ongedaan gemaakt worden, omdat deze persoon intussen alweer een lidmaatschap in deze periode heeft.',
         },
       };
       return NextResponse.json(response, { status: 409 });

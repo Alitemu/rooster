@@ -104,8 +104,8 @@ export function ChangePasswordDialog({ isOpen, onClose }: Props) {
             <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900 space-y-1">
               <p className="font-semibold">Je wachtwoord is gewijzigd.</p>
               <p>
-                Je blijft hier ingelogd. Was je ergens anders nog ingelogd - op een andere
-                computer of in een andere browser - dan is die sessie nu beëindigd.
+                Je blijft hier ingelogd. Was je ook nog ingelogd op een andere computer of in een
+                andere browser? Die sessie is nu beëindigd.
               </p>
             </div>
           ) : (

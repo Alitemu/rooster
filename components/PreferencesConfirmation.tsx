@@ -182,7 +182,7 @@ export function PreferencesConfirmation({
       {readOnly && (
         <div className="bg-neutral-100 border border-neutral-300 rounded p-3">
           <p className="text-sm text-neutral-700">
-            De deadline voor deze periode is verstreken - indienen en wijzigen kan niet meer.
+            De deadline voor deze periode is verstreken. Indienen en wijzigen kan niet meer.
           </p>
         </div>
       )}

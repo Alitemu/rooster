@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
     for (const [codenaam, count] of codenaamCounts) {
       if (count > 1) {
-        errors.push(`"${codenaam}" komt ${count}x voor in dit bestand - de aantallen worden bij elkaar opgeteld`);
+        errors.push(`"${codenaam}" komt ${count}x voor in dit bestand. De aantallen worden bij elkaar opgeteld.`);
       }
     }
 

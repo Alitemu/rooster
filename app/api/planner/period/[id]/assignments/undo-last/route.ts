@@ -78,7 +78,7 @@ export async function POST(
       success: false,
       error: {
         code: 'UNDO_STALE',
-        message: 'Deze wijziging kan niet meer ongedaan gemaakt worden - er is intussen iets anders met deze dienst gebeurd.',
+        message: 'Deze wijziging kan niet meer ongedaan gemaakt worden, omdat er intussen iets anders met deze dienst is gebeurd.',
       },
     };
 

@@ -160,7 +160,7 @@ export function ParttimePatternEditor({
       <div>
         <h3 className="font-bold text-lg mb-1">Deeltijdpatroon instellen</h3>
         <p className="text-sm text-neutral-600">
-          Werk je een vaste dag (of om de week) niet? Geef dat hier op - die dagen worden dan
+          Werk je een vaste dag (of om de week) niet? Geef dat hier op. Die dagen worden dan
           automatisch geblokkeerd. Je kunt hieronder controleren of dat klopt.
         </p>
       </div>
@@ -211,7 +211,7 @@ export function ParttimePatternEditor({
       {readOnly ? (
         <div className="border-t border-neutral-200 pt-4">
           <p className="text-sm text-neutral-600">
-            De deadline voor deze periode is verstreken - deeltijdpatronen zijn nu alleen-lezen.
+            De deadline voor deze periode is verstreken. Deeltijdpatronen kun je nu alleen nog bekijken.
           </p>
         </div>
       ) : (

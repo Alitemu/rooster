@@ -262,8 +262,8 @@ export function TotpSettingsDialog({ isOpen, onClose }: Props) {
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 />
                 <p className="text-xs text-neutral-500 mt-1">
-                  Ben je je authenticator-app kwijt? Dit is de weg terug - alleen je wachtwoord is
-                  dan nog nodig.
+                  Ben je je authenticator-app kwijt? Dan zet je het hier uit. Daarvoor is
+                  alleen je wachtwoord nodig.
                 </p>
               </div>
               {disableError && (

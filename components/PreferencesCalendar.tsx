@@ -466,7 +466,7 @@ export function PreferencesCalendar({
       {/* Blocked-days counters */}
       <p className="text-xs text-neutral-500">
         Hoeveel diensten je per type al geblokkeerd hebt, van het maximum dat voor jou geldt (je
-        blokkadebudget) - kom je hier tegen een grens aan, dan kun je voor dat diensttype geen dag
+        blokkadebudget). Kom je hier tegen een grens aan, dan kun je voor dat diensttype geen dag
         meer als &quot;geblokkeerd&quot; markeren.
       </p>
       <div className="flex gap-3 flex-wrap">

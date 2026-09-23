@@ -668,7 +668,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       const rowNum = i + 2; // header is row 1
       if (!codenaam) return;
       if (seenCodenamen.has(codenaam)) {
-        warnings.push(`Rij ${rowNum}: codenaam "${codenaam}" komt meerdere keren voor - beide rijen worden bij elkaar opgeteld`);
+        warnings.push(`Rij ${rowNum}: codenaam "${codenaam}" komt meerdere keren voor. Beide rijen worden bij elkaar opgeteld.`);
       }
       seenCodenamen.add(codenaam);
       const avondParsed = parseOptionalInt(avond);
@@ -1375,7 +1375,7 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
             <p className="text-xs text-neutral-500">
               Het kleinste van deze twee vensters geldt ook tussen een avonddienst en een weekend-
-              of feestdagdienst - een avonddienst kan dus wel een weekenddienst in de buurt
+              of feestdagdienst. Een avonddienst kan dus wel een weekenddienst in de buurt
               blokkeren en andersom, maar nooit strenger dan het kleinste ingestelde venster.
             </p>
 
@@ -1533,7 +1533,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                 de hele periode, niet over iemands persoonlijke (lagere) aantal werkdagen. Met dit
                 vinkje uit telt een automatisch geblokkeerde parttime-dag gewoon mee als een
                 geblokkeerde dag, zoals elke andere. Met dit vinkje aan telt die dag niet mee en
-                komt hij dus bovenop het budget - iemand met een parttime-dag kan dan in totaal
+                komt hij dus bovenop het budget. Iemand met een parttime-dag kan dan in totaal
                 meer dagen blokkeren dan een fulltimer met hetzelfde percentage.
               </p>
             </div>

@@ -148,8 +148,8 @@ function Section({
               }}
               title={
                 pinned
-                  ? 'Losmaken - klapt dicht zodra je een andere sectie opent'
-                  : 'Vastzetten - blijft open, ook als je een andere sectie opent'
+                  ? 'Losmaken: klapt dicht zodra je een andere sectie opent'
+                  : 'Vastzetten: blijft open, ook als je een andere sectie opent'
               }
               aria-pressed={pinned}
               className={`px-1.5 py-1 rounded transition-colors ${
@@ -603,11 +603,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
         >
           <p className="text-sm text-neutral-600 mb-3">
             De vensterregel (niemand twee keer binnen het ingestelde venster) geldt ook over de
-            grens van de vorige periode heen - de solver moet dus weten wie aan het eind daarvan
-            welke dienst had. Hier leg je dat vast: automatisch afgeleid uit de vorige gepubliceerde
-            periode, met CSV-upload als terugvaloptie, of handmatig aangevuld. Bevestigen is
-            verplicht voordat je het rooster kunt genereren - alleen de allereerste periode van een
-            team slaat dit over, want die heeft niets om over te dragen.
+            grens van de vorige periode heen. De solver moet dus weten wie aan het eind daarvan
+            welke dienst had. Hier leg je dat vast. Dat gaat automatisch vanuit de vorige
+            gepubliceerde periode, via een CSV-bestand of met de hand. Bevestigen is verplicht
+            voordat je het rooster kunt genereren. Alleen de allereerste periode van een team slaat
+            dit over, want die heeft niets om over te dragen.
           </p>
           <div className="flex justify-end">
             <Link
@@ -784,11 +784,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             dedicated justify-end row underneath keeps it at the right
             regardless of how many lines the text takes. */}
         <p className="text-sm text-neutral-600 mb-3">
-          Voeg hier personeel toe of verwijder ze, en pas per persoon de geldigheidsperiode of
-          deelnamefactor aan. Dit werkt op elk moment, ook in een al gepubliceerd rooster - handig
-          als iemand halverwege start: voeg diegene hier toe met de juiste geldig-vanaf-datum, en
-          die persoon verschijnt meteen in de keuzelijst bij het handmatig toewijzen van diensten
-          in deze periode.
+          Voeg hier personeel toe of verwijder ze. Per persoon pas je hier ook de geldigheidsperiode
+          of deelnamefactor aan. Dit werkt op elk moment, ook in een al gepubliceerd rooster. Dat is
+          handig als iemand halverwege start: voeg diegene hier toe met de juiste
+          geldig-vanaf-datum. Die persoon verschijnt dan meteen in de keuzelijst bij het handmatig
+          toewijzen van diensten in deze periode.
         </p>
         <div className="flex justify-end">
           <Link
@@ -1079,7 +1079,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             <h2 className="text-xl font-bold mb-2 text-red-700">Publicatie intrekken?</h2>
             <p className="text-sm text-neutral-700 mb-2">
               Het rooster voor &quot;{dashboard.period_name}&quot; gaat terug naar de status
-              &quot;Gegenereerd&quot;. De toewijzingen blijven staan - je kunt ze aanpassen en het
+              &quot;Gegenereerd&quot;. De toewijzingen blijven staan. Je kunt ze aanpassen en het
               rooster later opnieuw publiceren.
             </p>
             <p className="text-sm text-neutral-700 mb-4">
@@ -1123,8 +1123,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             <h2 className="text-xl font-bold mb-2 text-amber-800">⚠️ Niet-toegepaste toewijzingen</h2>
             <p className="text-sm text-neutral-700 mb-4">
               Bij &quot;Rooster vooraf invullen&quot; staan nog keuzes klaar die niet zijn toegepast.
-              De solver ziet deze pas zodra je op &quot;Alle toewijzingen toepassen&quot; hebt geklikt
-              - ga je nu verder met genereren, dan worden deze keuzes genegeerd.
+              De solver ziet deze pas zodra je op &quot;Alle toewijzingen toepassen&quot; hebt geklikt.
+              Ga je nu verder met genereren, dan worden deze keuzes genegeerd.
             </p>
             <div className="flex gap-3">
               <Link

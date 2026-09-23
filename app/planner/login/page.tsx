@@ -142,8 +142,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
               />
               <p className="text-xs text-neutral-500 mt-1">
                 Te vinden in de serverlogs (bijv. `docker compose logs web`) bij het aanmaken van de
-                database - nooit hierin getypt door iemand anders dan degene met toegang tot de
-                server.
+                database. Alleen iemand met toegang tot de server kan deze code zien.
               </p>
             </div>
 

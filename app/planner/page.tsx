@@ -560,7 +560,7 @@ export default function PlannerHomePage() {
             <h2 className="text-xl font-bold mb-2 text-red-700">Definitief verwijderen?</h2>
             <p className="text-sm text-neutral-700 mb-3">
               &quot;{purgingPeriod.naam}&quot; en alle bijbehorende gegevens (voorkeuren,
-              toewijzingen, saldi) worden nu meteen en onherroepelijk verwijderd - dit kan niet
+              toewijzingen, saldi) worden nu meteen en onherroepelijk verwijderd. Dit kan niet
               ongedaan gemaakt worden, ook niet via de prullenbak.
             </p>
 
