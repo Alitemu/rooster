@@ -168,6 +168,7 @@ export async function POST(
     const baseUrl = resolveBaseUrl(request);
     const lapsed: Array<{ send: () => void }> = [];
     let eigenIngetrokken = 0;
+    let afgesloten: Array<{ id: string; status: string }> = [];
     const approveTx = db.transaction(() => {
       db.prepare(
         'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
@@ -221,6 +222,7 @@ export async function POST(
       const closed = closeLapsedSwaps(swapRequest, now, baseUrl);
       lapsed.push(...closed.meldingen);
       eigenIngetrokken = closed.eigenIngetrokken;
+      afgesloten = closed.afgesloten;
     });
     approveTx();
     lapsed.forEach((m) => m.send());
@@ -255,6 +257,9 @@ export async function POST(
         swap_request_id: swapId,
         status: 'GOEDGEKEURD',
         message: 'Ruil goedgekeurd en diensten geruild',
+        // Other requests this approval closed, so the approver's list shows
+        // them as they now are instead of "in behandeling".
+        afgesloten,
       },
     });
   } catch (error) {

@@ -378,10 +378,14 @@ reason, both capped at 1000 characters by lib/freeText.ts). Withdrawing a
 swap tells the colleague. One shift may be offered to several colleagues
 at once (the candidates list marks who was already asked, `al_gevraagd`;
 the exact same request twice is refused): the first to approve wins. That
-approval withdraws the requester's other open requests (INGETROKKEN, only
-those colleagues are told, the requester hears it in the approval mail)
-and closes anyone else's request on either shift as AFGEWEZEN
-("vervallen", both sides told) (lib/swapLifecycle.ts). Invitations go out only for an OPEN period before
+approval withdraws the other open requests of either side of that swap
+(INGETROKKEN, only the colleague each was sent to is told; the requester
+hears it in the approval mail, the approver on screen from the response's
+`afgesloten`) and closes anyone else's request on either shift as
+AFGEWEZEN ("vervallen", both sides told) (lib/swapLifecycle.ts). One
+participant may start at most 20 swap requests per 24 hours, withdrawn
+ones included (lib/swapQuota.ts, 429): each mails two people, and the
+sending account's daily limit is shared with invitations and reminders. Invitations go out only for an OPEN period before
 its deadline, like reminders (lib/reminderGate.ts); the CSV of links is
 not gated. SMTP on any port but 465 requires STARTTLS (requireTLS).
 

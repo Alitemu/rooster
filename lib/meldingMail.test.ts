@@ -18,6 +18,8 @@ import {
   type SmtpSink,
 } from '@/tests/smtpSink';
 import { formatSwapDate } from './swapMailDetails';
+import { AL_GERUILD_REDEN, AL_ONDERLING_GERUILD_REDEN } from './swapLifecycle';
+import { MAX_RUILVERZOEKEN_PER_DAG } from './swapQuota';
 
 /**
  * The rules:
@@ -132,7 +134,7 @@ function createFixture() {
   // A third colleague with a shift of the same type, far from the others.
   const derde = person();
   const derdeShift = shift(derde, '2099-03-24', 13);
-  return { periodId, aanvrager, collega, offered, requested, derde, derdeShift };
+  return { periodId, aanvrager, collega, offered, requested, derde, derdeShift, shift };
 }
 
 function codenaam(id: string) {
@@ -166,6 +168,32 @@ async function requestSwap(f: ReturnType<typeof createFixture>, notes?: string) 
   );
   expect(res.status).toBe(200);
   return (await res.json()).data.swap_request_id as string;
+}
+
+async function createAs(f: ReturnType<typeof createFixture>, personId: string, offered: string, requested: string) {
+  const res = await createSwap(
+    new NextRequest(`http://localhost/api/person/${personId}/swap-requests`, {
+      method: 'POST',
+      headers: { Cookie: cookie(personId), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ period_id: f.periodId, offered_slot_id: offered, requested_slot_id: requested }),
+    }),
+    { params: Promise.resolve({ id: personId }) }
+  );
+  return res;
+}
+
+async function approveAs(personId: string, swapId: string) {
+  return approveSwap(
+    new NextRequest(`http://localhost/api/person/${personId}/swap-requests/${swapId}/approve`, {
+      method: 'POST',
+      headers: { Cookie: cookie(personId) },
+    }),
+    { params: Promise.resolve({ id: personId, 'swap-id': swapId }) }
+  );
+}
+
+function statusOf(swapId: string) {
+  return (db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(swapId) as { status: string }).status;
 }
 
 /** All berichten received so far, by the codenaam they are addressed to. */
@@ -499,6 +527,85 @@ describe('a swap request that is withdrawn or lapses', () => {
 
     const naarCollega = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
     expect(naarCollega.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.derde)} is vervallen`);
+  });
+
+  it('tells a colleague asked twice by the same requester that they already swapped with each other', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    // Two different own shifts offered to the same colleague for the same shift.
+    const extra = f.shift(f.aanvrager, '2099-03-17', 12);
+    const eerste = await requestSwap(f);
+    const tweedeRes = await createAs(f, f.aanvrager, extra, f.requested);
+    const tweede = (await tweedeRes.json()).data.swap_request_id as string;
+    await waitForMails(sink, 4);
+
+    expect((await approveAs(f.collega, eerste)).status).toBe(200);
+    await waitForMails(sink, 6);
+
+    expect(statusOf(tweede)).toBe('INGETROKKEN');
+    const notice = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
+    expect(notice.tekst).toContain(AL_ONDERLING_GERUILD_REDEN);
+    expect(notice.tekst).not.toContain(AL_GERUILD_REDEN);
+  });
+
+  it("withdraws the approver's own offer of the shift they just gave away, without telling them it lapsed", async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    const eerste = await requestSwap(f);
+    // The colleague had offered that same shift to the third colleague.
+    const eigenRes = await createAs(f, f.collega, f.requested, f.derdeShift);
+    const eigen = (await eigenRes.json()).data.swap_request_id as string;
+    await waitForMails(sink, 4);
+
+    const res = await approveAs(f.collega, eerste);
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.afgesloten).toEqual([{ id: eigen, status: 'INGETROKKEN' }]);
+    // The outcome to the requester and the notice to the third colleague.
+    await waitForMails(sink, 6);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(sink.received).toHaveLength(6);
+
+    expect(statusOf(eigen)).toBe('INGETROKKEN');
+    const naarDerde = berichtenFor(f.derde).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
+    expect(naarDerde.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.collega)} is ingetrokken`);
+    expect(naarDerde.tekst).toContain(AL_GERUILD_REDEN);
+    expect(berichtenFor(f.collega).map((b) => b.onderwerp)).not.toContain('Je ruilverzoek is vervallen');
+  });
+});
+
+describe('how many swap requests one participant may start', () => {
+  const insertEarlier = (f: ReturnType<typeof createFixture>, aantal: number, aangemaaktOp: string) => {
+    for (let i = 0; i < aantal; i++) {
+      db.prepare(
+        `INSERT INTO dienstrooster_swap_request
+           (id, periode_id, aanvrager_person_id, aangeboden_slot_id, gevraagde_slot_id, respondent_person_id,
+            status, aangemaakt_op, row_version)
+         VALUES (?, ?, ?, ?, ?, ?, 'INGETROKKEN', ?, 1)`
+      ).run(crypto.randomUUID(), f.periodId, f.aanvrager, f.offered, f.requested, f.collega, aangemaaktOp);
+    }
+  };
+
+  it('refuses a new request once the day\'s limit is used up, withdrawn ones included, and mails nobody', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    insertEarlier(f, MAX_RUILVERZOEKEN_PER_DAG - 1, new Date(Date.now() - 60_000).toISOString());
+    // The last one still allowed.
+    expect((await createAs(f, f.aanvrager, f.offered, f.requested)).status).toBe(200);
+    await waitForMails(sink, 2);
+
+    const res = await createAs(f, f.aanvrager, f.offered, f.derdeShift);
+    expect(res.status).toBe(429);
+    expect((await res.json()).error).toContain('ruilverzoeken gedaan');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(sink.received).toHaveLength(2);
+  });
+
+  it('counts only the last 24 hours, and only the requester', async () => {
+    const f = createFixture();
+    insertEarlier(f, MAX_RUILVERZOEKEN_PER_DAG, new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString());
+    expect((await createAs(f, f.aanvrager, f.offered, f.requested)).status).toBe(200);
+    // The colleague's own allowance is untouched by requests aimed at them.
+    expect((await createAs(f, f.collega, f.requested, f.derdeShift)).status).toBe(200);
   });
 });
 

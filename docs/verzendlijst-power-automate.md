@@ -43,14 +43,26 @@ groot mogelijk te maken. Wie het eerst goedkeurt, ruilt:
 - De andere verzoeken van de aanvrager worden vanzelf ingetrokken. Die
   collega's krijgen een mail dat het verzoek is ingetrokken, met de reden "De
   dienst is al met een andere collega geruild." De aanvrager krijgt daar
-  geen losse mails over.
+  geen losse mails over. Vroeg de aanvrager dezelfde collega ook in een
+  ander verzoek, dan staat er dat ze die dienst al met elkaar geruild hebben.
+- Had de collega die goedkeurt die dienst zelf ook aan iemand aangeboden,
+  dan wordt dat verzoek op dezelfde manier ingetrokken. Alleen de collega
+  aan wie het gericht was, krijgt een mail. Wie goedkeurt, ziet het meteen
+  op het scherm.
 - Had iemand anders ook een verzoek lopen voor een van de twee geruilde
   diensten, dan vervalt dat verzoek. De aanvrager en de collega van dat
   verzoek krijgen er allebei bericht van.
 
 Dezelfde collega twee keer vragen voor dezelfde dienst kan niet. In het
-venster voor een ruilverzoek staat wie al gevraagd is, en die collega is
-niet nog eens te kiezen.
+venster voor een ruilverzoek staat wie al gevraagd is. Die collega is niet
+nog eens te kiezen.
+
+Elk verzoek levert twee mails op. Daarom mag één deelnemer hooguit 20
+ruilverzoeken per 24 uur doen, ingetrokken verzoeken meegeteld. Zo kan
+niemand de mailbox van een collega volspammen of de daglimiet van het
+Gmail-account (ongeveer 500 mails) opmaken. Daarna zouden ook uitnodigingen
+en herinneringen niet meer aankomen. Wie de grens haalt, krijgt de melding
+dat het morgen weer kan.
 
 In elke mail staat wat de lezer zelf afgeeft en krijgt, met de datum voluit,
 en een persoonlijke link om het verzoek te openen. Zo'n verzoek geldt als een

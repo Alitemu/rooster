@@ -17,6 +17,7 @@ import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { optionalFreeText } from '@/lib/freeText';
 import { swapWindowConflicts } from '@/lib/swapWindowRule';
+import { swapQuotaReached, RUILVERZOEK_LIMIET_MELDING } from '@/lib/swapQuota';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -232,6 +233,11 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         { success: false, error: 'Je hebt dit ruilverzoek al ingediend. Het wacht nog op antwoord.' },
         { status: 409 }
       );
+    }
+
+    // Every request mails two people: a cap per day, see lib/swapQuota.ts.
+    if (swapQuotaReached(personId)) {
+      return NextResponse.json({ success: false, error: RUILVERZOEK_LIMIET_MELDING }, { status: 429 });
     }
 
     // Create swap request

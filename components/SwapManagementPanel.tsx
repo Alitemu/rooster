@@ -159,8 +159,22 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
         throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Goedkeuren van ruil mislukt');
       }
 
+      const data = await res.json().catch(() => null);
+      // Approving closes every other open request on either shift, the
+      // approver's own offers of the shift they just gave away included.
+      const afgesloten = (data?.data?.afgesloten ?? []) as Array<{ id: string; status: string }>;
+      const eigen = afgesloten.filter((a) =>
+        swapRequests.some((s) => s.id === a.id && s.aanvrager_person_id === personId)
+      ).length;
       updateSwapStatus(swapId, 'GOEDGEKEURD');
-      showSuccess('Ruil goedgekeurd');
+      afgesloten.forEach((a) => updateSwapStatus(a.id, a.status));
+      showSuccess(
+        eigen === 0
+          ? 'Ruil goedgekeurd'
+          : eigen === 1
+            ? 'Ruil goedgekeurd. Je eigen ruilverzoek voor die dienst is ingetrokken.'
+            : `Ruil goedgekeurd. Je ${eigen} eigen ruilverzoeken voor die dienst zijn ingetrokken.`
+      );
       // The two shifts just changed hands - the roster above must show it.
       onSwapsChanged?.();
     } catch (err) {

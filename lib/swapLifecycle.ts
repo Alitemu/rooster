@@ -108,15 +108,20 @@ export function noticeWithdrawn(swap: SwapRow, baseUrl: string): Melding {
 
 /** Why the colleague is told a request is off, when the requester had already swapped elsewhere. */
 export const AL_GERUILD_REDEN = 'De dienst is al met een andere collega geruild.';
+/** The same, when the colleague was the other side of that swap themselves. */
+export const AL_ONDERLING_GERUILD_REDEN = 'Jullie hebben die dienst intussen via een ander ruilverzoek al met elkaar geruild.';
 
 /**
  * `approved` just swapped its two shifts. Every other PENDING request that
  * involves either shift can no longer be approved:
  *
- * - the approved requester's own other requests (the same shift offered to
- *   several colleagues at once, first come first served) are withdrawn
- *   (INGETROKKEN). Only those colleagues are told: the requester knows,
- *   and is told in the approval mail how many went (`eigenIngetrokken`).
+ * - a request made by one of the two who just swapped (the same shift
+ *   offered to several colleagues at once, first come first served, or the
+ *   approver's own offer of the shift they just gave away) is withdrawn
+ *   (INGETROKKEN). Only the colleague it was sent to is told: the one who
+ *   made it just took part in the swap. The approved requester is told in
+ *   the approval mail how many went (`eigenIngetrokken`), the approver on
+ *   screen (`afgesloten`).
  * - anyone else's request for one of the two shifts lapses: AFGEWEZEN with
  *   VERVALLEN_REDEN, and both sides are told.
  *
@@ -127,7 +132,7 @@ export function closeLapsedSwaps(
   approved: SwapRow,
   now: string,
   baseUrl: string
-): { meldingen: Melding[]; eigenIngetrokken: number } {
+): { meldingen: Melding[]; eigenIngetrokken: number; afgesloten: Array<{ id: string; status: string }> } {
   const lapsed = db
     .prepare(
       `SELECT id, periode_id, aanvrager_person_id, respondent_person_id, aangeboden_slot_id, gevraagde_slot_id
@@ -155,16 +160,21 @@ export function closeLapsedSwaps(
      WHERE id = ? AND status = 'PENDING'`
   );
   const meldingen: Melding[] = [];
+  const afgesloten: Array<{ id: string; status: string }> = [];
   let eigenIngetrokken = 0;
+  const partijen = [approved.aanvrager_person_id, approved.respondent_person_id];
   for (const swap of lapsed) {
-    if (swap.aanvrager_person_id === approved.aanvrager_person_id) {
-      withdraw.run(now, approved.aanvrager_person_id, swap.id);
-      eigenIngetrokken++;
-      meldingen.push(noticeToColleague(swap, 'ingetrokken', baseUrl, AL_GERUILD_REDEN));
+    if (partijen.includes(swap.aanvrager_person_id)) {
+      withdraw.run(now, swap.aanvrager_person_id, swap.id);
+      afgesloten.push({ id: swap.id, status: 'INGETROKKEN' });
+      if (swap.aanvrager_person_id === approved.aanvrager_person_id) eigenIngetrokken++;
+      const reden = partijen.includes(swap.respondent_person_id) ? AL_ONDERLING_GERUILD_REDEN : AL_GERUILD_REDEN;
+      meldingen.push(noticeToColleague(swap, 'ingetrokken', baseUrl, reden));
       continue;
     }
 
     close.run(now, VERVALLEN_REDEN, swap.id);
+    afgesloten.push({ id: swap.id, status: 'AFGEWEZEN' });
 
     // The requester: their request lapsed.
     const aanvrager = codenaamOf(swap.aanvrager_person_id);
@@ -202,5 +212,5 @@ export function closeLapsedSwaps(
     // The colleague: the request they were asked about is off.
     meldingen.push(noticeToColleague(swap, 'vervallen', baseUrl, VERVALLEN_REDEN));
   }
-  return { meldingen, eigenIngetrokken };
+  return { meldingen, eigenIngetrokken, afgesloten };
 }
