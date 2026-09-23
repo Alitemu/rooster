@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 
@@ -207,41 +208,10 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
     []
   );
 
-  // Dismiss on an outside click, a right-click elsewhere, Escape, or
-  // scrolling the page out from under a menu positioned at a fixed pixel
-  // coordinate - same mechanics as PreferencesCalendar's own context menu.
-  //
-  // The scroll listener has to run on the capture phase (native `scroll`
-  // events don't bubble) to see the page scrolling out from under the
-  // menu - but capture also means it sees the menu's OWN candidate list
-  // scrolling (max-h-80 overflow-y-auto below), since that's a scroll
-  // event too, just nested deeper in the same document. Closing on every
-  // one of those made the list itself impossible to scroll - by mouse
-  // wheel, touch drag or dragging the scrollbar - since the very first
-  // pixel of scroll dismissed the menu before anything visibly moved. The
-  // menuRef check tells the two apart: only close for a scroll whose
-  // target is NOT inside this menu.
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    const closeUnlessInsideMenu = (e: Event) => {
-      if (menuRef.current && e.target instanceof Node && menuRef.current.contains(e.target)) return;
-      setContextMenu(null);
-    };
-    const closeOnEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContextMenu(null);
-    };
-    window.addEventListener('click', close);
-    window.addEventListener('contextmenu', close);
-    window.addEventListener('keydown', closeOnEscape);
-    window.addEventListener('scroll', closeUnlessInsideMenu, true);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('contextmenu', close);
-      window.removeEventListener('keydown', closeOnEscape);
-      window.removeEventListener('scroll', closeUnlessInsideMenu, true);
-    };
-  }, [contextMenu]);
+  // Closing rules (outside click, right-click elsewhere, Escape, the page
+  // really scrolling away) - see lib/useContextMenuDismiss.ts.
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  useContextMenuDismiss(contextMenu, closeContextMenu, menuRef);
 
   // Fetch who's eligible for this slot as soon as the menu opens.
   useEffect(() => {

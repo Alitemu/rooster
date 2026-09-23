@@ -207,6 +207,14 @@ export function cleanupTestData(periodId: string, userIds: string[]): void {
   db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId);
+  // A test that picks a level in the preferences calendar leaves an
+  // availability row (and marks the submission started) - both point at
+  // this period's slots/row and would block deleting them.
+  db.prepare(
+    'DELETE FROM dienstrooster_availability WHERE slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)'
+  ).run(periodId);
+  db.prepare('DELETE FROM dienstrooster_submission WHERE schedule_period_id = ?').run(periodId);
+  db.prepare('DELETE FROM dienstrooster_pending_undo WHERE scope_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
 
   // Delete test users (access links and audit log entries first - approving

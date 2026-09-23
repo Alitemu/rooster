@@ -25,6 +25,7 @@
  */
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { dateToISO, parseISO, getHolidayInfo, addDays } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 
@@ -369,26 +370,11 @@ export function PreferencesCalendar({
     [contextMenu, applyPreferenceLevel]
   );
 
-  // Dismiss the menu on an outside click, a right-click elsewhere (see the
-  // stopPropagation note above), Escape, or scrolling the page out from
-  // under a menu positioned at a fixed pixel coordinate.
-  useEffect(() => {
-    if (!contextMenu) return;
-    const close = () => setContextMenu(null);
-    const closeOnEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setContextMenu(null);
-    };
-    window.addEventListener('click', close);
-    window.addEventListener('contextmenu', close);
-    window.addEventListener('keydown', closeOnEscape);
-    window.addEventListener('scroll', close, true);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('contextmenu', close);
-      window.removeEventListener('keydown', closeOnEscape);
-      window.removeEventListener('scroll', close, true);
-    };
-  }, [contextMenu]);
+  // Closing rules (outside click, right-click elsewhere - see the
+  // stopPropagation note above - Escape, the page really scrolling away):
+  // see lib/useContextMenuDismiss.ts.
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  useContextMenuDismiss(contextMenu, closeContextMenu);
 
   // Block whole weekend - sets both days directly to ABSOLUUT rather than
   // cycling them, so the result never depends on whatever state a day
