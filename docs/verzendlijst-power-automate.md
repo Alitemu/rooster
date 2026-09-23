@@ -17,6 +17,24 @@ buiten de app, in een Excel-lijst die alleen jij beheert. Zo gaat het:
 Eerder verstuurde links blijven werken. Elke verzending maakt alleen een
 extra link aan.
 
+### Ruilverzoeken
+
+Is automatisch versturen ingesteld (stap 2), dan gaan ook ruilverzoeken per
+mail. Daar hoef je niets voor te doen, want het gaat via dezelfde stroom:
+
+- Bij een nieuw ruilverzoek krijgt de collega een mail met het verzoek. De
+  aanvrager krijgt een bevestiging.
+- Bij goedkeuren of afwijzen krijgt de aanvrager de uitkomst. Bij een
+  afwijzing staat de reden erbij.
+
+In elke mail staat wat de lezer zelf afgeeft en krijgt, met de datum voluit,
+en een persoonlijke link om het verzoek te openen. Zo'n verzoek geldt als een
+verzendlijst met één bericht. De stroom hoeft er dus niets voor te weten.
+Wel moet iedereen die kan ruilen in je Excel-lijst staan.
+
+De melding in de app blijft altijd bestaan. De mail komt er alleen bij. Lukt
+het versturen niet, dan gaat het ruilverzoek gewoon door.
+
 ## Stap 1. Gmail klaarzetten
 
 Gebruik bij voorkeur een apart Gmail-account alleen voor Dienstrooster.
@@ -42,7 +60,8 @@ VERZENDLIJST_AAN=jouw.adres@voorbeeld.nl
 ```
 
 `SMTP_HOST` en `SMTP_PORT` hoeven niet: standaard is dat `smtp.gmail.com`
-op poort 465. Herstart daarna met `docker compose up -d`.
+op poort 465. Haal eerst de nieuwste versie binnen met `git pull` en herstart
+daarna met `docker compose up -d --build`.
 
 In het exportvenster verschijnt nu een groen blok *Automatisch versturen via
 Power Automate*. Zie je dat niet, dan mist een van de drie waarden. De

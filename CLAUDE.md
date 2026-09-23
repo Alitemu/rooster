@@ -358,7 +358,13 @@ mail. That mail reaches the flow either by hand (download the JSON, mail it
 to yourself) or, when SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN are set,
 from the server itself (lib/verzendlijstMail.ts, Gmail with an app
 password by default). The recipient is always VERZENDLIJST_AAN, never
-anything from a request. Setup for the operator, in Dutch:
+anything from a request. Swap requests use the same channel (lib/meldingMail.ts):
+a new request mails the colleague (SWAP_REQUESTED) and confirms to the
+requester, and approve/reject mails the requester (SWAP_RESULT), each a
+one-bericht verzendlijst with a fresh personal link and the swap spelled
+out from the reader's side (lib/swapMailDetails.ts). Started after the
+commit and never awaited, so a mail failure can't fail or slow the swap;
+without SMTP configured it does nothing, not even issue a link. Setup for the operator, in Dutch:
 docs/verzendlijst-power-automate.md.
 
 ## Deployment

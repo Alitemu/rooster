@@ -11,6 +11,9 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+import { swapMailDetails } from '@/lib/swapMailDetails';
+import { mailMelding } from '@/lib/meldingMail';
+import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { swapStatusLabel } from '@/lib/statusLabels';
 
@@ -146,10 +149,13 @@ export async function POST(
 
     const details = `Jouw ${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller} op ${offeredSlot?.datum} is geruild tegen de ${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller} op ${requestedSlot?.datum}.`;
 
-    const rendered = renderNotificationTemplate('SWAP_RESULT', {
+    const placeholders = {
       codenaam: aanvrager?.codenaam ?? '',
       uitkomst: 'goedgekeurd',
       details,
+    };
+    const rendered = renderNotificationTemplate('SWAP_RESULT', {
+      ...placeholders,
       link: '',
     });
     // Swapping the two assignments, updating the request status, and
@@ -207,6 +213,28 @@ export async function POST(
       );
     });
     approveTx();
+
+    // Also by mail - see the same call in ../../route.ts.
+    const collega = db
+      .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
+      .get(swapRequest.respondent_person_id) as { codenaam: string } | undefined;
+    void mailMelding({
+      personId: swapRequest.aanvrager_person_id,
+      periodId: swapRequest.periode_id,
+      template: { sleutel: 'SWAP_RESULT' },
+      placeholders: {
+        ...placeholders,
+        details: swapMailDetails({
+          lezer: 'aanvrager',
+          aanvrager: aanvrager?.codenaam ?? '',
+          collega: collega?.codenaam ?? 'je collega',
+          aangeboden: offeredSlot ?? { datum: '', teller: '' },
+          gevraagd: requestedSlot ?? { datum: '', teller: '' },
+        }),
+      },
+      linkIntro: 'Bekijk je rooster via je persoonlijke link:',
+      baseUrl: resolveBaseUrl(request),
+    });
 
     return NextResponse.json({
       success: true,

@@ -43,19 +43,23 @@ export function issuePeriodLinks(
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
 
-  const insert = db.prepare(
+  return db.transaction(() =>
+    members.map((member) => ({
+      codenaam: member.codenaam,
+      personalLink: issuePersonLink(member.id, period.id, baseUrl),
+    }))
+  )();
+}
+
+/** One fresh personal link for one person and period, added to any they already have. */
+export function issuePersonLink(personId: string, periodId: string, baseUrl: string): string {
+  const token = generateAccessToken();
+  db.prepare(
     `INSERT INTO dienstrooster_person_access_link
        (id, person_id, geldt_voor_periode_id, token_hash, aangemaakt_op)
      VALUES (?, ?, ?, ?, ?)`
-  );
-  const now = new Date().toISOString();
-  return db.transaction(() =>
-    members.map((member) => {
-      const token = generateAccessToken();
-      insert.run(crypto.randomUUID(), member.id, period.id, hashToken(token), now);
-      return { codenaam: member.codenaam, personalLink: `${baseUrl}/person/${token}` };
-    })
-  )();
+  ).run(crypto.randomUUID(), personId, periodId, hashToken(token), new Date().toISOString());
+  return `${baseUrl}/person/${token}`;
 }
 
 export function formatDeadline(deadline: string): string {

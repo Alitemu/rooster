@@ -11,6 +11,9 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
+import { swapMailDetails } from '@/lib/swapMailDetails';
+import { mailMelding, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
+import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { swapWindowConflicts } from '@/lib/swapWindowRule';
 
@@ -225,10 +228,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     const details = `Aangeboden: ${offeredSlot?.datum} (${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller})\nGevraagd: ${requestedSlot?.datum} (${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller})`;
 
-    const rendered = renderNotificationTemplate('SWAP_REQUESTED', {
+    const placeholders = {
       codenaam: respondent?.codenaam ?? '',
       aanvrager: aanvrager?.codenaam ?? '',
       details,
+    };
+    const rendered = renderNotificationTemplate('SWAP_REQUESTED', {
+      ...placeholders,
       link: '',
     });
 
@@ -264,6 +270,49 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       }
     });
     createTx();
+
+    // The mails spell the swap out from each reader's own side.
+    const windowConflicts = swapWindowConflicts({
+      periodId: period_id as string,
+      requesterPersonId: personId,
+      respondentPersonId: respondentAssignment.person_id,
+      offeredSlotId: offered_slot_id as string,
+      requestedSlotId: requested_slot_id as string,
+    });
+    const mailDetails = (lezer: 'aanvrager' | 'collega', kortOpElkaar: boolean) =>
+      swapMailDetails({
+        lezer,
+        aanvrager: aanvrager?.codenaam ?? '',
+        collega: respondent?.codenaam ?? '',
+        aangeboden: offeredSlot ?? { datum: '', teller: '' },
+        gevraagd: requestedSlot ?? { datum: '', teller: '' },
+        toelichting: typeof notes === 'string' ? notes : null,
+        kortOpElkaar,
+      });
+
+    // Also by mail, when the server is set up for it. Started after the
+    // commit and not awaited: it must never hold up or undo the request.
+    void mailMelding({
+      personId: respondentAssignment.person_id,
+      periodId: period_id as string,
+      template: { sleutel: 'SWAP_REQUESTED' },
+      placeholders: { ...placeholders, details: mailDetails('collega', windowConflicts.respondentTooClose) },
+      linkIntro: 'Bekijk het verzoek en geef antwoord via je persoonlijke link:',
+      baseUrl: resolveBaseUrl(request),
+    });
+    // And a confirmation to the requester, so they have it in writing too.
+    void mailMelding({
+      personId,
+      periodId: period_id as string,
+      template: SWAP_SUBMITTED_TEMPLATE,
+      placeholders: {
+        codenaam: aanvrager?.codenaam ?? '',
+        respondent: respondent?.codenaam ?? '',
+        details: mailDetails('aanvrager', windowConflicts.requesterTooClose),
+      },
+      linkIntro: 'Je kunt het verzoek volgen of intrekken via je persoonlijke link:',
+      baseUrl: resolveBaseUrl(request),
+    });
 
     return NextResponse.json({
       success: true,
