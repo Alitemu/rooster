@@ -16,6 +16,7 @@ import { verzendlijstPersonen, type VerzendlijstBericht } from './verzendlijst';
 export interface InvitationPeriod {
   id: string;
   naam: string;
+  status: string;
   deadline: string;
   pool_id: string;
   start_datum: string;
@@ -24,7 +25,7 @@ export interface InvitationPeriod {
 
 export function getInvitationPeriod(periodId: string): InvitationPeriod | undefined {
   return db
-    .prepare('SELECT id, naam, deadline, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+    .prepare('SELECT id, naam, status, deadline, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
     .get(periodId) as InvitationPeriod | undefined;
 }
 

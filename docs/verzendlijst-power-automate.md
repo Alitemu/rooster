@@ -4,8 +4,9 @@ Dienstrooster kent geen e-mailadressen, alleen codenamen (Persoon-01,
 Persoon-02 ...). Het koppelen van codenaam aan e-mailadres gebeurt daarom
 buiten de app, in een Excel-lijst die alleen jij beheert. Zo gaat het:
 
-1. In Dienstrooster klik je bij **Exporteren** op *Uitnodigingen automatisch
-   versturen* of *Herinneringen automatisch versturen*.
+1. In Dienstrooster kies je bij **Exporteren & communicatie** voor
+   *Uitnodigingen versturen* of *Herinneringen versturen*. Herinneringen kun
+   je aan iedereen tegelijk sturen of per persoon.
 2. De server maakt voor iedereen een nieuwe persoonlijke link aan en mailt
    één e-mail via Gmail naar jouw mailbox. Het onderwerp is altijd
    `DIENSTROOSTER-VERZENDLIJST`. De bijlage is een JSON-bestand met per
@@ -65,10 +66,9 @@ VERZENDLIJST_AAN=jouw.adres@voorbeeld.nl
 op poort 465. Haal eerst de nieuwste versie binnen met `git pull` en herstart
 daarna met `docker compose up -d --build`.
 
-In het exportvenster verschijnt nu een groen blok *Automatisch versturen via
-Power Automate*. Zie je dat niet, dan mist een van de drie waarden. De
-handmatige manier (JSON downloaden en zelf mailen) blijft altijd
-beschikbaar.
+In het exportvenster verschijnt nu bij *Uitnodigingen versturen* een groene
+knop. Zie je in plaats daarvan "Versturen is nog niet ingesteld", dan mist
+een van de drie waarden of is de app niet opnieuw gestart.
 
 De server moet naar buiten kunnen verbinden met `smtp.gmail.com` op poort
 465. Een melding "De mailserver is niet bereikbaar" betekent meestal dat een

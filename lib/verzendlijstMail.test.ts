@@ -164,7 +164,10 @@ describe('verzendlijst over SMTP', () => {
     const f = createFixture();
     const berichten = [{ codenaam: codenaam(f.a), onderwerp: 'Herinnering', tekst: 'Hoi, je link: https://x/person/abc' }];
     const res = await sendReminders(
-      plannerRequest(`http://localhost/api/exports/reminders/${f.periodId}/send`, f.planner, { berichten }),
+      plannerRequest(`http://localhost/api/exports/reminders/${f.periodId}/send`, f.planner, {
+        deadline: '2099-02-01T17:00',
+        berichten,
+      }),
       { params: Promise.resolve({ 'period-id': f.periodId }) }
     );
     expect(res.status).toBe(200);
@@ -177,6 +180,7 @@ describe('verzendlijst over SMTP', () => {
     const f = createFixture();
     const res = await sendReminders(
       plannerRequest(`http://localhost/api/exports/reminders/${f.periodId}/send`, f.planner, {
+        deadline: '2099-02-01T17:00',
         berichten: [
           { codenaam: codenaam(f.a), onderwerp: 'H', tekst: 'T' },
           { codenaam: codenaam(f.gone), onderwerp: 'H', tekst: 'T' },
@@ -220,6 +224,38 @@ describe('verzendlijst over SMTP', () => {
       { params: Promise.resolve({ 'period-id': f.periodId }) }
     );
     expect(res.status).toBe(401);
+    expect(sink.received).toHaveLength(0);
+  });
+
+  it('refuses reminders written for a deadline that has since been moved, and sends nothing', async () => {
+    configure();
+    const f = createFixture();
+    db.prepare("UPDATE dienstrooster_schedule_period SET deadline = '2099-02-08T17:00' WHERE id = ?").run(f.periodId);
+    const res = await sendReminders(
+      plannerRequest(`http://localhost/api/exports/reminders/${f.periodId}/send`, f.planner, {
+        deadline: '2099-02-01T17:00',
+        berichten: [{ codenaam: codenaam(f.a), onderwerp: 'H', tekst: 'Uiterlijk 1 februari' }],
+      }),
+      { params: Promise.resolve({ 'period-id': f.periodId }) }
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('DEADLINE_CHANGED');
+    expect(sink.received).toHaveLength(0);
+  });
+
+  it('refuses reminders once the deadline has passed, and sends nothing', async () => {
+    configure();
+    const f = createFixture();
+    db.prepare("UPDATE dienstrooster_schedule_period SET deadline = '2020-01-01T17:00' WHERE id = ?").run(f.periodId);
+    const res = await sendReminders(
+      plannerRequest(`http://localhost/api/exports/reminders/${f.periodId}/send`, f.planner, {
+        deadline: '2020-01-01T17:00',
+        berichten: [{ codenaam: codenaam(f.a), onderwerp: 'H', tekst: 'T' }],
+      }),
+      { params: Promise.resolve({ 'period-id': f.periodId }) }
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('DEADLINE_PASSED');
     expect(sink.received).toHaveLength(0);
   });
 });

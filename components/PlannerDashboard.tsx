@@ -17,7 +17,7 @@ import { useState, useEffect, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
-import { ExportDialog } from './ExportDialog';
+import { ExportDialog, type ExportType } from './ExportDialog';
 import { RosterGenerationDialog } from './RosterGenerationDialog';
 import { AssignmentGrid } from './AssignmentGrid';
 import { AssignmentCalendar } from './AssignmentCalendar';
@@ -51,6 +51,7 @@ interface DashboardData {
   period_id: string;
   period_name: string;
   status: string;
+  deadline: string;
   pool_id: string;
   submission_stats: {
     not_started: number;
@@ -217,7 +218,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   // versturen" below is a shortcut straight past that picker into
   // reminders, the same jump the period page used to offer on its own,
   // separate from this dashboard.
-  const [exportInitialType, setExportInitialType] = useState<'invitations' | 'reminders' | 'audit-trail' | null>(
+  const [exportInitialType, setExportInitialType] = useState<ExportType>(
     null
   );
   const [rosterDialogOpen, setRosterDialogOpen] = useState(false);
@@ -1076,8 +1077,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       <ExportDialog
         periodId={periodId}
         periodName={dashboard.period_name}
+        deadline={dashboard.deadline}
+        periodStatus={dashboard.status}
         isOpen={exportDialogOpen}
         onClose={() => setExportDialogOpen(false)}
+        onDeadlineChanged={() => {
+          loadData();
+          onPeriodChanged?.();
+        }}
         initialType={exportInitialType}
       />
 

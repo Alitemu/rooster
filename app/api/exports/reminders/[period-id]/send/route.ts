@@ -17,9 +17,12 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { getInvitationPeriod } from '@/lib/periodInvitations';
 import { verzendlijstPersonen } from '@/lib/verzendlijst';
+import { checkRemindersAllowed } from '@/lib/reminderGate';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 
 const bodySchema = z.object({
+  // The deadline the texts were generated for (deadline_bron from POST ../).
+  deadline: z.string().min(1),
   berichten: z
     .array(
       z.object({
@@ -50,6 +53,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const parsed = bodySchema.safeParse(await parseJsonBody(req));
     if (!parsed.success) return fail(400, 'VALIDATION_ERROR', 'De berichten zijn onvolledig of te lang.');
     const { berichten } = parsed.data;
+
+    const gate = checkRemindersAllowed(period, { generatedFor: parsed.data.deadline });
+    if (!gate.allowed) return fail(409, gate.code, gate.message);
 
     const members = new Set(
       (

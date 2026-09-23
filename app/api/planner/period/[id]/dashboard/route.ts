@@ -29,6 +29,7 @@ interface DashboardData {
   period_id: string;
   period_name: string;
   status: string;
+  deadline: string;
   pool_id: string;
   submission_stats: SubmissionStats;
   large_imbalances: ImbalanceItem[];
@@ -55,7 +56,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
 
     // Get period info
     const periodStmt = db.prepare(
-      'SELECT id, naam, status, pool_id, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?'
+      'SELECT id, naam, status, deadline, pool_id, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?'
     );
     const period = periodStmt.get(periodId) as any;
 
@@ -164,6 +165,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
         period_id: period.id,
         period_name: period.naam,
         status: period.status,
+        deadline: period.deadline,
         pool_id: period.pool_id,
         submission_stats: {
           not_started: stats.not_started || 0,

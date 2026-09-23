@@ -15,13 +15,10 @@
  * order, "Persoon-10" is gone before "Persoon-1" could match inside it. A
  * flow that ignores the field keeps working unchanged.
  *
- * That e-mail can reach the flow two ways: the planner downloads the JSON
- * and sends it to themselves by hand, or the app sends it itself over SMTP
- * (lib/verzendlijstMail.ts). Both produce the same subject and the same
- * attachment, so one flow handles either.
- *
- * Shared by the client (ExportDialog) and the server, so nothing here may
- * import server-only code.
+ * The server sends that e-mail itself over SMTP (lib/verzendlijstMail.ts).
+ * There used to be a manual route too (download the JSON, attach it to a
+ * mail to yourself), and per-person mailto links; both are gone, so every
+ * mail to a participant now goes through the flow.
  */
 
 /** Must match the flow's subject filter exactly. */

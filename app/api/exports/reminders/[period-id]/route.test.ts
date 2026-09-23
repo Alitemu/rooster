@@ -180,4 +180,39 @@ describe('POST /api/exports/reminders/[period-id]', () => {
 
     expect(isLinkLive(firstToken)).toBe(true);
   });
+
+  it('issues no links once the deadline has passed: the planner moves the deadline first', async () => {
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const participant = createPerson();
+    createMembership(poolId, participant);
+    const periodId = createPeriod(poolId);
+    db.prepare("UPDATE dienstrooster_schedule_period SET deadline = '2020-01-01T17:00' WHERE id = ?").run(periodId);
+
+    const res = await POST(plannerRequest(periodId, planner), {
+      params: Promise.resolve({ 'period-id': periodId }),
+    });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('DEADLINE_PASSED');
+    const links = db
+      .prepare('SELECT COUNT(*) AS c FROM dienstrooster_person_access_link WHERE person_id = ? AND geldt_voor_periode_id = ?')
+      .get(participant, periodId) as { c: number };
+    expect(links.c).toBe(0);
+  });
+
+  it('writes the current deadline into the text and says which one it was', async () => {
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const participant = createPerson();
+    createMembership(poolId, participant);
+    const periodId = createPeriod(poolId);
+    db.prepare("UPDATE dienstrooster_schedule_period SET deadline = '2098-06-15T17:00' WHERE id = ?").run(periodId);
+
+    const res = await POST(plannerRequest(periodId, planner), {
+      params: Promise.resolve({ 'period-id': periodId }),
+    });
+    const [reminder] = (await res.json()).data;
+    expect(reminder.deadline_bron).toBe('2098-06-15T17:00');
+    expect(reminder.body).toContain(new Date('2098-06-15T17:00').toLocaleString('nl-NL'));
+  });
 });

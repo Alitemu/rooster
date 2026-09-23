@@ -9,42 +9,54 @@
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
-import {
-  VERZENDLIJST_SUBJECT,
-  verzendlijstFilename,
-  verzendlijstJson,
-  verzendlijstPersonen,
-  type VerzendlijstBericht,
-} from '@/lib/verzendlijst';
 
-type ExportType = 'invitations' | 'reminders' | 'audit-trail' | null;
+export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
-// The Power Automate contract (fixed subject + JSON attachment) lives in
-// lib/verzendlijst.ts. When the server has SMTP set up
-// (lib/verzendlijstMail.ts) it sends that mail itself; otherwise the
-// planner downloads the file and mails it to themselves.
+// Every mail goes out through the Power Automate flow: the server sends it
+// a verzendlijst (lib/verzendlijst.ts, lib/verzendlijstMail.ts) and the
+// flow mails each person. There is no route through the planner's own mail
+// program any more: that needed the recipient's address typed in by hand,
+// which is exactly what the flow's own address list is for.
 type SendState = { kind: 'idle' } | { kind: 'sending' } | { kind: 'sent'; aantal: number } | { kind: 'failed'; message: string };
 
 interface ReminderTemplate {
   person_id: string;
   codenaam: string;
-  email: string | null;
   personal_link: string;
   deadline: string;
   subject: string;
   body: string;
-  mailto_link: string;
+  deadline_bron: string;
 }
 
 interface Props {
   periodId: string;
   periodName: string;
+  /** As stored (a datetime-local value). */
+  deadline: string;
+  periodStatus: string;
   isOpen: boolean;
   onClose: () => void;
+  /** After the deadline was moved from this dialog, so the page shows the new one. */
+  onDeadlineChanged?: () => void;
   initialType?: ExportType;
 }
 
-export function ExportDialog({ periodId, periodName, isOpen, onClose, initialType = null }: Props) {
+function formatDeadline(deadline: string): string {
+  const d = new Date(deadline);
+  return isNaN(d.getTime()) ? deadline : d.toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
+}
+
+export function ExportDialog({
+  periodId,
+  periodName,
+  deadline,
+  periodStatus,
+  isOpen,
+  onClose,
+  onDeadlineChanged,
+  initialType = null,
+}: Props) {
   const [exportType, setExportType] = useState<ExportType>(initialType);
   const [reminders, setReminders] = useState<ReminderTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -57,6 +69,9 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
   // as "the" way until the server has said whether it can send.
   const [autoSendAvailable, setAutoSendAvailable] = useState<boolean | null>(null);
   const [sendState, setSendState] = useState<SendState>({ kind: 'idle' });
+  // Per reminder, by person_id: sending one on its own, or already sent
+  // (on its own or with the rest). "All" only sends the ones not sent yet.
+  const [reminderSends, setReminderSends] = useState<Record<string, SendState>>({});
 
   useEffect(() => {
     if (exportType !== 'reminders') {
@@ -64,6 +79,55 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
       setRemindersLoadFailed(false);
     }
   }, [exportType]);
+
+  // Reminders carry the deadline in their text, so a new deadline means
+  // generating them again (the send route refuses the old ones anyway).
+  useEffect(() => {
+    setReminders([]);
+    setRemindersLoaded(false);
+    setRemindersLoadFailed(false);
+    setReminderSends({});
+    setSendState({ kind: 'idle' });
+  }, [deadline]);
+
+  const [newDeadline, setNewDeadline] = useState('');
+  const [savingDeadline, setSavingDeadline] = useState(false);
+  const [deadlineError, setDeadlineError] = useState<string | null>(null);
+  // The clock, refreshed when a screen opens and every half minute after,
+  // so a deadline that passes while the dialog is open is noticed. The
+  // server checks it again on every generate and send regardless.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const tick = () => setNow(Date.now());
+    tick();
+    const timer = setInterval(tick, 30_000);
+    return () => clearInterval(timer);
+  }, [isOpen, exportType, deadline]);
+  const deadlineIsPast = now !== null && new Date(deadline).getTime() < now;
+
+  const saveDeadline = async () => {
+    setSavingDeadline(true);
+    setDeadlineError(null);
+    try {
+      const res = await fetch(`/api/periods/${periodId}/deadline`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deadline: newDeadline }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setDeadlineError(data?.error?.message ?? 'Aanpassen van de deadline is mislukt.');
+        return;
+      }
+      setNewDeadline('');
+      onDeadlineChanged?.();
+    } catch {
+      setDeadlineError('Geen verbinding met de server. Controleer je netwerk.');
+    } finally {
+      setSavingDeadline(false);
+    }
+  };
 
   // The component never unmounts between opens (isOpen just toggles
   // whether it renders null), so without this, reopening the dialog - for
@@ -81,6 +145,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
       setRemindersLoaded(false);
       setRemindersLoadFailed(false);
       setSendState({ kind: 'idle' });
+      setReminderSends({});
     }
   }, [isOpen, periodId, initialType]);
 
@@ -105,8 +170,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
     setSendState({ kind: 'idle' });
   }, [exportType]);
 
-  const postSend = async (url: string, body?: unknown) => {
-    setSendState({ kind: 'sending' });
+  const postSend = async (url: string, body?: unknown): Promise<SendState> => {
     try {
       const res = await fetch(url, {
         method: 'POST',
@@ -115,13 +179,17 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
-        setSendState({ kind: 'failed', message: data?.error?.message ?? 'Versturen is mislukt.' });
-        return;
+        return { kind: 'failed', message: data?.error?.message ?? 'Versturen is mislukt.' };
       }
-      setSendState({ kind: 'sent', aantal: data.data.aantal });
+      return { kind: 'sent', aantal: data.data.aantal };
     } catch {
-      setSendState({ kind: 'failed', message: 'Geen verbinding met de server. Controleer je netwerk.' });
+      return { kind: 'failed', message: 'Geen verbinding met de server. Controleer je netwerk.' };
     }
+  };
+
+  const sendInvitations = async () => {
+    setSendState({ kind: 'sending' });
+    setSendState(await postSend(`/api/exports/invitations/${periodId}/send`));
   };
 
   const loadReminders = async () => {
@@ -133,7 +201,10 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
       // (see the route's docstring) - a state change must not be reachable
       // by a link click.
       const res = await fetch(`/api/exports/reminders/${periodId}`, { method: 'POST' });
-      if (!res.ok) throw new Error('Laden van herinneringen mislukt');
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error?.message ?? 'Laden van herinneringen mislukt');
+      }
 
       const data = await res.json();
       setReminders(data.data);
@@ -155,44 +226,33 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
   const templateLink = reminders[0]?.personal_link;
   // If a planner edits the textarea so heavily that the exact link string
   // no longer appears, split/join below silently no-ops and every
-  // recipient's mailto body would keep person 0's link instead of their
-  // own - checked once per render so the UI can warn instead of letting
-  // that happen unnoticed.
+  // recipient would get person 0's link instead of their own - checked
+  // once per render so the UI can warn instead of letting that happen
+  // unnoticed.
   const linkPlaceholderIntact = !templateLink || editedBody.includes(templateLink);
 
-  const mailtoFor = (reminder: ReminderTemplate): string => {
-    const body = templateLink
-      ? editedBody.split(templateLink).join(reminder.personal_link)
-      : editedBody;
-    return `mailto:?subject=${encodeURIComponent(editedSubject)}&body=${encodeURIComponent(body)}`;
-  };
+  const reminderBericht = (reminder: ReminderTemplate) => ({
+    codenaam: reminder.codenaam,
+    onderwerp: editedSubject,
+    tekst: templateLink ? editedBody.split(templateLink).join(reminder.personal_link) : editedBody,
+  });
 
-  const triggerMailto = `mailto:?subject=${encodeURIComponent(VERZENDLIJST_SUBJECT)}&body=${encodeURIComponent(
-    'Zie bijlage. Voeg het zojuist gedownloade JSON-bestand toe als bijlage voordat je deze e-mail verstuurt.'
-  )}`;
+  const unsentReminders = reminders.filter((r) => reminderSends[r.person_id]?.kind !== 'sent');
+  const anyReminderSending =
+    sendState.kind === 'sending' || Object.values(reminderSends).some((st) => st.kind === 'sending');
 
-  // Zelfde substitutie als mailtoFor (ieders eigen persoonlijke link, geen
-  // URL-encoding nodig - dit wordt een bestand, geen mailto-link) - zo
-  // geldt een bewerking van onderwerp/bericht hierboven ook voor de
-  // batch-download, net als voor de losse mailto-links per persoon.
-  const reminderBerichten = (): VerzendlijstBericht[] =>
-    reminders.map((reminder) => ({
-      codenaam: reminder.codenaam,
-      personen: verzendlijstPersonen(reminder.codenaam),
-      onderwerp: editedSubject,
-      tekst: templateLink ? editedBody.split(templateLink).join(reminder.personal_link) : editedBody,
-    }));
-
-  const downloadBatchJson = () => {
-    const blob = new Blob([verzendlijstJson(reminderBerichten())], { type: 'application/json' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = verzendlijstFilename(periodName);
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+  /** Sends these reminders as one verzendlijst; `alle` also drives the "all" button's state. */
+  const sendReminders = async (list: ReminderTemplate[], alle: boolean) => {
+    const mark = (state: SendState) =>
+      setReminderSends((prev) => ({ ...prev, ...Object.fromEntries(list.map((r) => [r.person_id, state])) }));
+    if (alle) setSendState({ kind: 'sending' });
+    mark({ kind: 'sending' });
+    const result = await postSend(`/api/exports/reminders/${periodId}/send`, {
+      deadline: reminders[0]?.deadline_bron,
+      berichten: list.map(reminderBericht),
+    });
+    mark(result.kind === 'sent' ? { kind: 'sent', aantal: 1 } : result);
+    if (alle) setSendState(result);
   };
 
   const downloadInvitations = async () => {
@@ -260,11 +320,11 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
             <h2 className="text-2xl font-bold mb-4">Exporteren en communicatie</h2>
             <div className="space-y-3 mb-6">
               <button
-                onClick={() => setExportType('invitations')}
+                onClick={() => setExportType('invitations-send')}
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
-                <p className="font-semibold text-neutral-900">📊 Uitnodigingen downloaden</p>
-                <p className="text-sm text-neutral-600">CSV-bestand met namen en persoonlijke links</p>
+                <p className="font-semibold text-neutral-900">✉️ Uitnodigingen versturen</p>
+                <p className="text-sm text-neutral-600">Iedereen de eigen persoonlijke link mailen via Power Automate</p>
               </button>
 
               <button
@@ -272,7 +332,15 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <p className="font-semibold text-neutral-900">📧 Herinneringen versturen</p>
-                <p className="text-sm text-neutral-600">Vooraf ingevulde mailto-sjablonen voor deadline-herinneringen</p>
+                <p className="text-sm text-neutral-600">Deadline-herinneringen via Power Automate, aan iedereen of per persoon</p>
+              </button>
+
+              <button
+                onClick={() => setExportType('invitations-download')}
+                className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
+              >
+                <p className="font-semibold text-neutral-900">📊 Uitnodigingen downloaden</p>
+                <p className="text-sm text-neutral-600">CSV-bestand met namen en persoonlijke links</p>
               </button>
 
               <button
@@ -291,9 +359,41 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
               Sluiten
             </button>
           </>
-        ) : exportType === 'invitations' ? (
+        ) : exportType === 'invitations-send' ? (
           <>
-            <h2 className="text-2xl font-bold mb-4">Uitnodigingen</h2>
+            <h2 className="text-2xl font-bold mb-4">Uitnodigingen versturen</h2>
+            {autoSendAvailable === null ? (
+              <p className="text-center text-neutral-600 mb-4">Laden...</p>
+            ) : autoSendAvailable ? (
+              <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 space-y-3">
+                <p className="text-sm text-green-900">
+                  De server maakt voor iedereen een nieuwe persoonlijke link aan en stuurt de uitnodigingen
+                  als verzendlijst naar de mailbox van de Power Automate-stroom. Die stuurt iedereen de
+                  eigen persoonlijke link.
+                </p>
+                <p className="text-sm text-green-900">
+                  Eerder verstuurde links blijven gewoon werken. Wie de vorige mail nog heeft, kan die
+                  blijven gebruiken.
+                </p>
+                <SendButton label="✉️ Uitnodigingen versturen" state={sendState} onClick={sendInvitations} />
+              </div>
+            ) : (
+              <NotConfiguredNotice />
+            )}
+
+            <button
+              onClick={() => setExportType(null)}
+              className="w-full py-2 px-4 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            >
+              Terug
+            </button>
+          </>
+        ) : exportType === 'invitations-download' ? (
+          <>
+            <h2 className="text-2xl font-bold mb-4">Uitnodigingen downloaden</h2>
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>
+            )}
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
                 Het CSV-bestand bevat namen en persoonlijke links naar het voorkeurenformulier.
@@ -309,22 +409,6 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                 gebruiken.
               </p>
             </div>
-
-            {autoSendAvailable && (
-              <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 space-y-3">
-                <p className="text-sm font-semibold text-green-900">Automatisch versturen via Power Automate</p>
-                <p className="text-sm text-green-900">
-                  De server maakt voor iedereen een nieuwe persoonlijke link aan en stuurt de uitnodigingen
-                  als verzendlijst naar de mailbox van de Power Automate-stroom. Die stuurt iedereen de
-                  eigen persoonlijke link.
-                </p>
-                <SendButton
-                  label="✉️ Uitnodigingen automatisch versturen"
-                  state={sendState}
-                  onClick={() => postSend(`/api/exports/invitations/${periodId}/send`)}
-                />
-              </div>
-            )}
 
             <div className="flex gap-3">
               <button
@@ -378,9 +462,53 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
               <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>
             )}
 
-            {!remindersLoaded ? (
+            {autoSendAvailable === null ? (
+              <p className="text-center text-neutral-600 mb-4">Laden...</p>
+            ) : !autoSendAvailable ? (
+              // Generating would issue everyone a link that nothing can send.
+              <NotConfiguredNotice />
+            ) : periodStatus !== 'OPEN' ? (
+              <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
+                <p className="text-sm text-amber-900">
+                  Herinneringen kunnen alleen verstuurd worden zolang de periode open staat voor voorkeuren.
+                </p>
+              </div>
+            ) : deadlineIsPast ? (
+              <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6 space-y-3">
+                <p className="text-sm font-semibold text-amber-900">De deadline is al voorbij</p>
+                <p className="text-sm text-amber-900">
+                  De deadline was {formatDeadline(deadline)}. Een herinnering met die datum heeft geen zin meer.
+                  Stel eerst een nieuwe deadline in. De herinneringen noemen daarna de nieuwe deadline.
+                </p>
+                <label className="block text-xs font-semibold text-amber-900" htmlFor="nieuwe-deadline">
+                  Nieuwe deadline
+                </label>
+                <input
+                  id="nieuwe-deadline"
+                  type="datetime-local"
+                  value={newDeadline}
+                  onChange={(e) => setNewDeadline(e.target.value)}
+                  className="w-full px-3 py-2 border rounded text-sm bg-white"
+                />
+                {deadlineError && (
+                  <p role="alert" className="text-sm text-red-700">
+                    {deadlineError}
+                  </p>
+                )}
+                <button
+                  onClick={saveDeadline}
+                  disabled={!newDeadline || savingDeadline}
+                  className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+                >
+                  {savingDeadline ? 'Bezig met opslaan...' : 'Deadline opslaan'}
+                </button>
+              </div>
+            ) : !remindersLoaded ? (
               <>
                 <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
+                  <p className="text-sm text-blue-900 mb-2">
+                    De herinneringen noemen de huidige deadline: {formatDeadline(deadline)}.
+                  </p>
                   <p className="text-sm text-blue-900">
                     Dit maakt voor iedereen die nog niet heeft bevestigd een nieuwe persoonlijke link aan.
                     Eerder verstuurde links blijven gewoon werken. Wie de uitnodigingsmail nog heeft,
@@ -431,104 +559,72 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
                   ) : (
                     <p className="text-xs text-red-700 font-medium">
                       ⚠️ De persoonlijke link is uit de tekst verdwenen. Iedereen zou nu dezelfde (verkeerde) link
-                      krijgen. Zet de link terug in de tekst voordat je een mail verstuurt.
+                      krijgen. Zet de link terug in de tekst voordat je iets verstuurt.
                     </p>
                   )}
                 </div>
 
-                {autoSendAvailable && (
-                  <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 space-y-3">
-                    <p className="text-sm font-semibold text-green-900">Automatisch versturen via Power Automate</p>
-                    <p className="text-sm text-green-900">
-                      Stuurt alle {reminders.length} herinneringen met de tekst hierboven als verzendlijst naar
-                      de mailbox van de Power Automate-stroom.
-                    </p>
+                <div className="bg-green-50 border border-green-200 rounded p-4 mb-6 space-y-3">
+                  <p className="text-sm font-semibold text-green-900">Versturen via Power Automate</p>
+                  <p className="text-sm text-green-900">
+                    {unsentReminders.length === reminders.length
+                      ? `Stuurt alle ${reminders.length} herinneringen met de tekst hierboven naar de Power Automate-stroom.`
+                      : unsentReminders.length === 0
+                        ? 'Alle herinneringen zijn verstuurd.'
+                        : `Stuurt de ${unsentReminders.length} herinneringen die nog niet verstuurd zijn.`}
+                  </p>
+                  {unsentReminders.length > 0 && (
                     <SendButton
-                      label="✉️ Herinneringen automatisch versturen"
-                      state={sendState}
-                      disabled={!linkPlaceholderIntact}
-                      onClick={() => postSend(`/api/exports/reminders/${periodId}/send`, { berichten: reminderBerichten() })}
+                      label={
+                        unsentReminders.length === reminders.length
+                          ? '✉️ Alle herinneringen versturen'
+                          : `✉️ De overige ${unsentReminders.length} versturen`
+                      }
+                      state={sendState.kind === 'sent' ? { kind: 'idle' } : sendState}
+                      disabled={!linkPlaceholderIntact || anyReminderSending}
+                      onClick={() => sendReminders(unsentReminders, true)}
                     />
-                  </div>
-                )}
-
-                <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6 space-y-3">
-                  <p className="text-sm font-semibold text-blue-900">
-                    {autoSendAvailable ? 'Of met de hand via Power Automate' : 'Versturen via Power Automate'}
-                  </p>
-                  <p className="text-sm text-blue-900">
-                    Download het bestand hieronder en stuur het als bijlage naar jezelf. Dat
-                    start de Power Automate-stroom die alle {reminders.length} herinneringen
-                    hieronder automatisch verstuurt.
-                  </p>
-                  <ol className="text-sm text-blue-900 list-decimal list-inside space-y-1">
-                    <li>Download het JSON-bestand</li>
-                    <li>Open een nieuwe e-mail (de knop hiernaast vult het onderwerp al goed in)</li>
-                    <li>Voeg het zojuist gedownloade bestand toe als bijlage</li>
-                    <li>Verstuur de e-mail naar jezelf</li>
-                  </ol>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={downloadBatchJson}
-                      disabled={!linkPlaceholderIntact}
-                      className="flex-1 py-2 px-4 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-300 transition-colors"
-                    >
-                      📥 JSON-bestand downloaden
-                    </button>
-                    <a
-                      href={linkPlaceholderIntact ? triggerMailto : undefined}
-                      aria-disabled={!linkPlaceholderIntact}
-                      onClick={(e) => {
-                        if (!linkPlaceholderIntact) e.preventDefault();
-                      }}
-                      className={`flex-1 py-2 px-4 rounded font-medium text-center transition-colors ${
-                        linkPlaceholderIntact
-                          ? 'bg-blue-100 text-blue-900 hover:bg-blue-200'
-                          : 'opacity-50 cursor-not-allowed bg-blue-100 text-blue-900'
-                      }`}
-                    >
-                      ✉️ Nieuwe e-mail openen
-                    </a>
-                  </div>
-                  <p className="text-xs text-blue-800">
-                    Onderwerp van deze e-mail moet exact{' '}
-                    <code className="font-mono bg-blue-100 px-1 rounded">{VERZENDLIJST_SUBJECT}</code>{' '}
-                    zijn, want daaraan herkent de Power Automate-stroom de mail. De knop hierboven vult dit
-                    al goed in.
-                  </p>
+                  )}
+                  {sendState.kind === 'sent' && unsentReminders.length === 0 && (
+                    <p role="status" className="text-sm text-green-900">
+                      ✓ Verstuurd. De Power Automate-stroom mailt iedereen nu de eigen persoonlijke link.
+                    </p>
+                  )}
                 </div>
 
-                <p className="text-sm text-neutral-600 mb-4">
-                  Of klik op iemand om diens herinneringsmail los te openen in je standaard e-mailprogramma.
-                </p>
-
-                <div className="space-y-2 mb-6">
-                  {reminders.map((reminder) => (
-                    <a
-                      key={reminder.person_id}
-                      href={linkPlaceholderIntact ? mailtoFor(reminder) : undefined}
-                      aria-disabled={!linkPlaceholderIntact}
-                      onClick={(e) => {
-                        if (!linkPlaceholderIntact) e.preventDefault();
-                      }}
-                      className={`block p-3 border rounded transition-colors ${
-                        linkPlaceholderIntact
-                          ? 'hover:bg-blue-50 cursor-pointer'
-                          : 'opacity-50 cursor-not-allowed'
-                      }`}
-                    >
-                      <p className="font-medium text-neutral-900">{reminder.codenaam}</p>
-                      <p className="text-xs text-neutral-600">
-                        Deadline: {reminder.deadline}
-                      </p>
-                    </a>
-                  ))}
-                </div>
-
-                <p className="text-xs text-neutral-500 mb-4 italic">
-                  Let op: als je op een naam klikt, opent je e-mailprogramma met een vooraf ingevuld bericht.
-                  Mogelijk moet je het ontvangersadres handmatig invullen voordat je verstuurt.
-                </p>
+                <p className="text-sm text-neutral-600 mb-2">Of verstuur de herinnering per persoon.</p>
+                <ul className="space-y-2 mb-6">
+                  {reminders.map((reminder) => {
+                    const state = reminderSends[reminder.person_id] ?? { kind: 'idle' };
+                    return (
+                      <li key={reminder.person_id} className="p-3 border rounded">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-neutral-900">{reminder.codenaam}</p>
+                            <p className="text-xs text-neutral-600">Deadline: {reminder.deadline}</p>
+                          </div>
+                          {state.kind === 'sent' ? (
+                            <span className="text-sm text-green-800 whitespace-nowrap">✓ Verstuurd</span>
+                          ) : (
+                            <button
+                              onClick={() => sendReminders([reminder], false)}
+                              disabled={!linkPlaceholderIntact || anyReminderSending}
+                              aria-label={`Herinnering versturen aan ${reminder.codenaam}`}
+                              className="py-1.5 px-3 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors whitespace-nowrap"
+                            >
+                              {state.kind === 'sending' ? 'Bezig...' : '✉️ Versturen'}
+                            </button>
+                          )}
+                        </div>
+                        {state.kind === 'failed' && (
+                          <p role="alert" className="text-sm text-red-700 mt-2">
+                            {state.message}
+                          </p>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               </>
             )}
 
@@ -579,6 +675,19 @@ function SendButton({
           {state.message}
         </p>
       )}
+    </div>
+  );
+}
+
+function NotConfiguredNotice() {
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
+      <p className="text-sm font-semibold text-amber-900">Versturen is nog niet ingesteld</p>
+      <p className="text-sm text-amber-900 mt-1">
+        De server kan nog geen mail naar de Power Automate-stroom sturen. De beheerder stelt dat in met
+        SMTP_USER, SMTP_PASS en VERZENDLIJST_AAN in het .env-bestand. De stappen staan in
+        docs/verzendlijst-power-automate.md.
+      </p>
     </div>
   );
 }

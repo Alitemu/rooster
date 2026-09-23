@@ -36,17 +36,18 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { getActiveReminderMilestones, resolveReminderUrgency } from '@/lib/reminderSchedule';
 import { resolveBaseUrl } from '@/lib/baseUrl';
+import { checkRemindersAllowed } from '@/lib/reminderGate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ReminderTemplate {
   person_id: string;
   codenaam: string;
-  email: string | null;
   personal_link: string;
   deadline: string;
   subject: string;
   body: string;
-  mailto_link: string;
+  /** The period's deadline as stored, which this text was written for. The send route refuses it once that changes. */
+  deadline_bron: string;
 }
 
 function daysBeforeDeadlineFromOverride(override: string | null, deadline: string): number {
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const periodId = params['period-id'];
 
     // Get period info
-    const periodStmt = db.prepare('SELECT naam, deadline, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?');
+    const periodStmt = db.prepare('SELECT naam, status, deadline, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?');
     const period = periodStmt.get(periodId) as any;
 
     if (!period) {
@@ -92,6 +93,14 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
         },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // Checked before any link is issued: after the deadline the date in the
+    // text would be wrong (see lib/reminderGate.ts).
+    const gate = checkRemindersAllowed(period);
+    if (!gate.allowed) {
+      const response: ApiErrorResponse = { success: false, error: { code: gate.code, message: gate.message } };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // People in this period who have not confirmed their preferences yet -
@@ -168,17 +177,14 @@ Heb je vragen? Neem dan contact op met de roosteraar.
 
 Bedankt!`;
 
-      const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
       return {
         person_id: person.person_id,
         codenaam: person.codenaam,
-        email: null, // No real emails stored
         personal_link: personalLink,
         deadline,
         subject,
         body,
-        mailto_link: mailtoLink,
+        deadline_bron: period.deadline,
       };
     });
 

@@ -356,10 +356,12 @@ itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
 the text names, longest first, so a flow can swap in real names from its
 sheet without "Persoon-1" matching inside "Persoon-10") to a Power Automate flow on the planner's
 side, which looks each codenaam up in its own Excel list and sends the
-mail. That mail reaches the flow either by hand (download the JSON, mail it
-to yourself) or, when SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN are set,
-from the server itself (lib/verzendlijstMail.ts, Gmail with an app
-password by default). The recipient is always VERZENDLIJST_AAN, never
+mail. The server sends that mail itself when SMTP_USER/SMTP_PASS/
+VERZENDLIJST_AAN are set (lib/verzendlijstMail.ts, Gmail with an app
+password by default); without them the export dialog says sending isn't
+set up. There is deliberately no other way out: the old manual JSON
+download and the per-person mailto links are gone, and a single reminder
+goes through the flow too. The invitations CSV download stays. The recipient is always VERZENDLIJST_AAN, never
 anything from a request. Swap requests use the same channel (lib/meldingMail.ts):
 a new request mails the colleague (SWAP_REQUESTED) and confirms to the
 requester, and approve/reject mails the requester (SWAP_RESULT), each a
