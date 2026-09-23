@@ -266,9 +266,12 @@ dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
 
       - **Rijen weergeven die in een tabel voorkomen** (Excel Online
         (Business)): tabel `Adressen`, filterquery
-        `Codenaam eq '@{items('Toepassen_op_elk_3')}'`.
+        `Codenaam eq '@{replace(items('Toepassen_op_elk_3'), '''', '''''')}'`.
         Anders dan *Een rij ophalen* mislukt dit niet als iemand ontbreekt.
-        Het geeft dan gewoon niets terug.
+        Het geeft dan gewoon niets terug. Het `replace`-deel verdubbelt elke
+        apostrof in de codenaam, zoals het filter dat verwacht. Zonder dat
+        breekt een codenaam als `Persoon-O'Brien` het filter, en kan een
+        slim gekozen codenaam zelfs een verkeerde rij opleveren.
       - **Opstellen**, met als expressie de naam, of de codenaam als er geen
         naam is:
         `coalesce(first(outputs('Rijen_weergeven_die_in_een_tabel_voorkomen')?['body/value'])?['Naam'], items('Toepassen_op_elk_3'))`
@@ -302,7 +305,7 @@ geen naam, dan blijft de codenaam gewoon staan.
 
 Tot en met september 2026 was de bijlage een losse lijst berichten. Nu staat
 die lijst in `berichten`, met de samenvatting eromheen. Pas in een bestaande
-stroom drie dingen aan, op hetzelfde moment dat je de nieuwe versie van
+stroom de volgende dingen aan, op hetzelfde moment dat je de nieuwe versie van
 Dienstrooster installeert:
 
 1. Vervang bij **JSON parseren** het schema door het schema uit stap 4.
@@ -313,6 +316,9 @@ Dienstrooster installeert:
    namen (stap 5), zet de variabele `tekst` dan op *html* en gebruik als
    hoofdtekst `variables('tekst')` zonder `replace`. Dit is belangrijk voor
    de veiligheid, zie stap 4.
+4. Gebruik je echte namen (stap 5)? Vervang dan de filterquery bij *Rijen
+   weergeven die in een tabel voorkomen* door de nieuwe uit stap 5, met het
+   `replace`-deel voor apostroffen.
 
 De stappen binnen de lus (rij ophalen, mail versturen, echte namen) blijven
 gewoon werken.
