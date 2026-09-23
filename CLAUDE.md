@@ -375,9 +375,13 @@ RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN) and an
 The flow must use `html` as the mail body, never build HTML from `tekst`:
 the text can hold words a participant typed (swap toelichting, rejection
 reason, both capped at 1000 characters by lib/freeText.ts). Withdrawing a
-swap tells the colleague; approving one closes every other PENDING request
-on either shift as AFGEWEZEN ("vervallen") and tells both sides
-(lib/swapLifecycle.ts). Invitations go out only for an OPEN period before
+swap tells the colleague. One shift may be offered to several colleagues
+at once (the candidates list marks who was already asked, `al_gevraagd`;
+the exact same request twice is refused): the first to approve wins. That
+approval withdraws the requester's other open requests (INGETROKKEN, only
+those colleagues are told, the requester hears it in the approval mail)
+and closes anyone else's request on either shift as AFGEWEZEN
+("vervallen", both sides told) (lib/swapLifecycle.ts). Invitations go out only for an OPEN period before
 its deadline, like reminders (lib/reminderGate.ts); the CSV of links is
 not gated. SMTP on any port but 465 requires STARTTLS (requireTLS).
 

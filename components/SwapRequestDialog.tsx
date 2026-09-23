@@ -29,6 +29,8 @@ interface Candidate {
   category: CandidateCategory;
   /** You would end up with two shifts close together yourself. */
   requester_te_dichtbij: boolean;
+  /** You already asked this colleague for this shift, and they haven't answered yet. */
+  al_gevraagd: boolean;
 }
 
 // Most promising first. The colleague would get the shift you offer, so
@@ -276,9 +278,13 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   {groupedCandidates.map(([category, list]) => (
                     <optgroup key={category} label={`${CATEGORY_LABELS[category]} (${list.length})`}>
                       {list.map((c) => (
-                        <option key={c.slot_id} value={c.slot_id}>
+                        <option key={c.slot_id} value={c.slot_id} disabled={c.al_gevraagd}>
                           {c.codenaam}: {formatDatum(c.datum)} - {shiftTypeNames[c.teller]}
-                          {c.requester_te_dichtbij ? ' (jij hebt dan twee diensten kort op elkaar)' : ''}
+                          {c.al_gevraagd
+                            ? ' (al gevraagd, wacht op antwoord)'
+                            : c.requester_te_dichtbij
+                              ? ' (jij hebt dan twee diensten kort op elkaar)'
+                              : ''}
                         </option>
                       ))}
                     </optgroup>
@@ -289,6 +295,12 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                     ? `Je collega krijgt jouw dienst op ${formatDatum(getOfferedSlot()?.datum ?? '')}. De groepen laten zien hoe collega's tegenover die dag staan: bovenaan staan wie de meeste kans geven op een "ja". Je kunt alleen ruilen met hetzelfde diensttype (${shiftTypeNames[offeredTeller ?? '']}).`
                     : 'Kies eerst een dienst die je aanbiedt'}
                 </p>
+                {offeredSlotId && (
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Je kunt dezelfde dienst aan meerdere collega&apos;s aanbieden. Wie het eerst goedkeurt,
+                    ruilt met je. Je andere verzoeken voor deze dienst worden dan vanzelf ingetrokken.
+                  </p>
+                )}
               </div>
 
               {/* Preview */}

@@ -385,6 +385,51 @@ describe('what a participant types into a swap', () => {
 });
 
 describe('a swap request that is withdrawn or lapses', () => {
+  it('lets one shift be offered to several colleagues: the first to approve wins, the rest are withdrawn', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    // The same shift offered to the colleague and to the third colleague.
+    const naarCollega = await requestSwap(f);
+    const naarDerdeRes = await createSwap(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_id: f.periodId, offered_slot_id: f.offered, requested_slot_id: f.derdeShift }),
+      }),
+      { params: Promise.resolve({ id: f.aanvrager }) }
+    );
+    expect(naarDerdeRes.status).toBe(200);
+    const naarDerde = (await naarDerdeRes.json()).data.swap_request_id as string;
+    await waitForMails(sink, 4);
+
+    await approveSwap(
+      new NextRequest(`http://localhost/api/person/${f.collega}/swap-requests/${naarCollega}/approve`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.collega) },
+      }),
+      { params: Promise.resolve({ id: f.collega, 'swap-id': naarCollega }) }
+    );
+    // The outcome to the requester and the notice to the third colleague.
+    await waitForMails(sink, 6);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(sink.received).toHaveLength(6);
+
+    const row = db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(naarDerde) as {
+      status: string;
+    };
+    expect(row.status).toBe('INGETROKKEN');
+
+    const naarDerdeMail = berichtenFor(f.derde).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
+    expect(naarDerdeMail.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.aanvrager)} is ingetrokken`);
+    expect(naarDerdeMail.tekst).toContain('De dienst is al met een andere collega geruild.');
+
+    // The requester hears it once, in the approval, not as a "vervallen" per colleague.
+    const aanAanvrager = berichtenFor(f.aanvrager);
+    expect(aanAanvrager.map((b) => b.onderwerp)).not.toContain('Je ruilverzoek is vervallen');
+    const uitkomst = aanAanvrager.find((b) => b.onderwerp === 'Je ruilverzoek is goedgekeurd')!;
+    expect(uitkomst.tekst).toContain('Je andere ruilverzoek is ingetrokken.');
+  });
+
   const inApp = (personId: string) =>
     db
       .prepare('SELECT onderwerp, inhoud FROM dienstrooster_notification WHERE person_id = ? ORDER BY aangemaakt_op')

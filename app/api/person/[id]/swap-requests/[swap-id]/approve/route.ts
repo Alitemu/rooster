@@ -167,6 +167,7 @@ export async function POST(
     // PENDING and no audit trail of what happened.
     const baseUrl = resolveBaseUrl(request);
     const lapsed: Array<{ send: () => void }> = [];
+    let eigenIngetrokken = 0;
     const approveTx = db.transaction(() => {
       db.prepare(
         'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
@@ -217,7 +218,9 @@ export async function POST(
 
       // Other open requests for either of these two shifts can never be
       // approved now: close them and tell those involved.
-      lapsed.push(...closeLapsedSwaps(swapRequest, now, baseUrl));
+      const closed = closeLapsedSwaps(swapRequest, now, baseUrl);
+      lapsed.push(...closed.meldingen);
+      eigenIngetrokken = closed.eigenIngetrokken;
     });
     approveTx();
     lapsed.forEach((m) => m.send());
@@ -238,7 +241,7 @@ export async function POST(
           collega: collega?.codenaam ?? 'je collega',
           aangeboden: offeredSlot ?? { datum: '', teller: '' },
           gevraagd: requestedSlot ?? { datum: '', teller: '' },
-        }),
+        }) + ingetrokkenRegel(eigenIngetrokken),
       },
       anderen: [collega?.codenaam ?? ''],
       soort: 'RUIL_UITKOMST',
@@ -263,4 +266,12 @@ export async function POST(
     }
     return internalErrorResponse('swap-approve', error);
   }
+}
+
+/** Tells the requester their other offers of the same swap were withdrawn for them. */
+function ingetrokkenRegel(aantal: number): string {
+  if (aantal === 0) return '';
+  return aantal === 1
+    ? '\n\nJe andere ruilverzoek is ingetrokken. Die collega heeft daar bericht van gekregen.'
+    : `\n\nJe ${aantal} andere ruilverzoeken zijn ingetrokken. Die collega's hebben daar bericht van gekregen.`;
 }

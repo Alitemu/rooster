@@ -77,6 +77,7 @@ afterEach(() => {
     for (const { id } of db.prepare('SELECT id FROM dienstrooster_schedule_period WHERE pool_id = ?').all(poolId) as Array<{
       id: string;
     }>) {
+      db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(id);
       db.prepare(
         'DELETE FROM dienstrooster_availability WHERE slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)'
       ).run(id);
@@ -175,5 +176,23 @@ describe('getSwapCandidates', () => {
     const theirs = f.shift(other, '2099-04-06', 15);
     const result = getSwapCandidates(f.requester, f.periodId, theirs);
     expect(result.ok).toBe(false);
+  });
+
+  it('marks a colleague already asked for this shift, so they are not asked twice', () => {
+    const f = createFixture(2);
+    const gevraagd = f.person('Gevraagd');
+    const ander = f.person('Ander');
+    const hunDienst = f.shift(gevraagd, '2099-04-06', 15);
+    const andereDienst = f.shift(ander, '2099-04-13', 16);
+    db.prepare(
+      `INSERT INTO dienstrooster_swap_request
+         (id, periode_id, aanvrager_person_id, aangeboden_slot_id, gevraagde_slot_id, respondent_person_id, status, aangemaakt_op, row_version)
+       VALUES (?, ?, ?, ?, ?, ?, 'PENDING', datetime('now'), 1)`
+    ).run(crypto.randomUUID(), f.periodId, f.requester, f.offered, hunDienst, gevraagd);
+
+    const result = getSwapCandidates(f.requester, f.periodId, f.offered);
+    if (!result.ok) throw new Error(result.message);
+    expect(result.candidates.find((c) => c.slot_id === hunDienst)!.al_gevraagd).toBe(true);
+    expect(result.candidates.find((c) => c.slot_id === andereDienst)!.al_gevraagd).toBe(false);
   });
 });

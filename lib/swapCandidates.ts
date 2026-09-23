@@ -46,6 +46,13 @@ export interface SwapCandidate {
   category: SwapCandidateCategory;
   /** The requester would end up with two shifts close together. */
   requester_te_dichtbij: boolean;
+  /**
+   * The requester already has an open request offering this same shift
+   * for this one. Offering one shift to several colleagues is fine (first
+   * to approve wins, lib/swapLifecycle.ts), asking the same one twice is
+   * refused by the create route.
+   */
+  al_gevraagd: boolean;
 }
 
 export type SwapCandidatesResult =
@@ -89,7 +96,20 @@ export function getSwapCandidates(
        WHERE a.schedule_version_id = ? AND a.person_id != ? AND st.teller = ?
        ORDER BY s.datum`
     )
-    .all(periodId, requesterId, offered.teller) as Array<Omit<SwapCandidate, 'category' | 'requester_te_dichtbij'>>;
+    .all(periodId, requesterId, offered.teller) as Array<
+    Omit<SwapCandidate, 'category' | 'requester_te_dichtbij' | 'al_gevraagd'>
+  >;
+
+  const alGevraagd = new Set(
+    (
+      db
+        .prepare(
+          `SELECT gevraagde_slot_id FROM dienstrooster_swap_request
+           WHERE periode_id = ? AND aanvrager_person_id = ? AND aangeboden_slot_id = ? AND status = 'PENDING'`
+        )
+        .all(periodId, requesterId, offered.id) as Array<{ gevraagde_slot_id: string }>
+    ).map((r) => r.gevraagde_slot_id)
+  );
 
   const preferenceStmt = db.prepare(
     'SELECT blocking_level FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
@@ -132,7 +152,12 @@ export function getSwapCandidates(
             : level === 'VOORKEUR'
               ? 'VOORKEUR'
               : 'BESCHIKBAAR';
-    candidates.push({ ...other, category, requester_te_dichtbij: conflicts.requesterTooClose });
+    candidates.push({
+      ...other,
+      category,
+      requester_te_dichtbij: conflicts.requesterTooClose,
+      al_gevraagd: alGevraagd.has(other.slot_id),
+    });
   }
 
   return { ok: true, candidates };
