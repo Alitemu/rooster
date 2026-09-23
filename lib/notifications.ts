@@ -38,20 +38,25 @@ export function renderNotificationTemplate(
   };
 }
 
-/** Writes one row to the participant's in-app inbox. Always active - see module docstring. */
+/**
+ * Writes one row to the participant's in-app inbox. Always active - see
+ * module docstring. Returns the new row's id, so a caller can link to it
+ * (a swap request stores it to show whether the request was read).
+ */
 export function insertNotification(params: {
   personId: string;
   periodId?: string | null;
   type: string;
   onderwerp: string;
   inhoud: string;
-}): void {
+}): string {
+  const id = uuid();
   db.prepare(
     `INSERT INTO dienstrooster_notification
      (id, person_id, periode_id, type, onderwerp, inhoud, gelezen, aangemaakt_op)
      VALUES (?, ?, ?, ?, ?, ?, 0, ?)`
   ).run(
-    uuid(),
+    id,
     params.personId,
     params.periodId ?? null,
     params.type,
@@ -59,6 +64,7 @@ export function insertNotification(params: {
     params.inhoud,
     new Date().toISOString()
   );
+  return id;
 }
 
 /**

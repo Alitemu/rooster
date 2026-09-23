@@ -25,6 +25,7 @@ import { StaffingOverview } from './StaffingOverview';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
 import { RebalanceSuggestions } from './RebalanceSuggestions';
 import { FillGapsSummary } from './FillGapsSummary';
+import { SwapRequestsOverview } from './SwapRequestsOverview';
 import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
@@ -275,7 +276,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   // they'd keep showing the previous roster until an unrelated prop change
   // happened to remount them.
   const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
-  const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar' | 'dienstdoende'>('list');
+  const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar' | 'dienstdoende' | 'ruilverzoeken'>('list');
   // The single most recent reversible assign/reassign/remove for this
   // period, read from the server (lib/pendingUndo.ts) rather than kept in
   // this component's own state - that's what makes it still show up after
@@ -511,7 +512,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   return (
     <div className="space-y-4">
       {/* No separate stats-summary card here anymore - it duplicated
-          exactly what "Personeel & voortgang" already shows in its own
+          exactly what "Status voorkeuren" already shows in its own
           section hint below (visible whether that section is open or
           closed), just phrased slightly differently. */}
 
@@ -643,7 +644,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       )}
 
       <Section
-        title="Personeel & voortgang"
+        title="Status voorkeuren"
         hint={`${dashboard.total_staff} personen · ${stats.confirmed} bevestigd, ${stats.in_progress} bezig, ${stats.not_started} niet begonnen`}
         isOpen={openSections.has('personeel')}
         pinned={pinnedSections.has('personeel')}
@@ -952,7 +953,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               header-row version of this button group) - this is a plain
               block-level div now, not a flex sibling fighting a title for
               space, so it doesn't need the min-w-0 workaround too. Still
-              needed at all: the three buttons together (~359px) are wider
+              needed at all: the four buttons together are wider
               than a 375px screen's content width once this section's own
               padding is subtracted. */}
           <div className="overflow-x-auto mb-4">
@@ -986,6 +987,16 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               }`}
             >
               🧑‍⚕️ Dienstdoende
+            </button>
+            <button
+              onClick={() => setAssignmentsView('ruilverzoeken')}
+              className={`px-3 py-1 text-sm font-medium transition-colors border-l border-neutral-300 ${
+                assignmentsView === 'ruilverzoeken'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-white text-neutral-700 hover:bg-neutral-100'
+              }`}
+            >
+              🔁 Ruilverzoeken
             </button>
           </div>
           </div>
@@ -1024,8 +1035,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                 setFillGapsRefreshKey((k) => k + 1);
               }}
             />
-          ) : (
+          ) : assignmentsView === 'dienstdoende' ? (
             <StaffingOverview key={assignmentsRefreshKey} periodId={periodId} />
+          ) : (
+            <SwapRequestsOverview key={assignmentsRefreshKey} periodId={periodId} />
           )}
         </Section>
       )}

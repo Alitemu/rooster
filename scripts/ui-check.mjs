@@ -161,10 +161,10 @@ rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(aw
 // Accordion sections (PlannerDashboard's Section component): opening one
 // closes any other open-but-unpinned section, and pinning (📌, shown only
 // while a section is open) keeps it open even when another section opens.
-await page.click('[role="button"]:has-text("Personeel & voortgang")');
+await page.click('[role="button"]:has-text("Status voorkeuren")');
 await page.waitForTimeout(300);
 const staffTableVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
-rec('Opening "Personeel & voortgang" shows its content', staffTableVisible);
+rec('Opening "Status voorkeuren" shows its content', staffTableVisible);
 
 await page.click('[role="button"]:has-text("Exporteren & communicatie")');
 await page.waitForTimeout(300);
@@ -176,10 +176,10 @@ rec(
   `staff-still-visible=${staffTableStillVisible} export-visible=${exportVisible}`
 );
 
-// Reopen "Personeel & voortgang" and pin it before opening the export section again.
-await page.click('[role="button"]:has-text("Personeel & voortgang")');
+// Reopen "Status voorkeuren" and pin it before opening the export section again.
+await page.click('[role="button"]:has-text("Status voorkeuren")');
 await page.waitForTimeout(300);
-await page.click('[role="button"]:has-text("Personeel & voortgang") button[aria-pressed]');
+await page.click('[role="button"]:has-text("Status voorkeuren") button[aria-pressed]');
 await page.waitForTimeout(200);
 await page.click('[role="button"]:has-text("Exporteren & communicatie")');
 await page.waitForTimeout(300);
@@ -204,7 +204,7 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 let calendarNavCount = 0;
 page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) calendarNavCount++; });
 // The Dienstrooster section is a collapsible header now (PlannerDashboard's
-// Section component), same mechanism as "Personeel & voortgang" etc. -
+// Section component), same mechanism as "Status voorkeuren" etc. -
 // there's no separate "Tonen" button anymore, clicking the header itself
 // opens it.
 await page.click('[role="button"]:has-text("Dienstrooster")');
@@ -554,6 +554,14 @@ if (rosterPeriod) {
   rec('Dienstrooster (kalender): de pagina springt niet naar boven',
       calYBefore > 500 && Math.abs(calYAfter - calYBefore) < 30, `${calYBefore} -> ${calYAfter}`);
   rec('…en die toekenning is weer ongedaan gemaakt', (await undoLast()) === 200);
+
+  // The fourth view under Dienstrooster: the planner's overview of the
+  // swap requests participants made among themselves.
+  await page.locator('button:has-text("🔁 Ruilverzoeken")').click();
+  await page.waitForTimeout(800);
+  const swapOverviewShown =
+    (await page.locator('text=Ruilverzoeken die medewerkers onderling hebben gedaan').count()) > 0;
+  rec('Dienstrooster: "Ruilverzoeken" toont het overzicht van ruilverzoeken', swapOverviewShown);
 } else {
   console.log('(Dienstrooster-check overgeslagen: geen gegenereerde periode in de database)');
 }

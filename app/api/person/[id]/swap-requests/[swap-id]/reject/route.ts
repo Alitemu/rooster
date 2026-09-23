@@ -96,7 +96,7 @@ export async function POST(
     const rejectTx = db.transaction(() => {
       const swapUpdate = db.prepare(
         `UPDATE dienstrooster_swap_request
-         SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?, opmerkingen = ?
+         SET status = ?, beantwoord_op = ?, afgehandeld_door_person_id = ?, reden_afwijzing = ?
          WHERE id = ? AND status = 'PENDING'`
       ).run('AFGEWEZEN', now, personId, reason || null, swapId);
 

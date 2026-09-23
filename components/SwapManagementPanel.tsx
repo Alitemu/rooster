@@ -23,6 +23,7 @@ interface SwapRequest {
   gevraagde_datum: string;
   gevraagde_type: string;
   opmerkingen: string | null;
+  reden_afwijzing: string | null;
 }
 
 interface Props {
@@ -296,6 +297,12 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
                   {swap.opmerkingen && (
                     <p className="text-sm text-neutral-700 italic mb-2">
                       &ldquo;{swap.opmerkingen}&rdquo;
+                    </p>
+                  )}
+
+                  {swap.reden_afwijzing && (
+                    <p className="text-sm text-neutral-700 mb-2">
+                      Reden van afwijzen: &ldquo;{swap.reden_afwijzing}&rdquo;
                     </p>
                   )}
 

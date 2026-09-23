@@ -418,6 +418,8 @@ async function createTables() {
       beantwoord_op TEXT,
       afgehandeld_door_person_id TEXT REFERENCES dienstrooster_person(id),
       opmerkingen TEXT,
+      reden_afwijzing TEXT,
+      melding_id TEXT,
       row_version INTEGER NOT NULL DEFAULT 1
     );
 
@@ -511,6 +513,10 @@ const SEEDED_TABLES = [
 const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_person: {
     sessie_versie: 'INTEGER NOT NULL DEFAULT 1',
+  },
+  dienstrooster_swap_request: {
+    reden_afwijzing: 'TEXT',
+    melding_id: 'TEXT',
   },
 };
 

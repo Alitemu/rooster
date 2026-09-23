@@ -563,7 +563,14 @@ export const swapRequest = sqliteTable(
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
     beantwoord_op: text('beantwoord_op'), // When approved/rejected
     afgehandeld_door_person_id: text('afgehandeld_door_person_id').references(() => person.id),
-    opmerkingen: text('opmerkingen'), // Notes from requester/responder
+    opmerkingen: text('opmerkingen'), // The requester's own note
+    // Why the respondent declined - kept apart from opmerkingen, which a
+    // rejection used to overwrite, losing the requester's note.
+    reden_afwijzing: text('reden_afwijzing'),
+    // The in-app notification sent to the respondent, so the planner's
+    // overview can show whether it has been read. Null for requests made
+    // before this column existed.
+    melding_id: text('melding_id'),
     row_version: integer('row_version').default(1).notNull(),
   },
   (table) => ({

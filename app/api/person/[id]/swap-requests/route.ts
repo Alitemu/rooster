@@ -47,7 +47,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     // Build query
     let query = `
       SELECT
-        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op, sr.opmerkingen,
+        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op, sr.opmerkingen, sr.reden_afwijzing,
         sr.aanvrager_person_id, ap.codenaam as aanvrager_codenaam,
         sr.respondent_person_id, rp.codenaam as respondent_codenaam,
         sr.aangeboden_slot_id, sr.gevraagde_slot_id,
@@ -242,13 +242,15 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
 
       if (rendered) {
-        insertNotification({
+        const meldingId = insertNotification({
           personId: respondentAssignment.person_id,
           periodId: period_id as string,
           type: 'RUILVERZOEK',
           onderwerp: rendered.onderwerp,
           inhoud: rendered.inhoud,
         });
+        // Linked so the planner's overview can show whether it was read.
+        db.prepare('UPDATE dienstrooster_swap_request SET melding_id = ? WHERE id = ?').run(meldingId, swapId);
       }
     });
     createTx();
