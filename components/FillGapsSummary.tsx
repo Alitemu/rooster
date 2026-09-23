@@ -24,9 +24,17 @@ import Link from 'next/link';
 interface Props {
   periodId: string;
   onCountChange?: (count: number) => void;
+  /**
+   * Bumped by the parent after anything that can open or close a gap.
+   * A refetch in place, not a remount (it used to be the element's `key`):
+   * a remount flashed "Laden..." for a moment, and because this box sits
+   * above the roster, that brief change in height made the whole page
+   * jump right after every assignment.
+   */
+  refreshKey?: number;
 }
 
-export function FillGapsSummary({ periodId, onCountChange }: Props) {
+export function FillGapsSummary({ periodId, onCountChange, refreshKey }: Props) {
   const [count, setCount] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -47,7 +55,7 @@ export function FillGapsSummary({ periodId, onCountChange }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshKey]);
 
   if (loadError) {
     return (

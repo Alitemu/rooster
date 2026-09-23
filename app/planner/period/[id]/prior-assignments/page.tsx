@@ -408,9 +408,15 @@ export default function PriorAssignmentsPage() {
                         the same here as it does on the live roster. */}
                     {editingKey === key ? (
                       <div className="flex items-center gap-2">
+                        {/* Picking someone applies it straight away and closes
+                            the editor, same as the Wisselen menu on the live roster. */}
                         <select
                           value={editCodenaam}
-                          onChange={(e) => setEditCodenaam(e.target.value)}
+                          disabled={savingKey === key}
+                          onChange={(e) => {
+                            setEditCodenaam(e.target.value);
+                            handleAssign(a.datum, a.teller, e.target.value || null);
+                          }}
                           className="text-xs border border-neutral-300 rounded px-2 py-1"
                         >
                           <option value="">Onbekend</option>
@@ -420,13 +426,7 @@ export default function PriorAssignmentsPage() {
                             </option>
                           ))}
                         </select>
-                        <button
-                          onClick={() => handleAssign(a.datum, a.teller, editCodenaam || null)}
-                          disabled={savingKey === key}
-                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300"
-                        >
-                          {savingKey === key ? 'Bezig…' : 'Bevestigen'}
-                        </button>
+                        {savingKey === key && <span className="text-xs text-neutral-500">Bezig…</span>}
                         <button
                           onClick={() => setEditingKey(null)}
                           disabled={savingKey === key}

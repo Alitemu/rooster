@@ -114,8 +114,11 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     return () => clearTimeout(timer);
   }, [filterPerson]);
 
-  const loadAssignments = useCallback(async () => {
-    setLoading(true);
+  // `silent` keeps the table on screen while it refetches - same reason
+  // as AssignmentCalendar's loadSlots: swapping it for the "Toewijzingen
+  // laden..." placeholder after every change made the page jump to the top.
+  const loadAssignments = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setLoadError(null);
 
     try {
@@ -157,7 +160,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
 
       setConfirmingId(null);
       setReason('');
-      await loadAssignments();
+      await loadAssignments(true);
       onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verwijderen van toewijzing mislukt');
@@ -189,8 +192,11 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     }
   };
 
-  const handleReassign = async (assignmentId: string) => {
-    if (!reassignPersonId) return;
+  // personId is passed explicitly when a pick in the dropdown applies the
+  // swap straight away (see its onChange) - the state update from that
+  // same pick hasn't landed yet at that point.
+  const handleReassign = async (assignmentId: string, personId: string = reassignPersonId) => {
+    if (!personId) return;
     setReassigning(assignmentId);
     setError(null);
     try {
@@ -199,7 +205,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ person_id: reassignPersonId, reason: reassignReason.trim() || null }),
+          body: JSON.stringify({ person_id: personId, reason: reassignReason.trim() || null }),
         }
       );
       const data = await res.json();
@@ -210,7 +216,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       setReassignPersonId('');
       setReassignReason('');
       setEligiblePeople(null);
-      await loadAssignments();
+      await loadAssignments(true);
       onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Wisselen van toewijzing mislukt');
@@ -383,7 +389,16 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                         ) : (
                           <select
                             value={reassignPersonId}
-                            onChange={(e) => setReassignPersonId(e.target.value)}
+                            disabled={reassigning === a.id}
+                            onChange={(e) => {
+                              const personId = e.target.value;
+                              setReassignPersonId(personId);
+                              // Picking someone is the whole action, same as in the
+                              // calendar view: apply it and close the editor. A
+                              // published roster still needs a reason first, so there
+                              // the pick waits for "Bevestigen".
+                              if (personId && !isPublished) handleReassign(a.id, personId);
+                            }}
                             className="text-xs border border-neutral-300 rounded px-2 py-1"
                           >
                             <option value="">Kies iemand…</option>
@@ -401,24 +416,29 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                             ))}
                           </select>
                         )}
-                        <input
-                          type="text"
-                          value={reassignReason}
-                          onChange={(e) => setReassignReason(e.target.value)}
-                          placeholder={isPublished ? 'Reden (verplicht)' : 'Reden (optioneel)'}
-                          className="px-2 py-1 border rounded text-xs w-36"
-                        />
-                        <button
-                          onClick={() => handleReassign(a.id)}
-                          disabled={
-                            reassigning === a.id ||
-                            !reassignPersonId ||
-                            (isPublished && !reassignReason.trim())
-                          }
-                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300"
-                        >
-                          {reassigning === a.id ? 'Bezig…' : 'Bevestigen'}
-                        </button>
+                        {/* Only a published roster needs the extra step: a
+                            mandatory reason, then Bevestigen. Otherwise the pick
+                            in the dropdown above already applies the swap. */}
+                        {isPublished ? (
+                          <>
+                            <input
+                              type="text"
+                              value={reassignReason}
+                              onChange={(e) => setReassignReason(e.target.value)}
+                              placeholder="Reden (verplicht)"
+                              className="px-2 py-1 border rounded text-xs w-36"
+                            />
+                            <button
+                              onClick={() => handleReassign(a.id)}
+                              disabled={reassigning === a.id || !reassignPersonId || !reassignReason.trim()}
+                              className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300"
+                            >
+                              {reassigning === a.id ? 'Bezig…' : 'Bevestigen'}
+                            </button>
+                          </>
+                        ) : (
+                          reassigning === a.id && <span className="text-xs text-neutral-500">Bezig…</span>
+                        )}
                         <button
                           onClick={() => {
                             setReassigningId(null);

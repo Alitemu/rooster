@@ -292,9 +292,11 @@ rec(
 
 await page.click('button:has-text("Wisselen") >> nth=0');
 await page.waitForTimeout(200);
+// Picking someone applies it straight away - no separate confirm step,
+// same as the Wisselen menu on the live roster.
 await page.selectOption('table select', { label: 'Persoon-02' });
-await page.click('table button:has-text("Bevestigen")');
 await page.waitForTimeout(600);
+const editorClosed = (await page.locator('table select').count()) === 0;
 const swappedRow = db
   .prepare(
     `SELECT p.codenaam FROM dienstrooster_prior_assignment pa
@@ -307,6 +309,7 @@ rec(
   swappedRow?.codenaam === 'Persoon-02',
   swappedRow?.codenaam
 );
+rec('…and the editor closes by itself once the pick is saved', editorClosed);
 
 db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ? AND datum = ?').run(period.id, rangeStart);
 
@@ -490,6 +493,70 @@ rec('The new "Uitloggen" button is there', (await ppage.locator('button:has-text
 await ppage.click('button:has-text("Uitloggen")');
 await ppage.waitForTimeout(2000);
 rec('Uitloggen leaves the token page', !/\/person\//.test(ppage.url()), ppage.url());
+
+// Dienstrooster, list and calendar view: picking someone applies it and
+// closes the menu, and the page stays where it was. Both views used to swap
+// themselves for a one-line "laden..." placeholder while refetching after
+// every change, so the page shrank and the browser dropped the planner back
+// at the top; and the list's Wisselen dropdown only picked someone, it
+// never applied the swap or closed. Every change here is undone again
+// through the app's own undo-last endpoint.
+const rosterPeriod = db
+  .prepare(`SELECT id FROM dienstrooster_schedule_period WHERE status = 'GEGENEREERD'`)
+  .get();
+if (rosterPeriod) {
+  const undoLast = () =>
+    page.evaluate(
+      (id) =>
+        fetch(`/api/planner/period/${id}/assignments/undo-last`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: '{}',
+        }).then((r) => r.status),
+      rosterPeriod.id
+    );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${BASE}/planner/period/${rosterPeriod.id}`, { waitUntil: 'networkidle' });
+  await page.locator('[role="button"]:has-text("Dienstrooster")').first().click();
+  await page.waitForSelector('button:has-text("Wisselen")');
+
+  const row = page.locator('table tbody tr').nth(15);
+  await row.locator('button:has-text("Wisselen")').scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(300);
+  const rowYBefore = (await row.boundingBox()).y;
+  await row.locator('button:has-text("Wisselen")').click();
+  await page.waitForFunction(() => document.querySelectorAll('table select option').length > 1);
+  const pick = await page.locator('table select option').nth(1).getAttribute('value');
+  await page.locator('table select').selectOption(pick);
+  await page.waitForTimeout(1500);
+  rec('Dienstrooster (lijst): kiezen bij Wisselen past de wissel toe en sluit het menu',
+      (await page.locator('table select').count()) === 0);
+  const rowYAfter = (await row.boundingBox()).y;
+  rec('Dienstrooster (lijst): de gewijzigde rij blijft op dezelfde plek in beeld',
+      Math.abs(rowYAfter - rowYBefore) < 30, `${rowYBefore} -> ${rowYAfter}`);
+  rec('…en die wissel is weer ongedaan gemaakt', (await undoLast()) === 200);
+
+  await page.locator('button:has-text("📅 Kalender")').click();
+  await page.waitForSelector('[title*="rechtsklik om te wijzigen"]');
+  const filled = page.locator('[title*="rechtsklik om te wijzigen"]');
+  const lateCell = filled.nth((await filled.count()) - 5);
+  await lateCell.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(300);
+  const calYBefore = await page.evaluate(() => window.scrollY);
+  await lateCell.click({ button: 'right' });
+  await page.waitForFunction(() => document.querySelectorAll('[role="menu"] button').length > 2);
+  await page.locator('[role="menu"] button').first().click();
+  await page.waitForTimeout(1500);
+  const calYAfter = await page.evaluate(() => window.scrollY);
+  rec('Dienstrooster (kalender): na toekennen sluit het menu',
+      (await page.locator('[role="menu"]').count()) === 0);
+  rec('Dienstrooster (kalender): de pagina springt niet naar boven',
+      calYBefore > 500 && Math.abs(calYAfter - calYBefore) < 30, `${calYBefore} -> ${calYAfter}`);
+  rec('…en die toekenning is weer ongedaan gemaakt', (await undoLast()) === 200);
+} else {
+  console.log('(Dienstrooster-check overgeslagen: geen gegenereerde periode in de database)');
+}
 
 rec('No CSP violations', cspViolations.length === 0, cspViolations.slice(0, 2).join(' | '));
 console.log('\nRequests that returned >= 400:');

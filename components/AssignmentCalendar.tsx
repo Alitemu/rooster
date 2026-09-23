@@ -141,8 +141,13 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
 
   const isPublished = periodStatus === 'GEPUBLICEERD';
 
-  const loadSlots = useCallback(async () => {
-    setLoading(true);
+  // `silent` keeps the calendar on screen while it refetches. After an
+  // assign/reassign/remove it used to swap the whole calendar for the
+  // one-line "Rooster laden..." placeholder first - the page suddenly got
+  // much shorter, the browser clamped the scroll position, and the
+  // planner landed back at the top instead of on the day they just filled.
+  const loadSlots = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [periodRes, slotsRes] = await Promise.all([
@@ -298,7 +303,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
         setContextMenu(null);
         setPendingAction(null);
         setPendingReason('');
-        await loadSlots();
+        await loadSlots(true);
         onChanged?.();
       } catch (err) {
         setActionError(err instanceof Error ? err.message : 'Bijwerken van toewijzing mislukt');

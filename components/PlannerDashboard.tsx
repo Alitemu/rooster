@@ -296,7 +296,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   // reported by FillGapsSummary itself (its own dedicated endpoint, not
   // part of the /dashboard payload above).
   const [fillGapsCount, setFillGapsCount] = useState<number | null>(null);
-  // Remounts FillGapsSummary so it refetches. Deliberately separate from
+  // Makes FillGapsSummary refetch in place. Deliberately separate from
   // assignmentsRefreshKey: a single reassign/remove (AssignmentGrid/
   // AssignmentCalendar's onChanged) can open or close a gap and so change
   // this count, but must NOT bump assignmentsRefreshKey too - that would
@@ -638,7 +638,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           onTogglePin={() => toggleSectionPin('vooraf')}
           keepMounted
         >
-          <FillGapsSummary key={fillGapsRefreshKey} periodId={periodId} onCountChange={setFillGapsCount} />
+          <FillGapsSummary refreshKey={fillGapsRefreshKey} periodId={periodId} onCountChange={setFillGapsCount} />
         </Section>
       )}
 
