@@ -9,6 +9,12 @@
  * JSON attachment (a list of VerzendlijstBericht), looks each codenaam up
  * in the sheet and sends that person their own onderwerp + tekst.
  *
+ * `personen` lists every codenaam that appears in onderwerp/tekst, the
+ * recipient's own included, so a flow that also keeps real names in its
+ * sheet can swap each one for the name. Longest first: replaced in that
+ * order, "Persoon-10" is gone before "Persoon-1" could match inside it. A
+ * flow that ignores the field keeps working unchanged.
+ *
  * That e-mail can reach the flow two ways: the planner downloads the JSON
  * and sends it to themselves by hand, or the app sends it itself over SMTP
  * (lib/verzendlijstMail.ts). Both produce the same subject and the same
@@ -23,8 +29,16 @@ export const VERZENDLIJST_SUBJECT = 'DIENSTROOSTER-VERZENDLIJST';
 
 export interface VerzendlijstBericht {
   codenaam: string;
+  personen: string[];
   onderwerp: string;
   tekst: string;
+}
+
+/** The recipient plus anyone else named in the message: unique, longest first. */
+export function verzendlijstPersonen(codenaam: string, anderen: string[] = []): string[] {
+  return [...new Set([codenaam, ...anderen].filter((c) => c.length > 0))].sort(
+    (a, b) => b.length - a.length || a.localeCompare(b)
+  );
 }
 
 export function verzendlijstFilename(periodName: string): string {

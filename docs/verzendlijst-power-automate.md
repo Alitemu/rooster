@@ -10,6 +10,8 @@ buiten de app, in een Excel-lijst die alleen jij beheert. Zo gaat het:
    één e-mail via Gmail naar jouw mailbox. Het onderwerp is altijd
    `DIENSTROOSTER-VERZENDLIJST`. De bijlage is een JSON-bestand met per
    persoon de codenaam, het onderwerp en de tekst (met de eigen link erin).
+   Het veld `personen` noemt elke codenaam die in onderwerp of tekst staat.
+   Dat heb je alleen nodig als je echte namen wilt gebruiken (stap 5).
 3. Die e-mail start je Power Automate-stroom. De stroom verplaatst de mail
    naar een map, zoekt elke codenaam op in je Excel-lijst en stuurt die
    persoon het eigen bericht.
@@ -117,6 +119,7 @@ versie iets verschillen.
           "type": "object",
           "properties": {
             "codenaam": { "type": "string" },
+            "personen": { "type": "array", "items": { "type": "string" } },
             "onderwerp": { "type": "string" },
             "tekst": { "type": "string" }
           },
@@ -143,6 +146,58 @@ versie iets verschillen.
 
 Test de stroom eerst met een Excel-lijst waarin alleen jouw eigen adres
 staat, bij één of twee codenamen.
+
+## Stap 5 (optioneel). Echte namen in plaats van codenamen
+
+Zonder deze stap staat er in de mail bijvoorbeeld "Hoi Persoon-07,
+Persoon-03 wil een dienst met je ruilen." Met deze stap vervangt de stroom
+elke codenaam door de naam uit je Excel-lijst: "Hoi Anna, Bram wil een
+dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
+
+1. Geef de tabel `Adressen` een derde kolom `Naam`.
+
+2. Voeg direct onder de trigger (dus niet in een lus) twee keer
+   **Variabele initialiseren** toe: `onderwerp` en `tekst`, allebei van
+   het type *Tekenreeks* en leeg.
+
+3. Zet in de binnenste lus (over de berichten), vóór *Een e-mail verzenden*:
+
+   a. **Variabele instellen**: `onderwerp` = *onderwerp* van het bericht.
+      Nog een keer: `tekst` = *tekst* van het bericht.
+
+   b. **Toepassen op elk** over *personen* van het bericht. Daarbinnen:
+
+      - **Rijen weergeven die in een tabel voorkomen** (Excel Online
+        (Business)): tabel `Adressen`, filterquery
+        `Codenaam eq '@{items('Toepassen_op_elk_3')}'`.
+        Anders dan *Een rij ophalen* mislukt dit niet als iemand ontbreekt.
+        Het geeft dan gewoon niets terug.
+      - **Opstellen**, met als expressie de naam, of de codenaam als er geen
+        naam is:
+        `coalesce(first(outputs('Rijen_weergeven_die_in_een_tabel_voorkomen')?['body/value'])?['Naam'], items('Toepassen_op_elk_3'))`
+      - **Opstellen** (tweede), expressie
+        `replace(variables('onderwerp'), items('Toepassen_op_elk_3'), outputs('Opstellen'))`
+        en daarna **Variabele instellen** `onderwerp` = uitvoer van die
+        stap.
+      - Hetzelfde voor `tekst`: een **Opstellen** met
+        `replace(variables('tekst'), items('Toepassen_op_elk_3'), outputs('Opstellen'))`
+        en **Variabele instellen** `tekst` = uitvoer daarvan.
+
+      Het tussenstuk met *Opstellen* is nodig, omdat Power Automate niet
+      toestaat dat een variabele in één stap naar zichzelf verwijst.
+
+   c. Gebruik in **Een e-mail verzenden (V2)** voortaan de variabelen:
+      Onderwerp = `variables('onderwerp')`, Hoofdtekst =
+      `replace(variables('tekst'), decodeUriComponent('%0A'), '<br>')`.
+
+4. Zet bij beide *Toepassen op elk*-lussen die berichten en personen
+   verwerken onder *Instellingen* het **Gelijktijdigheidsbeheer uit**. De
+   variabelen worden gedeeld, dus de lussen moeten één voor één lopen.
+
+De volgorde van `personen` is al goed: Dienstrooster zet langere codenamen
+vooraan. Zo wordt "Persoon-10" altijd vervangen voordat "Persoon-1" erin
+gevonden zou kunnen worden. Staat iemand niet in de lijst of heeft iemand
+geen naam, dan blijft de codenaam gewoon staan.
 
 ## Veiligheid
 

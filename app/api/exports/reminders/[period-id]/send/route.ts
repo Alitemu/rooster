@@ -16,6 +16,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { getInvitationPeriod } from '@/lib/periodInvitations';
+import { verzendlijstPersonen } from '@/lib/verzendlijst';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 
 const bodySchema = z.object({
@@ -67,7 +68,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       return fail(400, 'UNKNOWN_PERSON', `Deze codenamen doen niet mee in deze periode: ${unknown.join(', ')}.`);
     }
 
-    const result = await sendVerzendlijst(period.naam, berichten);
+    // Set here rather than trusted from the client: a reminder only ever
+    // names its own recipient.
+    const result = await sendVerzendlijst(
+      period.naam,
+      berichten.map((b) => ({ ...b, personen: verzendlijstPersonen(b.codenaam) }))
+    );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {

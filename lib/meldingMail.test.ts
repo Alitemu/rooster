@@ -214,12 +214,15 @@ describe('mail about swap requests', () => {
     expect(naarCollega.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 3 maart 2099 van ${codenaam(f.aanvrager)}`);
     expect(naarCollega.tekst).toContain(`Toelichting van ${codenaam(f.aanvrager)}: Ik ben die week op vakantie`);
     expect(linkOwner(naarCollega.tekst)).toBe(f.collega);
+    // Both people named in it, so a flow can put real names in for either.
+    expect([...naarCollega.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
 
     const [bevestiging] = berichtenFor(f.aanvrager);
     expect(bevestiging.onderwerp).toBe(`Je ruilverzoek aan ${codenaam(f.collega)} is verstuurd`);
     expect(bevestiging.tekst).toContain('Jij geeft: je avonddienst op dinsdag 3 maart 2099');
     expect(bevestiging.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 14 april 2099 van ${codenaam(f.collega)}`);
     expect(linkOwner(bevestiging.tekst)).toBe(f.aanvrager);
+    expect([...bevestiging.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
 
     // Only ever to the flow's mailbox.
     expect(sink.received.every((m) => m.to.join() === 'stroom@example.test')).toBe(true);
@@ -246,6 +249,7 @@ describe('mail about swap requests', () => {
     expect(uitkomst.tekst).toContain('Je ruilverzoek is goedgekeurd.');
     expect(uitkomst.tekst).toContain('Jij krijgt: de avonddienst op dinsdag 14 april 2099');
     expect(linkOwner(uitkomst.tekst)).toBe(f.aanvrager);
+    expect([...uitkomst.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
   });
 
   it('mails the requester when the colleague rejects, with the reason and without claiming a swap', async () => {

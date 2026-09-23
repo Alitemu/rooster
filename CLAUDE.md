@@ -352,7 +352,9 @@ Raising it invalidates every token issued for that person in one UPDATE.
 The app never stores e-mail addresses, so it never mails participants
 itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
 `DIENSTROOSTER-VERZENDLIJST` + a JSON attachment of
-`{codenaam, onderwerp, tekst}`) to a Power Automate flow on the planner's
+`{codenaam, personen, onderwerp, tekst}`; `personen` = every codenaam
+the text names, longest first, so a flow can swap in real names from its
+sheet without "Persoon-1" matching inside "Persoon-10") to a Power Automate flow on the planner's
 side, which looks each codenaam up in its own Excel list and sends the
 mail. That mail reaches the flow either by hand (download the JSON, mail it
 to yourself) or, when SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN are set,

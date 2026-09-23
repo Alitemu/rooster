@@ -157,6 +157,7 @@ export async function POST(
           redenAfwijzing: typeof reason === 'string' ? reason : null,
         }),
       },
+      anderen: [collega?.codenaam ?? ''],
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
       baseUrl: resolveBaseUrl(request),
     });

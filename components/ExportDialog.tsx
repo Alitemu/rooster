@@ -9,7 +9,13 @@
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
-import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type VerzendlijstBericht } from '@/lib/verzendlijst';
+import {
+  VERZENDLIJST_SUBJECT,
+  verzendlijstFilename,
+  verzendlijstJson,
+  verzendlijstPersonen,
+  type VerzendlijstBericht,
+} from '@/lib/verzendlijst';
 
 type ExportType = 'invitations' | 'reminders' | 'audit-trail' | null;
 
@@ -172,6 +178,7 @@ export function ExportDialog({ periodId, periodName, isOpen, onClose, initialTyp
   const reminderBerichten = (): VerzendlijstBericht[] =>
     reminders.map((reminder) => ({
       codenaam: reminder.codenaam,
+      personen: verzendlijstPersonen(reminder.codenaam),
       onderwerp: editedSubject,
       tekst: templateLink ? editedBody.split(templateLink).join(reminder.personal_link) : editedBody,
     }));

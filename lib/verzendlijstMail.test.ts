@@ -154,6 +154,7 @@ describe('verzendlijst over SMTP', () => {
         .get(hashToken(token!)) as { person_id: string } | undefined;
       expect(owner && codenaam(owner.person_id)).toBe(bericht.codenaam);
       expect(bericht.onderwerp).toContain('Voorjaar 2099');
+      expect(bericht.personen).toEqual([bericht.codenaam]);
     }
     expect(linkCount(f.gone, f.periodId)).toBe(0);
   });
@@ -167,7 +168,8 @@ describe('verzendlijst over SMTP', () => {
       { params: Promise.resolve({ 'period-id': f.periodId }) }
     );
     expect(res.status).toBe(200);
-    expect(attachment(sink.received[0].raw)).toEqual(berichten);
+    // personen is set by the server: a reminder names only its recipient.
+    expect(attachment(sink.received[0].raw)).toEqual([{ ...berichten[0], personen: [codenaam(f.a)] }]);
   });
 
   it('refuses a codenaam that does not take part in the period, and sends nothing', async () => {

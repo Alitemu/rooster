@@ -297,6 +297,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       periodId: period_id as string,
       template: { sleutel: 'SWAP_REQUESTED' },
       placeholders: { ...placeholders, details: mailDetails('collega', windowConflicts.respondentTooClose) },
+      anderen: [aanvrager?.codenaam ?? ''],
       linkIntro: 'Bekijk het verzoek en geef antwoord via je persoonlijke link:',
       baseUrl: resolveBaseUrl(request),
     });
@@ -310,6 +311,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         respondent: respondent?.codenaam ?? '',
         details: mailDetails('aanvrager', windowConflicts.requesterTooClose),
       },
+      anderen: [respondent?.codenaam ?? ''],
       linkIntro: 'Je kunt het verzoek volgen of intrekken via je persoonlijke link:',
       baseUrl: resolveBaseUrl(request),
     });

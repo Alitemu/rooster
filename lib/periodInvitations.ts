@@ -11,7 +11,7 @@
 
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from './auth';
-import type { VerzendlijstBericht } from './verzendlijst';
+import { verzendlijstPersonen, type VerzendlijstBericht } from './verzendlijst';
 
 export interface InvitationPeriod {
   id: string;
@@ -73,6 +73,7 @@ export function invitationBericht(
 ): VerzendlijstBericht {
   return {
     codenaam,
+    personen: verzendlijstPersonen(codenaam),
     onderwerp: `Geef je voorkeuren door voor ${period.naam}`,
     tekst: `Hoi ${codenaam},
 

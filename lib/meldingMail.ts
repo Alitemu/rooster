@@ -18,6 +18,7 @@ import { db } from '@/db/client';
 import { issuePersonLink } from './periodInvitations';
 import { renderNotificationTemplate, renderTemplate } from './notifications';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
+import { verzendlijstPersonen } from './verzendlijst';
 
 export interface MeldingMail {
   personId: string;
@@ -29,6 +30,8 @@ export interface MeldingMail {
    */
   template: { sleutel: string } | { naam: string; onderwerp: string; tekst: string };
   placeholders: Record<string, string>;
+  /** Other people's codenamen the text mentions (the reader's own is added). */
+  anderen: string[];
   /** The sentence above the link, e.g. "Bekijk het verzoek via je persoonlijke link:". */
   linkIntro: string;
   baseUrl: string;
@@ -61,6 +64,7 @@ export async function mailMelding(melding: MeldingMail): Promise<void> {
     const result = await sendVerzendlijst(period.naam, [
       {
         codenaam: person.codenaam,
+        personen: verzendlijstPersonen(person.codenaam, melding.anderen),
         onderwerp: rendered.onderwerp,
         // The templates use **bold** for the in-app view; a plain-text
         // mail would show the asterisks.

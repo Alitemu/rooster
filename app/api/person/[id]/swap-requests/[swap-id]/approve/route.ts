@@ -232,6 +232,7 @@ export async function POST(
           gevraagd: requestedSlot ?? { datum: '', teller: '' },
         }),
       },
+      anderen: [collega?.codenaam ?? ''],
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
       baseUrl: resolveBaseUrl(request),
     });
