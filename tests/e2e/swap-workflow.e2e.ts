@@ -121,6 +121,10 @@ test.describe('Swap Request Workflow - E2E', () => {
       await page.goto(getPersonalLinkUrl(requester.token));
       await page.waitForLoadState('networkidle');
 
+      // Open the list of own swap requests first - with it already open,
+      // a new request used to appear only after reloading the page.
+      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+
       await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
       await expect(page.getByRole('heading', { name: 'Ruilverzoek indienen' })).toBeVisible();
 
@@ -139,7 +143,9 @@ test.describe('Swap Request Workflow - E2E', () => {
       await offered.selectOption(offeredValue!);
 
       await expect(requested).toBeEnabled();
-      const requestedOption = requested.locator('option[value]:not([value=""])').first();
+      // Grouped by how the colleague stands towards the offered day; a
+      // swap the window rule would refuse is listed but disabled.
+      const requestedOption = requested.locator('option[value]:not([value=""]):not([disabled])').first();
       await expect(requestedOption).toHaveCount(1);
       const requestedValue = await requestedOption.getAttribute('value');
       expect(requestedValue).toBeTruthy();
@@ -158,6 +164,9 @@ test.describe('Swap Request Workflow - E2E', () => {
       expect(swaps[0].status).toBe('PENDING');
       expect(swaps[0].aangeboden_slot_id).toBe(offeredValue);
       expect(swaps[0].gevraagde_slot_id).toBe(requestedValue);
+
+      // ...and it shows up in the already-open list straight away.
+      await expect(page.getByText('Family event that weekend')).toBeVisible({ timeout: 5000 });
     } finally {
       await context.close();
     }
@@ -213,10 +222,22 @@ test.describe('Swap Request Workflow - E2E', () => {
     expect(ownerOfSlot(swap.gevraagde_slot_id)).toBe(swap.respondent_person_id);
 
     const respondent = testData.users.find((u) => u.id === swap.respondent_person_id)!;
+    const requester = testData.users.find((u) => u.id === swap.aanvrager_person_id)!;
     const context = await browser.newContext();
     const page = await context.newPage();
+    // The requester has their own list open, filtered on "In behandeling",
+    // while the colleague approves somewhere else.
+    const requesterContext = await browser.newContext();
+    const requesterPage = await requesterContext.newPage();
 
     try {
+      await requesterPage.goto(getPersonalLinkUrl(requester.token));
+      await requesterPage.waitForLoadState('networkidle');
+      await requesterPage.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      const pendingOwn = requesterPage.getByRole('button', { name: 'Intrekken' });
+      await expect(pendingOwn.first()).toBeVisible();
+      const pendingBefore = await pendingOwn.count();
+
       await page.goto(getPersonalLinkUrl(respondent.token));
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
@@ -238,8 +259,15 @@ test.describe('Swap Request Workflow - E2E', () => {
       // The whole point: the shifts changed hands.
       expect(ownerOfSlot(swap.aangeboden_slot_id)).toBe(swap.respondent_person_id);
       expect(ownerOfSlot(swap.gevraagde_slot_id)).toBe(swap.aanvrager_person_id);
+
+      // The requester's open list drops the approved request from "In
+      // behandeling" without a reload - here on coming back to the tab,
+      // otherwise within its 20-second refresh.
+      await requesterPage.evaluate(() => window.dispatchEvent(new Event('focus')));
+      await expect(pendingOwn).toHaveCount(pendingBefore - 1, { timeout: 5000 });
     } finally {
       await context.close();
+      await requesterContext.close();
     }
   });
 
@@ -316,6 +344,11 @@ test.describe('Swap Request Workflow - E2E', () => {
 
       const requested = page.locator('select[name="requested-slot"]');
       await expect(requested).toBeVisible();
+
+      // Colleagues are loaded once a shift is offered - they depend on it.
+      const offered = page.locator('select[name="offered-slot"]');
+      await offered.selectOption((await offered.locator('option').nth(1).getAttribute('value'))!);
+      await expect(requested).toBeEnabled();
 
       // Structurally impossible rather than validated after the fact: the
       // "requested" list only contains other people's shifts.

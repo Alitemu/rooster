@@ -18,9 +18,37 @@ interface Assignment {
   teller: string;
 }
 
-interface OtherAssignment extends Assignment {
+type CandidateCategory = 'VOORKEUR' | 'BESCHIKBAAR' | 'LIEVER_NIET' | 'ZELFDE_WEEK' | 'GEBLOKKEERD' | 'NIET_MOGELIJK';
+
+interface Candidate {
+  slot_id: string;
+  person_id: string;
   codenaam: string;
+  datum: string;
+  teller: string;
+  category: CandidateCategory;
 }
+
+// Most promising first. The colleague would get the shift you offer, so
+// each group says how they stand towards THAT day - see
+// lib/swapCandidates.ts.
+const CATEGORY_ORDER: CandidateCategory[] = [
+  'VOORKEUR',
+  'BESCHIKBAAR',
+  'LIEVER_NIET',
+  'ZELFDE_WEEK',
+  'GEBLOKKEERD',
+  'NIET_MOGELIJK',
+];
+
+const CATEGORY_LABELS: Record<CandidateCategory, string> = {
+  VOORKEUR: 'Heeft voorkeur voor die dag',
+  BESCHIKBAAR: 'Niets aangegeven voor die dag',
+  LIEVER_NIET: 'Liever niet op die dag',
+  ZELFDE_WEEK: 'Heeft die week al een andere dienst',
+  GEBLOKKEERD: 'Heeft die dag geblokkeerd',
+  NIET_MOGELIJK: 'Niet mogelijk: te kort op een andere dienst',
+};
 
 interface Props {
   personId: string;
@@ -38,7 +66,8 @@ function formatDatum(datum: string): string {
 
 export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSuccess }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [otherAssignments, setOtherAssignments] = useState<OtherAssignment[]>([]);
+  const [candidates, setCandidates] = useState<Candidate[] | null>(null);
+  const [candidatesLoading, setCandidatesLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,16 +94,12 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
       setError(null);
 
       try {
-        const [ownRes, othersRes] = await Promise.all([
-          fetch(`/api/person/${personId}/roster/${periodId}`),
-          fetch(`/api/person/${personId}/roster/${periodId}/others`),
-        ]);
-        if (!ownRes.ok || !othersRes.ok) throw new Error('Laden van rooster mislukt');
+        const ownRes = await fetch(`/api/person/${personId}/roster/${periodId}`);
+        if (!ownRes.ok) throw new Error('Laden van rooster mislukt');
 
         const ownData = await ownRes.json();
-        const othersData = await othersRes.json();
         setAssignments(ownData.data.assignments);
-        setOtherAssignments(othersData.data.assignments);
+        setCandidates(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Laden van rooster mislukt');
       } finally {
@@ -84,6 +109,34 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
 
     loadAssignments();
   }, [personId, periodId, isOpen]);
+
+  // Who could take the offered shift, and how each of them stands towards
+  // that day - fetched per offered shift, since that is what it depends on.
+  useEffect(() => {
+    if (!isOpen || !offeredSlotId) {
+      setCandidates(null);
+      return;
+    }
+    let current = true;
+    setCandidatesLoading(true);
+    fetch(`/api/person/${personId}/swap-requests/candidates?period_id=${periodId}&offered_slot_id=${offeredSlotId}`)
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || 'Laden van collega\'s mislukt');
+        if (current) setCandidates(data.data.candidates);
+      })
+      .catch((err) => {
+        if (!current) return;
+        setCandidates([]);
+        setError(err instanceof Error ? err.message : 'Laden van collega\'s mislukt');
+      })
+      .finally(() => {
+        if (current) setCandidatesLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [isOpen, offeredSlotId, personId, periodId]);
 
   const handleSubmit = async () => {
     if (!offeredSlotId || !requestedSlotId) {
@@ -126,18 +179,15 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   };
 
   const getOfferedSlot = () => assignments.find(a => a.slot_id === offeredSlotId);
-  const getRequestedSlot = () => otherAssignments.find(a => a.slot_id === requestedSlotId);
+  const getRequestedSlot = () => candidates?.find((c) => c.slot_id === requestedSlotId);
 
-  // A swap trades one shift for an equivalent one - the backend rejects a
-  // cross-counter pair outright (an unequal trade like avond-voor-weekend
-  // goes through the planner's manual saldo-correcties instead, which
-  // records the resulting delta explicitly), so only offer same-teller
-  // options here rather than letting someone pick a mismatch and then
-  // explain why it was rejected.
+  // Only same-teller shifts come back from the candidates endpoint - the
+  // backend rejects a cross-counter pair outright (an unequal trade goes
+  // through the planner's saldo-correcties instead).
   const offeredTeller = getOfferedSlot()?.teller;
-  const eligibleRequestedAssignments = offeredTeller
-    ? otherAssignments.filter((a) => a.teller === offeredTeller)
-    : otherAssignments;
+  const groupedCandidates = CATEGORY_ORDER.map(
+    (category) => [category, (candidates ?? []).filter((c) => c.category === category)] as const
+  ).filter(([, list]) => list.length > 0);
 
   const shiftTypeNames: Record<string, string> = {
     AVOND: 'Avond',
@@ -214,24 +264,28 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   name="requested-slot"
                   value={requestedSlotId}
                   onChange={(e) => setRequestedSlotId(e.target.value)}
-                  disabled={!offeredSlotId}
+                  disabled={!offeredSlotId || candidatesLoading}
                   className="w-full px-3 py-2 border rounded-lg text-sm"
                 >
-                  <option value="">Kies een dienst</option>
-                  {offeredSlotId && eligibleRequestedAssignments.length === 0 && (
+                  <option value="">{candidatesLoading ? 'Collega\'s laden…' : 'Kies een dienst'}</option>
+                  {offeredSlotId && !candidatesLoading && candidates?.length === 0 && (
                     <option value="" disabled>
                       Geen andere {shiftTypeNames[offeredTeller ?? '']}diensten beschikbaar
                     </option>
                   )}
-                  {eligibleRequestedAssignments.map((a) => (
-                    <option key={a.slot_id} value={a.slot_id}>
-                      {a.codenaam}: {formatDatum(a.datum)} - {shiftTypeNames[a.teller]}
-                    </option>
+                  {groupedCandidates.map(([category, list]) => (
+                    <optgroup key={category} label={`${CATEGORY_LABELS[category]} (${list.length})`}>
+                      {list.map((c) => (
+                        <option key={c.slot_id} value={c.slot_id} disabled={category === 'NIET_MOGELIJK'}>
+                          {c.codenaam}: {formatDatum(c.datum)} - {shiftTypeNames[c.teller]}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
                 <p className="text-xs text-neutral-500 mt-1">
                   {offeredSlotId
-                    ? `Je kunt alleen ruilen met hetzelfde diensttype (${shiftTypeNames[offeredTeller ?? '']})`
+                    ? `Je collega krijgt jouw dienst op ${formatDatum(getOfferedSlot()?.datum ?? '')}. De groepen laten zien hoe collega's tegenover die dag staan: bovenaan staan wie de meeste kans geven op een "ja". Je kunt alleen ruilen met hetzelfde diensttype (${shiftTypeNames[offeredTeller ?? '']}).`
                     : 'Kies eerst een dienst die je aanbiedt'}
                 </p>
               </div>
@@ -247,7 +301,21 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                     <p>
                       Je ontvangt: <span className="font-semibold">{getRequestedSlot() && formatDatum(getRequestedSlot()!.datum)}</span>
                     </p>
+                    <p>
+                      Van: <span className="font-semibold">{getRequestedSlot()!.codenaam}</span>
+                    </p>
                   </div>
+                  {['GEBLOKKEERD', 'LIEVER_NIET', 'ZELFDE_WEEK'].includes(getRequestedSlot()!.category) && (
+                    <p className="text-sm text-amber-800 mt-2">
+                      ⚠️ {getRequestedSlot()!.codenaam}{' '}
+                      {getRequestedSlot()!.category === 'GEBLOKKEERD'
+                        ? 'heeft die dag geblokkeerd'
+                        : getRequestedSlot()!.category === 'LIEVER_NIET'
+                          ? 'werkt die dag liever niet'
+                          : 'heeft die week al een andere dienst'}
+                      . Het verzoek kan wel, maar de kans op een "ja" is kleiner.
+                    </p>
+                  )}
                 </div>
               )}
 

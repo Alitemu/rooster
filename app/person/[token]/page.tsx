@@ -184,6 +184,15 @@ function PersonalLinkPageContent() {
     }
   }, [router]);
 
+  // An approved swap moves shifts between two people. Reloads just the
+  // roster (not the whole page), so the list of shifts above the swap
+  // panel follows along without a manual refresh.
+  const reloadRoster = async () => {
+    if (!personId || !period) return;
+    const res = await fetch(`/api/person/${personId}/roster/${period.id}`);
+    if (res.ok) setRosterData((await res.json()).data);
+  };
+
   // Verify token and load person data
   useEffect(() => {
     const verifyToken = async () => {
@@ -529,6 +538,7 @@ function PersonalLinkPageContent() {
         <PersonalRosterView
           personId={personId}
           periodId={period.id}
+          onRosterChanged={reloadRoster}
           assignedShifts={rosterData.assignments.map((a) => ({
             datum: a.datum,
             iso_jaar: a.iso_jaar,

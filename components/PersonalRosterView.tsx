@@ -47,6 +47,8 @@ interface Props {
   // never a hard rule to begin with), so shown as its own, more urgent
   // notice rather than folded into the same list.
   blockedOverrideViolations?: SoftBlockViolation[];
+  /** Reload the roster itself - an approved swap moves shifts. */
+  onRosterChanged?: () => void;
 }
 
 interface WeekGroup {
@@ -62,11 +64,13 @@ export function PersonalRosterView({
   balances,
   softBlockViolations = [],
   blockedOverrideViolations = [],
+  onRosterChanged,
 }: Props) {
   const [weekView, setWeekView] = useState<Map<string, WeekGroup>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [showSwapManagement, setShowSwapManagement] = useState(false);
   const [swapSuccessMessage, setSwapSuccessMessage] = useState(false);
+  const [swapListRefreshKey, setSwapListRefreshKey] = useState(0);
 
   // Group shifts by ISO week - keyed on (iso_jaar, iso_week) together, not
   // iso_week alone: a period spanning a year boundary (e.g. October to
@@ -291,7 +295,12 @@ export function PersonalRosterView({
             >
               Ruilverzoeken verbergen
             </button>
-            <SwapManagementPanel personId={personId} periodId={periodId} />
+            <SwapManagementPanel
+              personId={personId}
+              periodId={periodId}
+              refreshKey={swapListRefreshKey}
+              onSwapsChanged={onRosterChanged}
+            />
           </div>
         )}
         {!showSwapManagement && (
@@ -324,6 +333,7 @@ export function PersonalRosterView({
         onSuccess={() => {
           setSwapDialogOpen(false);
           setShowSwapManagement(true);
+          setSwapListRefreshKey((k) => k + 1);
           setSwapSuccessMessage(true);
           setTimeout(() => setSwapSuccessMessage(false), 5000);
         }}

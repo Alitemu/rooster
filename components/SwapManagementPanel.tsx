@@ -7,7 +7,7 @@
  * Shows requests where user is requester or respondent.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 interface SwapRequest {
   id: string;
@@ -29,9 +29,24 @@ interface SwapRequest {
 interface Props {
   personId: string;
   periodId: string;
+  /**
+   * Bumped by the parent after this person submits a new request. The
+   * panel stays mounted while it's open, so without this a request you
+   * had just made only showed up after reloading the whole page.
+   */
+  refreshKey?: number;
+  /**
+   * Called when a swap involving this person has changed - approved here,
+   * or found changed by a background refresh (the other side acted). An
+   * approved swap moves shifts, so the parent reloads the roster itself.
+   */
+  onSwapsChanged?: () => void;
 }
 
-export function SwapManagementPanel({ personId, periodId }: Props) {
+export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwapsChanged }: Props) {
+  // What the last load returned, to notice a background refresh bringing
+  // back something different (see onSwapsChanged).
+  const lastSignature = useRef<string | null>(null);
   const [swapRequests, setSwapRequests] = useState<SwapRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -51,9 +66,11 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
     // another filter's button.
     let current = true;
 
-    const loadSwaps = async () => {
-      setLoading(true);
-      setError(null);
+    // `silent` for the background refreshes below: keep the list on screen
+    // instead of flashing "laden" (and making the page jump) every time.
+    const loadSwaps = async (silent = false) => {
+      if (!silent) setLoading(true);
+      if (!silent) setError(null);
 
       try {
         let url = `/api/person/${personId}/swap-requests?period_id=${periodId}`;
@@ -64,6 +81,12 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
 
         const data = await res.json();
         if (!current) return;
+        const list = data.data.swap_requests as Array<{ id: string; status: string }>;
+        const signature = list.map((s) => `${s.id}:${s.status}`).join('|');
+        if (silent && lastSignature.current !== null && signature !== lastSignature.current) {
+          onSwapsChanged?.();
+        }
+        lastSignature.current = signature;
         setSwapRequests(data.data.swap_requests);
       } catch (err) {
         if (!current) return;
@@ -74,10 +97,30 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
     };
 
     loadSwaps();
+
+    // The other side of a swap acts somewhere else: a colleague approving
+    // or rejecting your request never touched this page, so the list kept
+    // showing it as "In behandeling" until a full reload. Refresh when you
+    // come back to the tab, and every 20 seconds while it's visible.
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') loadSwaps(true);
+    };
+    const interval = setInterval(refreshIfVisible, 20_000);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    window.addEventListener('focus', refreshIfVisible);
     return () => {
       current = false;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+      window.removeEventListener('focus', refreshIfVisible);
     };
-  }, [personId, periodId, filterStatus]);
+  }, [personId, periodId, filterStatus, refreshKey]);
+
+  // A new request is always "in afwachting" - switch to that filter so it
+  // is actually in the list you're looking at, whichever one was chosen.
+  useEffect(() => {
+    if (refreshKey > 0) setFilterStatus('PENDING');
+  }, [refreshKey]);
 
   const showSuccess = (message: string) => {
     setSuccessMessage(message);
@@ -115,6 +158,8 @@ export function SwapManagementPanel({ personId, periodId }: Props) {
 
       updateSwapStatus(swapId, 'GOEDGEKEURD');
       showSuccess('Ruil goedgekeurd');
+      // The two shifts just changed hands - the roster above must show it.
+      onSwapsChanged?.();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Goedkeuren van ruil mislukt');
     }
