@@ -37,8 +37,20 @@ function server(): { host: string; port: number } {
 // pasted as shown, the spaces would make the login fail.
 const stripSpaces = (pass: string) => pass.replace(/\s+/g, '');
 
+/**
+ * MAIL_UITGESCHAKELD=true in .env: nothing is ever sent, whatever
+ * Mailinstellingen says. For a test installation that runs on a copy of
+ * production's data - mail settings included - which would otherwise send
+ * real invitations, reminders and swap mails to real people, the automatic
+ * reminders within a minute of starting.
+ */
+export function mailSwitchedOff(): boolean {
+  return process.env.MAIL_UITGESCHAKELD === 'true';
+}
+
 /** The settings saved in the app ("Mailinstellingen", lib/appSettings.ts), or null. */
 function readConfig(): MailConfig | null {
+  if (mailSwitchedOff()) return null;
   const stored = getStoredMailSettings();
   if (!stored?.wachtwoord) return null;
   return {
@@ -53,6 +65,8 @@ function readConfig(): MailConfig | null {
 /** Whether sending is set up, for the settings dialog and the warning on the period page. */
 export function mailConfigStatus(): {
   ingesteld: boolean;
+  /** MAIL_UITGESCHAKELD: a test installation that never sends. */
+  uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
   /** Saved, but the password can no longer be read (new session secret). */
@@ -67,7 +81,8 @@ export function mailConfigStatus(): {
   const wachtrij = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_mail_queue').get() as { n: number }).n;
   const stored = getStoredMailSettings();
   return {
-    ingesteld: Boolean(stored?.wachtwoord),
+    ingesteld: Boolean(stored?.wachtwoord) && !mailSwitchedOff(),
+    uitgeschakeld: mailSwitchedOff(),
     gebruiker: stored?.gebruiker ?? null,
     verzendlijst_aan: stored?.verzendlijstAan ?? null,
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
@@ -150,7 +165,9 @@ async function sendJsonMail(mail: {
   if (!config) {
     return {
       ok: false,
-      message: 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.',
+      message: mailSwitchedOff()
+        ? 'Versturen staat uit op deze installatie (MAIL_UITGESCHAKELD).'
+        : 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.',
       notConfigured: true,
     };
   }

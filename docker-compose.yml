@@ -22,12 +22,13 @@ services:
       start_period: 10s
 
   web:
-    # Ready-made by GitHub (.github/workflows/images.yml): `docker compose
-    # pull` then `docker compose up -d` updates without building anything
-    # here. ROOSTER_VERSION in .env pins a version (e.g. 0.2.2); left out,
-    # it is the newest. `build` stays for building from source instead
-    # (`docker compose up -d --build`).
-    image: "ghcr.io/alitemu/rooster-web:${ROOSTER_VERSION:-latest}"
+    # Ready-made by GitHub (.github/workflows/images.yml and release.yml):
+    # `docker compose pull` then `docker compose up -d` updates without
+    # building anything here. Left out, ROOSTER_VERSION is `stable`: the
+    # version released for production. A test installation sets it to
+    # `test` (the newest build); a number (e.g. 0.2.3) pins one version.
+    # `build` stays for building from source (`docker compose up -d --build`).
+    image: "ghcr.io/alitemu/rooster-web:${ROOSTER_VERSION:-stable}"
     build:
       context: .
       dockerfile: Dockerfile
@@ -41,6 +42,9 @@ services:
       TZ: "${TZ:-Europe/Amsterdam}"
       DATABASE_URL: "file:/data/rooster.db"
       SOLVER_URL: "http://solver:8000"
+      # true on a test installation: no mail ever goes out, whatever
+      # Mailinstellingen says (see .env.example).
+      MAIL_UITGESCHAKELD: "${MAIL_UITGESCHAKELD:-false}"
       # Creates the ADMIN/PLANNER accounts and demo data on first boot of a
       # fresh DATA_DIR - see .env.example. Safe to leave set across
       # restarts/reinstalls: no-ops once seeded.
@@ -111,7 +115,7 @@ services:
 
   solver:
     # Same release as web, see there.
-    image: "ghcr.io/alitemu/rooster-solver:${ROOSTER_VERSION:-latest}"
+    image: "ghcr.io/alitemu/rooster-solver:${ROOSTER_VERSION:-stable}"
     build:
       context: ./solver
       dockerfile: Dockerfile

@@ -1,24 +1,23 @@
-# Builds the two images the NAS runs and publishes them to GitHub's
-# container registry, so the server only downloads them (docker compose
-# pull) and never has to build anything itself:
+# "Bouwen (test)": builds the two images the NAS runs and publishes them
+# to GitHub's container registry, so the server only downloads them
+# (docker compose pull) and never builds anything itself:
 #
-#   ghcr.io/alitemu/rooster-web:<version> and :latest
-#   ghcr.io/alitemu/rooster-solver:<version> and :latest
+#   ghcr.io/alitemu/rooster-web:<version> and :test
+#   ghcr.io/alitemu/rooster-solver:<version> and :test
 #
-# <version> is package.json's "version": raising it (the version shown in
-# the app's header) is what makes a release. Runs when package.json
-# changes on the main branch, or by hand from the Actions tab.
+# <version> is package.json's "version" (the one in the app's header).
+# Only ever started by hand (Actions tab > Bouwen (test) > Run workflow),
+# and it never touches :stable, which production pulls: a test
+# installation runs :test, and "Vrijgeven (productie)" (release.yml)
+# moves :stable to a tested version.
 #
 # Both amd64 and arm64: most Synology models are amd64, the "j" and value
 # series are arm64. The arm64 half is emulated (QEMU), so a run takes a
 # while.
 
-name: Images
+name: Bouwen (test)
 
 on:
-  push:
-    branches: ['claude/new-session-yinlbo', 'main']
-    paths: ['package.json']
   workflow_dispatch:
 
 permissions:
@@ -63,7 +62,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/alitemu/rooster-${{ matrix.name }}:${{ steps.version.outputs.version }}
-            ghcr.io/alitemu/rooster-${{ matrix.name }}:latest
+            ghcr.io/alitemu/rooster-${{ matrix.name }}:test
           # Links the package to this repository, so it shows up there and
           # takes its public visibility.
           labels: |

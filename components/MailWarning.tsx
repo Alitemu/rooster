@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 
 interface Status {
   ingesteld: boolean;
+  uitgeschakeld: boolean;
   wachtwoord_onleesbaar: boolean;
   laatste_fout: { op: string; melding: string; soort: string; automatisch: boolean } | null;
   wachtrij: number;
@@ -57,7 +58,11 @@ export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string
 
   let titel: string;
   let tekst: string;
-  if (!status.ingesteld) {
+  if (status.uitgeschakeld) {
+    titel = 'Er wordt geen mail verstuurd';
+    tekst =
+      'Versturen staat uit op deze installatie (MAIL_UITGESCHAKELD in het serverbestand). Dat is bedoeld voor een testinstallatie.';
+  } else if (!status.ingesteld) {
     titel = 'Er wordt geen mail verstuurd';
     tekst = status.wachtwoord_onleesbaar
       ? 'Het opgeslagen app-wachtwoord kan niet meer gelezen worden. Uitnodigingen, herinneringen en ruilmails staan stil tot je het opnieuw invult.'

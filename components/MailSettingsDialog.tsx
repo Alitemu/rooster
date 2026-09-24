@@ -14,6 +14,7 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 
 interface Status {
   ingesteld: boolean;
+  uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
   wachtwoord_onleesbaar: boolean;
@@ -62,7 +63,11 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
 
   if (!isOpen) return null;
 
-  const ingesteld = Boolean(status?.ingesteld);
+  // A saved, readable password: leaving the field empty keeps it (also while
+  // MAIL_UITGESCHAKELD keeps it from being used).
+  const ingesteld = Boolean(
+    status?.ingesteld || (status?.uitgeschakeld && status.gebruiker && !status.wachtwoord_onleesbaar)
+  );
   // Also when the password can no longer be read: then there is still something to remove.
   const opgeslagen = Boolean(status?.gebruiker);
 
@@ -134,6 +139,12 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
               Maken. Google toont dan 16 letters. Die vul je hieronder in.
             </p>
           </div>
+          {status?.uitgeschakeld && (
+            <p className="text-sm text-red-800">
+              Versturen staat uit op deze installatie (MAIL_UITGESCHAKELD). Wat je hier opslaat, wordt pas gebruikt
+              als dat uit het serverbestand is gehaald.
+            </p>
+          )}
           {status?.wachtwoord_onleesbaar && (
             <p className="text-sm text-red-800">
               Het opgeslagen app-wachtwoord kan niet meer gelezen worden. Vul het opnieuw in.

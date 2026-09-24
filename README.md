@@ -299,10 +299,22 @@ installatie zonder automatisch aangemaakte voorbeelddeelnemers en
 
 #### Bijwerken naar een nieuwe versie
 
-De images worden kant-en-klaar gebouwd door GitHub
-(`.github/workflows/images.yml`) zodra het versienummer in `package.json`
-omhoog gaat. De server hoeft zelf niets te bouwen. Bijwerken gaat zo, in de
-map met `docker-compose.yml`:
+De images worden kant-en-klaar gebouwd door GitHub. De server hoeft zelf
+niets te bouwen. Jij bepaalt wanneer er gebouwd wordt en wanneer productie
+een nieuwe versie krijgt. Dat gaat in drie stappen, allemaal op
+github.com/Alitemu/rooster onder **Actions**:
+
+1. **Bouwen (test):** kies links *Bouwen (test)* en daarna *Run workflow*.
+   GitHub bouwt de versie uit `package.json` en noemt die `test`. Dat duurt
+   ongeveer een half uur. Productie merkt er niets van.
+2. **Testen:** werk de testinstallatie bij (zie hieronder) en probeer de
+   nieuwe versie uit.
+3. **Vrijgeven (productie):** tevreden? Kies *Vrijgeven (productie)*, dan
+   *Run workflow*, en vul het versienummer in (bijvoorbeeld 0.2.3). Die
+   versie heet dan `stable`. Er wordt niets opnieuw gebouwd: productie
+   krijgt precies de versie die je getest hebt.
+
+Daarna op de productieserver, in de map met `docker-compose.yml`:
 
 ```bash
 docker compose pull
@@ -313,9 +325,33 @@ De database in `DATA_DIR` blijft staan. Nieuwe kolommen en tabellen worden
 bij het starten automatisch toegevoegd. Maak voor de zekerheid eerst een
 kopie van die map.
 
-Wil je op één versie blijven of terug naar een eerdere, zet dan
-`ROOSTER_VERSION=0.2.2` (of een andere versie) in `.env` en doe dezelfde
-twee stappen. Zonder `ROOSTER_VERSION` krijg je altijd de nieuwste.
+Terug naar een eerdere versie gaat op dezelfde manier: geef bij
+*Vrijgeven (productie)* het oudere versienummer op. Of zet
+`ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
+
+##### Een aparte testinstallatie
+
+Zet op dezelfde NAS een tweede kopie van de app in een eigen map, met in
+`.env`:
+
+```bash
+ROOSTER_VERSION=test
+APP_PORT=8011
+DATA_DIR=./data
+MAIL_UITGESCHAKELD=true
+```
+
+Een eigen map betekent eigen containers, een eigen database en een eigen
+poort (hier https://<nas>:8011). Productie op poort 8010 blijft
+onaangeroerd. Bijwerken gaat met dezelfde twee commando's in die map.
+
+`MAIL_UITGESCHAKELD=true` zorgt dat de testinstallatie nooit mail
+verstuurt, wat er ook bij Mailinstellingen staat. Bovenaan de periodepagina
+staat dan een melding dat versturen uit staat. Dat is belangrijk als je test
+met echte gegevens: kopieer je de map `data` van productie naar de testmap,
+dan gaan de mailinstellingen mee. Zonder deze regel zou de testinstallatie
+echte uitnodigingen, herinneringen en ruilmails naar echte deelnemers
+sturen, de automatische herinneringen al binnen een minuut na het starten.
 
 Zelf bouwen vanuit de broncode kan nog steeds, met
 `docker compose up -d --build`.

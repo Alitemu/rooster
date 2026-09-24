@@ -208,6 +208,30 @@ describe('Mailinstellingen in de app', () => {
     expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(false);
   });
 
+  it('sends nothing at all while MAIL_UITGESCHAKELD is set, even with working settings saved', async () => {
+    configureSmtpServerOnly(sink);
+    const planner = person('PLANNER');
+    expect((await PUT(request('PUT', planner, goed))).status).toBe(200);
+    process.env.MAIL_UITGESCHAKELD = 'true';
+    try {
+      expect((await (await GET(request('GET', planner))).json()).data).toMatchObject({
+        ingesteld: false,
+        uitgeschakeld: true,
+        gebruiker: SMTP_SINK_GMAIL_USER,
+      });
+      const res = await sendVerzendlijst(
+        buildVerzendlijst({ soort: 'HERINNERING', automatisch: true, periode: 'P', deadline: null }, [])
+      );
+      expect(res).toMatchObject({ ok: false, message: expect.stringContaining('MAIL_UITGESCHAKELD') });
+      await new Promise((r) => setTimeout(r, 200));
+      expect(sink.received).toHaveLength(0);
+      // Not a failure to warn about: the page says sending is switched off.
+      expect((await (await GET(request('GET', planner))).json()).data.laatste_fout).toBeNull();
+    } finally {
+      delete process.env.MAIL_UITGESCHAKELD;
+    }
+  });
+
   it('is for planners only', async () => {
     const deelnemer = person('DEELNEMER');
     expect((await GET(request('GET', deelnemer, undefined, 'person'))).status).toBe(401);

@@ -419,7 +419,9 @@ password is stored AES-GCM encrypted with a key derived from the session
 secret, lib/settingsCrypto.ts, and never returned). .env is not read for
 it any more (SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN were removed on
 purpose); SMTP_HOST/SMTP_PORT exist only so tests can point it at
-tests/smtpSink.ts. Without it the export dialog says sending isn't
+tests/smtpSink.ts. The one mail variable left is MAIL_UITGESCHAKELD=true, a
+kill switch for a test installation on a copy of production's data: nothing
+is sent (readConfig returns null) and MailWarning says so. Without it the export dialog says sending isn't
 set up, and MailWarning at the top of the period page says no mail goes
 out at all. That warning also shows the last failed send (stored as
 `mail.laatste_fout` in app_setting by sendVerzendlijst, cleared by the
@@ -490,10 +492,12 @@ Dutch: docs/verzendlijst-power-automate.md.
 
 ## Deployment
 
-**Images:** `.github/workflows/images.yml` builds `ghcr.io/alitemu/rooster-web`
-and `rooster-solver` (amd64 + arm64) whenever package.json changes on the
-main branch, tagged with its `version` and `latest`; compose pulls
-`${ROOSTER_VERSION:-latest}` and keeps `build` for building from source.
+**Images:** built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
+builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 + arm64)
+tagged with package.json's `version` and `test`; "Vrijgeven (productie)"
+(release.yml) points `stable` at an already built, tested version without
+rebuilding. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
+installation sets `test`) and keeps `build` for building from source.
 Updating is `docker compose pull && docker compose up -d`. The schema of an
 existing database is brought up to date at every start either way:
 docker-entrypoint.sh runs the seed (SEED_ON_START=true) or else
