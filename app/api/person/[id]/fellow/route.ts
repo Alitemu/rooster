@@ -6,7 +6,11 @@
  *
  * The participant can change it while the period accepts input, like any
  * other preference; after the deadline it is fixed for them. The planner
- * can always change it (logged in the audit trail).
+ * can change it until the roster is generated (logged in the audit
+ * trail). After that it would move everyone's weekend streefbereik under a
+ * roster already built on it, block weekends the person already works and,
+ * once published, shift everyone's carry-over into the next period
+ * (lib/carryOver.ts reads it when that period opens).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -67,6 +71,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   }
 }
 
+/** From here on the planner can no longer change it either. */
+const ROSTER_MADE = new Set(['GEGENEREERD', 'GEPUBLICEERD']);
+
 const putSchema = z.object({ period_id: z.string().min(1), fellow: z.boolean() });
 
 export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -92,6 +99,17 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
       if (!gate.allowed) {
         return NextResponse.json({ success: false, error: { code: gate.code, message: gate.message } }, { status: 403 });
       }
+    } else if (ROSTER_MADE.has(period.status)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: 'ROSTER_ALREADY_GENERATED',
+            message: 'Het rooster is al gemaakt. Wie fellow is, kan daarna niet meer veranderd worden.',
+          },
+        },
+        { status: 409 }
+      );
     } else {
       const member = db
         .prepare(

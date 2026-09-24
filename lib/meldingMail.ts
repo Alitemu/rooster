@@ -8,8 +8,8 @@
  * never holds up or fails the request that caused it (the caller starts it
  * and moves on). A mail that can't go out right now - sending not set up,
  * or the mail server refusing - waits in dienstrooster_mail_queue and is
- * sent later by flushMailQueue: every hour, and right after new mail
- * settings are saved. Dropped after 7 days, or as soon as the swap has
+ * sent later by flushMailQueue: every hour, right after new mail settings
+ * are saved, and as soon as any other mail goes out again. Dropped after 7 days, or as soon as the swap has
  * moved on (see stillRelevant).
  *
  * The mail carries a fresh personal link for that period. The plaintext of
@@ -124,10 +124,34 @@ function dropQueuedRequest(swapId: string): boolean {
   return removed.some((r) => r.soort === 'RUILVERZOEK');
 }
 
+/**
+ * Request mails still on their way out, by swap: a withdrawal waits for
+ * its request mail to be sent or queued first. Otherwise a withdrawal made
+ * while the request mail was still being tried could go out, after which
+ * the request mail failed and was queued - and the colleague heard of a
+ * withdrawal for a request they never got.
+ */
+const requestsInFlight = new Map<string, Promise<void>>();
+
 /** Resolves once the mail is sent, queued or skipped. Never rejects. */
-export async function mailMelding(melding: MeldingMail): Promise<void> {
+export function mailMelding(melding: MeldingMail): Promise<void> {
+  const run = sendOrQueue(melding);
+  const swapId = melding.swapId;
+  if (melding.soort === 'RUILVERZOEK' && swapId) {
+    requestsInFlight.set(swapId, run);
+    void run.then(() => {
+      if (requestsInFlight.get(swapId) === run) requestsInFlight.delete(swapId);
+    });
+  }
+  return run;
+}
+
+async function sendOrQueue(melding: MeldingMail): Promise<void> {
   try {
-    if (melding.soort === 'RUIL_INGETROKKEN' && melding.swapId && dropQueuedRequest(melding.swapId)) return;
+    if (melding.soort === 'RUIL_INGETROKKEN' && melding.swapId) {
+      await requestsInFlight.get(melding.swapId);
+      if (dropQueuedRequest(melding.swapId)) return;
+    }
     if (!verzendlijstMailConfigured()) {
       enqueue(melding);
       return;
@@ -151,27 +175,66 @@ function stillRelevant(soort: string, swapId: string | null): boolean {
 }
 
 let flushing = false;
+let currentFlush: Promise<unknown> = Promise.resolve();
+
+/** Resolves once no flush is running. For tests, which clean up after themselves. */
+export function mailQueueSettled(): Promise<unknown> {
+  return currentFlush;
+}
 
 /**
- * Sends what waits in the queue, oldest first. Stops at the first failure
- * (the mail server is still refusing; the next run tries again) and drops
- * what is too old or no longer applies. Does nothing while sending isn't
+ * Drops what is too old or no longer applies. Runs even while sending
+ * isn't set up, so the count on the period page (MailWarning) stays what
+ * would really still go out.
+ */
+function pruneMailQueue(now: Date): number {
+  const rows = db
+    .prepare('SELECT id, swap_id, soort, aangemaakt_op FROM dienstrooster_mail_queue')
+    .all() as Array<{ id: string; swap_id: string | null; soort: string; aangemaakt_op: string }>;
+  const remove = db.prepare('DELETE FROM dienstrooster_mail_queue WHERE id = ?');
+  let vervallen = 0;
+  for (const row of rows) {
+    if (now.getTime() - Date.parse(row.aangemaakt_op) > MAIL_QUEUE_MAX_AGE_MS || !stillRelevant(row.soort, row.swap_id)) {
+      remove.run(row.id);
+      vervallen++;
+    }
+  }
+  return vervallen;
+}
+
+/**
+ * Drops what is too old or no longer applies, then sends what is left,
+ * oldest first. Stops at the first failure (the mail server is still
+ * refusing; the next run tries again). Sends nothing while sending isn't
  * set up. One run at a time.
  */
-export async function flushMailQueue(now: Date = new Date()): Promise<{ verstuurd: number; vervallen: number; over: number }> {
-  const result = { verstuurd: 0, vervallen: 0, over: 0 };
-  if (flushing || !verzendlijstMailConfigured()) {
-    result.over = queuedMailCount();
-    return result;
-  }
+export function flushMailQueue(now: Date = new Date()): Promise<{ verstuurd: number; vervallen: number; over: number }> {
+  if (flushing) return Promise.resolve({ verstuurd: 0, vervallen: 0, over: queuedMailCount() });
   flushing = true;
+  const run = runFlush(now).finally(() => {
+    flushing = false;
+  });
+  currentFlush = run.catch(() => {});
+  return run;
+}
+
+async function runFlush(now: Date): Promise<{ verstuurd: number; vervallen: number; over: number }> {
+  const result = { verstuurd: 0, vervallen: 0, over: 0 };
   try {
+    result.vervallen = pruneMailQueue(now);
+    if (!verzendlijstMailConfigured()) return result;
     const rows = db
-      .prepare('SELECT id, swap_id, soort, melding_json, aangemaakt_op FROM dienstrooster_mail_queue ORDER BY aangemaakt_op, rowid')
-      .all() as Array<{ id: string; swap_id: string | null; soort: string; melding_json: string; aangemaakt_op: string }>;
+      .prepare('SELECT id, melding_json FROM dienstrooster_mail_queue ORDER BY aangemaakt_op, rowid')
+      .all() as Array<{ id: string; melding_json: string }>;
     const remove = db.prepare('DELETE FROM dienstrooster_mail_queue WHERE id = ?');
     for (const row of rows) {
-      if (now.getTime() - Date.parse(row.aangemaakt_op) > MAIL_QUEUE_MAX_AGE_MS || !stillRelevant(row.soort, row.swap_id)) {
+      // Checked again per mail: an answer given while this run was sending
+      // the ones before it makes a request mail pointless.
+      const current = db
+        .prepare('SELECT swap_id, soort FROM dienstrooster_mail_queue WHERE id = ?')
+        .get(row.id) as { swap_id: string | null; soort: string } | undefined;
+      if (!current) continue;
+      if (!stillRelevant(current.soort, current.swap_id)) {
         remove.run(row.id);
         result.vervallen++;
         continue;
@@ -187,10 +250,19 @@ export async function flushMailQueue(now: Date = new Date()): Promise<{ verstuur
   } catch (error) {
     console.error('[melding-mail] wachtrij versturen mislukt', error);
   } finally {
-    flushing = false;
+    result.over = queuedMailCount();
   }
-  result.over = queuedMailCount();
   return result;
+}
+
+/**
+ * Called by lib/verzendlijstMail.ts after every successful send (an
+ * invitation, a reminder, a new swap mail): sending works, so what waited
+ * goes too. The flushing guard keeps the flush's own sends from starting
+ * another run.
+ */
+export function flushAfterSend(): void {
+  if (!flushing && queuedMailCount() > 0) void flushMailQueue();
 }
 
 function templateName(melding: MeldingMail): string {

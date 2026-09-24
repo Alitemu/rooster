@@ -1,12 +1,10 @@
 /**
- * GET    /api/planner/mail-settings - where sending is set up (the app, the
- *        server's .env, or nowhere), which account and which flow mailbox.
- *        Never the password.
+ * GET    /api/planner/mail-settings - whether sending is set up, which
+ *        account and which flow mailbox. Never the password.
  * PUT    { gebruiker, wachtwoord?, verzendlijst_aan } - save a Gmail account
  *        and its app password. Logs in first and refuses settings that
  *        don't work. Leaving the password out keeps the saved one.
- * DELETE - remove the settings saved in the app. Sending then stops, or
- *        falls back to the .env if the server still has one.
+ * DELETE - remove the settings. Sending then stops.
  *
  * lib/appSettings.ts, lib/verzendlijstMail.ts. Changes are audit-logged,
  * without the password.

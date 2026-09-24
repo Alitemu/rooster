@@ -309,7 +309,7 @@ describe('runAutoReminders', () => {
   });
 
   it('tries again next time when the mail server refuses', async () => {
-    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    configureSmtp(sink, { wachtwoord: 'verkeerd' });
     const f = createFixture();
     const [result] = await run(moment(7));
     expect(result.uitkomst).toBe('MISLUKT');

@@ -78,7 +78,7 @@ test.describe('Periodepagina', () => {
   });
 
   test('warns at the top of the page that no mail goes out, and opens Mailinstellingen from there', async ({ page }) => {
-    // This test server has no mail settings, in the app or in .env.
+    // This test server has no mail settings.
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');

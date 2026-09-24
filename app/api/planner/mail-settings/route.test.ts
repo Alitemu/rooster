@@ -11,6 +11,7 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { hashToken } from '@/lib/auth';
 import { sendVerzendlijst } from '@/lib/verzendlijstMail';
 import { buildVerzendlijst } from '@/lib/verzendlijst';
+import { encryptSetting } from '@/lib/settingsCrypto';
 import {
   startSmtpSink,
   configureSmtp,
@@ -29,7 +30,8 @@ import { GET, PUT, DELETE } from './route';
  * - only a Gmail address, only an app password (16 letters), and only
  *   settings that actually log in are saved;
  * - the password is stored encrypted and never sent back;
- * - what is saved in the app wins over .env; removing it falls back to it;
+ * - the app is the only place sending is set up: .env is not read, and
+ *   removing the settings stops sending;
  * - planners only, and every change is in the audit trail without the
  *   password.
  */
@@ -104,7 +106,7 @@ describe('Mailinstellingen in de app', () => {
     expect(res.status).toBe(200);
     // toMatchObject: laatste_fout is shared state other test files may touch.
     expect((await res.json()).data).toMatchObject({
-      bron: 'APP',
+      ingesteld: true,
       gebruiker: SMTP_SINK_GMAIL_USER,
       verzendlijst_aan: 'flow@ziekenhuis.test',
       wachtwoord_onleesbaar: false,
@@ -159,19 +161,32 @@ describe('Mailinstellingen in de app', () => {
     expect(sink.logins).not.toContain('ander@gmail.com');
   });
 
-  it('wins over .env, and removing it falls back to .env', async () => {
-    configureSmtp(sink, { VERZENDLIJST_AAN: 'env@ziekenhuis.test' });
+  it('is the only place sending is set up: .env is ignored, and removing the settings stops sending', async () => {
+    configureSmtpServerOnly(sink);
+    // What an older installation may still have in its .env.
+    Object.assign(process.env, { SMTP_USER: SMTP_SINK_GMAIL_USER, SMTP_PASS: SMTP_SINK_GMAIL_PASSWORD, VERZENDLIJST_AAN: 'env@ziekenhuis.test' });
     const planner = person('PLANNER');
-    expect((await (await GET(request('GET', planner))).json()).data.bron).toBe('ENV');
+    try {
+      expect((await (await GET(request('GET', planner))).json()).data.ingesteld).toBe(false);
+      const loginsBefore = sink.logins.length;
+      expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(false);
+      expect(sink.logins).toHaveLength(loginsBefore);
 
-    await PUT(request('PUT', planner, goed));
-    await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []));
-    await waitForMails(sink, 1);
-    expect(sink.received[0].to).toEqual(['flow@ziekenhuis.test']);
+      await PUT(request('PUT', planner, goed));
+      await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []));
+      await waitForMails(sink, 1);
+      expect(sink.received[0].to).toEqual(['flow@ziekenhuis.test']);
 
-    const res = await DELETE(request('DELETE', planner));
-    expect((await res.json()).data).toMatchObject({ bron: 'ENV', verzendlijst_aan: 'env@ziekenhuis.test' });
-    expect(stored()).toHaveLength(0);
+      const res = await DELETE(request('DELETE', planner));
+      expect((await res.json()).data).toMatchObject({ ingesteld: false, gebruiker: null, verzendlijst_aan: null });
+      expect(stored()).toHaveLength(0);
+      expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(false);
+      expect(sink.received).toHaveLength(1);
+    } finally {
+      delete process.env.SMTP_USER;
+      delete process.env.SMTP_PASS;
+      delete process.env.VERZENDLIJST_AAN;
+    }
 
     const log = db
       .prepare(`SELECT actie, oud_json, nieuw_json FROM dienstrooster_audit_log WHERE actor_id = ? AND entiteit = 'app_setting'`)
@@ -187,7 +202,7 @@ describe('Mailinstellingen in de app', () => {
     db.prepare(`UPDATE dienstrooster_app_setting SET waarde = 'v1:kapot' WHERE sleutel = 'mail.wachtwoord'`).run();
 
     expect((await (await GET(request('GET', planner))).json()).data).toMatchObject({
-      bron: null,
+      ingesteld: false,
       wachtwoord_onleesbaar: true,
     });
     expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(false);
@@ -210,24 +225,27 @@ describe('Mailinstellingen in de app', () => {
     expect((await sendVerzendlijst(lijst(true))).ok).toBe(false);
     expect(await fout()).toBeNull();
 
-    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    configureSmtp(sink, { wachtwoord: 'verkeerd' });
     expect((await sendVerzendlijst(lijst(true))).ok).toBe(false);
     expect(await fout()).toMatchObject({ soort: 'HERINNERING', automatisch: true });
     expect((await fout()).melding).toContain('weigerde de inlog');
 
-    configureSmtp(sink);
+    // The right password, without saving settings (which would forget the
+    // failure by itself): only the successful send may clear it here.
+    db.prepare(`UPDATE dienstrooster_app_setting SET waarde = ? WHERE sleutel = 'mail.wachtwoord'`).run(
+      encryptSetting('app-wachtwoord')
+    );
+    expect(await fout()).not.toBeNull();
     expect((await sendVerzendlijst(lijst(false))).ok).toBe(true);
     expect(await fout()).toBeNull();
   });
 
   it('forgets an earlier failure once new settings are saved', async () => {
-    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    configureSmtp(sink, { wachtwoord: 'verkeerd' });
     const planner = person('PLANNER');
     await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []));
     expect((await (await GET(request('GET', planner))).json()).data.laatste_fout).not.toBeNull();
 
-    clearSmtpConfig();
-    configureSmtpServerOnly(sink);
     expect((await PUT(request('PUT', planner, goed))).status).toBe(200);
     expect((await (await GET(request('GET', planner))).json()).data.laatste_fout).toBeNull();
   });

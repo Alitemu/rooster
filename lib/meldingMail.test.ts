@@ -22,9 +22,12 @@ import {
 import { formatSwapDate } from './swapMailDetails';
 import { AL_GERUILD_REDEN, AL_ONDERLING_GERUILD_REDEN } from './swapLifecycle';
 import { MAX_RUILVERZOEKEN_PER_DAG } from './swapQuota';
-import { flushMailQueue, MAIL_QUEUE_MAX_AGE_MS } from './meldingMail';
+import { flushMailQueue, MAIL_QUEUE_MAX_AGE_MS, mailQueueSettled } from './meldingMail';
 import { GET as getMailSettings, PUT as putMailSettings } from '@/app/api/planner/mail-settings/route';
 import { STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
+import { encryptSetting } from './settingsCrypto';
+import { sendVerzendlijst } from './verzendlijstMail';
+import { buildVerzendlijst } from './verzendlijst';
 
 /**
  * The rules:
@@ -206,7 +209,11 @@ function berichtenFor(personId: string) {
   return sink.received.flatMap((m) => verzendlijstAttachment(m.raw)).filter((b) => b.codenaam === codenaam(personId));
 }
 
-afterEach(() => {
+afterEach(async () => {
+  // Mails started in the background, and a queue run a successful send
+  // set off, finish before their people and periods are removed.
+  await new Promise((r) => setTimeout(r, 50));
+  await mailQueueSettled();
   clearSmtpConfig();
   sink.received.length = 0;
   // Mail settings saved through the app, and a refused send remembered
@@ -338,7 +345,7 @@ describe('mail about swap requests', () => {
   });
 
   it('still creates the swap request when the mail server refuses', async () => {
-    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    configureSmtp(sink, { wachtwoord: 'verkeerd' });
     const f = createFixture();
     const swapId = await requestSwap(f);
     const row = db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(swapId) as {
@@ -650,7 +657,7 @@ describe('ruilmails die niet meteen weg konden', () => {
   });
 
   it('keeps a mail the server refused and sends it once the server takes it, stopping at the first refusal', async () => {
-    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    configureSmtp(sink, { wachtwoord: 'verkeerd' });
     const f = createFixture();
     await requestSwap(f);
     await new Promise((r) => setTimeout(r, 300));
@@ -685,7 +692,7 @@ describe('ruilmails die niet meteen weg konden', () => {
   });
 
   it('sends no "ingetrokken" to a colleague who never got the request', async () => {
-    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    configureSmtp(sink, { wachtwoord: 'verkeerd' });
     const f = createFixture();
     const swapId = await requestSwap(f);
     await new Promise((r) => setTimeout(r, 300));
@@ -701,6 +708,35 @@ describe('ruilmails die niet meteen weg konden', () => {
     await new Promise((r) => setTimeout(r, 300));
     expect(queued(f)).toEqual([]);
     expect(sink.received).toHaveLength(0);
+  });
+
+  it('also when the request is withdrawn while its mail is still being sent, and that mail then fails', async () => {
+    // A server that turns down only the request mail to the colleague.
+    const picky = await startSmtpSink({
+      refuse: (raw) => verzendlijstPayload(raw).berichten.some((b) => b.soort === 'RUILVERZOEK'),
+    });
+    try {
+      configureSmtp(picky);
+      const f = createFixture();
+      const swapId = await requestSwap(f);
+      // Straight away: the request mail is still on its way.
+      await cancelSwap(
+        new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests/${swapId}/cancel`, {
+          method: 'POST',
+          headers: { Cookie: cookie(f.aanvrager) },
+        }),
+        { params: Promise.resolve({ id: f.aanvrager, 'swap-id': swapId }) }
+      );
+      await new Promise((r) => setTimeout(r, 500));
+      await mailQueueSettled();
+      const toColleague = picky.received
+        .flatMap((m) => verzendlijstAttachment(m.raw))
+        .filter((b) => b.codenaam === codenaam(f.collega));
+      expect(toColleague).toEqual([]);
+      expect(queued(f)).toEqual([]);
+    } finally {
+      await picky.close();
+    }
   });
 
   it('counts what waits, and sends it as soon as mail settings are saved in the app', async () => {
@@ -742,6 +778,42 @@ describe('ruilmails die niet meteen weg konden', () => {
     const later = new Date(Date.now() + MAIL_QUEUE_MAX_AGE_MS + 60_000);
     expect(await flushMailQueue(later)).toMatchObject({ verstuurd: 0, vervallen: 2 });
     expect(sink.received).toHaveLength(0);
+  });
+
+  it('sends what waited as soon as any other mail goes out again, not at the next hourly run', async () => {
+    configureSmtp(sink, { wachtwoord: 'verkeerd' });
+    const f = createFixture();
+    await requestSwap(f);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(queued(f)).toHaveLength(2);
+
+    // The password is fixed without going through the settings route
+    // (which flushes by itself); then an ordinary verzendlijst goes out.
+    db.prepare(`UPDATE dienstrooster_app_setting SET waarde = ? WHERE sleutel = 'mail.wachtwoord'`).run(
+      encryptSetting('app-wachtwoord')
+    );
+    expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(true);
+    await waitForMails(sink, 3);
+    expect(queued(f)).toEqual([]);
+  });
+
+  it('clears out what no longer applies even while sending is not set up, so the count stays honest', async () => {
+    const old = createFixture();
+    await requestSwap(old);
+    db.prepare('UPDATE dienstrooster_mail_queue SET aangemaakt_op = ? WHERE period_id = ?').run(
+      new Date(Date.now() - MAIL_QUEUE_MAX_AGE_MS - 60_000).toISOString(),
+      old.periodId
+    );
+    const answered = createFixture();
+    const swapId = await requestSwap(answered);
+    db.prepare(`UPDATE dienstrooster_swap_request SET status = 'AFGEWEZEN' WHERE id = ?`).run(swapId);
+    const open = createFixture();
+    await requestSwap(open);
+
+    expect(await flushMailQueue()).toMatchObject({ verstuurd: 0, vervallen: 4 });
+    expect(queued(old)).toEqual([]);
+    expect(queued(answered)).toEqual([]);
+    expect(queued(open)).toHaveLength(2);
   });
 
   it('tells the requester when the mail to the colleague will be late', async () => {

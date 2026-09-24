@@ -15,6 +15,11 @@
  * `fellow_blok`), and every weekend day they leave unblocked raises how
  * many weekend shifts they can get (lib/rosterBands.ts, fellowWeekendBand).
  *
+ * A weekend day blocked for another reason first (a part-time pattern, an
+ * absence) becomes a fellow block when that reason goes away
+ * (lib/fellowBlocks.ts restoreFellowBlocks), so it never turns open by
+ * itself.
+ *
  * Fellows don't count for the weekend band of the others, so theirs goes
  * up automatically at generation (resolvePeriodBands).
  *
@@ -24,13 +29,11 @@
 import { db } from '@/db/client';
 import { syncPatternsForPerson } from './parttimeSync';
 import { syncAbsencesForPerson } from './absenceSync';
+import { WEEKEND_DAY_SQL } from './fellowBlocks';
 
 export const FELLOW_UITLEG =
   'Je weekenden worden geblokkeerd, omdat je op een zaterdag al ingedeeld kan worden ' +
   'om de AIOS te ondersteunen bij de voorwacht.';
-
-/** Saturday or Sunday, from an ISO date column. */
-const WEEKEND_DAY_SQL = `strftime('%w', s.datum) IN ('0', '6')`;
 
 export function isFellow(periodId: string, personId: string): boolean {
   return Boolean(

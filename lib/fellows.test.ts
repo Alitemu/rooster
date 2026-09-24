@@ -14,7 +14,8 @@ import { GET as getFellow, PUT as putFellow } from '@/app/api/person/[id]/fellow
 import { setFellow, isFellow, releasedWeekendDays } from './fellows';
 import { computeMemberTargets, resolvePeriodBands } from './rosterBands';
 import { checkBlockBudget } from './blockBudget';
-import { syncAvailabilityForAbsence } from './absenceSync';
+import { removeAbsenceAvailability, syncAvailabilityForAbsence } from './absenceSync';
+import { removePatternAvailability, syncAvailabilityForPattern } from './parttimeSync';
 import { computeCarryOver } from './carryOver';
 import { checkWeekendCapacity } from './capacity';
 import { getEligiblePeopleForSlot } from './rosterGaps';
@@ -282,6 +283,74 @@ describe('Ik ben fellow: de weekendblokkades', () => {
     expect(m.has('2028-04-23')).toBe(false);
   });
 
+  it('turns a weekend day back into a fellow block when the vacation holding it is removed or shortened', () => {
+    const f = createFixture();
+    const [p] = f.people;
+    setFellow(f.periodId, p, true);
+    const absenceId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_absence (id, person_id, van_datum, tot_datum, soort, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, '2028-04-15', '2028-04-23', 'VAKANTIE', ?, datetime('now'))`
+    ).run(absenceId, p, p);
+    syncAvailabilityForAbsence(absenceId);
+
+    // Shortened to the last weekend: the first one is no longer the vacation's.
+    db.prepare(`UPDATE dienstrooster_absence SET van_datum = '2028-04-22' WHERE id = ?`).run(absenceId);
+    syncAvailabilityForAbsence(absenceId);
+    expect(marks(p, f).get('2028-04-15')).toMatchObject({ blocking_level: 'ABSOLUUT', fellow_blok: 1 });
+
+    // Removed altogether.
+    removeAbsenceAvailability(absenceId);
+    db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(absenceId);
+    expect(marks(p, f).get('2028-04-22')).toMatchObject({ blocking_level: 'ABSOLUUT', fellow_blok: 1 });
+    // A weekday of that vacation just opens.
+    expect(marks(p, f).has('2028-04-19')).toBe(false);
+    expect(releasedWeekendDays(f.periodId).get(p)).toBe(0);
+  });
+
+  it('turns a part-time Saturday that was there before "fellow" into a fellow block when the pattern goes', () => {
+    const f = createFixture();
+    const [p] = f.people;
+    const patternId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_parttime_pattern
+         (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, 'ZA', 'ELKE_WEEK', '2028-01-01', '2028-12-31', ?, datetime('now'))`
+    ).run(patternId, p, p);
+    syncAvailabilityForPattern(patternId);
+    setFellow(f.periodId, p, true);
+    expect(marks(p, f).get('2028-04-15')?.fellow_blok).toBe(0);
+
+    removePatternAvailability(patternId);
+    expect(marks(p, f).get('2028-04-15')).toMatchObject({ blocking_level: 'ABSOLUUT', fellow_blok: 1 });
+    expect(marks(p, f).get('2028-04-22')).toMatchObject({ blocking_level: 'ABSOLUUT', fellow_blok: 1 });
+    db.prepare('DELETE FROM dienstrooster_parttime_pattern WHERE id = ?').run(patternId);
+  });
+
+  it('leaves a weekend day the fellow released themselves open, and gives nobody else a fellow block', () => {
+    const f = createFixture({ people: 2 });
+    const [p, other] = f.people;
+    setFellow(f.periodId, p, true);
+    // Released by the fellow: the row is simply gone.
+    db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?').run(
+      p,
+      f.slotByDate.get('2028-04-23')
+    );
+    for (const who of [p, other]) {
+      const absenceId = crypto.randomUUID();
+      db.prepare(
+        `INSERT INTO dienstrooster_absence (id, person_id, van_datum, tot_datum, soort, aangemaakt_door, aangemaakt_op)
+         VALUES (?, ?, '2028-04-22', '2028-04-22', 'VAKANTIE', ?, datetime('now'))`
+      ).run(absenceId, who, who);
+      syncAvailabilityForAbsence(absenceId);
+      removeAbsenceAvailability(absenceId);
+      db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(absenceId);
+    }
+    expect(marks(p, f).has('2028-04-23')).toBe(false);
+    expect(marks(p, f).get('2028-04-22')?.fellow_blok).toBe(1);
+    expect(marks(other, f).has('2028-04-22')).toBe(false);
+  });
+
   it('never counts the weekend blocks against a block budget', () => {
     // One WEEKEND block allowed: floor(3 * 0.34).
     const config = {
@@ -430,7 +499,7 @@ describe('het vinkje via de app', () => {
   });
 
   it('lets the planner change it after the deadline, on record in the audit trail', async () => {
-    const closed = createFixture({ deadline: '2020-01-01T00:00:00Z', status: 'GEGENEREERD' });
+    const closed = createFixture({ deadline: '2020-01-01T00:00:00Z', status: 'GESLOTEN' });
     const planner = createPlanner();
     expect((await put(closed.people[0], closed.periodId, true, planner, 'staff')).status).toBe(200);
     expect(isFellow(closed.periodId, closed.people[0])).toBe(true);
@@ -438,6 +507,20 @@ describe('het vinkje via de app', () => {
       .prepare(`SELECT COUNT(*) AS n FROM dienstrooster_audit_log WHERE actor_id = ? AND entiteit = 'period_fellow'`)
       .get(planner) as { n: number };
     expect(audit.n).toBe(1);
+  });
+
+  it('is fixed for the planner too once the roster is generated or published', async () => {
+    const planner = createPlanner();
+    for (const status of ['GEGENEREERD', 'GEPUBLICEERD']) {
+      const made = createFixture({ people: 2, deadline: '2020-01-01T00:00:00Z', status });
+      setFellow(made.periodId, made.people[1], true);
+      const aan = await put(made.people[0], made.periodId, true, planner, 'staff');
+      expect(aan.status).toBe(409);
+      expect((await aan.json()).error.message).toContain('Het rooster is al gemaakt');
+      expect((await put(made.people[1], made.periodId, false, planner, 'staff')).status).toBe(409);
+      expect(isFellow(made.periodId, made.people[0])).toBe(false);
+      expect(isFellow(made.periodId, made.people[1])).toBe(true);
+    }
   });
 });
 

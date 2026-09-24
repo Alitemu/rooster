@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { deleteMailSettings, saveMailSettings } from '@/lib/appSettings';
 import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
@@ -67,9 +68,7 @@ afterEach(() => {
   created.periods = [];
   created.pools = [];
   created.people = [];
-  delete process.env.SMTP_USER;
-  delete process.env.SMTP_PASS;
-  delete process.env.VERZENDLIJST_AAN;
+  deleteMailSettings();
 });
 
 describe('/api/planner/period/[id]/auto-reminders', () => {
@@ -82,7 +81,7 @@ describe('/api/planner/period/[id]/auto-reminders', () => {
     expect((await res.json()).data.aan).toBe(false);
 
     // Mail "configured" (never actually reached: nothing is due for a paused period).
-    Object.assign(process.env, { SMTP_USER: 'x', SMTP_PASS: 'y', VERZENDLIJST_AAN: 'z' });
+    saveMailSettings({ gebruiker: 'x@gmail.com', wachtwoord: 'y', verzendlijstAan: 'z@example.test' }, null);
     await runAutoReminders(reminderMoment(new Date('2099-03-11T17:00'), 7), { onlyPeriodIds: [f.periodId] });
     const runs = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_reminder_run WHERE period_id = ?').get(f.periodId) as {
       n: number;

@@ -3,15 +3,11 @@
  * mailbox over SMTP, so the Power Automate flow starts without the
  * planner having to download a file and attach it by hand.
  *
- * Configured in the app ("Mailinstellingen" under Exporteren &
+ * Configured in the app only ("Mailinstellingen" under Exporteren &
  * communicatie, lib/appSettings.ts): a Gmail account, its app password
- * and the mailbox the flow watches. The environment is the fallback for an
- * installation set up before that screen existed (see .env.example):
- *   SMTP_USER, SMTP_PASS   the sending account and its app password
- *   SMTP_FROM              optional, defaults to SMTP_USER
- *   VERZENDLIJST_AAN       the mailbox the flow watches
- *   SMTP_HOST, SMTP_PORT   default smtp.gmail.com:465; also apply to the
- *                          app's settings (the tests use their own server)
+ * and the mailbox the flow watches. The server is smtp.gmail.com:465;
+ * SMTP_HOST/SMTP_PORT exist only so the tests can point it at their own
+ * server (tests/smtpSink.ts).
  *
  * The recipient is fixed by the operator, never taken from a request: this
  * can only ever mail the planner's own flow mailbox, not arbitrary people.
@@ -31,7 +27,7 @@ interface MailConfig {
   to: string;
 }
 
-/** Host and port: Gmail unless SMTP_HOST/SMTP_PORT say otherwise (tests use their own server). */
+/** Gmail, unless SMTP_HOST/SMTP_PORT say otherwise (only the tests do). */
 function server(): { host: string; port: number } {
   const port = parseInt(process.env.SMTP_PORT ?? '', 10);
   return { host: process.env.SMTP_HOST?.trim() || 'smtp.gmail.com', port: Number.isFinite(port) ? port : 465 };
@@ -41,70 +37,41 @@ function server(): { host: string; port: number } {
 // pasted as shown, the spaces would make the login fail.
 const stripSpaces = (pass: string) => pass.replace(/\s+/g, '');
 
-function configFromEnv(): MailConfig | null {
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
-  const to = process.env.VERZENDLIJST_AAN?.trim();
-  if (!user || !pass || !to) return null;
-  return { ...server(), user, pass: stripSpaces(pass), from: process.env.SMTP_FROM?.trim() || user, to };
-}
-
-/**
- * The settings saved in the app ("Mailinstellingen", lib/appSettings.ts)
- * win over .env, so the operator can set this up without access to the
- * server. .env stays as the fallback for an installation that already
- * uses it.
- */
+/** The settings saved in the app ("Mailinstellingen", lib/appSettings.ts), or null. */
 function readConfig(): MailConfig | null {
   const stored = getStoredMailSettings();
-  if (stored?.wachtwoord) {
-    return {
-      ...server(),
-      user: stored.gebruiker,
-      pass: stripSpaces(stored.wachtwoord),
-      from: stored.gebruiker,
-      to: stored.verzendlijstAan,
-    };
-  }
-  return configFromEnv();
+  if (!stored?.wachtwoord) return null;
+  return {
+    ...server(),
+    user: stored.gebruiker,
+    pass: stripSpaces(stored.wachtwoord),
+    from: stored.gebruiker,
+    to: stored.verzendlijstAan,
+  };
 }
 
-export type MailConfigSource = 'APP' | 'ENV' | null;
-
-/** Where sending is set up, for the settings dialog. */
+/** Whether sending is set up, for the settings dialog and the warning on the period page. */
 export function mailConfigStatus(): {
-  bron: MailConfigSource;
+  ingesteld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
-  /** Saved in the app, but the password can no longer be read (new session secret). */
+  /** Saved, but the password can no longer be read (new session secret). */
   wachtwoord_onleesbaar: boolean;
   /** The last failed send, until one succeeds again. */
   laatste_fout: MailFailure | null;
   /** Swap mails waiting to go out (lib/meldingMail.ts flushMailQueue). */
   wachtrij: number;
 } {
-  const laatste_fout = getMailFailure();
   // Counted here rather than imported from lib/meldingMail.ts, which
   // imports this module.
   const wachtrij = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_mail_queue').get() as { n: number }).n;
   const stored = getStoredMailSettings();
-  if (stored?.wachtwoord) {
-    return {
-      bron: 'APP',
-      gebruiker: stored.gebruiker,
-      verzendlijst_aan: stored.verzendlijstAan,
-      wachtwoord_onleesbaar: false,
-      laatste_fout,
-      wachtrij,
-    };
-  }
-  const env = configFromEnv();
   return {
-    bron: env ? 'ENV' : null,
-    gebruiker: stored?.gebruiker ?? env?.user ?? null,
-    verzendlijst_aan: stored?.verzendlijstAan ?? env?.to ?? null,
+    ingesteld: Boolean(stored?.wachtwoord),
+    gebruiker: stored?.gebruiker ?? null,
+    verzendlijst_aan: stored?.verzendlijstAan ?? null,
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
-    laatste_fout,
+    laatste_fout: getMailFailure(),
     wachtrij,
   };
 }
@@ -123,23 +90,20 @@ function explainSmtpError(error: unknown): string {
   const code = (error as { code?: string }).code;
   if (code === 'EAUTH') {
     return (
-      'De mailserver weigerde de inlog. Controleer SMTP_USER en SMTP_PASS. ' +
-      'Bij Gmail is dat een app-wachtwoord, niet je gewone wachtwoord.'
+      'Gmail weigerde de inlog. Controleer het Gmail-adres en het app-wachtwoord bij Mailinstellingen. ' +
+      'Het moet een app-wachtwoord zijn, niet je gewone wachtwoord.'
     );
   }
   if (code === 'ECONNECTION' || code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'EDNS') {
-    return 'De mailserver is niet bereikbaar. Controleer SMTP_HOST en SMTP_PORT en of de server internet heeft.';
+    return 'Gmail is niet bereikbaar. Controleer of de server verbinding heeft met internet.';
   }
   if (code === 'ETLS') {
-    return (
-      'De mailserver biedt geen versleutelde verbinding aan, dus het wachtwoord is niet verstuurd. ' +
-      'Controleer SMTP_HOST en SMTP_PORT. Bij Gmail is dat smtp.gmail.com met poort 465.'
-    );
+    return 'Er kon geen versleutelde verbinding met de mailserver gemaakt worden, dus het wachtwoord is niet verstuurd.';
   }
   if (code === 'EENVELOPE') {
-    return 'De mailserver weigerde het adres. Controleer VERZENDLIJST_AAN en SMTP_FROM.';
+    return 'Gmail weigerde het adres. Controleer het adres voor de verzendlijst bij Mailinstellingen.';
   }
-  return 'Versturen via de mailserver is mislukt.';
+  return 'Versturen via Gmail is mislukt.';
 }
 
 function createTransport(config: Pick<MailConfig, 'host' | 'port' | 'user' | 'pass'>) {
@@ -224,6 +188,10 @@ export async function sendVerzendlijst(lijst: Verzendlijst): Promise<Verzendlijs
   // "Not set up" is not a failure to remember - the page says that itself.
   if (result.ok) {
     clearMailFailure();
+    // Sending works (again): swap mails that waited go now rather than at
+    // the next hourly run. Imported when needed: lib/meldingMail.ts
+    // imports this module.
+    void import('./meldingMail').then((m) => m.flushAfterSend()).catch(() => {});
     return { ok: true, aantal: lijst.aantal };
   }
   if (!result.notConfigured) {

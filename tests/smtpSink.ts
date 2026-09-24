@@ -6,6 +6,7 @@
 
 import { SMTPServer } from 'smtp-server';
 import type { AddressInfo } from 'net';
+import { deleteMailSettings, saveMailSettings } from '@/lib/appSettings';
 import type { Verzendlijst, VerzendlijstBerichtUit } from '@/lib/verzendlijst';
 
 export const SMTP_SINK_USER = 'rooster@example.test';
@@ -32,9 +33,15 @@ export interface SmtpSink {
  * `starttls: false` makes a server that never offers encryption: the app
  * must then refuse to log in at all (lib/verzendlijstMail.ts requireTLS).
  * With STARTTLS the server uses smtp-server's own self-signed certificate,
- * which configureSmtp tells Node to accept for the test.
+ * which configureSmtpServerOnly tells Node to accept for the test.
  */
-export async function startSmtpSink(opts: { starttls?: boolean } = {}): Promise<SmtpSink> {
+export async function startSmtpSink(
+  opts: {
+    starttls?: boolean;
+    /** Refuse the messages this matches (the raw MIME text), the way a server turns one mail down. */
+    refuse?: (raw: string) => boolean;
+  } = {}
+): Promise<SmtpSink> {
   const received: ReceivedMail[] = [];
   const logins: string[] = [];
   const server = new SMTPServer({
@@ -57,10 +64,15 @@ export async function startSmtpSink(opts: { starttls?: boolean } = {}): Promise<
       const chunks: Buffer[] = [];
       stream.on('data', (c: Buffer) => chunks.push(c));
       stream.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        if (opts.refuse?.(raw)) {
+          callback(new Error('Message refused'));
+          return;
+        }
         received.push({
           from: session.envelope.mailFrom ? session.envelope.mailFrom.address : '',
           to: session.envelope.rcptTo.map((r) => r.address),
-          raw: Buffer.concat(chunks).toString('utf8'),
+          raw,
         });
         callback();
       });
@@ -75,36 +87,45 @@ export async function startSmtpSink(opts: { starttls?: boolean } = {}): Promise<
   };
 }
 
-const ENV_KEYS = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS', 'SMTP_FROM', 'VERZENDLIJST_AAN'] as const;
-
-/** Points lib/verzendlijstMail.ts at the sink. */
-export function configureSmtp(sink: SmtpSink, overrides: Partial<Record<(typeof ENV_KEYS)[number], string>> = {}) {
-  // The sink's certificate is self-signed; checking certificates is not
-  // what these tests are about. Undone by clearSmtpConfig.
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-  Object.assign(process.env, {
-    SMTP_HOST: '127.0.0.1',
-    SMTP_PORT: String(sink.port),
-    SMTP_USER: SMTP_SINK_USER,
-    // Pasted the way Google shows an app password: in groups with spaces.
-    SMTP_PASS: 'app-wacht woord',
-    VERZENDLIJST_AAN: 'stroom@example.test',
-    ...overrides,
-  });
+/**
+ * Points lib/verzendlijstMail.ts at the sink: the server through
+ * SMTP_HOST/SMTP_PORT (which only tests set), the account the way the app
+ * stores it (lib/appSettings.ts). saveMailSettings does not check for
+ * Gmail - only the route does - so the sink's own account works here.
+ */
+export function configureSmtp(
+  sink: SmtpSink,
+  overrides: { gebruiker?: string; wachtwoord?: string; aan?: string } = {}
+) {
+  configureSmtpServerOnly(sink);
+  saveMailSettings(
+    {
+      gebruiker: overrides.gebruiker ?? SMTP_SINK_USER,
+      // Pasted the way Google shows an app password: in groups with spaces.
+      wachtwoord: overrides.wachtwoord ?? 'app-wacht woord',
+      verzendlijstAan: overrides.aan ?? 'stroom@example.test',
+    },
+    null
+  );
 }
 
 /**
- * Points the server (not the account) at the sink, the way the app's own
- * Mailinstellingen are tested: SMTP_HOST/SMTP_PORT apply to them too.
+ * Points the server (not the account) at the sink, for tests that save
+ * the account through the Mailinstellingen route themselves.
  */
 export function configureSmtpServerOnly(sink: SmtpSink) {
+  // The sink's certificate is self-signed; checking certificates is not
+  // what these tests are about. Undone by clearSmtpConfig.
   process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
   Object.assign(process.env, { SMTP_HOST: '127.0.0.1', SMTP_PORT: String(sink.port) });
 }
 
+/** Removes the server override and every mail setting, a remembered failure included. */
 export function clearSmtpConfig() {
-  for (const key of ENV_KEYS) delete process.env[key];
+  delete process.env.SMTP_HOST;
+  delete process.env.SMTP_PORT;
   delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+  deleteMailSettings();
 }
 
 /** The whole verzendlijst (summary fields and berichten), decoded from a raw MIME message. */

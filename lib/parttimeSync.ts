@@ -16,6 +16,7 @@
 import { db } from '@/db/client';
 import { parseISO, dateToISO, getISOWeek } from '@/lib/holidays';
 import { deadlinePassed } from '@/lib/periodInputGate';
+import { restoreFellowBlocks } from '@/lib/fellowBlocks';
 
 export type Weekdag = 'MA' | 'DI' | 'WO' | 'DO' | 'VR' | 'ZA' | 'ZO';
 export type Frequentie = 'ELKE_WEEK' | 'EVEN_WEKEN' | 'ONEVEN_WEKEN';
@@ -188,6 +189,7 @@ function reconcilePatternForPeriod(pattern: ParttimePatternRow, periodId: string
     db.prepare(
       `DELETE FROM dienstrooster_availability WHERE bron_pattern_id = ? AND slot_id IN (${placeholders})`
     ).run(pattern.id, ...toDelete);
+    restoreFellowBlocks(pattern.person_id, toDelete);
   }
 
   const toCheck = [...targetSlotIds].filter((id) => !currentSlotIds.has(id));
@@ -369,13 +371,20 @@ export function releaseSourceAvailability(
 ): { deleted: number; kept: number } {
   const rows = db
     .prepare(
-      `SELECT a.id, sp.status, sp.deadline, sp.verwijderd_op
+      `SELECT a.id, a.person_id, a.slot_id, sp.status, sp.deadline, sp.verwijderd_op
        FROM dienstrooster_availability a
        JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
        JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
        WHERE a.${column} = ?`
     )
-    .all(sourceId) as Array<{ id: string; status: string; deadline: string; verwijderd_op: string | null }>;
+    .all(sourceId) as Array<{
+    id: string;
+    person_id: string;
+    slot_id: string;
+    status: string;
+    deadline: string;
+    verwijderd_op: string | null;
+  }>;
 
   const deleteStmt = db.prepare('DELETE FROM dienstrooster_availability WHERE id = ?');
   const detachStmt = db.prepare(`UPDATE dienstrooster_availability SET ${column} = NULL WHERE id = ?`);
@@ -387,6 +396,7 @@ export function releaseSourceAvailability(
       const acceptsInput = row.status === 'OPEN' && !row.verwijderd_op && !deadlinePassed(row.deadline, now);
       if (acceptsInput) {
         deleteStmt.run(row.id);
+        restoreFellowBlocks(row.person_id, [row.slot_id]);
         deleted++;
       } else {
         detachStmt.run(row.id);

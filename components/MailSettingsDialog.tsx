@@ -2,7 +2,7 @@
 
 /**
  * "Mailinstellingen": the Gmail account Dienstrooster sends the
- * verzendlijst from, set up from the app instead of the server's .env
+ * verzendlijst from - the only place sending is set up
  * (lib/appSettings.ts, /api/planner/mail-settings). Saving logs in first,
  * so settings that don't work are never kept. The saved password is never
  * shown again; leaving the field empty keeps it.
@@ -13,7 +13,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 
 interface Status {
-  bron: 'APP' | 'ENV' | null;
+  ingesteld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
   wachtwoord_onleesbaar: boolean;
@@ -62,7 +62,9 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
 
   if (!isOpen) return null;
 
-  const opgeslagenInApp = status?.bron === 'APP';
+  const ingesteld = Boolean(status?.ingesteld);
+  // Also when the password can no longer be read: then there is still something to remove.
+  const opgeslagen = Boolean(status?.gebruiker);
 
   const save = async () => {
     setBusy(true);
@@ -96,11 +98,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Verwijderen is mislukt.');
       apply(data.data);
       setConfirmDelete(false);
-      setMelding(
-        data.data.bron === 'ENV'
-          ? 'De instellingen zijn verwijderd. Er wordt nu weer verstuurd met de instellingen uit het serverbestand.'
-          : 'De instellingen zijn verwijderd. Er wordt geen mail meer verstuurd.'
-      );
+      setMelding('De instellingen zijn verwijderd. Er wordt geen mail meer verstuurd.');
       onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Verwijderen is mislukt.');
@@ -109,7 +107,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     }
   };
 
-  const canSave = !busy && gebruiker.trim() !== '' && aan.trim() !== '' && (wachtwoord.trim() !== '' || opgeslagenInApp);
+  const canSave = !busy && gebruiker.trim() !== '' && aan.trim() !== '' && (wachtwoord.trim() !== '' || ingesteld);
 
   return (
     <div
@@ -128,16 +126,14 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
         </div>
 
         <div className="p-6 space-y-4 overflow-y-auto min-h-0">
-          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-            De app werkt alleen met Gmail. Gebruik een app-wachtwoord van Google, niet je gewone wachtwoord. Hoe
-            je dat aanmaakt, staat in de handleiding (docs/verzendlijst-power-automate.md, stap 1).
-          </div>
-
-          {status?.bron === 'ENV' && (
-            <p className="text-sm text-neutral-700">
-              Nu ingesteld via het serverbestand (.env). Wat je hier opslaat, gaat daarvoor.
+          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
+            <p>De app werkt alleen met Gmail. Gebruik een app-wachtwoord van Google, niet je gewone wachtwoord.</p>
+            <p>
+              Zo maak je een app-wachtwoord aan: zet in je Google-account eerst verificatie in twee stappen aan. Ga
+              daarna naar myaccount.google.com/apppasswords, geef het een naam (bijvoorbeeld Dienstrooster) en kies
+              Maken. Google toont dan 16 letters. Die vul je hieronder in.
             </p>
-          )}
+          </div>
           {status?.wachtwoord_onleesbaar && (
             <p className="text-sm text-red-800">
               Het opgeslagen app-wachtwoord kan niet meer gelezen worden. Vul het opnieuw in.
@@ -167,7 +163,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
               id="mail-wachtwoord"
               type="password"
               autoComplete="new-password"
-              placeholder={opgeslagenInApp ? 'Opgeslagen. Laat leeg om het te houden.' : '16 letters, bijvoorbeeld abcd efgh ijkl mnop'}
+              placeholder={ingesteld ? 'Opgeslagen. Laat leeg om het te houden.' : '16 letters, bijvoorbeeld abcd efgh ijkl mnop'}
               value={wachtwoord}
               onChange={(e) => setWachtwoord(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg text-sm"
@@ -201,12 +197,12 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
             <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">{melding}</div>
           )}
 
-          {opgeslagenInApp && confirmDelete && (
+          {opgeslagen && confirmDelete && (
             <div className="rounded-lg border border-red-300 bg-red-50 p-4 space-y-3">
               <p className="text-sm font-semibold text-red-900">Mailinstellingen verwijderen?</p>
               <p className="text-sm text-red-900">
-                Daarna verstuurt Dienstrooster geen uitnodigingen, herinneringen of ruilmails meer, tenzij er nog
-                instellingen in het serverbestand staan. Het app-wachtwoord is dan ook weg uit de app.
+                Daarna verstuurt Dienstrooster geen uitnodigingen, herinneringen of ruilmails meer. Het
+                app-wachtwoord is dan ook weg uit de app.
               </p>
               <div className="flex gap-2 justify-end">
                 <button onClick={() => setConfirmDelete(false)} disabled={busy} className="btn-secondary">
@@ -226,7 +222,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
 
         <div className="border-t p-6 flex-shrink-0 flex flex-wrap justify-between gap-3">
           <div>
-            {opgeslagenInApp && !confirmDelete && (
+            {opgeslagen && !confirmDelete && (
               <button
                 onClick={() => setConfirmDelete(true)}
                 disabled={busy}

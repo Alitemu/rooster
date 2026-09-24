@@ -116,8 +116,7 @@ Gebruik bij voorkeur een apart Gmail-account alleen voor Dienstrooster.
    groepjes van vier. Je mag het met of zonder spaties overnemen.
 
 Gebruik nooit het gewone wachtwoord van het account. Google weigert dat
-voor deze manier van versturen en het zou dan in een bestand op de server
-staan.
+voor deze manier van versturen.
 
 ## Stap 2. Het account instellen in Dienstrooster
 
@@ -136,17 +135,17 @@ verzendlijst aanpassen, laat het wachtwoordveld dan leeg.
 Met **Instellingen verwijderen** haal je alles weer weg. Daarna gaat er geen
 mail meer uit.
 
-Stonden de waarden al in het `.env`-bestand op de server (`SMTP_USER`,
-`SMTP_PASS`, `VERZENDLIJST_AAN`)? Dan blijft dat werken. Wat je in de app
-opslaat, gaat daarvoor. Verwijder je de instellingen in de app, dan wordt het
-`.env`-bestand weer gebruikt.
+Dit is de enige plek waar je het mailen instelt. Stonden er nog
+`SMTP_USER`, `SMTP_PASS` of `VERZENDLIJST_AAN` in het `.env`-bestand op de
+server? Die worden niet meer gelezen en mag je weghalen. Vul de gegevens
+eenmalig in bij Mailinstellingen.
 
 In het exportvenster verschijnt nu bij *Uitnodigingen versturen* een groene
 knop. Zie je in plaats daarvan "Versturen is nog niet ingesteld", dan staat
 er nog niets in de Mailinstellingen.
 
 De server moet naar buiten kunnen verbinden met `smtp.gmail.com` op poort
-465. Een melding "De mailserver is niet bereikbaar" betekent meestal dat een
+465. Een melding "Gmail is niet bereikbaar" betekent meestal dat een
 firewall dat tegenhoudt.
 
 ## Stap 3. De Excel-lijst
@@ -381,3 +380,10 @@ gewoon werken.
   voor de eigen periode.
 - De Excel-lijst is de enige plek waar codenaam en e-mailadres samenkomen.
   Deel dat bestand met niemand die het niet nodig heeft.
+- Het app-wachtwoord staat versleuteld in de database. De sleutel staat in
+  het bestand `.session_secret` in dezelfde datamap, tenzij je
+  `SESSION_SECRET` in het `.env`-bestand hebt gezet. Een kopie van alleen de
+  database geeft het wachtwoord dus niet prijs, een kopie van de hele
+  datamap wel. Bewaar back-ups van die map net zo zorgvuldig als het
+  wachtwoord zelf. Denk je dat iemand anders het wachtwoord heeft? Trek het
+  dan in bij Google en maak een nieuw aan.

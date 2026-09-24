@@ -79,7 +79,7 @@ export function getMailFailure(): MailFailure | null {
   }
 }
 
-export function saveMailSettings(settings: { gebruiker: string; wachtwoord: string; verzendlijstAan: string }, actorId: string): void {
+export function saveMailSettings(settings: { gebruiker: string; wachtwoord: string; verzendlijstAan: string }, actorId: string | null): void {
   const now = new Date().toISOString();
   const upsert = db.prepare(
     `INSERT INTO dienstrooster_app_setting (sleutel, waarde, gewijzigd_op, gewijzigd_door)

@@ -21,7 +21,7 @@ import { POST as sendReminders } from '@/app/api/exports/reminders/[period-id]/s
  * - the verzendlijst reaches the configured mailbox as one mail with the
  *   fixed subject the Power Automate flow filters on, and a JSON
  *   attachment holding every participant's own working link.
- * - it only ever goes to VERZENDLIJST_AAN, never to an address from the
+ * - it only ever goes to the mailbox set up in Mailinstellingen, never to an address from the
  *   request.
  * - nothing is issued or sent when the server isn't set up for it, and a
  *   codenaam that doesn't take part in the period is refused before
@@ -227,7 +227,7 @@ describe('verzendlijst over SMTP', () => {
   });
 
   it('explains a refused login in Dutch instead of a raw SMTP error', async () => {
-    configure({ SMTP_PASS: 'verkeerd' });
+    configure({ wachtwoord: 'verkeerd' });
     const f = createFixture();
     const res = await sendInvitations(
       plannerRequest(`http://localhost/api/exports/invitations/${f.periodId}/send`, f.planner),

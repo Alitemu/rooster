@@ -17,6 +17,7 @@
 
 import { db } from '@/db/client';
 import { getOpenPeriodsForPerson, releaseSourceAvailability } from '@/lib/parttimeSync';
+import { restoreFellowBlocks } from '@/lib/fellowBlocks';
 
 export interface AbsenceRow {
   id: string;
@@ -73,6 +74,7 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
     db.prepare(
       `DELETE FROM dienstrooster_availability WHERE bron_absence_id = ? AND slot_id IN (${placeholders})`
     ).run(absence.id, ...toDelete);
+    restoreFellowBlocks(absence.person_id, toDelete);
   }
 
   const toCheck = [...targetSlotIds].filter((id) => !currentSlotIds.has(id));

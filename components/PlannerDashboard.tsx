@@ -456,8 +456,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     }
   };
 
-  // The planner may always change who is a fellow (lib/fellows.ts); the
-  // participant only until the deadline.
+  // The planner may change who is a fellow (lib/fellows.ts) until the
+  // roster is generated; the participant only until the deadline.
   const handleToggleFellow = async (personId: string, fellow: boolean) => {
     setSubmittingFor(personId);
     setActionError(null);
@@ -837,10 +837,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                       type="checkbox"
                       className="h-4 w-4"
                       checked={Boolean(person.is_fellow)}
-                      disabled={submittingFor === person.person_id}
+                      // Fixed once the roster is made (the API refuses it too, see the fellow route).
+                      disabled={submittingFor === person.person_id || isGenerated}
                       onChange={(e) => handleToggleFellow(person.person_id, e.target.checked)}
                       aria-label={`${person.codenaam} is fellow`}
-                      title="Fellow: weekenden geblokkeerd voor de AIOS-ondersteuning op zaterdag"
+                      title={
+                        isGenerated
+                          ? 'Het rooster is al gemaakt. Wie fellow is, ligt nu vast.'
+                          : 'Fellow: weekenden geblokkeerd voor de AIOS-ondersteuning op zaterdag'
+                      }
                     />
                   </td>
                   <td className="px-3 py-2 text-center">

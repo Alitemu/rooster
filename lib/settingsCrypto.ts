@@ -24,7 +24,10 @@ export function decryptSetting(stored: string): string | null {
   if (!stored.startsWith('v1:')) return null;
   try {
     const raw = Buffer.from(stored.slice(3), 'base64url');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', deriveSecretKey(PURPOSE), raw.subarray(0, 12));
+    // A shortened tag would otherwise be accepted and weaken the check.
+    const decipher = crypto.createDecipheriv('aes-256-gcm', deriveSecretKey(PURPOSE), raw.subarray(0, 12), {
+      authTagLength: 16,
+    });
     decipher.setAuthTag(raw.subarray(12, 28));
     return Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString('utf8');
   } catch {

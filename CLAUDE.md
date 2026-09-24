@@ -294,10 +294,16 @@ over.
 
 - "Ik ben fellow" on the participant's preferences step (FellowToggle,
   `PUT /api/person/[id]/fellow`), until the deadline like any preference;
-  the planner can always change it ("Status voorkeuren", audit-logged).
+  the planner can change it until the roster is generated ("Status
+  voorkeuren", audit-logged; 409 on GEGENEREERD/GEPUBLICEERD: it would move
+  everyone's weekend band under a built roster, and carry-over reads it
+  when the next period opens).
 - Ticking blocks every Saturday and Sunday of the period, feestdagen on a
   weekend included, never a weekday feestdag, and never a day the person
-  marked themselves (lib/fellows.ts). The rows are ordinary ABSOLUUT
+  marked themselves (lib/fellows.ts). A weekend day a part-time pattern
+  or absence held becomes a fellow block when that lets go of it
+  (lib/fellowBlocks.ts restoreFellowBlocks, called where parttimeSync and
+  absenceSync delete rows), so it never counts as released. The rows are ordinary ABSOLUUT
   availability with `fellow_blok = 1` (source stays MANUAL: the CHECK on
   `source` predates this), so solver, warnings and publication check need
   nothing special. Unticking removes only `fellow_blok` rows and re-syncs
@@ -406,14 +412,14 @@ the text names, longest first, so a flow can swap in real names from its
 sheet without "Persoon-1" matching inside "Persoon-10") to a Power Automate flow on the planner's
 side, which looks each codenaam up in its own Excel list and sends the
 mail. The server sends that mail itself (lib/verzendlijstMail.ts) once an
-account is set up: in the app ("Mailinstellingen" under Exporteren &
+account is set up, in the app only ("Mailinstellingen" under Exporteren &
 communicatie, `/api/planner/mail-settings`, lib/appSettings.ts - Gmail
 only, a 16-letter app password, the login is tried before saving, the
 password is stored AES-GCM encrypted with a key derived from the session
-secret, lib/settingsCrypto.ts, and never returned), or as the fallback
-via SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN in .env; what the app stores
-wins. SMTP_HOST/SMTP_PORT apply to both (the tests point them at
-tests/smtpSink.ts). Without either the export dialog says sending isn't
+secret, lib/settingsCrypto.ts, and never returned). .env is not read for
+it any more (SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN were removed on
+purpose); SMTP_HOST/SMTP_PORT exist only so tests can point it at
+tests/smtpSink.ts. Without it the export dialog says sending isn't
 set up, and MailWarning at the top of the period page says no mail goes
 out at all. That warning also shows the last failed send (stored as
 `mail.laatste_fout` in app_setting by sendVerzendlijst, cleared by the
@@ -421,7 +427,7 @@ next successful send or new settings; "not set up" is never recorded as
 a failure) - automatic reminders and swap mails fail where nobody
 watches. There is deliberately no other way out: the old manual JSON
 download and the per-person mailto links are gone, and a single reminder
-goes through the flow too. The invitations CSV download stays. The recipient is always VERZENDLIJST_AAN, never
+goes through the flow too. The invitations CSV download stays. The recipient is always the flow mailbox from Mailinstellingen, never
 anything from a request. Swap requests use the same channel (lib/meldingMail.ts):
 a new request mails the colleague (SWAP_REQUESTED) and confirms to the
 requester, and approve/reject mails the requester (SWAP_RESULT), each a
@@ -431,8 +437,12 @@ commit and never awaited, so a mail failure can't fail or slow the swap.
 A swap mail that can't go out (not set up, or refused) waits in
 dienstrooster_mail_queue with its MeldingMail as JSON - built, personal
 link included, only when it is sent - and flushMailQueue sends it hourly
-(instrumentation-node.ts) and right after mail settings are saved,
-oldest first, stopping at the first refusal. Dropped after 7 days, a
+(instrumentation-node.ts), right after mail settings are saved and after
+any other successful send (flushAfterSend, via a dynamic import from
+lib/verzendlijstMail.ts), oldest first, stopping at the first refusal.
+What no longer applies is pruned on every run, also while sending isn't
+set up, so MailWarning's count stays honest. A withdrawal waits for its
+own request mail if that is still being tried (requestsInFlight). Dropped after 7 days, a
 RUILVERZOEK/RUIL_BEVESTIGING as soon as the swap is no longer PENDING,
 and a withdrawal notice whose request mail never went out takes that
 request mail with it instead of being sent. The create route returns
