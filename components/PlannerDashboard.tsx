@@ -31,6 +31,7 @@ import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { FellowBadge } from './FellowBadge';
 import { MailSettingsDialog } from './MailSettingsDialog';
+import { MailWarning } from './MailWarning';
 
 interface PersonProgress {
   person_id: string;
@@ -617,6 +618,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           exactly what "Status voorkeuren" already shows in its own
           section hint below (visible whether that section is open or
           closed), just phrased slightly differently. */}
+
+      {/* Mail not going out: period-wide, so above every heading. */}
+      <MailWarning refreshKey={`${mailSettingsKey}|${exportDialogOpen}`} onOpenSettings={() => setMailSettingsOpen(true)} />
 
       {/* Large Imbalances - an actionable warning, not a summary stat, so
           unlike the rest of this reorganization it stays directly visible

@@ -4,11 +4,12 @@ import { db } from '@/db/client';
 import { createTestPeriod, cleanupTestData, loginAsPlanner, getBaseUrl } from './setup';
 
 /**
- * Three things on the planner's period page:
+ * Four things on the planner's period page:
  * - "Ongedaan maken" sits under the heading the change was made in and
  *   folds away with it (lib/pendingUndo.ts `onderdeel`);
  * - "Mailinstellingen" under Exporteren & communicatie, Gmail only;
- * - the version number next to the title.
+ * - the version number next to the title;
+ * - a warning at the top while no mail can go out.
  */
 
 test.describe('Periodepagina', () => {
@@ -74,6 +75,19 @@ test.describe('Periodepagina', () => {
     await dialog.getByLabel('Verzendlijst sturen naar').fill('flow@ziekenhuis.test');
     await dialog.getByRole('button', { name: 'Opslaan' }).click();
     await expect(dialog.getByRole('alert')).toContainText('alleen via Gmail');
+  });
+
+  test('warns at the top of the page that no mail goes out, and opens Mailinstellingen from there', async ({ page }) => {
+    // This test server has no mail settings, in the app or in .env.
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
+
+    const warning = page.getByRole('alert').filter({ hasText: 'Er wordt geen mail verstuurd' });
+    await expect(warning).toBeVisible();
+    await expect(warning).toContainText('Uitnodigingen, herinneringen en ruilmails staan stil');
+    await warning.getByRole('button', { name: 'Mailinstellingen openen' }).click();
+    await expect(page.getByRole('dialog', { name: 'Mailinstellingen' })).toBeVisible();
   });
 
   test('the version number is on the title line', async ({ page }) => {

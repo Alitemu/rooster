@@ -18,7 +18,7 @@
  */
 
 import nodemailer from 'nodemailer';
-import { getStoredMailSettings } from './appSettings';
+import { clearMailFailure, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
 import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
 interface MailConfig {
@@ -77,10 +77,19 @@ export function mailConfigStatus(): {
   verzendlijst_aan: string | null;
   /** Saved in the app, but the password can no longer be read (new session secret). */
   wachtwoord_onleesbaar: boolean;
+  /** The last failed send, until one succeeds again. */
+  laatste_fout: MailFailure | null;
 } {
+  const laatste_fout = getMailFailure();
   const stored = getStoredMailSettings();
   if (stored?.wachtwoord) {
-    return { bron: 'APP', gebruiker: stored.gebruiker, verzendlijst_aan: stored.verzendlijstAan, wachtwoord_onleesbaar: false };
+    return {
+      bron: 'APP',
+      gebruiker: stored.gebruiker,
+      verzendlijst_aan: stored.verzendlijstAan,
+      wachtwoord_onleesbaar: false,
+      laatste_fout,
+    };
   }
   const env = configFromEnv();
   return {
@@ -88,6 +97,7 @@ export function mailConfigStatus(): {
     gebruiker: stored?.gebruiker ?? env?.user ?? null,
     verzendlijst_aan: stored?.verzendlijstAan ?? env?.to ?? null,
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
+    laatste_fout,
   };
 }
 
@@ -163,10 +173,14 @@ async function sendJsonMail(mail: {
   text: string;
   filename: string;
   json: string;
-}): Promise<{ ok: true } | { ok: false; message: string }> {
+}): Promise<{ ok: true } | { ok: false; message: string; notConfigured?: true }> {
   const config = readConfig();
   if (!config) {
-    return { ok: false, message: 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.' };
+    return {
+      ok: false,
+      message: 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.',
+      notConfigured: true,
+    };
   }
 
   const transport = createTransport(config);
@@ -197,5 +211,20 @@ export async function sendVerzendlijst(lijst: Verzendlijst): Promise<Verzendlijs
     filename: verzendlijstFilename(lijst.periode),
     json: verzendlijstJson(lijst),
   });
-  return result.ok ? { ok: true, aantal: lijst.aantal } : result;
+  // Remembered for the warning on the period page (lib/appSettings.ts):
+  // automatic reminders and swap mails fail where nobody is watching.
+  // "Not set up" is not a failure to remember - the page says that itself.
+  if (result.ok) {
+    clearMailFailure();
+    return { ok: true, aantal: lijst.aantal };
+  }
+  if (!result.notConfigured) {
+    recordMailFailure({
+      op: new Date().toISOString(),
+      melding: result.message,
+      soort: lijst.soort,
+      automatisch: lijst.automatisch,
+    });
+  }
+  return { ok: false, message: result.message };
 }

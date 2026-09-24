@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import {
@@ -78,6 +78,11 @@ const stored = () =>
     waarde: string;
   }>;
 
+// Another test file may have left a failed send behind.
+beforeEach(() => {
+  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%'`).run();
+});
+
 afterEach(() => {
   clearSmtpConfig();
   sink.received.length = 0;
@@ -97,7 +102,8 @@ describe('Mailinstellingen in de app', () => {
 
     const res = await PUT(request('PUT', planner, goed));
     expect(res.status).toBe(200);
-    expect((await res.json()).data).toEqual({
+    // toMatchObject: laatste_fout is shared state other test files may touch.
+    expect((await res.json()).data).toMatchObject({
       bron: 'APP',
       gebruiker: SMTP_SINK_GMAIL_USER,
       verzendlijst_aan: 'flow@ziekenhuis.test',
@@ -193,4 +199,37 @@ describe('Mailinstellingen in de app', () => {
     expect((await PUT(request('PUT', deelnemer, goed, 'person'))).status).toBe(401);
     expect((await DELETE(request('DELETE', deelnemer, undefined, 'person'))).status).toBe(401);
   });
+
+  it('remembers the last failed send until one succeeds, and never counts "not set up" as a failure', async () => {
+    const planner = person('PLANNER');
+    const lijst = (automatisch: boolean) =>
+      buildVerzendlijst({ soort: 'HERINNERING', automatisch, periode: 'P', deadline: null }, []);
+    const fout = async () => (await (await GET(request('GET', planner))).json()).data.laatste_fout;
+
+    // Nothing set up: nothing to remember, the page says that itself.
+    expect((await sendVerzendlijst(lijst(true))).ok).toBe(false);
+    expect(await fout()).toBeNull();
+
+    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    expect((await sendVerzendlijst(lijst(true))).ok).toBe(false);
+    expect(await fout()).toMatchObject({ soort: 'HERINNERING', automatisch: true });
+    expect((await fout()).melding).toContain('weigerde de inlog');
+
+    configureSmtp(sink);
+    expect((await sendVerzendlijst(lijst(false))).ok).toBe(true);
+    expect(await fout()).toBeNull();
+  });
+
+  it('forgets an earlier failure once new settings are saved', async () => {
+    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    const planner = person('PLANNER');
+    await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []));
+    expect((await (await GET(request('GET', planner))).json()).data.laatste_fout).not.toBeNull();
+
+    clearSmtpConfig();
+    configureSmtpServerOnly(sink);
+    expect((await PUT(request('PUT', planner, goed))).status).toBe(200);
+    expect((await (await GET(request('GET', planner))).json()).data.laatste_fout).toBeNull();
+  });
 });
+

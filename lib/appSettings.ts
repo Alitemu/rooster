@@ -15,6 +15,22 @@ import { decryptSetting, encryptSetting } from './settingsCrypto';
 const GEBRUIKER = 'mail.gebruiker';
 const WACHTWOORD = 'mail.wachtwoord';
 const AAN = 'mail.verzendlijst_aan';
+const LAATSTE_FOUT = 'mail.laatste_fout';
+
+/**
+ * The last time sending failed, kept until a send succeeds again (or the
+ * settings change), so the planner sees on the period page that mail is
+ * not going out, instead of hearing it from someone who got nothing.
+ */
+export interface MailFailure {
+  /** ISO timestamp. */
+  op: string;
+  /** Dutch explanation (lib/verzendlijstMail.ts explainSmtpError). */
+  melding: string;
+  /** VerzendlijstSoort of what failed. */
+  soort: string;
+  automatisch: boolean;
+}
 
 export interface StoredMailSettings {
   gebruiker: string;
@@ -40,6 +56,29 @@ export function getStoredMailSettings(): StoredMailSettings | null {
   return { gebruiker, wachtwoord: decryptSetting(wachtwoord), verzendlijstAan };
 }
 
+export function recordMailFailure(failure: MailFailure): void {
+  db.prepare(
+    `INSERT INTO dienstrooster_app_setting (sleutel, waarde, gewijzigd_op, gewijzigd_door)
+     VALUES (?, ?, ?, NULL)
+     ON CONFLICT(sleutel) DO UPDATE SET waarde = excluded.waarde, gewijzigd_op = excluded.gewijzigd_op,
+       gewijzigd_door = NULL`
+  ).run(LAATSTE_FOUT, JSON.stringify(failure), failure.op);
+}
+
+export function clearMailFailure(): void {
+  db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(LAATSTE_FOUT);
+}
+
+export function getMailFailure(): MailFailure | null {
+  const raw = get(LAATSTE_FOUT);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as MailFailure;
+  } catch {
+    return null;
+  }
+}
+
 export function saveMailSettings(settings: { gebruiker: string; wachtwoord: string; verzendlijstAan: string }, actorId: string): void {
   const now = new Date().toISOString();
   const upsert = db.prepare(
@@ -52,6 +91,8 @@ export function saveMailSettings(settings: { gebruiker: string; wachtwoord: stri
     upsert.run(GEBRUIKER, settings.gebruiker, now, actorId);
     upsert.run(WACHTWOORD, encryptSetting(settings.wachtwoord), now, actorId);
     upsert.run(AAN, settings.verzendlijstAan, now, actorId);
+    // New settings, so an earlier failure says nothing about them any more.
+    clearMailFailure();
   })();
 }
 
@@ -59,5 +100,6 @@ export function deleteMailSettings(): boolean {
   const removed = db
     .prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN (?, ?, ?)`)
     .run(GEBRUIKER, WACHTWOORD, AAN);
+  clearMailFailure();
   return removed.changes > 0;
 }

@@ -414,7 +414,12 @@ secret, lib/settingsCrypto.ts, and never returned), or as the fallback
 via SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN in .env; what the app stores
 wins. SMTP_HOST/SMTP_PORT apply to both (the tests point them at
 tests/smtpSink.ts). Without either the export dialog says sending isn't
-set up. There is deliberately no other way out: the old manual JSON
+set up, and MailWarning at the top of the period page says no mail goes
+out at all. That warning also shows the last failed send (stored as
+`mail.laatste_fout` in app_setting by sendVerzendlijst, cleared by the
+next successful send or new settings; "not set up" is never recorded as
+a failure) - automatic reminders and swap mails fail where nobody
+watches. There is deliberately no other way out: the old manual JSON
 download and the per-person mailto links are gone, and a single reminder
 goes through the flow too. The invitations CSV download stays. The recipient is always VERZENDLIJST_AAN, never
 anything from a request. Swap requests use the same channel (lib/meldingMail.ts):
