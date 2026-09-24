@@ -306,7 +306,7 @@ github.com/Alitemu/rooster onder **Actions**:
 
 1. **Bouwen (test):** kies links *Bouwen (test)* en daarna *Run workflow*.
    GitHub bouwt de versie uit `package.json` en noemt die `test`. Dat duurt
-   ongeveer een half uur. Productie merkt er niets van.
+   meestal een kwartier of minder. Productie merkt er niets van.
 2. **Testen:** werk de testinstallatie bij (zie hieronder) en probeer de
    nieuwe versie uit.
 3. **Vrijgeven (productie):** tevreden? Kies *Vrijgeven (productie)*, dan
