@@ -126,7 +126,7 @@ uvicorn main:app --host 127.0.0.1 --port 8000
 npm run seed
 
 # App starten
-SESSION_SECRET=... SOLVER_URL=http://localhost:8000 npm start
+ALLOW_SEED_PASSWORD=true SESSION_SECRET=... SOLVER_URL=http://localhost:8000 npm start
 ```
 
 Daarna:
@@ -154,13 +154,11 @@ node scripts/schema-drift.mjs
 
 ### Database
 
+De migraties in `db/migrations` voert de app bij het starten zelf uit
+(`db/client.ts`). Een geseede database krijgt nieuwe tabellen en kolommen
+via `scripts/seed.ts` (zie Bijwerken). Er is geen apart migratiecommando.
+
 ```bash
-# Migratie toepassen
-npm run db:migrate
-
-# Drizzle Studio openen
-npm run db:studio
-
 # Database (opnieuw) seeden
 npm run seed
 npm run seed -- --reset
@@ -342,8 +340,14 @@ MAIL_UITGESCHAKELD=true
 ```
 
 Een eigen map betekent eigen containers, een eigen database en een eigen
-poort (hier https://<nas>:8011). Productie op poort 8010 blijft
-onaangeroerd. Bijwerken gaat met dezelfde twee commando's in die map.
+poort (hier https://<nas>:8011). Productie blijft onaangeroerd. Bijwerken
+gaat met dezelfde twee commando's in die map.
+
+Open de testinstallatie in de browser via een ander adres dan productie,
+bijvoorbeeld de naam van de NAS voor test en het IP-adres voor productie.
+Browsers houden cookies per adres bij, maar niet per poort: met hetzelfde
+adres zouden beide installaties elkaars inlogcookie overschrijven, en met
+een gekopieerde datamap zou een sessie van productie ook op test gelden.
 
 `MAIL_UITGESCHAKELD=true` zorgt dat de testinstallatie nooit mail
 verstuurt, wat er ook bij Mailinstellingen staat. Bovenaan de periodepagina
@@ -438,7 +442,21 @@ de stroom al gebouwd?".
 ### Beveiliging
 
 - **Geen inloggegevens in de repository** (`.env` staat in `.gitignore`)
-- **TOTP-tweestapsverificatie** voor planner/beheerder, zelf te beheren
+- **Startwachtwoord:** het wachtwoord dat de seed voor `planner` instelt,
+  staat openbaar in deze repository. Wie ermee inlogt, moet eerst een eigen
+  wachtwoord kiezen en kan daarvoor niets anders.
+- **TOTP-tweestapsverificatie** voor planner/beheerder, zelf te beheren.
+  Zet dit aan: het is de beste bescherming tegen iemand die wachtwoorden
+  probeert te raden vanaf veel adressen tegelijk. De sleutel staat
+  versleuteld in de database. Kan iemand niet meer inloggen omdat de
+  telefoon weg is of de sleutel op de server is veranderd, dan zet de
+  beheerder het uit met
+  `docker compose exec web npx tsx scripts/reset-totp.ts <codenaam>`.
+- **`BASE_URL`** in `.env`: zet dit op het adres waarop deelnemers de app
+  openen, bijvoorbeeld `https://192.168.1.10`. Dan wijzen alle links in
+  mails daarheen.
+- **Grenzen:** een verzoek mag hooguit 1 MB zijn (Caddy en de app zelf),
+  tekst die een deelnemer typt hooguit 1000 tekens.
 - **Alleen TLS** via Caddy (interne certificaten zijn acceptabel binnen een
   ziekenhuisnetwerk)
 - **Persoonlijke links** met SHA256-hashing (alleen de hash staat in de

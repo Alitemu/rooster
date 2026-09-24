@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { parseJsonBody, internalErrorResponse } from './api-errors';
+import { parseJsonBody, internalErrorResponse, MAX_JSON_BODY_BYTES } from './api-errors';
 
 /**
  * The hard rule: a request body a client controls can never reach a route
@@ -74,5 +74,38 @@ describe('internalErrorResponse', () => {
     expect(body.error.message).not.toMatch(/Probeer het opnieuw/);
     expect(String(log.mock.calls[0][0])).toContain(`foutcode ${code}`);
     log.mockRestore();
+  });
+});
+
+describe('parseJsonBody size cap', () => {
+  const big = JSON.stringify({ codenaam: 'planner', password: 'x', vulling: 'a'.repeat(MAX_JSON_BODY_BYTES) });
+
+  it('reads a normal body', async () => {
+    const req = new NextRequest('http://localhost/x', { method: 'POST', body: JSON.stringify({ a: 1 }) });
+    expect(await parseJsonBody(req)).toEqual({ a: 1 });
+  });
+
+  it('treats a body over the cap as empty, whether its length is declared or not', async () => {
+    const declared = new NextRequest('http://localhost/x', {
+      method: 'POST',
+      headers: { 'content-length': String(big.length) },
+      body: big,
+    });
+    expect(await parseJsonBody(declared)).toEqual({});
+
+    const encoder = new TextEncoder();
+    const streamed = new NextRequest('http://localhost/x', {
+      method: 'POST',
+      body: new ReadableStream({
+        start(controller) {
+          for (let i = 0; i < big.length; i += 64_000) controller.enqueue(encoder.encode(big.slice(i, i + 64_000)));
+          controller.close();
+        },
+      }),
+      // Required by Node's fetch for a stream body.
+      duplex: 'half',
+    });
+    expect(streamed.headers.get('content-length')).toBeNull();
+    expect(await parseJsonBody(streamed)).toEqual({});
   });
 });

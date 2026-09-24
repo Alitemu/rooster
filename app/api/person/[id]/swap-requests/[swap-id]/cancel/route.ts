@@ -16,7 +16,6 @@ import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-contex
 import { internalErrorResponse } from '@/lib/api-errors';
 import { swapStatusLabel } from '@/lib/statusLabels';
 import { noticeWithdrawn } from '@/lib/swapLifecycle';
-import { resolveBaseUrl } from '@/lib/baseUrl';
 
 class SwapAlreadyHandledError extends Error {}
 
@@ -59,8 +58,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    const baseUrl = resolveBaseUrl(request);
     const meldingen: Array<{ send: () => void }> = [];
     const cancelTx = db.transaction(() => {
       const swapUpdate = db.prepare(
@@ -89,7 +86,7 @@ export async function POST(
       );
 
       // The colleague was told about the request, so they're told it's off.
-      meldingen.push(noticeWithdrawn(swapRequest, baseUrl));
+      meldingen.push(noticeWithdrawn(swapRequest));
     });
     cancelTx();
     meldingen.forEach((m) => m.send());

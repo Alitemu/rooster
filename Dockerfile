@@ -1,4 +1,6 @@
-FROM node:20-alpine
+# Node 22: Node 20 stopped getting security updates in April 2026. The same
+# major version the tests run on.
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -7,8 +9,9 @@ WORKDIR /app
 # after fixing DATA_DIR's ownership - see the USER note below).
 RUN apk add --no-cache python3 make g++ su-exec
 
-# Copy package files
-COPY package*.json ./
+# Copy package files (.npmrc: the lockfile was resolved with
+# legacy-peer-deps, and `npm ci` has to use the same setting)
+COPY package*.json .npmrc ./
 
 # Install dependencies
 RUN npm ci
@@ -18,6 +21,11 @@ COPY . .
 
 # Build Next.js
 RUN npm run build
+
+# Only what runs is kept: the test tools (vitest, playwright, eslint, ...)
+# have no business in a running installation. tsx stays - it is a
+# dependency, and docker-entrypoint.sh runs scripts/seed.ts with it.
+RUN npm prune --omit=dev
 
 # The app itself still runs as this non-root user (dropped into by
 # docker-entrypoint.sh via su-exec, not set here with USER) - only /app

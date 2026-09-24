@@ -17,7 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import QRCode from 'qrcode';
 import { db } from '@/db/client';
 import { generateTOTPSecret } from '@/lib/auth';
-import { getAuthContextFromRequest } from '@/lib/auth-context';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { signPayload } from '@/lib/session';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { checkRateLimit, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
@@ -34,7 +34,7 @@ const MAX_ATTEMPTS = 10;
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(request);
-    if (!auth || (auth.role !== 'ADMIN' && auth.role !== 'PLANNER')) {
+    if (!auth || !requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
 

@@ -57,6 +57,13 @@ https://:{$APP_PORT:8010} {
 	# reverse_proxy appends to it rather than replacing it, so a
 	# client-supplied value stays present ahead of Caddy's own entry and
 	# would let every request claim a fresh IP, defeating rate limiting.
+	# No request here needs more than a few kilobytes; without a cap anyone
+	# could make the app hold whatever they send, before logging in too
+	# (lib/api-errors.ts parseJsonBody caps it as well).
+	request_body {
+		max_size 1MB
+	}
+
 	reverse_proxy web:3000 {
 		header_up X-Real-IP {http.request.remote.host}
 	}

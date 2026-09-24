@@ -24,6 +24,12 @@ export interface StaffSessionPayload {
   personId: string;
   /** See lib/sessionVersion.ts - stale value means the session was revoked. */
   sessionVersion: number;
+  /**
+   * Logged in with the password scripts/seed.ts sets (lib/seedPassword.ts),
+   * which is public with the code. Such a session can only change the
+   * password (lib/auth-context.ts requirePlannerAccess refuses it).
+   */
+  wachtwoordWijzigen?: true;
 }
 
 export type SessionPayload = PersonSessionPayload | StaffSessionPayload;

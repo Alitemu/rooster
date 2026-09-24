@@ -19,7 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { verifyPassword, DUMMY_PASSWORD_HASH } from '@/lib/auth';
-import { getAuthContextFromRequest } from '@/lib/auth-context';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { checkRateLimit, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -35,7 +35,7 @@ const MAX_ATTEMPTS = 10;
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(req);
-    if (!auth || (auth.role !== 'ADMIN' && auth.role !== 'PLANNER')) {
+    if (!auth || !requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
 

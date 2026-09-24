@@ -63,7 +63,7 @@ interface Melding {
 }
 
 /** The colleague's notice that a request aimed at them is off. Call inside the transaction. */
-function noticeToColleague(swap: SwapRow, wat: 'ingetrokken' | 'vervallen', baseUrl: string, reden?: string): Melding {
+function noticeToColleague(swap: SwapRow, wat: 'ingetrokken' | 'vervallen', reden?: string): Melding {
   const aanvrager = codenaamOf(swap.aanvrager_person_id);
   const collega = codenaamOf(swap.respondent_person_id);
   const details = swapMailDetails({
@@ -94,7 +94,6 @@ function noticeToColleague(swap: SwapRow, wat: 'ingetrokken' | 'vervallen', base
         anderen: [aanvrager],
         soort: 'RUIL_INGETROKKEN',
         linkIntro: 'Bekijk je rooster via je persoonlijke link:',
-        baseUrl,
       }),
   };
 }
@@ -103,8 +102,8 @@ function noticeToColleague(swap: SwapRow, wat: 'ingetrokken' | 'vervallen', base
  * The requester withdrew `swap`: tell the colleague. Call inside the
  * transaction that sets INGETROKKEN; call `.send()` on the result after it.
  */
-export function noticeWithdrawn(swap: SwapRow, baseUrl: string): Melding {
-  return noticeToColleague(swap, 'ingetrokken', baseUrl);
+export function noticeWithdrawn(swap: SwapRow): Melding {
+  return noticeToColleague(swap, 'ingetrokken');
 }
 
 /** Why the colleague is told a request is off, when the requester had already swapped elsewhere. */
@@ -131,8 +130,7 @@ export const AL_ONDERLING_GERUILD_REDEN = 'Jullie hebben die dienst intussen via
  */
 export function closeLapsedSwaps(
   approved: SwapRow,
-  now: string,
-  baseUrl: string
+  now: string
 ): { meldingen: Melding[]; eigenIngetrokken: number; afgesloten: Array<{ id: string; status: string }> } {
   const lapsed = db
     .prepare(
@@ -170,7 +168,7 @@ export function closeLapsedSwaps(
       afgesloten.push({ id: swap.id, status: 'INGETROKKEN' });
       if (swap.aanvrager_person_id === approved.aanvrager_person_id) eigenIngetrokken++;
       const reden = partijen.includes(swap.respondent_person_id) ? AL_ONDERLING_GERUILD_REDEN : AL_GERUILD_REDEN;
-      meldingen.push(noticeToColleague(swap, 'ingetrokken', baseUrl, reden));
+      meldingen.push(noticeToColleague(swap, 'ingetrokken', reden));
       continue;
     }
 
@@ -207,12 +205,11 @@ export function closeLapsedSwaps(
           anderen: [collega],
           soort: 'RUIL_UITKOMST',
           linkIntro: 'Bekijk je rooster via je persoonlijke link:',
-          baseUrl,
         }),
     });
 
     // The colleague: the request they were asked about is off.
-    meldingen.push(noticeToColleague(swap, 'vervallen', baseUrl, VERVALLEN_REDEN));
+    meldingen.push(noticeToColleague(swap, 'vervallen', VERVALLEN_REDEN));
   }
   return { meldingen, eigenIngetrokken, afgesloten };
 }

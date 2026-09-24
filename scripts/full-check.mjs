@@ -10,7 +10,7 @@
  * Prerequisites (all three, in this order):
  *   1. npm run seed                       # fresh database
  *   2. uvicorn main:app --port 8000       # from ./solver
- *   3. SESSION_SECRET=... SOLVER_URL=http://localhost:8000 npm start
+ *   3. ALLOW_SEED_PASSWORD=true SESSION_SECRET=... SOLVER_URL=http://localhost:8000 npm start
  * Then: node scripts/full-check.mjs
  *
  * Exits non-zero on the first failing assertion set, and prints a summary.

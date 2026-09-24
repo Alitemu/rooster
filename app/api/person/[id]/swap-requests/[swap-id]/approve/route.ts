@@ -14,7 +14,6 @@ import { renderNotificationTemplate, insertNotification } from '@/lib/notificati
 import { swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding } from '@/lib/meldingMail';
 import { closeLapsedSwaps } from '@/lib/swapLifecycle';
-import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { swapStatusLabel } from '@/lib/statusLabels';
 
@@ -165,7 +164,6 @@ export async function POST(
     // before the second) would otherwise leave the respondent holding both
     // shifts and the requester holding neither, with the request still
     // PENDING and no audit trail of what happened.
-    const baseUrl = resolveBaseUrl(request);
     const lapsed: Array<{ send: () => void }> = [];
     let eigenIngetrokken = 0;
     let afgesloten: Array<{ id: string; status: string }> = [];
@@ -219,7 +217,7 @@ export async function POST(
 
       // Other open requests for either of these two shifts can never be
       // approved now: close them and tell those involved.
-      const closed = closeLapsedSwaps(swapRequest, now, baseUrl);
+      const closed = closeLapsedSwaps(swapRequest, now);
       lapsed.push(...closed.meldingen);
       eigenIngetrokken = closed.eigenIngetrokken;
       afgesloten = closed.afgesloten;
@@ -249,7 +247,6 @@ export async function POST(
       anderen: [collega?.codenaam ?? ''],
       soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
-      baseUrl,
     });
 
     return NextResponse.json({

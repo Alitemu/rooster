@@ -170,3 +170,31 @@ describe('PATCH /api/person/[id]/absences/[absenceId]', () => {
     expect(row).toEqual({ van_datum: '2027-03-02', tot_datum: '2027-03-08' });
   });
 });
+
+describe('the notitie of an absence', () => {
+  it('is capped and must be text, on create and on edit', async () => {
+    const personId = createParticipant();
+    const base = { van_datum: '2027-03-01', tot_datum: '2027-03-05', soort: 'VAKANTIE' };
+
+    for (const notitie of ['x'.repeat(1001), { tekst: 'geen string' }, ['a']]) {
+      const res = await post(personId, { ...base, notitie });
+      expect(res.status).toBe(400);
+    }
+    expect(
+      db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_absence WHERE person_id = ?').get(personId)
+    ).toEqual({ n: 0 });
+
+    expect((await post(personId, { ...base, notitie: '  Zomervakantie  ' })).status).toBe(201);
+    const row = db.prepare('SELECT id, notitie FROM dienstrooster_absence WHERE person_id = ?').get(personId) as {
+      id: string;
+      notitie: string;
+    };
+    createdAbsenceIds.push(row.id);
+    expect(row.notitie).toBe('Zomervakantie');
+
+    expect((await patch(personId, row.id, { notitie: 'y'.repeat(1001) })).status).toBe(400);
+    expect(
+      (db.prepare('SELECT notitie FROM dienstrooster_absence WHERE id = ?').get(row.id) as { notitie: string }).notitie
+    ).toBe('Zomervakantie');
+  });
+});

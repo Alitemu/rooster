@@ -8,8 +8,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { verifyTOTPCode, isValidTOTPFormat } from '@/lib/auth';
-import { getAuthContextFromRequest } from '@/lib/auth-context';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { verifyPayload } from '@/lib/session';
+import { encryptTotpSecret } from '@/lib/totpSecret';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { checkRateLimit, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { TotpSetupPayload } from '../setup/route';
@@ -25,7 +26,7 @@ const MAX_ATTEMPTS = 10;
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(request);
-    if (!auth || (auth.role !== 'ADMIN' && auth.role !== 'PLANNER')) {
+    if (!auth || !requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     clearRateLimit(rateLimitKey);
 
     db.prepare(`UPDATE dienstrooster_person SET totp_secret = ? WHERE id = ?`).run(
-      setupPayload.secret,
+      encryptTotpSecret(setupPayload.secret),
       auth.userId
     );
 

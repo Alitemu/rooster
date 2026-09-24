@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { hashPassword, generateTOTPCode } from '@/lib/auth';
+import { readTotpSecret } from '@/lib/totpSecret';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { clearRateLimit } from '@/lib/rateLimit';
@@ -172,7 +173,11 @@ describe('POST /api/auth/totp/confirm', () => {
       const secretRow = db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(personId) as {
         totp_secret: string;
       };
-      const loginCode = generateTOTPCode(secretRow.totp_secret);
+      // Stored encrypted (lib/totpSecret.ts), never as the secret itself.
+      expect(secretRow.totp_secret.startsWith('v1:')).toBe(true);
+      const secret = readTotpSecret(secretRow.totp_secret).secret!;
+      expect(secretRow.totp_secret).not.toContain(secret);
+      const loginCode = generateTOTPCode(secret);
       const withCode = await staffLogin(loginRequest(codenaam, PASSWORD, loginCode));
       expect(withCode.status).toBe(200);
       expect((await withCode.json()).data.totp_enrolled).toBe(true);
@@ -189,5 +194,37 @@ describe('POST /api/auth/totp/confirm', () => {
     const after = await staffLogin(loginRequest(codenaam, PASSWORD));
     expect(after.status).toBe(200);
     expect((await after.json()).data.totp_enrolled).toBe(false);
+  });
+});
+
+describe('a TOTP secret stored before encryption, or one that can no longer be read', () => {
+  it('still logs in with a plain-text secret and encrypts it on the way', async () => {
+    const personId = await createStaff();
+    const codenaam = `Test-${personId.slice(0, 8)}`;
+    const secret = 'JBSWY3DPEHPK3PXP';
+    db.prepare('UPDATE dienstrooster_person SET totp_secret = ? WHERE id = ?').run(secret, personId);
+
+    const res = await staffLogin(loginRequest(codenaam, PASSWORD, generateTOTPCode(secret)));
+    expect(res.status).toBe(200);
+    const stored = (db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(personId) as {
+      totp_secret: string;
+    }).totp_secret;
+    expect(stored.startsWith('v1:')).toBe(true);
+    expect(readTotpSecret(stored).secret).toBe(secret);
+  });
+
+  it('says what to do when the secret cannot be read, and only after the right password', async () => {
+    const personId = await createStaff();
+    const codenaam = `Test-${personId.slice(0, 8)}`;
+    db.prepare(`UPDATE dienstrooster_person SET totp_secret = 'v1:onleesbaar' WHERE id = ?`).run(personId);
+
+    const wrong = await staffLogin(loginRequest(codenaam, 'Fout-Wachtwoord-1!', '123456'));
+    expect((await wrong.json()).error.code).toBe('INVALID_CREDENTIALS');
+
+    const right = await staffLogin(loginRequest(codenaam, PASSWORD, '123456'));
+    expect(right.status).toBe(401);
+    const body = await right.json();
+    expect(body.error.code).toBe('TOTP_UNREADABLE');
+    expect(body.error.message).toContain('reset-totp');
   });
 });

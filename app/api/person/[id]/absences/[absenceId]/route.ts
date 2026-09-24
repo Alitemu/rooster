@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { removeAbsenceAvailability, syncAbsencesForPerson } from '@/lib/absenceSync';
 import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods, syncPatternsForPerson } from '@/lib/parttimeSync';
@@ -77,12 +78,21 @@ export async function PATCH(
       }
     }
 
+    const notitieCheck = optionalFreeText(body.notitie, 'De notitie');
+    if (!notitieCheck.ok) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: notitieCheck.message },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Update fields
     const updates: Record<string, any> = {};
     if (body.van_datum) updates.van_datum = body.van_datum;
     if (body.tot_datum) updates.tot_datum = body.tot_datum;
     if (body.soort) updates.soort = body.soort;
-    if (body.notitie !== undefined) updates.notitie = body.notitie || null;
+    if (body.notitie !== undefined) updates.notitie = notitieCheck.value;
 
     if (Object.keys(updates).length === 0) {
       const response: ApiErrorResponse = {

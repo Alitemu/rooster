@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForAbsence } from '@/lib/absenceSync';
 import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods } from '@/lib/parttimeSync';
@@ -168,6 +169,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 400 });
     }
 
+    // Free text a participant types, like a swap toelichting: a string of
+    // sensible length (lib/freeText.ts), not whatever size the body holds.
+    const notitieCheck = optionalFreeText(notitie, 'De notitie');
+    if (!notitieCheck.ok) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: notitieCheck.message },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
     // Before the range check, not after: `>` on two strings compares them
     // alphabetically, so "xx" > "yy" is false and a pair of non-dates sailed
     // straight past it into the database. Everything downstream - the
@@ -216,7 +228,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       van_datum,
       tot_datum,
       soort,
-      notitie || null,
+      notitieCheck.value,
       id, // Created by self
       new Date().toISOString()
     );
@@ -244,7 +256,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       van_datum,
       tot_datum,
       soort,
-      notitie,
+      notitie: notitieCheck.value ?? undefined,
     };
 
     const warning = buildDeadlinePassedWarning(

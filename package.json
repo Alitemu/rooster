@@ -1,6 +1,6 @@
 {
   "name": "dienstrooster",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,8 +8,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",
-    "db:migrate": "drizzle-kit push:sqlite",
-    "db:studio": "drizzle-kit studio",
     "seed": "tsx scripts/seed.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
@@ -48,22 +46,21 @@
     "@playwright/test": "^1.62.1",
     "@types/bcrypt": "^6.0.0",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^20.10.6",
+    "@types/node": "^22.20.4",
     "@types/nodemailer": "^8.0.2",
     "@types/qrcode": "^1.5.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/smtp-server": "^3.5.13",
     "@types/speakeasy": "^2.0.10",
-    "@vitest/ui": "^1.0.4",
+    "@vitest/ui": "^4.1.11",
     "autoprefixer": "^10.4.16",
-    "drizzle-kit": "^0.20.17",
     "eslint": "^9.39.5",
     "eslint-config-next": "16.3.5",
     "fast-check": "^3.14.0",
     "postcss": "^8.4.32",
     "smtp-server": "^3.19.13",
-    "vitest": "^1.0.4"
+    "vitest": "^4.1.11"
   },
   "overrides": {
     "@types/react": "19.3.0",

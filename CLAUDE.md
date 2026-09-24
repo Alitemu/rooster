@@ -133,7 +133,10 @@ identifiers, DB fields, comments, and console/log output only.
 
 **Browser-level checks** need a seeded database, the solver and the app
 already running (`npm run seed`, `uvicorn main:app --port 8000` from
-`./solver`, then `npm start`) - none of them starts anything itself:
+`./solver`, then `ALLOW_SEED_PASSWORD=true SOLVER_URL=http://localhost:8000
+npm start`) - none of them starts anything itself. ALLOW_SEED_PASSWORD
+because they all log in with the seed password, which otherwise only
+opens a "choose a new password" session (see Authentication):
 - `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its
   own period/assignments fixture per file (`tests/e2e/setup.ts`), so it does
   not read the seeded period, only the pool and shift types it finds.
@@ -372,7 +375,21 @@ Show live in settings screen with interpretation in plain Dutch/English.
    - `scripts/seed.ts` sets a known password from `lib/seedPassword.ts` -
      deliberate, so a seeded database is immediately usable while this is
      being built. The app logs a warning on every start while an account
-     still has it.
+     still has it. The repository is public, so a login with it gets a
+     session flagged `wachtwoordWijzigen` (lib/session.ts): requirePlannerAccess
+     refuses it, only change-password (requireStaffSession), logout and
+     /api/auth/me accept it, and the login page asks for a new password
+     first; the seed password itself is refused as the new one.
+     ALLOW_SEED_PASSWORD=true lifts this for local test runs only;
+     docker-compose.yml does not pass it through.
+   - The TOTP secret is stored encrypted like the mail password
+     (lib/totpSecret.ts, "v1:"; a plain-text one from before is re-saved
+     encrypted at the next login). Unreadable after a key change: the
+     login says so, and `scripts/reset-totp.ts <codenaam>` on the server
+     turns two-step verification off for that account.
+   - The login page's `redirect` only goes to a /planner path on this site
+     (lib/safeRedirect.ts, checked with the URL parser: "/\\host" leaves
+     the site in a browser).
    - TOTP is self-service, mirroring the password: "Tweestapsverificatie"
      on the period list opens `TotpSettingsDialog`, which calls
      `/api/auth/totp/setup` (a fresh secret + a server-rendered QR PNG,
@@ -430,7 +447,12 @@ a failure) - automatic reminders and swap mails fail where nobody
 watches. There is deliberately no other way out: the old manual JSON
 download and the per-person mailto links are gone, and a single reminder
 goes through the flow too. The invitations CSV download stays. The recipient is always the flow mailbox from Mailinstellingen, never
-anything from a request. Swap requests use the same channel (lib/meldingMail.ts):
+anything from a request. Links in mails a participant sets off (swap
+mails, lib/meldingMail.ts) use lib/baseUrl.ts `mailBaseUrl`: BASE_URL or
+the period's `basis_url` from the planner's export, never the Host header
+of the participant's request (anyone can forge it, and the colleague's
+fresh personal link would go to that host); with neither known the mail
+has no link. resolveBaseUrl (Host header) is for planner exports only. Swap requests use the same channel (lib/meldingMail.ts):
 a new request mails the colleague (SWAP_REQUESTED) and confirms to the
 requester, and approve/reject mails the requester (SWAP_RESULT), each a
 one-bericht verzendlijst with a fresh personal link and the swap spelled
@@ -492,7 +514,10 @@ Dutch: docs/verzendlijst-power-automate.md.
 
 ## Deployment
 
-**Images:** built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
+**Images:** node:22-alpine (Node 20 is end-of-life), dev dependencies
+pruned after the build; `.npmrc` sets legacy-peer-deps because npm 10
+crashes resolving vitest 4's optional peers, and `npm ci` must match the
+lockfile. Built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
 builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 only)
 tagged with package.json's `version` and `test`; "Vrijgeven (productie)"
 (release.yml) points `stable` at an already built, tested version without
@@ -503,6 +528,11 @@ existing database is brought up to date at every start either way:
 docker-entrypoint.sh runs the seed (SEED_ON_START=true) or else
 `scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
 templates, no data; skipped for a migration-built database).
+
+**Limits:** request bodies are capped at 1 MB in Caddy and in
+lib/api-errors.ts parseJsonBody (read no further; also before login).
+Free text a participant types - swap toelichting, rejection reason,
+absence notitie - goes through lib/freeText.ts (1000 characters).
 
 **Docker Compose (3 services):**
 - `caddy` - TLS termination (internal certs via `tls internal`)

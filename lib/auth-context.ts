@@ -16,6 +16,8 @@ export interface AuthContext {
   userId: string;
   role: 'ADMIN' | 'PLANNER' | 'DEELNEMER';
   timestamp: string;
+  /** A staff session opened with the public seed password: it may only change the password. */
+  wachtwoordWijzigen?: boolean;
 }
 
 /**
@@ -70,6 +72,7 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
       userId: session.personId,
       role: current.rol as 'ADMIN' | 'PLANNER',
       timestamp: new Date().toISOString(),
+      wachtwoordWijzigen: session.wachtwoordWijzigen === true,
     };
   }
 
@@ -104,11 +107,21 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
 }
 
 /**
- * True if the authenticated identity is an ADMIN or PLANNER.
+ * True if the authenticated identity is an ADMIN or PLANNER staff session,
+ * also one that still has to change the seed password. Only for the routes
+ * that session needs: changing the password, logging out, /api/auth/me.
  */
-export function requirePlannerAccess(auth: AuthContext | null): boolean {
+export function requireStaffSession(auth: AuthContext | null): boolean {
   if (!auth) return false;
   return auth.role === 'ADMIN' || auth.role === 'PLANNER';
+}
+
+/**
+ * True if the authenticated identity is an ADMIN or PLANNER - and not one
+ * that logged in with the public seed password and has yet to change it.
+ */
+export function requirePlannerAccess(auth: AuthContext | null): boolean {
+  return requireStaffSession(auth) && !auth!.wachtwoordWijzigen;
 }
 
 /**
@@ -116,7 +129,7 @@ export function requirePlannerAccess(auth: AuthContext | null): boolean {
  */
 export function requirePersonAccess(auth: AuthContext | null, personId: string): boolean {
   if (!auth) return false;
-  if (auth.role === 'ADMIN' || auth.role === 'PLANNER') return true;
+  if (auth.role === 'ADMIN' || auth.role === 'PLANNER') return requirePlannerAccess(auth);
   return auth.userId === personId;
 }
 

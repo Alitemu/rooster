@@ -9,7 +9,7 @@
  * Prerequisites, same as full-check.mjs:
  *   1. npm run seed
  *   2. uvicorn main:app --port 8000     # from ./solver
- *   3. SESSION_SECRET=... SOLVER_URL=http://localhost:8000 npm start
+ *   3. ALLOW_SEED_PASSWORD=true SESSION_SECRET=... SOLVER_URL=http://localhost:8000 npm start
  * Then: node scripts/ui-check.mjs
  *
  * Exits non-zero if anything failed.

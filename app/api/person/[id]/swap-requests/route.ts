@@ -15,7 +15,6 @@ import { swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding, queuedMailCount, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
 import { verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { getMailFailure } from '@/lib/appSettings';
-import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { optionalFreeText } from '@/lib/freeText';
 import { swapWindowConflicts } from '@/lib/swapWindowRule';
@@ -338,7 +337,6 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       anderen: [aanvrager?.codenaam ?? ''],
       soort: 'RUILVERZOEK',
       linkIntro: 'Bekijk het verzoek en geef antwoord via je persoonlijke link:',
-      baseUrl: resolveBaseUrl(request),
     });
     // And a confirmation to the requester, so they have it in writing too.
     void mailMelding({
@@ -354,7 +352,6 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       anderen: [respondent?.codenaam ?? ''],
       soort: 'RUIL_BEVESTIGING',
       linkIntro: 'Je kunt het verzoek volgen of intrekken via je persoonlijke link:',
-      baseUrl: resolveBaseUrl(request),
     });
 
     return NextResponse.json({

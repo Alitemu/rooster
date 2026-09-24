@@ -9,6 +9,8 @@ import { db } from '@/db/client';
 import { verifyPassword, isValidTOTPFormat, verifyTOTPCode, DUMMY_PASSWORD_HASH } from '@/lib/auth';
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
+import { seedPasswordMustBeChanged } from '@/lib/seedPassword';
+import { encryptTotpSecret, readTotpSecret } from '@/lib/totpSecret';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { checkRateLimit, getClientIp, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 
@@ -104,12 +106,41 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           { status: 401 }
         );
       }
-      if (!verifyTOTPCode(person.totp_secret, totpCode)) {
+      const totp = readTotpSecret(person.totp_secret);
+      if (!totp.secret) {
+        // Only ever said after the right password: the secret is stored
+        // encrypted and the server's key changed since (lib/totpSecret.ts).
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'TOTP_UNREADABLE',
+              message:
+                'Je authenticatiecode kan niet gecontroleerd worden, omdat de sleutel op de server is veranderd. ' +
+                'Vraag de beheerder van de server om tweestapsverificatie voor je uit te zetten ' +
+                '(scripts/reset-totp.ts). Daarna log je in met alleen je wachtwoord.',
+            },
+          },
+          { status: 401 }
+        );
+      }
+      if (!verifyTOTPCode(totp.secret, totpCode)) {
         return invalidCredentials();
+      }
+      // Saved before secrets were encrypted: encrypt it now.
+      if (totp.legacy) {
+        db.prepare('UPDATE dienstrooster_person SET totp_secret = ? WHERE id = ?').run(
+          encryptTotpSecret(totp.secret),
+          person.id
+        );
       }
     }
 
     clearRateLimit(rateLimitKey);
+
+    // The seed password is public with the code: a session opened with it
+    // can only change the password (lib/auth-context.ts).
+    const wachtwoordWijzigen = seedPasswordMustBeChanged(password);
 
     const response = NextResponse.json({
       success: true,
@@ -118,12 +149,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         codenaam: person.codenaam,
         role: person.rol,
         totp_enrolled: Boolean(person.totp_secret),
+        wachtwoord_wijzigen: wachtwoordWijzigen,
       },
     });
 
     setSessionCookie(
       response,
-      { kind: 'staff', personId: person.id, sessionVersion: getSessionVersion(person.id) ?? 1 },
+      {
+        kind: 'staff',
+        personId: person.id,
+        sessionVersion: getSessionVersion(person.id) ?? 1,
+        ...(wachtwoordWijzigen ? { wachtwoordWijzigen: true as const } : {}),
+      },
       STAFF_SESSION_MAX_AGE_SECONDS
     );
 

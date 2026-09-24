@@ -23,7 +23,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { getAuthContextFromRequest, requireStaffSession } from '@/lib/auth-context';
+import { DEFAULT_TEST_PASSWORD } from '@/lib/seedPassword';
 import { hashPassword, verifyPassword, validatePasswordStrength, DUMMY_PASSWORD_HASH } from '@/lib/auth';
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { revokeAllSessions } from '@/lib/sessionVersion';
@@ -43,7 +44,8 @@ const MAX_ATTEMPTS = 10;
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(req);
-    if (!requirePlannerAccess(auth)) {
+    // Also a session opened with the seed password: this is the one thing it may do.
+    if (!requireStaffSession(auth)) {
       return unauthorizedResponse();
     }
 
@@ -92,6 +94,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'WEAK_PASSWORD', message: passwordErrors.join(', ') },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    if (nieuw_wachtwoord === DEFAULT_TEST_PASSWORD) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'PASSWORD_PUBLIC',
+          message: 'Dit wachtwoord staat openbaar in de broncode. Kies een ander wachtwoord.',
+        },
       };
       return NextResponse.json(response, { status: 400 });
     }

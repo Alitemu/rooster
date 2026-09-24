@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
@@ -354,6 +354,53 @@ describe('mail about swap requests', () => {
     expect(row.status).toBe('PENDING');
     await new Promise((r) => setTimeout(r, 300));
     expect(sink.received).toHaveLength(0);
+  });
+});
+
+describe('the link in a swap mail', () => {
+  // Vitest sets BASE_URL to "/" for its own purposes; these tests need it unset.
+  let viteBase: string | undefined;
+  beforeEach(() => {
+    viteBase = process.env.BASE_URL;
+    delete process.env.BASE_URL;
+  });
+  afterEach(() => {
+    if (viteBase !== undefined) process.env.BASE_URL = viteBase;
+  });
+
+  const requestWithHost = (f: ReturnType<typeof createFixture>, host: string) =>
+    createSwap(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager), 'Content-Type': 'application/json', Host: host },
+        body: JSON.stringify({ period_id: f.periodId, offered_slot_id: f.offered, requested_slot_id: f.requested }),
+      }),
+      { params: Promise.resolve({ id: f.aanvrager }) }
+    );
+
+  it('never points at the host name the requester sent, only at the address the planner used', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    db.prepare('UPDATE dienstrooster_schedule_period SET basis_url = ? WHERE id = ?').run('https://nas.ziekenhuis.test', f.periodId);
+    expect((await requestWithHost(f, 'evil.example')).status).toBe(200);
+    await waitForMails(sink, 2);
+
+    const [naarCollega] = berichtenFor(f.collega);
+    expect(naarCollega.tekst).not.toContain('evil.example');
+    expect(naarCollega.tekst).toContain('https://nas.ziekenhuis.test/person/');
+    expect(linkOwner(naarCollega.tekst)).toBe(f.collega);
+  });
+
+  it('leaves the link out rather than guess when no address is known', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    expect((await requestWithHost(f, 'evil.example')).status).toBe(200);
+    await waitForMails(sink, 2);
+
+    const [naarCollega] = berichtenFor(f.collega);
+    expect(naarCollega.tekst).not.toContain('evil.example');
+    expect(naarCollega.tekst).not.toContain('/person/');
+    expect(naarCollega.tekst).toContain('persoonlijke link uit je uitnodiging');
   });
 });
 

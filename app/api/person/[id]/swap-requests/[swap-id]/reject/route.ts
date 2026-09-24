@@ -13,7 +13,6 @@ import { renderNotificationTemplate, insertNotification } from '@/lib/notificati
 import { optionalFreeText } from '@/lib/freeText';
 import { swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding } from '@/lib/meldingMail';
-import { resolveBaseUrl } from '@/lib/baseUrl';
 import { swapStatusLabel } from '@/lib/statusLabels';
 
 const TELLER_LABELS: Record<string, string> = {
@@ -166,7 +165,6 @@ export async function POST(
       anderen: [collega?.codenaam ?? ''],
       soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
-      baseUrl: resolveBaseUrl(request),
     });
 
     return NextResponse.json({

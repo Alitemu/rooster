@@ -17,3 +17,15 @@
  * roster for every participant.
  */
 export const DEFAULT_TEST_PASSWORD = 'Password123!';
+
+/**
+ * Whether a staff login with DEFAULT_TEST_PASSWORD must change it before
+ * anything else (app/api/auth/staff-login). The password is public with
+ * the code, so on any real installation it must. ALLOW_SEED_PASSWORD=true
+ * lifts that for local test runs only (the browser checks in scripts/ and
+ * tests/e2e log in with it); docker-compose.yml deliberately does not pass
+ * it through.
+ */
+export function seedPasswordMustBeChanged(password: string): boolean {
+  return password === DEFAULT_TEST_PASSWORD && process.env.ALLOW_SEED_PASSWORD !== 'true';
+}

@@ -28,10 +28,19 @@ import { NextRequest, NextResponse } from 'next/server';
  * No route here takes a top-level array, so collapsing all four cases to
  * the same empty object keeps every caller's existing field validation as
  * the single place that decides what a missing field means.
+ *
+ * A body over MAX_JSON_BODY_BYTES is treated the same way, and read no
+ * further than that: nothing here takes more than a few kilobytes, and
+ * several of these routes (logging in, first run) are reached before any
+ * authentication, so without a cap anyone could make the server hold as
+ * much as they cared to send. Caddy caps request bodies too (Caddyfile);
+ * this covers running the app without it.
  */
 export async function parseJsonBody<T = Record<string, unknown>>(req: NextRequest): Promise<Partial<T>> {
   try {
-    const parsed = await req.json();
+    const text = await readCappedBody(req);
+    if (text === null) return {} as Partial<T>;
+    const parsed = JSON.parse(text);
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {} as Partial<T>;
     }
@@ -105,4 +114,28 @@ export function forbiddenResponse(message = 'Niet toegestaan'): NextResponse {
     { success: false, error: { code: 'FORBIDDEN', message } },
     { status: 403 }
   );
+}
+
+/** Largest JSON body any route reads (parseJsonBody). */
+export const MAX_JSON_BODY_BYTES = 1_000_000;
+
+/** The body as text, or null when it is larger than MAX_JSON_BODY_BYTES. */
+async function readCappedBody(req: NextRequest): Promise<string | null> {
+  const declared = Number(req.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_JSON_BODY_BYTES) return null;
+  if (!req.body) return '';
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_JSON_BODY_BYTES) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }

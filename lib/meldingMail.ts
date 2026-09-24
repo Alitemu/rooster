@@ -19,6 +19,7 @@
 
 import { db } from '@/db/client';
 import { issuePersonLink } from './periodInvitations';
+import { mailBaseUrl } from './baseUrl';
 import { renderNotificationTemplate, renderTemplate } from './notifications';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstSoort } from './verzendlijst';
@@ -38,7 +39,6 @@ export interface MeldingMail {
   soort: VerzendlijstSoort;
   /** The sentence above the link, e.g. "Bekijk het verzoek via je persoonlijke link:". */
   linkIntro: string;
-  baseUrl: string;
   /** The swap request this mail is about, so a queued mail can be dropped once it no longer applies. */
   swapId?: string;
 }
@@ -61,8 +61,14 @@ async function deliver(melding: MeldingMail): Promise<Delivery> {
     .get(melding.periodId) as { naam: string } | undefined;
   if (!person || !period) return 'GONE';
 
-  const link = issuePersonLink(melding.personId, melding.periodId, melding.baseUrl);
-  const placeholders = { ...melding.placeholders, link: `${melding.linkIntro}\n${link}` };
+  // Worked out now, never taken from the request that set this off (see
+  // lib/baseUrl.ts mailBaseUrl) - also not from a queued mail's JSON,
+  // which older versions stored it in.
+  const baseUrl = mailBaseUrl(melding.periodId);
+  const link = baseUrl
+    ? `${melding.linkIntro}\n${issuePersonLink(melding.personId, melding.periodId, baseUrl)}`
+    : 'Open Dienstrooster via de persoonlijke link uit je uitnodiging.';
+  const placeholders = { ...melding.placeholders, link };
   const rendered =
     'sleutel' in melding.template
       ? renderNotificationTemplate(melding.template.sleutel, placeholders)

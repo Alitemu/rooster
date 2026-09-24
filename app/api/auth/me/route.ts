@@ -28,6 +28,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   return NextResponse.json({
     success: true,
-    data: { authenticated: true, person_id: auth.userId, role: auth.role, totp_enrolled: totpEnrolled },
+    data: {
+      authenticated: true,
+      person_id: auth.userId,
+      role: auth.role,
+      totp_enrolled: totpEnrolled,
+      // Logged in with the public seed password: the login page asks for a new one first.
+      wachtwoord_wijzigen: Boolean(auth.wachtwoordWijzigen),
+    },
   });
 }

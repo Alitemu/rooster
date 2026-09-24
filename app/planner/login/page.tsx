@@ -8,21 +8,7 @@
 
 import { Suspense, useState, useEffect, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
-
-/**
- * `redirect` is a URL query param, so it's attacker-controlled - anyone can
- * send a colleague a link like /planner/login?redirect=https://evil.example.
- * router.push() previously treated it as an internal route, harmless by
- * construction; window.location.href (needed below to escape the stale
- * router-cache redirect loop) executes whatever it's given, so this has to
- * reject anything that isn't a same-origin, single-leading-slash path
- * before it's ever used for navigation. A leading "//" is rejected too -
- * browsers treat that as scheme-relative and happily navigate off-site.
- */
-function safeRedirectTarget(raw: string | null): string {
-  if (raw && raw.startsWith('/') && !raw.startsWith('//')) return raw;
-  return '/planner';
-}
+import { safeRedirectTarget } from '@/lib/safeRedirect';
 
 export default function PlannerLoginPage() {
   return (
@@ -206,6 +192,23 @@ function PlannerLoginForm() {
   const [totpRequired, setTotpRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Logged in with the public seed password: a new one comes first.
+  // `huidig` is what was just typed; empty when an earlier session sent
+  // the browser back here.
+  const [wachtwoordWijzigen, setWachtwoordWijzigen] = useState<{ huidig: string } | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    fetch('/api/auth/me')
+      .then((res) => res.json())
+      .then((data) => {
+        if (current && data?.data?.authenticated && data.data.wachtwoord_wijzigen) setWachtwoordWijzigen({ huidig: '' });
+      })
+      .catch(() => {});
+    return () => {
+      current = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -245,6 +248,12 @@ function PlannerLoginForm() {
         return;
       }
 
+      if (data.data?.wachtwoord_wijzigen) {
+        setWachtwoordWijzigen({ huidig: password });
+        setLoading(false);
+        return;
+      }
+
       // A hard navigation, not router.push(): /planner is a route Next.js
       // prefetches automatically while still on this page (a shared layout
       // links to it), and that prefetch runs before login - unauthenticated,
@@ -260,6 +269,12 @@ function PlannerLoginForm() {
       setLoading(false);
     }
   };
+
+  if (wachtwoordWijzigen) {
+    return (
+      <SeedPasswordChange huidig={wachtwoordWijzigen.huidig} onDone={() => (window.location.href = redirectTo)} />
+    );
+  }
 
   return (
     <div className="container-main">
@@ -324,6 +339,114 @@ function PlannerLoginForm() {
 
             <button type="submit" className="btn-primary w-full" disabled={loading}>
               {loading ? 'Bezig...' : 'Inloggen'}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * After logging in with the password scripts/seed.ts sets. That password
+ * is public with the code, so the session it opened can do nothing but
+ * this (lib/auth-context.ts requirePlannerAccess).
+ */
+function SeedPasswordChange({ huidig, onDone }: { huidig: string; onDone: () => void }) {
+  const [current, setCurrent] = useState(huidig);
+  const [next, setNext] = useState('');
+  const [repeat, setRepeat] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    if (next !== repeat) {
+      setError('De twee nieuwe wachtwoorden zijn niet gelijk.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ huidig_wachtwoord: current, nieuw_wachtwoord: next }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
+        setError(data?.error?.message || 'Wijzigen is mislukt.');
+        setSaving(false);
+        return;
+      }
+      onDone();
+    } catch {
+      setError('Wijzigen is mislukt. Probeer het opnieuw.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="container-main">
+      <div className="max-w-sm mx-auto">
+        <div className="card card-padding">
+          <h1 className="text-xl font-bold text-neutral-900 mb-2">Kies een nieuw wachtwoord</h1>
+          <p className="text-sm text-neutral-700 mb-6">
+            Je bent ingelogd met het startwachtwoord. Dat staat openbaar in de broncode van Dienstrooster, dus
+            iedereen kan het kennen. Kies eerst een eigen wachtwoord. Daarna ga je verder.
+          </p>
+          <form onSubmit={handleSubmit}>
+            {!huidig && (
+              <div className="form-group">
+                <label className="label" htmlFor="seed-huidig">
+                  Huidig wachtwoord
+                </label>
+                <input
+                  id="seed-huidig"
+                  className="input w-full"
+                  type="password"
+                  autoComplete="current-password"
+                  value={current}
+                  onChange={(e) => setCurrent(e.target.value)}
+                  required
+                />
+              </div>
+            )}
+            <div className="form-group">
+              <label className="label" htmlFor="seed-nieuw">
+                Nieuw wachtwoord
+              </label>
+              <input
+                id="seed-nieuw"
+                className="input w-full"
+                type="password"
+                autoComplete="new-password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="label" htmlFor="seed-herhaal">
+                Nieuw wachtwoord herhalen
+              </label>
+              <input
+                id="seed-herhaal"
+                className="input w-full"
+                type="password"
+                autoComplete="new-password"
+                value={repeat}
+                onChange={(e) => setRepeat(e.target.value)}
+                required
+              />
+            </div>
+            {error && (
+              <p role="alert" className="text-sm text-red-600 mb-4">
+                {error}
+              </p>
+            )}
+            <button type="submit" className="btn-primary w-full" disabled={saving}>
+              {saving ? 'Bezig...' : 'Wachtwoord opslaan en verder'}
             </button>
           </form>
         </div>
