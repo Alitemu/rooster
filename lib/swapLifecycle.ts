@@ -86,6 +86,7 @@ function noticeToColleague(swap: SwapRow, wat: 'ingetrokken' | 'vervallen', base
   return {
     send: () =>
       void mailMelding({
+        swapId: swap.id,
         personId: swap.respondent_person_id,
         periodId: swap.periode_id,
         template: SWAP_WITHDRAWN_TEMPLATE,
@@ -198,6 +199,7 @@ export function closeLapsedSwaps(
     meldingen.push({
       send: () =>
         void mailMelding({
+          swapId: swap.id,
           personId: swap.aanvrager_person_id,
           periodId: swap.periode_id,
           template: { sleutel: 'SWAP_RESULT' },

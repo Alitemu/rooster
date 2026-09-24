@@ -427,8 +427,18 @@ a new request mails the colleague (SWAP_REQUESTED) and confirms to the
 requester, and approve/reject mails the requester (SWAP_RESULT), each a
 one-bericht verzendlijst with a fresh personal link and the swap spelled
 out from the reader's side (lib/swapMailDetails.ts). Started after the
-commit and never awaited, so a mail failure can't fail or slow the swap;
-without SMTP configured it does nothing, not even issue a link. Every
+commit and never awaited, so a mail failure can't fail or slow the swap.
+A swap mail that can't go out (not set up, or refused) waits in
+dienstrooster_mail_queue with its MeldingMail as JSON - built, personal
+link included, only when it is sent - and flushMailQueue sends it hourly
+(instrumentation-node.ts) and right after mail settings are saved,
+oldest first, stopping at the first refusal. Dropped after 7 days, a
+RUILVERZOEK/RUIL_BEVESTIGING as soon as the swap is no longer PENDING,
+and a withdrawal notice whose request mail never went out takes that
+request mail with it instead of being sent. The create route returns
+`mail_vertraagd` (not set up, a remembered failure, or a non-empty queue)
+so the requester is told the colleague may only see it in the app for
+now; MailWarning counts what waits. Every
 bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
 RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN) and an
 `html` field: `tekst` escaped with <br> for line breaks (tekstNaarHtml).

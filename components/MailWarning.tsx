@@ -15,6 +15,7 @@ interface Status {
   bron: 'APP' | 'ENV' | null;
   wachtwoord_onleesbaar: boolean;
   laatste_fout: { op: string; melding: string; soort: string; automatisch: boolean } | null;
+  wachtrij: number;
 }
 
 const WAT: Record<string, string> = {
@@ -68,6 +69,9 @@ export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string
     tekst = `Op ${wanneer(fout.op)} kon ${wat} niet verstuurd worden: ${fout.melding} Deze melding verdwijnt zodra er weer iets verstuurd is.`;
   } else {
     return null;
+  }
+  if (status.wachtrij > 0) {
+    tekst += ` ${status.wachtrij === 1 ? 'Er wacht 1 ruilmail' : `Er wachten ${status.wachtrij} ruilmails`} op verzending. ${status.wachtrij === 1 ? 'Die gaat' : 'Die gaan'} alsnog zodra het versturen weer werkt.`;
   }
 
   return (

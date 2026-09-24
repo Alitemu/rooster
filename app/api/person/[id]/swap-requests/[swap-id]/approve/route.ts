@@ -232,6 +232,7 @@ export async function POST(
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
       .get(swapRequest.respondent_person_id) as { codenaam: string } | undefined;
     void mailMelding({
+      swapId,
       personId: swapRequest.aanvrager_person_id,
       periodId: swapRequest.periode_id,
       template: { sleutel: 'SWAP_RESULT' },

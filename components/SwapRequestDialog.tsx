@@ -57,7 +57,8 @@ interface Props {
   periodId: string;
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: () => void;
+  /** mailVertraagd: the mail to the colleague could not go out right now and follows later. */
+  onSuccess?: (result: { mailVertraagd: boolean }) => void;
 }
 
 // Rest of the app formats dates via toLocaleDateString('nl-NL') rather than
@@ -166,12 +167,12 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
         }),
       });
 
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json();
-        throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Aanmaken van ruilverzoek mislukt');
+        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Aanmaken van ruilverzoek mislukt');
       }
 
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess({ mailVertraagd: Boolean(data?.data?.mail_vertraagd) });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Aanmaken van ruilverzoek mislukt');

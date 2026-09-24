@@ -12,7 +12,9 @@ import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-contex
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { swapMailDetails } from '@/lib/swapMailDetails';
-import { mailMelding, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
+import { mailMelding, queuedMailCount, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
+import { verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
+import { getMailFailure } from '@/lib/appSettings';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { optionalFreeText } from '@/lib/freeText';
@@ -318,9 +320,17 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         kortOpElkaar,
       });
 
+    // Whether the mail is likely to be late: not set up, the last send
+    // failed, or others are already waiting. Worked out before the mails
+    // below are started - they may join the queue themselves. The
+    // requester is told, so they know the colleague may only see it in the
+    // app for now (lib/meldingMail.ts sends it later).
+    const mailVertraagd = !verzendlijstMailConfigured() || getMailFailure() !== null || queuedMailCount() > 0;
+
     // Also by mail, when the server is set up for it. Started after the
     // commit and not awaited: it must never hold up or undo the request.
     void mailMelding({
+      swapId,
       personId: respondentAssignment.person_id,
       periodId: period_id as string,
       template: { sleutel: 'SWAP_REQUESTED' },
@@ -332,6 +342,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     });
     // And a confirmation to the requester, so they have it in writing too.
     void mailMelding({
+      swapId,
       personId,
       periodId: period_id as string,
       template: SWAP_SUBMITTED_TEMPLATE,
@@ -351,6 +362,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       data: {
         swap_request_id: swapId,
         respondent_person_id: respondentAssignment.person_id,
+        mail_vertraagd: mailVertraagd,
       },
     });
   } catch (error) {

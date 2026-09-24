@@ -352,6 +352,17 @@ async function createTables() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS pending_undo_scope_id_uniq ON dienstrooster_pending_undo(scope_id);
 
+    CREATE TABLE IF NOT EXISTS dienstrooster_mail_queue (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      swap_id TEXT,
+      soort TEXT NOT NULL,
+      melding_json TEXT NOT NULL,
+      pogingen INTEGER NOT NULL DEFAULT 0,
+      laatste_poging_op TEXT,
+      aangemaakt_op TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS dienstrooster_app_setting (
       sleutel TEXT PRIMARY KEY NOT NULL,
       waarde TEXT NOT NULL,
@@ -513,6 +524,7 @@ const SEEDED_TABLES = [
   'dienstrooster_reminder_schedule',
   'dienstrooster_reminder_run',
   'dienstrooster_period_fellow',
+  'dienstrooster_mail_queue',
   // References a person (gewijzigd_door), so a reset clears it as well.
   'dienstrooster_app_setting',
   'dienstrooster_notification_template',

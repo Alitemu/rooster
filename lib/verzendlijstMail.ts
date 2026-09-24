@@ -18,6 +18,7 @@
  */
 
 import nodemailer from 'nodemailer';
+import { db } from '@/db/client';
 import { clearMailFailure, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
 import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
@@ -79,8 +80,13 @@ export function mailConfigStatus(): {
   wachtwoord_onleesbaar: boolean;
   /** The last failed send, until one succeeds again. */
   laatste_fout: MailFailure | null;
+  /** Swap mails waiting to go out (lib/meldingMail.ts flushMailQueue). */
+  wachtrij: number;
 } {
   const laatste_fout = getMailFailure();
+  // Counted here rather than imported from lib/meldingMail.ts, which
+  // imports this module.
+  const wachtrij = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_mail_queue').get() as { n: number }).n;
   const stored = getStoredMailSettings();
   if (stored?.wachtwoord) {
     return {
@@ -89,6 +95,7 @@ export function mailConfigStatus(): {
       verzendlijst_aan: stored.verzendlijstAan,
       wachtwoord_onleesbaar: false,
       laatste_fout,
+      wachtrij,
     };
   }
   const env = configFromEnv();
@@ -98,6 +105,7 @@ export function mailConfigStatus(): {
     verzendlijst_aan: stored?.verzendlijstAan ?? env?.to ?? null,
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
     laatste_fout,
+    wachtrij,
   };
 }
 

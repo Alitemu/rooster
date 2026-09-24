@@ -91,6 +91,8 @@ afterEach(() => {
     for (const { id } of db.prepare('SELECT id FROM dienstrooster_schedule_period WHERE pool_id = ?').all(poolId) as Array<{
       id: string;
     }>) {
+      // Swap mails that could not go out wait here (lib/meldingMail.ts).
+      db.prepare('DELETE FROM dienstrooster_mail_queue WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(id);

@@ -721,3 +721,23 @@ export const appSetting = sqliteTable('dienstrooster_app_setting', {
   gewijzigd_op: text('gewijzigd_op').notNull(),
   gewijzigd_door: text('gewijzigd_door').references(() => person.id),
 });
+
+/**
+ * Swap mails that could not go out (sending not set up, or the mail server
+ * refused), kept to be sent later (lib/mailQueue.ts): every hour, and right
+ * after new mail settings are saved. `melding_json` is the MeldingMail
+ * (lib/meldingMail.ts) itself, so the mail - and its personal link - is
+ * only built when it actually goes out. Dropped after 7 days, or earlier
+ * once the swap it is about has moved on.
+ */
+export const mailQueue = sqliteTable('dienstrooster_mail_queue', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  period_id: text('period_id').notNull().references(() => schedulePeriod.id),
+  swap_id: text('swap_id'),
+  soort: text('soort').notNull(),
+  melding_json: text('melding_json').notNull(),
+  pogingen: integer('pogingen').default(0).notNull(),
+  laatste_poging_op: text('laatste_poging_op'),
+  aangemaakt_op: text('aangemaakt_op').notNull(),
+});
+

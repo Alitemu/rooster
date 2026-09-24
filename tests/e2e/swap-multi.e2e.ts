@@ -39,6 +39,9 @@ test.describe('Eén dienst aan meerdere collega’s aanbieden', () => {
     await requested.selectOption(eerste!);
     await page.getByRole('button', { name: 'Verzoek versturen' }).click();
     await expect(page.getByText('Ruilverzoek aangemaakt')).toBeVisible();
+    // This test server sends no mail: the requester is told the colleague
+    // only sees it in the app for now (lib/meldingMail.ts queues the mail).
+    await expect(page.getByText(/Er kan op dit moment geen mail verstuurd worden/)).toBeVisible();
 
     await openDialog();
     const alGevraagd = requested.locator(`option[value="${eerste}"]`);

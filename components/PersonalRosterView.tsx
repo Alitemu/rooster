@@ -70,7 +70,8 @@ export function PersonalRosterView({
   const [weekView, setWeekView] = useState<Map<string, WeekGroup>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [showSwapManagement, setShowSwapManagement] = useState(false);
-  const [swapSuccessMessage, setSwapSuccessMessage] = useState(false);
+  // 'vertraagd': created, but the mail to the colleague follows later.
+  const [swapSuccessMessage, setSwapSuccessMessage] = useState<'ok' | 'vertraagd' | null>(null);
   const [swapListRefreshKey, setSwapListRefreshKey] = useState(0);
 
   // Group shifts by ISO week - keyed on (iso_jaar, iso_week) together, not
@@ -293,8 +294,14 @@ export function PersonalRosterView({
         </div>
 
         {swapSuccessMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+          <div role="status" className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
             Ruilverzoek aangemaakt
+            {swapSuccessMessage === 'vertraagd' && (
+              <p className="mt-1 text-amber-900">
+                Er kan op dit moment geen mail verstuurd worden. Je collega ziet het verzoek wel in de app. De mail
+                gaat alsnog zodra het versturen weer werkt.
+              </p>
+            )}
           </div>
         )}
 
@@ -342,12 +349,13 @@ export function PersonalRosterView({
         periodId={periodId}
         isOpen={swapDialogOpen}
         onClose={() => setSwapDialogOpen(false)}
-        onSuccess={() => {
+        onSuccess={({ mailVertraagd }) => {
           setSwapDialogOpen(false);
           setShowSwapManagement(true);
           setSwapListRefreshKey((k) => k + 1);
-          setSwapSuccessMessage(true);
-          setTimeout(() => setSwapSuccessMessage(false), 5000);
+          setSwapSuccessMessage(mailVertraagd ? 'vertraagd' : 'ok');
+          // Longer when there is more to read.
+          setTimeout(() => setSwapSuccessMessage(null), mailVertraagd ? 15000 : 5000);
         }}
       />
     </div>

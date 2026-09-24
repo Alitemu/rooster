@@ -19,6 +19,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { deleteMailSettings, getStoredMailSettings, saveMailSettings } from '@/lib/appSettings';
 import { mailConfigStatus, verifyMailLogin } from '@/lib/verzendlijstMail';
+import { flushMailQueue } from '@/lib/meldingMail';
 
 const fail = (status: number, message: string) =>
   NextResponse.json({ success: false, error: { code: 'INVALID_INPUT', message } }, { status });
@@ -89,6 +90,9 @@ export async function PUT(req: NextRequest) {
       { gebruiker, verzendlijst_aan, wachtwoord_gewijzigd: Boolean(typed) },
       'UPDATE'
     );
+    // Swap mails that waited for working settings go out now, not at the
+    // next hourly run. Not awaited: the queue may take a while.
+    void flushMailQueue();
     return NextResponse.json({ success: true, data: mailConfigStatus() });
   } catch (error) {
     return internalErrorResponse('mail-settings-put', error);

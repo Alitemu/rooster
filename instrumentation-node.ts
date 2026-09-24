@@ -160,6 +160,14 @@ export function startAutoReminderScheduler(): void {
       }
     } catch (error) {
       console.error('[auto-herinneringen] controle mislukt', error);
+    }
+    // Swap mails that could not go out earlier (lib/meldingMail.ts).
+    try {
+      const { flushMailQueue } = await import('./lib/meldingMail');
+      const { verstuurd, over } = await flushMailQueue();
+      if (verstuurd > 0 || over > 0) console.warn(`[ruilmails] alsnog verstuurd: ${verstuurd}, wachten nog: ${over}`);
+    } catch (error) {
+      console.error('[ruilmails] wachtrij versturen mislukt', error);
     } finally {
       running = false;
     }

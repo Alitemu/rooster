@@ -11,7 +11,9 @@ import { POST as cancelSwap } from '@/app/api/person/[id]/swap-requests/[swap-id
 import {
   startSmtpSink,
   configureSmtp,
+  configureSmtpServerOnly,
   clearSmtpConfig,
+  SMTP_SINK_GMAIL_USER,
   verzendlijstAttachment,
   verzendlijstPayload,
   waitForMails,
@@ -20,6 +22,9 @@ import {
 import { formatSwapDate } from './swapMailDetails';
 import { AL_GERUILD_REDEN, AL_ONDERLING_GERUILD_REDEN } from './swapLifecycle';
 import { MAX_RUILVERZOEKEN_PER_DAG } from './swapQuota';
+import { flushMailQueue, MAIL_QUEUE_MAX_AGE_MS } from './meldingMail';
+import { GET as getMailSettings, PUT as putMailSettings } from '@/app/api/planner/mail-settings/route';
+import { STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 
 /**
  * The rules:
@@ -204,10 +209,15 @@ function berichtenFor(personId: string) {
 afterEach(() => {
   clearSmtpConfig();
   sink.received.length = 0;
+  // Mail settings saved through the app, and a refused send remembered
+  // for the planner's warning.
+  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%'`).run();
   for (const poolId of created.pools) {
     for (const { id } of db.prepare('SELECT id FROM dienstrooster_schedule_period WHERE pool_id = ?').all(poolId) as Array<{
       id: string;
     }>) {
+      // Swap mails that could not go out wait here (lib/meldingMail.ts).
+      db.prepare('DELETE FROM dienstrooster_mail_queue WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').run(id);
@@ -606,6 +616,155 @@ describe('how many swap requests one participant may start', () => {
     expect((await createAs(f, f.aanvrager, f.offered, f.requested)).status).toBe(200);
     // The colleague's own allowance is untouched by requests aimed at them.
     expect((await createAs(f, f.collega, f.requested, f.derdeShift)).status).toBe(200);
+  });
+});
+
+describe('ruilmails die niet meteen weg konden', () => {
+  const queued = (f: ReturnType<typeof createFixture>) =>
+    db
+      .prepare('SELECT soort, pogingen FROM dienstrooster_mail_queue WHERE period_id = ? ORDER BY aangemaakt_op, rowid')
+      .all(f.periodId) as Array<{ soort: string; pogingen: number }>;
+  const linkCount = (f: ReturnType<typeof createFixture>) =>
+    (
+      db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').get(f.periodId) as {
+        n: number;
+      }
+    ).n;
+
+  it('keeps them while sending is not set up, and sends them once it is, each with a fresh link', async () => {
+    const f = createFixture();
+    await requestSwap(f);
+    expect(queued(f).map((q) => q.soort)).toEqual(['RUILVERZOEK', 'RUIL_BEVESTIGING']);
+    // Nothing is built yet: no link handed out for a mail that did not go.
+    expect(linkCount(f)).toBe(0);
+
+    configureSmtp(sink);
+    const result = await flushMailQueue();
+    expect(result).toMatchObject({ verstuurd: 2, vervallen: 0 });
+    expect(queued(f)).toEqual([]);
+    const [naarCollega] = berichtenFor(f.collega);
+    expect(naarCollega.soort).toBe('RUILVERZOEK');
+    expect(naarCollega.tekst).toContain('Jij geeft: je avonddienst op dinsdag 14 april 2099');
+    expect(linkOwner(naarCollega.tekst)).toBe(f.collega);
+    expect(linkCount(f)).toBe(2);
+  });
+
+  it('keeps a mail the server refused and sends it once the server takes it, stopping at the first refusal', async () => {
+    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    const f = createFixture();
+    await requestSwap(f);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(queued(f)).toHaveLength(2);
+
+    // Still refused: tried once, then left for the next run.
+    await flushMailQueue();
+    expect(queued(f).map((q) => q.pogingen)).toEqual([1, 0]);
+
+    configureSmtp(sink);
+    expect((await flushMailQueue()).verstuurd).toBe(2);
+    expect(sink.received).toHaveLength(2);
+  });
+
+  it('drops the request mails once the request was answered, but still sends the answer', async () => {
+    const f = createFixture();
+    const swapId = await requestSwap(f);
+    await rejectSwap(
+      new NextRequest(`http://localhost/api/person/${f.collega}/swap-requests/${swapId}/reject`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.collega), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Kan niet' }),
+      }),
+      { params: Promise.resolve({ id: f.collega, 'swap-id': swapId }) }
+    );
+    expect(queued(f).map((q) => q.soort)).toEqual(['RUILVERZOEK', 'RUIL_BEVESTIGING', 'RUIL_UITKOMST']);
+
+    configureSmtp(sink);
+    expect(await flushMailQueue()).toMatchObject({ verstuurd: 1, vervallen: 2 });
+    expect(berichtenFor(f.aanvrager).map((b) => b.soort)).toEqual(['RUIL_UITKOMST']);
+    expect(berichtenFor(f.collega)).toEqual([]);
+  });
+
+  it('sends no "ingetrokken" to a colleague who never got the request', async () => {
+    configureSmtp(sink, { SMTP_PASS: 'verkeerd' });
+    const f = createFixture();
+    const swapId = await requestSwap(f);
+    await new Promise((r) => setTimeout(r, 300));
+
+    configureSmtp(sink);
+    await cancelSwap(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests/${swapId}/cancel`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager) },
+      }),
+      { params: Promise.resolve({ id: f.aanvrager, 'swap-id': swapId }) }
+    );
+    await new Promise((r) => setTimeout(r, 300));
+    expect(queued(f)).toEqual([]);
+    expect(sink.received).toHaveLength(0);
+  });
+
+  it('counts what waits, and sends it as soon as mail settings are saved in the app', async () => {
+    const f = createFixture();
+    await requestSwap(f);
+    const planner = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'PLANNER', 1, datetime('now'))`
+    ).run(planner, `MM-planner-${planner.slice(0, 6)}`);
+    created.people.push(planner);
+    const staff = (method: string, body?: unknown) =>
+      new NextRequest('http://localhost/api/planner/mail-settings', {
+        method,
+        headers: {
+          Cookie: `${SESSION_COOKIE_NAME}=${createSessionToken(
+            { kind: 'staff', personId: planner, sessionVersion: getSessionVersion(planner)! } as never,
+            STAFF_SESSION_MAX_AGE_SECONDS
+          )}`,
+          'Content-Type': 'application/json',
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+
+    expect((await (await getMailSettings(staff('GET'))).json()).data.wachtrij).toBe(2);
+
+    configureSmtpServerOnly(sink);
+    const res = await putMailSettings(
+      staff('PUT', { gebruiker: SMTP_SINK_GMAIL_USER, wachtwoord: 'abcdefghijklmnop', verzendlijst_aan: 'stroom@example.test' })
+    );
+    expect(res.status).toBe(200);
+    await waitForMails(sink, 2);
+    expect(queued(f)).toEqual([]);
+  });
+
+  it('drops a mail that waited longer than 7 days', async () => {
+    const f = createFixture();
+    await requestSwap(f);
+    configureSmtp(sink);
+    const later = new Date(Date.now() + MAIL_QUEUE_MAX_AGE_MS + 60_000);
+    expect(await flushMailQueue(later)).toMatchObject({ verstuurd: 0, vervallen: 2 });
+    expect(sink.received).toHaveLength(0);
+  });
+
+  it('tells the requester when the mail to the colleague will be late', async () => {
+    const post = async (f: ReturnType<typeof createFixture>) =>
+      (
+        await (
+          await createSwap(
+            new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests`, {
+              method: 'POST',
+              headers: { Cookie: cookie(f.aanvrager), 'Content-Type': 'application/json' },
+              body: JSON.stringify({ period_id: f.periodId, offered_slot_id: f.offered, requested_slot_id: f.requested }),
+            }),
+            { params: Promise.resolve({ id: f.aanvrager }) }
+          )
+        ).json()
+      ).data.mail_vertraagd;
+
+    expect(await post(createFixture())).toBe(true);
+
+    configureSmtp(sink);
+    // Clear what the first request left waiting, so only "is sending set up" counts.
+    await flushMailQueue();
+    expect(await post(createFixture())).toBe(false);
   });
 });
 
