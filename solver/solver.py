@@ -115,7 +115,8 @@ class RosterSolver:
         preference_reward_weight: float = 0.3,
         objective_mode: str = 'weighted',
         window_weeks_avond: Optional[int] = None,
-        window_weeks_weekend_feestdag: Optional[int] = None
+        window_weeks_weekend_feestdag: Optional[int] = None,
+        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None
     ) -> dict:
         """
         Build the CP-SAT model: every constraint always, the combined
@@ -252,7 +253,8 @@ class RosterSolver:
         band_slack_vars = constraint_builder.add_band_constraints(
             assignment_vars, people, slots, band_ranges, balances,
             distribution_mode=distribution_mode, participation_factors=participation_factors,
-            coverage_factors=coverage_factors, already_assigned=already_assigned
+            coverage_factors=coverage_factors, already_assigned=already_assigned,
+            band_overrides=band_overrides
         )
 
         objective_builder = None
@@ -286,7 +288,8 @@ class RosterSolver:
             imbalance_cost = objective_builder.add_band_imbalance_objective(
                 assignment_vars, people, slots, band_ranges, balances, weight=band_imbalance_weight,
                 distribution_mode=distribution_mode, participation_factors=participation_factors,
-                coverage_factors=coverage_factors, already_assigned=already_assigned
+                coverage_factors=coverage_factors, already_assigned=already_assigned,
+                band_overrides=band_overrides
             )
 
             logger.info("Adding preference reward objective")
@@ -626,7 +629,8 @@ class RosterSolver:
         objective_mode: str = 'weighted',
         random_seed: Optional[int] = None,
         window_weeks_avond: Optional[int] = None,
-        window_weeks_weekend_feestdag: Optional[int] = None
+        window_weeks_weekend_feestdag: Optional[int] = None,
+        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None
     ) -> dict:
         """
         End-to-end: build model, solve (weighted or lexicographic per
@@ -657,7 +661,8 @@ class RosterSolver:
                 holiday_spread_weeks, shortfall_weight, band_imbalance_weight,
                 preference_reward_weight, objective_mode,
                 window_weeks_avond=window_weeks_avond,
-                window_weeks_weekend_feestdag=window_weeks_weekend_feestdag
+                window_weeks_weekend_feestdag=window_weeks_weekend_feestdag,
+                band_overrides=band_overrides
             )
 
             # Solve

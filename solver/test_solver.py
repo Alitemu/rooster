@@ -57,7 +57,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
           participation_factors=None, coverage=None, band_deviation_penalty=None, band_deviation_multiplier=1.0,
           holiday_spread_weeks=0, shortfall_weight=1000.0, band_imbalance_weight=0.5,
           preference_reward_weight=0.3, objective_mode='weighted', random_seed=None,
-          window_weeks_avond=None, window_weeks_weekend_feestdag=None):
+          window_weeks_avond=None, window_weeks_weekend_feestdag=None, band_overrides=None):
     """Run the full pipeline with wide-open bands unless told otherwise."""
     wide = [0, len(slots)]
     band_ranges = band or {'AVOND': wide, 'WEEKEND': wide, 'FEESTDAG': wide}
@@ -87,6 +87,7 @@ def solve(people, slots, window_weeks=2, band=None, blocked=None, soft=None, bal
         random_seed=random_seed,
         window_weeks_avond=window_weeks_avond,
         window_weeks_weekend_feestdag=window_weeks_weekend_feestdag,
+        band_overrides=band_overrides,
     )
 
 
@@ -1526,3 +1527,45 @@ def test_per_teller_windows_still_restrict_within_the_weekend_feestdag_group():
     assert len(result['assignments']) <= 1, (
         f"WEEKEND and FEESTDAG share one window group, expected only one filled, got {result['assignments']}"
     )
+
+
+# ---------------------------------------------------------------------------
+# band_overrides: a fellow's weekend (lib/fellows.ts)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('objective_mode', ['weighted', 'lexicographic'])
+def test_band_override_caps_a_fellows_weekend_at_the_days_they_released(objective_mode):
+    """
+    A fellow's WEEKEND band is replaced by [0, released days]: never more,
+    even with slots left over, and being under it is no band violation.
+    p1 (fellow, released 1) and p2 (band 2), four weekend slots: p1 takes
+    exactly 1, p2 takes 2, one stays unfilled.
+    """
+    slots = make_slots(4, teller='WEEKEND')
+    band = {'AVOND': [0, 0], 'WEEKEND': [2, 2], 'FEESTDAG': [0, 0]}
+    result = solve(
+        ['p1', 'p2'], slots, window_weeks=1, band=band, objective_mode=objective_mode,
+        band_overrides={'p1': {'WEEKEND': (0, 1)}},
+    )
+
+    per_person = {p: len(w) for p, w in weeks_by_person(result, slots).items()}
+    assert per_person.get('p1', 0) == 1
+    assert per_person.get('p2', 0) == 2
+    assert result['diagnostics']['violations']['band_limit'] == 0
+
+
+def test_band_override_ignores_the_ledger_delta():
+    """
+    A weekend saldo waits while someone is a fellow: +3 in the ledger does
+    not lift the override [0, 0], and nobody is counted as short.
+    """
+    slots = make_slots(3, teller='WEEKEND')
+    band = {'AVOND': [0, 0], 'WEEKEND': [1, 1], 'FEESTDAG': [0, 0]}
+    result = solve(
+        ['p1'], slots, window_weeks=1, band=band,
+        balances={'p1': {'AVOND': 0, 'WEEKEND': 3, 'FEESTDAG': 0}},
+        band_overrides={'p1': {'WEEKEND': (0, 0)}},
+    )
+
+    assert result['assignments'] == []
+    assert result['diagnostics']['violations']['band_limit'] == 0

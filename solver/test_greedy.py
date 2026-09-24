@@ -37,7 +37,7 @@ def make_slots(num_weeks, teller='AVOND', start_year=2027, start_week=1):
 def run(people, slots, window_weeks=2, band=None, blocked=None, soft=None, preferred=None,
         prior=None, manual=None, distribution_mode='GELIJK', participation_factors=None,
         coverage=None, holiday_spread_weeks=0, variant='medewerker', random_seed=1,
-        window_weeks_avond=None, window_weeks_weekend_feestdag=None):
+        window_weeks_avond=None, window_weeks_weekend_feestdag=None, band_overrides=None):
     wide = {'AVOND': (0, len(slots)), 'WEEKEND': (0, len(slots)), 'FEESTDAG': (0, len(slots))}
     return run_greedy_construction(
         people=people,
@@ -58,6 +58,7 @@ def run(people, slots, window_weeks=2, band=None, blocked=None, soft=None, prefe
         random_seed=random_seed,
         window_weeks_avond=window_weeks_avond,
         window_weeks_weekend_feestdag=window_weeks_weekend_feestdag,
+        band_overrides=band_overrides,
     )
 
 
@@ -430,3 +431,20 @@ def test_per_teller_windows_still_restrict_within_the_weekend_feestdag_group(var
     assert len(result['assignments']) <= 1, (
         f"WEEKEND and FEESTDAG share one window group, expected only one filled, got {result['assignments']}"
     )
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_band_override_caps_a_fellows_weekend(variant):
+    """Same rule as the CP-SAT solver: a fellow's WEEKEND override [0, 1]
+    is a hard ceiling, and being under it is no band violation."""
+    slots = make_slots(4, teller='WEEKEND')
+    band = {'AVOND': (0, 0), 'WEEKEND': (2, 2), 'FEESTDAG': (0, 0)}
+    result = run(['p1', 'p2'], slots, window_weeks=1, band=band, variant=variant,
+                 band_overrides={'p1': {'WEEKEND': (0, 1)}})
+
+    per_person = {}
+    for a in result['assignments']:
+        per_person[a['person_id']] = per_person.get(a['person_id'], 0) + 1
+    assert per_person.get('p1', 0) == 1
+    assert per_person.get('p2', 0) == 2
+    assert result['diagnostics']['violations']['band_limit'] == 0

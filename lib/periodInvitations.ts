@@ -10,6 +10,7 @@
  */
 
 import { db } from '@/db/client';
+import { TELLERS, type MemberTarget, type Teller } from '@/lib/rosterBands';
 import { generateAccessToken, hashToken } from './auth';
 import { verzendlijstPersonen, type VerzendlijstBericht } from './verzendlijst';
 
@@ -33,7 +34,7 @@ export function getInvitationPeriod(periodId: string): InvitationPeriod | undefi
 export function issuePeriodLinks(
   period: InvitationPeriod,
   baseUrl: string
-): Array<{ codenaam: string; personalLink: string }> {
+): Array<{ personId: string; codenaam: string; personalLink: string }> {
   const members = db
     .prepare(
       `SELECT DISTINCT p.id, p.codenaam
@@ -46,6 +47,7 @@ export function issuePeriodLinks(
 
   return db.transaction(() =>
     members.map((member) => ({
+      personId: member.id,
       codenaam: member.codenaam,
       personalLink: issuePersonLink(member.id, period.id, baseUrl),
     }))
@@ -75,10 +77,44 @@ export function formatDeadline(deadline: string): string {
   return new Date(deadline).toLocaleString('nl-NL');
 }
 
+const TELLER_ENKELVOUD: Record<Teller, string> = {
+  AVOND: 'avonddienst',
+  WEEKEND: 'weekenddienst',
+  FEESTDAG: 'feestdagdienst',
+};
+const TELLER_MEERVOUD: Record<Teller, string> = {
+  AVOND: 'avonddiensten',
+  WEEKEND: 'weekenddiensten',
+  FEESTDAG: 'feestdagdiensten',
+};
+
+/**
+ * "We proberen ... ongeveer 9 avonddiensten en 2 weekenddiensten. Dat is
+ * een indicatie. ...": the top of each streefbereik (computeMemberTargets,
+ * so deeltijd, instroom and saldo are in it), in words and explicitly an
+ * estimate - the final bands are only fixed at generation, when the
+ * fellows (lib/fellows.ts) are known. A counter with nothing to expect,
+ * and a fellow's weekend, are left out. Empty when there is nothing to say.
+ */
+export function indicatieTekst(target: Record<Teller, MemberTarget> | undefined): string {
+  if (!target) return '';
+  const delen = TELLERS.filter((t) => !target[t].fellow && target[t].max > 0).map(
+    (t) => `ongeveer ${target[t].max} ${target[t].max === 1 ? TELLER_ENKELVOUD[t] : TELLER_MEERVOUD[t]}`
+  );
+  if (delen.length === 0) return '';
+  const opsomming = delen.length === 1 ? delen[0] : `${delen.slice(0, -1).join(', ')} en ${delen[delen.length - 1]}`;
+  return (
+    'We proberen de diensten zo eerlijk mogelijk te verdelen. ' +
+    `Naar verwachting krijg je ${opsomming}. ` +
+    'Dat is een indicatie. Het precieze aantal hangt af van de invulling van iedereen.'
+  );
+}
+
 export function invitationBericht(
   period: InvitationPeriod,
   codenaam: string,
-  personalLink: string
+  personalLink: string,
+  indicatie = ''
 ): VerzendlijstBericht {
   return {
     soort: 'UITNODIGING',
@@ -88,7 +124,7 @@ export function invitationBericht(
     tekst: `Hoi ${codenaam},
 
 Het rooster voor ${period.naam} wordt gemaakt. Geef via je persoonlijke link aan op welke dagen je liever wel of juist niet werkt.
-
+${indicatie ? `\n${indicatie}\n` : ''}
 Je persoonlijke link:
 ${personalLink}
 

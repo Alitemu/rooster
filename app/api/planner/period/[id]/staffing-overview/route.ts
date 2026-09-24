@@ -15,6 +15,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { TELLERS, type Teller } from '@/lib/rosterBands';
+import { getFellowIds } from '@/lib/fellows';
 
 interface StaffingRow {
   person_id: string;
@@ -23,6 +24,7 @@ interface StaffingRow {
   WEEKEND: number;
   FEESTDAG: number;
   totaal: number;
+  fellow: boolean;
 }
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -58,11 +60,20 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       )
       .all(periodId) as Array<{ person_id: string; codenaam: string; teller: string; count: number }>;
 
+    const fellows = getFellowIds(periodId);
     const byPerson = new Map<string, StaffingRow>();
     for (const row of rows) {
       let entry = byPerson.get(row.person_id);
       if (!entry) {
-        entry = { person_id: row.person_id, codenaam: row.codenaam, AVOND: 0, WEEKEND: 0, FEESTDAG: 0, totaal: 0 };
+        entry = {
+          person_id: row.person_id,
+          codenaam: row.codenaam,
+          AVOND: 0,
+          WEEKEND: 0,
+          FEESTDAG: 0,
+          totaal: 0,
+          fellow: fellows.has(row.person_id),
+        };
         byPerson.set(row.person_id, entry);
       }
       if (TELLERS.includes(row.teller as Teller)) {

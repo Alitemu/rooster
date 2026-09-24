@@ -472,6 +472,7 @@ describe('rosterGaps', () => {
           LIEVER_NIET: 0,
           VENSTERBLOK: 0,
           PARTTIME: 0,
+          FELLOW: 0,
           GEBLOKKEERD: 0,
         };
         for (const p of gap!.eligible_people) byCategory[p.category]++;
@@ -497,6 +498,7 @@ describe('rosterGaps', () => {
         LIEVER_NIET: 0,
         VENSTERBLOK: 0,
         PARTTIME: 0,
+        FELLOW: 0,
         GEBLOKKEERD: 0,
       };
       for (const p of eligible) byCategory2[p.category]++;

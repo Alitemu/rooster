@@ -81,7 +81,7 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
 
   if (toCheck.length > 0) {
     const existingStmt = db.prepare(
-      'SELECT source FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
+      'SELECT source, fellow_blok FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
     );
     const insertStmt = db.prepare(
       `INSERT INTO dienstrooster_availability
@@ -101,15 +101,20 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
     // edited, since the slot would look "stale" from the pattern's side).
     const takeOverStmt = db.prepare(
       `UPDATE dienstrooster_availability
-       SET source = 'ABSENCE', bron_absence_id = ?, bron_pattern_id = NULL
+       SET source = 'ABSENCE', bron_absence_id = ?, bron_pattern_id = NULL, fellow_blok = 0
        WHERE person_id = ? AND slot_id = ?`
     );
     const now = new Date().toISOString();
 
     for (const slotId of toCheck) {
-      const existing = existingStmt.get(absence.person_id, slotId) as { source: string } | undefined;
+      const existing = existingStmt.get(absence.person_id, slotId) as
+        | { source: string; fellow_blok: number }
+        | undefined;
       if (existing) {
-        if (existing.source === 'PARTTIME') {
+        // A fellow's weekend block (lib/fellows.ts) is taken over the same
+        // way: otherwise unticking "fellow" would delete it and leave the
+        // vacation day open.
+        if (existing.source === 'PARTTIME' || existing.fellow_blok) {
           takeOverStmt.run(absence.id, absence.person_id, slotId);
           inserted++;
         } else {

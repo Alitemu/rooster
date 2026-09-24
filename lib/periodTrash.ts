@@ -117,6 +117,7 @@ function cascadeDeletePeriod(periodId: string): void {
   db.prepare('DELETE FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_reminder_schedule WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_reminder_run WHERE period_id = ?').run(periodId);
+  db.prepare('DELETE FROM dienstrooster_period_fellow WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_period_excluded_day WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);

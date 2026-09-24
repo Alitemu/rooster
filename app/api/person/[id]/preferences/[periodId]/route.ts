@@ -22,6 +22,7 @@ interface PreferenceEntry {
   teller: string;
   blocking_level: string | null; // ABSOLUUT, LIEVER_NIET, or null
   source: string | null; // MANUAL, PARTTIME, ABSENCE, or null when blocking_level is null
+  fellow_blok: number | null; // 1 = placed by "Ik ben fellow" (lib/fellows.ts)
 }
 
 interface GetPreferencesResponse {
@@ -76,7 +77,8 @@ export async function GET(
         s.iso_week,
         st.teller,
         a.blocking_level,
-        a.source
+        a.source,
+        a.fellow_blok
       FROM dienstrooster_shift_slot s
       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
       LEFT JOIN dienstrooster_availability a ON a.slot_id = s.id AND a.person_id = ?

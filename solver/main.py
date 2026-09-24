@@ -308,6 +308,27 @@ class SolverInput(BaseModel):
     # lib/coverageFactor.ts (Next.js side) and
     # constraints.add_band_constraints for the scaling itself.
     coverage_factors: dict[str, float] = {}
+    # person_id -> {counter: [min, max]}: a band that replaces this
+    # person's scaled band and ledger delta for that counter outright (see
+    # constraints.add_band_constraints). Sent for fellows' WEEKEND: they
+    # support the AIOS on Saturdays, so nothing is expected of them there
+    # and they can get at most the weekend days they left unblocked
+    # themselves (lib/fellows.ts, lib/rosterBands.ts). Empty for everyone
+    # else and for any caller that predates it.
+    band_overrides: dict[str, dict[str, tuple[int, int]]] = {}
+
+    @field_validator('band_overrides')
+    @classmethod
+    def _overrides_are_ordered_and_nonnegative(
+        cls, value: dict[str, dict[str, tuple[int, int]]]
+    ) -> dict[str, dict[str, tuple[int, int]]]:
+        for per_counter in value.values():
+            for low, high in per_counter.values():
+                if low < 0 or high < 0:
+                    raise ValueError('band override values must be >= 0')
+                if low > high:
+                    raise ValueError('band override min must be <= max')
+        return value
     # How long CP-SAT may search before returning its best-so-far solution.
     # Default matches the "standaard" duration offered in the roster
     # generation dialog; a planner can ask for a longer search (5, then 10
@@ -533,6 +554,7 @@ async def solve_roster(request: SolverInput, raw_request: Request):
             distribution_mode=request.rules.distribution_mode,
             participation_factors=request.participation_factors,
             coverage_factors=request.coverage_factors,
+            band_overrides=request.band_overrides,
             band_deviation_penalty=request.rules.band_deviation_penalty,
             band_deviation_multiplier=request.rules.band_deviation_multiplier,
             holiday_spread_weeks=request.rules.holiday_spread_weeks,
@@ -640,6 +662,7 @@ async def solve_roster_greedy(request: GreedySolverInput, raw_request: Request):
             distribution_mode=request.rules.distribution_mode,
             participation_factors=request.participation_factors,
             coverage_factors=request.coverage_factors,
+            band_overrides=request.band_overrides,
             holiday_spread_weeks=request.rules.holiday_spread_weeks,
             variant=request.variant,
             random_seed=request.rules.random_seed,

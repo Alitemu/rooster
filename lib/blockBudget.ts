@@ -102,6 +102,9 @@ export function checkBlockBudget(params: {
   const maxAllowed = Math.floor(totalSlots * maxFraction);
 
   const sourceFilter = budget.parttimeExempt ? `AND a.source != 'PARTTIME'` : '';
+  // A fellow's weekend blocks (lib/fellows.ts) are never theirs to budget:
+  // blocking every weekend is the whole point of ticking "fellow".
+  const fellowFilter = 'AND a.fellow_blok = 0';
   const row = db
     .prepare(
       `SELECT COUNT(*) as count
@@ -110,7 +113,8 @@ export function checkBlockBudget(params: {
        JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
        WHERE a.person_id = ? AND s.period_id = ? AND st.teller = ? AND a.blocking_level = ?
          AND a.slot_id != ?
-         ${sourceFilter}`
+         ${sourceFilter}
+         ${fellowFilter}`
     )
     .get(params.personId, params.periodId, params.teller, params.level, params.excludeSlotId) as {
     count: number;

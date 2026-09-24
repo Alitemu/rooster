@@ -48,14 +48,15 @@ interface Member {
 }
 
 // Desirability order for picking a recipient among several eligible
-// candidates - never used to exclude anyone (GEBLOKKEERD/PARTTIME are
-// already filtered out before this runs). Lower index = preferred.
+// candidates - never used to exclude anyone (GEBLOKKEERD/PARTTIME/FELLOW
+// are already filtered out before this runs). Lower index = preferred.
 const CATEGORY_RANK: Record<EligibilityCategory, number> = {
   VOORKEUR: 0,
   BESCHIKBAAR: 1,
   LIEVER_NIET: 2,
   VENSTERBLOK: 3,
   PARTTIME: 99,
+  FELLOW: 99,
   GEBLOKKEERD: 99,
 };
 
@@ -167,7 +168,7 @@ export function suggestRebalances(periodId: string): RebalanceSuggestion[] {
         if (excess <= 0) break;
 
         const eligible = getEligiblePeopleForSlot(periodId, slot.slot_id, member.id).filter(
-          (p) => p.category !== 'GEBLOKKEERD' && p.category !== 'PARTTIME'
+          (p) => p.category !== 'GEBLOKKEERD' && p.category !== 'PARTTIME' && p.category !== 'FELLOW'
         );
 
         const candidates = eligible

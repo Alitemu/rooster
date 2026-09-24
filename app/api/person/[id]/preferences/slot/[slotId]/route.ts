@@ -164,10 +164,11 @@ export async function PATCH(
       // the solver could roster that part-time free day), and the next
       // pattern edit deleted the person's own choice with it, because
       // reconcilePatternForPeriod removes rows by bron_pattern_id.
-      // Setting it by hand means owning it: source becomes MANUAL and both
-      // bron_* ids are cleared, which is exactly the "some other source
-      // owns this slot" case both sync modules already document and skip
-      // over.
+      // Setting it by hand means owning it: source becomes MANUAL, both
+      // bron_* ids are cleared and a fellow's weekend block stops being
+      // one (lib/fellows.ts: unticking "fellow" must not take it along).
+      // That is exactly the "some other source owns this slot" case both
+      // sync modules already document and skip over.
       const writeAndMark = db.transaction(() => {
         db.prepare(
           `INSERT INTO dienstrooster_availability
@@ -177,7 +178,8 @@ export async function PATCH(
              blocking_level = excluded.blocking_level,
              source = 'MANUAL',
              bron_pattern_id = NULL,
-             bron_absence_id = NULL`
+             bron_absence_id = NULL,
+             fellow_blok = 0`
         ).run(crypto.randomUUID(), id, slotId, level, new Date().toISOString());
 
         // Together with the write: a crash in between would leave the

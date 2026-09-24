@@ -93,6 +93,7 @@ def run_greedy_construction(
     distribution_mode: str = 'GELIJK',
     participation_factors: Optional[dict[str, float]] = None,
     coverage_factors: Optional[dict[str, float]] = None,
+    band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None,
     holiday_spread_weeks: int = 0,
     variant: Variant = 'medewerker',
     random_seed: Optional[int] = None,
@@ -131,6 +132,7 @@ def run_greedy_construction(
     manual_assignments = manual_assignments or []
     participation_factors = participation_factors or {}
     coverage_factors = coverage_factors or {}
+    band_overrides = band_overrides or {}
     counters = ['AVOND', 'WEEKEND', 'FEESTDAG']
 
     per_teller_windows = window_weeks_avond is not None or window_weeks_weekend_feestdag is not None
@@ -177,6 +179,13 @@ def run_greedy_construction(
             assigned_feestdag_weeks[pid].add(week)
 
     def actual_band(person_id: str, counter: str) -> tuple[int, int]:
+        # A fixed band for this person and counter (a fellow's weekend):
+        # replaces the scaled band and the ledger delta, like
+        # constraints.add_band_constraints' band_overrides.
+        override = band_overrides.get(person_id, {}).get(counter)
+        if override is not None:
+            already = already_assigned.get(person_id, {}).get(counter, 0)
+            return override[0] - already, override[1] - already
         base_min, base_max = band_ranges.get(counter, (7, 8))
         return _compute_actual_band(
             base_min, base_max,

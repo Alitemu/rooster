@@ -12,10 +12,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
-import { getInvitationPeriod, issuePeriodLinks, invitationBericht, rememberBaseUrl } from '@/lib/periodInvitations';
+import {
+  getInvitationPeriod,
+  indicatieTekst,
+  invitationBericht,
+  issuePeriodLinks,
+  rememberBaseUrl,
+} from '@/lib/periodInvitations';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { buildVerzendlijst } from '@/lib/verzendlijst';
 import { checkInvitationsAllowed } from '@/lib/reminderGate';
+import { computeMemberTargets } from '@/lib/rosterBands';
 
 function fail(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ success: false, error: { code, message } }, { status });
@@ -38,8 +45,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
 
     const baseUrl = resolveBaseUrl(req);
     rememberBaseUrl(period.id, baseUrl);
+    const targets = computeMemberTargets(period.id);
     const berichten = issuePeriodLinks(period, baseUrl).map((link) =>
-      invitationBericht(period, link.codenaam, link.personalLink)
+      invitationBericht(period, link.codenaam, link.personalLink, indicatieTekst(targets.get(link.personId)))
     );
     if (berichten.length === 0) return fail(400, 'EMPTY', 'Er doet niemand mee in deze periode.');
 

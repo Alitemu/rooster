@@ -108,7 +108,8 @@ class ObjectiveBuilder:
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
         coverage_factors: Optional[dict[str, float]] = None,
-        already_assigned: Optional[dict[str, dict[str, int]]] = None
+        already_assigned: Optional[dict[str, dict[str, int]]] = None,
+        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None
     ):
         """
         Objective: Prefer assignments toward middle of band range.
@@ -140,6 +141,9 @@ class ObjectiveBuilder:
         imbalance_cost = 0
         factors = participation_factors or {}
         coverage = coverage_factors or {}
+        # Same outright replacement as constraints.add_band_constraints'
+        # band_overrides - must stay in lockstep with that copy.
+        overrides = band_overrides or {}
 
         for person_id in people:
             for counter in counters:
@@ -168,6 +172,10 @@ class ObjectiveBuilder:
 
                 actual_min = base_min + delta - already
                 actual_max = base_max + delta - already
+                override = overrides.get(person_id, {}).get(counter)
+                if override is not None:
+                    actual_min = override[0] - already
+                    actual_max = override[1] - already
                 # Integer target - CP-SAT variable bounds must be integers
                 target = (actual_min + actual_max) // 2
 

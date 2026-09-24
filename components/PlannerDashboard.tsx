@@ -29,6 +29,7 @@ import { FillGapsSummary } from './FillGapsSummary';
 import { SwapRequestsOverview } from './SwapRequestsOverview';
 import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { FellowBadge } from './FellowBadge';
 
 interface PersonProgress {
   person_id: string;
@@ -38,6 +39,7 @@ interface PersonProgress {
   has_parttime_patterns: boolean;
   blocked_days_count: number;
   has_absences: boolean;
+  is_fellow: number;
 }
 
 interface ImbalanceItem {
@@ -448,6 +450,34 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     }
   };
 
+  // The planner may always change who is a fellow (lib/fellows.ts); the
+  // participant only until the deadline.
+  const handleToggleFellow = async (personId: string, fellow: boolean) => {
+    setSubmittingFor(personId);
+    setActionError(null);
+    // Ticked at once, put back if saving fails (the reload below re-sorts).
+    const setLocal = (value: boolean) =>
+      setProgress((prev) => prev.map((p) => (p.person_id === personId ? { ...p, is_fellow: value ? 1 : 0 } : p)));
+    setLocal(fellow);
+    try {
+      const res = await fetch(`/api/person/${personId}/fellow`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_id: periodId, fellow }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error?.message || 'Aanpassen mislukt');
+      }
+      await loadData();
+    } catch (err) {
+      setLocal(!fellow);
+      setActionError({ personId, message: err instanceof Error ? err.message : 'Aanpassen mislukt' });
+    } finally {
+      setSubmittingFor(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="card p-8 text-center">
@@ -687,6 +717,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                 <th className="px-3 py-2 text-left font-semibold">Status</th>
                 <th className="px-3 py-2 text-center font-semibold">Geblokkeerde dagen</th>
                 <th className="px-3 py-2 text-center font-semibold">Deeltijd</th>
+                <th className="px-3 py-2 text-center font-semibold">Fellow</th>
                 <th className="px-3 py-2 text-center font-semibold">Acties</th>
               </tr>
             </thead>
@@ -701,6 +732,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                     >
                       {person.codenaam}
                     </Link>
+                    {person.is_fellow ? <FellowBadge /> : null}
                   </td>
                   <td className="px-3 py-2">
                     {!person.submission_status || person.submission_status === 'NIET_BEGONNEN' ? (
@@ -724,6 +756,17 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                     ) : (
                       <span className="text-neutral-400">−</span>
                     )}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={Boolean(person.is_fellow)}
+                      disabled={submittingFor === person.person_id}
+                      onChange={(e) => handleToggleFellow(person.person_id, e.target.checked)}
+                      aria-label={`${person.codenaam} is fellow`}
+                      title="Fellow: weekenden geblokkeerd voor de AIOS-ondersteuning op zaterdag"
+                    />
                   </td>
                   <td className="px-3 py-2 text-center">
                     {/* Only while preferences still matter: once the roster is

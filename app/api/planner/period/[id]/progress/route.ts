@@ -18,6 +18,7 @@ interface PersonProgress {
   has_parttime_patterns: boolean;
   blocked_days_count: number;
   has_absences: boolean;
+  is_fellow: number;
 }
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -55,7 +56,13 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
         (SELECT COUNT(*) FROM dienstrooster_availability
          WHERE person_id = p.id
          AND slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)
-         AND blocking_level = 'ABSOLUUT') as blocked_days_count,
+         AND blocking_level = 'ABSOLUUT'
+         -- A fellow's weekend blocks are shown as the "Fellow" label, not
+         -- as some forty days they blocked themselves.
+         AND fellow_blok = 0) as blocked_days_count,
+        EXISTS (
+          SELECT 1 FROM dienstrooster_period_fellow pf WHERE pf.person_id = p.id AND pf.period_id = ?
+        ) as is_fellow,
         CASE
           WHEN (
             SELECT COUNT(*) FROM dienstrooster_absence a
@@ -75,10 +82,11 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
         WHERE pm.pool_id = sp2.pool_id
           AND pm.geldig_vanaf <= sp2.eind_datum AND pm.geldig_tot >= sp2.start_datum
       )
-      ORDER BY p.codenaam ASC
+      -- Fellows together at the bottom instead of scattered among the rest.
+      ORDER BY is_fellow ASC, p.codenaam ASC
     `);
 
-    const progress = progressStmt.all(periodId, periodId, periodId, periodId) as PersonProgress[];
+    const progress = progressStmt.all(periodId, periodId, periodId, periodId, periodId) as PersonProgress[];
 
     const response: ApiSuccessResponse<PersonProgress[]> = {
       success: true,

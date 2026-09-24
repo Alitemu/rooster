@@ -51,13 +51,14 @@
 import { db } from '@/db/client';
 import {
   TELLERS,
+  computeMemberTargets,
   countSlotsByTeller,
-  resolveBands,
+  resolvePeriodBands,
   resolveRulesetConfig,
   resolveWindowWeeks,
-  scaledBandForMember,
   type BandsByTeller,
 } from '@/lib/rosterBands';
+import { getFellowIds } from '@/lib/fellows';
 import { countWindowRuleViolations } from '@/lib/windowRule';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 
@@ -140,34 +141,34 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // Band compliance, per counter, against this period's own frozen ruleset.
   // Counting a person's assignments across all counters and comparing that
   // total against a single band mixes three unrelated quotas.
+  //
+  // Each person's target comes from computeMemberTargets - the same scaling
+  // the solver applies (coverage always, deelnamefactor under NAAR_RATO,
+  // ledger delta, a fellow's weekend). Comparing against the flat band
+  // instead flagged every part-timer under NAAR_RATO, and would flag every
+  // fellow for having no weekend shifts.
   const members = db
     .prepare(
-      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
+      `SELECT p.id, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
        JOIN dienstrooster_person p ON p.id = pm.person_id
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{
     id: string;
-    deelnamefactor: number;
     geldig_vanaf: string;
     geldig_tot: string;
   }>;
 
   const config = resolveRulesetConfig(period);
-  const bands = resolveBands(config, countSlotsByTeller(periodId), members.length);
-
-  // Under NAAR_RATO, the solver (constraints.add_band_constraints) doesn't
-  // hold a part-timer to the same band as everyone else - it scales
-  // base_min/base_max by their deelnamefactor first (floor/ceil, so a
-  // band's width never collapses to 0 the way rounding both ends the same
-  // way can). This check used to always compare against the flat,
-  // full-time `bands` regardless of distribution_mode, so under NAAR_RATO
-  // it flagged *every* part-timer as "outside their band" - a roster the
-  // solver built correctly could never pass this gate, and the message
-  // it showed (adjust the band, or manually move people) couldn't
-  // actually fix that, since the real target per person was never wrong.
+  const fellows = getFellowIds(periodId);
+  const bands = resolvePeriodBands(
+    config,
+    countSlotsByTeller(periodId),
+    members.length,
+    members.filter((m) => fellows.has(m.id)).length
+  );
+  const targets = computeMemberTargets(periodId);
   const naarRato = config.distributionMode === 'NAAR_RATO';
-  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
 
   const perPerson = db
     .prepare(
@@ -183,18 +184,6 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   const counts = new Map<string, number>();
   for (const row of perPerson) counts.set(`${row.person_id}|${row.teller}`, row.count);
 
-  const ledger = db
-    .prepare(
-      `SELECT person_id, teller, SUM(delta) as total
-       FROM dienstrooster_ledger_entry
-       WHERE geldt_voor_periode_id = ?
-       GROUP BY person_id, teller`
-    )
-    .all(periodId) as Array<{ person_id: string; teller: string; total: number }>;
-
-  const deltas = new Map<string, number>();
-  for (const row of ledger) deltas.set(`${row.person_id}|${row.teller}`, row.total || 0);
-
   // Everyone in the pool, not just people who already have an assignment -
   // somebody scheduled zero times is exactly what a band's lower bound is for.
   let bandViolations = 0;
@@ -203,12 +192,12 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     if (computeCoverageFactor(member.geldig_vanaf, member.geldig_tot, period.start_datum, period.eind_datum) < 1) {
       anyPartialCoverage = true;
     }
+    const target = targets.get(member.id);
+    if (!target) continue;
     for (const teller of TELLERS) {
-      const key = `${member.id}|${teller}`;
-      const [min, max] = scaledBandForMember(bands, teller, member, period, distributionMode);
-      const delta = deltas.get(key) || 0;
-      const count = counts.get(key) || 0;
-      if (count < min + delta || count > max + delta) bandViolations++;
+      const { min, max } = target[teller];
+      const count = counts.get(`${member.id}|${teller}`) || 0;
+      if (count < min || count > max) bandViolations++;
     }
   }
 
@@ -216,6 +205,9 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     const scalingNotes = [
       anyPartialCoverage ? 'Voor wie een deel van de periode meedraait, is het bereik automatisch naar rato verlaagd.' : null,
       naarRato ? 'Bij naar-rato-verdeling is het bereik geschaald naar ieders deelnamefactor.' : null,
+      fellows.size > 0
+        ? 'Fellows tellen niet mee voor de weekenden. Het weekendbereik van de anderen is daarom verhoogd.'
+        : null,
     ].filter((note): note is string => note !== null);
 
     // A warning, not an issue: going over the band max can only be a

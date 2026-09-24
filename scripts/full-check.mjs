@@ -250,6 +250,31 @@ async function main() {
   rec('Notifications', eq((await req('GET', `/api/person/${s1.id}/notifications`, { jar: person })).status, 200));
   rec('Swap requests list', eq((await req('GET', `/api/person/${s1.id}/swap-requests`, { jar: person })).status, 200));
 
+  // ---------- FELLOW ----------
+  // Persoon-02 supports the AIOS on Saturdays this period: their weekends
+  // are blocked and they don't count for the weekend band (lib/fellows.ts).
+  console.log('\n━━ FELLOW ━━');
+  const fellowJar = {};
+  await req('GET', `/api/auth/verify-link?token=${mintLink(s2.id)}`, { jar: fellowJar });
+  rec('Participant ticks "Ik ben fellow"', eq((await req('PUT', `/api/person/${s2.id}/fellow`, {
+    jar: fellowJar, body: { period_id: period.id, fellow: true },
+  })).status, 200));
+  const weekendDays = db.prepare(
+    `SELECT COUNT(*) c FROM dienstrooster_shift_slot WHERE period_id=? AND strftime('%w', datum) IN ('0','6')`
+  ).get(period.id).c;
+  const unblockedWeekend = db.prepare(`
+    SELECT COUNT(*) c FROM dienstrooster_shift_slot s
+    WHERE s.period_id=? AND strftime('%w', s.datum) IN ('0','6')
+      AND NOT EXISTS (SELECT 1 FROM dienstrooster_availability a
+                      WHERE a.person_id=? AND a.slot_id=s.id AND a.blocking_level='ABSOLUUT')`).get(period.id, s2.id).c;
+  rec('…every weekend day of the period is blocked for them', weekendDays > 0 && unblockedWeekend === 0,
+      `${weekendDays} weekend days, ${unblockedWeekend} open`);
+  const fellowSummary = await req('GET', `/api/planner/period/${period.id}/fellows`, { jar: planner });
+  const wk = fellowSummary.json?.data?.weekend;
+  rec('…and the others\' weekend band goes up', fellowSummary.status === 200 &&
+      fellowSummary.json?.data?.fellows?.length === 1 && wk?.bereik?.[1] > wk?.bereik_zonder_fellows?.[1],
+      `${JSON.stringify(wk?.bereik_zonder_fellows)} → ${JSON.stringify(wk?.bereik)}`);
+
   // ---------- PLANNER MONITORING ----------
   console.log('\n━━ PLANNER MONITORING ━━');
   rec('Dashboard', eq((await req('GET', `/api/planner/period/${period.id}/dashboard`, { jar: planner })).status, 200));
@@ -292,6 +317,12 @@ async function main() {
     JOIN dienstrooster_shift_slot s2 ON s2.id=a2.slot_id
     WHERE a1.schedule_version_id=? AND s1.iso_jaar=s2.iso_jaar AND s1.iso_week=s2.iso_week AND s1.id<>s2.id`).get(period.id);
   rec('HARD RULE: no person twice in one ISO week', windowViol.c === 0, `${windowViol.c} violations`);
+
+  const fellowWeekend = db.prepare(`
+    SELECT COUNT(*) c FROM dienstrooster_assignment a
+    JOIN dienstrooster_shift_slot s ON s.id=a.slot_id
+    WHERE a.schedule_version_id=? AND a.person_id=? AND strftime('%w', s.datum) IN ('0','6')`).get(period.id, s2.id);
+  rec('FELLOW: the solver gives a fellow no weekend shift', fellowWeekend.c === 0, `${fellowWeekend.c} weekend shifts`);
 
   // The window rule proper - "no second shift within windowWeeks", which is
   // stricter than the same-week check above and is the rule the whole

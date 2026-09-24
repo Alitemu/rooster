@@ -35,6 +35,7 @@ interface SlotPreference {
   slot_id: string;
   level: BlockLevel;
   source: string | null; // MANUAL, PARTTIME, ABSENCE, or null when level is null
+  fellow?: boolean; // a weekend block from "Ik ben fellow" - still the person's to release
 }
 
 interface DayPreference {
@@ -169,6 +170,7 @@ export function PreferencesCalendar({
           slot_id: slot.slot_id,
           level: slot.blocking_level,
           source: slot.source,
+          fellow: Boolean(slot.fellow_blok),
         });
       }
 
@@ -676,7 +678,11 @@ export function PreferencesCalendar({
                                       disabled={isSaving || readOnly}
                                       className={`w-full h-8 rounded text-[20px] leading-none font-semibold transition-all
                                         ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
-                                      title={`${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'} (rechtsklik voor opties)`}
+                                      title={
+                                        slot.fellow && level === 'ABSOLUUT'
+                                          ? `${COUNTER_LABEL[counter] || counter}: geblokkeerd omdat je fellow bent (klik om vrij te geven)`
+                                          : `${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'} (rechtsklik voor opties)`
+                                      }
                                     >
                                       {counter[0]}{level ? GLYPH[level] : AVAILABLE_GLYPH}
                                     </button>

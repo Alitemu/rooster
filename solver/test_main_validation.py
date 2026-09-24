@@ -127,3 +127,16 @@ def test_zero_benodigd_aantal_personen_is_rejected():
 
 def test_positive_benodigd_aantal_personen_is_accepted():
     Slot(**_slot_kwargs(benodigd_aantal_personen=2))  # must not raise
+
+
+def _input(**extra):
+    return SolverInput(period_id='p1', slots=[], person_preferences={}, people=['a'], rules=RuleSet(), balances={}, **extra)
+
+
+def test_band_override_must_be_ordered_and_nonnegative():
+    """A fellow's weekend override (lib/fellows.ts) is a band like any other."""
+    with pytest.raises(ValidationError):
+        _input(band_overrides={'a': {'WEEKEND': (2, 1)}})
+    with pytest.raises(ValidationError):
+        _input(band_overrides={'a': {'WEEKEND': (-1, 1)}})
+    _input(band_overrides={'a': {'WEEKEND': (0, 1)}})  # must not raise

@@ -10,7 +10,14 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
-import { resolveBands, resolveRulesetConfig, type Teller } from '@/lib/rosterBands';
+import {
+  fellowWeekendBand,
+  resolvePeriodBands,
+  resolveRulesetConfig,
+  scaledBandForMember,
+  type Teller,
+} from '@/lib/rosterBands';
+import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
@@ -328,7 +335,25 @@ async function runGeneration(args: {
     for (const s of allSlots) {
       if (s.teller in slotCountByTeller) slotCountByTeller[s.teller as Teller]++;
     }
-    const bands = resolveBands(config, slotCountByTeller, people.length);
+    // Fellows (lib/fellows.ts) don't count for the weekend: the others'
+    // WEEKEND band goes up (resolvePeriodBands), and each fellow gets a
+    // band of their own through band_overrides - 0 up to the weekend days
+    // they left unblocked, no ledger delta.
+    const fellowIds = getFellowIds(periodId);
+    const bands = resolvePeriodBands(
+      config,
+      slotCountByTeller,
+      people.length,
+      people.filter((p) => fellowIds.has(p)).length
+    );
+    const releasedByFellow = releasedWeekendDays(periodId);
+    const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
+    const bandOverrides: Record<string, { WEEKEND: [number, number] }> = {};
+    for (const m of poolMembers) {
+      if (!fellowIds.has(m.person_id)) continue;
+      const scaled = scaledBandForMember(bands, 'WEEKEND', m, period, distributionMode);
+      bandOverrides[m.person_id] = { WEEKEND: fellowWeekendBand(scaled, releasedByFellow.get(m.person_id) ?? 0) };
+    }
 
     // Fetch the confirmed carry-over from the previous period (the "Prior
     // Assignments" screen, gated above by overloop_bevestigd_op) - without
@@ -479,6 +504,7 @@ async function runGeneration(args: {
       })),
       participation_factors: participationFactors,
       coverage_factors: coverageFactors,
+      band_overrides: bandOverrides,
       ...(timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}),
     };
 

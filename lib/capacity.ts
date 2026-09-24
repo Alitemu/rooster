@@ -210,3 +210,42 @@ export function periodsToCatchUp(
 
   return Math.ceil(shiftsNeeded / shiftsPerPeriod);
 }
+
+export interface WeekendCapacityResult {
+  /** Whether the weekend days can be covered with this window. */
+  passed: boolean;
+  /**
+   * The largest window (in weeks) that does fit, when `window` doesn't;
+   * null when it already fits, or when not even a window of 1 week does.
+   */
+  suggestedWindow: number | null;
+}
+
+/**
+ * Can the weekend days be covered by the people who do weekends (everyone
+ * but the fellows, lib/fellows.ts) with this weekend/feestdag window?
+ *
+ * The same two formulas as checkCapacity, for the weekend alone:
+ * - total: each person does at most floor(weeks / window) of them, so
+ *   people * floor(weeks / window) >= weekend slots;
+ * - distinct people: a weekend has two days, so any `window` consecutive
+ *   weeks need 2 * window different people.
+ *
+ * With fewer people for the weekend, the window usually has to go down so
+ * each of them can do more; suggestedWindow is the largest that fits.
+ * A window of 0 means no minimum gap: always fits.
+ */
+export function checkWeekendCapacity(
+  weeks: number,
+  window: number,
+  weekendPeople: number,
+  weekendSlots: number
+): WeekendCapacityResult {
+  const fits = (w: number) =>
+    w <= 0 || (weekendPeople >= 2 * w && weekendPeople * Math.floor(weeks / w) >= weekendSlots);
+  if (fits(window)) return { passed: true, suggestedWindow: null };
+  for (let w = window - 1; w >= 1; w--) {
+    if (fits(w)) return { passed: false, suggestedWindow: w };
+  }
+  return { passed: false, suggestedWindow: null };
+}

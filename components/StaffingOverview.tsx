@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { FellowBadge } from './FellowBadge';
 
 interface StaffingRow {
   person_id: string;
@@ -19,6 +20,7 @@ interface StaffingRow {
   WEEKEND: number;
   FEESTDAG: number;
   totaal: number;
+  fellow: boolean;
 }
 
 interface StaffingTotals {
@@ -134,9 +136,21 @@ export function StaffingOverview({ periodId }: Props) {
         <tbody>
           {staff.map((s) => (
             <tr key={s.person_id} className="border-b border-neutral-100">
-              <td className="px-4 py-2 whitespace-nowrap">{s.codenaam}</td>
+              <td className="px-4 py-2 whitespace-nowrap">
+                {s.codenaam}
+                {s.fellow && <FellowBadge />}
+              </td>
               <td className="px-4 py-2"><CountBar value={s.AVOND} max={max.AVOND} counter="AVOND" /></td>
-              <td className="px-4 py-2"><CountBar value={s.WEEKEND} max={max.WEEKEND} counter="WEEKEND" /></td>
+              <td className="px-4 py-2">
+                {/* A fellow has no weekends: "n.v.t." rather than a 0 that looks like a gap. */}
+                {s.fellow && s.WEEKEND === 0 ? (
+                  <span className="text-neutral-500" title="Fellow: geen weekenddiensten">
+                    n.v.t.
+                  </span>
+                ) : (
+                  <CountBar value={s.WEEKEND} max={max.WEEKEND} counter="WEEKEND" />
+                )}
+              </td>
               <td className="px-4 py-2"><CountBar value={s.FEESTDAG} max={max.FEESTDAG} counter="FEESTDAG" /></td>
               <td className="px-4 py-2 text-right font-medium">{s.totaal}</td>
             </tr>

@@ -10,6 +10,7 @@
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
+import { FellowToggle } from '@/components/FellowToggle';
 import { PartTimeCheckStep } from '@/components/PartTimeCheckStep';
 import { ParttimePatternEditor } from '@/components/ParttimePatternEditor';
 import { AbsenceManager, type Absence } from '@/components/AbsenceManager';
@@ -51,7 +52,7 @@ interface RosterData {
     total_assignments: number;
     by_shift_type: Record<string, number>;
     balances: Record<string, number>;
-    target_bands: Record<string, { min: number; max: number }>;
+    target_bands: Record<string, { min: number; max: number; fellow?: boolean }>;
   };
 }
 
@@ -148,6 +149,8 @@ function PersonalLinkPageContent() {
     total: 0,
   });
   const [voorkeurDays, setVoorkeurDays] = useState<VoorkeurDaysSummary>({ total: 0 });
+  // Bumped when "Ik ben fellow" changes, so the calendar reloads the weekend blocks it placed.
+  const [calendarKey, setCalendarKey] = useState(0);
   const [softBlockViolations, setSoftBlockViolations] = useState<SoftBlockViolation[]>([]);
   // Separate from softBlockViolations (LIEVER_NIET, a soft preference) -
   // this is an ABSOLUUT block the planner knowingly overrode by hand (see
@@ -559,6 +562,11 @@ function PersonalLinkPageContent() {
               target_min: rosterData.summary.target_bands['WEEKEND']?.min ?? 0,
               target_max: rosterData.summary.target_bands['WEEKEND']?.max ?? 0,
               message: `${rosterData.summary.by_shift_type['WEEKEND'] || 0} weekenddiensten toegewezen`,
+              // A fellow with no weekend shifts has no weekend target at all;
+              // one who released days and got some sees their count as usual.
+              fellow:
+                Boolean(rosterData.summary.target_bands['WEEKEND']?.fellow) &&
+                !rosterData.summary.by_shift_type['WEEKEND'],
             },
             {
               counter: 'FEESTDAG',
@@ -642,7 +650,13 @@ function PersonalLinkPageContent() {
 
       {period.status !== 'GEPUBLICEERD' && currentStep === 'calendar' && (
         <div className="space-y-4">
+          <FellowToggle
+            personId={personId}
+            periodId={period.id}
+            onChanged={() => setCalendarKey((k) => k + 1)}
+          />
           <PreferencesCalendar
+            key={calendarKey}
             personId={personId}
             periodId={period.id}
             readOnly={inputClosed}

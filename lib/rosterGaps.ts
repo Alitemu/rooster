@@ -14,6 +14,7 @@
 import { db } from '@/db/client';
 import { resolveRulesetConfig, resolveWindowWeeks, computeBandStatusByPerson, type Teller } from '@/lib/rosterBands';
 import { getWindowConflictingPersonIds } from '@/lib/windowRule';
+import { getFellowIds } from '@/lib/fellows';
 
 /**
  * Why a candidate needs a second look before being picked - never a
@@ -27,6 +28,10 @@ import { getWindowConflictingPersonIds } from '@/lib/windowRule';
  *  - PARTTIME: this is a part-time-free day for them (ABSOLUUT block
  *    sourced from a part-time pattern) - same strength as GEBLOKKEERD,
  *    just a different reason worth surfacing separately.
+ *  - FELLOW: a weekend day blocked because they are a fellow this period
+ *    (lib/fellows.ts) - they support the AIOS on Saturdays. A weekend day
+ *    a fellow released themselves is not this: it falls through to
+ *    whatever they marked, like anyone else's.
  *  - VENSTERBLOK: would violate the window rule (derived from their other
  *    assignments in this period - see lib/windowRule.ts) - a real
  *    correctness concern, so it still outranks a same-slot preference:
@@ -44,6 +49,7 @@ export type EligibilityCategory =
   | 'LIEVER_NIET'
   | 'VENSTERBLOK'
   | 'PARTTIME'
+  | 'FELLOW'
   | 'GEBLOKKEERD';
 
 export interface EligiblePerson {
@@ -61,6 +67,8 @@ export interface EligiblePerson {
   // it deliberately - it just stops them from doing it blindly.
   band_count: number;
   band_max: number;
+  /** A fellow this period, whatever this slot's category (lib/fellows.ts). */
+  fellow: boolean;
 }
 
 export interface UnfilledSlot {
@@ -74,17 +82,29 @@ export interface UnfilledSlot {
   eligible_people: EligiblePerson[];
 }
 
-function categorize(
-  slotPreference: { level: string; source: string } | undefined,
-  windowConflict: boolean
-): EligibilityCategory {
+interface SlotPreference {
+  level: string;
+  source: string;
+  fellow_blok: number;
+}
+
+function categorize(slotPreference: SlotPreference | undefined, windowConflict: boolean): EligibilityCategory {
   if (slotPreference?.level === 'ABSOLUUT') {
+    if (slotPreference.fellow_blok) return 'FELLOW';
     return slotPreference.source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD';
   }
   if (windowConflict) return 'VENSTERBLOK';
   if (slotPreference?.level === 'LIEVER_NIET') return 'LIEVER_NIET';
   if (slotPreference?.level === 'VOORKEUR') return 'VOORKEUR';
   return 'BESCHIKBAAR';
+}
+
+/**
+ * Fellows together at the bottom of every candidate list, each part still
+ * in codenaam order, instead of scattered among the rest.
+ */
+function fellowsLast<T extends { id: string }>(people: T[], fellows: Set<string>): T[] {
+  return [...people.filter((p) => !fellows.has(p.id)), ...people.filter((p) => fellows.has(p.id))];
 }
 
 /** Same resolution generate-roster's solver request uses - see resolveWindowWeeks. */
@@ -198,12 +218,13 @@ export function getEligiblePeopleForSlot(
     (
       db
         .prepare(
-          `SELECT person_id, blocking_level as level, source FROM dienstrooster_availability
+          `SELECT person_id, blocking_level as level, source, fellow_blok FROM dienstrooster_availability
            WHERE blocking_level IS NOT NULL AND slot_id = ?`
         )
-        .all(slotId) as Array<{ person_id: string; level: string; source: string }>
-    ).map((r) => [r.person_id, { level: r.level, source: r.source }])
+        .all(slotId) as Array<SlotPreference & { person_id: string }>
+    ).map((r) => [r.person_id, r])
   );
+  const fellows = getFellowIds(periodId);
 
   const windowWeeks = getWindowWeeks(period);
   const windowConflicting = slot
@@ -213,7 +234,7 @@ export function getEligiblePeopleForSlot(
   const bandStatus = computeBandStatusByPerson(periodId);
   const teller = slot?.teller as Teller | undefined;
 
-  return poolMembers
+  return fellowsLast(poolMembers, fellows)
     .filter((p) => p.id !== excludePersonId)
     .map((p) => {
       const status = teller ? bandStatus.get(p.id)?.[teller] : undefined;
@@ -222,6 +243,7 @@ export function getEligiblePeopleForSlot(
         category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
         band_count: status?.count ?? 0,
         band_max: status?.max ?? 0,
+        fellow: fellows.has(p.id),
       };
     });
 }
@@ -315,22 +337,24 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
   const placeholders = gapSlotIds.map(() => '?').join(',');
   const preferenceRows = db
     .prepare(
-      `SELECT person_id, slot_id, blocking_level as level, source FROM dienstrooster_availability
+      `SELECT person_id, slot_id, blocking_level as level, source, fellow_blok FROM dienstrooster_availability
        WHERE blocking_level IS NOT NULL AND slot_id IN (${placeholders})`
     )
-    .all(...gapSlotIds) as Array<{ person_id: string; slot_id: string; level: string; source: string }>;
+    .all(...gapSlotIds) as Array<SlotPreference & { person_id: string; slot_id: string }>;
 
-  const preferenceBySlot = new Map<string, Map<string, { level: string; source: string }>>();
+  const preferenceBySlot = new Map<string, Map<string, SlotPreference>>();
   for (const row of preferenceRows) {
     if (!preferenceBySlot.has(row.slot_id)) preferenceBySlot.set(row.slot_id, new Map());
-    preferenceBySlot.get(row.slot_id)!.set(row.person_id, { level: row.level, source: row.source });
+    preferenceBySlot.get(row.slot_id)!.set(row.person_id, row);
   }
+  const fellows = getFellowIds(periodId);
+  const members = fellowsLast(poolMembers, fellows);
 
   const windowWeeks = getWindowWeeks(period);
   const bandStatus = computeBandStatusByPerson(periodId);
 
   return gaps.map((slot) => {
-    const slotPreference = preferenceBySlot.get(slot.id) ?? new Map<string, { level: string; source: string }>();
+    const slotPreference = preferenceBySlot.get(slot.id) ?? new Map<string, SlotPreference>();
     const windowConflicting = getWindowConflictingPersonIds(
       periodId,
       slot.iso_jaar,
@@ -349,13 +373,14 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       benodigd_aantal_personen: required,
       assigned_count: slot.assigned_count,
       shortfall: required - slot.assigned_count,
-      eligible_people: poolMembers.map((p) => {
+      eligible_people: members.map((p) => {
         const status = bandStatus.get(p.id)?.[teller];
         return {
           ...p,
           category: categorize(slotPreference.get(p.id), windowConflicting.has(p.id)),
           band_count: status?.count ?? 0,
           band_max: status?.max ?? 0,
+          fellow: fellows.has(p.id),
         };
       }),
     };

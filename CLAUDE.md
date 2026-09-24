@@ -275,6 +275,44 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   sent (a historical record) and sends a new one telling participants the
   publication was withdrawn.
 
+## Fellows
+
+Fellows support the AIOS on the voorwacht on Saturdays, so they don't do
+weekends. Per period only (`dienstrooster_period_fellow`), nothing carries
+over.
+
+- "Ik ben fellow" on the participant's preferences step (FellowToggle,
+  `PUT /api/person/[id]/fellow`), until the deadline like any preference;
+  the planner can always change it ("Status voorkeuren", audit-logged).
+- Ticking blocks every Saturday and Sunday of the period, feestdagen on a
+  weekend included, never a weekday feestdag, and never a day the person
+  marked themselves (lib/fellows.ts). The rows are ordinary ABSOLUUT
+  availability with `fellow_blok = 1` (source stays MANUAL: the CHECK on
+  `source` predates this), so solver, warnings and publication check need
+  nothing special. Unticking removes only `fellow_blok` rows and re-syncs
+  part-time patterns and absences; setting such a day by hand clears the
+  flag (slot route), an absence takes it over. Never counted against a
+  block budget.
+- A fellow may release weekend days (clear or mark them). Bands: fellows
+  don't count for WEEKEND, so the others' band goes up at generation
+  (lib/rosterBands.ts `resolvePeriodBands`: a configured band scaled by
+  people / (people - fellows), floor/ceil; otherwise the default over the
+  non-fellows). A fellow's own WEEKEND band is `[0, released days]`,
+  capped at the others' max, without the ledger (`fellowWeekendBand`),
+  sent to the solver as `band_overrides` - an optional SolverInput field
+  that replaces a person's scaled band and delta for one counter.
+  `computeMemberTargets` is the one per-person target (publication check,
+  band room in pick lists, "Jouw rooster", invitation indication).
+  Carry-over: a fellow's weekend saldo waits; shifts taken anyway pay off
+  debt but never create credit (lib/carryOver.ts).
+- Planner views: "Fellow" label in Status voorkeuren, Dienstdoende
+  (weekend "n.v.t."), and every candidate list; fellows sorted to the
+  bottom; own category FELLOW on a fellow-blocked weekend day. The
+  generation dialog shows the raised weekend band and whether the
+  weekend/feestdag window still fits the non-fellows
+  (`checkWeekendCapacity`, lib/fellowSummary.ts) - the window itself stays
+  the planner's to set.
+
 ## Capacity Check (Live)
 
 Two formulas, both checked before generation:

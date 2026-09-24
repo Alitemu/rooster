@@ -202,9 +202,12 @@ test.describe('Roster Publication Workflow - E2E', () => {
       expect(expected).toBeGreaterThan(0);
 
       // Balance summary is rendered in words, never as a raw signed number
-      // or a [min,max] pair (CLAUDE.md) - "je krijgt 8 of 9 avonddiensten".
+      // or a [min,max] pair (CLAUDE.md) - "ongeveer 9 avonddiensten".
       await expect(page.getByText('Overzicht saldo')).toBeVisible();
-      await expect(page.getByText(/Streefbereik: je krijgt \d+( of \d+)? \w+diensten/).first()).toBeVisible();
+      await expect(page.getByText('We streven ernaar de diensten zo eerlijk mogelijk te verdelen.')).toBeVisible();
+      await expect(
+        page.getByText(/Voor jou komt dat neer op (ongeveer \d+ \w+dienst(en)?|geen \w+diensten)\./).first()
+      ).toBeVisible();
     } finally {
       await context.close();
     }

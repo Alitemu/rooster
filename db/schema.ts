@@ -533,10 +533,35 @@ export const availability = sqliteTable(
     }).notNull(), // How the blocking was created
     bron_pattern_id: text('bron_pattern_id').references(() => parttimePattern.id), // If source=PARTTIME
     bron_absence_id: text('bron_absence_id').references(() => absence.id), // If source=ABSENCE
+    // A weekend block placed because this person ticked "Ik ben fellow"
+    // for the period (lib/fellows.ts). Stored as source MANUAL - it is the
+    // person's own choice, and the source CHECK predates fellows - with
+    // this flag so unticking removes exactly these rows and nothing the
+    // person marked themselves. Setting the day by hand clears it.
+    fellow_blok: integer('fellow_blok', { mode: 'boolean' }).default(false).notNull(),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   },
   (table) => ({
     uniq: uniqueIndex('availability_uniq').on(table.person_id, table.slot_id),
+  })
+);
+
+/**
+ * Who is a fellow in a period: they support the AIOS on the voorwacht on
+ * Saturdays, so their weekends are blocked and they don't count for the
+ * weekend band (lib/fellows.ts, lib/rosterBands.ts). Per period only:
+ * nothing carries over to the next one.
+ */
+export const periodFellow = sqliteTable(
+  'dienstrooster_period_fellow',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id),
+    person_id: text('person_id').notNull().references(() => person.id),
+    aangemaakt_op: text('aangemaakt_op').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('period_fellow_uniq').on(table.period_id, table.person_id),
   })
 );
 

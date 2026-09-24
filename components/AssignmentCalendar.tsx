@@ -40,7 +40,14 @@ interface Slot {
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see AssignmentGrid.tsx/
 // FillGapsPanel.tsx, which each keep their own copy of this same constant
 // rather than a shared module (matches the existing convention here).
-type EligibilityCategory = 'BESCHIKBAAR' | 'VOORKEUR' | 'LIEVER_NIET' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
+type EligibilityCategory =
+  | 'BESCHIKBAAR'
+  | 'VOORKEUR'
+  | 'LIEVER_NIET'
+  | 'VENSTERBLOK'
+  | 'PARTTIME'
+  | 'FELLOW'
+  | 'GEBLOKKEERD';
 
 interface EligiblePerson {
   id: string;
@@ -48,6 +55,7 @@ interface EligiblePerson {
   category: EligibilityCategory;
   band_count: number;
   band_max: number;
+  fellow?: boolean;
 }
 
 // The solver itself now never assigns anyone past their streefbereik (see
@@ -56,7 +64,10 @@ interface EligiblePerson {
 // shown next to every candidate regardless of category, not a filter.
 function bandLabel(p: EligiblePerson): string {
   const suffix = p.band_count >= p.band_max ? ', vol' : '';
-  return `${p.codenaam} (${p.band_count} van ${p.band_max}${suffix})`;
+  // Fellows (lib/fellows.ts) are labelled in every list; an <option> can
+  // only hold text, so the label is part of it.
+  const naam = p.fellow ? `${p.codenaam} · Fellow` : p.codenaam;
+  return `${naam} (${p.band_count} van ${p.band_max}${suffix})`;
 }
 
 interface Props {
@@ -97,6 +108,7 @@ const CATEGORY_ORDER: EligibilityCategory[] = [
   'LIEVER_NIET',
   'VENSTERBLOK',
   'PARTTIME',
+  'FELLOW',
   'GEBLOKKEERD',
 ];
 
@@ -106,6 +118,7 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
   PARTTIME: 'Part-time dag',
+  FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
 

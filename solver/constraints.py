@@ -379,7 +379,8 @@ class ConstraintBuilder:
         distribution_mode: str = 'GELIJK',
         participation_factors: Optional[dict[str, float]] = None,
         coverage_factors: Optional[dict[str, float]] = None,
-        already_assigned: Optional[dict[str, dict[str, int]]] = None
+        already_assigned: Optional[dict[str, dict[str, int]]] = None,
+        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None
     ) -> dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]]:
         """
         Constraint: Each person must have assignments in band range per counter.
@@ -439,9 +440,16 @@ class ConstraintBuilder:
         cap applies unconditionally, in every objective_mode, since it's a
         hard rule now rather than a cost to trade off.
 
+        band_overrides (person -> {counter: (min, max)}) replaces that
+        person's band for that counter outright: no coverage or NAAR_RATO
+        scaling and no ledger delta, only the already_assigned offset. Used
+        for a fellow's weekend (lib/fellows.ts on the Next.js side): 0 up
+        to the weekend days they left unblocked themselves.
+
         Returns: dict[(person_id, counter), (under IntVar, over IntVar)]
         """
         self.violations['band_limit'] = 0
+        overrides = band_overrides or {}
         band_slack_vars: dict[tuple[str, str], tuple[cp_model.IntVar, cp_model.IntVar]] = {}
         factors = participation_factors or {}
         coverage = coverage_factors or {}
@@ -476,6 +484,10 @@ class ConstraintBuilder:
                 already = already_assigned.get(person_id, {}).get(counter, 0) if already_assigned else 0
                 actual_min = base_min + delta - already
                 actual_max = base_max + delta - already
+                override = overrides.get(person_id, {}).get(counter)
+                if override is not None:
+                    actual_min = override[0] - already
+                    actual_max = override[1] - already
 
                 # Slots matching this counter
                 counter_vars = [

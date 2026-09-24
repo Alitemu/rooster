@@ -28,6 +28,7 @@ interface BalanceDisplay {
   target_min: number;
   target_max: number;
   message: string; // e.g., "1 fewer evening shifts" or "8 or 9 evening shifts"
+  fellow?: boolean; // a fellow's weekend (lib/fellows.ts): no target
 }
 
 interface SoftBlockViolation {
@@ -105,14 +106,22 @@ export function PersonalRosterView({
     FEESTDAG: 'feestdagdiensten',
   };
 
-  // "8 of 9 avonddiensten" rather than a raw "8–9" range or tuple - CLAUDE.md
-  // is explicit that a balance/band is always expressed in words, never as
-  // a bare number or [min,max] pair.
-  const targetRangeLabel = (balance: BalanceDisplay): string => {
-    const noun = counterPluralLower[balance.counter] || balance.counter.toLowerCase();
-    return balance.target_min === balance.target_max
-      ? `${balance.target_min} ${noun}`
-      : `${balance.target_min} of ${balance.target_max} ${noun}`;
+  const counterSingularLower: Record<string, string> = {
+    AVOND: 'avonddienst',
+    WEEKEND: 'weekenddienst',
+    FEESTDAG: 'feestdagdienst',
+  };
+
+  // "ongeveer 9 avonddiensten": the top of the streefbereik, in words and
+  // explicitly approximate. The solver aims for the range, not a promise
+  // of an exact number (CLAUDE.md: never a raw range or [min,max] pair).
+  const targetLabel = (balance: BalanceDisplay): string => {
+    if (balance.target_max <= 0) return `geen ${counterPluralLower[balance.counter] || balance.counter.toLowerCase()}`;
+    const noun =
+      balance.target_max === 1
+        ? counterSingularLower[balance.counter] || balance.counter.toLowerCase()
+        : counterPluralLower[balance.counter] || balance.counter.toLowerCase();
+    return `ongeveer ${balance.target_max} ${noun}`;
   };
 
   const softBlockSet = new Set(
@@ -135,6 +144,7 @@ export function PersonalRosterView({
       {/* Balance summary */}
       <div className="card p-6 space-y-4">
         <h3 className="font-bold text-lg">Overzicht saldo</h3>
+        <p className="text-sm text-neutral-600">We streven ernaar de diensten zo eerlijk mogelijk te verdelen.</p>
         <div className="space-y-3">
           {balances.map((balance) => (
             <div key={balance.counter} className="flex items-start gap-4 pb-3 border-b last:border-b-0">
@@ -146,7 +156,9 @@ export function PersonalRosterView({
                   {balance.message}
                 </p>
                 <p className="text-xs text-neutral-600">
-                  Streefbereik: je krijgt {targetRangeLabel(balance)}
+                  {balance.fellow
+                    ? 'n.v.t. (fellow)'
+                    : `Voor jou komt dat neer op ${targetLabel(balance)}.`}
                 </p>
               </div>
             </div>

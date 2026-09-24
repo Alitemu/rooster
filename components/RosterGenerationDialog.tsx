@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { FellowWeekendNotice } from './FellowWeekendNotice';
 
 // Native fetch() throws a plain TypeError with a browser-specific, English,
 // technical message ("Failed to fetch", "NetworkError when attempting to
@@ -696,6 +697,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       Het kleinste van deze twee geldt ook tussen een avonddienst en een weekend-
                       of feestdagdienst.
                     </p>
+                    <FellowWeekendNotice periodId={periodId} vensterWeekend={ruleset.windowWeeksWeekendFeestdag} />
                     <div className="grid grid-cols-3 gap-3">
                       {(['AVOND', 'WEEKEND', 'FEESTDAG'] as const).map((counter) => {
                         const key = `band${counter.charAt(0)}${counter.slice(1).toLowerCase()}` as

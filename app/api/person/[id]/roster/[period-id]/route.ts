@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse } from '@/lib/api-errors';
-import { resolveRulesetConfig, resolveBands, countSlotsByTeller, TELLERS, type Teller } from '@/lib/rosterBands';
+import { computeMemberTargets, TELLERS, type Teller } from '@/lib/rosterBands';
 
 export async function GET(
   request: NextRequest,
@@ -112,45 +112,16 @@ export async function GET(
     // The target band shown to the participant must be the exact same one
     // the solver actually enforced when building this roster - not a
     // separately-eyeballed number that could quietly disagree with it.
-    const config = resolveRulesetConfig(period);
-    const slotCountByTeller = countSlotsByTeller(periodId);
-    const activePeople = db
-      .prepare(
-        `SELECT COUNT(*) as count FROM dienstrooster_pool_membership pm
-         JOIN dienstrooster_person p ON p.id = pm.person_id
-         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
-      )
-      .get(period.pool_id, period.eind_datum, period.start_datum) as { count: number };
-    const baseBands = resolveBands(config, slotCountByTeller, activePeople.count);
-
-    const membership = db
-      .prepare(
-        `SELECT deelnamefactor FROM dienstrooster_pool_membership
-         WHERE pool_id = ? AND person_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
-      )
-      .get(period.pool_id, personId, period.eind_datum, period.start_datum) as
-      | { deelnamefactor: number }
-      | undefined;
-    const factor = membership?.deelnamefactor ?? 1;
-    const naarRato = config.distributionMode === 'NAAR_RATO';
-
-    const targetBands: Record<Teller, { min: number; max: number }> = {
-      AVOND: { min: 0, max: 0 },
-      WEEKEND: { min: 0, max: 0 },
-      FEESTDAG: { min: 0, max: 0 },
+    // computeMemberTargets applies the same per-person scaling, ledger
+    // delta and fellow weekend rule as the solver input.
+    const target = computeMemberTargets(periodId).get(personId);
+    const targetBands: Record<Teller, { min: number; max: number; fellow: boolean }> = {
+      AVOND: { min: 0, max: 0, fellow: false },
+      WEEKEND: { min: 0, max: 0, fellow: false },
+      FEESTDAG: { min: 0, max: 0, fellow: false },
     };
-    for (const teller of TELLERS) {
-      const [baseMin, baseMax] = baseBands[teller];
-      // floor(min)/ceil(max), not round for both - matches
-      // solver/constraints.py's own NAAR_RATO scaling exactly (see the
-      // comment there): rounding both ends the same way can collapse a
-      // part-timer's band to zero width while a full-timer keeps >=1, and
-      // this number is shown to the participant as the actual promise the
-      // solver was building toward, so it must be the same number.
-      const scaledMin = naarRato ? Math.floor(baseMin * factor) : baseMin;
-      const scaledMax = naarRato ? Math.max(scaledMin, Math.ceil(baseMax * factor)) : baseMax;
-      const delta = balances[teller];
-      targetBands[teller] = { min: scaledMin + delta, max: scaledMax + delta };
+    if (target) {
+      for (const teller of TELLERS) targetBands[teller] = { ...target[teller] };
     }
 
     return NextResponse.json({

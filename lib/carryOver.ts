@@ -27,10 +27,11 @@ import { db } from '@/db/client';
 import {
   TELLERS,
   countSlotsByTeller,
-  resolveBands,
+  resolvePeriodBands,
   resolveRulesetConfig,
   type Teller,
 } from '@/lib/rosterBands';
+import { getFellowIds } from '@/lib/fellows';
 
 // Singular/plural Dutch labels for the ledger_entry.reden text below -
 // CLAUDE.md requires user-facing balance text in words ("1 avonddienst
@@ -98,10 +99,14 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
 
   if (members.length === 0) return [];
 
-  const bands = resolveBands(
+  // The same bands the solver built this period with: fellows don't count
+  // for the weekend, so everyone else's WEEKEND band was raised.
+  const fellows = getFellowIds(period.id);
+  const bands = resolvePeriodBands(
     resolveRulesetConfig(period),
     countSlotsByTeller(period.id),
-    members.length
+    members.length,
+    members.filter((m) => fellows.has(m.id)).length
   );
 
   const actualRows = db
@@ -139,9 +144,20 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
       const key = `${member.id}|${teller}`;
       const [min, max] = bands[teller];
       const shift = prior.get(key) || 0;
+      const count = actual.get(key) || 0;
+
+      // A fellow's weekend (lib/fellows.ts) had no target, so nothing new
+      // carries. A saldo they brought in waits until they are no longer a
+      // fellow: debt is only paid off by weekend shifts they took anyway,
+      // never turned into a credit by them, and a credit stays as it was.
+      if (teller === 'WEEKEND' && fellows.has(member.id)) {
+        const delta = shift > 0 ? Math.max(0, shift - count) : shift;
+        if (delta !== 0) entries.push({ person_id: member.id, teller, delta, target: count + delta, actual: count });
+        continue;
+      }
+
       const adjustedMin = min + shift;
       const adjustedMax = max + shift;
-      const count = actual.get(key) || 0;
 
       // Measured against the band itself, not its midpoint. The band is
       // what the person was actually promised ("you receive 8 or 9 evening

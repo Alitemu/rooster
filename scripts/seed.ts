@@ -390,11 +390,21 @@ async function createTables() {
       source TEXT NOT NULL CHECK(source IN ('MANUAL', 'PARTTIME', 'ABSENCE')),
       bron_pattern_id TEXT REFERENCES dienstrooster_parttime_pattern(id),
       bron_absence_id TEXT REFERENCES dienstrooster_absence(id),
+      fellow_blok INTEGER NOT NULL DEFAULT 0,
       aangemaakt_op TEXT NOT NULL
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS availability_uniq
       ON dienstrooster_availability(person_id, slot_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_period_fellow (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      aangemaakt_op TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS period_fellow_uniq
+      ON dienstrooster_period_fellow(period_id, person_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_submission (
       id TEXT PRIMARY KEY NOT NULL,
@@ -494,6 +504,7 @@ const SEEDED_TABLES = [
   'dienstrooster_import_run',
   'dienstrooster_reminder_schedule',
   'dienstrooster_reminder_run',
+  'dienstrooster_period_fellow',
   'dienstrooster_notification_template',
   'dienstrooster_holiday_history',
   'dienstrooster_ledger_entry',
@@ -538,6 +549,9 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_schedule_period: {
     auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
     basis_url: 'TEXT',
+  },
+  dienstrooster_availability: {
+    fellow_blok: 'INTEGER NOT NULL DEFAULT 0',
   },
 };
 

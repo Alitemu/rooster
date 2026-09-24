@@ -14,6 +14,7 @@
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
+import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
 export type Band = [number, number];
@@ -213,6 +214,127 @@ export function scaledBandForMember(
 }
 
 /**
+ * The period's bands with its fellows (lib/fellows.ts) taken into account.
+ *
+ * Fellows don't do weekends, so the weekend shifts are shared by the
+ * others only and their WEEKEND band goes up:
+ * - a band the ruleset names explicitly (set when the period was created,
+ *   over everyone) is scaled by people / (people - fellows), floor for the
+ *   minimum and ceil for the maximum like every other band scaling here;
+ * - without one, the usual default is worked out over the non-fellows.
+ * AVOND and FEESTDAG are unchanged: fellows do those like everyone else.
+ */
+export function resolvePeriodBands(
+  config: Record<string, unknown>,
+  slotCountByTeller: Record<Teller, number>,
+  peopleCount: number,
+  fellowCount: number
+): BandsByTeller {
+  const bands = resolveBands(config, slotCountByTeller, peopleCount);
+  const others = peopleCount - fellowCount;
+  if (fellowCount <= 0 || others <= 0) return bands;
+
+  const configured = config.bandWeekend;
+  if (Array.isArray(configured) && configured.length === 2) {
+    const factor = peopleCount / others;
+    const min = Math.floor(bands.WEEKEND[0] * factor);
+    bands.WEEKEND = [min, Math.max(min, Math.ceil(bands.WEEKEND[1] * factor))];
+  } else {
+    bands.WEEKEND = resolveBands({}, slotCountByTeller, others).WEEKEND;
+  }
+  return bands;
+}
+
+/**
+ * A fellow's WEEKEND band: nothing is expected of them, and they can get
+ * at most as many as they left unblocked themselves, never more than
+ * anyone else's maximum. The ledger does not apply to it: a weekend saldo
+ * waits until they are no longer a fellow (lib/carryOver.ts).
+ */
+export function fellowWeekendBand(scaled: Band, released: number): Band {
+  return [0, Math.max(0, Math.min(released, scaled[1]))];
+}
+
+export interface MemberTarget {
+  min: number;
+  max: number;
+  /** A fellow's WEEKEND target (fellowWeekendBand). */
+  fellow: boolean;
+}
+
+/**
+ * Every active pool member's target per counter for one period: the
+ * period's bands (resolvePeriodBands), scaled per person
+ * (scaledBandForMember), the ledger delta folded in, and a fellow's
+ * WEEKEND replaced by fellowWeekendBand. The one answer to "what is this
+ * person's streefbereik", shared by the publication check, the band room
+ * shown when filling a gap by hand and the participant's own roster, so
+ * none of them can disagree with the others or with the solver.
+ */
+export function computeMemberTargets(periodId: string): Map<string, Record<Teller, MemberTarget>> {
+  const period = db
+    .prepare(
+      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
+       FROM dienstrooster_schedule_period WHERE id = ?`
+    )
+    .get(periodId) as
+    | { id: string; pool_id: string; start_datum: string; eind_datum: string; bevroren_ruleset_json: string | null }
+    | undefined;
+
+  const result = new Map<string, Record<Teller, MemberTarget>>();
+  if (!period) return result;
+
+  const members = db
+    .prepare(
+      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
+       FROM dienstrooster_pool_membership pm
+       JOIN dienstrooster_person p ON p.id = pm.person_id
+       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
+    )
+    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<CoverageAwareMember & { id: string }>;
+  if (members.length === 0) return result;
+
+  const fellows = getFellowIds(periodId);
+  const released = releasedWeekendDays(periodId);
+  const config = resolveRulesetConfig(period);
+  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
+  const bands = resolvePeriodBands(
+    config,
+    countSlotsByTeller(periodId),
+    members.length,
+    members.filter((m) => fellows.has(m.id)).length
+  );
+
+  const deltas = new Map<string, number>();
+  for (const row of db
+    .prepare(
+      `SELECT person_id, teller, SUM(delta) as total
+       FROM dienstrooster_ledger_entry
+       WHERE geldt_voor_periode_id = ?
+       GROUP BY person_id, teller`
+    )
+    .all(periodId) as Array<{ person_id: string; teller: string; total: number }>) {
+    deltas.set(`${row.person_id}|${row.teller}`, row.total || 0);
+  }
+
+  for (const member of members) {
+    const byTeller = {} as Record<Teller, MemberTarget>;
+    for (const teller of TELLERS) {
+      const scaled = scaledBandForMember(bands, teller, member, period, distributionMode);
+      if (teller === 'WEEKEND' && fellows.has(member.id)) {
+        const [min, max] = fellowWeekendBand(scaled, released.get(member.id) ?? 0);
+        byTeller[teller] = { min, max, fellow: true };
+        continue;
+      }
+      const delta = deltas.get(`${member.id}|${teller}`) || 0;
+      byTeller[teller] = { min: scaled[0] + delta, max: scaled[1] + delta, fellow: false };
+    }
+    result.set(member.id, byTeller);
+  }
+  return result;
+}
+
+/**
  * Count a period's slots per counter, keyed the way the solver keys them
  * (by shift_type.teller, not shift_type_id).
  */
@@ -239,13 +361,13 @@ export interface PersonBandStatus {
   max: number; // scaledBandForMember's max, ledger delta already folded in - the same
   // "actual_max" the solver itself enforces, so `count > max` here means
   // literally the same thing it means in solver/constraints.py.
+  fellow: boolean; // a fellow's WEEKEND (fellowWeekendBand): below it is expected, not a shortfall
 }
 
 /**
  * Every active pool member's real count vs. effective ceiling, per counter,
- * for one period - the one place that combines resolveBands (the period's
- * flat band), scaledBandForMember (per-person scaling) and the ledger
- * delta into what a person's target actually is right now.
+ * for one period - computeMemberTargets' ceilings next to what each person
+ * actually has.
  *
  * Shared by lib/rebalanceSuggestions.ts (who's over, who has room to
  * absorb a moved dienst) and lib/rosterGaps.ts (showing a candidate's
@@ -254,32 +376,9 @@ export interface PersonBandStatus {
  * here instead of twice.
  */
 export function computeBandStatusByPerson(periodId: string): Map<string, Record<Teller, PersonBandStatus>> {
-  const period = db
-    .prepare(
-      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
-       FROM dienstrooster_schedule_period WHERE id = ?`
-    )
-    .get(periodId) as
-    | { id: string; pool_id: string; start_datum: string; eind_datum: string; bevroren_ruleset_json: string | null }
-    | undefined;
-
   const result = new Map<string, Record<Teller, PersonBandStatus>>();
-  if (!period) return result;
-
-  const members = db
-    .prepare(
-      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
-       FROM dienstrooster_pool_membership pm
-       JOIN dienstrooster_person p ON p.id = pm.person_id
-       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
-    )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<CoverageAwareMember & { id: string }>;
-
-  if (members.length === 0) return result;
-
-  const config = resolveRulesetConfig(period);
-  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolveBands(config, countSlotsByTeller(periodId), members.length);
+  const targets = computeMemberTargets(periodId);
+  if (targets.size === 0) return result;
 
   const counts = new Map<string, number>();
   for (const row of db
@@ -295,29 +394,16 @@ export function computeBandStatusByPerson(periodId: string): Map<string, Record<
     counts.set(`${row.person_id}|${row.teller}`, row.count);
   }
 
-  const deltas = new Map<string, number>();
-  for (const row of db
-    .prepare(
-      `SELECT person_id, teller, SUM(delta) as total
-       FROM dienstrooster_ledger_entry
-       WHERE geldt_voor_periode_id = ?
-       GROUP BY person_id, teller`
-    )
-    .all(periodId) as Array<{ person_id: string; teller: string; total: number }>) {
-    deltas.set(`${row.person_id}|${row.teller}`, row.total || 0);
-  }
-
-  for (const member of members) {
+  for (const [personId, target] of targets) {
     const byTeller = {} as Record<Teller, PersonBandStatus>;
     for (const teller of TELLERS) {
-      const key = `${member.id}|${teller}`;
-      const [, max] = scaledBandForMember(bands, teller, member, period, distributionMode);
       byTeller[teller] = {
-        count: counts.get(key) || 0,
-        max: max + (deltas.get(key) || 0),
+        count: counts.get(`${personId}|${teller}`) || 0,
+        max: target[teller].max,
+        fellow: target[teller].fellow,
       };
     }
-    result.set(member.id, byTeller);
+    result.set(personId, byTeller);
   }
 
   return result;

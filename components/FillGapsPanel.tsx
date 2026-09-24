@@ -32,7 +32,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
 // comment there for why a person can only ever be in one of these.
-type EligibilityCategory = 'BESCHIKBAAR' | 'VOORKEUR' | 'LIEVER_NIET' | 'VENSTERBLOK' | 'PARTTIME' | 'GEBLOKKEERD';
+type EligibilityCategory =
+  | 'BESCHIKBAAR'
+  | 'VOORKEUR'
+  | 'LIEVER_NIET'
+  | 'VENSTERBLOK'
+  | 'PARTTIME'
+  | 'FELLOW'
+  | 'GEBLOKKEERD';
 
 interface EligiblePerson {
   id: string;
@@ -40,6 +47,7 @@ interface EligiblePerson {
   category: EligibilityCategory;
   band_count: number;
   band_max: number;
+  fellow?: boolean;
 }
 
 // The solver itself now never assigns anyone past their streefbereik (see
@@ -49,7 +57,10 @@ interface EligiblePerson {
 // informational, shown next to every candidate regardless of category.
 function bandLabel(p: EligiblePerson): string {
   const suffix = p.band_count >= p.band_max ? ', vol' : '';
-  return `${p.codenaam} (${p.band_count} van ${p.band_max}${suffix})`;
+  // Fellows (lib/fellows.ts) are labelled in every list; an <option> can
+  // only hold text, so the label is part of it.
+  const naam = p.fellow ? `${p.codenaam} · Fellow` : p.codenaam;
+  return `${naam} (${p.band_count} van ${p.band_max}${suffix})`;
 }
 
 interface UnfilledSlot {
@@ -90,6 +101,7 @@ const CATEGORY_ORDER: EligibilityCategory[] = [
   'LIEVER_NIET',
   'VENSTERBLOK',
   'PARTTIME',
+  'FELLOW',
   'GEBLOKKEERD',
 ];
 
@@ -99,6 +111,7 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
   PARTTIME: 'Part-time dag',
+  FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
 
@@ -109,6 +122,7 @@ const CATEGORY_NOTES: Record<EligibilityCategory, string> = {
   LIEVER_NIET: 'heeft aangegeven liever niet op deze dag te werken',
   VENSTERBLOK: 'heeft al een dienst binnen het venster',
   PARTTIME: 'heeft parttime-vrij op deze dag',
+  FELLOW: 'is fellow en ondersteunt in het weekend de AIOS',
   GEBLOKKEERD: 'heeft deze dag geblokkeerd',
 };
 
