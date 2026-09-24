@@ -493,7 +493,7 @@ Dutch: docs/verzendlijst-power-automate.md.
 ## Deployment
 
 **Images:** built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
-builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 + arm64)
+builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 only)
 tagged with package.json's `version` and `test`; "Vrijgeven (productie)"
 (release.yml) points `stable` at an already built, tested version without
 rebuilding. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
