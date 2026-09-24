@@ -117,6 +117,16 @@ function getSessionSecret(): string {
   return cachedSecret;
 }
 
+/**
+ * A 32-byte key for one purpose, derived from the session secret, so
+ * settings stored encrypted (lib/settingsCrypto.ts) need no second secret
+ * to manage. A new session secret makes them unreadable: they have to be
+ * entered again, which is the point of rotating it.
+ */
+export function deriveSecretKey(purpose: string): Buffer {
+  return crypto.createHmac('sha256', getSessionSecret()).update(`dienstrooster-key:${purpose}`).digest();
+}
+
 function sign(value: string): string {
   return crypto.createHmac('sha256', getSessionSecret()).update(value).digest('base64url');
 }

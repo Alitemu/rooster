@@ -249,6 +249,17 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - **Freeze ruleset** when period opens (no retroactive rule changes)
 - **Row versioning** for optimistic concurrency on mutable periods
 
+**Undo on the period page:** a manual assign/reassign/remove leaves one
+"ongedaan maken" (lib/pendingUndo.ts) that records its `onderdeel` - the
+heading it was made under (ROOSTER, VOORAF = "Rooster vooraf invullen",
+HERVERDELING = "Voorstellen voor herverdeling"; the client sends it, the
+route falls back to ROOSTER). PlannerDashboard shows the button inside that
+section, so it folds away with it; a hidden herverdeling section hands it
+to the roster.
+
+**Version:** the header shows `versie` from package.json, right of the
+title - bump it when releasing.
+
 **Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
 
 - `runPublicationCheck` (lib/publicationCheck.ts) distinguishes two kinds
@@ -394,9 +405,15 @@ itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
 the text names, longest first, so a flow can swap in real names from its
 sheet without "Persoon-1" matching inside "Persoon-10") to a Power Automate flow on the planner's
 side, which looks each codenaam up in its own Excel list and sends the
-mail. The server sends that mail itself when SMTP_USER/SMTP_PASS/
-VERZENDLIJST_AAN are set (lib/verzendlijstMail.ts, Gmail with an app
-password by default); without them the export dialog says sending isn't
+mail. The server sends that mail itself (lib/verzendlijstMail.ts) once an
+account is set up: in the app ("Mailinstellingen" under Exporteren &
+communicatie, `/api/planner/mail-settings`, lib/appSettings.ts - Gmail
+only, a 16-letter app password, the login is tried before saving, the
+password is stored AES-GCM encrypted with a key derived from the session
+secret, lib/settingsCrypto.ts, and never returned), or as the fallback
+via SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN in .env; what the app stores
+wins. SMTP_HOST/SMTP_PORT apply to both (the tests point them at
+tests/smtpSink.ts). Without either the export dialog says sending isn't
 set up. There is deliberately no other way out: the old manual JSON
 download and the per-person mailto links are gone, and a single reminder
 goes through the flow too. The invitations CSV download stays. The recipient is always VERZENDLIJST_AAN, never

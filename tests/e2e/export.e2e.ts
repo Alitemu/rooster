@@ -59,7 +59,7 @@ test.describe('Exporteren & communicatie', () => {
     await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
     const panel = page.getByTestId('auto-herinneringen');
     await expect(panel).toContainText('Automatische herinneringen');
-    await expect(panel).toContainText('versturen is nog niet ingesteld op de server');
+    await expect(panel).toContainText('versturen is nog niet ingesteld');
     await expect(panel.getByRole('button', { name: 'Pauzeren' })).toHaveCount(0);
   });
 });

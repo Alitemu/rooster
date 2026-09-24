@@ -3,19 +3,22 @@
  * mailbox over SMTP, so the Power Automate flow starts without the
  * planner having to download a file and attach it by hand.
  *
- * Configured through the environment only (see .env.example). Gmail is the
- * intended provider (smtp.gmail.com with an app password), but any SMTP
- * server works:
- *   SMTP_HOST, SMTP_PORT   default smtp.gmail.com:465 (TLS from the start)
+ * Configured in the app ("Mailinstellingen" under Exporteren &
+ * communicatie, lib/appSettings.ts): a Gmail account, its app password
+ * and the mailbox the flow watches. The environment is the fallback for an
+ * installation set up before that screen existed (see .env.example):
  *   SMTP_USER, SMTP_PASS   the sending account and its app password
  *   SMTP_FROM              optional, defaults to SMTP_USER
  *   VERZENDLIJST_AAN       the mailbox the flow watches
+ *   SMTP_HOST, SMTP_PORT   default smtp.gmail.com:465; also apply to the
+ *                          app's settings (the tests use their own server)
  *
  * The recipient is fixed by the operator, never taken from a request: this
  * can only ever mail the planner's own flow mailbox, not arbitrary people.
  */
 
 import nodemailer from 'nodemailer';
+import { getStoredMailSettings } from './appSettings';
 import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
 interface MailConfig {
@@ -27,21 +30,64 @@ interface MailConfig {
   to: string;
 }
 
-function readConfig(): MailConfig | null {
+/** Host and port: Gmail unless SMTP_HOST/SMTP_PORT say otherwise (tests use their own server). */
+function server(): { host: string; port: number } {
+  const port = parseInt(process.env.SMTP_PORT ?? '', 10);
+  return { host: process.env.SMTP_HOST?.trim() || 'smtp.gmail.com', port: Number.isFinite(port) ? port : 465 };
+}
+
+// Google shows an app password as four groups of four ("abcd efgh ...");
+// pasted as shown, the spaces would make the login fail.
+const stripSpaces = (pass: string) => pass.replace(/\s+/g, '');
+
+function configFromEnv(): MailConfig | null {
   const user = process.env.SMTP_USER?.trim();
   const pass = process.env.SMTP_PASS?.trim();
   const to = process.env.VERZENDLIJST_AAN?.trim();
   if (!user || !pass || !to) return null;
-  const port = parseInt(process.env.SMTP_PORT ?? '', 10);
+  return { ...server(), user, pass: stripSpaces(pass), from: process.env.SMTP_FROM?.trim() || user, to };
+}
+
+/**
+ * The settings saved in the app ("Mailinstellingen", lib/appSettings.ts)
+ * win over .env, so the operator can set this up without access to the
+ * server. .env stays as the fallback for an installation that already
+ * uses it.
+ */
+function readConfig(): MailConfig | null {
+  const stored = getStoredMailSettings();
+  if (stored?.wachtwoord) {
+    return {
+      ...server(),
+      user: stored.gebruiker,
+      pass: stripSpaces(stored.wachtwoord),
+      from: stored.gebruiker,
+      to: stored.verzendlijstAan,
+    };
+  }
+  return configFromEnv();
+}
+
+export type MailConfigSource = 'APP' | 'ENV' | null;
+
+/** Where sending is set up, for the settings dialog. */
+export function mailConfigStatus(): {
+  bron: MailConfigSource;
+  gebruiker: string | null;
+  verzendlijst_aan: string | null;
+  /** Saved in the app, but the password can no longer be read (new session secret). */
+  wachtwoord_onleesbaar: boolean;
+} {
+  const stored = getStoredMailSettings();
+  if (stored?.wachtwoord) {
+    return { bron: 'APP', gebruiker: stored.gebruiker, verzendlijst_aan: stored.verzendlijstAan, wachtwoord_onleesbaar: false };
+  }
+  const env = configFromEnv();
   return {
-    host: process.env.SMTP_HOST?.trim() || 'smtp.gmail.com',
-    port: Number.isFinite(port) ? port : 465,
-    user,
-    // Google shows an app password as four groups of four ("abcd efgh ...");
-    // pasted as shown, the spaces would make the login fail.
-    pass: pass.replace(/\s+/g, ''),
-    from: process.env.SMTP_FROM?.trim() || user,
-    to,
+    bron: env ? 'ENV' : null,
+    gebruiker: stored?.gebruiker ?? env?.user ?? null,
+    verzendlijst_aan: stored?.verzendlijstAan ?? env?.to ?? null,
+    wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
   };
 }
 
@@ -78,19 +124,8 @@ function explainSmtpError(error: unknown): string {
   return 'Versturen via de mailserver is mislukt.';
 }
 
-/** One mail to VERZENDLIJST_AAN with a single JSON attachment. */
-async function sendJsonMail(mail: {
-  subject: string;
-  text: string;
-  filename: string;
-  json: string;
-}): Promise<{ ok: true } | { ok: false; message: string }> {
-  const config = readConfig();
-  if (!config) {
-    return { ok: false, message: 'Automatisch versturen is niet ingesteld op de server.' };
-  }
-
-  const transport = nodemailer.createTransport({
+function createTransport(config: Pick<MailConfig, 'host' | 'port' | 'user' | 'pass'>) {
+  return nodemailer.createTransport({
     host: config.host,
     port: config.port,
     // 465 speaks TLS from the first byte; 587/25 start plain and upgrade.
@@ -103,6 +138,38 @@ async function sendJsonMail(mail: {
     greetingTimeout: 15_000,
     socketTimeout: 30_000,
   });
+}
+
+/**
+ * Logs in with these credentials without sending anything, so settings
+ * that don't work are refused before they are saved.
+ */
+export async function verifyMailLogin(user: string, pass: string): Promise<{ ok: true } | { ok: false; message: string }> {
+  const transport = createTransport({ ...server(), user, pass: stripSpaces(pass) });
+  try {
+    await transport.verify();
+    return { ok: true };
+  } catch (error) {
+    console.error('[verzendlijst-mail] login check failed', error);
+    return { ok: false, message: explainSmtpError(error) };
+  } finally {
+    transport.close();
+  }
+}
+
+/** One mail to the flow's mailbox with a single JSON attachment. */
+async function sendJsonMail(mail: {
+  subject: string;
+  text: string;
+  filename: string;
+  json: string;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const config = readConfig();
+  if (!config) {
+    return { ok: false, message: 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.' };
+  }
+
+  const transport = createTransport(config);
 
   try {
     await transport.sendMail({

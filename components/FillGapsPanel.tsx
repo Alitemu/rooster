@@ -256,7 +256,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
         const res = await fetch(`/api/planner/period/${periodId}/assignments/manual-assign`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ person_id: personId, slot_id: slotId, reason: 'Handmatig aangevuld' }),
+          body: JSON.stringify({ person_id: personId, slot_id: slotId, reason: 'Handmatig aangevuld', onderdeel: 'VOORAF' }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Toewijzen mislukt');

@@ -113,6 +113,13 @@
       "when": 1788801000000,
       "tag": "0015_fellows",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1788801100000,
+      "tag": "0016_undo_onderdeel_app_setting",
+      "breakpoints": true
     }
   ]
 }

@@ -25,9 +25,9 @@ export async function GET(
 
     const row = getPendingUndo(params.id);
 
-    const response: ApiSuccessResponse<{ pending: { label: string } | null }> = {
+    const response: ApiSuccessResponse<{ pending: { label: string; onderdeel: string } | null }> = {
       success: true,
-      data: { pending: row ? { label: row.label } : null },
+      data: { pending: row ? { label: row.label, onderdeel: row.onderdeel } : null },
     };
     return NextResponse.json(response);
   } catch (error) {

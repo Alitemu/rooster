@@ -91,7 +91,7 @@ export function AutoReminderPanel({ periodId, refreshKey }: Props) {
 
   let regel: React.ReactNode;
   if (!status.mailIngesteld) {
-    regel = 'Staan uit, want versturen is nog niet ingesteld op de server.';
+    regel = 'Staan uit, want versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.';
   } else if (!status.periodeOpen) {
     regel = 'Alleen zolang de periode open staat en de deadline nog niet voorbij is.';
   } else if (!status.aan) {

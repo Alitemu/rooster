@@ -30,6 +30,7 @@ import { SwapRequestsOverview } from './SwapRequestsOverview';
 import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { FellowBadge } from './FellowBadge';
+import { MailSettingsDialog } from './MailSettingsDialog';
 
 interface PersonProgress {
   person_id: string;
@@ -288,8 +289,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   // this same period later, and what makes undoing it a real button
   // instead of a client-only ctrl+z that only the person who made the
   // change could ever use.
-  const [pendingUndo, setPendingUndo] = useState<{ label: string } | null>(null);
+  const [pendingUndo, setPendingUndo] = useState<{ label: string; onderdeel?: string } | null>(null);
   const [undoing, setUndoing] = useState(false);
+  const [mailSettingsOpen, setMailSettingsOpen] = useState(false);
+  // Bumped when the mail settings change, so the automatic-reminder panel
+  // re-reads whether sending is set up.
+  const [mailSettingsKey, setMailSettingsKey] = useState(0);
   const [undoError, setUndoError] = useState<string | null>(null);
   // null = not known yet (still loading, or load failed) - the "Voorstellen
   // voor herverdeling" section stays visible in that case, so a load error
@@ -508,6 +513,71 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     );
   }
 
+  // The "ongedaan maken" banner sits inside the section the change was
+  // made in (pendingUndo.onderdeel, lib/pendingUndo.ts), so it folds away
+  // with it. "Voorstellen voor herverdeling" hides itself once nothing is
+  // left to suggest; its undo then goes under the roster instead.
+  const herverdelingZichtbaar = dashboard.assignment_count > 0 && suggestionCount !== 0;
+  const undoOnderdeel = !pendingUndo
+    ? null
+    : pendingUndo.onderdeel === 'VOORAF' || (pendingUndo.onderdeel === 'HERVERDELING' && herverdelingZichtbaar)
+      ? pendingUndo.onderdeel
+      : 'ROOSTER';
+  const undoBanner = (onderdeel: 'ROOSTER' | 'VOORAF' | 'HERVERDELING') =>
+    undoOnderdeel === onderdeel && pendingUndo ? (
+      <div className="mb-4 space-y-2">
+        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-sm text-blue-900">
+            <span className="font-medium">Laatst gewijzigd:</span> {pendingUndo.label}
+          </p>
+          {undoReasonPromptOpen ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={undoReason}
+                onChange={(e) => setUndoReason(e.target.value)}
+                placeholder="Reden (verplicht bij gepubliceerd rooster)"
+                className="px-2 py-1 border rounded text-sm"
+                autoFocus
+              />
+              <button
+                onClick={() => handleUndoLast(undoReason)}
+                disabled={undoing || !undoReason.trim()}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {undoing ? 'Bezig…' : 'Bevestigen'}
+              </button>
+              <button
+                onClick={() => {
+                  setUndoReasonPromptOpen(false);
+                  setUndoReason('');
+                }}
+                disabled={undoing}
+                className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+              >
+                Annuleren
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => handleUndoLast()}
+              disabled={undoing}
+              className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            >
+              {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
+            </button>
+          )}
+        </div>
+        {undoError && (
+          <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">{undoError}</div>
+        )}
+      </div>
+    ) : onderdeel === 'ROOSTER' && !pendingUndo && undoError ? (
+      // The undo went wrong and there is nothing left to undo (someone
+      // else changed it meanwhile): the message still needs a place.
+      <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">{undoError}</div>
+    ) : null;
+
   const stats = dashboard.submission_stats;
   const totalSubmissions = stats.not_started + stats.in_progress + stats.confirmed;
   const submissionProgress =
@@ -671,6 +741,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           onTogglePin={() => toggleSectionPin('vooraf')}
           keepMounted
         >
+          {undoBanner('VOORAF')}
           <FillGapsSummary refreshKey={fillGapsRefreshKey} periodId={periodId} onCountChange={setFillGapsCount} />
         </Section>
       )}
@@ -852,7 +923,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
 
       <Section
         title="Exporteren & communicatie"
-        hint="uitnodigingen, herinneringen, statusrapport"
+        hint="uitnodigingen, herinneringen, statusrapport, mailinstellingen"
         isOpen={openSections.has('export')}
         pinned={pinnedSections.has('export')}
         onToggleOpen={() => toggleSectionOpen('export')}
@@ -882,6 +953,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               📧 Deadlineherinnering versturen
             </button>
           )}
+          <button
+            onClick={() => setMailSettingsOpen(true)}
+            className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+          >
+            ⚙️ Mailinstellingen
+          </button>
           <a
             href={`/api/exports/status-report/${periodId}`}
             className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
@@ -908,7 +985,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               the next automatic one). */}
           <AutoReminderPanel
             periodId={periodId}
-            refreshKey={`${dashboard.deadline}|${dashboard.status}|${dashboard.submission_stats.confirmed}|${dashboard.submission_stats.in_progress}|${exportDialogOpen}`}
+            refreshKey={`${dashboard.deadline}|${dashboard.status}|${dashboard.submission_stats.confirmed}|${dashboard.submission_stats.in_progress}|${exportDialogOpen}|${mailSettingsKey}`}
           />
         </div>
       </Section>
@@ -930,6 +1007,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           onTogglePin={() => toggleSectionPin('voorstellen')}
           keepMounted
         >
+          {undoBanner('HERVERDELING')}
           <RebalanceSuggestions
             periodId={periodId}
             isPublished={dashboard.status === 'GEPUBLICEERD'}
@@ -937,58 +1015,6 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             onCountChange={setSuggestionCount}
           />
         </Section>
-      )}
-
-      {/* Undo banner - kept outside the Dienstrooster section (not inside
-          its collapsible body) so a reversible change stays visible and
-          actionable even while that section is collapsed, the same way
-          "Grote verschillen" above stays outside every section. */}
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && pendingUndo && (
-        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-sm text-blue-900">
-            <span className="font-medium">Laatst gewijzigd:</span> {pendingUndo.label}
-          </p>
-          {undoReasonPromptOpen ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              <input
-                type="text"
-                value={undoReason}
-                onChange={(e) => setUndoReason(e.target.value)}
-                placeholder="Reden (verplicht bij gepubliceerd rooster)"
-                className="px-2 py-1 border rounded text-sm"
-                autoFocus
-              />
-              <button
-                onClick={() => handleUndoLast(undoReason)}
-                disabled={undoing || !undoReason.trim()}
-                className="px-3 py-1.5 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
-              >
-                {undoing ? 'Bezig…' : 'Bevestigen'}
-              </button>
-              <button
-                onClick={() => {
-                  setUndoReasonPromptOpen(false);
-                  setUndoReason('');
-                }}
-                disabled={undoing}
-                className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
-              >
-                Annuleren
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => handleUndoLast()}
-              disabled={undoing}
-              className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors"
-            >
-              {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
-            </button>
-          )}
-        </div>
-      )}
-      {undoError && (
-        <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-800">{undoError}</div>
       )}
 
       {/* Dienstrooster - visible from OPEN onward (not just after the
@@ -1003,6 +1029,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
           onToggleOpen={() => toggleSectionOpen('rooster')}
           onTogglePin={() => toggleSectionPin('rooster')}
         >
+          {undoBanner('ROOSTER')}
           {/* overflow-x-auto on its own is enough here (unlike the old
               header-row version of this button group) - this is a plain
               block-level div now, not a flex sibling fighting a title for
@@ -1127,6 +1154,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       />
 
       {/* Export Dialog */}
+      <MailSettingsDialog
+        isOpen={mailSettingsOpen}
+        onClose={() => setMailSettingsOpen(false)}
+        onChanged={() => setMailSettingsKey((k) => k + 1)}
+      />
       <ExportDialog
         periodId={periodId}
         periodName={dashboard.period_name}

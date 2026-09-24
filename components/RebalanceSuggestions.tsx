@@ -87,7 +87,7 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ person_id: suggestion.to_person_id, reason: reason || null }),
+          body: JSON.stringify({ person_id: suggestion.to_person_id, reason: reason || null, onderdeel: 'HERVERDELING' }),
         }
       );
       const data = await res.json();

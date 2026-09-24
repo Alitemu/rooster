@@ -113,23 +113,31 @@ Gebruik nooit het gewone wachtwoord van het account. Google weigert dat
 voor deze manier van versturen en het zou dan in een bestand op de server
 staan.
 
-## Stap 2. De server instellen
+## Stap 2. Het account instellen in Dienstrooster
 
-Zet in het `.env`-bestand naast `docker-compose.yml`:
+Open een periode en klik onder *Exporteren & communicatie* op
+**Mailinstellingen**. Vul in:
 
-```
-SMTP_USER=dienstrooster.afdeling@gmail.com
-SMTP_PASS=abcd efgh ijkl mnop
-VERZENDLIJST_AAN=jouw.adres@voorbeeld.nl
-```
+- **Gmail-adres**: het account uit stap 1. De app werkt alleen met Gmail.
+- **App-wachtwoord**: de 16 letters uit stap 1, met of zonder spaties.
+- **Verzendlijst sturen naar**: het adres waar je stroom in stap 4 op let.
 
-`SMTP_HOST` en `SMTP_PORT` hoeven niet: standaard is dat `smtp.gmail.com`
-op poort 465. Haal eerst de nieuwste versie binnen met `git pull` en herstart
-daarna met `docker compose up -d --build`.
+Bij **Opslaan** logt Dienstrooster meteen in bij Gmail. Lukt dat niet, dan
+wordt er niets opgeslagen en zie je waarom. Het wachtwoord wordt versleuteld
+bewaard en daarna nooit meer getoond. Wil je later alleen het adres voor de
+verzendlijst aanpassen, laat het wachtwoordveld dan leeg.
+
+Met **Instellingen verwijderen** haal je alles weer weg. Daarna gaat er geen
+mail meer uit.
+
+Stonden de waarden al in het `.env`-bestand op de server (`SMTP_USER`,
+`SMTP_PASS`, `VERZENDLIJST_AAN`)? Dan blijft dat werken. Wat je in de app
+opslaat, gaat daarvoor. Verwijder je de instellingen in de app, dan wordt het
+`.env`-bestand weer gebruikt.
 
 In het exportvenster verschijnt nu bij *Uitnodigingen versturen* een groene
-knop. Zie je in plaats daarvan "Versturen is nog niet ingesteld", dan mist
-een van de drie waarden of is de app niet opnieuw gestart.
+knop. Zie je in plaats daarvan "Versturen is nog niet ingesteld", dan staat
+er nog niets in de Mailinstellingen.
 
 De server moet naar buiten kunnen verbinden met `smtp.gmail.com` op poort
 465. Een melding "De mailserver is niet bereikbaar" betekent meestal dat een

@@ -345,11 +345,19 @@ async function createTables() {
       action_type TEXT NOT NULL CHECK(action_type IN ('ASSIGN', 'REASSIGN', 'REMOVE', 'MEMBERSHIP_DELETE')),
       payload_json TEXT NOT NULL,
       label TEXT NOT NULL,
+      onderdeel TEXT NOT NULL DEFAULT 'ROOSTER',
       actor_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
       aangemaakt_op TEXT NOT NULL
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS pending_undo_scope_id_uniq ON dienstrooster_pending_undo(scope_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_app_setting (
+      sleutel TEXT PRIMARY KEY NOT NULL,
+      waarde TEXT NOT NULL,
+      gewijzigd_op TEXT NOT NULL,
+      gewijzigd_door TEXT REFERENCES dienstrooster_person(id)
+    );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_parttime_pattern (
       id TEXT PRIMARY KEY NOT NULL,
@@ -505,6 +513,8 @@ const SEEDED_TABLES = [
   'dienstrooster_reminder_schedule',
   'dienstrooster_reminder_run',
   'dienstrooster_period_fellow',
+  // References a person (gewijzigd_door), so a reset clears it as well.
+  'dienstrooster_app_setting',
   'dienstrooster_notification_template',
   'dienstrooster_holiday_history',
   'dienstrooster_ledger_entry',
@@ -552,6 +562,9 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   },
   dienstrooster_availability: {
     fellow_blok: 'INTEGER NOT NULL DEFAULT 0',
+  },
+  dienstrooster_pending_undo: {
+    onderdeel: "TEXT NOT NULL DEFAULT 'ROOSTER'",
   },
 };
 

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { AppHeader } from '@/components/AppHeader';
+import packageJson from '../package.json';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -40,8 +41,13 @@ export default function RootLayout({
       <body className={inter.className}>
         <div className="min-h-screen flex flex-col">
           <header className="bg-primary-600 text-white shadow-md">
-            <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="max-w-7xl mx-auto px-4 py-4 flex items-baseline justify-between gap-4">
               <AppHeader />
+              {/* Which version is running, from package.json - handy when
+                  asking whether an update has landed on the server. */}
+              <span className="text-sm italic text-white/90" data-testid="app-versie">
+                versie {packageJson.version}
+              </span>
             </div>
           </header>
           <main className="flex-1">

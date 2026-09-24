@@ -21,7 +21,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
-import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
+import { setPendingUndo, assignmentSlotLabel, parseOnderdeel } from '@/lib/pendingUndo';
 import { isEligibleForPeriod } from '@/lib/rosterGaps';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
@@ -233,6 +233,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         payload: { assignment_id: assignmentId, slot_id, person_id },
         label: `${person.codenaam} toegewezen aan ${assignmentSlotLabel(slot.datum, slot.teller)}`,
         actorId,
+        // Which heading its "ongedaan maken" belongs under (lib/pendingUndo.ts).
+        onderdeel: parseOnderdeel(body.onderdeel),
       });
     })();
 

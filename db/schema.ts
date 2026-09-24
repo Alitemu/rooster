@@ -480,6 +480,11 @@ export const pendingUndo = sqliteTable(
     // Dutch, human-readable - shown on the button itself, so a planner
     // knows exactly what "ongedaan maken" is about to do before clicking it.
     label: text('label').notNull(),
+    // Where on the period page the change was made, so its "ongedaan
+    // maken" button sits under that heading: ROOSTER (the roster itself),
+    // VOORAF ("Rooster vooraf invullen") or HERVERDELING ("Voorstellen voor
+    // herverdeling"). Checked at the route boundary.
+    onderdeel: text('onderdeel').default('ROOSTER').notNull(),
     actor_id: text('actor_id').notNull().references(() => person.id),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   },
@@ -704,3 +709,15 @@ export const assignmentEdit = sqliteTable(
     ),
   })
 );
+
+/**
+ * Settings changed from the app itself rather than the server's .env, for
+ * an operator with little access to the server (lib/appSettings.ts).
+ * Secrets are stored encrypted (lib/settingsCrypto.ts).
+ */
+export const appSetting = sqliteTable('dienstrooster_app_setting', {
+  sleutel: text('sleutel').primaryKey(),
+  waarde: text('waarde').notNull(),
+  gewijzigd_op: text('gewijzigd_op').notNull(),
+  gewijzigd_door: text('gewijzigd_door').references(() => person.id),
+});

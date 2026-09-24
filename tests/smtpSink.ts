@@ -10,6 +10,9 @@ import type { Verzendlijst, VerzendlijstBerichtUit } from '@/lib/verzendlijst';
 
 export const SMTP_SINK_USER = 'rooster@example.test';
 export const SMTP_SINK_PASSWORD = 'app-wachtwoord';
+/** A second account shaped like what the app's Mailinstellingen accept: a Gmail address and a 16-letter app password. */
+export const SMTP_SINK_GMAIL_USER = 'dienstrooster.test@gmail.com';
+export const SMTP_SINK_GMAIL_PASSWORD = 'abcdefghijklmnop';
 
 export interface ReceivedMail {
   from: string;
@@ -41,7 +44,10 @@ export async function startSmtpSink(opts: { starttls?: boolean } = {}): Promise<
     logger: false,
     onAuth(auth, _session, callback) {
       logins.push(auth.username ?? '');
-      if (auth.username === SMTP_SINK_USER && auth.password === SMTP_SINK_PASSWORD) {
+      const ok =
+        (auth.username === SMTP_SINK_USER && auth.password === SMTP_SINK_PASSWORD) ||
+        (auth.username === SMTP_SINK_GMAIL_USER && auth.password === SMTP_SINK_GMAIL_PASSWORD);
+      if (ok) {
         callback(null, { user: auth.username });
       } else {
         callback(new Error('Invalid login'));
@@ -85,6 +91,15 @@ export function configureSmtp(sink: SmtpSink, overrides: Partial<Record<(typeof 
     VERZENDLIJST_AAN: 'stroom@example.test',
     ...overrides,
   });
+}
+
+/**
+ * Points the server (not the account) at the sink, the way the app's own
+ * Mailinstellingen are tested: SMTP_HOST/SMTP_PORT apply to them too.
+ */
+export function configureSmtpServerOnly(sink: SmtpSink) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+  Object.assign(process.env, { SMTP_HOST: '127.0.0.1', SMTP_PORT: String(sink.port) });
 }
 
 export function clearSmtpConfig() {

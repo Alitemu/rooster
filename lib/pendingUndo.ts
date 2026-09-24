@@ -19,6 +19,18 @@ import { db } from '@/db/client';
 export type PendingUndoScope = 'PERIOD_ASSIGNMENT' | 'POOL_MEMBERSHIP';
 export type PendingUndoActionType = 'ASSIGN' | 'REASSIGN' | 'REMOVE' | 'MEMBERSHIP_DELETE';
 
+/**
+ * Where on the period page a change was made, so its "ongedaan maken"
+ * button appears under that heading (and folds away with it).
+ */
+export type PendingUndoOnderdeel = 'ROOSTER' | 'VOORAF' | 'HERVERDELING';
+const ONDERDELEN: PendingUndoOnderdeel[] = ['ROOSTER', 'VOORAF', 'HERVERDELING'];
+
+/** From a request body: anything else (or nothing) is the roster itself. */
+export function parseOnderdeel(value: unknown): PendingUndoOnderdeel {
+  return ONDERDELEN.includes(value as PendingUndoOnderdeel) ? (value as PendingUndoOnderdeel) : 'ROOSTER';
+}
+
 export interface PendingUndoRow {
   id: string;
   scope: PendingUndoScope;
@@ -26,6 +38,7 @@ export interface PendingUndoRow {
   action_type: PendingUndoActionType;
   payload_json: string;
   label: string;
+  onderdeel: PendingUndoOnderdeel;
   actor_id: string;
   aangemaakt_op: string;
 }
@@ -38,13 +51,23 @@ export function setPendingUndo(params: {
   payload: unknown;
   label: string;
   actorId: string;
+  onderdeel?: PendingUndoOnderdeel;
 }): void {
   db.prepare('DELETE FROM dienstrooster_pending_undo WHERE scope_id = ?').run(params.scopeId);
   db.prepare(
     `INSERT INTO dienstrooster_pending_undo
-       (id, scope, scope_id, action_type, payload_json, label, actor_id, aangemaakt_op)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-  ).run(uuid(), params.scope, params.scopeId, params.actionType, JSON.stringify(params.payload), params.label, params.actorId);
+       (id, scope, scope_id, action_type, payload_json, label, onderdeel, actor_id, aangemaakt_op)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+  ).run(
+    uuid(),
+    params.scope,
+    params.scopeId,
+    params.actionType,
+    JSON.stringify(params.payload),
+    params.label,
+    params.onderdeel ?? 'ROOSTER',
+    params.actorId
+  );
 }
 
 export function getPendingUndo(scopeId: string): PendingUndoRow | undefined {
