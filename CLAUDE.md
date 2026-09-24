@@ -529,6 +529,21 @@ docker-entrypoint.sh runs the seed (SEED_ON_START=true) or else
 `scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
 templates, no data; skipped for a migration-built database).
 
+**Sub-folder (basePath):** NEXT_PUBLIC_BASE_PATH at build time (Dockerfile
+arg BASE_PATH, "Bouwen (test)" input `basispad`, default /achterwacht;
+empty = root, as before) sets next.config basePath. Next.js prefixes
+<Link> and router.push itself; everything else goes through
+lib/basePath.ts `withBasePath` - every client fetch('/api/...'), plain
+<a href>, window.location - and `withoutBasePath` for a browser pathname.
+The session cookie's path is the sub-folder, resolveBaseUrl appends it
+(BASE_URL must include it), the Docker healthcheck uses it, and Caddy
+redirects anything outside it to it (BASE_PATH in .env). A new client
+fetch without withBasePath works at the root and breaks only in a
+sub-folder, so run the browser checks against a sub-folder build too:
+`NEXT_PUBLIC_BASE_PATH=/achterwacht npm run build`, start it the same
+way, and run them with `APP_URL=http://localhost:3000/achterwacht`
+(scripts and tests/e2e read APP_URL).
+
 **Limits:** request bodies are capped at 1 MB in Caddy and in
 lib/api-errors.ts parseJsonBody (read no further; also before login).
 Free text a participant types - swap toelichting, rejection reason,

@@ -9,6 +9,7 @@
 import { Suspense, useState, useEffect, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { safeRedirectTarget } from '@/lib/safeRedirect';
+import { withBasePath } from '@/lib/basePath';
 
 export default function PlannerLoginPage() {
   return (
@@ -31,7 +32,7 @@ function PlannerLoginGate() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/auth/first-run-status')
+    fetch(withBasePath('/api/auth/first-run-status'))
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) setPending(data.data?.pending ?? []);
@@ -82,7 +83,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
     setLoading(true);
     try {
       for (const codenaam of remaining) {
-        const res = await fetch('/api/auth/first-run-setup', {
+        const res = await fetch(withBasePath('/api/auth/first-run-setup'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ codenaam, password: passwords[codenaam] || '', setup_token: setupToken }),
@@ -199,7 +200,7 @@ function PlannerLoginForm() {
 
   useEffect(() => {
     let current = true;
-    fetch('/api/auth/me')
+    fetch(withBasePath('/api/auth/me'))
       .then((res) => res.json())
       .then((data) => {
         if (current && data?.data?.authenticated && data.data.wachtwoord_wijzigen) setWachtwoordWijzigen({ huidig: '' });
@@ -216,7 +217,7 @@ function PlannerLoginForm() {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/auth/staff-login', {
+      const res = await fetch(withBasePath('/api/auth/staff-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ codenaam, password, totpCode: totpCode || undefined }),
@@ -240,7 +241,7 @@ function PlannerLoginForm() {
       // blocks third-party/insecure cookies outright) - checked explicitly
       // so a genuine failure here shows a clear message instead of the
       // silent bounce-back described below.
-      const meRes = await fetch('/api/auth/me');
+      const meRes = await fetch(withBasePath('/api/auth/me'));
       const meData = await meRes.json();
       if (!meData.data?.authenticated) {
         setError('Inloggen is gelukt, maar de sessie kon niet worden opgeslagen. Probeer het opnieuw.');
@@ -263,7 +264,7 @@ function PlannerLoginForm() {
       // which looked exactly like the login endlessly doing nothing -
       // reported as "inloggen duurt heel lang". window.location.href always
       // issues a fresh request instead of reading the client router cache.
-      window.location.href = redirectTo;
+      window.location.href = withBasePath(redirectTo);
     } catch {
       setError('Inloggen mislukt. Probeer het opnieuw.');
       setLoading(false);
@@ -272,7 +273,7 @@ function PlannerLoginForm() {
 
   if (wachtwoordWijzigen) {
     return (
-      <SeedPasswordChange huidig={wachtwoordWijzigen.huidig} onDone={() => (window.location.href = redirectTo)} />
+      <SeedPasswordChange huidig={wachtwoordWijzigen.huidig} onDone={() => (window.location.href = withBasePath(redirectTo))} />
     );
   }
 
@@ -368,7 +369,7 @@ function SeedPasswordChange({ huidig, onDone }: { huidig: string; onDone: () => 
     }
     setSaving(true);
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await fetch(withBasePath('/api/auth/change-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ huidig_wachtwoord: current, nieuw_wachtwoord: next }),

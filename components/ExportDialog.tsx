@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { withBasePath } from '@/lib/basePath';
 
 export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
@@ -110,7 +111,7 @@ export function ExportDialog({
     setSavingDeadline(true);
     setDeadlineError(null);
     try {
-      const res = await fetch(`/api/periods/${periodId}/deadline`, {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/deadline`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deadline: newDeadline }),
@@ -152,7 +153,7 @@ export function ExportDialog({
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
-    fetch('/api/exports/verzendlijst-status')
+    fetch(withBasePath('/api/exports/verzendlijst-status'))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled) setAutoSendAvailable(Boolean(data?.data?.ingesteld));
@@ -189,7 +190,7 @@ export function ExportDialog({
 
   const sendInvitations = async () => {
     setSendState({ kind: 'sending' });
-    setSendState(await postSend(`/api/exports/invitations/${periodId}/send`));
+    setSendState(await postSend(withBasePath(`/api/exports/invitations/${periodId}/send`)));
   };
 
   const loadReminders = async () => {
@@ -200,7 +201,7 @@ export function ExportDialog({
       // POST, not GET: this revokes and reissues everyone's personal link
       // (see the route's docstring) - a state change must not be reachable
       // by a link click.
-      const res = await fetch(`/api/exports/reminders/${periodId}`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/exports/reminders/${periodId}`), { method: 'POST' });
       if (!res.ok) {
         const data = await res.json().catch(() => null);
         throw new Error(data?.error?.message ?? 'Laden van herinneringen mislukt');
@@ -247,7 +248,7 @@ export function ExportDialog({
       setReminderSends((prev) => ({ ...prev, ...Object.fromEntries(list.map((r) => [r.person_id, state])) }));
     if (alle) setSendState({ kind: 'sending' });
     mark({ kind: 'sending' });
-    const result = await postSend(`/api/exports/reminders/${periodId}/send`, {
+    const result = await postSend(withBasePath(`/api/exports/reminders/${periodId}/send`), {
       deadline: reminders[0]?.deadline_bron,
       berichten: list.map(reminderBericht),
     });
@@ -258,7 +259,7 @@ export function ExportDialog({
   const downloadInvitations = async () => {
     try {
       // POST for the same reason as the reminders fetch above.
-      const res = await fetch(`/api/exports/invitations/${periodId}`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/exports/invitations/${periodId}`), { method: 'POST' });
       if (!res.ok) throw new Error('Downloaden van uitnodigingen mislukt');
 
       const blob = await res.blob();
@@ -279,7 +280,7 @@ export function ExportDialog({
 
   const downloadAuditTrail = async () => {
     try {
-      const res = await fetch(`/api/exports/audit-trail/${periodId}`);
+      const res = await fetch(withBasePath(`/api/exports/audit-trail/${periodId}`));
       if (!res.ok) throw new Error('Downloaden van wijzigingsgeschiedenis mislukt');
 
       const blob = await res.blob();

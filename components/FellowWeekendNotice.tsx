@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface Summary {
   fellows: Array<{ person_id: string; codenaam: string; vrije_weekenddagen: number }>;
@@ -34,7 +35,7 @@ export function FellowWeekendNotice({ periodId, vensterWeekend }: { periodId: st
 
   useEffect(() => {
     let current = true;
-    fetch(`/api/planner/period/${periodId}/fellows?venster_weekend=${vensterWeekend}`)
+    fetch(withBasePath(`/api/planner/period/${periodId}/fellows?venster_weekend=${vensterWeekend}`))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (current && data?.success) setSummary(data.data);

@@ -17,6 +17,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { parseCsv } from '@/lib/csv';
+import { withBasePath } from '@/lib/basePath';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'holidays' | 'confirm';
 
@@ -353,7 +354,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         if (periodData.start_datum) params.set('start_datum', periodData.start_datum);
         if (periodData.eind_datum) params.set('eind_datum', periodData.eind_datum);
 
-        const res = await fetch(`/api/periods/${period.id}/capacity?${params.toString()}`);
+        const res = await fetch(withBasePath(`/api/periods/${period.id}/capacity?${params.toString()}`));
         if (!res.ok) throw new Error('Capaciteitscheck mislukt');
         const data = await res.json();
         if (ticket !== capacityRequestRef.current) return; // superseded by a newer request
@@ -424,7 +425,7 @@ export function SetupWizard({ period, onComplete }: Props) {
   };
 
   const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }) =>
-    fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
+    fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch),
@@ -452,11 +453,11 @@ export function SetupWizard({ period, onComplete }: Props) {
       const memberParams = new URLSearchParams();
       if (periodData.start_datum) memberParams.set('period_start', periodData.start_datum);
       if (periodData.eind_datum) memberParams.set('period_end', periodData.eind_datum);
-      const membersUrl = `/api/planner/pool/${periodData.pool_id}/members?${memberParams.toString()}`;
+      const membersUrl = withBasePath(`/api/planner/pool/${periodData.pool_id}/members?${memberParams.toString()}`);
 
       const [membersRes, linksRes] = await Promise.all([
         fetch(membersUrl),
-        fetch(`/api/planner/period/${period.id}/staff-links`),
+        fetch(withBasePath(`/api/planner/period/${period.id}/staff-links`)),
       ]);
       let membersData = await membersRes.json();
       const linksData = await linksRes.json();
@@ -557,7 +558,7 @@ export function SetupWizard({ period, onComplete }: Props) {
     setAddingMember(true);
     setStaffError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${periodData.pool_id}/members`, {
+      const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newMember),
@@ -588,7 +589,7 @@ export function SetupWizard({ period, onComplete }: Props) {
     setSavingMembership(true);
     setStaffError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
+      const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editDates),
@@ -613,7 +614,7 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
     setStaffError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`, {
+      const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
         method: 'DELETE',
       });
       const data = await res.json();
@@ -792,7 +793,7 @@ export function SetupWizard({ period, onComplete }: Props) {
     setOpenResult(null);
 
     try {
-      const openRes = await fetch(`/api/periods/${period.id}/open`, {
+      const openRes = await fetch(withBasePath(`/api/periods/${period.id}/open`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -845,7 +846,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       const toLink = staffMembers.filter((m) => m.is_active && !m.access_link);
       let linksSent = 0;
       for (const member of toLink) {
-        const linkRes = await fetch(`/api/planner/period/${period.id}/staff-links`, {
+        const linkRes = await fetch(withBasePath(`/api/planner/period/${period.id}/staff-links`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ person_id: member.person_id }),
@@ -861,7 +862,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       }
 
       if (balanceRows.length > 0) {
-        const balancesRes = await fetch(`/api/planner/period/${period.id}/import-balances`, {
+        const balancesRes = await fetch(withBasePath(`/api/planner/period/${period.id}/import-balances`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rows: balanceRows }),
@@ -880,7 +881,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       }
 
       if (holidayRows.length > 0) {
-        const holidaysRes = await fetch(`/api/planner/period/${period.id}/import-holidays`, {
+        const holidaysRes = await fetch(withBasePath(`/api/planner/period/${period.id}/import-holidays`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ rows: holidayRows }),
@@ -900,7 +901,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
       let correctionsFailed = false;
       if (corrections.length > 0) {
-        const correctionsRes = await fetch(`/api/planner/period/${period.id}/ledger-corrections`, {
+        const correctionsRes = await fetch(withBasePath(`/api/planner/period/${period.id}/ledger-corrections`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

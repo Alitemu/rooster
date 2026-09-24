@@ -7,6 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface Props {
   personId: string;
@@ -24,7 +25,7 @@ export function FellowToggle({ personId, periodId, onChanged }: Props) {
 
   useEffect(() => {
     let current = true;
-    fetch(`/api/person/${personId}/fellow?period_id=${encodeURIComponent(periodId)}`)
+    fetch(withBasePath(`/api/person/${personId}/fellow?period_id=${encodeURIComponent(periodId)}`))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!current || !data?.success) return;
@@ -47,7 +48,7 @@ export function FellowToggle({ personId, periodId, onChanged }: Props) {
     setError(null);
     setFellow(next);
     try {
-      const res = await fetch(`/api/person/${personId}/fellow`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/fellow`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period_id: periodId, fellow: next }),

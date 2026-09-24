@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { withBasePath } from '@/lib/basePath';
 
 interface Pool {
   id: string;
@@ -75,7 +76,7 @@ export default function PoolStaffPage() {
   // already carries naam for every pool, so find this one in it rather
   // than adding a single-pool route for one field.
   useEffect(() => {
-    fetch('/api/planner/pools?include_inactive=true')
+    fetch(withBasePath('/api/planner/pools?include_inactive=true'))
       .then((res) => res.json())
       .then((data) => {
         const found = (data.data || []).find((p: Pool) => p.id === poolId);
@@ -93,7 +94,7 @@ export default function PoolStaffPage() {
     if (!options?.silent) setStaffLoading(true);
     setStaffError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${poolId}/members`);
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members`));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Laden van personeel mislukt');
       setMembers(data.data || []);
@@ -106,7 +107,7 @@ export default function PoolStaffPage() {
 
   const loadPendingUndo = useCallback(async () => {
     try {
-      const res = await fetch(`/api/planner/pool/${poolId}/members/pending-undo`);
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/pending-undo`));
       const data = await res.json();
       setPendingUndo(res.ok ? data.data?.pending ?? null : null);
     } catch {
@@ -123,7 +124,7 @@ export default function PoolStaffPage() {
     setUndoing(true);
     setUndoError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${poolId}/members/undo-last`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/undo-last`), { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Ongedaan maken mislukt');
       await loadStaff({ silent: true });
@@ -147,7 +148,7 @@ export default function PoolStaffPage() {
     setAddingMember(true);
     setStaffError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${poolId}/members`, {
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newMember),
@@ -178,7 +179,7 @@ export default function PoolStaffPage() {
     setSavingMembership(true);
     setStaffError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${poolId}/members/${membershipId}`, {
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/${membershipId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editDates),
@@ -203,7 +204,7 @@ export default function PoolStaffPage() {
     }
     setStaffError(null);
     try {
-      const res = await fetch(`/api/planner/pool/${poolId}/members/${membershipId}`, { method: 'DELETE' });
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/${membershipId}`), { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
 

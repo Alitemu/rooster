@@ -15,6 +15,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { withBasePath } from '@/lib/basePath';
 
 interface Props {
   isOpen: boolean;
@@ -65,7 +66,7 @@ export function TotpSettingsDialog({ isOpen, onClose }: Props) {
   useEffect(() => {
     if (!isOpen) return;
     reset();
-    fetch('/api/auth/me')
+    fetch(withBasePath('/api/auth/me'))
       .then((res) => res.json())
       .then((data) => {
         if (!data?.data?.authenticated) {
@@ -88,7 +89,7 @@ export function TotpSettingsDialog({ isOpen, onClose }: Props) {
     setEnrollError(null);
     setEnrolling(true);
     try {
-      const res = await fetch('/api/auth/totp/setup', { method: 'POST' });
+      const res = await fetch(withBasePath('/api/auth/totp/setup'), { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
         setEnrollError(data?.error?.message ?? 'Starten van instellen is mislukt');
@@ -109,7 +110,7 @@ export function TotpSettingsDialog({ isOpen, onClose }: Props) {
     setEnrollError(null);
     setEnrolling(true);
     try {
-      const res = await fetch('/api/auth/totp/confirm', {
+      const res = await fetch(withBasePath('/api/auth/totp/confirm'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ setup_token: setupToken, code }),
@@ -136,7 +137,7 @@ export function TotpSettingsDialog({ isOpen, onClose }: Props) {
     setDisableError(null);
     setDisabling(true);
     try {
-      const res = await fetch('/api/auth/totp/disable', {
+      const res = await fetch(withBasePath('/api/auth/totp/disable'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wachtwoord: disablePassword }),

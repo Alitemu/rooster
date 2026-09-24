@@ -21,6 +21,7 @@
 import { useState, useEffect } from 'react';
 import { parseISO, dateToISO } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
+import { withBasePath } from '@/lib/basePath';
 
 interface ParttimePattern {
   id: string;
@@ -97,7 +98,7 @@ export function PartTimeCheckStep({
       setLoadError(null);
       try {
         const res = await fetch(
-          `/api/person/${personId}/parttime-patterns/generated-days?period_id=${periodId}`
+          withBasePath(`/api/person/${personId}/parttime-patterns/generated-days?period_id=${periodId}`)
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data.error?.message || 'Ophalen van deeltijddagen mislukt');

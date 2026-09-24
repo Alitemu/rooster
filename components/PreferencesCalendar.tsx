@@ -28,6 +28,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { dateToISO, parseISO, getHolidayInfo, addDays } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
+import { withBasePath } from '@/lib/basePath';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
 
@@ -152,7 +153,7 @@ export function PreferencesCalendar({
   const fetchPreferences = useCallback(async () => {
     setLoadError(null);
     try {
-      const res = await fetch(`/api/person/${personId}/preferences/${periodId}`);
+      const res = await fetch(withBasePath(`/api/person/${personId}/preferences/${periodId}`));
       if (!res.ok) throw new Error('Ophalen van voorkeuren mislukt');
 
       const data = await res.json();
@@ -203,7 +204,7 @@ export function PreferencesCalendar({
   const fetchCoverage = useCallback(async () => {
     const requestId = ++coverageRequestId.current;
     try {
-      const res = await fetch(`/api/person/${personId}/preferences/${periodId}/coverage`);
+      const res = await fetch(withBasePath(`/api/person/${personId}/preferences/${periodId}/coverage`));
       if (!res.ok) throw new Error('Failed to fetch coverage');
 
       const data = await res.json();
@@ -247,7 +248,7 @@ export function PreferencesCalendar({
       setIsSaving(true);
       setSaveError(null);
       try {
-        const res = await fetch(`/api/person/${personId}/preferences/slot/${slotId}`, {
+        const res = await fetch(withBasePath(`/api/person/${personId}/preferences/slot/${slotId}`), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ level }),

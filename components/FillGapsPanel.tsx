@@ -29,6 +29,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
 // comment there for why a person can only ever be in one of these.
@@ -210,7 +211,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
   // renders something.
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/planner/period/${periodId}/unfilled-slots`);
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/unfilled-slots`));
       const data = await res.json();
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Laden van openstaande diensten mislukt');
       setLoadError(null);
@@ -253,7 +254,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
 
     for (const [slotId, personId] of entries) {
       try {
-        const res = await fetch(`/api/planner/period/${periodId}/assignments/manual-assign`, {
+        const res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/manual-assign`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ person_id: personId, slot_id: slotId, reason: 'Handmatig aangevuld', onderdeel: 'VOORAF' }),

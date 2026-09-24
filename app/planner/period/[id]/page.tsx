@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
+import { withBasePath } from '@/lib/basePath';
 
 interface Period {
   id: string;
@@ -39,7 +40,7 @@ export default function PlannerPeriodPage() {
 
   const loadPeriod = async () => {
     try {
-      const res = await fetch(`/api/periods/${periodId}`);
+      const res = await fetch(withBasePath(`/api/periods/${periodId}`));
       if (!res.ok) throw new Error('Laden van periode mislukt');
 
       const data = await res.json();
@@ -72,7 +73,7 @@ export default function PlannerPeriodPage() {
     setSavingDeadline(true);
     setDeadlineError(null);
     try {
-      const res = await fetch(`/api/periods/${periodId}/deadline`, {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/deadline`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deadline: deadlineInput }),
@@ -99,7 +100,7 @@ export default function PlannerPeriodPage() {
     setClosing(true);
     setCloseError(null);
     try {
-      const res = await fetch(`/api/periods/${periodId}/close`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/close`), { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Sluiten van periode mislukt');
       await loadPeriod();
@@ -268,7 +269,7 @@ export default function PlannerPeriodPage() {
         <div className="card p-4 bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-900">
             Deze periode staat nog op concept. Ga naar de{' '}
-            <a href={`/planner/setup/${periodId}`} className="font-medium underline">
+            <a href={withBasePath(`/planner/setup/${periodId}`)} className="font-medium underline">
               instelwizard
             </a>{' '}
             om deze in te stellen en te openen.

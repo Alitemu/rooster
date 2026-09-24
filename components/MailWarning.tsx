@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface Status {
   ingesteld: boolean;
@@ -43,7 +44,7 @@ export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string
 
   useEffect(() => {
     let current = true;
-    fetch('/api/planner/mail-settings')
+    fetch(withBasePath('/api/planner/mail-settings'))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (current && data?.success) setStatus(data.data);

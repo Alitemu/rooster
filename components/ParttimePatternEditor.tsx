@@ -13,6 +13,7 @@
  */
 
 import { useState } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 export interface ParttimePattern {
   id: string;
@@ -78,7 +79,7 @@ export function ParttimePatternEditor({
 
   const refresh = async () => {
     try {
-      const res = await fetch(`/api/person/${personId}/parttime-patterns`);
+      const res = await fetch(withBasePath(`/api/person/${personId}/parttime-patterns`));
       if (!res.ok) throw new Error();
       const data = await res.json();
       onPatternsChange(data.data);
@@ -115,8 +116,8 @@ export function ParttimePatternEditor({
     setWarning(null);
     try {
       const url = editingId
-        ? `/api/person/${personId}/parttime-patterns/${editingId}`
-        : `/api/person/${personId}/parttime-patterns`;
+        ? withBasePath(`/api/person/${personId}/parttime-patterns/${editingId}`)
+        : withBasePath(`/api/person/${personId}/parttime-patterns`);
       const res = await fetch(url, {
         method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,7 +141,7 @@ export function ParttimePatternEditor({
     setError(null);
     setWarning(null);
     try {
-      const res = await fetch(`/api/person/${personId}/parttime-patterns/${patternId}`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/parttime-patterns/${patternId}`), {
         method: 'DELETE',
       });
       const data = await res.json();

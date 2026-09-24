@@ -13,6 +13,7 @@
 
 import { useState, useEffect } from 'react';
 import { swapStatusLabel } from '@/lib/statusLabels';
+import { withBasePath } from '@/lib/basePath';
 
 interface SwapRequestRow {
   id: string;
@@ -71,7 +72,7 @@ export function SwapRequestsOverview({ periodId }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/planner/period/${periodId}/swap-requests`);
+        const res = await fetch(withBasePath(`/api/planner/period/${periodId}/swap-requests`));
         const data = await res.json();
         if (!res.ok) {
           throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Laden van ruilverzoeken mislukt');

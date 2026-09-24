@@ -10,6 +10,7 @@
  */
 
 import { useState } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface BlockedDaysSummary {
   AVOND: number;
@@ -56,7 +57,7 @@ export function PreferencesConfirmation({
     setError(null);
 
     try {
-      const res = await fetch(`/api/person/${personId}/preferences/submission`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/preferences/submission`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

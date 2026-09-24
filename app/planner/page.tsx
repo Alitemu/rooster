@@ -13,6 +13,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
+import { withBasePath, withoutBasePath } from '@/lib/basePath';
 
 interface Period {
   id: string;
@@ -113,9 +114,9 @@ export default function PlannerHomePage() {
     setLoadError(null);
     try {
       const [periodsRes, poolsRes, trashRes] = await Promise.all([
-        fetch('/api/periods'),
-        fetch('/api/planner/pools'),
-        fetch('/api/periods/trash'),
+        fetch(withBasePath('/api/periods')),
+        fetch(withBasePath('/api/planner/pools')),
+        fetch(withBasePath('/api/periods/trash')),
       ]);
 
       // middleware.ts only checks that a session cookie is present, not
@@ -125,7 +126,7 @@ export default function PlannerHomePage() {
       // undefined and the planner sees a misleading "no periods yet"
       // empty state instead of being sent back to log in.
       if (periodsRes.status === 401 || poolsRes.status === 401 || trashRes.status === 401) {
-        router.push(`/planner/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+        router.push(`/planner/login?redirect=${encodeURIComponent(withoutBasePath(window.location.pathname))}`);
         return;
       }
 
@@ -156,7 +157,7 @@ export default function PlannerHomePage() {
   const loadTrash = async () => {
     setTrashLoading(true);
     try {
-      const res = await fetch('/api/periods/trash');
+      const res = await fetch(withBasePath('/api/periods/trash'));
       const data = await res.json();
       setTrash(data.data || []);
     } catch {
@@ -176,7 +177,7 @@ export default function PlannerHomePage() {
     setDeleteBusy(true);
     setDeleteError(null);
     try {
-      const res = await fetch(`/api/periods/${deletingPeriod.id}`, { method: 'DELETE' });
+      const res = await fetch(withBasePath(`/api/periods/${deletingPeriod.id}`), { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
 
@@ -194,7 +195,7 @@ export default function PlannerHomePage() {
     setTrashActionBusy(id);
     setRestoreError(null);
     try {
-      const res = await fetch(`/api/periods/${id}/restore`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/periods/${id}/restore`), { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Herstellen mislukt');
       // loadData() already re-fetches /api/periods/trash itself - the
@@ -213,7 +214,7 @@ export default function PlannerHomePage() {
     setTrashActionBusy(purgingPeriod.id);
     setPurgeError(null);
     try {
-      const res = await fetch(`/api/periods/${purgingPeriod.id}/purge`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/periods/${purgingPeriod.id}/purge`), { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Definitief verwijderen mislukt');
 
@@ -236,7 +237,7 @@ export default function PlannerHomePage() {
 
     setCreating(true);
     try {
-      const res = await fetch('/api/planner/periods', {
+      const res = await fetch(withBasePath('/api/planner/periods'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -255,7 +256,7 @@ export default function PlannerHomePage() {
   };
 
   const handleLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' });
+    await fetch(withBasePath('/api/auth/logout'), { method: 'POST' });
     router.push('/');
   };
 

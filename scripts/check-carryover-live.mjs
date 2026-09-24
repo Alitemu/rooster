@@ -25,7 +25,8 @@ import Database from 'better-sqlite3';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
 
-const BASE = 'http://localhost:3000';
+// APP_URL includes the app's sub-folder when it was built with one (lib/basePath.ts).
+const BASE = process.env.APP_URL || 'http://localhost:3000';
 
 // Same resolution as db/client.ts, so this script always inspects the very
 // database the server it is testing is writing to (locally ./rooster.db,

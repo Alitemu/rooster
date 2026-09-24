@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface SwapRequest {
   id: string;
@@ -76,7 +77,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       if (!silent) setError(null);
 
       try {
-        let url = `/api/person/${personId}/swap-requests?period_id=${periodId}`;
+        let url = withBasePath(`/api/person/${personId}/swap-requests?period_id=${periodId}`);
         if (filterStatus) url += `&status=${filterStatus}`;
 
         const res = await fetch(url);
@@ -150,7 +151,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   const handleApprove = async (swapId: string) => {
     setActionError(null);
     try {
-      const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/approve`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/approve`), {
         method: 'POST',
       });
 
@@ -185,7 +186,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   const handleReject = async (swapId: string, reason?: string) => {
     setActionError(null);
     try {
-      const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/reject`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/reject`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: reason || null }),
@@ -208,7 +209,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   const handleCancel = async (swapId: string) => {
     setActionError(null);
     try {
-      const res = await fetch(`/api/person/${personId}/swap-requests/${swapId}/cancel`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/cancel`), {
         method: 'POST',
       });
 

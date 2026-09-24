@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface Status {
   aan: boolean;
@@ -49,7 +50,7 @@ export function AutoReminderPanel({ periodId, refreshKey }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/planner/period/${periodId}/auto-reminders`);
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/auto-reminders`));
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error?.message ?? 'Laden mislukt');
       setStatus(data.data);
@@ -67,7 +68,7 @@ export function AutoReminderPanel({ periodId, refreshKey }: Props) {
     if (!status) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/planner/period/${periodId}/auto-reminders`, {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/auto-reminders`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ aan: !status.aan }),

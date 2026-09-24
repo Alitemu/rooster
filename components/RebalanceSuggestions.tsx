@@ -15,6 +15,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface Suggestion {
   assignment_id: string;
@@ -60,7 +61,7 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
   const load = useCallback(async () => {
     setLoadError(null);
     try {
-      const res = await fetch(`/api/planner/period/${periodId}/rebalance-suggestions`);
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/rebalance-suggestions`));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Laden van voorstellen mislukt');
       const loaded: Suggestion[] = data.data || [];
@@ -83,7 +84,7 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
     setActionError(null);
     try {
       const res = await fetch(
-        `/api/planner/period/${periodId}/assignments/${suggestion.assignment_id}/reassign`,
+        withBasePath(`/api/planner/period/${periodId}/assignments/${suggestion.assignment_id}/reassign`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

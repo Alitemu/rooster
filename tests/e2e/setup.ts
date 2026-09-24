@@ -151,7 +151,8 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
  * Get base URL for E2E tests
  */
 export function getBaseUrl(): string {
-  return process.env.E2E_BASE_URL || 'http://localhost:3000';
+  // Includes the app's sub-folder when it was built with one (lib/basePath.ts).
+  return process.env.APP_URL || process.env.E2E_BASE_URL || 'http://localhost:3000';
 }
 
 /**

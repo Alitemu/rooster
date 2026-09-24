@@ -11,6 +11,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { FellowWeekendNotice } from './FellowWeekendNotice';
+import { withBasePath } from '@/lib/basePath';
 
 // Native fetch() throws a plain TypeError with a browser-specific, English,
 // technical message ("Failed to fetch", "NetworkError when attempting to
@@ -249,7 +250,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     let cancelled = false;
     setRulesetLoading(true);
     setRulesetError(null);
-    fetch(`/api/periods/${periodId}`)
+    fetch(withBasePath(`/api/periods/${periodId}`))
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
@@ -317,7 +318,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
           setNotReadyWarning(null);
           return;
         }
-        fetch(`/api/planner/period/${periodId}/dashboard`)
+        fetch(withBasePath(`/api/planner/period/${periodId}/dashboard`))
           .then((res) => res.json())
           .then((dashData) => {
             if (cancelled) return;
@@ -362,7 +363,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       let res: Response;
       try {
         res = await fetch(
-          `/api/planner/period/${periodId}/generate-roster/status?job_id=${encodeURIComponent(jobId)}`
+          withBasePath(`/api/planner/period/${periodId}/generate-roster/status?job_id=${encodeURIComponent(jobId)}`)
         );
       } catch (err) {
         consecutiveFailures++;
@@ -444,7 +445,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       // hidden once a result exists) not demote-then-repromote the period
       // on every single click.
       if (ruleset && JSON.stringify(ruleset) !== JSON.stringify(originalRuleset)) {
-        const rulesetRes = await fetch(`/api/periods/${periodId}/ruleset`, {
+        const rulesetRes = await fetch(withBasePath(`/api/periods/${periodId}/ruleset`), {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -466,7 +467,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       // solve happens server-side afterwards (see generate-roster/route.ts
       // and lib/rosterGenerationJobs.ts). pollJobStatus below finds out how
       // it went via short, resilient polls instead of one long request.
-      const res = await fetch(`/api/planner/period/${periodId}/generate-roster`, {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/generate-roster`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
@@ -505,7 +506,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
     if (!currentJobId || cancelling) return;
     setCancelling(true);
     try {
-      await fetch(`/api/planner/period/${periodId}/generate-roster/cancel`, {
+      await fetch(withBasePath(`/api/planner/period/${periodId}/generate-roster/cancel`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ job_id: currentJobId }),

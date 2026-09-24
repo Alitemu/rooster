@@ -32,6 +32,7 @@ import { periodStatusLabel } from '@/lib/statusLabels';
 import { FellowBadge } from './FellowBadge';
 import { MailSettingsDialog } from './MailSettingsDialog';
 import { MailWarning } from './MailWarning';
+import { withBasePath } from '@/lib/basePath';
 
 interface PersonProgress {
   person_id: string;
@@ -340,8 +341,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const loadData = async (bumpAssignmentsKey: boolean = true) => {
     try {
       const [dashRes, progRes] = await Promise.all([
-        fetch(`/api/planner/period/${periodId}/dashboard`),
-        fetch(`/api/planner/period/${periodId}/progress`),
+        fetch(withBasePath(`/api/planner/period/${periodId}/dashboard`)),
+        fetch(withBasePath(`/api/planner/period/${periodId}/progress`)),
       ]);
 
       if (!dashRes.ok || !progRes.ok) throw new Error('Laden van dashboard mislukt');
@@ -363,7 +364,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     // dashboard data, so a failure here must never block the rest of the
     // page from loading the way the checks above do.
     try {
-      const pendingRes = await fetch(`/api/planner/period/${periodId}/assignments/pending-undo`);
+      const pendingRes = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/pending-undo`));
       const pendingData = await pendingRes.json();
       setPendingUndo(pendingRes.ok ? pendingData.data?.pending ?? null : null);
     } catch {
@@ -385,7 +386,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     setUndoing(true);
     setUndoError(null);
     try {
-      const res = await fetch(`/api/planner/period/${periodId}/assignments/undo-last`, {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/undo-last`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: reason || undefined }),
@@ -413,7 +414,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     setUnpublishing(true);
     setUnpublishError(null);
     try {
-      const res = await fetch(`/api/planner/period/${periodId}/unpublish`, { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/unpublish`), { method: 'POST' });
       const data = await res.json();
       if (!res.ok) {
         throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Intrekken van publicatie mislukt');
@@ -431,7 +432,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     setSubmittingFor(personId);
     setActionError(null);
     try {
-      const res = await fetch(`/api/planner/person/${personId}/submit-on-behalf`, {
+      const res = await fetch(withBasePath(`/api/planner/person/${personId}/submit-on-behalf`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -466,7 +467,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
       setProgress((prev) => prev.map((p) => (p.person_id === personId ? { ...p, is_fellow: value ? 1 : 0 } : p)));
     setLocal(fellow);
     try {
-      const res = await fetch(`/api/person/${personId}/fellow`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/fellow`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ period_id: periodId, fellow }),
@@ -969,7 +970,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             ⚙️ Mailinstellingen
           </button>
           <a
-            href={`/api/exports/status-report/${periodId}`}
+            href={withBasePath(`/api/exports/status-report/${periodId}`)}
             className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
           >
             📋 Statusrapport downloaden
@@ -981,7 +982,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
               uitleg bij dat kopje). */}
           {dashboard.assignment_count > 0 && (
             <a
-              href={`/api/exports/assignments/${periodId}`}
+              href={withBasePath(`/api/exports/assignments/${periodId}`)}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
               📅 Rooster downloaden (CSV)

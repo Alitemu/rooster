@@ -12,7 +12,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: process.env.APP_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
   },
   webServer: undefined, // Server already running

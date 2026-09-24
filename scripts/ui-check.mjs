@@ -21,7 +21,8 @@ import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
 
-const BASE = 'http://localhost:3000';
+// APP_URL includes the app's sub-folder when it was built with one (lib/basePath.ts).
+const BASE = process.env.APP_URL || 'http://localhost:3000';
 const db = new Database(
   nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..', 'rooster.db')
 );
@@ -507,13 +508,14 @@ const rosterPeriod = db
 if (rosterPeriod) {
   const undoLast = () =>
     page.evaluate(
-      (id) =>
-        fetch(`/api/planner/period/${id}/assignments/undo-last`, {
+      ({ id, basePath }) =>
+        fetch(`${basePath}/api/planner/period/${id}/assignments/undo-last`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: '{}',
         }).then((r) => r.status),
-      rosterPeriod.id
+      // The app's sub-folder, when APP_URL has one.
+      { id: rosterPeriod.id, basePath: new URL(BASE).pathname.replace(/\/$/, '') }
     );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${BASE}/planner/period/${rosterPeriod.id}`, { waitUntil: 'networkidle' });

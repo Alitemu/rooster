@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { withBasePath } from '@/lib/basePath';
 
 interface Props {
   isOpen: boolean;
@@ -58,7 +59,7 @@ export function ChangePasswordDialog({ isOpen, onClose }: Props) {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const res = await fetch(withBasePath('/api/auth/change-password'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ huidig_wachtwoord: current, nieuw_wachtwoord: next }),

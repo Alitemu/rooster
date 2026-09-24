@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import { addDays } from '@/lib/holidays';
+import { withBasePath } from '@/lib/basePath';
 
 export interface Absence {
   id: string;
@@ -74,8 +75,8 @@ export function AbsenceManager({
 
   const refresh = async () => {
     const url = periodId
-      ? `/api/person/${personId}/absences?period_id=${periodId}`
-      : `/api/person/${personId}/absences`;
+      ? withBasePath(`/api/person/${personId}/absences?period_id=${periodId}`)
+      : withBasePath(`/api/person/${personId}/absences`);
     const res = await fetch(url);
     if (res.ok) {
       const data = await res.json();
@@ -107,8 +108,8 @@ export function AbsenceManager({
     setWarning(null);
     try {
       const url = editingId
-        ? `/api/person/${personId}/absences/${editingId}`
-        : `/api/person/${personId}/absences`;
+        ? withBasePath(`/api/person/${personId}/absences/${editingId}`)
+        : withBasePath(`/api/person/${personId}/absences`);
       const res = await fetch(url, {
         method: editingId ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -132,7 +133,7 @@ export function AbsenceManager({
     setError(null);
     setWarning(null);
     try {
-      const res = await fetch(`/api/person/${personId}/absences/${absenceId}`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/absences/${absenceId}`), {
         method: 'DELETE',
       });
       const data = await res.json();

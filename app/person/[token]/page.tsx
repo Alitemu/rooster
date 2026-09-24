@@ -18,6 +18,7 @@ import { PreferencesConfirmation } from '@/components/PreferencesConfirmation';
 import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
+import { withBasePath } from '@/lib/basePath';
 
 type Step = 'calendar' | 'parttime' | 'confirmation' | 'submitted' | 'roster';
 
@@ -181,7 +182,7 @@ function PersonalLinkPageContent() {
    */
   const handleLogout = useCallback(async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
+      await fetch(withBasePath('/api/auth/logout'), { method: 'POST' });
     } finally {
       router.replace('/');
     }
@@ -192,7 +193,7 @@ function PersonalLinkPageContent() {
   // panel follows along without a manual refresh.
   const reloadRoster = async () => {
     if (!personId || !period) return;
-    const res = await fetch(`/api/person/${personId}/roster/${period.id}`);
+    const res = await fetch(withBasePath(`/api/person/${personId}/roster/${period.id}`));
     if (res.ok) setRosterData((await res.json()).data);
   };
 
@@ -201,7 +202,7 @@ function PersonalLinkPageContent() {
     const verifyToken = async () => {
       try {
         // Validate token format and fetch person info
-        const res = await fetch(`/api/auth/verify-link?token=${encodeURIComponent(token)}`);
+        const res = await fetch(withBasePath(`/api/auth/verify-link?token=${encodeURIComponent(token)}`));
         if (!res.ok) {
           throw new Error('Ongeldige of verlopen toegangslink');
         }
@@ -213,7 +214,7 @@ function PersonalLinkPageContent() {
         setIsLinkError(false);
 
         // Fetch period details
-        const periodRes = await fetch(`/api/periods/${period_id}`);
+        const periodRes = await fetch(withBasePath(`/api/periods/${period_id}`));
         if (!periodRes.ok) throw new Error('Kon periode niet laden');
 
         const periodData = await periodRes.json();
@@ -223,8 +224,8 @@ function PersonalLinkPageContent() {
         // If period is published, load roster; otherwise load patterns
         if (periodInfo.status === 'GEPUBLICEERD') {
           const [rosterRes, preferencesRes] = await Promise.all([
-            fetch(`/api/person/${person_id}/roster/${period_id}`),
-            fetch(`/api/person/${person_id}/preferences/${period_id}`),
+            fetch(withBasePath(`/api/person/${person_id}/roster/${period_id}`)),
+            fetch(withBasePath(`/api/person/${person_id}/preferences/${period_id}`)),
           ]);
 
           if (rosterRes.ok) {
@@ -282,8 +283,8 @@ function PersonalLinkPageContent() {
         } else {
           // Fetch part-time patterns and absences for preference entry
           const [patternsRes, absencesRes] = await Promise.all([
-            fetch(`/api/person/${person_id}/parttime-patterns`),
-            fetch(`/api/person/${person_id}/absences?period_id=${period_id}`),
+            fetch(withBasePath(`/api/person/${person_id}/parttime-patterns`)),
+            fetch(withBasePath(`/api/person/${person_id}/absences?period_id=${period_id}`)),
           ]);
           const failedParts: string[] = [];
           if (patternsRes.ok) {
@@ -329,7 +330,7 @@ function PersonalLinkPageContent() {
 
     const loadBlockedDays = async () => {
       try {
-        const res = await fetch(`/api/person/${personId}/preferences/${period.id}`);
+        const res = await fetch(withBasePath(`/api/person/${personId}/preferences/${period.id}`));
         if (!res.ok) return;
         const data = await res.json();
 

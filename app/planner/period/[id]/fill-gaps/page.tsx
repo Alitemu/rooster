@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { FillGapsPanel } from '@/components/FillGapsPanel';
+import { withBasePath } from '@/lib/basePath';
 
 interface Period {
   id: string;
@@ -29,7 +30,7 @@ export default function FillGapsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/periods/${periodId}`)
+    fetch(withBasePath(`/api/periods/${periodId}`))
       .then((res) => res.json())
       .then((data) => {
         if (!data.success) throw new Error(data.error?.message || 'Laden van periode mislukt');

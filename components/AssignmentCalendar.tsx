@@ -19,6 +19,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
+import { withBasePath } from '@/lib/basePath';
 
 interface SlotAssignment {
   id: string;
@@ -165,8 +166,8 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
     setError(null);
     try {
       const [periodRes, slotsRes] = await Promise.all([
-        fetch(`/api/periods/${periodId}`),
-        fetch(`/api/planner/period/${periodId}/slots`),
+        fetch(withBasePath(`/api/periods/${periodId}`)),
+        fetch(withBasePath(`/api/planner/period/${periodId}/slots`)),
       ]);
       const periodData = await periodRes.json();
       const slotsData = await slotsRes.json();
@@ -231,7 +232,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
     if (!contextMenu) return;
     let cancelled = false;
     setEligibleLoading(true);
-    fetch(`/api/planner/period/${periodId}/slots/${contextMenu.slotId}/eligible-people`)
+    fetch(withBasePath(`/api/planner/period/${periodId}/slots/${contextMenu.slotId}/eligible-people`))
       .then((res) => res.json())
       .then((data) => {
         if (cancelled) return;
@@ -258,20 +259,20 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
         let res: Response;
         if (action.type === 'remove') {
           const assignmentId = contextMenu.currentAssignment!.id;
-          res = await fetch(`/api/planner/period/${periodId}/assignments/${assignmentId}/delete`, {
+          res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/${assignmentId}/delete`), {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ reason: reason.trim() || null }),
           });
         } else if (action.type === 'reassign') {
           const assignmentId = contextMenu.currentAssignment!.id;
-          res = await fetch(`/api/planner/period/${periodId}/assignments/${assignmentId}/reassign`, {
+          res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/${assignmentId}/reassign`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ person_id: action.personId, reason: reason.trim() || null }),
           });
         } else {
-          res = await fetch(`/api/planner/period/${periodId}/assignments/manual-assign`, {
+          res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/manual-assign`), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ person_id: action.personId, slot_id: contextMenu.slotId, reason: reason.trim() || null }),

@@ -12,6 +12,7 @@
 
 import { useState, useEffect } from 'react';
 import { FellowBadge } from './FellowBadge';
+import { withBasePath } from '@/lib/basePath';
 
 interface StaffingRow {
   person_id: string;
@@ -75,7 +76,7 @@ export function StaffingOverview({ periodId }: Props) {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/planner/period/${periodId}/staffing-overview`);
+        const res = await fetch(withBasePath(`/api/planner/period/${periodId}/staffing-overview`));
         if (!res.ok) throw new Error('Laden van dienstdoende-overzicht mislukt');
         const data = await res.json();
         if (cancelled) return;

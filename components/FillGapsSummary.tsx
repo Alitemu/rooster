@@ -20,6 +20,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { withBasePath } from '@/lib/basePath';
 
 interface Props {
   periodId: string;
@@ -40,7 +41,7 @@ export function FillGapsSummary({ periodId, onCountChange, refreshKey }: Props) 
 
   const load = useCallback(async () => {
     try {
-      const res = await fetch(`/api/planner/period/${periodId}/unfilled-slots/count`);
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/unfilled-slots/count`));
       const data = await res.json();
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Laden van openstaande diensten mislukt');
       setLoadError(null);

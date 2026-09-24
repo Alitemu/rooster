@@ -8,6 +8,8 @@ services:
       - "${APP_PORT:-8010}:${APP_PORT:-8010}"
     environment:
       APP_PORT: "${APP_PORT:-8010}"
+      # The app's sub-folder, for the redirect from / (see Caddyfile).
+      BASE_PATH: "${BASE_PATH:-}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
@@ -32,6 +34,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Only when building from source: the sub-folder, e.g. /achterwacht
+      # (see .env.example). A ready-made image already has its own.
+      args:
+        BASE_PATH: "${BASE_PATH:-}"
     environment:
       NODE_ENV: production
       # Pinned rather than left to the base image's default (typically

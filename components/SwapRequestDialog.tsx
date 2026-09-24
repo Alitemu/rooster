@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { withBasePath } from '@/lib/basePath';
 
 interface Assignment {
   id: string;
@@ -97,7 +98,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
       setError(null);
 
       try {
-        const ownRes = await fetch(`/api/person/${personId}/roster/${periodId}`);
+        const ownRes = await fetch(withBasePath(`/api/person/${personId}/roster/${periodId}`));
         if (!ownRes.ok) throw new Error('Laden van rooster mislukt');
 
         const ownData = await ownRes.json();
@@ -122,7 +123,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     }
     let current = true;
     setCandidatesLoading(true);
-    fetch(`/api/person/${personId}/swap-requests/candidates?period_id=${periodId}&offered_slot_id=${offeredSlotId}`)
+    fetch(withBasePath(`/api/person/${personId}/swap-requests/candidates?period_id=${periodId}&offered_slot_id=${offeredSlotId}`))
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error?.message || 'Laden van collega\'s mislukt');
@@ -156,7 +157,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     setError(null);
 
     try {
-      const res = await fetch(`/api/person/${personId}/swap-requests`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

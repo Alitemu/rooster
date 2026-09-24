@@ -11,6 +11,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import type { NextResponse } from 'next/server';
+import { BASE_PATH } from './basePath';
 
 export interface PersonSessionPayload {
   kind: 'person';
@@ -35,6 +36,12 @@ export interface StaffSessionPayload {
 export type SessionPayload = PersonSessionPayload | StaffSessionPayload;
 
 export const SESSION_COOKIE_NAME = 'dienstrooster_session';
+
+/**
+ * Only this app's own sub-folder (lib/basePath.ts), so a browser does not
+ * send the session along to another site on the same address.
+ */
+const COOKIE_PATH = BASE_PATH || '/';
 export const PERSON_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days, matches long-lived personal link
 export const STAFF_SESSION_MAX_AGE_SECONDS = 60 * 60 * 12; // 12 hours
 
@@ -206,7 +213,7 @@ export function setSessionCookie(
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    path: '/',
+    path: COOKIE_PATH,
     maxAge: maxAgeSeconds,
   });
 }
@@ -216,7 +223,7 @@ export function clearSessionCookie(response: NextResponse): void {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    path: '/',
+    path: COOKIE_PATH,
     maxAge: 0,
   });
 }

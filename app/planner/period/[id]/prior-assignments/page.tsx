@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { parseCsv } from '@/lib/csv';
+import { withBasePath } from '@/lib/basePath';
 
 interface PriorAssignment {
   datum: string;
@@ -92,16 +93,16 @@ export default function PriorAssignmentsPage() {
 
   const load = async () => {
     try {
-      const periodRes = await fetch(`/api/periods/${periodId}`);
+      const periodRes = await fetch(withBasePath(`/api/periods/${periodId}`));
       const periodData = await periodRes.json();
       setPeriod(periodData.data);
 
-      const assignmentsRes = await fetch(`/api/periods/${periodId}/prior-assignments`);
+      const assignmentsRes = await fetch(withBasePath(`/api/periods/${periodId}/prior-assignments`));
       const assignmentsData = await assignmentsRes.json();
       setData(assignmentsData.data);
 
       if (periodData.data?.pool_id) {
-        const staffRes = await fetch(`/api/planner/pool/${periodData.data.pool_id}/members`);
+        const staffRes = await fetch(withBasePath(`/api/planner/pool/${periodData.data.pool_id}/members`));
         const staffData = await staffRes.json();
         setStaff(
           (staffData.data || []).map((m: { person_id: string; codenaam: string }) => ({
@@ -126,7 +127,7 @@ export default function PriorAssignmentsPage() {
     setError(null);
     setDeriveInfo(null);
     try {
-      const res = await fetch(`/api/periods/${periodId}/prior-assignments/auto-derive`, {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/prior-assignments/auto-derive`), {
         method: 'POST',
       });
       const result = await res.json();
@@ -145,7 +146,7 @@ export default function PriorAssignmentsPage() {
     setSavingKey(key);
     setError(null);
     try {
-      const res = await fetch(`/api/periods/${periodId}/prior-assignments`, {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/prior-assignments`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ datum, teller, person_codenaam: codenaam }),
@@ -205,7 +206,7 @@ export default function PriorAssignmentsPage() {
     setImporting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/periods/${periodId}/prior-assignments/import-csv`, {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/prior-assignments/import-csv`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ rows: csvRows }),
@@ -232,7 +233,7 @@ export default function PriorAssignmentsPage() {
     setError(null);
     setConfirmResult(null);
     try {
-      const res = await fetch(`/api/periods/${periodId}/prior-assignments/confirm`, {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/prior-assignments/confirm`), {
         method: 'PATCH',
       });
       const result = await res.json();

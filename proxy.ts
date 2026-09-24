@@ -26,7 +26,11 @@ export function proxy(request: NextRequest) {
   const hasSession = request.cookies.has(SESSION_COOKIE_NAME);
 
   if (!hasSession) {
-    const loginUrl = new URL('/planner/login', request.url);
+    // A clone of nextUrl keeps the app's sub-folder (next.config basePath)
+    // in front of the new path; pathname itself is without it.
+    const loginUrl = request.nextUrl.clone();
+    loginUrl.pathname = '/planner/login';
+    loginUrl.search = '';
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
   }

@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { withBasePath } from '@/lib/basePath';
 
 interface Notification {
   id: string;
@@ -44,7 +45,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
       setError(null);
 
       try {
-        let url = `/api/person/${personId}/notifications?limit=50`;
+        let url = withBasePath(`/api/person/${personId}/notifications?limit=50`);
         if (periodId) url += `&period_id=${periodId}`;
         if (filterType) url += `&type=${filterType}`;
         if (unreadOnly) url += `&unread_only=true`;
@@ -73,7 +74,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
   const handleMarkRead = async (notifId: string) => {
     setActionError(null);
     try {
-      const res = await fetch(`/api/person/${personId}/notifications/${notifId}/read`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/notifications/${notifId}/read`), {
         method: 'POST',
       });
 
@@ -98,7 +99,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
   const handleDismiss = async (notifId: string) => {
     setActionError(null);
     try {
-      const res = await fetch(`/api/person/${personId}/notifications/${notifId}/dismiss`, {
+      const res = await fetch(withBasePath(`/api/person/${personId}/notifications/${notifId}/dismiss`), {
         method: 'POST',
       });
 

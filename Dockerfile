@@ -19,6 +19,12 @@ RUN npm ci
 # Copy app code
 COPY . .
 
+# The sub-folder the app runs under, e.g. /achterwacht (lib/basePath.ts).
+# Empty: the root of its address. Fixed at build time - Next.js writes it
+# into the pages - and kept as ENV for the healthcheck below.
+ARG BASE_PATH=""
+ENV NEXT_PUBLIC_BASE_PATH=$BASE_PATH
+
 # Build Next.js
 RUN npm run build
 
@@ -46,7 +52,7 @@ EXPOSE 3000
 # loopback until it times out, reporting the container unhealthy even
 # though the server is up and answering on IPv4.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
-  CMD node -e "require('http').get('http://127.0.0.1:3000/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+  CMD node -e "require('http').get('http://127.0.0.1:3000' + (process.env.NEXT_PUBLIC_BASE_PATH || '') + '/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
 # No USER here (deliberately) - the container starts as root so
 # docker-entrypoint.sh can chown DATA_DIR's bind mount before dropping to

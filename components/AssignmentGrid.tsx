@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getHolidayInfo } from '@/lib/holidays';
+import { withBasePath } from '@/lib/basePath';
 
 interface Assignment {
   id: string;
@@ -135,7 +136,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     setLoadError(null);
 
     try {
-      let url = `/api/planner/period/${periodId}/assignments?page=${page}`;
+      let url = withBasePath(`/api/planner/period/${periodId}/assignments?page=${page}`);
       if (debouncedFilterPerson) url += `&codenaam=${encodeURIComponent(debouncedFilterPerson)}`;
       if (filterShiftType) url += `&shift_type=${filterShiftType}`;
 
@@ -161,7 +162,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     setError(null);
     try {
       const res = await fetch(
-        `/api/planner/period/${periodId}/assignments/${assignmentId}/delete`,
+        withBasePath(`/api/planner/period/${periodId}/assignments/${assignmentId}/delete`),
         {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
@@ -192,7 +193,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     setWarning(null);
     try {
       const res = await fetch(
-        `/api/planner/period/${periodId}/assignments/${assignmentId}/eligible-people`
+        withBasePath(`/api/planner/period/${periodId}/assignments/${assignmentId}/eligible-people`)
       );
       const data = await res.json();
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Ophalen van beschikbare collega\'s mislukt');
@@ -214,7 +215,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     setError(null);
     try {
       const res = await fetch(
-        `/api/planner/period/${periodId}/assignments/${assignmentId}/reassign`,
+        withBasePath(`/api/planner/period/${periodId}/assignments/${assignmentId}/reassign`),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

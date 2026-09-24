@@ -31,8 +31,13 @@ const contentSecurityPolicy = [
   "object-src 'none'",
 ].join('; ');
 
+// The sub-folder the app runs under (lib/basePath.ts), e.g. "/achterwacht".
+// Empty: the root of its address, exactly as before.
+const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').trim().replace(/\/+$/, '');
+
 const nextConfig = {
   reactStrictMode: true,
+  ...(basePath ? { basePath } : {}),
   experimental: {
     optimizePackageImports: ['@radix-ui'],
   },

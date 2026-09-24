@@ -10,6 +10,7 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { SetupWizard } from '@/components/SetupWizard';
+import { withBasePath } from '@/lib/basePath';
 
 interface Period {
   id: string;
@@ -33,7 +34,7 @@ export default function SetupPage() {
   useEffect(() => {
     const loadPeriod = async () => {
       try {
-        const res = await fetch(`/api/periods/${periodId}`);
+        const res = await fetch(withBasePath(`/api/periods/${periodId}`));
         if (!res.ok) throw new Error('Laden van periode mislukt');
 
         const data = await res.json();

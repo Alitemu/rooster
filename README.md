@@ -327,6 +327,36 @@ Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
 
+##### Draaien in een submap
+
+De app kan onder een submap draaien, bijvoorbeeld
+`https://<nas>/achterwacht` in plaats van `https://<nas>:8010`. Handig als
+het adres al door een andere website wordt gebruikt.
+
+- De submap wordt bij het bouwen vastgelegd. Bij **Bouwen (test)** vul je
+  hem in bij *basispad* (standaard `/achterwacht`). Leeg laten betekent: geen
+  submap, zoals vroeger.
+- Zet in `.env` op de server:
+  ```bash
+  BASE_PATH=/achterwacht
+  BASE_URL=https://<nas>/achterwacht
+  ```
+  `BASE_PATH` gebruikt Caddy om `https://<nas>/` door te sturen naar de
+  submap (en is nodig als je zelf bouwt met `--build`). `BASE_URL` zorgt
+  dat de links in mails de submap bevatten.
+- **Ongedaan maken:** bouw opnieuw met een leeg *basispad*, haal
+  `BASE_PATH` weg uit `.env` en zet `BASE_URL` terug op het adres zonder
+  submap. Links in mails die al verstuurd zijn, bevatten nog de submap en
+  werken dan niet meer; stuur zo nodig de uitnodigingen opnieuw.
+- De poort staat hier los van: `APP_PORT=443` werkt alleen als de NAS die
+  poort zelf niet al gebruikt (een Synology doet dat vaak voor DSM).
+
+Komt de app later achter de webserver van een andere site, onder een
+submap van diens adres, dan moet die server alles onder de submap
+ongewijzigd doorsturen naar de NAS, met het IP-adres van de bezoeker erbij.
+Let op: de app deelt dan het adres met die andere site, en een zwakke plek
+daar raakt ook Dienstrooster. Een eigen (sub)domein is veiliger.
+
 ##### Een aparte testinstallatie
 
 Zet op dezelfde NAS een tweede kopie van de app in een eigen map, met in

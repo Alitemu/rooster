@@ -1,5 +1,6 @@
 import type { NextRequest } from 'next/server';
 import { db } from '@/db/client';
+import { BASE_PATH } from './basePath';
 
 /**
  * Resolves the public base URL personal/reminder links should point at,
@@ -22,7 +23,9 @@ export function resolveBaseUrl(req: NextRequest): string {
   if (process.env.BASE_URL) return process.env.BASE_URL;
   const host = req.headers.get('host');
   // A host name or address with an optional port, nothing else.
-  return host && /^[a-z0-9.-]+(:\d{1,5})?$/i.test(host) ? `https://${host}` : 'https://localhost:8010';
+  const origin = host && /^[a-z0-9.-]+(:\d{1,5})?$/i.test(host) ? `https://${host}` : 'https://localhost:8010';
+  // The app's own sub-folder, when it runs in one (lib/basePath.ts).
+  return `${origin}${BASE_PATH}`;
 }
 
 /**

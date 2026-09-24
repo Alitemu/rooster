@@ -11,6 +11,7 @@
 import { useEffect, useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
+import { withBasePath } from '@/lib/basePath';
 
 interface Status {
   ingesteld: boolean;
@@ -52,7 +53,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     setError(null);
     setMelding(null);
     setConfirmDelete(false);
-    fetch('/api/planner/mail-settings')
+    fetch(withBasePath('/api/planner/mail-settings'))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.success) apply(data.data);
@@ -76,7 +77,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     setError(null);
     setMelding(null);
     try {
-      const res = await fetch('/api/planner/mail-settings', {
+      const res = await fetch(withBasePath('/api/planner/mail-settings'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan }),
@@ -98,7 +99,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     setError(null);
     setMelding(null);
     try {
-      const res = await fetch('/api/planner/mail-settings', { method: 'DELETE' });
+      const res = await fetch(withBasePath('/api/planner/mail-settings'), { method: 'DELETE' });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Verwijderen is mislukt.');
       apply(data.data);

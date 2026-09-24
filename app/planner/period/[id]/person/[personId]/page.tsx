@@ -17,6 +17,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
+import { withBasePath } from '@/lib/basePath';
 
 interface Period {
   id: string;
@@ -42,13 +43,13 @@ export default function PersonCalendarPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const periodRes = await fetch(`/api/periods/${periodId}`);
+        const periodRes = await fetch(withBasePath(`/api/periods/${periodId}`));
         if (!periodRes.ok) throw new Error('Laden van periode mislukt');
         const periodData = await periodRes.json();
         setPeriod(periodData.data);
 
         if (periodData.data?.pool_id) {
-          const membersRes = await fetch(`/api/planner/pool/${periodData.data.pool_id}/members`);
+          const membersRes = await fetch(withBasePath(`/api/planner/pool/${periodData.data.pool_id}/members`));
           if (membersRes.ok) {
             const membersData = await membersRes.json();
             const member = (membersData.data || []).find(
