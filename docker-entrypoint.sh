@@ -24,6 +24,12 @@ fi
 if [ "$SEED_ON_START" = "true" ]; then
   echo "SEED_ON_START=true - running database seed..."
   npm run seed || echo "Seed step exited non-zero (likely: already seeded) - continuing startup."
+elif [ -f /data/rooster.db ]; then
+  # The seed above is also what adds new tables and columns to an existing
+  # database after an update (docker compose pull). Without it, do only
+  # that part - no data is added.
+  echo "SEED_ON_START is off - bringing the database schema up to date..."
+  npx tsx scripts/seed.ts --schema-only || echo "Schema update failed - continuing startup."
 fi
 
 # Optional: claim the planner password from .env instead of the

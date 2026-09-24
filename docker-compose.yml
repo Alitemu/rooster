@@ -22,6 +22,12 @@ services:
       start_period: 10s
 
   web:
+    # Ready-made by GitHub (.github/workflows/images.yml): `docker compose
+    # pull` then `docker compose up -d` updates without building anything
+    # here. ROOSTER_VERSION in .env pins a version (e.g. 0.2.2); left out,
+    # it is the newest. `build` stays for building from source instead
+    # (`docker compose up -d --build`).
+    image: "ghcr.io/alitemu/rooster-web:${ROOSTER_VERSION:-latest}"
     build:
       context: .
       dockerfile: Dockerfile
@@ -104,6 +110,8 @@ services:
       - solver
 
   solver:
+    # Same release as web, see there.
+    image: "ghcr.io/alitemu/rooster-solver:${ROOSTER_VERSION:-latest}"
     build:
       context: ./solver
       dockerfile: Dockerfile

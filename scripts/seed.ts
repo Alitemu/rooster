@@ -667,8 +667,36 @@ function wipe() {
   db.pragma('foreign_keys = ON');
 }
 
+/**
+ * `--schema-only`: bring an existing database's schema up to date (new
+ * tables, LATER_COLUMNS, reworded templates) without adding any data.
+ * docker-entrypoint.sh runs it on every start when SEED_ON_START is off,
+ * so updating the app (docker compose pull) upgrades the database either
+ * way. A database built by the migrations instead (it has a
+ * __drizzle_migrations ledger) is left to db/client.ts: creating its
+ * tables here would make its own next migration fail on "already exists".
+ */
+function upgradeSchemaOnly() {
+  const hasLedger = db
+    .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = '__drizzle_migrations'`)
+    .get();
+  if (hasLedger) {
+    console.log('Schema is managed by the migrations; nothing to do here.');
+    return;
+  }
+  console.log('Bringing the schema up to date...');
+  createTables();
+  applyMissingColumns();
+  refreshRewordedTemplates();
+}
+
 async function seed() {
   try {
+    if (process.argv.includes('--schema-only')) {
+      upgradeSchemaOnly();
+      process.exit(0);
+    }
+
     console.log('Creating tables...');
     createTables();
     applyMissingColumns();

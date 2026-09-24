@@ -490,6 +490,16 @@ Dutch: docs/verzendlijst-power-automate.md.
 
 ## Deployment
 
+**Images:** `.github/workflows/images.yml` builds `ghcr.io/alitemu/rooster-web`
+and `rooster-solver` (amd64 + arm64) whenever package.json changes on the
+main branch, tagged with its `version` and `latest`; compose pulls
+`${ROOSTER_VERSION:-latest}` and keeps `build` for building from source.
+Updating is `docker compose pull && docker compose up -d`. The schema of an
+existing database is brought up to date at every start either way:
+docker-entrypoint.sh runs the seed (SEED_ON_START=true) or else
+`scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
+templates, no data; skipped for a migration-built database).
+
 **Docker Compose (3 services):**
 - `caddy` - TLS termination (internal certs via `tls internal`)
 - `web` - Next.js + SQLite

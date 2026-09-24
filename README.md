@@ -297,6 +297,29 @@ een echt verse database. Zet `SEED_ON_START=false` in `.env` voor een
 installatie zonder automatisch aangemaakte voorbeelddeelnemers en
 -periode.
 
+#### Bijwerken naar een nieuwe versie
+
+De images worden kant-en-klaar gebouwd door GitHub
+(`.github/workflows/images.yml`) zodra het versienummer in `package.json`
+omhoog gaat. De server hoeft zelf niets te bouwen. Bijwerken gaat zo, in de
+map met `docker-compose.yml`:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+De database in `DATA_DIR` blijft staan. Nieuwe kolommen en tabellen worden
+bij het starten automatisch toegevoegd. Maak voor de zekerheid eerst een
+kopie van die map.
+
+Wil je op één versie blijven of terug naar een eerdere, zet dan
+`ROOSTER_VERSION=0.2.2` (of een andere versie) in `.env` en doe dezelfde
+twee stappen. Zonder `ROOSTER_VERSION` krijg je altijd de nieuwste.
+
+Zelf bouwen vanuit de broncode kan nog steeds, met
+`docker compose up -d --build`.
+
 #### TLS-certificaat vertrouwen (de browserwaarschuwing oplossen)
 
 Caddy geeft zelf certificaten uit vanuit een eigen, interne CA
