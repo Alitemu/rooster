@@ -464,9 +464,22 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
    kunnen dan nog in `rooster.db-wal` staan. Neem de map
    `data/backups/database/` mee in de back-up van de NAS zelf (bijvoorbeeld
    Hyper Backup), zodat er ook een kopie buiten de NAS is.
+   **Bewaar ook de sleutel.** Het Gmail-app-wachtwoord en de geheimen voor
+   tweestapsverificatie staan versleuteld in de database. De sleutel
+   daarvoor staat in `data/.session_secret` (of in `SESSION_SECRET` in
+   `.env`, als je die zelf hebt ingesteld). Dat bestand zit niet in de
+   dagelijkse kopie. Omdat de naam met een punt begint, is het in
+   bestandsbeheer vaak verborgen en slaat een back-up het soms over. Bewaar
+   een kopie op een veilige plek, niet in dezelfde map als de back-ups:
+   wie de database en de sleutel samen heeft, kan het app-wachtwoord
+   ontsleutelen. Zonder de sleutel werkt een teruggezette database wel,
+   maar moet iedereen opnieuw inloggen, moet het app-wachtwoord opnieuw in
+   Mailinstellingen en moet tweestapsverificatie per account worden
+   uitgezet met `scripts/reset-totp.ts`.
 4. **Terugzetten:** `docker compose down`, verwijder `data/rooster.db`,
    `data/rooster.db-wal` en `data/rooster.db-shm`, kopieer de gewenste
    back-up naar `data/rooster.db` en start weer met `docker compose up -d`.
+   Op een nieuwe NAS zet je eerst ook `data/.session_secret` terug.
    Probeer dit één keer uit voordat de installatie echt in gebruik gaat.
 5. **Grenzen:** de solver mag hooguit 2 GB geheugen gebruiken, de app 1 GB
    (`SOLVER_MEM_LIMIT`, `WEB_MEM_LIMIT` in `.env`). Logbestanden van elke

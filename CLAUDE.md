@@ -549,7 +549,9 @@ way, and run them with `APP_URL=http://localhost:3000/achterwacht`
 **Backups and a clean start:** lib/dbBackup.ts writes one `VACUUM INTO`
 copy a day to `<db dir>/backups/database/rooster-YYYY-MM-DD.db` (local
 date), from the hourly scheduler, keeping the newest 14 - a plain file copy
-of a WAL database misses what is still in -wal. SEED_ON_START=planner runs
+of a WAL database misses what is still in -wal. The key for everything stored
+encrypted (`<db dir>/.session_secret`, or SESSION_SECRET) is deliberately
+not in it; the README tells the operator to keep it apart. SEED_ON_START=planner runs
 `scripts/seed.ts --alleen-planner`: planner account, ruleset, pool, shift
 types and notification templates, no demo people or period (the
 production start and compose's default; true adds the demo data); a rerun

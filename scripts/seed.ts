@@ -676,11 +676,14 @@ function wipe() {
  * __drizzle_migrations ledger) is left to db/client.ts: creating its
  * tables here would make its own next migration fail on "already exists".
  */
-function upgradeSchemaOnly() {
-  const hasLedger = db
+function hasMigrationLedger(): boolean {
+  return !!db
     .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = '__drizzle_migrations'`)
     .get();
-  if (hasLedger) {
+}
+
+function upgradeSchemaOnly() {
+  if (hasMigrationLedger()) {
     console.log('Schema is managed by the migrations; nothing to do here.');
     return;
   }
@@ -769,10 +772,19 @@ async function seed() {
     // wording, and none of the demo participants, period or preferences.
     const alleenPlanner = process.argv.includes('--alleen-planner');
 
-    console.log('Creating tables...');
-    createTables();
-    applyMissingColumns();
-    refreshRewordedTemplates();
+    // The entrypoint runs --alleen-planner on every start. A database the
+    // migrations built (SEED_ON_START=false at some earlier start) keeps
+    // its schema to db/client.ts, as with --schema-only: creating its
+    // tables here would make its own next migration fail on "already
+    // exists". Its planner account is still created below if missing.
+    if (alleenPlanner && hasMigrationLedger()) {
+      console.log('Schema is managed by the migrations; leaving it to them.');
+    } else {
+      console.log('Creating tables...');
+      createTables();
+      applyMissingColumns();
+      refreshRewordedTemplates();
+    }
 
     // Re-running the seed used to die on `UNIQUE constraint failed:
     // dienstrooster_person.codenaam` - a raw SQLite error that says nothing
