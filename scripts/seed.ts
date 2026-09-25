@@ -690,12 +690,84 @@ function upgradeSchemaOnly() {
   refreshRewordedTemplates();
 }
 
+/**
+ * The wording of every in-app notice and mail. A fresh installation needs
+ * these whether or not it gets demo data (--alleen-planner included).
+ */
+function createNotificationTemplates() {
+  console.log('Creating notification templates...');
+  const templates: Array<[string, string, string]> = [
+    [
+      'PERIOD_OPENED',
+      '{{periode}}: voorkeuren staan open',
+      'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** staat open voor invoer.\n\nGeef de dagen waarop je niet kunt werken door vóór **{{deadline}}**.\n\n{{link}}\n\nVergeet niet je vakantiedagen te blokkeren. Die worden nergens anders vandaan gehaald.',
+    ],
+    [
+      'PARTTIME_CHECK',
+      '{{periode}}: controleer je deeltijddagen',
+      'Hoi {{codenaam}},\n\nWe hebben je deeltijddagen voor **{{periode}}** gegenereerd op basis van je patroon.\n\nControleer ze goed, vooral rond de jaarwisseling. Daar kunnen weeknummers verschuiven.\n\n{{link}}',
+    ],
+    [
+      'REMINDER',
+      'Herinnering: voorkeuren {{periode}} nog niet ontvangen',
+      'Hoi {{codenaam}},\n\nWe hebben je voorkeuren voor **{{periode}}** nog niet ontvangen.\n\nDe deadline is **{{deadline}}**.\n\n{{link}}',
+    ],
+    [
+      'FINAL_WARNING',
+      'Laatste kans: voorkeuren {{periode}} sluiten binnenkort',
+      'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is **{{deadline}}** en je voorkeuren ontbreken nog.\n\nAls er niets binnenkomt, wordt het rooster gegenereerd zonder je geblokkeerde dagen.\n\n{{link}}',
+    ],
+    [
+      'DEADLINE_PASSED',
+      '{{periode}}: de deadline is verstreken',
+      'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
+    ],
+    [
+      'BLOCK_OVERRIDDEN',
+      '{{periode}}: een van je voorkeuren kon niet worden gehonoreerd',
+      'Hoi {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de roosteraar als dit een probleem is.',
+    ],
+    [
+      'SCHEDULE_PUBLISHED',
+      '{{periode}}: het rooster is gepubliceerd',
+      'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** is definitief.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
+    ],
+    [
+      'SWAP_REQUESTED',
+      'Ruilverzoek van {{aanvrager}}',
+      'Hoi {{codenaam}},\n\n{{aanvrager}} wil een dienst met je ruilen.\n\n{{details}}\n\n{{link}}',
+    ],
+    [
+      'SWAP_RESULT',
+      'Je ruilverzoek is {{uitkomst}}',
+      'Hoi {{codenaam}},\n\nJe ruilverzoek is **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
+    ],
+    [
+      'CORRECTION_BOOKED',
+      '{{periode}}: een correctie is geregistreerd',
+      'Hoi {{codenaam}},\n\nEr is een correctie voor je geregistreerd die wordt toegepast op **{{periode}}**.\n\n{{details}}\n\nReden: {{reden}}',
+    ],
+  ];
+
+  for (const [sleutel, onderwerp, bodyMd] of templates) {
+    db.prepare(`
+      INSERT INTO dienstrooster_notification_template (id, sleutel, onderwerp, body_md)
+      VALUES (?, ?, ?, ?)
+    `).run(uuid(), sleutel, onderwerp, bodyMd);
+  }
+}
+
 async function seed() {
   try {
     if (process.argv.includes('--schema-only')) {
       upgradeSchemaOnly();
       process.exit(0);
     }
+
+    // --alleen-planner (SEED_ON_START=planner): a clean production start.
+    // The planner account, the ruleset, pool, shift types and notice
+    // wording, and none of the demo participants, period or preferences.
+    const alleenPlanner = process.argv.includes('--alleen-planner');
 
     console.log('Creating tables...');
     createTables();
@@ -706,6 +778,10 @@ async function seed() {
     // dienstrooster_person.codenaam` - a raw SQLite error that says nothing
     // about what to do next, on a script the verification scripts document
     // as their first step. Wiping is destructive, so it stays opt-in.
+    if (alreadySeeded() && alleenPlanner) {
+      console.log('The planner account already exists; nothing else to do.');
+      return;
+    }
     if (alreadySeeded()) {
       if (!process.argv.includes('--reset')) {
         console.error(
@@ -750,11 +826,11 @@ async function seed() {
       setupToken = createSetupToken();
     }
 
-    // 2. Create 31 staff members
-    console.log('Creating 31 staff members...');
+    // 2. Create 31 staff members (not for --alleen-planner)
     const staffIds: string[] = [];
+    if (!alleenPlanner) console.log('Creating 31 staff members...');
 
-    for (let i = 1; i <= 31; i++) {
+    for (let i = 1; i <= (alleenPlanner ? 0 : 31); i++) {
       const staffId = uuid();
       staffIds.push(staffId);
       const codenaam = `Persoon-${String(i).padStart(2, '0')}`;
@@ -851,6 +927,18 @@ async function seed() {
       `).run(typeId, poolId, type.naam, type.teller);
     }
 
+    if (alleenPlanner) {
+      createNotificationTemplates();
+      console.log('\n✅ Planner account, pool, shift types and notice wording created (no demo data).');
+      console.log(
+        plannerPasswordFromEnv
+          ? '  Planner: planner / password from SEED_PLANNER_PASSWORD'
+          : '  Planner: planner / the seed password. The app asks for a new one at the first login.'
+      );
+      console.log('  Add participants under the pool\'s staff page, then create a period.');
+      return;
+    }
+
     // 7. Create period
     // Dates match tests/fixtures/blokkades-2027-h1.csv (a real ward's
     // blockades for Jan-Jun 2027, anonymized - see step 11b below) so the
@@ -914,66 +1002,7 @@ async function seed() {
     // Placeholders use the {{key}} form that renderTemplate() in
     // app/api/notifications/send-test/route.ts substitutes. Wording refers
     // to people only by codenaam.
-    console.log('Creating notification templates...');
-    const templates: Array<[string, string, string]> = [
-      [
-        'PERIOD_OPENED',
-        '{{periode}}: voorkeuren staan open',
-        'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** staat open voor invoer.\n\nGeef de dagen waarop je niet kunt werken door vóór **{{deadline}}**.\n\n{{link}}\n\nVergeet niet je vakantiedagen te blokkeren. Die worden nergens anders vandaan gehaald.',
-      ],
-      [
-        'PARTTIME_CHECK',
-        '{{periode}}: controleer je deeltijddagen',
-        'Hoi {{codenaam}},\n\nWe hebben je deeltijddagen voor **{{periode}}** gegenereerd op basis van je patroon.\n\nControleer ze goed, vooral rond de jaarwisseling. Daar kunnen weeknummers verschuiven.\n\n{{link}}',
-      ],
-      [
-        'REMINDER',
-        'Herinnering: voorkeuren {{periode}} nog niet ontvangen',
-        'Hoi {{codenaam}},\n\nWe hebben je voorkeuren voor **{{periode}}** nog niet ontvangen.\n\nDe deadline is **{{deadline}}**.\n\n{{link}}',
-      ],
-      [
-        'FINAL_WARNING',
-        'Laatste kans: voorkeuren {{periode}} sluiten binnenkort',
-        'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is **{{deadline}}** en je voorkeuren ontbreken nog.\n\nAls er niets binnenkomt, wordt het rooster gegenereerd zonder je geblokkeerde dagen.\n\n{{link}}',
-      ],
-      [
-        'DEADLINE_PASSED',
-        '{{periode}}: de deadline is verstreken',
-        'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
-      ],
-      [
-        'BLOCK_OVERRIDDEN',
-        '{{periode}}: een van je voorkeuren kon niet worden gehonoreerd',
-        'Hoi {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de roosteraar als dit een probleem is.',
-      ],
-      [
-        'SCHEDULE_PUBLISHED',
-        '{{periode}}: het rooster is gepubliceerd',
-        'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** is definitief.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
-      ],
-      [
-        'SWAP_REQUESTED',
-        'Ruilverzoek van {{aanvrager}}',
-        'Hoi {{codenaam}},\n\n{{aanvrager}} wil een dienst met je ruilen.\n\n{{details}}\n\n{{link}}',
-      ],
-      [
-        'SWAP_RESULT',
-        'Je ruilverzoek is {{uitkomst}}',
-        'Hoi {{codenaam}},\n\nJe ruilverzoek is **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
-      ],
-      [
-        'CORRECTION_BOOKED',
-        '{{periode}}: een correctie is geregistreerd',
-        'Hoi {{codenaam}},\n\nEr is een correctie voor je geregistreerd die wordt toegepast op **{{periode}}**.\n\n{{details}}\n\nReden: {{reden}}',
-      ],
-    ];
-
-    for (const [sleutel, onderwerp, bodyMd] of templates) {
-      db.prepare(`
-        INSERT INTO dienstrooster_notification_template (id, sleutel, onderwerp, body_md)
-        VALUES (?, ?, ?, ?)
-      `).run(uuid(), sleutel, onderwerp, bodyMd);
-    }
+    createNotificationTemplates();
 
     console.log('Creating reminder schedule...');
     // A week before and a last call the day before - the same moments

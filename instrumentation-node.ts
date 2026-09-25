@@ -161,6 +161,14 @@ export function startAutoReminderScheduler(): void {
     } catch (error) {
       console.error('[auto-herinneringen] controle mislukt', error);
     }
+    // Today's copy of the database, if there is none yet (lib/dbBackup.ts).
+    try {
+      const { runDailyDatabaseBackup } = await import('./lib/dbBackup');
+      const written = runDailyDatabaseBackup();
+      if (written) console.warn(`[back-up] database gekopieerd naar ${written}`);
+    } catch (error) {
+      console.error('[back-up] database kopiëren mislukt', error);
+    }
     // Swap mails that could not go out earlier (lib/meldingMail.ts).
     try {
       const { flushMailQueue } = await import('./lib/meldingMail');

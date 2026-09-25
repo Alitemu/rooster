@@ -1,49 +1,66 @@
+# Two stages: the first builds, the second only runs. The compiler and
+# Python that better-sqlite3 and bcrypt need to build (and the test tools)
+# stay behind in the first; the image that runs has none of them.
+#
 # Node 22: Node 20 stopped getting security updates in April 2026. The same
 # major version the tests run on.
-FROM node:22-alpine
+
+# ---- build ----
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
-# Install system dependencies for better-sqlite3, plus su-exec (used by
-# docker-entrypoint.sh to drop from root to the unprivileged `node` user
-# after fixing DATA_DIR's ownership - see the USER note below).
-RUN apk add --no-cache python3 make g++ su-exec
+# Native modules (better-sqlite3, bcrypt) compile against musl here.
+RUN apk add --no-cache python3 make g++
+
+# Next.js otherwise sends anonymous usage data to Vercel while building.
+ENV NEXT_TELEMETRY_DISABLED=1
 
 # Copy package files (.npmrc: the lockfile was resolved with
 # legacy-peer-deps, and `npm ci` has to use the same setting)
 COPY package*.json .npmrc ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy app code
 COPY . .
 
 # The sub-folder the app runs under, e.g. /achterwacht (lib/basePath.ts).
 # Empty: the root of its address. Fixed at build time - Next.js writes it
-# into the pages - and kept as ENV for the healthcheck below.
+# into the pages.
 ARG BASE_PATH=""
 ENV NEXT_PUBLIC_BASE_PATH=$BASE_PATH
 
-# Build Next.js
 RUN npm run build
 
 # Only what runs is kept: the test tools (vitest, playwright, eslint, ...)
 # have no business in a running installation. tsx stays - it is a
-# dependency, and docker-entrypoint.sh runs scripts/seed.ts with it.
-RUN npm prune --omit=dev
+# dependency, and docker-entrypoint.sh runs scripts/seed.ts with it. The
+# build's own cache goes too.
+RUN npm prune --omit=dev \
+  && rm -rf .next/cache \
+  && chmod +x docker-entrypoint.sh
 
-# The app itself still runs as this non-root user (dropped into by
-# docker-entrypoint.sh via su-exec, not set here with USER) - only /app
-# needs pre-chowning at build time. /data does NOT: it's a bind-mount
-# point (see docker-compose.yml's DATA_DIR), so whatever gets chowned into
-# it here is invisible once the real host directory is mounted over it at
-# container start - that's fixed at runtime instead, see the entrypoint.
-RUN mkdir -p /data && chown -R node:node /app
+# ---- run ----
+FROM node:22-alpine
 
-RUN chmod +x docker-entrypoint.sh
+WORKDIR /app
 
-# Expose port
+# su-exec: docker-entrypoint.sh drops from root to the unprivileged `node`
+# user with it after fixing DATA_DIR's ownership (see the USER note below).
+RUN apk add --no-cache su-exec
+
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1
+
+ARG BASE_PATH=""
+# Kept for the healthcheck below (the pages have it built in already).
+ENV NEXT_PUBLIC_BASE_PATH=$BASE_PATH
+
+# Owned by root, so the app - running as `node` - cannot change its own
+# code. Only two places are writable: /data (the bind mount, fixed at
+# runtime by the entrypoint) and Next.js's own cache.
+COPY --from=build /app /app
+RUN mkdir -p /data /app/.next/cache && chown node:node /app/.next/cache
+
 EXPOSE 3000
 
 # Health check endpoint. Uses 127.0.0.1, not localhost: Node 18+ resolves
@@ -59,9 +76,9 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
 # the unprivileged `node` user via su-exec for everything the app itself
 # does. A Docker-managed named volume gets its ownership from the image
 # automatically on first use; a bind-mounted host directory (what this
-# compose file now uses instead, so the data is a plain folder a NAS's
-# file manager can browse) does not - Docker just creates it as root:root
-# if it doesn't already exist, which `node` (uid 1000) can't write into.
+# compose file uses, so the data is a plain folder a NAS's file manager
+# can browse) does not - Docker just creates it as root:root if it doesn't
+# already exist, which `node` (uid 1000) can't write into.
 
-# Runs the optional demo-data seed (SEED_ON_START) before starting Next.js.
+# Runs the optional seed (SEED_ON_START) before starting Next.js.
 ENTRYPOINT ["./docker-entrypoint.sh"]

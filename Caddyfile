@@ -20,13 +20,12 @@
 	# default always errored out. The endpoint below is served by this
 	# same Caddy instance on a loopback-only port with no docker-compose
 	# port mapping, so it's unreachable from outside the container; it
-	# just says yes to everything, which is fine given the interval/burst
-	# limit above and that this only ever issues certs from our own
-	# private CA, never a public/rate-limited one.
+	# just says yes to everything, which is fine because this only ever
+	# issues certs from our own private CA, never a public/rate-limited
+	# one. (Caddy 2.8+ dropped the old interval/burst options; the `ask`
+	# check is the only limit it keeps.)
 	on_demand_tls {
 		ask http://127.0.0.1:9053/ask
-		interval 2m
-		burst 10
 	}
 }
 

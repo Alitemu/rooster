@@ -451,10 +451,26 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
 
 #### Productie
 
-1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist)
-2. Automatische back-ups via `VACUUM INTO`
-3. Handmatige back-updownload beschikbaar in het plannerdashboard
-4. Test een restore vóórdat de installatie echt in gebruik gaat
+1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist).
+2. **Een schone start:** zet vóór de eerste start `SEED_ON_START=planner` in
+   `.env`. Dan maakt de app alleen het planneraccount, de pool, de soorten
+   diensten en de berichtteksten aan, zonder voorbeelddeelnemers of
+   voorbeeldperiode. Bij de eerste keer inloggen kies je een eigen
+   wachtwoord. Deelnemers voeg je toe via de pagina van de pool.
+3. **Back-ups:** de app maakt elke dag zelf een kopie van de database in
+   `data/backups/database/` (`rooster-JJJJ-MM-DD.db`) en bewaart de laatste
+   14. Zo'n kopie is compleet, ook terwijl de app draait. Kopieer
+   `rooster.db` niet zelf terwijl de app draait: de laatste wijzigingen
+   kunnen dan nog in `rooster.db-wal` staan. Neem de map
+   `data/backups/database/` mee in de back-up van de NAS zelf (bijvoorbeeld
+   Hyper Backup), zodat er ook een kopie buiten de NAS is.
+4. **Terugzetten:** `docker compose down`, verwijder `data/rooster.db`,
+   `data/rooster.db-wal` en `data/rooster.db-shm`, kopieer de gewenste
+   back-up naar `data/rooster.db` en start weer met `docker compose up -d`.
+   Probeer dit één keer uit voordat de installatie echt in gebruik gaat.
+5. **Grenzen:** de solver mag hooguit 2 GB geheugen gebruiken, de app 1 GB
+   (`SOLVER_MEM_LIMIT`, `WEB_MEM_LIMIT` in `.env`). Logbestanden van elke
+   container blijven onder de 30 MB.
 
 ### E-mail versturen (Gmail en Power Automate)
 

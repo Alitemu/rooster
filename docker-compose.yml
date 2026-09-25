@@ -1,8 +1,15 @@
-version: '3.8'
+# Every container's log, capped: Docker otherwise keeps it forever, and on
+# a NAS that runs for months that slowly fills the disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   caddy:
-    image: caddy:2.7-alpine
+    # The newest Caddy 2.x on every pull, for its security fixes.
+    image: caddy:2-alpine
     ports:
       # Host and container port stay identical - see the note in Caddyfile.
       - "${APP_PORT:-8010}:${APP_PORT:-8010}"
@@ -16,6 +23,9 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
       interval: 30s
@@ -116,8 +126,15 @@ services:
     networks:
       - internal
     restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - solver
+    # A tiny init as process 1, so a stop signal reaches the app and the
+    # container stops cleanly instead of being killed after 10 seconds.
+    init: true
+    mem_limit: "${WEB_MEM_LIMIT:-1g}"
 
   solver:
     # Same release as web, see there.
@@ -135,9 +152,18 @@ services:
     # network either way; only caddy should be host-published.
     expose:
       - "8000"
+    # It needs no Linux privileges at all, and runs as its own user.
+    cap_drop:
+      - ALL
+    # Generating a roster is the heaviest thing on the NAS; this keeps it
+    # from taking all memory. Raise it in .env if a big period needs more.
+    mem_limit: "${SOLVER_MEM_LIMIT:-2g}"
     networks:
       - internal
     restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
 
 networks:
   internal:

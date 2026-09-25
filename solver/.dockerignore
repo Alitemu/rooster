@@ -1,0 +1,8 @@
+# Only what the solver runs goes into its image.
+__pycache__
+*.pyc
+.pytest_cache
+venv
+.venv
+test_*.py
+requirements-dev.txt

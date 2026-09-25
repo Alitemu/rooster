@@ -21,7 +21,13 @@ if [ "$(id -u)" = "0" ]; then
   exec su-exec node "$0" "$@"
 fi
 
-if [ "$SEED_ON_START" = "true" ]; then
+if [ "$SEED_ON_START" = "planner" ]; then
+  # A clean production start: only the planner account, pool, shift types
+  # and notice wording, no demo participants or period. Also brings an
+  # existing database's schema up to date, like the seed below.
+  echo "SEED_ON_START=planner - creating the planner account if needed..."
+  npx tsx scripts/seed.ts --alleen-planner || echo "Seed step failed - continuing startup."
+elif [ "$SEED_ON_START" = "true" ]; then
   echo "SEED_ON_START=true - running database seed..."
   npm run seed || echo "Seed step exited non-zero (likely: already seeded) - continuing startup."
 elif [ -f /data/rooster.db ]; then

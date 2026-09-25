@@ -545,6 +545,24 @@ sub-folder, so run the browser checks against a sub-folder build too:
 way, and run them with `APP_URL=http://localhost:3000/achterwacht`
 (scripts and tests/e2e read APP_URL).
 
+**Backups and a clean start:** lib/dbBackup.ts writes one `VACUUM INTO`
+copy a day to `<db dir>/backups/database/rooster-YYYY-MM-DD.db` (local
+date), from the hourly scheduler, keeping the newest 14 - a plain file copy
+of a WAL database misses what is still in -wal. SEED_ON_START=planner runs
+`scripts/seed.ts --alleen-planner`: planner account, ruleset, pool, shift
+types and notification templates, no demo people or period (the
+production start); a rerun on a seeded database only upgrades the schema.
+
+**Container hardening:** the web image is built in two stages (no
+compiler, Python or dev dependencies in the one that runs, no .next/cache),
+code owned by root with only /data and .next/cache writable for `node`,
+NEXT_TELEMETRY_DISABLED. The solver image installs wheels only
+(--only-binary), no build-essential, own .dockerignore, code root-owned.
+Compose: caddy:2-alpine (Caddy 2.8+ dropped on_demand_tls interval/burst),
+capped json-file logs, no-new-privileges everywhere, init + mem_limit on
+web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
+to commit SHAs.
+
 **Limits:** request bodies are capped at 1 MB in Caddy and in
 lib/api-errors.ts parseJsonBody (read no further; also before login).
 Free text a participant types - swap toelichting, rejection reason,
