@@ -21,7 +21,7 @@ on:
       basispad:
         description: 'Submap waaronder de app draait, bijvoorbeeld /achterwacht. Leeg: de hoofdmap van het adres.'
         required: false
-        default: '/achterwacht'
+        default: ''
         type: string
 
 permissions:

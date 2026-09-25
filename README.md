@@ -334,8 +334,8 @@ De app kan onder een submap draaien, bijvoorbeeld
 het adres al door een andere website wordt gebruikt.
 
 - De submap wordt bij het bouwen vastgelegd. Bij **Bouwen (test)** vul je
-  hem in bij *basispad* (standaard `/achterwacht`). Leeg laten betekent: geen
-  submap, zoals vroeger.
+  hem in bij *basispad*, bijvoorbeeld `/achterwacht`. Standaard is het leeg:
+  geen submap.
 - Zet in `.env` op de server:
   ```bash
   BASE_PATH=/achterwacht

@@ -530,7 +530,8 @@ docker-entrypoint.sh runs the seed (SEED_ON_START=true) or else
 templates, no data; skipped for a migration-built database).
 
 **Sub-folder (basePath):** NEXT_PUBLIC_BASE_PATH at build time (Dockerfile
-arg BASE_PATH, "Bouwen (test)" input `basispad`, default /achterwacht;
+arg BASE_PATH, "Bouwen (test)" input `basispad`, empty by default -
+the app got its own subdomain instead;
 empty = root, as before) sets next.config basePath. Next.js prefixes
 <Link> and router.push itself; everything else goes through
 lib/basePath.ts `withBasePath` - every client fetch('/api/...'), plain
