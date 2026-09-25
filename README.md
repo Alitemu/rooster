@@ -148,7 +148,7 @@ npm run test:e2e
 # Vergelijkt het schema dat de seed bouwt met het schema dat de migraties
 # bouwen, kolom voor kolom, index voor index, foreign key voor foreign key
 # - nodig omdat scripts/seed.ts (niet db/migrations) in productie het
-# schema bouwt zodra SEED_ON_START=true staat (de standaardwaarde)
+# schema bouwt zodra SEED_ON_START=planner of true staat (de standaard)
 node scripts/schema-drift.mjs
 ```
 
@@ -287,13 +287,13 @@ bind mount heeft namelijk een al bestaande hostmap nodig, in tegenstelling
 tot een named volume. Bij een eigen `DATA_DIR` moet die map zelf van
 tevoren worden aangemaakt.
 
-`SEED_ON_START` staat standaard op `true`: de eerste keer dat `DATA_DIR`
-(zie `.env.example`) leeg is, wordt automatisch het planneraccount
-aangemaakt (codenaam `planner`) plus voorbeelddata. Veilig om aan te laten
-staan bij herstarts en herinstallaties, want het gebeurt maar één keer, op
-een echt verse database. Zet `SEED_ON_START=false` in `.env` voor een
-installatie zonder automatisch aangemaakte voorbeelddeelnemers en
--periode.
+`SEED_ON_START` staat standaard op `planner`: de eerste keer dat `DATA_DIR`
+(zie `.env.example`) leeg is, maakt de app alleen het planneraccount
+(codenaam `planner`), de pool, de soorten diensten en de berichtteksten
+aan. Er komen geen voorbeelddeelnemers of voorbeeldperiode bij. Veilig om
+aan te laten staan bij herstarts en herinstallaties, want het gebeurt maar
+één keer, op een echt verse database. Zet `SEED_ON_START=true` in `.env`
+voor een testinstallatie met voorbeelddata.
 
 #### Bijwerken naar een nieuwe versie
 
@@ -452,10 +452,10 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
 #### Productie
 
 1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist).
-2. **Een schone start:** zet vóór de eerste start `SEED_ON_START=planner` in
-   `.env`. Dan maakt de app alleen het planneraccount, de pool, de soorten
-   diensten en de berichtteksten aan, zonder voorbeelddeelnemers of
-   voorbeeldperiode. Bij de eerste keer inloggen kies je een eigen
+2. **Een schone start:** dat is de standaard (`SEED_ON_START=planner`).
+   De app maakt alleen het planneraccount, de pool, de soorten diensten en
+   de berichtteksten aan, zonder voorbeelddeelnemers of voorbeeldperiode.
+   Bij de eerste keer inloggen kies je een eigen
    wachtwoord. Deelnemers voeg je toe via de pagina van de pool.
 3. **Back-ups:** de app maakt elke dag zelf een kopie van de database in
    `data/backups/database/` (`rooster-JJJJ-MM-DD.db`) en bewaart de laatste

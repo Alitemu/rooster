@@ -149,7 +149,7 @@ opens a "choose a new password" session (see Authentication):
 `node scripts/schema-drift.mjs` needs nothing running. It builds one
 database from the seed and one from the migrations and compares them
 column by column, index by index, foreign key by foreign key. Run it after
-any schema change: SEED_ON_START defaults to true, so on a real deployment
+any schema change: SEED_ON_START defaults to planner, so on a real deployment
 it is scripts/seed.ts - not db/migrations - that builds the schema, and
 the two drifting apart means production quietly runs a different one than
 every test does.
@@ -525,7 +525,8 @@ rebuilding. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
 installation sets `test`) and keeps `build` for building from source.
 Updating is `docker compose pull && docker compose up -d`. The schema of an
 existing database is brought up to date at every start either way:
-docker-entrypoint.sh runs the seed (SEED_ON_START=true) or else
+docker-entrypoint.sh runs the seed (SEED_ON_START=planner, the default, or
+true) or else
 `scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
 templates, no data; skipped for a migration-built database).
 
@@ -551,7 +552,8 @@ date), from the hourly scheduler, keeping the newest 14 - a plain file copy
 of a WAL database misses what is still in -wal. SEED_ON_START=planner runs
 `scripts/seed.ts --alleen-planner`: planner account, ruleset, pool, shift
 types and notification templates, no demo people or period (the
-production start); a rerun on a seeded database only upgrades the schema.
+production start and compose's default; true adds the demo data); a rerun
+on a seeded database only upgrades the schema.
 
 **Container hardening:** the web image is built in two stages (no
 compiler, Python or dev dependencies in the one that runs, no .next/cache),

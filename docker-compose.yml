@@ -77,11 +77,15 @@ services:
       # Before real staff and real schedules use this: either set
       # SEED_PLANNER_PASSWORD below (which claims the account with your own
       # password instead), or log in once and change it under "Wachtwoord
-      # wijzigen". Setting SEED_ON_START=false only skips the demo data on
-      # a *fresh* DATA_DIR; it is not a way to undo a password already set.
+      # wijzigen". Seeding is not a way to undo a password already set.
       # The app logs a warning on every start while the seeded password is
       # still in place.
-      SEED_ON_START: "${SEED_ON_START:-true}"
+      #
+      # Defaults to planner: the planner account, pool, shift types and
+      # notice wording, no demo participants or period, so a production
+      # installation never gets demo data by accident. A test installation
+      # sets SEED_ON_START=true in .env for the demo data.
+      SEED_ON_START: "${SEED_ON_START:-planner}"
       # Optional. Left empty the app generates one on first start and keeps
       # it in DATA_DIR, so sessions survive restarts. Set it here
       # (or in .env) to pin your own: openssl rand -hex 32
