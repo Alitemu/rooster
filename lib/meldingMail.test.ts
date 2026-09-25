@@ -815,6 +815,8 @@ describe('ruilmails die niet meteen weg konden', () => {
     );
     expect(res.status).toBe(200);
     await waitForMails(sink, 2);
+    // The mails reach the sink before the queue run removes their rows.
+    await mailQueueSettled();
     expect(queued(f)).toEqual([]);
   });
 
@@ -841,6 +843,8 @@ describe('ruilmails die niet meteen weg konden', () => {
     );
     expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(true);
     await waitForMails(sink, 3);
+    // The mails reach the sink before the queue run removes their rows.
+    await mailQueueSettled();
     expect(queued(f)).toEqual([]);
   });
 
