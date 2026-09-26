@@ -155,7 +155,7 @@ export function PartTimeCheckStep({
   return (
     <div className="card p-6 space-y-4">
       <div>
-        <h3 className="font-bold text-lg mb-1">Deeltijddagen controleren</h3>
+        <h3 className="font-bold text-lg mb-1">Geblokkeerde dagen controleren</h3>
         <p className="text-sm text-neutral-600">
           De gearceerde dagen zijn automatisch geblokkeerd op basis van je deeltijdpatroon of een
           geregistreerde afwezigheid. Loop de maanden door en controleer of dat klopt.

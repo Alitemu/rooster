@@ -153,9 +153,9 @@ export function AbsenceManager({
       <div>
         <h3 className="font-bold text-lg mb-1">Afwezigheid opgeven</h3>
         <p className="text-sm text-neutral-600">
-          Vakantie, ziekte of ander verlof: geef de periode hier op, dan wordt die automatisch
-          geblokkeerd. Dit is de enige plek waar vakantiedagen vandaan komen. Blokkeer ze als extra controle
-          ook altijd los in je voorkeurenkalender.
+          Vakantie, ziekte of ander verlof: geef de periode hier op, dan worden die dagen automatisch
+          geblokkeerd. Het rooster haalt vakantie nergens anders vandaan. Controleer daarna in de kalender
+          hieronder of de juiste dagen geblokkeerd zijn.
         </p>
       </div>
 
