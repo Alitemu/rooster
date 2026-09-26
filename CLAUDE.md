@@ -519,7 +519,9 @@ pruned after the build; `.npmrc` sets legacy-peer-deps because npm 10
 crashes resolving vitest 4's optional peers, and `npm ci` must match the
 lockfile. Built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
 builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 only)
-tagged with package.json's `version` and `test`; "Vrijgeven (productie)"
+tagged with package.json's `version` and `test`, only after the app's and
+the solver's tests pass and only for a version not built before (bump
+package.json for every build); "Vrijgeven (productie)"
 (release.yml) points `stable` at an already built, tested version without
 rebuilding. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
 installation sets `test`) and keeps `build` for building from source.

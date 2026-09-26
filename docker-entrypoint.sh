@@ -1,9 +1,9 @@
 #!/bin/sh
-# Optional demo-data seed, run once per fresh database - see SEED_ON_START
-# in .env.example. `npm run seed` is idempotent (scripts/seed.ts refuses to
-# touch a database that already has a planner account unless told --reset),
-# so leaving this on across restarts and reinstalls is safe: it only ever
-# does something the first time a fresh DATA_DIR boots.
+# Seeds a fresh database (SEED_ON_START in .env.example: planner by
+# default, true for demo data) and brings an existing one's schema up to
+# date. scripts/seed.ts never adds data to a database that already has
+# some (unless told --reset), so this is safe on every start: it only
+# creates anything the first time a fresh DATA_DIR boots.
 set -e
 
 # The image starts this container as root (no USER in the Dockerfile)

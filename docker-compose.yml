@@ -26,8 +26,10 @@ services:
     logging: *logging
     security_opt:
       - no-new-privileges:true
+    # 127.0.0.1, not localhost: on Alpine localhost can resolve to ::1
+    # first, where the admin API does not listen (see Dockerfile).
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:2019/config/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:2019/config/"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -61,9 +63,9 @@ services:
       # true on a test installation: no mail ever goes out, whatever
       # Mailinstellingen says (see .env.example).
       MAIL_UITGESCHAKELD: "${MAIL_UITGESCHAKELD:-false}"
-      # Creates the ADMIN/PLANNER accounts and demo data on first boot of a
-      # fresh DATA_DIR - see .env.example. Safe to leave set across
-      # restarts/reinstalls: no-ops once seeded.
+      # What the first boot of a fresh DATA_DIR creates - see .env.example.
+      # Safe to leave set across restarts/reinstalls: after that it only
+      # brings the schema up to date.
       #
       # !! The planner account comes out of this WITH a password already
       # set, and that password is checked into this repository

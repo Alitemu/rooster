@@ -303,12 +303,17 @@ een nieuwe versie krijgt. Dat gaat in drie stappen, allemaal op
 github.com/Alitemu/rooster onder **Actions**:
 
 1. **Bouwen (test):** kies links *Bouwen (test)* en daarna *Run workflow*.
-   GitHub bouwt de versie uit `package.json` en noemt die `test`. Dat duurt
+   GitHub draait eerst alle tests en bouwt pas als die slagen. Daarna
+   bouwt het de versie uit `package.json` en noemt die `test`. Dat duurt
    meestal een kwartier of minder. Productie merkt er niets van.
+   Elk versienummer wordt maar één keer gebouwd. Bestaat het al, dan stopt
+   de build met een melding: verhoog dan eerst het versienummer in
+   `package.json`. Zo kan een geteste versie nooit ongemerkt vervangen
+   worden door een nieuwere build met hetzelfde nummer.
 2. **Testen:** werk de testinstallatie bij (zie hieronder) en probeer de
    nieuwe versie uit.
 3. **Vrijgeven (productie):** tevreden? Kies *Vrijgeven (productie)*, dan
-   *Run workflow*, en vul het versienummer in (bijvoorbeeld 0.2.3). Die
+   *Run workflow* en vul het versienummer in (bijvoorbeeld 0.2.3). Die
    versie heet dan `stable`. Er wordt niets opnieuw gebouwd: productie
    krijgt precies de versie die je getest hebt.
 

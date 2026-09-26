@@ -33,7 +33,8 @@
 export async function runStartupBootstrap(): Promise<void> {
   await warnAboutSeededPassword();
 
-  if (process.env.SEED_ON_START !== 'true' && !process.env.SEED_PLANNER_PASSWORD) return;
+  const seedMode = process.env.SEED_ON_START;
+  if (seedMode !== 'true' && seedMode !== 'planner' && !process.env.SEED_PLANNER_PASSWORD) return;
 
   const { db } = await import('./db/client');
   const hasStaffAccount = db
@@ -59,8 +60,10 @@ export async function runStartupBootstrap(): Promise<void> {
     });
   }
 
-  if (process.env.SEED_ON_START === 'true') {
+  if (seedMode === 'true') {
     await runScript('scripts/seed.ts');
+  } else if (seedMode === 'planner') {
+    await runScript('scripts/seed.ts', ['--alleen-planner']);
   }
   if (process.env.SEED_PLANNER_PASSWORD) {
     await runScript('scripts/claim-password.ts', ['planner']);
