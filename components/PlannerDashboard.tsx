@@ -203,7 +203,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const [loading, setLoading] = useState(true);
   // loadError means the dashboard itself couldn't be fetched at all - fatal,
   // nothing else on this component can render meaningfully without it.
-  // actionError is for an inline action failing (submit-on-behalf) with the
+  // actionError is for an inline action failing (a reminder, the fellow box) with the
   // dashboard already showing - same split, and the same reasoning, as
   // AssignmentGrid's loadError/error: a rejected action isn't a reason to
   // blank out everything else the planner was looking at, and a planner
@@ -218,6 +218,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{ personId: string; message: string } | null>(null);
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
+  // Who got a reminder from this screen since it was opened: their button
+  // says so instead of inviting a second mail a minute later.
+  const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
+  const [remindAll, setRemindAll] = useState<
+    { stage: 'idle' } | { stage: 'confirm' } | { stage: 'sending' } | { stage: 'done'; ok: boolean; message: string }
+  >({ stage: 'idle' });
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   // Which screen ExportDialog opens straight to - null shows its own picker
   // (uitnodigingen/herinneringen/audit-trail). "Deadlineherinnering
@@ -325,7 +331,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
   const dismissUnappliedDraftBackdrop = useDialogDismiss(showUnappliedDraftWarning, () => setShowUnappliedDraftWarning(false));
 
   // bumpAssignmentsKey defaults to true - a full dashboard reload (mount,
-  // submit-on-behalf, or the roster dialog's own onSuccess) means the
+  // a fellow change, or the roster dialog's own onSuccess) means the
   // assignments list/calendar's data could be stale in a way its own
   // fetch effect won't notice on its own (a genuinely new dataset after
   // regeneration), so remounting them is the safe default there.
@@ -428,32 +434,44 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     }
   };
 
-  const handleSubmitOnBehalf = async (personId: string) => {
-    setSubmittingFor(personId);
-    setActionError(null);
+  // A reminder with the standard text, straight away (POST .../remind):
+  // one person, or without personId everyone who hasn't handed in yet.
+  const sendReminder = async (personId?: string): Promise<{ ok: true; aantal: number } | { ok: false; message: string }> => {
     try {
-      const res = await fetch(withBasePath(`/api/planner/person/${personId}/submit-on-behalf`), {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/remind`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          period_id: periodId,
-        }),
+        body: JSON.stringify(personId ? { person_id: personId } : {}),
       });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) return { ok: false, message: data?.error?.message || 'Versturen mislukt' };
+      return { ok: true, aantal: data.data.aantal };
+    } catch {
+      return { ok: false, message: 'Versturen mislukt. Controleer de verbinding en probeer het opnieuw.' };
+    }
+  };
 
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error?.message || 'Indienen mislukt');
-      }
+  const handleRemindOne = async (personId: string) => {
+    setSubmittingFor(personId);
+    setActionError(null);
+    const result = await sendReminder(personId);
+    if (result.ok) setRemindedIds((prev) => new Set(prev).add(personId));
+    else setActionError({ personId, message: result.message });
+    setSubmittingFor(null);
+  };
 
-      // Reload the full dashboard (not just progress) - the top-level
-      // stats (bevestigd-telling, large_imbalances) are stale otherwise
-      // until a manual page reload, and loadData() already has the
-      // res.ok-checked fetch this used to duplicate without one.
-      await loadData();
-    } catch (err) {
-      setActionError({ personId, message: err instanceof Error ? err.message : 'Indienen mislukt' });
-    } finally {
-      setSubmittingFor(null);
+  const handleRemindAll = async (personIds: string[]) => {
+    setRemindAll({ stage: 'sending' });
+    const result = await sendReminder();
+    if (result.ok) {
+      setRemindedIds((prev) => new Set([...prev, ...personIds]));
+      setRemindAll({
+        stage: 'done',
+        ok: true,
+        message: `Herinnering verstuurd aan ${result.aantal} ${result.aantal === 1 ? 'persoon' : 'personen'}.`,
+      });
+    } else {
+      setRemindAll({ stage: 'done', ok: false, message: result.message });
     }
   };
 
@@ -850,31 +868,40 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                     />
                   </td>
                   <td className="px-3 py-2 text-center">
-                    {/* Only while preferences still matter: once the roster is
-                        generated, confirming for someone changes nothing (the
-                        API refuses it too, see submit-on-behalf). */}
-                    {(dashboard.status === 'OPEN' || dashboard.status === 'GESLOTEN') &&
-                      (!person.submission_status || person.submission_status === 'NIET_BEGONNEN') && (
-                      <>
+                    {/* Reminders only while preferences can still be handed
+                        in (the API refuses otherwise, lib/reminderGate.ts). */}
+                    {dashboard.status === 'OPEN' && (() => {
+                      const ingediend = person.submission_status === 'BEVESTIGD';
+                      const verstuurd = remindedIds.has(person.person_id);
+                      return (
                         <button
-                          onClick={() => handleSubmitOnBehalf(person.person_id)}
-                          disabled={submittingFor === person.person_id}
-                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-400 transition-colors"
+                          onClick={() => handleRemindOne(person.person_id)}
+                          disabled={ingediend || verstuurd || submittingFor === person.person_id}
+                          title={
+                            ingediend
+                              ? 'Deze persoon heeft de voorkeuren al ingediend.'
+                              : 'Stuurt een herinnering met een persoonlijke link.'
+                          }
+                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 disabled:text-neutral-600 transition-colors whitespace-nowrap"
                         >
-                          {submittingFor === person.person_id ? 'Bezig...' : 'Indienen'}
+                          {submittingFor === person.person_id
+                            ? 'Bezig...'
+                            : verstuurd
+                              ? 'Verstuurd ✓'
+                              : 'Herinnering sturen'}
                         </button>
-                        {actionError?.personId === person.person_id && (
-                          <div className="mt-2 p-2 rounded border border-red-200 bg-red-50 text-left flex items-start gap-2 max-w-xs mx-auto">
-                            <p className="text-xs text-red-800">{actionError.message}</p>
-                            <button
-                              onClick={() => setActionError(null)}
-                              className="shrink-0 px-2 py-0.5 rounded border border-red-300 bg-white text-red-700 text-xs font-medium hover:bg-red-100"
-                            >
-                              Sluiten
-                            </button>
-                          </div>
-                        )}
-                      </>
+                      );
+                    })()}
+                    {actionError?.personId === person.person_id && (
+                      <div className="mt-2 p-2 rounded border border-red-200 bg-red-50 text-left flex items-start gap-2 max-w-xs mx-auto">
+                        <p className="text-xs text-red-800">{actionError.message}</p>
+                        <button
+                          onClick={() => setActionError(null)}
+                          className="shrink-0 px-2 py-0.5 rounded border border-red-300 bg-white text-red-700 text-xs font-medium hover:bg-red-100"
+                        >
+                          Sluiten
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -882,6 +909,51 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             </tbody>
           </table>
         </div>
+
+        {dashboard.status === 'OPEN' && (() => {
+          const open = progress.filter((p) => p.submission_status !== 'BEVESTIGD').map((p) => p.person_id);
+          const aantal = `${open.length} ${open.length === 1 ? 'persoon' : 'personen'}`;
+          return (
+            <div className="mt-4 border-t pt-4">
+              {remindAll.stage === 'confirm' ? (
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-sm text-neutral-800">
+                    {aantal} {open.length === 1 ? 'krijgt' : 'krijgen'} een herinnering met een persoonlijke link.
+                  </p>
+                  <button
+                    onClick={() => handleRemindAll(open)}
+                    className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                  >
+                    Versturen
+                  </button>
+                  <button
+                    onClick={() => setRemindAll({ stage: 'idle' })}
+                    className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                  >
+                    Annuleren
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setRemindAll({ stage: 'confirm' })}
+                  disabled={open.length === 0 || remindAll.stage === 'sending'}
+                  className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 disabled:text-neutral-600 transition-colors"
+                >
+                  {remindAll.stage === 'sending'
+                    ? 'Bezig met versturen...'
+                    : open.length === 0
+                      ? 'Iedereen heeft ingediend'
+                      : `📧 Herinnering sturen aan iedereen die nog niet heeft ingediend (${open.length})`}
+                </button>
+              )}
+              {remindAll.stage === 'done' && (
+                <p className={`mt-2 text-sm ${remindAll.ok ? 'text-green-700' : 'text-red-700'}`} role="status">
+                  {remindAll.message}
+                </p>
+              )}
+            </div>
+          );
+        })()}
       </Section>
 
       {/* Always shown, regardless of period status - unlike the ruleset,
