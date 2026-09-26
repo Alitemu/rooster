@@ -104,7 +104,8 @@ identifiers, DB fields, comments, and console/log output only.
 **Calendar/UI Constraints:**
 - Grid must remain readable on 375px width (mobile-first)
 - Always show ISO week numbers
-- Saturday and Sunday as separate cells with a "heel weekend blokkeren" quick action
+- Saturday and Sunday as separate cells (no "whole weekend" quick action:
+  the tiny button it once had was removed at the planner's request)
 - 5 states per day must be visually distinct without color alone:
   - Neutral (no marking)
   - Voorkeur (soft, positive)

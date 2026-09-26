@@ -14,8 +14,6 @@
  * - Click cycles through the states; right-click (or long-press on touch,
  *   which fires the same 'contextmenu' event) opens a menu to jump to one
  *   directly
- * - "Block whole weekend" quick action, absolutely positioned so it can't
- *   stretch Saturday's row taller than the rest (the old layout bug)
  * - Live per-day coverage bar + count, and a running blocked-days summary
  *   per shift type at the top
  * - A social-pressure notice that reacts to whichever day was last
@@ -26,7 +24,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
-import { dateToISO, parseISO, getHolidayInfo, addDays } from '@/lib/holidays';
+import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
 
@@ -379,26 +377,6 @@ export function PreferencesCalendar({
   const closeContextMenu = useCallback(() => setContextMenu(null), []);
   useContextMenuDismiss(contextMenu, closeContextMenu);
 
-  // Block whole weekend - sets both days directly to ABSOLUUT rather than
-  // cycling them, so the result never depends on whatever state a day
-  // already happened to be in (cycling a day already at ABSOLUUT would
-  // unblock it instead of blocking it, and cycling one at VOORKEUR would
-  // only step it to LIEVER_NIET, not all the way to blocked).
-  const handleBlockWeekend = useCallback(
-    (satDate: string) => {
-      const satParsed = parseISO(satDate);
-      const sunParsed = new Date(satParsed);
-      sunParsed.setDate(sunParsed.getDate() + 1);
-      const sunDate = dateToISO(sunParsed);
-
-      for (const counter of shiftCounters) {
-        applyPreferenceLevel(satDate, counter, 'ABSOLUUT');
-        applyPreferenceLevel(sunDate, counter, 'ABSOLUUT');
-      }
-    },
-    [shiftCounters, applyPreferenceLevel]
-  );
-
   if (loading) {
     return <div className="p-4 text-center">Voorkeuren laden...</div>;
   }
@@ -690,19 +668,6 @@ export function PreferencesCalendar({
                                   );
                                 })}
                               </div>
-
-                              {isWeekendDay && (
-                                <button
-                                  onClick={() => handleBlockWeekend(isSaturday ? datum : addDays(datum, -1))}
-                                  disabled={isSaving || readOnly}
-                                  className="absolute top-0.5 right-0.5 text-[8px] font-bold px-1 py-0.5 rounded
-                                    bg-neutral-200 hover:bg-neutral-300 text-neutral-700 transition-colors
-                                    disabled:opacity-50"
-                                  title="Heel weekend blokkeren"
-                                >
-                                  WE
-                                </button>
-                              )}
 
                               {cov && (
                                 <div className="mt-1">
