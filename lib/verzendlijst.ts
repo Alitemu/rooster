@@ -38,7 +38,8 @@ export type VerzendlijstSoort =
   | 'RUILVERZOEK'
   | 'RUIL_BEVESTIGING'
   | 'RUIL_UITKOMST'
-  | 'RUIL_INGETROKKEN';
+  | 'RUIL_INGETROKKEN'
+  | 'LINK_AANVRAAG';
 
 export interface VerzendlijstBericht {
   soort: VerzendlijstSoort;
@@ -85,6 +86,19 @@ export interface Verzendlijst {
   nog_niet_ingediend: number | null;
   verstuurd_op: string;
   berichten: VerzendlijstBerichtUit[];
+  /**
+   * LINK_AANVRAAG only, otherwise null: someone asked for their link on the
+   * start page with this address (trimmed, lower case). The app cannot tell
+   * whose it is - it keeps no addresses - so `berichten` stays empty and
+   * `kandidaten` holds a ready bericht for everyone taking part; the flow
+   * looks the address up in its own sheet and sends only that person's
+   * bericht, to the address in the sheet. Kept out of `berichten` on
+   * purpose: a flow that doesn't know this soort yet loops over nothing,
+   * instead of mailing everybody their link because a stranger typed an
+   * address.
+   */
+  aanvraag_email: string | null;
+  kandidaten: VerzendlijstBerichtUit[] | null;
 }
 
 export function buildVerzendlijst(
@@ -94,10 +108,12 @@ export function buildVerzendlijst(
     periode: string;
     deadline?: string | null;
     groepen?: { nog_niets_ingevuld: number; nog_niet_ingediend: number };
+    aanvraag?: { email: string; kandidaten: VerzendlijstBericht[] };
   },
   berichten: VerzendlijstBericht[],
   now: Date = new Date()
 ): Verzendlijst {
+  const uit = (b: VerzendlijstBericht): VerzendlijstBerichtUit => ({ ...b, html: tekstNaarHtml(b.tekst) });
   return {
     soort: meta.soort,
     automatisch: meta.automatisch,
@@ -108,7 +124,9 @@ export function buildVerzendlijst(
     nog_niets_ingevuld: meta.groepen?.nog_niets_ingevuld ?? null,
     nog_niet_ingediend: meta.groepen?.nog_niet_ingediend ?? null,
     verstuurd_op: now.toISOString(),
-    berichten: berichten.map((b) => ({ ...b, html: tekstNaarHtml(b.tekst) })),
+    berichten: berichten.map(uit),
+    aanvraag_email: meta.aanvraag?.email ?? null,
+    kandidaten: meta.aanvraag ? meta.aanvraag.kandidaten.map(uit) : null,
   };
 }
 

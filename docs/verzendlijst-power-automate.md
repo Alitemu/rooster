@@ -105,6 +105,39 @@ De links in een automatische herinnering gebruiken het adres waarmee jij de
 uitnodigingen verstuurde. Verstuur dus eerst de uitnodigingen. Wil je een
 vast adres, zet dan `BASE_URL` in het `.env`-bestand.
 
+### Link opnieuw aanvragen
+
+Op de startpagina kan een deelnemer zijn werk-e-mailadres invullen om de
+persoonlijke link opnieuw te krijgen. Dienstrooster kent geen
+e-mailadressen, dus de app weet niet van wie dat adres is. De stroom weet
+dat wel, via je Excel-lijst. Zo gaat het:
+
+- Dienstrooster stuurt een verzendlijst met `soort` `LINK_AANVRAAG`. Daarin
+  staat het ingevulde adres in `aanvraag_email`, in kleine letters. In
+  `kandidaten` staat voor iedere deelnemer van een lopende of komende
+  periode een kant-en-klaar bericht met een nieuwe link. `berichten` is
+  leeg.
+- De stroom zoekt het adres op in de Excel-lijst, neemt het bericht van die
+  codenaam en stuurt het naar het adres uit de Excel-lijst (stap 4d).
+  Staat het adres niet in de lijst, dan gaat er niets weg.
+- Een link gaat dus nooit naar een adres dat niet in jouw lijst staat, wat
+  iemand ook invult. Vult iemand het adres van een collega in, dan krijgt
+  die collega alleen de eigen link.
+- De deelnemer krijgt altijd hetzelfde antwoord: als het adres bekend is,
+  komt er binnen een paar minuten een mail. Zo is niet af te lezen welke
+  adressen in de lijst staan.
+- Per kwartier kan één apparaat drie keer een link aanvragen en de hele
+  installatie tien keer.
+
+Zolang je stroom stap 4d niet heeft, gebeurt er bij een aanvraag niets. De
+stroom loopt dan over de lege `berichten` en stuurt geen mail. Dat is zo
+gemaakt, zodat een stroom die nog niet is aangepast niet iedereen een link
+stuurt.
+
+Schrijf de adressen in de Excel-lijst in kleine letters. Dienstrooster
+stuurt het ingevulde adres ook in kleine letters, en de stroom zoekt op
+precies die tekst.
+
 ## Stap 1. Gmail klaarzetten
 
 Gebruik bij voorkeur een apart Gmail-account alleen voor Dienstrooster.
@@ -211,8 +244,10 @@ versie iets verschillen.
       ```
 
       - `soort`: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
-        `RUILVERZOEK`, `RUIL_BEVESTIGING`, `RUIL_UITKOMST` of
-        `RUIL_INGETROKKEN`.
+        `RUILVERZOEK`, `RUIL_BEVESTIGING`, `RUIL_UITKOMST`,
+        `RUIL_INGETROKKEN` of `LINK_AANVRAAG`.
+      - `aanvraag_email` en `kandidaten` zijn alleen gevuld bij
+        `LINK_AANVRAAG` (stap 4d), anders `null`.
       - `html` is dezelfde tekst, klaar om als hoofdtekst van de mail te
         gebruiken: regels als `<br>` en alle tekens veilig gemaakt. Gebruik
         altijd `html` als hoofdtekst en nooit zelf `tekst` met een
@@ -242,6 +277,8 @@ versie iets verschillen.
           "nog_niets_ingevuld": { "type": ["integer", "null"] },
           "nog_niet_ingediend": { "type": ["integer", "null"] },
           "verstuurd_op": { "type": "string" },
+          "aanvraag_email": { "type": ["string", "null"] },
+          "kandidaten": { "type": ["array", "null"] },
           "berichten": {
             "type": "array",
             "items": {
@@ -279,6 +316,29 @@ versie iets verschillen.
       en in de tekst *aantal*, *nog_niets_ingevuld*, *nog_niet_ingediend*,
       *deadline_tekst* en *automatisch*. Wil je voor elke verzending een
       samenvatting, laat de voorwaarde dan weg.
+
+   d. **Link opnieuw aanvragen.** Zet ná de lus van stap b (nog binnen de
+      lus over de bijlagen) een **Voorwaarde**: *soort* van *JSON parseren*
+      `is gelijk aan` `LINK_AANVRAAG`. In de *Ja*-tak:
+
+      - **Een rij ophalen** (Excel Online (Business)): het bestand uit stap
+        3, tabel `Adressen`, sleutelkolom `Email`, sleutelwaarde
+        *aanvraag_email*. Staat het adres niet in de lijst, dan mislukt deze
+        actie en gaat er niets weg. Dat is de bedoeling.
+      - **Matrix filteren** (Gegevensbewerking). Van: *kandidaten* van *JSON
+        parseren*. Voorwaarde: `item()?['codenaam']` `is gelijk aan`
+        *Codenaam* uit *Een rij ophalen*.
+      - **Een e-mail verzenden (V2)**: Aan = *Email* uit *Een rij ophalen*
+        (niet *aanvraag_email*), Onderwerp =
+        `first(body('Matrix_filteren'))?['onderwerp']`, Hoofdtekst =
+        `first(body('Matrix_filteren'))?['html']`.
+
+      Gebruik je echte namen (stap 5)? Vervang de codenaam dan op dezelfde
+      manier in dat ene bericht.
+
+      Een mislukte *Een rij ophalen* laat de hele run als mislukt zien in
+      Power Automate. Wil je dat niet, zet dan na die actie een lege
+      parallelle tak met *Uitvoeren na* > *is mislukt*.
 
 4. Optioneel maar handig: voeg na *Een rij ophalen* een parallelle tak toe
    die alleen draait als die actie **mislukt** (*Uitvoeren na* > *is

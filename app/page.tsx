@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { LinkAanvraagForm } from '@/components/LinkAanvraagForm';
 
 export default function Home() {
   return (
@@ -27,6 +28,7 @@ export default function Home() {
             Voer je voorkeuren in, blokkeer je dagen en bekijk je toegewezen diensten via je
             persoonlijke link, ontvangen van de roosteraar.
           </p>
+          <LinkAanvraagForm />
         </div>
 
         <div className="card card-padding">

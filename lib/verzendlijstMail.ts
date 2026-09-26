@@ -195,7 +195,9 @@ export async function sendVerzendlijst(lijst: Verzendlijst): Promise<Verzendlijs
   const result = await sendJsonMail({
     subject: VERZENDLIJST_SUBJECT,
     text:
-      `Verzendlijst voor ${lijst.periode}: ${lijst.aantal} berichten in de bijlage.\n` +
+      (lijst.soort === 'LINK_AANVRAAG'
+        ? 'Iemand vroeg op de startpagina een persoonlijke link aan. Adres en berichten staan in de bijlage.\n'
+        : `Verzendlijst voor ${lijst.periode}: ${lijst.aantal} berichten in de bijlage.\n`) +
       'Deze mail is automatisch verstuurd door Dienstrooster voor de Power Automate-stroom.',
     filename: verzendlijstFilename(lijst.periode),
     json: verzendlijstJson(lijst),

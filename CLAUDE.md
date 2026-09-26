@@ -512,6 +512,28 @@ planner itself. runAutoReminders takes `onlyPeriodIds` for tests: the
 test database is shared across test files. Setup for the operator, in
 Dutch: docs/verzendlijst-power-automate.md.
 
+The planner reminds by hand from "Status voorkeuren": a "Herinnering
+sturen" per person (disabled once BEVESTIGD) and one below the table for
+everyone not BEVESTIGD, both POST /api/planner/period/[id]/remind - the
+automatic reminder's text (reminderBericht), fresh links, logged like any
+reminder, only while OPEN before the deadline. (There used to be a
+"submit on behalf" button there; it is gone on purpose.)
+
+"Link kwijt?" on the start page (components/LinkAanvraagForm.tsx, public
+POST /api/link-aanvragen, lib/linkAanvraag.ts): the app can't map an
+address to a codenaam, so it mails the flow a LINK_AANVRAAG verzendlijst
+with the typed address (`aanvraag_email`, trimmed, lower case) and a
+bericht for every participant of every current period (not CONCEPT, not
+ended, not in the trash, with a known mailBaseUrl - never the request's
+Host header) in `kandidaten`, each with a fresh link per such period.
+`berichten` stays empty on purpose: a flow that doesn't know this soort
+must send nothing rather than mail everyone. The flow looks the address
+up in its sheet and sends only that codenaam's bericht, to the sheet's
+address. The answer is the same for any address; rate-limited per caller
+(3) and in total (10) per 15 minutes, because every request mints a link
+for every participant and costs a Gmail send. The address is never
+stored or logged.
+
 ## Deployment
 
 **Images:** node:22-alpine (Node 20 is end-of-life), dev dependencies
