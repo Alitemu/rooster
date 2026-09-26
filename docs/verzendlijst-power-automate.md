@@ -105,6 +105,16 @@ De links in een automatische herinnering gebruiken het adres waarmee jij de
 uitnodigingen verstuurde. Verstuur dus eerst de uitnodigingen. Wil je een
 vast adres, zet dan `BASE_URL` in het `.env`-bestand.
 
+### Het rooster zelf
+
+Publiceer je een rooster, dan is het eerst voorlopig. Iedereen krijgt meteen
+een mail met de eigen diensten (`soort` `ROOSTER_VOORLOPIG`) en kan die
+controleren. Zie je geen fouten meer, bijvoorbeeld na twee weken, dan klik
+je op de periodepagina op *Definitief maken*. Iedereen krijgt dan het
+definitieve rooster (`ROOSTER_DEFINITIEF`), met wat er sinds het voorlopige
+rooster voor die persoon veranderd is. Dat gebeurt nooit vanzelf. Voor de
+stroom zijn het gewone berichten: er hoeft niets aan te veranderen.
+
 ### Link opnieuw aanvragen
 
 Op de startpagina kan een deelnemer zijn werk-e-mailadres invullen om de
@@ -254,7 +264,8 @@ versie iets verschillen.
 
       - `soort`: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
         `RUILVERZOEK`, `RUIL_BEVESTIGING`, `RUIL_UITKOMST`,
-        `RUIL_INGETROKKEN` of `LINK_AANVRAAG`.
+        `RUIL_INGETROKKEN`, `LINK_AANVRAAG`, `ROOSTER_VOORLOPIG` of
+        `ROOSTER_DEFINITIEF`.
       - `aanvraag_email` en `kandidaten` zijn alleen gevuld bij
         `LINK_AANVRAAG` (stap 4d), anders `null`.
       - `html` is dezelfde tekst, klaar om als hoofdtekst van de mail te

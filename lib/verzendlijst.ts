@@ -39,7 +39,9 @@ export type VerzendlijstSoort =
   | 'RUIL_BEVESTIGING'
   | 'RUIL_UITKOMST'
   | 'RUIL_INGETROKKEN'
-  | 'LINK_AANVRAAG';
+  | 'LINK_AANVRAAG'
+  | 'ROOSTER_VOORLOPIG'
+  | 'ROOSTER_DEFINITIEF';
 
 export interface VerzendlijstBericht {
   soort: VerzendlijstSoort;

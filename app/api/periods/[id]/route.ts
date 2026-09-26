@@ -24,6 +24,7 @@ interface PeriodDetail {
   bevroren_ruleset_json: string | null;
   overloop_bevestigd_op: string | null;
   gepubliceerd_op: string | null;
+  definitief_op: string | null;
   row_version: number;
   verwijderd_op: string | null;
 }
@@ -79,6 +80,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         bevroren_ruleset_json,
         overloop_bevestigd_op,
         gepubliceerd_op,
+        definitief_op,
         row_version,
         verwijderd_op
       FROM dienstrooster_schedule_period

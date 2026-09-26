@@ -31,11 +31,21 @@ describe('resolveBands - default rounding', () => {
     expect(resolveBands({}, counts(63), 10).AVOND).toEqual([6, 7]);
   });
 
-  it('bumps a .5-or-higher fraction a further step up to [floor+2, floor+3]', () => {
+  it('keeps a .5-or-higher fraction at [floor, ceil] too', () => {
     // 65 / 10 = 6.5
-    expect(resolveBands({}, counts(65), 10).AVOND).toEqual([8, 9]);
+    expect(resolveBands({}, counts(65), 10).AVOND).toEqual([6, 7]);
     // 68 / 10 = 6.8
-    expect(resolveBands({}, counts(68), 10).AVOND).toEqual([8, 9]);
+    expect(resolveBands({}, counts(68), 10).AVOND).toEqual([6, 7]);
+  });
+
+  it('always leaves room for everyone: the band holds the average', () => {
+    // The period's slots divided evenly must fit inside every default band,
+    // or nobody can end up inside it (40 avonddiensten / 16 = 2.5).
+    for (const [slots, people] of [[40, 16], [65, 10], [68, 10], [180, 12], [7, 31]]) {
+      const [min, max] = resolveBands({}, counts(slots), people).AVOND;
+      expect(min * people).toBeLessThanOrEqual(slots);
+      expect(max * people).toBeGreaterThanOrEqual(slots);
+    }
   });
 
   it('stays at the ordinary band just below the .5 boundary', () => {

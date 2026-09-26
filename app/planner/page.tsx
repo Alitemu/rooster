@@ -23,6 +23,7 @@ interface Period {
   deadline: string;
   status: string;
   pool_id: string;
+  definitief_op?: string | null;
   // The period whose invitations went out last (lib/activePeriod.ts).
   actief?: boolean;
 }
@@ -50,8 +51,14 @@ const statusLabels: Record<string, string> = {
   OPEN: '📖 Open',
   GESLOTEN: '🔒 Gesloten',
   GEGENEREERD: '🤖 Gegenereerd',
-  GEPUBLICEERD: '✅ Gepubliceerd',
+  GEPUBLICEERD: '✅ Definitief',
 };
+
+/** A published roster is voorlopig until the planner makes it definitief. */
+function statusLabel(p: { status: string; definitief_op?: string | null }): string {
+  if (p.status === 'GEPUBLICEERD' && !p.definitief_op) return '📝 Voorlopig gepubliceerd';
+  return statusLabels[p.status] || p.status;
+}
 
 // The stakes of deleting a period differ a lot by status - a CONCEPT
 // period nobody has seen yet is low-risk, but deleting an OPEN or
@@ -427,7 +434,7 @@ export default function PlannerHomePage() {
                     {p.start_datum} t/m {p.eind_datum}
                   </td>
                   <td className="px-4 py-2 text-sm">
-                    {statusLabels[p.status] || p.status}
+                    {statusLabel(p)}
                     {p.actief && (
                       <span
                         className="ml-2 inline-block rounded border border-green-700 bg-green-50 px-1.5 py-0.5 text-xs font-semibold text-green-800"

@@ -182,6 +182,14 @@ export const schedulePeriod = sqliteTable(
     // "Link kwijt?" on the start page links to it, and no other period can
     // be invited while it isn't published.
     uitgenodigd_op: text('uitgenodigd_op'),
+    // Publishing first makes the roster voorlopig (gepubliceerd_op set, this
+    // null): everyone gets it by mail to check. The planner makes it
+    // definitief by hand once nobody objects (lib/publication.ts).
+    definitief_op: text('definitief_op'),
+    definitief_door_person_id: text('definitief_door_person_id').references(() => person.id),
+    // Everyone's shifts as they were published voorlopig ({datum, teller,
+    // person_id}[]), so the definitief mail can say what changed since.
+    voorlopig_rooster_json: text('voorlopig_rooster_json'),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
     verwijderd_op: text('verwijderd_op'), // Soft-delete marker; null = not in trash. Purged 30 days after this.
   }

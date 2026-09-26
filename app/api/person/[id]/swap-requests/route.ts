@@ -19,6 +19,7 @@ import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { optionalFreeText } from '@/lib/freeText';
 import { swapWindowConflicts } from '@/lib/swapWindowRule';
 import { swapQuotaReached, RUILVERZOEK_LIMIET_MELDING } from '@/lib/swapQuota';
+import { swapMembershipProblem } from '@/lib/membershipWindow';
 
 const TELLER_LABELS: Record<string, string> = {
   AVOND: 'avonddienst',
@@ -187,8 +188,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // lib/swapEligibility.ts for why both matter. Re-checked at approval
     // time too, since a period can move on while a request sits pending.
     const period = db
-      .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(period_id as string) as { status: string } | undefined;
+      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(period_id as string) as { status: string; pool_id: string } | undefined;
     if (!period) {
       return NextResponse.json({ success: false, error: 'Periode niet gevonden' }, { status: 404 });
     }
@@ -214,6 +215,18 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         },
         { status: 400 }
       );
+    }
+
+    // Each takes over the other's day, so each must take part that day.
+    const buitenLidmaatschap = swapMembershipProblem(
+      period.pool_id,
+      personId,
+      respondentAssignment.person_id,
+      offeredSlot?.datum ?? '',
+      requestedSlot?.datum ?? ''
+    );
+    if (buitenLidmaatschap) {
+      return NextResponse.json({ success: false, error: buitenLidmaatschap }, { status: 400 });
     }
 
     // No window-rule check here on purpose: someone who wants two shifts

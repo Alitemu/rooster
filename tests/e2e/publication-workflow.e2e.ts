@@ -45,16 +45,16 @@ test.describe('Roster Publication Workflow - E2E', () => {
   test('planner sees the publish button for a generated period', async ({ page }) => {
     await gotoPlanner(page);
 
-    const publishButton = page.getByRole('button', { name: '✅ Rooster publiceren' });
+    const publishButton = page.getByRole('button', { name: '✅ Voorlopig publiceren' });
     await expect(publishButton).toBeVisible();
     await expect(publishButton).toBeEnabled();
   });
 
   test('publication dialog reports the roster is ready and lists its checks', async ({ page }) => {
     await gotoPlanner(page);
-    await page.getByRole('button', { name: '✅ Rooster publiceren' }).click();
+    await page.getByRole('button', { name: '✅ Voorlopig publiceren' }).click();
 
-    const dialogHeading = page.getByRole('heading', { name: 'Rooster publiceren' });
+    const dialogHeading = page.getByRole('heading', { name: 'Rooster voorlopig publiceren' });
     await expect(dialogHeading).toBeVisible();
 
     // The fixture is a complete roster: 7 slots, 7 assignments, no blocks.
@@ -91,11 +91,11 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
     try {
       await gotoPlanner(page);
-      await page.getByRole('button', { name: '✅ Rooster publiceren' }).click();
+      await page.getByRole('button', { name: '✅ Voorlopig publiceren' }).click();
 
       await expect(page.getByText('Problemen gevonden')).toBeVisible();
       await expect(page.getByText(/6 van 7 ingevuld/)).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Nu publiceren' })).toBeDisabled();
+      await expect(page.getByRole('button', { name: /^Voorlopig publiceren/ })).toBeDisabled();
 
       // The disabled button is convenience only - the API has to refuse it
       // too, or a direct POST publishes an incomplete roster and notifies
@@ -127,19 +127,21 @@ test.describe('Roster Publication Workflow - E2E', () => {
     ).c;
 
     await gotoPlanner(page);
-    await page.getByRole('button', { name: '✅ Rooster publiceren' }).click();
+    await page.getByRole('button', { name: '✅ Voorlopig publiceren' }).click();
 
-    const publishNow = page.getByRole('button', { name: 'Nu publiceren' });
+    const publishNow = page.getByRole('button', { name: /^Voorlopig publiceren/ });
     await expect(publishNow).toBeEnabled();
     await publishNow.click();
 
-    // The dialog closes and BOTH the dashboard's status line and the page's
-    // own header badge reflect the new state - they hold separate copies of
-    // the period, so a stale badge after publishing is a real regression.
-    // Regex, not an exact string: the badge carries a nested span with the
-    // publication timestamp beside the label.
-    await expect(page.getByText(/✅ Status: Gepubliceerd/)).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Status: Gepubliceerd', { exact: true })).toBeVisible();
+    // The dialog stays open on its outcome; closing it, BOTH the dashboard's
+    // status line and the page's own header badge reflect the new state -
+    // they hold separate copies of the period, so a stale badge after
+    // publishing is a real regression. Regex, not an exact string: the
+    // badge carries a nested span with the publication timestamp.
+    await expect(page.getByText('Het rooster is voorlopig gepubliceerd.')).toBeVisible({ timeout: 10000 });
+    await page.getByRole('dialog').getByRole('button', { name: 'Sluiten' }).click();
+    await expect(page.getByText(/📝 Status: Voorlopig gepubliceerd/)).toBeVisible();
+    await expect(page.getByText('Status: Voorlopig gepubliceerd', { exact: true })).toBeVisible();
 
     const period = db
       .prepare(
@@ -166,8 +168,27 @@ test.describe('Roster Publication Workflow - E2E', () => {
   test('the publish button is gone once the period is published', async ({ page }) => {
     await gotoPlanner(page);
 
-    await expect(page.getByText('GEPUBLICEERD').first()).toBeVisible();
-    await expect(page.getByRole('button', { name: '✅ Rooster publiceren' })).toHaveCount(0);
+    await expect(page.getByText('Status: Voorlopig gepubliceerd', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '✅ Voorlopig publiceren' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '🔏 Definitief maken' })).toBeVisible();
+  });
+
+  test('making the roster definitief warns about the mail and is a one-time step', async ({ page }) => {
+    await gotoPlanner(page);
+    await page.getByRole('button', { name: '🔏 Definitief maken' }).click();
+    await expect(page.getByRole('heading', { name: 'Rooster definitief maken' })).toBeVisible();
+    await expect(page.getByTestId('mail-waarschuwing')).toBeVisible();
+
+    await page.getByRole('button', { name: /^Definitief maken/ }).click();
+    await expect(page.getByText('Het rooster is definitief.')).toBeVisible({ timeout: 10000 });
+    await page.getByRole('dialog').getByRole('button', { name: 'Sluiten' }).click();
+
+    await expect(page.getByText('Status: Definitief', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '🔏 Definitief maken' })).toHaveCount(0);
+    const row = db
+      .prepare('SELECT definitief_op FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(testData.period.id) as { definitief_op: string | null };
+    expect(row.definitief_op).toBeTruthy();
   });
 
   test('republishing a published period is refused by the API', async ({ page }) => {

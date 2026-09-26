@@ -60,6 +60,8 @@ interface DashboardData {
   status: string;
   deadline: string;
   pool_id: string;
+  /** GEPUBLICEERD only: null while the roster is still voorlopig. */
+  definitief_op: string | null;
   submission_stats: {
     not_started: number;
     in_progress: number;
@@ -243,6 +245,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   // applying them first silently throws them away.
   const [showUnappliedDraftWarning, setShowUnappliedDraftWarning] = useState(false);
   const [publicationDialogOpen, setPublicationDialogOpen] = useState(false);
+  const [publicationStap, setPublicationStap] = useState<'voorlopig' | 'definitief'>('voorlopig');
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
   const [unpublishError, setUnpublishError] = useState<string | null>(null);
@@ -699,10 +702,24 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           </button>
           {dashboard.status === 'GEGENEREERD' && (
             <button
-              onClick={() => setPublicationDialogOpen(true)}
+              onClick={() => {
+                setPublicationStap('voorlopig');
+                setPublicationDialogOpen(true);
+              }}
               className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
             >
-              ✅ Rooster publiceren
+              ✅ Voorlopig publiceren
+            </button>
+          )}
+          {dashboard.status === 'GEPUBLICEERD' && !dashboard.definitief_op && (
+            <button
+              onClick={() => {
+                setPublicationStap('definitief');
+                setPublicationDialogOpen(true);
+              }}
+              className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+            >
+              🔏 Definitief maken
             </button>
           )}
           {dashboard.status === 'GEPUBLICEERD' && (
@@ -719,9 +736,20 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         </div>
         <p className="text-xs text-neutral-500 mt-2">
           Status: <span className="font-semibold">
-            {periodStatusLabel(dashboard.status).charAt(0).toUpperCase() + periodStatusLabel(dashboard.status).slice(1)}
+            {dashboard.status === 'GEPUBLICEERD'
+              ? dashboard.definitief_op
+                ? 'Definitief'
+                : 'Voorlopig gepubliceerd'
+              : periodStatusLabel(dashboard.status).charAt(0).toUpperCase() + periodStatusLabel(dashboard.status).slice(1)}
           </span>
         </p>
+        {dashboard.status === 'GEPUBLICEERD' && !dashboard.definitief_op && (
+          <p className="text-xs text-neutral-600 mt-1">
+            Iedereen kan het rooster nu controleren. Voer correcties gewoon in het rooster in. Komen er
+            geen reacties meer, bijvoorbeeld na twee weken? Maak het rooster dan definitief. Iedereen
+            krijgt dan het definitieve rooster met de wijzigingen.
+          </p>
+        )}
       </div>
 
       {/* Same status gate as the page's old link used ("niet CONCEPT") -
@@ -1265,8 +1293,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         periodId={periodId}
         isOpen={publicationDialogOpen}
         onClose={() => setPublicationDialogOpen(false)}
+        stap={publicationStap}
         onSuccess={() => {
-          setPublicationDialogOpen(false);
+          // The dialog stays open on its own outcome (who got a mail).
           loadData();
           onPeriodChanged?.();
         }}

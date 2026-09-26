@@ -129,13 +129,12 @@ export function countNominalAvondWeekendDays(
  * doesn't name a band explicitly we derive each counter's own band from
  * its actual average per person.
  *
- * The rounding is deliberately not a plain [floor, ceil]: a fractional
- * average of x,5 or higher means most people are going to end up needing
- * the higher count anyway, so the band is bumped a further step up
- * ([floor+2, floor+3]) rather than just to [floor+1, floor+2] - and an
- * exact whole-number average (fraction 0) still gets a real two-value
- * band, rounded up ([n, n+1]), instead of collapsing to a single value
- * [n, n]. Below x,5 the band is the ordinary [floor, ceil].
+ * The band is the two whole numbers around the average, [floor, floor+1]:
+ * a fractional average is [floor, ceil], and an exact whole-number average
+ * still gets a real two-value band ([n, n+1]) instead of collapsing to
+ * [n, n]. (It once jumped to [floor+2, floor+3] from x,5 upwards. With
+ * an average of 2,5 that asked 4 or 5 of everyone, more shifts than the
+ * period had, so nobody could end up inside it.)
  */
 export function resolveBands(
   config: Record<string, unknown>,
@@ -147,8 +146,7 @@ export function resolveBands(
     if (total <= 0) return [0, 0];
     const avg = total / Math.max(peopleCount, 1);
     const n = Math.floor(avg);
-    const frac = avg - n;
-    return frac < 0.5 ? [n, n + 1] : [n + 2, n + 3];
+    return [n, n + 1];
   };
 
   const configured: Record<Teller, unknown> = {

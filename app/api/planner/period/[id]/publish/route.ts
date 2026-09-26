@@ -1,7 +1,10 @@
 /**
  * POST /api/planner/period/[id]/publish
  *
- * Mark period as PUBLISHED and send notifications to all staff.
+ * Publishes the roster voorlopig (lib/publication.ts): the period becomes
+ * GEPUBLICEERD, everyone taking part gets an in-app notice and, once mail
+ * is set up, their own shifts by mail to check. What was published is kept
+ * so the definitieve mail (finalize/route.ts) can say what changed.
  * Prerequisites: publication-check must pass.
  */
 
@@ -13,6 +16,9 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { runPublicationCheck } from '@/lib/publicationCheck';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { rosterSnapshot, sendRosterMail } from '@/lib/publication';
+import { resolveBaseUrl } from '@/lib/baseUrl';
+import { rememberBaseUrl } from '@/lib/periodInvitations';
 
 interface PublishRequest {
   /**
@@ -114,9 +120,11 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const publishTx = db.transaction(() => {
       db.prepare(
         `UPDATE dienstrooster_schedule_period
-         SET status = ?, gepubliceerd_op = ?, gepubliceerd_door_person_id = ?, row_version = row_version + 1
+         SET status = ?, gepubliceerd_op = ?, gepubliceerd_door_person_id = ?,
+             definitief_op = NULL, definitief_door_person_id = NULL, voorlopig_rooster_json = ?,
+             row_version = row_version + 1
          WHERE id = ?`
-      ).run('GEPUBLICEERD', now, publishedByPersonId, periodId);
+      ).run('GEPUBLICEERD', now, publishedByPersonId, JSON.stringify(rosterSnapshot(periodId)), periodId);
 
       for (const p of people) {
         const rendered = renderNotificationTemplate('SCHEDULE_PUBLISHED', {
@@ -148,6 +156,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         JSON.stringify({ status: 'GEGENEREERD' }),
         JSON.stringify({
           status: 'GEPUBLICEERD',
+          publicatie: 'voorlopig',
           notifications_sent: people.length,
           // Empty when there was nothing to confirm - keeps the common
           // case's audit entry uncluttered rather than always carrying an
@@ -162,6 +171,12 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     const notificationsCreated = publishTx();
 
+    // After the commit: the roster is published whether or not the mail
+    // gets out, and the planner is told which it was.
+    const baseUrl = resolveBaseUrl(request);
+    rememberBaseUrl(periodId, baseUrl);
+    const mail = await sendRosterMail('ROOSTER_VOORLOPIG', period, baseUrl);
+
     return NextResponse.json({
       success: true,
       data: {
@@ -171,6 +186,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           gepubliceerd_op: now,
         },
         notifications_sent: notificationsCreated,
+        mail,
       },
     });
   } catch (error) {

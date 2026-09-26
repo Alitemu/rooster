@@ -61,6 +61,7 @@ import {
 import { getFellowIds } from '@/lib/fellows';
 import { countWindowRuleViolations } from '@/lib/windowRule';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
+import { formatSwapDate } from './swapMailDetails';
 
 export interface PublicationCheckResult {
   valid: boolean;
@@ -104,6 +105,36 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   const slotsFilled = slots.count === assignedSlots.count;
   if (!slotsFilled) {
     issues.push(`Nog niet alle diensten zijn ingedeeld (${assignedSlots.count} van ${slots.count} ingevuld)`);
+  }
+
+  // Someone on a day they don't take part (after Geldig tot, before Geldig
+  // vanaf). The solver and every manual path refuse this now, so it only
+  // happens when the membership changed after the roster was made - the
+  // shift is effectively unmanned, so it blocks like an empty one.
+  const outsideMembership = (
+    db
+      .prepare(
+        `SELECT p.codenaam, s.datum FROM dienstrooster_assignment a
+         JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+         JOIN dienstrooster_person p ON p.id = a.person_id
+         JOIN dienstrooster_schedule_period sp ON sp.id = a.schedule_version_id
+         WHERE a.schedule_version_id = ?
+           AND NOT EXISTS (
+             SELECT 1 FROM dienstrooster_pool_membership pm
+             WHERE pm.pool_id = sp.pool_id AND pm.person_id = a.person_id
+               AND pm.geldig_vanaf <= s.datum AND pm.geldig_tot >= s.datum
+           )
+         ORDER BY s.datum`
+      )
+      .all(periodId) as Array<{ codenaam: string; datum: string }>
+  );
+  if (outsideMembership.length > 0) {
+    const voorbeelden = outsideMembership.slice(0, 5).map((r) => `${r.codenaam} op ${formatSwapDate(r.datum)}`);
+    issues.push(
+      `${outsideMembership.length} ${outsideMembership.length === 1 ? 'dienst staat' : 'diensten staan'} bij iemand die ` +
+        `die dag niet meer of nog niet meedoet (${voorbeelden.join(', ')}${outsideMembership.length > 5 ? ' en meer' : ''}). ` +
+        `Geef die diensten aan een ander.`
+    );
   }
 
   const blockingViolations = db

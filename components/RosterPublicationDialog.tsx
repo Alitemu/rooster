@@ -18,6 +18,11 @@
  *     a confirmation box before Publish enables, but do not block it
  *     outright - blocking on the same override a planner just made on
  *     purpose left no way to ever publish a roster that used it.
+ *
+ * Used for both steps of publishing (lib/publication.ts): `voorlopig`
+ * publishes, `definitief` makes a published roster final. Both mail
+ * everyone their own shifts straight away, which the dialog says before
+ * the button is pressed, and shows how that went afterwards.
  */
 
 import { useState, useEffect } from 'react';
@@ -45,19 +50,28 @@ interface CheckResult {
   };
 }
 
+type RosterMailResult =
+  | { verstuurd: true; aantal: number }
+  | { verstuurd: false; reden: 'NIET_INGESTELD' | 'MISLUKT'; melding: string };
+
 interface Props {
   periodId: string;
+  /** Publish (voorlopig) or make the published roster definitief. */
+  stap?: 'voorlopig' | 'definitief';
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
 }
 
-export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }: Props) {
+export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, onClose, onSuccess }: Props) {
+  const definitief = stap === 'definitief';
   const [validating, setValidating] = useState(true);
   const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
   const [overridesConfirmed, setOverridesConfirmed] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mailKlaar, setMailKlaar] = useState<boolean | null>(null);
+  const [resultaat, setResultaat] = useState<RosterMailResult | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -66,6 +80,14 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
     // previous visit to this dialog must not silently carry over to a
     // roster that has since changed underneath it.
     setOverridesConfirmed(false);
+    setResultaat(null);
+    setMailKlaar(null);
+    fetch(withBasePath('/api/planner/mail-settings'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.success) setMailKlaar(!!data.data.ingesteld && !data.data.uitgeschakeld);
+      })
+      .catch(() => {});
 
     const validateRoster = async () => {
       setValidating(true);
@@ -96,7 +118,7 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
       // (auth.userId) and ignores anything sent here. The literal
       // 'current-user' string this used to post was dead data behind a
       // stale "TODO: get from auth" that suggested auth was still missing.
-      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/publish`), {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/${definitief ? 'finalize' : 'publish'}`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
@@ -104,13 +126,15 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
         ),
       });
 
+      const data = await res.json();
       if (!res.ok) {
-        const data = await res.json();
         throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Publiceren van rooster mislukt');
       }
 
+      // Stay open on the outcome: whether everyone got their mail is
+      // something the planner needs to see.
+      setResultaat(data.data?.mail ?? { verstuurd: true, aantal: 0 });
       if (onSuccess) onSuccess();
-      onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publiceren van rooster mislukt');
     } finally {
@@ -134,22 +158,27 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
     ? 'Problemen gevonden'
     : needsConfirmation
       ? 'Bewuste uitzonderingen gevonden'
-      : 'Klaar om te publiceren';
+      : definitief
+        ? 'Klaar om definitief te maken'
+        : 'Klaar om te publiceren';
+  const titel = definitief ? 'Rooster definitief maken' : 'Rooster voorlopig publiceren';
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Rooster publiceren"
+      aria-label={titel}
       onClick={dismissBackdrop}
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
     >
       <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-full flex flex-col">
         {/* Header */}
         <div className="border-b p-6 flex-shrink-0">
-          <h2 className="text-xl font-bold">Rooster publiceren</h2>
+          <h2 className="text-xl font-bold">{titel}</h2>
           <p className="text-sm text-neutral-600 mt-1">
-            Laatste controle voordat het rooster naar het personeel gaat
+            {definitief
+              ? 'Doe dit als niemand meer fouten heeft gemeld. Correcties die je intussen hebt ingevoerd, zitten er al in.'
+              : 'Iedereen krijgt het rooster eerst voorlopig, om het te controleren. Daarna maak je het zelf definitief.'}
           </p>
         </div>
 
@@ -161,7 +190,30 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
             </div>
           )}
 
-          {!validating && checkResult && (
+          {resultaat && (
+            <div className="space-y-3" data-testid="publicatie-resultaat">
+              <div className="p-4 rounded-lg bg-green-50 border border-green-200">
+                <p className="font-semibold text-green-900">
+                  {definitief ? 'Het rooster is definitief.' : 'Het rooster is voorlopig gepubliceerd.'}
+                </p>
+              </div>
+              {resultaat.verstuurd ? (
+                <p className="text-sm text-neutral-700">
+                  {resultaat.aantal === 1 ? '1 persoon heeft' : `${resultaat.aantal} personen hebben`} een e-mail
+                  gekregen met het eigen rooster.
+                </p>
+              ) : (
+                <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                  <p className="text-sm text-amber-900">{resultaat.melding}</p>
+                  <p className="text-sm text-amber-900 mt-1">
+                    Iedereen ziet het rooster wel in de app, via de eigen link.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!resultaat && !validating && checkResult && (
             <div className="space-y-4">
               {/* Status */}
               <div
@@ -274,6 +326,22 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
             </div>
           )}
 
+          {!resultaat && !validating && checkResult && !hasIssues && (
+            <div className="mt-4 p-4 rounded-lg bg-blue-50 border border-blue-200" data-testid="mail-waarschuwing">
+              {mailKlaar === false ? (
+                <p className="text-sm text-blue-900">
+                  Er gaat geen e-mail uit, omdat automatisch versturen nog niet is ingesteld. Iedereen
+                  ziet het rooster wel in de app.
+                </p>
+              ) : (
+                <p className="text-sm text-blue-900">
+                  <strong>Let op:</strong> iedereen krijgt meteen een e-mail met het eigen rooster
+                  {definitief ? ' en met wat er sinds het voorlopige rooster veranderd is.' : '.'}
+                </p>
+              )}
+            </div>
+          )}
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded p-4">
               <p className="text-sm text-red-800">{error}</p>
@@ -290,13 +358,17 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
           >
             Sluiten
           </button>
-          <button
-            onClick={handlePublish}
-            disabled={publishing || validating || !canPublish}
-            className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
-          >
-            {publishing ? 'Bezig met publiceren...' : 'Nu publiceren'}
-          </button>
+          {!resultaat && (
+            <button
+              onClick={handlePublish}
+              disabled={publishing || validating || !canPublish}
+              className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
+            >
+              {publishing
+                ? 'Bezig...'
+                : `${definitief ? 'Definitief maken' : 'Voorlopig publiceren'}${mailKlaar === false ? '' : ' en mailen'}`}
+            </button>
+          )}
         </div>
       </div>
     </div>

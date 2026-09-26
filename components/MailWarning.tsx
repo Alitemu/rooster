@@ -28,6 +28,9 @@ const WAT: Record<string, string> = {
   RUIL_BEVESTIGING: 'een mail over een ruilverzoek',
   RUIL_UITKOMST: 'een mail over een ruilverzoek',
   RUIL_INGETROKKEN: 'een mail over een ruilverzoek',
+  LINK_AANVRAAG: 'een aangevraagde link',
+  ROOSTER_VOORLOPIG: 'het voorlopige rooster',
+  ROOSTER_DEFINITIEF: 'het definitieve rooster',
 };
 
 /** "24 september om 09:00". */

@@ -15,6 +15,7 @@ import { formatSwapDate, swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding } from '@/lib/meldingMail';
 import { closeLapsedSwaps } from '@/lib/swapLifecycle';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
+import { swapMembershipProblem } from '@/lib/membershipWindow';
 import { swapStatusLabel } from '@/lib/statusLabels';
 
 const TELLER_LABELS: Record<string, string> = {
@@ -114,8 +115,8 @@ export async function POST(
       .prepare('SELECT datum FROM dienstrooster_shift_slot WHERE id = ?')
       .get(swapRequest.gevraagde_slot_id) as { datum: string } | undefined;
     const period = db
-      .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(swapRequest.periode_id) as { status: string } | undefined;
+      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(swapRequest.periode_id) as { status: string; pool_id: string } | undefined;
 
     // Re-checked here, not just at creation: a request can sit PENDING
     // while the planner reopens/regenerates the period, or simply until
@@ -126,6 +127,22 @@ export async function POST(
     });
     if (!eligibility.allowed) {
       return NextResponse.json({ success: false, error: eligibility.message }, { status: 403 });
+    }
+    // The planner may have changed Geldig vanaf/tot while the request waited.
+    if (
+      period &&
+      swapMembershipProblem(
+        period.pool_id,
+        swapRequest.aanvrager_person_id,
+        swapRequest.respondent_person_id,
+        offeredSlotForCheck?.datum ?? '',
+        requestedSlotForCheck?.datum ?? ''
+      )
+    ) {
+      return NextResponse.json(
+        { success: false, error: 'Deze ruil kan niet meer. Een van jullie doet op die dag niet mee in het rooster.' },
+        { status: 409 }
+      );
     }
 
     // Notify requester that swap was approved

@@ -41,11 +41,15 @@ function createFixture(windowWeeks: number) {
      VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', ?, datetime('now'))`
   ).run(periodId, poolId, JSON.stringify({ windowWeeks }));
 
-  const person = (label: string) => {
+  // Everyone takes part for the whole period unless a test says otherwise.
+  const person = (label: string, geldig_vanaf = '2020-01-01', geldig_tot = '2100-12-31') => {
     const id = crypto.randomUUID();
     db.prepare(
       `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`
     ).run(id, `${label}-${id.slice(0, 6)}`);
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot) VALUES (?, ?, ?, ?, ?)`
+    ).run(crypto.randomUUID(), id, poolId, geldig_vanaf, geldig_tot);
     created.people.push(id);
     return id;
   };
@@ -86,6 +90,7 @@ afterEach(() => {
       db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(id);
     }
     db.prepare('DELETE FROM dienstrooster_shift_type WHERE pool_id = ?').run(poolId);
+    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(poolId);
     const pool = db.prepare('SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?').get(poolId) as { ruleset_id: string };
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(poolId);
     db.prepare('DELETE FROM dienstrooster_ruleset WHERE id = ?').run(pool.ruleset_id);
@@ -141,6 +146,20 @@ describe('getSwapCandidates', () => {
     f.shift(busy, '2099-03-05', 10);
 
     expect(categoryOf(getSwapCandidates(f.requester, f.periodId, f.offered), later)).toBe('KORT_OP_ELKAAR');
+  });
+
+  it('leaves out a swap that would give someone a day outside Geldig vanaf/tot', () => {
+    const f = createFixture(2);
+    // Leaves before the offered day (2099-03-03), so can't take it over.
+    const leaves = f.person('Vertrekt', '2020-01-01', '2099-03-02');
+    const leavesShift = f.shift(leaves, '2099-02-24', 9);
+    // Starts later: fine for their own shift, but the requester can take it.
+    const starts = f.person('Begint', '2099-03-01');
+    const startsShift = f.shift(starts, '2099-04-06', 15);
+
+    const result = getSwapCandidates(f.requester, f.periodId, f.offered);
+    expect(categoryOf(result, leavesShift)).toBeUndefined();
+    expect(categoryOf(result, startsShift)).toBe('BESCHIKBAAR');
   });
 
   it('leaves out past shifts and other shift types', () => {

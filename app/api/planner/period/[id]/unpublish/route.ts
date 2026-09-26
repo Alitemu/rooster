@@ -82,6 +82,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       db.prepare(
         `UPDATE dienstrooster_schedule_period
          SET status = 'GEGENEREERD', gepubliceerd_op = NULL, gepubliceerd_door_person_id = NULL,
+             definitief_op = NULL, definitief_door_person_id = NULL, voorlopig_rooster_json = NULL,
              row_version = row_version + 1
          WHERE id = ?`
       ).run(periodId);

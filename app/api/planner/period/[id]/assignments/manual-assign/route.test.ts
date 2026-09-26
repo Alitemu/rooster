@@ -5,6 +5,8 @@ import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS 
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { POST as manualAssign } from './route';
 import { POST as reassign } from '../[assignment-id]/reassign/route';
+import { getEligiblePeopleForSlot } from '@/lib/rosterGaps';
+import { runPublicationCheck } from '@/lib/publicationCheck';
 
 /**
  * The hard rules: a manual assignment only ever lands on a slot of the
@@ -170,6 +172,36 @@ describe('POST /api/planner/period/[id]/assignments/manual-assign', () => {
     expect(assignmentCount(f.periodId)).toBe(0);
   });
 
+  it('refuses a day after the member\'s Geldig tot, and allows Geldig tot itself', async () => {
+    const f = createFixture();
+    // The period runs 2027-03-01..14; the only slot is on the 1st.
+    db.prepare('UPDATE dienstrooster_pool_membership SET geldig_tot = ? WHERE person_id = ?').run('2027-02-28', f.memberId);
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, '2027-03-02', '2030-12-31')`
+    ).run(crypto.randomUUID(), f.memberId, f.poolId);
+
+    const res = await assign(f, f.periodId, f.slotId, f.memberId);
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('doet op 1 maart 2027 niet mee');
+    expect(assignmentCount(f.periodId)).toBe(0);
+
+    db.prepare('UPDATE dienstrooster_pool_membership SET geldig_tot = ? WHERE person_id = ? AND geldig_tot = ?').run(
+      '2027-03-01',
+      f.memberId,
+      '2027-02-28'
+    );
+    expect((await assign(f, f.periodId, f.slotId, f.memberId)).status).toBe(200);
+  });
+
+  it('refuses a day before the member\'s Geldig vanaf', async () => {
+    const f = createFixture();
+    db.prepare('UPDATE dienstrooster_pool_membership SET geldig_vanaf = ? WHERE person_id = ?').run('2027-03-08', f.memberId);
+    const res = await assign(f, f.periodId, f.slotId, f.memberId);
+    expect(res.status).toBe(400);
+    expect(assignmentCount(f.periodId)).toBe(0);
+  });
+
   it('refuses a member who has been deactivated', async () => {
     const f = createFixture();
     db.prepare('UPDATE dienstrooster_person SET actief = 0 WHERE id = ?').run(f.memberId);
@@ -199,5 +231,52 @@ describe('POST /api/planner/period/[id]/assignments/[assignment-id]/reassign', (
       .prepare('SELECT person_id FROM dienstrooster_assignment WHERE schedule_version_id = ?')
       .get(f.periodId) as { person_id: string };
     expect(after.person_id).toBe(f.memberId);
+  });
+
+  it('refuses to hand a shift to someone who only starts later', async () => {
+    const f = createFixture();
+    await assign(f, f.periodId, f.slotId, f.memberId);
+    const assignment = db
+      .prepare('SELECT id FROM dienstrooster_assignment WHERE schedule_version_id = ?')
+      .get(f.periodId) as { id: string };
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, '2027-03-08', '2030-12-31')`
+    ).run(crypto.randomUUID(), f.outsiderId, f.poolId);
+
+    const res = await reassign(
+      plannerRequest(
+        `http://localhost/api/planner/period/${f.periodId}/assignments/${assignment.id}/reassign`,
+        f.plannerId,
+        { person_id: f.outsiderId }
+      ),
+      { params: Promise.resolve({ id: f.periodId, 'assignment-id': assignment.id }) }
+    );
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('Geldig vanaf/tot in the pick list and the publication check', () => {
+  it('leaves someone out of the pick list on a day they do not take part', () => {
+    const f = createFixture();
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, '2027-03-08', '2030-12-31')`
+    ).run(crypto.randomUUID(), f.outsiderId, f.poolId);
+
+    const ids = getEligiblePeopleForSlot(f.periodId, f.slotId).map((p) => p.id);
+    expect(ids).toContain(f.memberId);
+    expect(ids).not.toContain(f.outsiderId);
+  });
+
+  it('blocks publishing a shift held by someone whose Geldig tot moved before it', async () => {
+    const f = createFixture();
+    await assign(f, f.periodId, f.slotId, f.memberId);
+    db.prepare('UPDATE dienstrooster_pool_membership SET geldig_vanaf = ? WHERE person_id = ?').run('2027-03-05', f.memberId);
+
+    const period = db.prepare('SELECT * FROM dienstrooster_schedule_period WHERE id = ?').get(f.periodId) as never;
+    const check = runPublicationCheck(period);
+    expect(check.valid).toBe(false);
+    expect(check.issues.join(' ')).toContain('niet meer of nog niet meedoet');
   });
 });

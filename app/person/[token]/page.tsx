@@ -40,7 +40,7 @@ interface Period {
 
 interface RosterData {
   person: { id: string; codenaam: string };
-  period: { id: string; naam: string; start_datum: string; eind_datum: string; gepubliceerd_op: string };
+  period: { id: string; naam: string; start_datum: string; eind_datum: string; gepubliceerd_op: string; definitief_op: string | null };
   assignments: Array<{
     id: string;
     slot_id: string;
@@ -594,6 +594,15 @@ function PersonalLinkPageContent() {
       )}
 
       {/* Content */}
+      {period.status === 'GEPUBLICEERD' && rosterData && !rosterData.period.definitief_op && (
+        <div className="mb-4 rounded border-2 border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-950" data-testid="voorlopig-rooster">
+          <p className="font-semibold">Dit is het voorlopige rooster.</p>
+          <p className="mt-1">
+            Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten.
+            Zonder reactie wordt het rooster over ongeveer twee weken definitief. Je krijgt dan nog een bericht.
+          </p>
+        </div>
+      )}
       {period.status === 'GEPUBLICEERD' && rosterData && personId && (
         <PersonalRosterView
           personId={personId}

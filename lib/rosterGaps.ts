@@ -15,6 +15,7 @@ import { db } from '@/db/client';
 import { resolveRulesetConfig, resolveWindowWeeks, computeBandStatusByPerson, type Teller } from '@/lib/rosterBands';
 import { getWindowConflictingPersonIds } from '@/lib/windowRule';
 import { getFellowIds } from '@/lib/fellows';
+import { coversDate, isMemberOnDate, membershipWindows, notMemberMessage } from './membershipWindow';
 
 /**
  * Why a candidate needs a second look before being picked - never a
@@ -180,6 +181,22 @@ export function isEligibleForPeriod(periodId: string, personId: string): boolean
   );
 }
 
+/**
+ * Why this person can't take this particular day, or null when they can:
+ * not a member of the pool that day (Geldig vanaf/tot, lib/membershipWindow.ts).
+ * Taking part somewhere in the period is not enough for a given shift.
+ */
+export function notMemberOnSlotDate(periodId: string, personId: string, datum: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT sp.pool_id, p.codenaam FROM dienstrooster_schedule_period sp, dienstrooster_person p
+       WHERE sp.id = ? AND p.id = ?`
+    )
+    .get(periodId, personId) as { pool_id: string; codenaam: string } | undefined;
+  if (!row) return null;
+  return isMemberOnDate(row.pool_id, personId, datum) ? null : notMemberMessage(row.codenaam, datum);
+}
+
 export function getEligiblePeopleForSlot(
   periodId: string,
   slotId: string,
@@ -198,12 +215,14 @@ export function getEligiblePeopleForSlot(
 
   const slot = db
     .prepare(
-      `SELECT s.iso_jaar, s.iso_week, st.teller
+      `SELECT s.datum, s.iso_jaar, s.iso_week, st.teller
        FROM dienstrooster_shift_slot s
        JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
        WHERE s.id = ?`
     )
-    .get(slotId) as { iso_jaar: number; iso_week: number; teller: string } | undefined;
+    .get(slotId) as { datum: string; iso_jaar: number; iso_week: number; teller: string } | undefined;
+  // Only people who take part on this very day (Geldig vanaf/tot).
+  const windows = membershipWindows(period.pool_id, period.start_datum, period.eind_datum);
 
   const poolMembers = db
     .prepare(
@@ -235,7 +254,7 @@ export function getEligiblePeopleForSlot(
   const teller = slot?.teller as Teller | undefined;
 
   return fellowsLast(poolMembers, fellows)
-    .filter((p) => p.id !== excludePersonId)
+    .filter((p) => p.id !== excludePersonId && (!slot || coversDate(windows.get(p.id), slot.datum)))
     .map((p) => {
       const status = teller ? bandStatus.get(p.id)?.[teller] : undefined;
       return {
@@ -349,6 +368,8 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
   }
   const fellows = getFellowIds(periodId);
   const members = fellowsLast(poolMembers, fellows);
+  // Per gap, only people who take part on that day (Geldig vanaf/tot).
+  const windows = membershipWindows(period.pool_id, period.start_datum, period.eind_datum);
 
   const windowWeeks = getWindowWeeks(period);
   const bandStatus = computeBandStatusByPerson(periodId);
@@ -373,7 +394,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
       benodigd_aantal_personen: required,
       assigned_count: slot.assigned_count,
       shortfall: required - slot.assigned_count,
-      eligible_people: members.map((p) => {
+      eligible_people: members.filter((p) => coversDate(windows.get(p.id), slot.datum)).map((p) => {
         const status = bandStatus.get(p.id)?.[teller];
         return {
           ...p,

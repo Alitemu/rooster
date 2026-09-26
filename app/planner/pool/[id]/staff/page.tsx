@@ -300,7 +300,7 @@ export default function PoolStaffPage() {
                       <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
                       <td className="px-4 py-2 text-sm">
                         <span className={member.is_active ? 'text-green-600 font-medium' : 'text-neutral-500'}>
-                          {member.is_active ? 'Actief' : 'Niet actief'}
+                          {member.is_active ? 'Actief' : member.geldig_vanaf > todayISO() ? 'Begint later' : 'Gestopt'}
                         </span>
                       </td>
                       <td className="px-4 py-2 text-sm">

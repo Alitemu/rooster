@@ -137,6 +137,7 @@ export async function GET(
           start_datum: period.start_datum,
           eind_datum: period.eind_datum,
           gepubliceerd_op: period.gepubliceerd_op,
+          definitief_op: period.definitief_op ?? null,
         },
         assignments,
         summary: {

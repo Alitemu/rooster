@@ -32,6 +32,7 @@ import {
   type RosterGenerationStoppedReason,
 } from '@/lib/rosterGenerationJobs';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { blockOutsideMembership, membershipWindows } from '@/lib/membershipWindow';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -290,6 +291,19 @@ async function runGeneration(args: {
           blocking_level: p.blocking_level || 'NEUTRAL',
         }));
     }
+
+    // A day before someone starts or after they leave (Geldig vanaf/tot)
+    // is not theirs to work: sent to the solver as a hard block, whatever
+    // they marked there (lib/membershipWindow.ts). Not stored, so it
+    // follows the membership when that changes.
+    Object.assign(
+      personPreferences,
+      blockOutsideMembership(
+        personPreferences,
+        slots,
+        membershipWindows(period.pool_id, period.start_datum, period.eind_datum)
+      )
+    );
 
     // Fetch balances (ledger sum per person per counter)
     const ledgerEntries = db

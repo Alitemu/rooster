@@ -23,7 +23,7 @@ import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
 import { setPendingUndo, assignmentSlotLabel, parseOnderdeel } from '@/lib/pendingUndo';
-import { isEligibleForPeriod } from '@/lib/rosterGaps';
+import { isEligibleForPeriod, notMemberOnSlotDate } from '@/lib/rosterGaps';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
@@ -150,6 +150,10 @@ export async function POST(
          WHERE s.id = ?`
       )
       .get(assignment.slot_id) as { datum: string; iso_jaar: number; iso_week: number; teller: string };
+    const buitenLidmaatschap = notMemberOnSlotDate(periodId, newPersonId as string, slot.datum);
+    if (buitenLidmaatschap) {
+      return NextResponse.json({ success: false, error: buitenLidmaatschap }, { status: 400 });
+    }
     const config = resolveRulesetConfig(period);
     const windowWeeks = resolveWindowWeeks(config);
     const windowConflict =

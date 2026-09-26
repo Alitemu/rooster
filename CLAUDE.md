@@ -270,6 +270,22 @@ changes before one "Bouwen (test)" share one new number.
 
 **Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
 
+- Two steps (lib/publication.ts). `POST .../publish` makes the roster
+  voorlopig: status GEPUBLICEERD, `definitief_op` NULL, everyone's shifts
+  kept in `voorlopig_rooster_json`, and each participant mailed their own
+  shifts (verzendlijst soort ROOSTER_VOORLOPIG) to check. `POST
+  .../finalize` ("Definitief maken") is always a manual act, never a timer:
+  it reruns the publication check (same issues/warnings rule as publish),
+  sets `definitief_op`/`definitief_door_person_id` and mails the final
+  shifts with what changed per person since the voorlopige version
+  (ROOSTER_DEFINITIEF). Corrections in between are ordinary manual
+  assignments on a GEPUBLICEERD roster. Both mails go out after the commit;
+  the response's `mail` says whether they did, and the dialog warns before
+  the button is pressed that everyone gets a mail at once. A roster
+  published before this existed counts as definitief (backfill in
+  migration 0020 and LATER_COLUMN_BACKFILL). Participants see a "voorlopige
+  rooster" notice while `definitief_op` is NULL.
+
 - `runPublicationCheck` (lib/publicationCheck.ts) distinguishes two kinds
   of finding: `issues` (an unfilled slot - genuinely not finished, always
   blocks) and `warnings` (an ABSOLUUT or window-rule violation already
@@ -289,7 +305,8 @@ changes before one "Bouwen (test)" share one new number.
   block on their own - blocking on the same override a planner just made
   on purpose would mean no roster using it could ever be published.
 - `POST .../unpublish` reverts GEPUBLICEERD back to GEGENEREERD: clears
-  `gepubliceerd_op`/`gepubliceerd_door_person_id`, keeps every assignment
+  `gepubliceerd_op`/`gepubliceerd_door_person_id` and the definitief
+  fields and snapshot (publishing again starts voorlopig), keeps every assignment
   (withdrawing is not discarding the roster), keeps notifications already
   sent (a historical record) and sends a new one telling participants the
   publication was withdrawn.
@@ -337,6 +354,18 @@ over.
   weekend/feestdag window still fits the non-fellows
   (`checkWeekendCapacity`, lib/fellowSummary.ts) - the window itself stays
   the planner's to set.
+
+## Geldig vanaf/tot (membership window)
+
+Overlapping the period is enough to take part (headcount, coverage factor:
+someone leaving halfway gets a proportionally lower streefbereik), but a
+shift needs the membership to hold on its own date (lib/membershipWindow.ts,
+both ends inclusive). generate-roster sends every slot outside it to the
+solver as ABSOLUUT (blockOutsideMembership, not stored); manual-assign and
+reassign refuse it (notMemberOnSlotDate); pick lists, herverdeling and swap
+candidates leave the person out; swap create and approve refuse it; and
+the publication check lists such a shift as an issue (only possible when
+the membership changed after the roster was made).
 
 ## Absences and part-time over what someone marked by hand
 
@@ -504,7 +533,8 @@ request mail with it instead of being sent. The create route returns
 so the requester is told the colleague may only see it in the app for
 now; MailWarning counts what waits. Every
 bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
-RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN) and an
+RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN, LINK_AANVRAAG,
+ROOSTER_VOORLOPIG, ROOSTER_DEFINITIEF) and an
 `html` field: `tekst` escaped with <br> for line breaks (tekstNaarHtml).
 The flow must use `html` as the mail body, never build HTML from `tekst`:
 the text can hold words a participant typed (swap toelichting, rejection

@@ -81,6 +81,7 @@ export interface SchedulePeriod {
   bevroren_ruleset_json?: string | null;
   overloop_bevestigd_op?: string | null;
   gepubliceerd_op?: string | null;
+  definitief_op?: string | null;
   gepubliceerd_door_person_id?: string | null;
   row_version: number;
   aangemaakt_op: string;

@@ -23,9 +23,18 @@ import { fileURLToPath } from 'url';
 
 // APP_URL includes the app's sub-folder when it was built with one (lib/basePath.ts).
 const BASE = process.env.APP_URL || 'http://localhost:3000';
-const db = new Database(
-  nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..', 'rooster.db')
-);
+// The database the app runs on: DATABASE_URL as the app reads it (same as
+// full-check.mjs), ./rooster.db without it.
+function resolveDbPath() {
+  let p = process.env.DATABASE_URL || 'file:./rooster.db';
+  if (p.startsWith('file:')) {
+    p = p.slice(5);
+    if (p.startsWith('//')) p = p.slice(2);
+  }
+  if (nodePath.isAbsolute(p)) return p;
+  return nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..', p);
+}
+const db = new Database(resolveDbPath());
 const problems = [];
 const ok = [];
 

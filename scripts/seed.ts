@@ -175,7 +175,10 @@ async function createTables() {
       verwijderd_op TEXT,
       auto_herinneren INTEGER NOT NULL DEFAULT 1,
       basis_url TEXT,
-      uitgenodigd_op TEXT
+      uitgenodigd_op TEXT,
+      definitief_op TEXT,
+      definitief_door_person_id TEXT REFERENCES dienstrooster_person(id),
+      voorlopig_rooster_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_excluded_day (
@@ -574,6 +577,9 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
     auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
     basis_url: 'TEXT',
     uitgenodigd_op: 'TEXT',
+    definitief_op: 'TEXT',
+    definitief_door_person_id: 'TEXT REFERENCES dienstrooster_person(id)',
+    voorlopig_rooster_json: 'TEXT',
   },
   dienstrooster_availability: {
     fellow_blok: 'INTEGER NOT NULL DEFAULT 0',
@@ -593,6 +599,8 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
  * newest period whose links were ever issued (basis_url is set by the
  * invitation and reminder exports) is taken as the active one - otherwise
  * "Link kwijt?" would link to nothing until the next invitations.
+ * definitief_op: a roster published before there was a voorlopig stage
+ * was final as it went out, so it counts as definitief from then.
  */
 const LATER_COLUMN_BACKFILL: Record<string, string> = {
   'dienstrooster_schedule_period.uitgenodigd_op': `
@@ -602,6 +610,10 @@ const LATER_COLUMN_BACKFILL: Record<string, string> = {
       WHERE verwijderd_op IS NULL AND status != 'CONCEPT' AND basis_url IS NOT NULL
       ORDER BY start_datum DESC LIMIT 1
     )`,
+  'dienstrooster_schedule_period.definitief_op': `
+    UPDATE dienstrooster_schedule_period
+    SET definitief_op = gepubliceerd_op, definitief_door_person_id = gepubliceerd_door_person_id
+    WHERE status = 'GEPUBLICEERD'`,
 };
 
 function applyMissingColumns() {
@@ -643,6 +655,12 @@ const REWORDED_TEMPLATES: Array<{ sleutel: string; oud: string; nieuw: string }>
     sleutel: 'FINAL_WARNING',
     oud: 'De deadline voor **{{periode}}** is **{{deadline}}**, en je voorkeuren ontbreken nog.',
     nieuw: 'De deadline voor **{{periode}}** is **{{deadline}}** en je voorkeuren ontbreken nog.',
+  },
+  {
+    // Publishing makes a roster voorlopig first (lib/publication.ts).
+    sleutel: 'SCHEDULE_PUBLISHED',
+    oud: 'Het rooster voor **{{periode}}** is definitief.',
+    nieuw: 'Het voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.',
   },
 ];
 
@@ -759,7 +777,7 @@ function createNotificationTemplates() {
     [
       'SCHEDULE_PUBLISHED',
       '{{periode}}: het rooster is gepubliceerd',
-      'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** is definitief.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
+      'Hoi {{codenaam}},\n\nHet voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
     ],
     [
       'SWAP_REQUESTED',

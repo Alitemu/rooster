@@ -21,6 +21,7 @@ interface Period {
   deadline: string;
   status: string;
   gepubliceerd_op?: string | null;
+  definitief_op?: string | null;
   bevroren_ruleset_json?: string | null;
 }
 
@@ -229,10 +230,12 @@ export default function PlannerPeriodPage() {
               {period.status === 'GEGENEREERD' && '🤖 Status: Gegenereerd'}
               {period.status === 'GEPUBLICEERD' && (
                 <>
-                  ✅ Status: Gepubliceerd
+                  {period.definitief_op ? '✅ Status: Definitief' : '📝 Status: Voorlopig gepubliceerd'}
                   {period.gepubliceerd_op && (
                     <span className="ml-2 font-normal text-sm">
-                      · Gepubliceerd op {new Date(period.gepubliceerd_op).toLocaleString('nl-NL')}
+                      · {period.definitief_op
+                        ? `Definitief sinds ${deadlineTekst(period.definitief_op)}`
+                        : `Gepubliceerd op ${deadlineTekst(period.gepubliceerd_op)}`}
                     </span>
                   )}
                 </>

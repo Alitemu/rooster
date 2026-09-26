@@ -49,7 +49,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         eind_datum,
         deadline,
         status,
-        pool_id
+        pool_id,
+        definitief_op
       FROM dienstrooster_schedule_period
       WHERE verwijderd_op IS NULL
       ORDER BY start_datum DESC
@@ -64,6 +65,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       deadline: string;
       status: string;
       pool_id: string;
+      definitief_op: string | null;
     }>;
 
     // The active period (lib/activePeriod.ts) is marked on the list.

@@ -22,7 +22,7 @@ import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
 import { setPendingUndo, assignmentSlotLabel, parseOnderdeel } from '@/lib/pendingUndo';
-import { isEligibleForPeriod } from '@/lib/rosterGaps';
+import { isEligibleForPeriod, notMemberOnSlotDate } from '@/lib/rosterGaps';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
@@ -125,6 +125,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         { success: false, error: 'Deze persoon is in deze periode geen actief lid van de pool' },
         { status: 400 }
       );
+    }
+    const buitenLidmaatschap = notMemberOnSlotDate(periodId, person_id as string, slot.datum);
+    if (buitenLidmaatschap) {
+      return NextResponse.json({ success: false, error: buitenLidmaatschap }, { status: 400 });
     }
 
     // Check for existing assignment on this slot
