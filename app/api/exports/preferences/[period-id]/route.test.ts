@@ -6,9 +6,10 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { GET } from './route';
 
 /**
- * The hard rules: every marking of this period is in the export, in
- * words, with why it is there - and nothing from another period, and no
- * neutral day. Only a planner may download it.
+ * The hard rules: one row per slot of this period, one column per
+ * participant, every marking in words in the right cell with why it is
+ * there, an empty cell where nothing was marked - and nothing from another
+ * period. Only a planner may download it.
  */
 
 const createdPeriodIds: string[] = [];
@@ -83,6 +84,26 @@ function mark(
   ).run(crypto.randomUUID(), personId, slotId, level, source, fellow ? 1 : 0);
 }
 
+function join(personId: string, poolId: string): void {
+  db.prepare(
+    `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
+     VALUES (?, ?, ?, 1, '2026-01-01', '2099-12-31')`
+  ).run(crypto.randomUUID(), personId, poolId);
+}
+
+/**
+ * The body split into rows of raw cells, after checking it starts with the
+ * UTF-8 byte order mark (read as bytes: res.text() drops the mark).
+ */
+async function grid(periodId: string, plannerId: string): Promise<string[][]> {
+  const bytes = await exportBytes(periodId, plannerId);
+  expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
+  return new TextDecoder()
+    .decode(bytes)
+    .split('\r\n')
+    .map((line) => line.split(';').map((c) => c.replace(/^"|"$/g, '')));
+}
+
 function codenaam(personId: string): string {
   return (db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(personId) as { codenaam: string })
     .codenaam;
@@ -98,12 +119,12 @@ function plannerRequest(periodId: string, personId: string): NextRequest {
   });
 }
 
-async function exportCsv(periodId: string, plannerId: string): Promise<string> {
+async function exportBytes(periodId: string, plannerId: string): Promise<Uint8Array> {
   const res = await GET(plannerRequest(periodId, plannerId), {
     params: Promise.resolve({ 'period-id': periodId }),
   });
   expect(res.status).toBe(200);
-  return res.text();
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 afterEach(() => {
@@ -119,7 +140,9 @@ afterEach(() => {
     db.prepare('DELETE FROM dienstrooster_shift_type WHERE id = ?').run(createdShiftTypeIds.pop()!);
   }
   while (createdPersonIds.length > 0) {
-    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(createdPersonIds.pop()!);
+    const personId = createdPersonIds.pop()!;
+    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(personId);
+    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(personId);
   }
   while (createdPoolIds.length > 0) {
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(createdPoolIds.pop()!);
@@ -130,13 +153,15 @@ afterEach(() => {
 });
 
 describe('GET /api/exports/preferences/[period-id]', () => {
-  it('lists every marking of the period in words, with its reason', async () => {
+  it('puts every marking in its day row and person column, in words', async () => {
     const poolId = createPool();
     const avond = createShiftType(poolId, 'AVOND');
     const weekend = createShiftType(poolId, 'WEEKEND');
     const planner = createPerson('PLANNER');
     const a = createPerson();
     const b = createPerson();
+    const leeg = createPerson();
+    [a, b, leeg].forEach((p) => join(p, poolId));
     const periodId = createPeriod(poolId, 'Voorjaar 2027', '2027-01-04', '2027-01-17');
 
     const maandag = createSlot(periodId, avond, '2027-01-04', 1);
@@ -150,32 +175,46 @@ describe('GET /api/exports/preferences/[period-id]', () => {
     mark(a, zaterdag, 'ABSOLUUT', 'MANUAL', true);
     mark(b, woensdag, 'VOORKEUR');
     mark(b, donderdag, 'ABSOLUUT', 'ABSENCE');
+    mark(b, maandag, null);
 
-    const lines = (await exportCsv(periodId, planner)).split('\n');
-    expect(lines[0]).toBe('Codenaam,Datum,Dag,Week,Dienst,Keuze,Reden');
-    const ca = codenaam(a);
-    const cb = codenaam(b);
-    expect(lines).toContain(`"${ca}","2027-01-04","maandag",1,"avonddienst","geblokkeerd","parttime"`);
-    expect(lines).toContain(`"${ca}","2027-01-05","dinsdag",1,"avonddienst","liever niet","handmatig"`);
-    expect(lines).toContain(`"${ca}","2027-01-09","zaterdag",1,"weekenddienst","geblokkeerd","fellow"`);
-    expect(lines).toContain(`"${cb}","2027-01-13","woensdag",2,"avonddienst","voorkeur","handmatig"`);
-    expect(lines).toContain(`"${cb}","2027-01-14","donderdag",2,"avonddienst","geblokkeerd","afwezig"`);
-    expect(lines).toHaveLength(6);
+    const rows = await grid(periodId, planner);
+    const header = rows[0];
+    expect(header.slice(0, 4)).toEqual(['Datum', 'Dag', 'Week', 'Dienst']);
+    const col = (personId: string) => header.indexOf(codenaam(personId));
+    const row = (datum: string) => rows.find((r) => r[0] === datum)!;
+
+    // Every slot a row, in date order; everyone in the pool a column.
+    expect(rows.slice(1).map((r) => r[0])).toEqual(['2027-01-04', '2027-01-05', '2027-01-09', '2027-01-13', '2027-01-14']);
+    expect(col(leeg)).toBeGreaterThan(3);
+    expect(row('2027-01-09').slice(0, 4)).toEqual(['2027-01-09', 'zaterdag', '1', 'weekenddienst']);
+
+    expect(row('2027-01-04')[col(a)]).toBe('geblokkeerd (parttime)');
+    expect(row('2027-01-05')[col(a)]).toBe('liever niet');
+    expect(row('2027-01-09')[col(a)]).toBe('geblokkeerd (fellow)');
+    expect(row('2027-01-13')[col(b)]).toBe('voorkeur');
+    expect(row('2027-01-14')[col(b)]).toBe('geblokkeerd (afwezig)');
+
+    // Nothing marked, or marked back to neutral: an empty cell.
+    expect(row('2027-01-04')[col(b)]).toBe('');
+    expect(row('2027-01-13')[col(a)]).toBe('');
+    expect(rows.slice(1).every((r) => r[col(leeg)] === '')).toBe(true);
   });
 
-  it('leaves out neutral days and other periods', async () => {
+  it('shows nothing from another period', async () => {
     const poolId = createPool();
     const avond = createShiftType(poolId);
     const planner = createPerson('PLANNER');
     const person = createPerson();
+    join(person, poolId);
     const periodA = createPeriod(poolId, 'Periode A', '2027-01-04', '2027-01-17');
     const periodB = createPeriod(poolId, 'Periode B', '2027-02-01', '2027-02-14');
 
-    mark(person, createSlot(periodA, avond, '2027-01-05'), null);
+    createSlot(periodA, avond, '2027-01-05');
     mark(person, createSlot(periodB, avond, '2027-02-02'), 'ABSOLUUT');
 
-    const lines = (await exportCsv(periodA, planner)).split('\n');
-    expect(lines).toHaveLength(1);
+    const rows = await grid(periodA, planner);
+    expect(rows.map((r) => r[0])).toEqual(['Datum', '2027-01-05']);
+    expect(rows[1][rows[0].indexOf(codenaam(person))]).toBe('');
   });
 
   it('is refused to a participant', async () => {

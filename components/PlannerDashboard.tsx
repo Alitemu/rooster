@@ -979,7 +979,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
             href={withBasePath(`/api/exports/preferences/${periodId}`)}
             className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
           >
-            🗓️ Alle voorkeuren downloaden (CSV)
+            🗓️ Voorkeurenoverzicht downloaden (Excel)
           </a>
           {/* Only meaningful once there's something in it - bewaar dit
               bestand ergens veilig: het is de aanbevolen manier om een

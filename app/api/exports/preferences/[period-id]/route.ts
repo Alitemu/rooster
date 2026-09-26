@@ -1,10 +1,20 @@
 /**
  * Preferences Export Route
  *
- * GET /api/exports/preferences/[period-id] - one CSV with every marking
- * every participant has for this period: one row per person per slot that
- * is not neutral, so a planner can filter it in a spreadsheet (everything
- * blocked in one week, everything from one person).
+ * GET /api/exports/preferences/[period-id] - the period's preferences as a
+ * grid for Excel: one row per shift slot (date, weekday, ISO week, kind of
+ * shift), then one column per participant holding what they marked for
+ * that slot, empty when they marked nothing. Planners print this.
+ *
+ * Every member of the period's pool gets a column, also someone who marked
+ * nothing, so an empty column says "nothing marked" rather than leaving
+ * the reader to wonder who is missing.
+ *
+ * Semicolons and a UTF-8 byte order mark, unlike the other exports: this
+ * one exists to be opened in Excel, and a Dutch Excel splits a double-
+ * clicked CSV on ";" (the list separator of Dutch regional settings) and
+ * only reads it as UTF-8 with the mark - with "," every row lands in one
+ * cell.
  *
  * Read straight from dienstrooster_availability, not from the per-person
  * backup files in backups/preferences/ (lib/preferencesBackup.ts): those
@@ -33,26 +43,33 @@ const KEUZE: Record<string, string> = {
 
 const DAG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 
-interface PreferenceRow {
-  codenaam: string;
+interface SlotRow {
+  id: string;
   datum: string;
   iso_week: number;
   teller: string;
+}
+
+interface MarkingRow {
+  person_id: string;
+  slot_id: string;
   blocking_level: string;
   source: string;
   fellow_blok: number;
 }
 
 /**
- * MANUAL covers both the participant and a planner filling it in on their
- * behalf, so it is "handmatig", not "zelf aangegeven". A fellow block is
- * stored as MANUAL too, told apart by its flag (see db/schema.ts).
+ * The marking in words, with why it is there when the person did not set
+ * it by hand. MANUAL covers both the participant and a planner filling it
+ * in on their behalf; a fellow block is stored as MANUAL too, told apart
+ * by its flag (see db/schema.ts).
  */
-function reden(row: PreferenceRow): string {
-  if (row.source === 'PARTTIME') return 'parttime';
-  if (row.source === 'ABSENCE') return 'afwezig';
-  if (row.fellow_blok) return 'fellow';
-  return 'handmatig';
+function cell(row: MarkingRow): string {
+  const keuze = KEUZE[row.blocking_level] ?? row.blocking_level;
+  if (row.source === 'PARTTIME') return `${keuze} (parttime)`;
+  if (row.source === 'ABSENCE') return `${keuze} (afwezig)`;
+  if (row.fellow_blok) return `${keuze} (fellow)`;
+  return keuze;
 }
 
 function weekdag(datum: string): string {
@@ -82,34 +99,66 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
       return NextResponse.json(response, { status: 404 });
     }
 
-    const rows = db
+    const slots = db
       .prepare(
-        `SELECT p.codenaam, s.datum, s.iso_week, st.teller, a.blocking_level, a.source, a.fellow_blok
+        `SELECT s.id, s.datum, s.iso_week, st.teller
+         FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.period_id = ?
+         ORDER BY s.datum, st.teller`
+      )
+      .all(periodId) as SlotRow[];
+
+    // The period's pool members, plus anyone who marked something without
+    // being one (a membership ended later) - leaving them out would hide
+    // markings the solver still sees.
+    const people = db
+      .prepare(
+        `SELECT p.id, p.codenaam
+         FROM dienstrooster_person p
+         WHERE p.id IN (
+             SELECT pm.person_id
+             FROM dienstrooster_pool_membership pm
+             JOIN dienstrooster_schedule_period sp ON sp.id = ?
+             JOIN dienstrooster_person p2 ON p2.id = pm.person_id
+             WHERE pm.pool_id = sp.pool_id
+               AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum
+               AND p2.actief = 1 AND p2.rol = 'DEELNEMER'
+           )
+           OR p.id IN (
+             SELECT a.person_id
+             FROM dienstrooster_availability a
+             JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+             WHERE s.period_id = ? AND a.blocking_level IS NOT NULL
+           )
+         ORDER BY p.codenaam`
+      )
+      .all(periodId, periodId) as Array<{ id: string; codenaam: string }>;
+
+    const markings = db
+      .prepare(
+        `SELECT a.person_id, a.slot_id, a.blocking_level, a.source, a.fellow_blok
          FROM dienstrooster_availability a
          JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
-         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-         JOIN dienstrooster_person p ON p.id = a.person_id
-         WHERE s.period_id = ? AND a.blocking_level IS NOT NULL
-         ORDER BY p.codenaam, s.datum, st.teller`
+         WHERE s.period_id = ? AND a.blocking_level IS NOT NULL`
       )
-      .all(periodId) as PreferenceRow[];
+      .all(periodId) as MarkingRow[];
+    const bySlotAndPerson = new Map(markings.map((m) => [`${m.slot_id}|${m.person_id}`, cell(m)]));
 
     const csvLines: string[] = [
-      'Codenaam,Datum,Dag,Week,Dienst,Keuze,Reden',
-      ...rows.map((r) =>
+      ['Datum', 'Dag', 'Week', 'Dienst', ...people.map((p) => p.codenaam)].map(csvField).join(';'),
+      ...slots.map((slot) =>
         [
-          csvField(r.codenaam),
-          csvField(r.datum),
-          csvField(weekdag(r.datum)),
-          r.iso_week,
-          csvField(DIENST[r.teller] ?? r.teller),
-          csvField(KEUZE[r.blocking_level] ?? r.blocking_level),
-          csvField(reden(r)),
-        ].join(',')
+          csvField(slot.datum),
+          csvField(weekdag(slot.datum)),
+          slot.iso_week,
+          csvField(DIENST[slot.teller] ?? slot.teller),
+          ...people.map((p) => csvField(bySlotAndPerson.get(`${slot.id}|${p.id}`) ?? '')),
+        ].join(';')
       ),
     ];
 
-    return new NextResponse(csvLines.join('\n'), {
+    return new NextResponse('\uFEFF' + csvLines.join('\r\n'), {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
         'Content-Disposition': `attachment; filename="voorkeuren_${sanitizeFilenamePart(period.naam.replace(/ /g, '_'))}.csv"`,
