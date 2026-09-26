@@ -4,16 +4,19 @@ import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
 import { createSessionToken, SESSION_COOKIE_NAME, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
+import { setParttimeCheck } from '@/lib/submissionStatus';
 import { POST } from './route';
 
 /**
- * The hard rule: submitting works for someone who changed nothing first.
+ * The hard rules: handing in needs the "Deeltijd" check on record - the
+ * server's own record, whatever the client says - and then works for
+ * someone who changed nothing else first.
  *
- * Only an actual change (a slot, an absence, a pattern) creates the
- * submission row. Someone who opens their link, checks their part-time
- * days and just confirms has no row yet - and the INSERT for that case
- * left out the NOT NULL aangemaakt_op, so "Indienen" failed with a bare
- * "Er is iets misgegaan" for exactly the people with nothing to change.
+ * Someone who opens their link, checks their part-time days and just
+ * confirms has no row until that check writes one; the INSERT for that
+ * case once left out the NOT NULL aangemaakt_op, so "Indienen" failed with
+ * a bare "Er is iets misgegaan" for exactly the people with nothing to
+ * change.
  */
 
 const created = { pools: [] as string[], people: [] as string[] };
@@ -66,25 +69,47 @@ afterEach(() => {
   created.pools = [];
 });
 
-describe('POST /api/person/[id]/preferences/submission', () => {
-  it('confirms for someone who has no submission row yet', async () => {
-    const { personId, periodId } = createFixture();
-    const token = createSessionToken(
-      { kind: 'person', personId, sessionVersion: getSessionVersion(personId)! },
-      PERSON_SESSION_MAX_AGE_SECONDS
-    );
-    const res = await POST(
-      new NextRequest(`http://localhost/api/person/${personId}/preferences/submission`, {
-        method: 'POST',
-        headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ period_id: periodId, vacation_confirmed: true, parttime_confirmed: true }),
-      }),
-      { params: Promise.resolve({ id: personId }) }
-    );
-    expect(res.status).toBe(200);
-    const row = db
+function submit(personId: string, periodId: string) {
+  const token = createSessionToken(
+    { kind: 'person', personId, sessionVersion: getSessionVersion(personId)! },
+    PERSON_SESSION_MAX_AGE_SECONDS
+  );
+  return POST(
+    new NextRequest(`http://localhost/api/person/${personId}/preferences/submission`, {
+      method: 'POST',
+      headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' },
+      // parttime_confirmed is what older clients sent; it no longer counts.
+      body: JSON.stringify({ period_id: periodId, parttime_confirmed: true }),
+    }),
+    { params: Promise.resolve({ id: personId }) }
+  );
+}
+
+const statusOf = (personId: string, periodId: string) =>
+  (
+    db
       .prepare('SELECT status FROM dienstrooster_submission WHERE person_id = ? AND schedule_period_id = ?')
-      .get(personId, periodId) as { status: string };
-    expect(row.status).toBe('BEVESTIGD');
+      .get(personId, periodId) as { status: string } | undefined
+  )?.status;
+
+describe('POST /api/person/[id]/preferences/submission', () => {
+  it('confirms once the part-time check is on record, for someone who changed nothing else', async () => {
+    const { personId, periodId } = createFixture();
+    setParttimeCheck(personId, periodId, true);
+
+    const res = await submit(personId, periodId);
+
+    expect(res.status).toBe(200);
+    expect(statusOf(personId, periodId)).toBe('BEVESTIGD');
+  });
+
+  it('refuses without the part-time check on record, whatever the client sends', async () => {
+    const { personId, periodId } = createFixture();
+
+    const res = await submit(personId, periodId);
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('PARTTIME_NOT_CONFIRMED');
+    expect(statusOf(personId, periodId)).toBeUndefined();
   });
 });

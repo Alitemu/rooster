@@ -167,39 +167,46 @@ function PersonalLinkPageContent() {
   const [_preferencesChanged, setPreferencesChanged] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  // The part-time check is remembered on this device, for exactly the
-  // part-time patterns and absences it was given for: coming back later
-  // (to change a preference, or to hand in again) no longer means ticking
-  // it again, and any change to either makes it lapse, so a confirmation
-  // never covers days the participant hasn't seen. Browser storage can be
-  // missing or refuse; the only cost then is ticking it once more.
+  // The part-time check lives in the database (submission
+  // .deeltijd_gecontroleerd_op, /api/person/[id]/parttime-check), so it
+  // holds on every device and the planner sees it. The server clears it
+  // on every change to a pattern or absence; the fingerprint below makes
+  // this page read it again after such a change.
   const deeltijdVingerafdruk = [
     patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(','),
     absences.map((a) => `${a.id}:${a.van_datum}:${a.tot_datum}`).join(','),
   ].join('|');
-  const deeltijdOpslagSleutel = personId && period ? `dienstrooster:deeltijd-gecontroleerd:${personId}:${period.id}` : null;
+  const periodId = period?.id;
   useEffect(() => {
-    if (!deeltijdOpslagSleutel) return;
-    let bewaard: string | null = null;
-    try {
-      bewaard = window.localStorage.getItem(deeltijdOpslagSleutel);
-    } catch {
-      // Storage unavailable: ask again.
-    }
-    setParttimeConfirmedState(bewaard === deeltijdVingerafdruk);
-  }, [deeltijdOpslagSleutel, deeltijdVingerafdruk]);
+    if (!personId || !periodId) return;
+    let cancelled = false;
+    fetch(withBasePath(`/api/person/${personId}/parttime-check?period_id=${periodId}`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data) setParttimeConfirmedState(Boolean(data.data?.gecontroleerd));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [personId, periodId, deeltijdVingerafdruk]);
   const setParttimeConfirmed = useCallback(
     (confirmed: boolean) => {
       setParttimeConfirmedState(confirmed);
-      if (!deeltijdOpslagSleutel) return;
-      try {
-        if (confirmed) window.localStorage.setItem(deeltijdOpslagSleutel, deeltijdVingerafdruk);
-        else window.localStorage.removeItem(deeltijdOpslagSleutel);
-      } catch {
-        // Storage unavailable: it just isn't remembered.
-      }
+      if (!personId || !periodId) return;
+      fetch(withBasePath(`/api/person/${personId}/parttime-check`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_id: periodId, gecontroleerd: confirmed }),
+      })
+        .then((res) => {
+          // Not stored (the deadline passed meanwhile, or the connection
+          // dropped): show what the server has, not what was clicked.
+          if (!res.ok) setParttimeConfirmedState(false);
+        })
+        .catch(() => setParttimeConfirmedState(false));
     },
-    [deeltijdOpslagSleutel, deeltijdVingerafdruk]
+    [personId, periodId]
   );
 
   // Nothing on this page reacts to a coverage update, but a fresh inline
@@ -648,8 +655,9 @@ function PersonalLinkPageContent() {
               // A changed pattern means the generated days below may have
               // changed too - make the participant look at them again
               // rather than carrying over a confirmation that no longer
-              // matches what they just edited.
-              setParttimeConfirmed(false);
+              // matches what they just edited. (The server already
+              // cleared it; this only updates the screen.)
+              setParttimeConfirmedState(false);
             }}
           />
           <AbsenceManager
@@ -666,8 +674,8 @@ function PersonalLinkPageContent() {
               // shows as "blocked elsewhere" (source=ABSENCE), so it must
               // both re-fetch (via the key below) and lose its stale
               // confirmation rather than silently keep showing what was
-              // true before this edit.
-              setParttimeConfirmed(false);
+              // true before this edit. (The server already cleared it.)
+              setParttimeConfirmedState(false);
             }}
           />
           <PartTimeCheckStep

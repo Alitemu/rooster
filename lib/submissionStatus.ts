@@ -46,3 +46,41 @@ export function markSubmissionStarted(personId: string, periodId: string): void 
     ).run(existing.id);
   }
 }
+
+/**
+ * The "Deeltijd" step's confirmation: the participant looked at the days
+ * their part-time patterns and absences block, and they are right. Stored
+ * on the submission row (deeltijd_gecontroleerd_op) so it holds on every
+ * device and the planner sees it in "Status voorkeuren". Confirming counts
+ * as having started, like any other input.
+ */
+export function getParttimeCheck(personId: string, periodId: string): string | null {
+  const row = db
+    .prepare(
+      `SELECT deeltijd_gecontroleerd_op FROM dienstrooster_submission
+       WHERE person_id = ? AND schedule_period_id = ?`
+    )
+    .get(personId, periodId) as { deeltijd_gecontroleerd_op: string | null } | undefined;
+  return row?.deeltijd_gecontroleerd_op ?? null;
+}
+
+export function setParttimeCheck(personId: string, periodId: string, checked: boolean, now: Date = new Date()): void {
+  if (checked) markSubmissionStarted(personId, periodId);
+  db.prepare(
+    `UPDATE dienstrooster_submission SET deeltijd_gecontroleerd_op = ?
+     WHERE person_id = ? AND schedule_period_id = ?`
+  ).run(checked ? now.toISOString() : null, personId, periodId);
+}
+
+/**
+ * A part-time pattern or absence changed: the days it blocks may have
+ * changed too, so the confirmation no longer covers what is there and the
+ * participant has to look again. Called wherever either is created,
+ * edited or removed.
+ */
+export function clearParttimeCheck(personId: string, periodId: string): void {
+  db.prepare(
+    `UPDATE dienstrooster_submission SET deeltijd_gecontroleerd_op = NULL
+     WHERE person_id = ? AND schedule_period_id = ?`
+  ).run(personId, periodId);
+}

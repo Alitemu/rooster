@@ -12,7 +12,7 @@ import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { removeAbsenceAvailability, syncAbsencesForPerson } from '@/lib/absenceSync';
 import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods, syncPatternsForPerson } from '@/lib/parttimeSync';
-import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
 import { isValidIsoDate } from '@/lib/isoDate';
@@ -157,6 +157,7 @@ export async function PATCH(
     // it must be tracked as a genuinely-started submission and backed up.
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);
+      clearParttimeCheck(id, periodId);
       try {
         writePreferencesBackup(id, periodId);
       } catch (backupError) {
@@ -246,6 +247,7 @@ export async function DELETE(
     // counts as a started submission and gets backed up too.
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);
+      clearParttimeCheck(id, periodId);
       try {
         writePreferencesBackup(id, periodId);
       } catch (backupError) {

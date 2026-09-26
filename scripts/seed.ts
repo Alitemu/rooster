@@ -433,7 +433,8 @@ async function createTables() {
       status TEXT NOT NULL CHECK(status IN ('NIET_BEGONNEN', 'BEZIG', 'BEVESTIGD')),
       ingediend_op TEXT,
       row_version INTEGER NOT NULL DEFAULT 1,
-      aangemaakt_op TEXT NOT NULL
+      aangemaakt_op TEXT NOT NULL,
+      deeltijd_gecontroleerd_op TEXT
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS submission_uniq
@@ -576,6 +577,9 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   },
   dienstrooster_availability: {
     fellow_blok: 'INTEGER NOT NULL DEFAULT 0',
+  },
+  dienstrooster_submission: {
+    deeltijd_gecontroleerd_op: 'TEXT',
   },
   dienstrooster_pending_undo: {
     onderdeel: "TEXT NOT NULL DEFAULT 'ROOSTER'",

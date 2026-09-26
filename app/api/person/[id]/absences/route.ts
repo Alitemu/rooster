@@ -14,7 +14,7 @@ import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForAbsence } from '@/lib/absenceSync';
 import { getOpenPeriodsForPerson, findDeadlinePassedOverlappingPeriods } from '@/lib/parttimeSync';
-import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
 import { isValidIsoDate } from '@/lib/isoDate';
@@ -244,6 +244,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // link), and back up the resulting preference state.
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);
+      clearParttimeCheck(id, periodId);
       try {
         writePreferencesBackup(id, periodId);
       } catch (backupError) {

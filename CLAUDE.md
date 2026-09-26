@@ -517,6 +517,16 @@ planner itself. runAutoReminders takes `onlyPeriodIds` for tests: the
 test database is shared across test files. Setup for the operator, in
 Dutch: docs/verzendlijst-power-automate.md.
 
+The "Deeltijd" step's check ("my part-time days and absences are right")
+is stored on the submission row (`deeltijd_gecontroleerd_op`, migration
+0019, lib/submissionStatus.ts get/set/clearParttimeCheck, GET/PUT
+/api/person/[id]/parttime-check), not in the browser: it holds on every
+device, "Status voorkeuren" shows it ("Deeltijd gecontroleerd"), every
+create/edit/delete of a part-time pattern or absence clears it (next to
+markSubmissionStarted in those routes), and the submission route refuses
+to hand in without it (the client's old `parttime_confirmed` flag is
+ignored).
+
 The planner reminds by hand from "Status voorkeuren": a "Herinnering
 sturen" per person (disabled once BEVESTIGD) and one below the table for
 everyone not BEVESTIGD, both POST /api/planner/period/[id]/remind - the

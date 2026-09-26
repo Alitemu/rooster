@@ -14,6 +14,8 @@ interface PersonProgress {
   person_id: string;
   codenaam: string;
   submission_status: string | null;
+  // When they confirmed their part-time and absence days (the Deeltijd step).
+  deeltijd_gecontroleerd_op: string | null;
   submitted_at: string | null;
   has_parttime_patterns: boolean;
   blocked_days_count: number;
@@ -47,6 +49,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
         p.id as person_id,
         p.codenaam,
         s.status as submission_status,
+        s.deeltijd_gecontroleerd_op,
         s.ingediend_op as submitted_at,
         CASE
           WHEN (SELECT COUNT(*) FROM dienstrooster_parttime_pattern WHERE person_id = p.id) > 0

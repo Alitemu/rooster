@@ -39,6 +39,7 @@ interface PersonProgress {
   codenaam: string;
   submission_status: string | null;
   submitted_at: string | null;
+  deeltijd_gecontroleerd_op: string | null;
   has_parttime_patterns: boolean;
   blocked_days_count: number;
   has_absences: boolean;
@@ -811,6 +812,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                 <th className="px-3 py-2 text-left font-semibold">Status</th>
                 <th className="px-3 py-2 text-center font-semibold">Geblokkeerde dagen</th>
                 <th className="px-3 py-2 text-center font-semibold">Deeltijd</th>
+                <th
+                  className="px-3 py-2 text-center font-semibold"
+                  title="Of de medewerker bij de stap Deeltijd heeft bevestigd dat deeltijd en afwezigheid kloppen"
+                >
+                  Deeltijd gecontroleerd
+                </th>
                 <th className="px-3 py-2 text-center font-semibold">Fellow</th>
                 <th className="px-3 py-2 text-center font-semibold">Acties</th>
               </tr>
@@ -849,6 +856,23 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
                       <span className="text-green-600 font-bold">✓</span>
                     ) : (
                       <span className="text-neutral-400">−</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {person.deeltijd_gecontroleerd_op ? (
+                      <span
+                        className="text-green-600 font-bold"
+                        title={`Gecontroleerd op ${new Date(person.deeltijd_gecontroleerd_op).toLocaleString('nl-NL', {
+                          day: 'numeric',
+                          month: 'long',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}`}
+                      >
+                        ✓
+                      </span>
+                    ) : (
+                      <span className="text-neutral-500 text-xs">nog niet</span>
                     )}
                   </td>
                   <td className="px-3 py-2 text-center">

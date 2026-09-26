@@ -587,6 +587,11 @@ export const submission = sqliteTable(
     ingediend_op: text('ingediend_op'), // Timestamp when confirmed
     row_version: integer('row_version').default(1).notNull(), // Optimistic locking
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
+    // When the participant confirmed that the days their part-time
+    // patterns and absences block are right (the "Deeltijd" step). Cleared
+    // by every change to either (lib/submissionStatus.ts), so it always
+    // covers what is there now. Handing in requires it.
+    deeltijd_gecontroleerd_op: text('deeltijd_gecontroleerd_op'),
   },
   (table) => ({
     uniq: uniqueIndex('submission_uniq').on(table.person_id, table.schedule_period_id),

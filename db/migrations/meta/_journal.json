@@ -134,6 +134,13 @@
       "when": 1788801300000,
       "tag": "0018_uitgenodigd_op",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1788801400000,
+      "tag": "0019_deeltijd_gecontroleerd",
+      "breakpoints": true
     }
   ]
 }

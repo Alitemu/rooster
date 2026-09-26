@@ -17,7 +17,7 @@ import {
   findDeadlinePassedOverlappingPeriods,
   PARTTIME_WEEKDAGEN,
 } from '@/lib/parttimeSync';
-import { markSubmissionStarted } from '@/lib/submissionStatus';
+import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
 import { isValidIsoDate } from '@/lib/isoDate';
@@ -200,6 +200,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     for (const periodId of getOpenPeriodsForPerson(id)) {
       markSubmissionStarted(id, periodId);
+      clearParttimeCheck(id, periodId);
       try {
         writePreferencesBackup(id, periodId);
       } catch (backupError) {

@@ -11,11 +11,11 @@ import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
+import { getParttimeCheck } from '@/lib/submissionStatus';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface SubmissionRequest {
   period_id: string;
-  parttime_confirmed: boolean; // Must be true to submit
 }
 
 interface SubmissionResponse {
@@ -28,8 +28,9 @@ interface SubmissionResponse {
 /**
  * POST /api/person/[id]/preferences/submission - Submit preferences
  *
- * Marks preferences as confirmed for the period.
- * Requires parttime_confirmed flag (user must verify part-time days)
+ * Marks preferences as confirmed for the period. Requires the "Deeltijd"
+ * step's check to be on record (submission.deeltijd_gecontroleerd_op,
+ * lib/submissionStatus.ts) - checked here, not taken from the client.
  */
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     const body = (await parseJsonBody(req)) as SubmissionRequest;
 
-    const { period_id, parttime_confirmed } = body;
+    const { period_id } = body;
 
     if (!period_id) {
       const response: ApiErrorResponse = {
@@ -50,17 +51,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         error: {
           code: 'MISSING_PERIOD_ID',
           message: 'Periode-ID is verplicht',
-        },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    if (!parttime_confirmed) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: {
-          code: 'PARTTIME_NOT_CONFIRMED',
-          message: 'Bevestig eerst je deeltijddagen voordat je indient',
         },
       };
       return NextResponse.json(response, { status: 400 });
@@ -100,6 +90,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         error: { code: gate.code!, message: gate.message! },
       };
       return NextResponse.json(response, { status: 403 });
+    }
+
+    if (!getParttimeCheck(id, period_id)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'PARTTIME_NOT_CONFIRMED',
+          message: 'Bevestig eerst bij de stap Deeltijd dat je deeltijddagen en afwezigheid kloppen.',
+        },
+      };
+      return NextResponse.json(response, { status: 400 });
     }
 
     // Create or update submission record

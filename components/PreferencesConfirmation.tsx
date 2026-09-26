@@ -62,7 +62,6 @@ export function PreferencesConfirmation({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           period_id: periodId,
-          parttime_confirmed: true,
         }),
       });
 
