@@ -11,7 +11,7 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
-import { swapMailDetails } from '@/lib/swapMailDetails';
+import { formatSwapDate, swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding } from '@/lib/meldingMail';
 import { closeLapsedSwaps } from '@/lib/swapLifecycle';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
@@ -147,7 +147,7 @@ export async function POST(
       )
       .get(swapRequest.gevraagde_slot_id) as { datum: string; teller: string } | undefined;
 
-    const details = `Jouw ${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller} op ${offeredSlot?.datum} is geruild tegen de ${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller} op ${requestedSlot?.datum}.`;
+    const details = `Jouw ${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller} op ${offeredSlot ? formatSwapDate(offeredSlot.datum) : ''} is geruild tegen de ${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller} op ${requestedSlot ? formatSwapDate(requestedSlot.datum) : ''}.`;
 
     const placeholders = {
       codenaam: aanvrager?.codenaam ?? '',

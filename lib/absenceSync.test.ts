@@ -194,6 +194,29 @@ describe('absenceSync', () => {
       expect(row.bron_absence_id).toBeNull();
     });
 
+    it.each(['LIEVER_NIET', 'VOORKEUR'])(
+      'blocks a day marked %s by hand: a vacation day must never stay open to the solver',
+      (level) => {
+        const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
+        const slot = db
+          .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-05'`)
+          .get(fixture.periodId) as { id: string };
+        db.prepare(
+          `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+           VALUES (?, ?, ?, ?, 'MANUAL', datetime('now'))`
+        ).run(crypto.randomUUID(), fixture.personId, slot.id, level);
+
+        const absenceId = createAbsence(fixture.personId, '2027-01-05', '2027-01-05');
+        const result = syncAvailabilityForAbsence(absenceId);
+
+        expect(result.inserted).toBe(1);
+        const row = db
+          .prepare('SELECT blocking_level, source, bron_absence_id FROM dienstrooster_availability WHERE slot_id = ?')
+          .get(slot.id) as { blocking_level: string; source: string; bron_absence_id: string };
+        expect(row).toEqual({ blocking_level: 'ABSOLUUT', source: 'ABSENCE', bron_absence_id: absenceId });
+      }
+    );
+
     it('takes over a PARTTIME-sourced slot instead of skipping it, since a registered absence is the more specific reason - and clears bron_pattern_id so the pattern cannot later delete it as stale', () => {
       const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
       const slot = db

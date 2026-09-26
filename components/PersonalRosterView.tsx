@@ -279,8 +279,9 @@ export function PersonalRosterView({
         </div>
       </div>
 
-      {/* Shift Swap Management */}
-      <div className="card p-6 space-y-4">
+      {/* Shift Swap Management - not on paper: a printed roster is for
+          reading, the buttons do nothing there. */}
+      <div className="card p-6 space-y-4 print:hidden">
         {/* Stacks on narrow screens: side by side, the button cannot shrink
             and pushed this row ~18px past the viewport at 375px, which
             CLAUDE.md rules out ("readable on 375px width"). */}

@@ -338,6 +338,24 @@ over.
   (`checkWeekendCapacity`, lib/fellowSummary.ts) - the window itself stays
   the planner's to set.
 
+## Absences and part-time over what someone marked by hand
+
+One availability row per person per slot, so a sync meets what is there:
+an absence (lib/absenceSync.ts) takes over a part-time or fellow block and
+any softer marking made by hand (LIEVER_NIET, VOORKEUR, or an empty row) -
+a vacation day must never stay open to the solver - and leaves a day
+blocked by hand or by another absence alone. A part-time pattern
+(lib/parttimeSync.ts) takes over LIEVER_NIET and empty manual rows but
+leaves a VOORKEUR (someone wanting to work that particular day), manual
+blocks, absences and fellow blocks. What was marked on a taken-over day is
+gone when the absence or pattern is removed; the day is then open.
+
+The participant's calendar shows the real block budget per counter
+(`blokkadebudget` in GET /api/person/[id]/preferences/[periodId], from
+lib/blockBudget.ts blockBudgetLimits: max and whether part-time days are
+exempt), counted the way checkBlockBudget counts; without a budget it
+shows blocked days out of all days and speaks of no maximum.
+
 ## Capacity Check (Live)
 
 Two formulas, both checked before generation:

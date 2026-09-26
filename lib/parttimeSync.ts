@@ -198,19 +198,41 @@ function reconcilePatternForPeriod(pattern: ParttimePatternRow, periodId: string
 
   if (toCheck.length > 0) {
     const existingStmt = db.prepare(
-      'SELECT source FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
+      'SELECT source, blocking_level, fellow_blok FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
     );
     const insertStmt = db.prepare(
       `INSERT INTO dienstrooster_availability
        (id, person_id, slot_id, blocking_level, source, bron_pattern_id, aangemaakt_op)
        VALUES (?, ?, ?, 'ABSOLUUT', 'PARTTIME', ?, ?)`
     );
+    // A day the person marked "liever niet" (or left empty on a row of its
+    // own) on a day they don't work at all: the pattern's block is the
+    // stronger truth, and left soft the solver could still put them on it.
+    // "Voorkeur" stays - that is someone saying they do want to work that
+    // particular day - and so do their own blocks, absences and fellow
+    // blocks, which already keep them off it.
+    const takeOverStmt = db.prepare(
+      `UPDATE dienstrooster_availability
+       SET blocking_level = 'ABSOLUUT', source = 'PARTTIME', bron_pattern_id = ?, bron_absence_id = NULL
+       WHERE person_id = ? AND slot_id = ?`
+    );
     const now = new Date().toISOString();
 
     for (const slotId of toCheck) {
-      const existing = existingStmt.get(pattern.person_id, slotId) as { source: string } | undefined;
+      const existing = existingStmt.get(pattern.person_id, slotId) as
+        | { source: string; blocking_level: string | null; fellow_blok: number }
+        | undefined;
       if (existing) {
-        skippedManualConflicts++;
+        const zachteMarkering =
+          existing.source === 'MANUAL' &&
+          !existing.fellow_blok &&
+          (existing.blocking_level === 'LIEVER_NIET' || existing.blocking_level === null);
+        if (zachteMarkering) {
+          takeOverStmt.run(pattern.id, pattern.person_id, slotId);
+          inserted++;
+        } else {
+          skippedManualConflicts++;
+        }
         continue;
       }
       insertStmt.run(crypto.randomUUID(), pattern.person_id, slotId, pattern.id, now);

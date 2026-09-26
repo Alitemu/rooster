@@ -10,6 +10,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { withBasePath } from '@/lib/basePath';
 
+/** "di 5 jan 2027": a stored YYYY-MM-DD as people read it. */
+function datumTekst(datum: string): string {
+  // Noon, so no timezone can move it to the day before.
+  return new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 interface SwapRequest {
   id: string;
   periode_id: string;
@@ -346,13 +357,13 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                     <div className="flex justify-between">
                       <span className="text-neutral-600">Aangeboden:</span>
                       <span className="font-medium">
-                        {swap.aangeboden_datum} ({shiftTypeNames[swap.aangeboden_type]})
+                        {datumTekst(swap.aangeboden_datum)} ({shiftTypeNames[swap.aangeboden_type]})
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-neutral-600">Gevraagd:</span>
                       <span className="font-medium">
-                        {swap.gevraagde_datum} ({shiftTypeNames[swap.gevraagde_type]})
+                        {datumTekst(swap.gevraagde_datum)} ({shiftTypeNames[swap.gevraagde_type]})
                       </span>
                     </div>
                   </div>

@@ -24,6 +24,15 @@ interface Props {
   periodId?: string;
 }
 
+/**
+ * The notice texts come from the templates, which mark words **like
+ * this**. Shown as bold instead of with the asterisks; everything else
+ * stays plain text (React escapes it).
+ */
+function metVet(tekst: string): React.ReactNode[] {
+  return tekst.split(/\*\*(.+?)\*\*/g).map((deel, i) => (i % 2 === 1 ? <strong key={i}>{deel}</strong> : deel));
+}
+
 export function NotificationCenter({ personId, periodId }: Props) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -238,9 +247,15 @@ export function NotificationCenter({ personId, periodId }: Props) {
                   )}
                 </div>
                 <h3 className="font-semibold text-neutral-900">{notif.onderwerp}</h3>
-                <p className="text-sm text-neutral-700 mt-1">{notif.inhoud}</p>
+                <p className="text-sm text-neutral-700 mt-1 whitespace-pre-line">{metVet(notif.inhoud)}</p>
                 <p className="text-xs text-neutral-500 mt-2">
-                  {new Date(notif.aangemaakt_op).toLocaleString('nl-NL')}
+                  {new Date(notif.aangemaakt_op).toLocaleString('nl-NL', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
                 </p>
               </div>
 

@@ -129,3 +129,32 @@ export function checkBlockBudget(params: {
 
   return { allowed: true };
 }
+
+export interface BlockBudgetLimit {
+  /** How many days of this kind the person may block themselves. */
+  max: number;
+  /** Part-time days don't count towards it (fellow weekend blocks never do). */
+  parttimeExempt: boolean;
+}
+
+/**
+ * The hard-block budget per counter, for the participant's calendar to show
+ * the real limit - null for a counter without one. Same numbers
+ * checkBlockBudget enforces.
+ */
+export function blockBudgetLimits(
+  period: { bevroren_ruleset_json?: string | null; pool_id: string },
+  periodId: string
+): Record<Teller, BlockBudgetLimit | null> {
+  const budget = resolveBudget(resolveRulesetConfig(period), 'blockBudget');
+  const totals = countSlotsByTeller(periodId);
+  const limits = {} as Record<Teller, BlockBudgetLimit | null>;
+  for (const teller of TELLERS) {
+    const fraction = budget?.perTeller[teller].maxFraction ?? 1;
+    limits[teller] =
+      budget && fraction < 1
+        ? { max: Math.floor(totals[teller] * fraction), parttimeExempt: budget.parttimeExempt }
+        : null;
+  }
+  return limits;
+}

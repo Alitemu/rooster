@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { db } from '@/db/client';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
-import { checkBlockBudget } from '@/lib/blockBudget';
+import { checkBlockBudget, blockBudgetLimits } from '@/lib/blockBudget';
 
 /**
  * Block budget: a period-level cap on how many slots of one counter a
@@ -271,5 +271,28 @@ describe('checkBlockBudget', () => {
       period, periodId: f.periodId, personId: f.personId, teller: 'AVOND', level: 'ABSOLUUT', excludeSlotId: f.slotIds[1],
     });
     expect(result.allowed).toBe(false);
+  });
+});
+
+describe('blockBudgetLimits', () => {
+  it('gives the calendar the same maximum checkBlockBudget enforces, and none where there is no limit', () => {
+    const config = {
+      blockBudget: { AVOND: { maxFraction: 0.2 }, WEEKEND: { maxFraction: 1 }, FEESTDAG: { maxFraction: 1 }, parttimeExempt: true },
+    };
+    const f = trackFixture(createFixture(14, config));
+    const period = { bevroren_ruleset_json: JSON.stringify(config), pool_id: f.poolId };
+
+    const limits = blockBudgetLimits(period, f.periodId);
+
+    // 14 AVOND slots at 0.2: the rejection test above hits "maximum van 2".
+    expect(limits.AVOND).toEqual({ max: 2, parttimeExempt: true });
+    expect(limits.WEEKEND).toBeNull();
+    expect(limits.FEESTDAG).toBeNull();
+  });
+
+  it('is null everywhere without a budget', () => {
+    const f = trackFixture(createFixture(14));
+    const limits = blockBudgetLimits({ bevroren_ruleset_json: JSON.stringify({}), pool_id: f.poolId }, f.periodId);
+    expect(limits).toEqual({ AVOND: null, WEEKEND: null, FEESTDAG: null });
   });
 });

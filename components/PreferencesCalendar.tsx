@@ -37,6 +37,9 @@ interface SlotPreference {
   fellow?: boolean; // a weekend block from "Ik ben fellow" - still the person's to release
 }
 
+/** The real limit per kind of shift (lib/blockBudget.ts); null: none. */
+type BlokkadeBudget = Record<string, { max: number; parttimeExempt: boolean } | null>;
+
 interface DayPreference {
   datum: string;
   slots: Map<string, SlotPreference>; // teller -> {slot_id, level}
@@ -131,6 +134,7 @@ export function PreferencesCalendar({
   onCoverageUpdate,
 }: Props) {
   const [preferences, setPreferences] = useState<Map<string, DayPreference>>(new Map());
+  const [budget, setBudget] = useState<BlokkadeBudget>({});
   const [coverage, setCoverage] = useState<Map<string, CoverageInfo>>(new Map());
   const [loading, setLoading] = useState(true);
   // Separate from saveError (an inline save failure with the calendar
@@ -174,6 +178,7 @@ export function PreferencesCalendar({
       }
 
       setPreferences(prefs);
+      setBudget(data.data.blokkadebudget ?? {});
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Ophalen van voorkeuren mislukt');
     } finally {
@@ -414,17 +419,23 @@ export function PreferencesCalendar({
 
   // Blocked-days summary per shift type, computed live from what's on
   // screen - no extra request needed, updates the moment a cell is clicked.
-  const counterTotals = new Map<string, { blocked: number; total: number }>();
-  for (const counter of shiftCounters) counterTotals.set(counter, { blocked: 0, total: 0 });
+  // With a budget, counted the way the server counts it (lib/blockBudget.ts):
+  // fellow weekend blocks never, part-time days not when exempt.
+  const counterTotals = new Map<string, { blocked: number; total: number; counted: number }>();
+  for (const counter of shiftCounters) counterTotals.set(counter, { blocked: 0, total: 0, counted: 0 });
   for (const dayPref of preferences.values()) {
     for (const counter of shiftCounters) {
       const slot = dayPref.slots.get(counter);
       if (!slot) continue;
       const totals = counterTotals.get(counter)!;
       totals.total++;
-      if (slot.level === 'ABSOLUUT') totals.blocked++;
+      if (slot.level !== 'ABSOLUUT') continue;
+      totals.blocked++;
+      const limit = budget[counter];
+      if (!slot.fellow && !(limit?.parttimeExempt && slot.source === 'PARTTIME')) totals.counted++;
     }
   }
+  const heeftBudget = shiftCounters.some((c) => budget[c]);
 
   const highlightCov = highlightDatum ? coverage.get(highlightDatum) : undefined;
 
@@ -432,14 +443,17 @@ export function PreferencesCalendar({
     <div className="space-y-4">
       {/* Blocked-days counters */}
       <p className="text-xs text-neutral-500">
-        Hoeveel diensten je per type al geblokkeerd hebt, van het maximum dat voor jou geldt (je
-        blokkadebudget). Kom je hier tegen een grens aan, dan kun je voor dat diensttype geen dag
-        meer als &quot;geblokkeerd&quot; markeren.
+        {heeftBudget
+          ? 'Hoeveel dagen je per soort dienst zelf hebt geblokkeerd, van het maximum dat je mag blokkeren. Deeltijddagen en fellowweekenden tellen niet mee. Zit je op het maximum, dan kun je voor die soort geen dag meer blokkeren.'
+          : 'Hoeveel dagen je per soort dienst hebt geblokkeerd, van alle dagen in deze periode.'}
       </p>
       <div className="flex gap-3 flex-wrap">
         {shiftCounters.map((counter) => {
           const totals = counterTotals.get(counter)!;
-          const pct = totals.total > 0 ? Math.round((totals.blocked / totals.total) * 100) : 0;
+          const limit = budget[counter];
+          const teller = limit ? totals.counted : totals.blocked;
+          const noemer = limit ? limit.max : totals.total;
+          const pct = noemer > 0 ? Math.min(100, Math.round((teller / noemer) * 100)) : 0;
           return (
             <div key={counter} className="flex-1 min-w-[180px] border border-neutral-200 rounded-lg p-3 bg-white">
               {/* Stacked (not side-by-side) so a long label like
@@ -447,7 +461,10 @@ export function PreferencesCalendar({
                   instead of pushing the count past the box's right edge. */}
               <div className="text-xs text-neutral-600">
                 <div>{COUNTER_LABEL[counter] || counter} geblokkeerd</div>
-                <div className="font-mono">{totals.blocked} van {totals.total}</div>
+                <div className="font-mono">
+                  {teller} van {noemer}
+                  {limit ? ' toegestaan' : ''}
+                </div>
               </div>
               <div className="text-lg font-semibold tracking-tight mt-0.5 mb-1.5">{pct}%</div>
               <div className="coverage-bar">
@@ -725,7 +742,7 @@ export function PreferencesCalendar({
           )}
           {saveError && !isSaving && (
             <div className="p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
-              {saveError} - de laatste wijziging is niet opgeslagen en teruggezet.
+              {saveError} De laatste wijziging is niet opgeslagen en teruggezet.
             </div>
           )}
           {hasChanged && !isSaving && (

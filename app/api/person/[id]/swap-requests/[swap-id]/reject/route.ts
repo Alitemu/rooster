@@ -11,7 +11,7 @@ import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-contex
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { optionalFreeText } from '@/lib/freeText';
-import { swapMailDetails } from '@/lib/swapMailDetails';
+import { formatSwapDate, swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding } from '@/lib/meldingMail';
 import { swapStatusLabel } from '@/lib/statusLabels';
 
@@ -89,7 +89,7 @@ export async function POST(
       )
       .get(swapRequest.gevraagde_slot_id) as { datum: string; teller: string } | undefined;
 
-    let details = `Jouw ${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller} op ${offeredSlot?.datum} tegen de ${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller} op ${requestedSlot?.datum}.`;
+    let details = `Jouw ${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller} op ${offeredSlot ? formatSwapDate(offeredSlot.datum) : ''} tegen de ${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller} op ${requestedSlot ? formatSwapDate(requestedSlot.datum) : ''}.`;
     if (reason) details += `\n\nReden: ${reason}`;
 
     const placeholders = {

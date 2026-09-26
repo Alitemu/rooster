@@ -47,10 +47,17 @@ export function matchSlotsToAbsence(absence: Pick<AbsenceRow, 'van_datum' | 'tot
 
 /**
  * Reconciles one absence's ABSENCE rows against one period's slots: deletes
- * stale rows this absence owns, inserts missing ones, and skips (never
- * overwrites) any slot that already has a different-source row - a person
- * can only have one availability row per slot (availability_uniq), so an
- * existing MANUAL block or another absence's row is never clobbered.
+ * stale rows this absence owns, inserts missing ones, and takes over or
+ * skips a slot that already has a row (a person can only have one per
+ * slot, availability_uniq): a part-time or fellow block, and a softer
+ * marking the person made by hand (liever niet, voorkeur), become this
+ * absence's block; a day the person blocked by hand, or another absence's
+ * day, is left as it is - it is blocked already.
+ *
+ * The softer marking has to give way: left alone, a vacation day marked
+ * "liever niet" earlier stayed soft, and the solver could put someone on
+ * it during their vacation. What they marked there is gone once the
+ * absence is removed again; the day is then simply open.
  */
 function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncResult {
   const slots = db
@@ -83,7 +90,7 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
 
   if (toCheck.length > 0) {
     const existingStmt = db.prepare(
-      'SELECT source, fellow_blok FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
+      'SELECT source, fellow_blok, blocking_level FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?'
     );
     const insertStmt = db.prepare(
       `INSERT INTO dienstrooster_availability
@@ -103,20 +110,22 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
     // edited, since the slot would look "stale" from the pattern's side).
     const takeOverStmt = db.prepare(
       `UPDATE dienstrooster_availability
-       SET source = 'ABSENCE', bron_absence_id = ?, bron_pattern_id = NULL, fellow_blok = 0
+       SET blocking_level = 'ABSOLUUT', source = 'ABSENCE', bron_absence_id = ?, bron_pattern_id = NULL, fellow_blok = 0
        WHERE person_id = ? AND slot_id = ?`
     );
     const now = new Date().toISOString();
 
     for (const slotId of toCheck) {
       const existing = existingStmt.get(absence.person_id, slotId) as
-        | { source: string; fellow_blok: number }
+        | { source: string; fellow_blok: number; blocking_level: string | null }
         | undefined;
       if (existing) {
         // A fellow's weekend block (lib/fellows.ts) is taken over the same
         // way: otherwise unticking "fellow" would delete it and leave the
-        // vacation day open.
-        if (existing.source === 'PARTTIME' || existing.fellow_blok) {
+        // vacation day open. So is a softer marking made by hand (see the
+        // doc comment above).
+        const softManual = existing.source === 'MANUAL' && existing.blocking_level !== 'ABSOLUUT';
+        if (existing.source === 'PARTTIME' || existing.fellow_blok || softManual) {
           takeOverStmt.run(absence.id, absence.person_id, slotId);
           inserted++;
         } else {

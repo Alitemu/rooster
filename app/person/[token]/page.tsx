@@ -510,7 +510,7 @@ function PersonalLinkPageContent() {
               </p>
             )}
           </div>
-          <div className="flex shrink-0 gap-2 self-start">
+          <div className="flex shrink-0 gap-2 self-start print:hidden">
             {period.status === 'GEPUBLICEERD' && (
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}

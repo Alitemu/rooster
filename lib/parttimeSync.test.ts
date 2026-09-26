@@ -331,6 +331,29 @@ describe('parttimeSync', () => {
       expect(row.bron_pattern_id).toBeNull();
     });
 
+    it('blocks a pattern day marked "liever niet" by hand, and leaves a "voorkeur" to work that day', () => {
+      const fixture = trackFixture(createFixture('2027-01-04', '2027-01-17'));
+      const mondays = db
+        .prepare(
+          `SELECT id, datum FROM dienstrooster_shift_slot WHERE period_id = ? AND datum IN ('2027-01-04', '2027-01-11') ORDER BY datum`
+        )
+        .all(fixture.periodId) as Array<{ id: string; datum: string }>;
+      const mark = db.prepare(
+        `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+         VALUES (?, ?, ?, ?, 'MANUAL', datetime('now'))`
+      );
+      mark.run(crypto.randomUUID(), fixture.personId, mondays[0].id, 'LIEVER_NIET');
+      mark.run(crypto.randomUUID(), fixture.personId, mondays[1].id, 'VOORKEUR');
+
+      const patternId = createPattern(fixture.personId, 'MA', 'ELKE_WEEK', '2027-01-01', '2027-12-31');
+      syncAvailabilityForPattern(patternId);
+
+      const stateOf = (slotId: string) =>
+        db.prepare('SELECT blocking_level, source FROM dienstrooster_availability WHERE slot_id = ?').get(slotId);
+      expect(stateOf(mondays[0].id)).toEqual({ blocking_level: 'ABSOLUUT', source: 'PARTTIME' });
+      expect(stateOf(mondays[1].id)).toEqual({ blocking_level: 'VOORKEUR', source: 'MANUAL' });
+    });
+
     it('re-running sync with no pattern change is a no-op', () => {
       const fixture = trackFixture(createFixture('2027-01-04', '2027-01-10'));
       const patternId = createPattern(fixture.personId, 'MA', 'ELKE_WEEK', '2027-01-01', '2027-12-31');

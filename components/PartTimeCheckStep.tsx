@@ -172,7 +172,7 @@ export function PartTimeCheckStep({
 
       {loadError && (
         <div className="bg-red-50 border border-red-200 rounded p-3">
-          <p className="text-sm text-red-800">⚠️ {loadError} - de dagen hieronder zijn niet betrouwbaar.</p>
+          <p className="text-sm text-red-800">⚠️ {loadError} De dagen hieronder zijn daarom niet betrouwbaar.</p>
         </div>
       )}
 

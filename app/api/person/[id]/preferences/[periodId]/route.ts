@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { blockBudgetLimits } from '@/lib/blockBudget';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
 import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
@@ -30,6 +31,7 @@ interface GetPreferencesResponse {
   period_id: string;
   preferences: PreferenceEntry[];
   total_entries: number;
+  blokkadebudget: ReturnType<typeof blockBudgetLimits>;
 }
 
 export async function GET(
@@ -54,10 +56,10 @@ export async function GET(
     }
 
     const periodStmt = db.prepare(
-      `SELECT id, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?`
+      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?`
     );
     const period = periodStmt.get(periodId) as
-      | { id: string; pool_id: string; start_datum: string; eind_datum: string }
+      | { id: string; pool_id: string; start_datum: string; eind_datum: string; bevroren_ruleset_json: string | null }
       | undefined;
     // The reply lists every slot in the period, so a foreign period id
     // handed back that period's whole shape (dates, weeks, shift types)
@@ -95,6 +97,9 @@ export async function GET(
         period_id: periodId,
         preferences,
         total_entries: preferences.length,
+        // The real limit per kind of shift, so the calendar can show it
+        // (null: no limit). Enforced by the slot route (lib/blockBudget.ts).
+        blokkadebudget: blockBudgetLimits(period, periodId),
       },
     };
 
