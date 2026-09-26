@@ -933,7 +933,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
 
       <Section
         title="Exporteren & communicatie"
-        hint="uitnodigingen, herinneringen, statusrapport, mailinstellingen"
+        hint="uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, mailinstellingen"
         isOpen={openSections.has('export')}
         pinned={pinnedSections.has('export')}
         onToggleOpen={() => toggleSectionOpen('export')}
