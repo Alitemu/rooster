@@ -44,7 +44,7 @@ export function PreferencesConfirmation({
 
   const handleSubmit = async () => {
     if (!hasVacationCheck) {
-      setError('Bevestig dat je je vakantiedagen hebt geblokkeerd');
+      setError('Bevestig dat je vakantie en ander verlof erin staan');
       return;
     }
 
@@ -138,12 +138,12 @@ export function PreferencesConfirmation({
       <div className="bg-red-50 border-2 border-red-300 rounded p-4">
         <p className="font-bold text-red-900 mb-2">⚠️ Belangrijke herinnering</p>
         <p className="text-red-900 font-semibold mb-2">
-          Heb je al je vakantiedagen geblokkeerd?
+          Staan je vakantie en ander verlof erin?
         </p>
         <p className="text-sm text-red-800 mb-3">
-          Vakantiedagen worden nergens anders vandaan gehaald. Als je ze hier niet blokkeert,
-          kun je ingedeeld worden tijdens je vakantie. Controleer of alle vakantieperiodes zijn
-          gemarkeerd als "geblokkeerd" voordat je bevestigt.
+          Het rooster haalt vakantie nergens anders vandaan. Staat een vakantie niet bij
+          Afwezigheid of als geblokkeerde dag in je kalender, dan kun je tijdens je vakantie
+          ingedeeld worden. Controleer het voordat je bevestigt.
         </p>
 
         <label className="flex items-start gap-3 cursor-pointer">
@@ -155,7 +155,7 @@ export function PreferencesConfirmation({
                        focus:ring-red-500 cursor-pointer"
           />
           <span className="text-sm font-medium text-red-900">
-            Ja, ik heb al mijn vakantiedagen geblokkeerd
+            Ja, mijn vakantie en ander verlof staan erin
           </span>
         </label>
       </div>
