@@ -261,7 +261,11 @@ section, so it folds away with it; a hidden herverdeling section hands it
 to the roster.
 
 **Version:** the header shows `versie` from package.json, right of the
-title - bump it when releasing.
+title - bump it when releasing. Three numbers only (npm and release.yml
+refuse a fourth): a new feature or changed behaviour raises the middle
+one (0.3.8 -> 0.4.0), a small fix or wording change the last one
+(0.4.0 -> 0.4.1). Bump once per build, not per commit: several small
+changes before one "Bouwen (test)" share one new number.
 
 **Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
 
