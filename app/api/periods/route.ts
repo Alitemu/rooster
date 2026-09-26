@@ -5,6 +5,7 @@
  * GET  /api/periods/[id]           - Get period details (routed separately)
  */
 
+import { getActivePeriod } from '@/lib/activePeriod';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -65,9 +66,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       pool_id: string;
     }>;
 
-    const response: ApiSuccessResponse<PeriodSummary[]> = {
+    // The active period (lib/activePeriod.ts) is marked on the list.
+    const activeId = getActivePeriod()?.id;
+    const response: ApiSuccessResponse<Array<PeriodSummary & { actief: boolean }>> = {
       success: true,
-      data: rows,
+      data: rows.map((row) => ({ ...row, actief: row.id === activeId })),
     };
 
     return NextResponse.json(response);

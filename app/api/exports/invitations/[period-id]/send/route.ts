@@ -6,8 +6,12 @@
  *
  * Checks the mail configuration before issuing anything, so a server that
  * can't send doesn't mint a batch of links nobody receives.
+ *
+ * Sent, this period becomes the active one (lib/activePeriod.ts); while
+ * another period is active and not yet published, this is refused.
  */
 
+import { checkMayBecomeActive, markInvited } from '@/lib/activePeriod';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
@@ -42,6 +46,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     // Checked before any link is issued (lib/reminderGate.ts).
     const gate = checkInvitationsAllowed(period);
     if (!gate.allowed) return fail(409, gate.code, gate.message);
+    // One active period at a time (lib/activePeriod.ts).
+    const activation = checkMayBecomeActive(period.id);
+    if (!activation.allowed) return fail(409, activation.code, activation.message);
 
     const baseUrl = resolveBaseUrl(req);
     rememberBaseUrl(period.id, baseUrl);
@@ -58,6 +65,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       )
     );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
+    markInvited(period.id);
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
     return internalErrorResponse('export-invitations-send', error);

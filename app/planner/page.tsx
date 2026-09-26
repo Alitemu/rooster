@@ -23,6 +23,8 @@ interface Period {
   deadline: string;
   status: string;
   pool_id: string;
+  // The period whose invitations went out last (lib/activePeriod.ts).
+  actief?: boolean;
 }
 
 interface Pool {
@@ -424,7 +426,17 @@ export default function PlannerHomePage() {
                   <td className="px-4 py-2 text-sm text-neutral-600">
                     {p.start_datum} t/m {p.eind_datum}
                   </td>
-                  <td className="px-4 py-2 text-sm">{statusLabels[p.status] || p.status}</td>
+                  <td className="px-4 py-2 text-sm">
+                    {statusLabels[p.status] || p.status}
+                    {p.actief && (
+                      <span
+                        className="ml-2 inline-block rounded border border-green-700 bg-green-50 px-1.5 py-0.5 text-xs font-semibold text-green-800"
+                        title="De uitnodigingen voor deze periode zijn verstuurd. Een link aanvragen op de startpagina geeft de link naar deze periode."
+                      >
+                        Actief
+                      </span>
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-sm">
                     <div className="flex items-center gap-4">
                       <Link

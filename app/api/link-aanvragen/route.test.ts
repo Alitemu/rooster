@@ -8,11 +8,10 @@ import { POST } from './route';
 /**
  * The rules:
  * - a request mails the flow the typed address and a bericht per
- *   participant of every current period, never in `berichten` (a flow
- *   that doesn't know LINK_AANVRAAG must send nothing).
- * - each bericht holds a working link for every current period that person
- *   takes part in; ended periods, periods without a known address for
- *   links and people outside the pool get none.
+ *   participant of the active period, never in `berichten` (a flow that
+ *   doesn't know LINK_AANVRAAG must send nothing).
+ * - only the active period: the one invited last. Its text says what the
+ *   link is good for now (preferences, only looking, the roster).
  * - the answer never says whether the address is known.
  * - limited per caller.
  */
@@ -51,15 +50,23 @@ function createPeriod(
   poolId: string,
   naam: string,
   status: string,
-  eind: string,
-  basisUrl: string | null = 'https://rooster.test'
+  uitgenodigdOp: string | null,
+  opts: { basisUrl?: string | null; deadline?: string } = {}
 ): string {
   const id = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
-       (id, pool_id, naam, start_datum, eind_datum, deadline, status, basis_url, aangemaakt_op)
-     VALUES (?, ?, ?, '2020-01-06', ?, '2099-03-11T17:00', ?, ?, datetime('now'))`
-  ).run(id, poolId, naam, eind, status, basisUrl);
+       (id, pool_id, naam, start_datum, eind_datum, deadline, status, basis_url, uitgenodigd_op, aangemaakt_op)
+     VALUES (?, ?, ?, '2099-01-05', '2099-06-28', ?, ?, ?, ?, datetime('now'))`
+  ).run(
+    id,
+    poolId,
+    naam,
+    opts.deadline ?? '2098-12-11T17:00',
+    status,
+    opts.basisUrl === undefined ? 'https://rooster.test' : opts.basisUrl,
+    uitgenodigdOp
+  );
   created.periods.push(id);
   return id;
 }
@@ -116,14 +123,12 @@ afterEach(() => {
 });
 
 describe('POST /api/link-aanvragen', () => {
-  it('hands the flow the address and a bericht per participant, never in berichten', async () => {
+  it('hands the flow the address and a bericht per participant of the active period, never in berichten', async () => {
     configureSmtp(sink);
     const poolId = createPool();
-    createPeriod(poolId, 'Najaar 2099', 'OPEN', '2099-12-31');
-    createPeriod(poolId, 'Voorjaar 2099', 'GEPUBLICEERD', '2099-06-30');
-    createPeriod(poolId, 'Voorbij', 'GEPUBLICEERD', '2020-06-30');
-    createPeriod(poolId, 'Zonder adres', 'GEPUBLICEERD', '2099-06-30', null);
-    createPeriod(poolId, 'Nog in opbouw', 'CONCEPT', '2099-12-31');
+    createPeriod(poolId, 'Eerder uitgenodigd', 'GEPUBLICEERD', '2098-01-01T10:00:00.000Z');
+    createPeriod(poolId, 'Najaar 2099', 'OPEN', '2098-06-01T10:00:00.000Z');
+    createPeriod(poolId, 'Nog in opbouw', 'CONCEPT', null);
     const deelnemer = createPerson(poolId);
     const buitenstaander = createPerson(null);
 
@@ -132,6 +137,7 @@ describe('POST /api/link-aanvragen', () => {
     expect(res.status).toBe(200);
     const lijst = verzendlijstPayload(sink.received[0].raw);
     expect(lijst.soort).toBe('LINK_AANVRAAG');
+    expect(lijst.periode).toBe('Najaar 2099');
     expect(lijst.aanvraag_email).toBe('iemand@werk.example');
     expect(lijst.berichten).toEqual([]);
     expect(lijst.aantal).toBe(0);
@@ -141,12 +147,47 @@ describe('POST /api/link-aanvragen', () => {
     const eigen = kandidaten.find((k) => k.codenaam === codenaam(deelnemer))!;
     expect(eigen.soort).toBe('LINK_AANVRAAG');
     expect(eigen.html).toContain('<br>');
-    expect(eigen.tekst).toContain('Najaar 2099 (voorkeuren doorgeven');
-    expect(eigen.tekst).toContain('Voorjaar 2099 (je rooster bekijken');
-    expect(eigen.tekst).not.toContain('Voorbij');
-    expect(eigen.tekst).not.toContain('Zonder adres');
-    expect(eigen.tekst).not.toContain('Nog in opbouw');
-    expect(eigen.tekst.match(/https:\/\/rooster\.test\/person\/[0-9a-f]{64}/g)).toHaveLength(2);
+    expect(eigen.tekst).toContain('Via deze link geef je je voorkeuren voor Najaar 2099 door');
+    expect(eigen.tekst).not.toContain('Eerder uitgenodigd');
+    expect(eigen.tekst.match(/https:\/\/rooster\.test\/person\/[0-9a-f]{64}/g)).toHaveLength(1);
+  });
+
+  it('says changing is no longer possible once the deadline has passed', async () => {
+    configureSmtp(sink);
+    const poolId = createPool();
+    createPeriod(poolId, 'Voorbij deadline', 'OPEN', '2098-06-01T10:00:00.000Z', { deadline: '2020-01-01T17:00' });
+    createPerson(poolId);
+
+    await request('iemand@werk.example');
+
+    const tekst = verzendlijstPayload(sink.received[0].raw).kandidaten![0].tekst;
+    expect(tekst).toContain('De deadline voor Voorbij deadline is verstreken en de periode is gesloten.');
+    expect(tekst).toContain('Je kunt je voorkeuren niet meer wijzigen.');
+  });
+
+  it('points to the roster once it is published', async () => {
+    configureSmtp(sink);
+    const poolId = createPool();
+    createPeriod(poolId, 'Gepubliceerd', 'GEPUBLICEERD', '2098-06-01T10:00:00.000Z');
+    createPerson(poolId);
+
+    await request('iemand@werk.example');
+
+    expect(verzendlijstPayload(sink.received[0].raw).kandidaten![0].tekst).toContain(
+      'Het rooster voor Gepubliceerd is gepubliceerd.'
+    );
+  });
+
+  it('sends nothing while no period is active, or no address for links is known', async () => {
+    configureSmtp(sink);
+    const poolId = createPool();
+    createPeriod(poolId, 'Open maar niet uitgenodigd', 'OPEN', null);
+    createPerson(poolId);
+
+    expect((await request('iemand@werk.example')).status).toBe(200);
+    createPeriod(poolId, 'Zonder adres', 'OPEN', '2098-06-01T10:00:00.000Z', { basisUrl: null });
+    expect((await request('iemand@werk.example')).status).toBe(200);
+    expect(sink.received).toHaveLength(0);
   });
 
   it('gives the same answer for any address, and sends nothing when there is no current period', async () => {
@@ -160,7 +201,7 @@ describe('POST /api/link-aanvragen', () => {
   it('refuses something that is not an address, without sending', async () => {
     configureSmtp(sink);
     const poolId = createPool();
-    createPeriod(poolId, 'Najaar 2099', 'OPEN', '2099-12-31');
+    createPeriod(poolId, 'Najaar 2099', 'OPEN', '2098-06-01T10:00:00.000Z');
     createPerson(poolId);
 
     for (const email of ['geen-adres', '', 42, 'a@b']) {

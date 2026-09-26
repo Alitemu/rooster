@@ -174,7 +174,8 @@ async function createTables() {
       aangemaakt_op TEXT NOT NULL,
       verwijderd_op TEXT,
       auto_herinneren INTEGER NOT NULL DEFAULT 1,
-      basis_url TEXT
+      basis_url TEXT,
+      uitgenodigd_op TEXT
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_excluded_day (
@@ -571,6 +572,7 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_schedule_period: {
     auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
     basis_url: 'TEXT',
+    uitgenodigd_op: 'TEXT',
   },
   dienstrooster_availability: {
     fellow_blok: 'INTEGER NOT NULL DEFAULT 0',
@@ -578,6 +580,24 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_pending_undo: {
     onderdeel: "TEXT NOT NULL DEFAULT 'ROOSTER'",
   },
+};
+
+/**
+ * Run once, right after the column is added to an existing database (and
+ * the same in its migration). uitgenodigd_op: a database from before it
+ * existed has no record of which period's invitations went out, so the
+ * newest period whose links were ever issued (basis_url is set by the
+ * invitation and reminder exports) is taken as the active one - otherwise
+ * "Link kwijt?" would link to nothing until the next invitations.
+ */
+const LATER_COLUMN_BACKFILL: Record<string, string> = {
+  'dienstrooster_schedule_period.uitgenodigd_op': `
+    UPDATE dienstrooster_schedule_period SET uitgenodigd_op = aangemaakt_op
+    WHERE id = (
+      SELECT id FROM dienstrooster_schedule_period
+      WHERE verwijderd_op IS NULL AND status != 'CONCEPT' AND basis_url IS NOT NULL
+      ORDER BY start_datum DESC LIMIT 1
+    )`,
 };
 
 function applyMissingColumns() {
@@ -589,6 +609,8 @@ function applyMissingColumns() {
       if (existing.has(column)) continue;
       console.log(`  Adding missing column ${table}.${column}`);
       db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      const backfill = LATER_COLUMN_BACKFILL[`${table}.${column}`];
+      if (backfill) db.exec(backfill);
     }
   }
 }

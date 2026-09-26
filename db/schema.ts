@@ -177,6 +177,11 @@ export const schedulePeriod = sqliteTable(
     // (from the planner's own request). Automatic reminders run without a
     // request, so they use this unless BASE_URL pins one.
     basis_url: text('basis_url'),
+    // When the invitations for this period last went out by mail. The
+    // period invited most recently is the active one (lib/activePeriod.ts):
+    // "Link kwijt?" on the start page links to it, and no other period can
+    // be invited while it isn't published.
+    uitgenodigd_op: text('uitgenodigd_op'),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
     verwijderd_op: text('verwijderd_op'), // Soft-delete marker; null = not in trash. Purged 30 days after this.
   }

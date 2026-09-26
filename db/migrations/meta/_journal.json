@@ -127,6 +127,13 @@
       "when": 1788801200000,
       "tag": "0017_mail_queue",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1788801300000,
+      "tag": "0018_uitgenodigd_op",
+      "breakpoints": true
     }
   ]
 }

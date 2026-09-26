@@ -114,9 +114,18 @@ dat wel, via je Excel-lijst. Zo gaat het:
 
 - Dienstrooster stuurt een verzendlijst met `soort` `LINK_AANVRAAG`. Daarin
   staat het ingevulde adres in `aanvraag_email`, in kleine letters. In
-  `kandidaten` staat voor iedere deelnemer van een lopende of komende
-  periode een kant-en-klaar bericht met een nieuwe link. `berichten` is
-  leeg.
+  `kandidaten` staat voor iedere deelnemer van de actieve periode een
+  kant-en-klaar bericht met een nieuwe link. `berichten` is leeg.
+- De actieve periode is de periode waarvan je het laatst de uitnodigingen
+  hebt verstuurd. In het periodeoverzicht staat daar **Actief** bij.
+  Uitnodigingen voor een andere periode kun je pas versturen als het
+  rooster van de actieve periode gepubliceerd is.
+- Het bericht zegt wat de link op dat moment doet. Is de periode open,
+  dan kan de deelnemer voorkeuren doorgeven tot de deadline. Is de
+  deadline voorbij of de periode gesloten, dan staat erin dat wijzigen
+  niet meer kan en dat de voorkeuren alleen nog te bekijken zijn. Is het
+  rooster gepubliceerd, dan staat erin dat de diensten via de link te
+  bekijken en te ruilen zijn.
 - De stroom zoekt het adres op in de Excel-lijst, neemt het bericht van die
   codenaam en stuurt het naar het adres uit de Excel-lijst (stap 4d).
   Staat het adres niet in de lijst, dan gaat er niets weg.

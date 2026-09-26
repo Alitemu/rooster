@@ -523,9 +523,17 @@ reminder, only while OPEN before the deadline. (There used to be a
 POST /api/link-aanvragen, lib/linkAanvraag.ts): the app can't map an
 address to a codenaam, so it mails the flow a LINK_AANVRAAG verzendlijst
 with the typed address (`aanvraag_email`, trimmed, lower case) and a
-bericht for every participant of every current period (not CONCEPT, not
-ended, not in the trash, with a known mailBaseUrl - never the request's
-Host header) in `kandidaten`, each with a fresh link per such period.
+bericht for every participant of the active period in `kandidaten`, each
+with a fresh link (mailBaseUrl - never the request's Host header) and a
+line saying what it is good for now (periodeUitleg: preferences until the
+deadline, only looking once it passed or the period closed, the roster
+once published). The active period (lib/activePeriod.ts) is the one
+whose invitations went out last (`schedule_period.uitgenodigd_op`, set by
+a successful invitation send; a database from before it gets the newest
+non-CONCEPT period with a basis_url, LATER_COLUMN_BACKFILL in the seed and
+migration 0018). Another period's invitations are refused (409
+OTHER_PERIOD_ACTIVE) until the active one is GEPUBLICEERD; the period
+list marks it "Actief".
 `berichten` stays empty on purpose: a flow that doesn't know this soort
 must send nothing rather than mail everyone. The flow looks the address
 up in its sheet and sends only that codenaam's bericht, to the sheet's

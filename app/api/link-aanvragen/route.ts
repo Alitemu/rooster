@@ -57,16 +57,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     recordAttempt(totalKey);
 
     const now = new Date();
-    const { periodes, kandidaten } = linkAanvraagKandidaten(now);
-    // Nobody to send a link to (no current period, or no address for the
+    const { periode, kandidaten } = linkAanvraagKandidaten(now);
+    // Nobody to send a link to (no active period, or no address for the
     // links yet): nothing goes out, and the answer stays the same.
-    if (kandidaten.length > 0) {
+    if (periode && kandidaten.length > 0) {
       const result = await sendVerzendlijst(
         buildVerzendlijst(
           {
             soort: 'LINK_AANVRAAG',
             automatisch: true,
-            periode: periodes.join(', '),
+            periode,
             aanvraag: { email: parsed.data.email, kandidaten },
           },
           [],
