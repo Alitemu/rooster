@@ -159,7 +159,9 @@ export function PersonalRosterView({
                 <p className="text-xs text-neutral-600">
                   {balance.fellow
                     ? 'n.v.t. (fellow)'
-                    : `Voor jou komt dat neer op ${targetLabel(balance)}.`}
+                    : balance.target_max <= 0
+                      ? `Je hoeft deze periode geen ${counterPluralLower[balance.counter] || balance.counter.toLowerCase()} te doen.`
+                      : `Je streefaantal is ${targetLabel(balance)}.`}
                 </p>
               </div>
             </div>
@@ -243,6 +245,9 @@ export function PersonalRosterView({
                     const dayName = ['Zo', 'Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za'][
                       date.getDay()
                     ];
+                    const maand = ['jan', 'feb', 'mrt', 'apr', 'mei', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dec'][
+                      date.getMonth()
+                    ];
                     const isBlockedOverride = blockedOverrideSet.has(shift);
                     const isSoftBlocked = softBlockSet.has(shift);
 
@@ -261,6 +266,7 @@ export function PersonalRosterView({
                         <div className="font-bold text-neutral-900">
                           {dayName} {date.getDate()}
                         </div>
+                        <div className="text-[10px] text-neutral-600">{maand}</div>
                         <div className="text-neutral-700 font-semibold">
                           {teller[0]}
                         </div>

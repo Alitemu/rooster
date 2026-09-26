@@ -502,6 +502,15 @@ export function PreferencesCalendar({
           <i className="holiday-slot inline-block w-5 h-4 rounded" />
           Feestdag (naam in het vakje)
         </span>
+        <span className="flex items-center gap-1.5">
+          <span className="inline-flex w-9 flex-col items-center">
+            <span className="coverage-bar w-full">
+              <span className="coverage-bar-fill coverage-warning block" style={{ width: '50%' }} />
+            </span>
+            <span className="text-[9px] text-neutral-500 tabular-nums">15/31</span>
+          </span>
+          Onder elke dag: hoeveel collega&apos;s die dag nog beschikbaar zijn (15 van de 31)
+        </span>
       </div>
 
       {/* Calendar, one card per calendar month */}

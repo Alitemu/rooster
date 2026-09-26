@@ -134,44 +134,49 @@ export function PreferencesConfirmation({
         </div>
       )}
 
-      {/* Critical vacation reminder */}
-      <div className="bg-red-50 border-2 border-red-300 rounded p-4">
-        <p className="font-bold text-red-900 mb-2">⚠️ Belangrijke herinnering</p>
-        <p className="text-red-900 font-semibold mb-2">
-          Staan je vakantie en ander verlof erin?
-        </p>
-        <p className="text-sm text-red-800 mb-3">
-          Het rooster haalt vakantie nergens anders vandaan. Staat een vakantie niet bij
-          Afwezigheid of als geblokkeerde dag in je kalender, dan kun je tijdens je vakantie
-          ingedeeld worden. Controleer het voordat je bevestigt.
-        </p>
+      {/* Critical vacation reminder and the part-time status. After the
+          deadline there is nothing left to confirm, so neither is shown. */}
+      {!readOnly && (
+        <>
+          <div className="bg-red-50 border-2 border-red-300 rounded p-4">
+            <p className="font-bold text-red-900 mb-2">⚠️ Belangrijke herinnering</p>
+            <p className="text-red-900 font-semibold mb-2">
+              Staan je vakantie en ander verlof erin?
+            </p>
+            <p className="text-sm text-red-800 mb-3">
+              Het rooster haalt vakantie nergens anders vandaan. Staat een vakantie niet bij
+              Afwezigheid of als geblokkeerde dag in je kalender, dan kun je tijdens je vakantie
+              ingedeeld worden. Controleer het voordat je bevestigt.
+            </p>
 
-        <label className="flex items-start gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={hasVacationCheck}
-            onChange={(e) => setHasVacationCheck(e.target.checked)}
-            className="mt-1 h-5 w-5 rounded border-red-300 text-red-600
-                       focus:ring-red-500 cursor-pointer"
-          />
-          <span className="text-sm font-medium text-red-900">
-            Ja, mijn vakantie en ander verlof staan erin
-          </span>
-        </label>
-      </div>
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasVacationCheck}
+                onChange={(e) => setHasVacationCheck(e.target.checked)}
+                className="mt-1 h-5 w-5 rounded border-red-300 text-red-600
+                           focus:ring-red-500 cursor-pointer"
+              />
+              <span className="text-sm font-medium text-red-900">
+                Ja, mijn vakantie en ander verlof staan erin
+              </span>
+            </label>
+          </div>
 
-      {/* Part-time confirmation status */}
-      <div className={`p-3 rounded flex items-start gap-2
-        ${parttimeConfirmed ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
-        <span className={parttimeConfirmed ? 'text-green-600 font-bold' : 'text-amber-600 font-bold'}>
-          {parttimeConfirmed ? '✓' : '⚠'}
-        </span>
-        <span className={parttimeConfirmed ? 'text-green-900' : 'text-amber-900 font-medium'}>
-          {parttimeConfirmed
-            ? 'Deeltijddagen bevestigd'
-            : 'Deeltijddagen moeten bevestigd zijn voordat je kunt indienen'}
-        </span>
-      </div>
+          {/* Part-time confirmation status */}
+          <div className={`p-3 rounded flex items-start gap-2
+            ${parttimeConfirmed ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+            <span className={parttimeConfirmed ? 'text-green-600 font-bold' : 'text-amber-600 font-bold'}>
+              {parttimeConfirmed ? '✓' : '⚠'}
+            </span>
+            <span className={parttimeConfirmed ? 'text-green-900' : 'text-amber-900 font-medium'}>
+              {parttimeConfirmed
+                ? 'Deeltijddagen bevestigd'
+                : 'Bevestig eerst bij de stap Deeltijd dat je deeltijddagen en afwezigheid kloppen. Daarna kun je indienen.'}
+            </span>
+          </div>
+        </>
+      )}
 
       {/* Error message */}
       {error && (
@@ -189,16 +194,18 @@ export function PreferencesConfirmation({
       )}
 
       {/* Submit button */}
-      <button
-        onClick={handleSubmit}
-        disabled={submitting || !parttimeConfirmed || !hasVacationCheck || readOnly}
-        className={`w-full py-3 px-4 rounded font-semibold text-white transition-colors
-          ${submitting || !parttimeConfirmed || !hasVacationCheck || readOnly
-            ? 'bg-neutral-400 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'}`}
-      >
-        {submitting ? 'Bezig met indienen...' : 'Bevestigen en indienen'}
-      </button>
+      {!readOnly && (
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || !parttimeConfirmed || !hasVacationCheck || readOnly}
+          className={`w-full py-3 px-4 rounded font-semibold text-white transition-colors
+            ${submitting || !parttimeConfirmed || !hasVacationCheck || readOnly
+              ? 'bg-neutral-400 cursor-not-allowed'
+              : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'}`}
+        >
+          {submitting ? 'Bezig met indienen...' : 'Bevestigen en indienen'}
+        </button>
+      )}
 
       {/* Help text */}
       {!readOnly && (

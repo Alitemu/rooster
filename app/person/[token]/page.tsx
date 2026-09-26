@@ -7,7 +7,9 @@
 
 'use client';
 
+import Link from 'next/link';
 import { Suspense, useState, useEffect, useCallback } from 'react';
+import { deadlineTekst } from '@/lib/verzendlijst';
 import { useParams, useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
 import { FellowToggle } from '@/components/FellowToggle';
@@ -161,9 +163,44 @@ function PersonalLinkPageContent() {
   // effect only ever checked for LIEVER_NIET, so an overruled hard block
   // rendered identically to any other ordinary assigned shift.
   const [blockedOverrideViolations, setBlockedOverrideViolations] = useState<SoftBlockViolation[]>([]);
-  const [parttimeConfirmed, setParttimeConfirmed] = useState(false);
+  const [parttimeConfirmed, setParttimeConfirmedState] = useState(false);
   const [_preferencesChanged, setPreferencesChanged] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // The part-time check is remembered on this device, for exactly the
+  // part-time patterns and absences it was given for: coming back later
+  // (to change a preference, or to hand in again) no longer means ticking
+  // it again, and any change to either makes it lapse, so a confirmation
+  // never covers days the participant hasn't seen. Browser storage can be
+  // missing or refuse; the only cost then is ticking it once more.
+  const deeltijdVingerafdruk = [
+    patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(','),
+    absences.map((a) => `${a.id}:${a.van_datum}:${a.tot_datum}`).join(','),
+  ].join('|');
+  const deeltijdOpslagSleutel = personId && period ? `dienstrooster:deeltijd-gecontroleerd:${personId}:${period.id}` : null;
+  useEffect(() => {
+    if (!deeltijdOpslagSleutel) return;
+    let bewaard: string | null = null;
+    try {
+      bewaard = window.localStorage.getItem(deeltijdOpslagSleutel);
+    } catch {
+      // Storage unavailable: ask again.
+    }
+    setParttimeConfirmedState(bewaard === deeltijdVingerafdruk);
+  }, [deeltijdOpslagSleutel, deeltijdVingerafdruk]);
+  const setParttimeConfirmed = useCallback(
+    (confirmed: boolean) => {
+      setParttimeConfirmedState(confirmed);
+      if (!deeltijdOpslagSleutel) return;
+      try {
+        if (confirmed) window.localStorage.setItem(deeltijdOpslagSleutel, deeltijdVingerafdruk);
+        else window.localStorage.removeItem(deeltijdOpslagSleutel);
+      } catch {
+        // Storage unavailable: it just isn't remembered.
+      }
+    },
+    [deeltijdOpslagSleutel, deeltijdVingerafdruk]
+  );
 
   // Nothing on this page reacts to a coverage update, but a fresh inline
   // `() => {}` on every render would still change PreferencesCalendar's
@@ -380,10 +417,19 @@ function PersonalLinkPageContent() {
           </h1>
           <p className="text-neutral-700 mb-6">{error}</p>
           {isLinkError && (
-            <p className="text-sm text-neutral-600">
-              Controleer of de URL volledig en juist is als je deze link via e-mail hebt gekregen.
-              De link kan verlopen zijn. Neem contact op met de roosteraar voor een nieuwe link.
-            </p>
+            <div className="text-sm text-neutral-600 space-y-2">
+              <p>
+                Controleer of je de hele link uit de e-mail hebt gebruikt. De link kan ook verlopen zijn, of horen
+                bij een eerdere periode.
+              </p>
+              <p>
+                Een nieuwe link vraag je aan op de{' '}
+                <Link href="/" className="text-blue-600 underline hover:no-underline">
+                  startpagina
+                </Link>{' '}
+                bij &quot;Link kwijt?&quot;, met je werk-e-mailadres.
+              </p>
+            </div>
           )}
         </div>
       </div>
@@ -450,9 +496,12 @@ function PersonalLinkPageContent() {
               {new Date(period.start_datum).toLocaleDateString('nl-NL')} t/m{' '}
               {new Date(period.eind_datum).toLocaleDateString('nl-NL')}
             </p>
-            <p className="text-sm text-neutral-600">
-              Deadline: {new Date(period.deadline).toLocaleString('nl-NL')}
-            </p>
+            {/* Once the roster is out the deadline no longer means anything here. */}
+            {period.status !== 'GEPUBLICEERD' && (
+              <p className="text-sm text-neutral-600">
+                Deadline: {deadlineTekst(period.deadline)}
+              </p>
+            )}
           </div>
           <div className="flex shrink-0 gap-2 self-start">
             {period.status === 'GEPUBLICEERD' && (
@@ -622,10 +671,7 @@ function PersonalLinkPageContent() {
             }}
           />
           <PartTimeCheckStep
-            key={[
-              patterns.map((p) => `${p.id}:${p.weekdag}:${p.frequentie}:${p.geldig_vanaf}:${p.geldig_tot}`).join(','),
-              absences.map((a) => `${a.id}:${a.van_datum}:${a.tot_datum}`).join(','),
-            ].join('|')}
+            key={deeltijdVingerafdruk}
             personId={personId}
             periodId={period.id}
             periodStart={period.start_datum}
@@ -633,6 +679,7 @@ function PersonalLinkPageContent() {
             periodStatus={period.status}
             patterns={patterns}
             absences={absences}
+            confirmed={parttimeConfirmed}
             onConfirm={setParttimeConfirmed}
           />
           <button
@@ -714,8 +761,8 @@ function PersonalLinkPageContent() {
           </p>
           <p className="text-sm text-green-700">
             {deadlinePassed
-              ? `Je kunt dit venster sluiten. De deadline (${new Date(period.deadline).toLocaleString('nl-NL')}) is verstreken, dus wijzigen kan niet meer.`
-              : `Je kunt dit venster sluiten. Je kunt ook nog iets aanpassen: zolang de deadline (${new Date(period.deadline).toLocaleString('nl-NL')}) niet verstreken is, tellen je laatste wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet opnieuw in te dienen.`}
+              ? `Je kunt dit venster sluiten. De deadline (${deadlineTekst(period.deadline)}) is verstreken, dus wijzigen kan niet meer.`
+              : `Je kunt dit venster sluiten. Je kunt ook nog iets aanpassen: zolang de deadline (${deadlineTekst(period.deadline)}) niet verstreken is, tellen je laatste wijzigingen automatisch mee bij het maken van het rooster. Je hoeft daarvoor niet opnieuw in te dienen.`}
           </p>
           <button
             onClick={() => setCurrentStep('calendar')}

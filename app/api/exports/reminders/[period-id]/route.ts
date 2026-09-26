@@ -30,6 +30,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { deadlineTekst } from '@/lib/verzendlijst';
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -150,7 +151,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       insertStmt.run(crypto.randomUUID(), person.person_id, periodId, hashToken(token), now);
 
       const personalLink = `${baseUrl}/person/${token}`;
-      const deadline = new Date(period.deadline).toLocaleString('nl-NL');
+      const deadline = deadlineTekst(period.deadline);
 
       const subject =
         urgency === 'urgent'

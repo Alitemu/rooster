@@ -73,7 +73,9 @@ interface Props {
   periodStatus?: string;
   patterns: ParttimePattern[];
   absences: AbsenceRange[];
-  onConfirm?: (confirmed: boolean) => void;
+  /** Controlled by the page, which remembers it (see app/person/[token]/page.tsx). */
+  confirmed: boolean;
+  onConfirm: (confirmed: boolean) => void;
 }
 
 export function PartTimeCheckStep({
@@ -84,11 +86,11 @@ export function PartTimeCheckStep({
   periodStatus,
   patterns,
   absences,
+  confirmed,
   onConfirm,
 }: Props) {
   const [generatedDays, setGeneratedDays] = useState<GeneratedDay[]>([]);
   const [blockedElsewhereDays, setBlockedElsewhereDays] = useState<BlockedElsewhereDay[]>([]);
-  const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -119,10 +121,6 @@ export function PartTimeCheckStep({
 
     loadGeneratedDays();
   }, [personId, periodId, patterns]);
-
-  useEffect(() => {
-    onConfirm?.(confirmed);
-  }, [confirmed, onConfirm]);
 
   if (loading) {
     return <div className="p-4 text-center">Deeltijddagen genereren...</div>;
@@ -226,10 +224,12 @@ export function PartTimeCheckStep({
           <i className="calendar-cell-parttime inline-block w-5 h-4 rounded" />
           Deeltijddag (automatisch geblokkeerd)
         </span>
-        <span className="flex items-center gap-1.5">
-          <i className="calendar-cell-parttime inline-block w-5 h-4 rounded ring-2 ring-red-500" />
-          Deeltijddag rond de jaarwisseling
-        </span>
+        {boundaryDays.length > 0 && (
+          <span className="flex items-center gap-1.5">
+            <i className="calendar-cell-parttime inline-block w-5 h-4 rounded ring-2 ring-red-500" />
+            Deeltijddag rond de jaarwisseling
+          </span>
+        )}
         <span className="flex items-center gap-1.5">
           <i className="calendar-cell-absence inline-block w-5 h-4 rounded" />
           Afwezigheid
@@ -329,7 +329,7 @@ export function PartTimeCheckStep({
           type="checkbox"
           checked={confirmed}
           disabled={!!loadError}
-          onChange={(e) => setConfirmed(e.target.checked)}
+          onChange={(e) => onConfirm(e.target.checked)}
           className="mt-1 h-5 w-5 rounded border-neutral-300 text-blue-600
                      focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed"
         />
@@ -339,7 +339,7 @@ export function PartTimeCheckStep({
           ) : (
             <>
               Ik heb de deeltijddagen en de afwezigheid hierboven gecontroleerd en bevestig dat ze kloppen.
-              Ik begrijp dat weeknummers kunnen verschillen bij weken rond de jaarwisseling.
+              {boundaryDays.length > 0 && ' Ook de rood omrande dagen rond de jaarwisseling kloppen.'}
             </>
           )}
         </span>

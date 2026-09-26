@@ -1,4 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import { deadlineTekst } from '@/lib/verzendlijst';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { hashToken } from '@/lib/auth';
@@ -213,6 +214,7 @@ describe('POST /api/exports/reminders/[period-id]', () => {
     });
     const [reminder] = (await res.json()).data;
     expect(reminder.deadline_bron).toBe('2098-06-15T17:00');
-    expect(reminder.body).toContain(new Date('2098-06-15T17:00').toLocaleString('nl-NL'));
+    expect(reminder.body).toContain(deadlineTekst('2098-06-15T17:00'));
+    expect(reminder.body).toContain('15 juni 2098 om 17:00');
   });
 });

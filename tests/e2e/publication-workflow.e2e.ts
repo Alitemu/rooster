@@ -206,7 +206,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await expect(page.getByText('Overzicht saldo')).toBeVisible();
       await expect(page.getByText('We streven ernaar de diensten zo eerlijk mogelijk te verdelen.')).toBeVisible();
       await expect(
-        page.getByText(/Voor jou komt dat neer op (ongeveer \d+ \w+dienst(en)?|geen \w+diensten)\./).first()
+        page.getByText(/Je streefaantal is ongeveer \d+ \w+dienst(en)?\.|Je hoeft deze periode geen \w+diensten te doen\./).first()
       ).toBeVisible();
     } finally {
       await context.close();

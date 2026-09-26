@@ -12,7 +12,7 @@
 import { db } from '@/db/client';
 import { TELLERS, type MemberTarget, type Teller } from '@/lib/rosterBands';
 import { generateAccessToken, hashToken } from './auth';
-import { verzendlijstPersonen, type VerzendlijstBericht } from './verzendlijst';
+import { deadlineTekst, verzendlijstPersonen, type VerzendlijstBericht } from './verzendlijst';
 
 export interface InvitationPeriod {
   id: string;
@@ -73,8 +73,9 @@ export function issuePersonLink(personId: string, periodId: string, baseUrl: str
   return `${baseUrl}/person/${token}`;
 }
 
+/** "donderdag 24 september 2026 om 17:00", as in every other mail (lib/verzendlijst.ts). */
 export function formatDeadline(deadline: string): string {
-  return new Date(deadline).toLocaleString('nl-NL');
+  return deadlineTekst(deadline);
 }
 
 const TELLER_ENKELVOUD: Record<Teller, string> = {
@@ -110,6 +111,11 @@ export function indicatieTekst(target: Record<Teller, MemberTarget> | undefined)
   );
 }
 
+/** The app's start page, from a personal link (<base>/person/<token>). */
+function startpagina(personalLink: string): string {
+  return personalLink.replace(/\/person\/[^/]+$/, '') || personalLink;
+}
+
 export function invitationBericht(
   period: InvitationPeriod,
   codenaam: string,
@@ -130,7 +136,9 @@ ${personalLink}
 
 Je voorkeuren moeten uiterlijk ${formatDeadline(period.deadline)} binnen zijn.
 
-Deze link is alleen voor jou. Stuur hem niet door.
+Werk je vaste dagen niet, of heb je vakantie of ander verlof? Geef dat op bij de eerste stap, Deeltijd. Die dagen worden dan automatisch geblokkeerd.
+
+Deze link is alleen voor jou. Stuur hem niet door. Ben je hem kwijt? Op ${startpagina(personalLink)} vraag je bij "Link kwijt?" een nieuwe aan met je werk-e-mailadres.
 
 Heb je vragen? Neem dan contact op met de roosteraar.`,
   };
