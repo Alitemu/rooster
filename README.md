@@ -480,7 +480,7 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
    ontsleutelen. Zonder de sleutel werkt een teruggezette database wel,
    maar moet iedereen opnieuw inloggen, moet het app-wachtwoord opnieuw in
    Mailinstellingen en moet tweestapsverificatie per account worden
-   uitgezet met `scripts/reset-totp.ts`.
+   uitgezet met `scripts/reset-totp.ts` (zie Beveiliging).
 4. **Terugzetten:** `docker compose down`, verwijder `data/rooster.db`,
    `data/rooster.db-wal` en `data/rooster.db-shm`, kopieer de gewenste
    back-up naar `data/rooster.db` en start weer met `docker compose up -d`.
@@ -515,7 +515,17 @@ de stroom al gebouwd?".
   versleuteld in de database. Kan iemand niet meer inloggen omdat de
   telefoon weg is of de sleutel op de server is veranderd, dan zet de
   beheerder het uit met
-  `docker compose exec web npx tsx scripts/reset-totp.ts <codenaam>`.
+  `docker compose exec -u node web npx tsx scripts/reset-totp.ts <codenaam>`.
+- **Wachtwoord vergeten:** er is bewust geen "wachtwoord vergeten" op de
+  inlogpagina. De app kent geen e-mailadres om een link naar te sturen, en
+  een herstel dat iedereen op de inlogpagina kan starten, is ook een weg
+  naar binnen. Wie bij de NAS kan, zet een nieuw wachtwoord met
+  `docker compose exec -u node web npx tsx scripts/reset-password.ts planner`.
+  Het script vraagt het nieuwe wachtwoord twee keer, zonder het te tonen.
+  Daarvoor gelden dezelfde regels als in de app. De planner wordt overal
+  uitgelogd en de wijziging staat in de wijzigingsgeschiedenis.
+  Tweestapsverificatie blijft aan. Is ook de telefoon weg, draai dan daarna
+  ook `reset-totp.ts`.
 - **`BASE_URL`** in `.env`: zet dit op het adres waarop deelnemers de app
   openen, bijvoorbeeld `https://192.168.1.10`. Dan wijzen alle links in
   mails daarheen.

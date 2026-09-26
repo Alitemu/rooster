@@ -12,7 +12,7 @@
  *
  * Usage (in the web container, or next to the database):
  *   npx tsx scripts/reset-totp.ts <CODENAAM>
- *   docker compose exec web npx tsx scripts/reset-totp.ts <CODENAAM>
+ *   docker compose exec -u node web npx tsx scripts/reset-totp.ts <CODENAAM>
  */
 
 import Database from 'better-sqlite3';

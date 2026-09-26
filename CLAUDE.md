@@ -410,6 +410,13 @@ Show live in settings screen with interpretation in plain Dutch/English.
      encrypted at the next login). Unreadable after a key change: the
      login says so, and `scripts/reset-totp.ts <codenaam>` on the server
      turns two-step verification off for that account.
+   - A forgotten password: `scripts/reset-password.ts <codenaam>` on the
+     server (`docker compose exec -u node web ...`) asks for a new one twice
+     without echo (NIEUW_WACHTWOORD without a terminal, never an argument),
+     applies validatePasswordStrength, refuses the seed password, raises
+     sessie_versie and writes the audit log. Deliberately no reset on the
+     login page: no e-mail address to send to, and a reset anyone can
+     start is a way in.
    - The login page's `redirect` only goes to a /planner path on this site
      (lib/safeRedirect.ts, checked with the URL parser: "/\\host" leaves
      the site in a browser).
