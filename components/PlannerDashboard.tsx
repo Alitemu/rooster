@@ -196,9 +196,11 @@ interface Props {
    * until a manual reload - you publish and the badge still says "Generated".
    */
   onPeriodChanged?: () => void;
+  /** The status the page itself shows; a change made there (closing) reloads this dashboard. */
+  periodStatus?: string;
 }
 
-export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
+export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Props) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [progress, setProgress] = useState<PersonProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -383,6 +385,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged }: Props) {
     setSuggestionCount(null);
     loadData();
   }, [periodId]);
+
+  // Closing the period happens in the page header, outside this component.
+  useEffect(() => {
+    if (periodStatus && dashboard && periodStatus !== dashboard.status) loadData();
+  }, [periodStatus]);
 
   // Only asked for on a GEPUBLICEERD period - every route this calls
   // requires a reason there, same as a direct reassign/remove would.

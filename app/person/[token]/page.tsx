@@ -611,14 +611,14 @@ function PersonalLinkPageContent() {
               assigned: rosterData.summary.by_shift_type['AVOND'] || 0,
               target_min: rosterData.summary.target_bands['AVOND']?.min ?? 0,
               target_max: rosterData.summary.target_bands['AVOND']?.max ?? 0,
-              message: `${rosterData.summary.by_shift_type['AVOND'] || 0} avonddiensten toegewezen`,
+              message: toegewezenTekst(rosterData.summary.by_shift_type['AVOND'] || 0, 'avonddienst', 'avonddiensten'),
             },
             {
               counter: 'WEEKEND',
               assigned: rosterData.summary.by_shift_type['WEEKEND'] || 0,
               target_min: rosterData.summary.target_bands['WEEKEND']?.min ?? 0,
               target_max: rosterData.summary.target_bands['WEEKEND']?.max ?? 0,
-              message: `${rosterData.summary.by_shift_type['WEEKEND'] || 0} weekenddiensten toegewezen`,
+              message: toegewezenTekst(rosterData.summary.by_shift_type['WEEKEND'] || 0, 'weekenddienst', 'weekenddiensten'),
               // A fellow with no weekend shifts has no weekend target at all;
               // one who released days and got some sees their count as usual.
               fellow:
@@ -630,7 +630,7 @@ function PersonalLinkPageContent() {
               assigned: rosterData.summary.by_shift_type['FEESTDAG'] || 0,
               target_min: rosterData.summary.target_bands['FEESTDAG']?.min ?? 0,
               target_max: rosterData.summary.target_bands['FEESTDAG']?.max ?? 0,
-              message: `${rosterData.summary.by_shift_type['FEESTDAG'] || 0} feestdagdiensten toegewezen`,
+              message: toegewezenTekst(rosterData.summary.by_shift_type['FEESTDAG'] || 0, 'feestdagdienst', 'feestdagdiensten'),
             },
           ]}
           softBlockViolations={softBlockViolations}
@@ -787,6 +787,11 @@ function PersonalLinkPageContent() {
 // PersonalLinkPageContent reads/writes the `stap` URL query param
 // (useSearchParams) so the browser's back button steps through the wizard
 // instead of leaving the page - that hook requires a Suspense boundary.
+/** "1 avonddienst toegewezen" / "3 avonddiensten toegewezen". */
+function toegewezenTekst(aantal: number, enkelvoud: string, meervoud: string): string {
+  return `${aantal} ${aantal === 1 ? enkelvoud : meervoud} toegewezen`;
+}
+
 export default function PersonalLinkPage() {
   return (
     <Suspense

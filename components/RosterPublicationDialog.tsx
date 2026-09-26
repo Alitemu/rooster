@@ -198,8 +198,9 @@ export function RosterPublicationDialog({ periodId, isOpen, onClose, onSuccess }
                 <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
                   <h3 className="font-semibold text-amber-900">Bewuste uitzonderingen</h3>
                   <p className="text-sm text-amber-800 mt-1">
-                    Dit rooster bevat handmatige toewijzingen die bewust een regel doorbreken
-                    (bijvoorbeeld op verzoek van de betrokkene). Controleer ze voordat je publiceert.
+                    Deze punten houden publiceren niet tegen. Het gaat om handmatige toewijzingen of ruilen
+                    die een regel doorbreken, of om iemand die buiten het streefbereik valt omdat er niet
+                    genoeg diensten of mensen waren. Controleer ze voordat je publiceert.
                   </p>
                   <ul className="mt-2 space-y-1 text-sm text-amber-800">
                     {checkResult.warnings.map((warning, i) => (

@@ -6,6 +6,7 @@ import {
   periodsToCatchUp,
   getMinimumParticipantsNeeded,
   getMaxWindowWeeksForParticipants,
+  getCapacityInterpretation,
 } from './capacity';
 
 /**
@@ -126,5 +127,15 @@ describe('getMinimumParticipantsNeeded / getMaxWindowWeeksForParticipants', () =
     expect(getMaxWindowWeeksForParticipants(minNeeded)).toBeGreaterThanOrEqual(windowWeeks);
     // ...one participant short must not.
     expect(getMaxWindowWeeksForParticipants(minNeeded - 1)).toBeLessThan(windowWeeks);
+  });
+});
+
+describe('getCapacityInterpretation', () => {
+  it('calls slots per person the average, never a maximum, in whole numbers', () => {
+    // 56 slots over 16 people: 3.5 each on average.
+    const text = getCapacityInterpretation(2, 56, 16);
+    expect(text).toContain('krijgt iedereen gemiddeld 3 of 4 diensten');
+    expect(text).not.toContain('maximaal');
+    expect(getCapacityInterpretation(2, 48, 16)).toContain('krijgt iedereen gemiddeld 3 diensten');
   });
 });

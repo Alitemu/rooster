@@ -55,8 +55,10 @@ export function FellowWeekendNotice({ periodId, vensterWeekend }: { periodId: st
   return (
     <div className="rounded border border-violet-300 bg-violet-50 p-3 text-sm text-violet-950 space-y-1" data-testid="fellow-weekend">
       <p>
-        Deze periode {fellows.length === 1 ? 'is er' : 'zijn er'} {aantal} ({fellows.map((f) => f.codenaam).join(', ')}).
-        Zij ondersteunen op zaterdag de AIOS en tellen niet mee voor de weekenden.
+        In deze periode {fellows.length === 1 ? 'is er' : 'zijn er'} {aantal} ({fellows.map((f) => f.codenaam).join(', ')}).
+        {fellows.length === 1
+          ? ' Die ondersteunt op zaterdag de AIOS en telt niet mee voor de weekenden.'
+          : ' Zij ondersteunen op zaterdag de AIOS en tellen niet mee voor de weekenden.'}
       </p>
       <p>
         {verhoogd

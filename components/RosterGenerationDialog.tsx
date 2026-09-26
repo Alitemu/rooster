@@ -137,6 +137,7 @@ const VIOLATION_LABEL: Record<string, string> = {
   blocking_absolute: 'Geblokkeerde dag toch toegewezen',
   capacity: 'Onvoldoende bezetting',
   band_limit: 'Buiten streefbereik',
+  holiday_spread: 'Feestdagdiensten te dicht op elkaar',
 };
 
 // Mirrors lib/rosterGenerationJobs.ts's RosterGenerationJobProgress -
@@ -1015,10 +1016,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 De solver zal:
               </p>
               <ul className="text-sm text-neutral-600 space-y-2 ml-4 list-disc">
-                <li>Alle blokkeervoorkeuren respecteren (blokkerend + liever niet)</li>
+                <li>Geblokkeerde dagen nooit toewijzen en &quot;liever niet&quot; zoveel mogelijk ontzien</li>
                 <li>Toewijzingen verdelen binnen het ingestelde bereik</li>
                 <li>Deeltijdpatronen afdwingen</li>
-                <li>Overtredingen van de venster-regel minimaliseren</li>
+                <li>Niemand twee diensten binnen het venster geven</li>
               </ul>
               <p className="text-xs text-neutral-500 pt-2">
                 De solver draait maximaal 2 minuten. Bij het bereiken van de tijdslimiet kan een

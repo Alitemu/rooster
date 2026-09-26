@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { withBasePath } from '@/lib/basePath';
+import { deadlineTekst } from '@/lib/verzendlijst';
 
 interface Period {
   id: string;
@@ -188,7 +189,7 @@ export default function PlannerPeriodPage() {
               </div>
             ) : (
               <p className="text-sm text-neutral-600">
-                Deadline: {new Date(period.deadline).toLocaleString('nl-NL')}
+                Deadline: {deadlineTekst(period.deadline)}{' '}
                 {period.status === 'OPEN' && (
                   <button
                     onClick={startEditDeadline}
@@ -287,7 +288,7 @@ export default function PlannerPeriodPage() {
       )}
 
       {/* Dashboard */}
-      <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} />
+      <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} periodStatus={period.status} />
     </div>
   );
 }

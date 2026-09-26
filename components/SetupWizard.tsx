@@ -18,6 +18,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { parseCsv } from '@/lib/csv';
 import { withBasePath } from '@/lib/basePath';
+import { deadlineTekst } from '@/lib/verzendlijst';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'holidays' | 'confirm';
 
@@ -222,6 +223,12 @@ const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReas
 interface Props {
   period?: any;
   onComplete?: () => void;
+}
+
+/** "1 maart 2027" from a stored YYYY-MM-DD, as people read it. */
+function datumKort(datum: string): string {
+  if (!datum) return '';
+  return new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
 export function SetupWizard({ period, onComplete }: Props) {
@@ -1093,7 +1100,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
               Iedereen in de pool doet standaard mee met deze periode (vinkje &quot;Actief&quot;
-              staat aan) en krijgt bij het openen een uitnodiging. Vink iemand uit om diegene voor
+              staat aan). Na het openen verstuur je de uitnodigingen zelf. Vink iemand uit om diegene voor
               deze periode uit te sluiten, waardoor de geldigheidsdatum automatisch wordt aangepast.
               Voeg hieronder eventueel iemand nieuw toe.
             </p>
@@ -1211,7 +1218,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                             {member.access_link ? (
                               <span className="text-green-600 font-medium">✓ Heeft al toegang</span>
                             ) : member.is_active ? (
-                              <span className="text-blue-600">Wordt uitgenodigd bij openen</span>
+                              <span className="text-blue-600">Krijgt de uitnodiging na het openen</span>
                             ) : (
                               <span className="text-neutral-500">-</span>
                             )}
@@ -1587,7 +1594,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
               Upload een CSV-bestand met beginsaldi uit de vorige periode: hoeveel diensten iemand
-              per diensttype meer of minder heeft gedraaid dan zijn streefaantal. Formaat:
+              per diensttype meer of minder heeft gedraaid dan het eigen streefaantal. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,AVOND_delta,WEEKEND_delta
@@ -1645,7 +1652,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'holidays' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Losstaand van de beginsaldi hierboven: geef per persoon aan welke feestdag hij/zij in
+              Losstaand van de beginsaldi hierboven: geef per persoon aan welke feestdag die persoon in
               welk jaar heeft gedraaid, zodat de feestdagrotatie eerlijk verdeeld blijft. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
@@ -1901,11 +1908,11 @@ export function SetupWizard({ period, onComplete }: Props) {
               <h3 className="font-semibold text-blue-900 mb-3">Configuratie controleren</h3>
               <div className="space-y-2 text-sm text-blue-900">
                 <p>
-                  <strong>Periode:</strong> {periodData.naam} ({periodData.start_datum} t/m{' '}
-                  {periodData.eind_datum})
+                  <strong>Periode:</strong> {periodData.naam} ({datumKort(periodData.start_datum)} t/m{' '}
+                  {datumKort(periodData.eind_datum)})
                 </p>
                 <p>
-                  <strong>Deadline:</strong> {periodData.deadline}
+                  <strong>Deadline:</strong> {periodData.deadline ? deadlineTekst(periodData.deadline) : 'nog niet ingevuld'}
                 </p>
                 <p>
                   <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_active).length} actief in deze periode
@@ -1947,8 +1954,8 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <p className="text-sm text-neutral-600 italic">
-              Zodra je de periode opent, kan het personeel voorkeuren indienen. De periodestatus
-              wordt op OPEN gezet.
+              Zodra je de periode opent, kan het personeel voorkeuren indienen. De uitnodigingen
+              verstuur je daarna zelf, bij Exporteren &amp; communicatie op de periodepagina.
             </p>
           </div>
         )}

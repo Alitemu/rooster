@@ -34,7 +34,9 @@ export function renderNotificationTemplate(
 
   return {
     onderwerp: renderTemplate(template.onderwerp, placeholders),
-    inhoud: renderTemplate(template.body_md, placeholders),
+    // A placeholder filled with nothing (no link in an in-app notice)
+    // would otherwise leave an empty paragraph behind.
+    inhoud: renderTemplate(template.body_md, placeholders).replace(/\n{3,}/g, '\n\n').trim(),
   };
 }
 

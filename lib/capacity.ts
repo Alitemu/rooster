@@ -149,13 +149,28 @@ export function checkCapacity(
  * Get human-readable interpretation of capacity
  * Used in UI to explain constraints
  */
+/**
+ * The average per person, which is what slots / people is - it used to be
+ * labelled "maximaal", while the total capacity line right below it counts
+ * a higher real maximum (weeks / window), so the two contradicted each
+ * other. A fraction reads as the two whole numbers around it.
+ */
+function gemiddeldTekst(slots: number, people: number): string {
+  const avg = slots / Math.max(people, 1);
+  const laag = Math.floor(avg);
+  const aantal = (n: number) => `${n} ${n === 1 ? 'dienst' : 'diensten'}`;
+  return Number.isInteger(avg)
+    ? `krijgt iedereen gemiddeld ${aantal(avg)}`
+    : `krijgt iedereen gemiddeld ${laag} of ${aantal(laag + 1)}`;
+}
+
 export function getCapacityInterpretation(windowWeeks: number, slots: number, people: number): string {
   const distinctRequired = 7 * windowWeeks;
 
   const lines = [
     `Bij een venster van ${windowWeeks} weken:`,
     `- zijn minimaal ${distinctRequired} verschillende mensen nodig om alle weken te dekken`,
-    `- kan iemand maximaal ${Math.floor(slots / Math.max(people, 1))} diensten draaien`,
+    `- ${gemiddeldTekst(slots, people)}`,
   ];
 
   if (people < distinctRequired) {
