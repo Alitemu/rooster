@@ -457,10 +457,14 @@ Show live in settings screen with interpretation in plain Dutch/English.
      "tijdelijk wachtwoord"), change-password clears it. Every change
      revokes that account's sessions and is audit-logged without password
      material. Never one's own account (409), never the last active admin.
-     The first admin is made on the server: `scripts/create-account.ts
-     <codenaam> [--planner | --beheerder]` (hidden prompt, scripts/hiddenPrompt.ts;
-     --beheerder promotes an existing planner). No real account name goes
-     into the repository.
+     The seed creates 'admin' (ADMIN) next to 'planner', both with the
+     seed password, so both must choose their own at the first login
+     (ensureAdminAccount; also added to an existing database at the next
+     start, but only while it has no ADMIN at all). The backup on the
+     server: scripts/reset-password.ts, and `scripts/create-account.ts
+     <codenaam> [--planner | --beheerder]` (hidden prompt,
+     scripts/hiddenPrompt.ts; --beheerder promotes an existing planner).
+     No real account name goes into the repository.
    - The login page's `redirect` only goes to a /planner path on this site
      (lib/safeRedirect.ts, checked with the URL parser: "/\\host" leaves
      the site in a browser).

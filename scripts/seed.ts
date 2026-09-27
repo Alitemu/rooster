@@ -681,6 +681,33 @@ function refreshRewordedTemplates() {
   }
 }
 
+/**
+ * The default beheerder account 'admin' (ADMIN: everything a planner can,
+ * plus Accounts beheren). Like 'planner' it starts with the seed password,
+ * so its first login can only choose a new one (lib/seedPassword.ts).
+ * Added to a database from before it too, but only while no ADMIN exists
+ * at all: an installation that already has a beheerder gets no second one.
+ * Returns whether it was added.
+ */
+async function ensureAdminAccount(): Promise<boolean> {
+  const hasAdmin = db.prepare(`SELECT 1 FROM dienstrooster_person WHERE rol = 'ADMIN' LIMIT 1`).get();
+  const nameTaken = db.prepare(`SELECT 1 FROM dienstrooster_person WHERE codenaam = 'admin'`).get();
+  if (hasAdmin || nameTaken) return false;
+  db.prepare(
+    `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
+     VALUES (?, 'admin', 'ADMIN', 1, ?, ?)`
+  ).run(uuid(), await hashPassword(DEFAULT_TEST_PASSWORD), new Date().toISOString());
+  return true;
+}
+
+function logAdminAdded() {
+  console.log(
+    `  - Beheerder: admin / password: ${DEFAULT_TEST_PASSWORD}\n` +
+      `    Log in right away and choose a new password: this one is public with the code.\n` +
+      `    Until then anyone who can reach the login page could claim the account.`
+  );
+}
+
 /** True once a previous seed run has populated this database. */
 function alreadySeeded(): boolean {
   const row = db
@@ -837,7 +864,12 @@ async function seed() {
     // about what to do next, on a script the verification scripts document
     // as their first step. Wiping is destructive, so it stays opt-in.
     if (alreadySeeded() && alleenPlanner) {
-      console.log('The planner account already exists; nothing else to do.');
+      if (await ensureAdminAccount()) {
+        console.log('Added the default beheerder account:');
+        logAdminAdded();
+      } else {
+        console.log('The planner account already exists; nothing else to do.');
+      }
       return;
     }
     if (alreadySeeded()) {
@@ -862,11 +894,8 @@ async function seed() {
     // to do here - log in directly with the password above.
     //
     // Codenaam is lowercase 'planner' by explicit request - login is
-    // case-sensitive, so this is what gets typed at /planner/login. There
-    // used to be a separate ADMIN account too, but it had no functional
-    // difference from PLANNER anywhere in the app (every permission check
-    // treats the two roles identically), so it was dropped rather than
-    // kept as a second account with nothing distinct to do.
+    // case-sensitive, so this is what gets typed at /planner/login. The
+    // beheerder 'admin' comes right after (ensureAdminAccount).
     console.log('Creating planner user...');
     const plannerId = uuid();
     const { hash: plannerPasswordHash, usedOverride: plannerPasswordFromEnv } = await resolvePlannerPassword();
@@ -875,6 +904,8 @@ async function seed() {
       INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(plannerId, 'planner', 'PLANNER', 1, plannerPasswordHash, now);
+
+    const adminAdded = await ensureAdminAccount();
 
     // Only when the account still needs the interactive /planner/login
     // "first run" form - SEED_PLANNER_PASSWORD already claimed it above,
@@ -993,6 +1024,7 @@ async function seed() {
           ? '  Planner: planner / password from SEED_PLANNER_PASSWORD'
           : '  Planner: planner / the seed password. The app asks for a new one at the first login.'
       );
+      if (adminAdded) console.log('  Beheerder: admin / the seed password. The app asks for a new one at the first login.');
       console.log('  Add participants under the pool\'s staff page, then create a period.');
       return;
     }
@@ -1281,6 +1313,7 @@ async function seed() {
           `    Log in and use "Wachtwoord wijzigen" on the period list - changing it there\n` +
           `    also ends every session opened with the old one.`
     );
+    if (adminAdded) logAdminAdded();
     if (setupToken) {
       console.log(
         `  - Setup-token voor /planner/login's eerste-keer-formulier: ${setupToken}\n` +

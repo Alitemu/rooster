@@ -533,12 +533,20 @@ de stroom al gebouwd?".
   tweestapsverificatie uitzetten, een account uitschakelen of de rol
   wijzigen. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
   vervangen, en de sessies van dat account worden beëindigd. Je eigen
-  account beheer je met *Wachtwoord wijzigen* en *Tweestapsverificatie*. De
-  eerste beheerder maak je op de server aan:
-  `docker compose exec -u node web npx tsx scripts/create-account.ts <codenaam>`.
-  Het script vraagt het wachtwoord twee keer, zonder het te tonen. Met
-  `--planner` maak je een planner aan, met `--beheerder` maak je van een
-  bestaande planner een beheerder.
+  account beheer je met *Wachtwoord wijzigen* en *Tweestapsverificatie*.
+  Een installatie heeft standaard twee accounts: `planner` en de beheerder
+  `admin`, allebei met het startwachtwoord. Log na de eerste start of de
+  update meteen met beide in en kies een eigen wachtwoord: tot dan kan
+  iedereen die de inlogpagina bereikt het account claimen. (Een installatie
+  die al een beheerder heeft, krijgt geen `admin` erbij.) Zijn beide
+  wachtwoorden vergeten, dan is er op de server
+  `docker compose exec -u node web npx tsx scripts/reset-password.ts admin`,
+  en met
+  `docker compose exec -u node web npx tsx scripts/create-account.ts <codenaam>`
+  maak je daar een nieuwe beheerder aan. Beide scripts vragen het
+  wachtwoord twee keer, zonder het te tonen. Met `--planner` maakt
+  create-account een planner, met `--beheerder` maakt het van een bestaande
+  planner een beheerder.
 - **`BASE_URL`** in `.env`: zet dit op het adres waarop deelnemers de app
   openen, bijvoorbeeld `https://192.168.1.10`. Dan wijzen alle links in
   mails daarheen.
