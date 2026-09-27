@@ -196,14 +196,16 @@ function PlannerLoginForm() {
   // Logged in with the public seed password: a new one comes first.
   // `huidig` is what was just typed; empty when an earlier session sent
   // the browser back here.
-  const [wachtwoordWijzigen, setWachtwoordWijzigen] = useState<{ huidig: string } | null>(null);
+  const [wachtwoordWijzigen, setWachtwoordWijzigen] = useState<{ huidig: string; tijdelijk: boolean } | null>(null);
 
   useEffect(() => {
     let current = true;
     fetch(withBasePath('/api/auth/me'))
       .then((res) => res.json())
       .then((data) => {
-        if (current && data?.data?.authenticated && data.data.wachtwoord_wijzigen) setWachtwoordWijzigen({ huidig: '' });
+        if (current && data?.data?.authenticated && data.data.wachtwoord_wijzigen) {
+          setWachtwoordWijzigen({ huidig: '', tijdelijk: Boolean(data.data.tijdelijk_wachtwoord) });
+        }
       })
       .catch(() => {});
     return () => {
@@ -250,7 +252,7 @@ function PlannerLoginForm() {
       }
 
       if (data.data?.wachtwoord_wijzigen) {
-        setWachtwoordWijzigen({ huidig: password });
+        setWachtwoordWijzigen({ huidig: password, tijdelijk: Boolean(data.data.tijdelijk_wachtwoord) });
         setLoading(false);
         return;
       }
@@ -273,7 +275,10 @@ function PlannerLoginForm() {
 
   if (wachtwoordWijzigen) {
     return (
-      <SeedPasswordChange huidig={wachtwoordWijzigen.huidig} onDone={() => (window.location.href = withBasePath(redirectTo))} />
+      <SeedPasswordChange
+        huidig={wachtwoordWijzigen.huidig}
+        tijdelijk={wachtwoordWijzigen.tijdelijk}
+        onDone={() => (window.location.href = withBasePath(redirectTo))} />
     );
   }
 
@@ -353,7 +358,7 @@ function PlannerLoginForm() {
  * is public with the code, so the session it opened can do nothing but
  * this (lib/auth-context.ts requirePlannerAccess).
  */
-function SeedPasswordChange({ huidig, onDone }: { huidig: string; onDone: () => void }) {
+function SeedPasswordChange({ huidig, tijdelijk, onDone }: { huidig: string; tijdelijk: boolean; onDone: () => void }) {
   const [current, setCurrent] = useState(huidig);
   const [next, setNext] = useState('');
   const [repeat, setRepeat] = useState('');
@@ -393,8 +398,9 @@ function SeedPasswordChange({ huidig, onDone }: { huidig: string; onDone: () => 
         <div className="card card-padding">
           <h1 className="text-xl font-bold text-neutral-900 mb-2">Kies een nieuw wachtwoord</h1>
           <p className="text-sm text-neutral-700 mb-6">
-            Je bent ingelogd met het startwachtwoord. Dat staat openbaar in de broncode van Dienstrooster, dus
-            iedereen kan het kennen. Kies eerst een eigen wachtwoord. Daarna ga je verder.
+            {tijdelijk
+              ? 'Je bent ingelogd met een tijdelijk wachtwoord dat de beheerder voor je heeft ingesteld. Kies eerst een eigen wachtwoord. Daarna ga je verder.'
+              : 'Je bent ingelogd met het startwachtwoord. Dat staat openbaar in de broncode van Dienstrooster, dus iedereen kan het kennen. Kies eerst een eigen wachtwoord. Daarna ga je verder.'}
           </p>
           <form onSubmit={handleSubmit}>
             {!huidig && (

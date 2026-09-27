@@ -33,6 +33,10 @@ export const person = sqliteTable(
     // "changing the password kicks out whoever else was logged in" into
     // one integer update.
     sessie_versie: integer('sessie_versie').notNull().default(1),
+    // Set when an admin gave this account a temporary password
+    // (/api/admin/accounts): the next login may only choose a new one, like
+    // a login with the seed password. Cleared by change-password.
+    wachtwoord_moet_wijzigen: integer('wachtwoord_moet_wijzigen', { mode: 'boolean' }).default(false).notNull(),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   }
 );

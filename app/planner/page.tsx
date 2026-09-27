@@ -102,6 +102,8 @@ export default function PlannerHomePage() {
   const [showTrash, setShowTrash] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [showTotpSettings, setShowTotpSettings] = useState(false);
+  // Only an ADMIN sees "Accounts beheren" (the API checks it too).
+  const [isAdmin, setIsAdmin] = useState(false);
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
@@ -161,6 +163,10 @@ export default function PlannerHomePage() {
 
   useEffect(() => {
     loadData();
+    fetch(withBasePath('/api/auth/me'))
+      .then((res) => res.json())
+      .then((data) => setIsAdmin(data?.data?.role === 'ADMIN'))
+      .catch(() => {});
   }, []);
 
   const loadTrash = async () => {
@@ -295,6 +301,11 @@ export default function PlannerHomePage() {
           <button onClick={() => setShowTotpSettings(true)} className="btn-secondary">
             Tweestapsverificatie
           </button>
+          {isAdmin && (
+            <Link href="/planner/accounts" className="btn-secondary">
+              Accounts beheren
+            </Link>
+          )}
           <button onClick={handleLogout} className="btn-secondary">
             Uitloggen
           </button>

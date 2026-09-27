@@ -130,7 +130,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // situation someone changing their password after a suspected leak is
     // trying to end.
     const newSessionVersion = db.transaction(() => {
-      db.prepare('UPDATE dienstrooster_person SET wachtwoord_hash = ? WHERE id = ?').run(newHash, person.id);
+      db.prepare(
+        'UPDATE dienstrooster_person SET wachtwoord_hash = ?, wachtwoord_moet_wijzigen = 0 WHERE id = ?'
+      ).run(newHash, person.id);
 
       const version = revokeAllSessions(person.id);
 

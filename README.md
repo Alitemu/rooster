@@ -525,7 +525,20 @@ de stroom al gebouwd?".
   Daarvoor gelden dezelfde regels als in de app. De planner wordt overal
   uitgelogd en de wijziging staat in de wijzigingsgeschiedenis.
   Tweestapsverificatie blijft aan. Is ook de telefoon weg, draai dan daarna
-  ook `reset-totp.ts`.
+  ook `reset-totp.ts`. Is er een beheerder, dan kan die dit ook in de app
+  doen (zie hieronder).
+- **Beheerder:** een beheerder kan alles wat een planner kan en beheert
+  daarnaast de accounts, bij *Accounts beheren* op de lijst met periodes:
+  een planner of beheerder toevoegen, iemand een tijdelijk wachtwoord geven,
+  tweestapsverificatie uitzetten, een account uitschakelen of de rol
+  wijzigen. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
+  vervangen, en de sessies van dat account worden beëindigd. Je eigen
+  account beheer je met *Wachtwoord wijzigen* en *Tweestapsverificatie*. De
+  eerste beheerder maak je op de server aan:
+  `docker compose exec -u node web npx tsx scripts/create-account.ts <codenaam>`.
+  Het script vraagt het wachtwoord twee keer, zonder het te tonen. Met
+  `--planner` maak je een planner aan, met `--beheerder` maak je van een
+  bestaande planner een beheerder.
 - **`BASE_URL`** in `.env`: zet dit op het adres waarop deelnemers de app
   openen, bijvoorbeeld `https://192.168.1.10`. Dan wijzen alle links in
   mails daarheen.

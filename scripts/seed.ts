@@ -109,7 +109,8 @@ async function createTables() {
       wachtwoord_hash TEXT,
       totp_secret TEXT,
       sessie_versie INTEGER NOT NULL DEFAULT 1,
-      aangemaakt_op TEXT NOT NULL
+      aangemaakt_op TEXT NOT NULL,
+      wachtwoord_moet_wijzigen INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_person_access_link (
@@ -568,6 +569,7 @@ const SEEDED_TABLES = [
 const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_person: {
     sessie_versie: 'INTEGER NOT NULL DEFAULT 1',
+    wachtwoord_moet_wijzigen: 'INTEGER NOT NULL DEFAULT 0',
   },
   dienstrooster_swap_request: {
     reden_afwijzing: 'TEXT',

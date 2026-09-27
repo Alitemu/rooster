@@ -19,11 +19,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // place, so this is read for staff only rather than adding a column read
   // that means nothing for a participant.
   let totpEnrolled = false;
+  let tijdelijkWachtwoord = false;
   if (auth.role === 'ADMIN' || auth.role === 'PLANNER') {
     const row = db
-      .prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?')
-      .get(auth.userId) as { totp_secret: string | null } | undefined;
+      .prepare('SELECT totp_secret, wachtwoord_moet_wijzigen FROM dienstrooster_person WHERE id = ?')
+      .get(auth.userId) as { totp_secret: string | null; wachtwoord_moet_wijzigen: number } | undefined;
     totpEnrolled = Boolean(row?.totp_secret);
+    tijdelijkWachtwoord = Boolean(row?.wachtwoord_moet_wijzigen);
   }
 
   return NextResponse.json({
@@ -35,6 +37,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       totp_enrolled: totpEnrolled,
       // Logged in with the public seed password: the login page asks for a new one first.
       wachtwoord_wijzigen: Boolean(auth.wachtwoordWijzigen),
+      // Why: a temporary password an admin set, rather than the seed password.
+      tijdelijk_wachtwoord: tijdelijkWachtwoord,
     },
   });
 }

@@ -125,6 +125,14 @@ export function requirePlannerAccess(auth: AuthContext | null): boolean {
 }
 
 /**
+ * True for an ADMIN with a full session: everything a planner can do, plus
+ * managing the staff accounts themselves (lib/staffAccounts.ts).
+ */
+export function requireAdminAccess(auth: AuthContext | null): boolean {
+  return requirePlannerAccess(auth) && auth!.role === 'ADMIN';
+}
+
+/**
  * True if the authenticated identity is the given person, or staff acting on their behalf.
  */
 export function requirePersonAccess(auth: AuthContext | null, personId: string): boolean {

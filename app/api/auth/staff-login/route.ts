@@ -69,7 +69,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const person = db
       .prepare(
-        `SELECT id, codenaam, rol, actief, wachtwoord_hash, totp_secret
+        `SELECT id, codenaam, rol, actief, wachtwoord_hash, totp_secret, wachtwoord_moet_wijzigen
          FROM dienstrooster_person
          WHERE codenaam = ? AND rol IN ('ADMIN', 'PLANNER')`
       )
@@ -81,6 +81,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           actief: number;
           wachtwoord_hash: string | null;
           totp_secret: string | null;
+          wachtwoord_moet_wijzigen: number;
         }
       | undefined;
 
@@ -140,7 +141,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // The seed password is public with the code: a session opened with it
     // can only change the password (lib/auth-context.ts).
-    const wachtwoordWijzigen = seedPasswordMustBeChanged(password);
+    // So can one opened with a temporary password an admin set
+    // (/api/admin/accounts/[id]/reset-password): only its owner should
+    // know the password the account goes on with.
+    const tijdelijkWachtwoord = Boolean(person.wachtwoord_moet_wijzigen);
+    const wachtwoordWijzigen = seedPasswordMustBeChanged(password) || tijdelijkWachtwoord;
 
     const response = NextResponse.json({
       success: true,
@@ -150,6 +155,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         role: person.rol,
         totp_enrolled: Boolean(person.totp_secret),
         wachtwoord_wijzigen: wachtwoordWijzigen,
+        tijdelijk_wachtwoord: tijdelijkWachtwoord,
       },
     });
 
