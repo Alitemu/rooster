@@ -17,6 +17,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { withBasePath } from '@/lib/basePath';
 
+/** "di 2 mrt": a calendar day, so no timezone may shift it. */
+function datumTekst(datum: string): string {
+  return new Date(`${datum}T00:00:00Z`).toLocaleDateString('nl-NL', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
 interface Suggestion {
   assignment_id: string;
   slot_id: string;
@@ -127,7 +137,7 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
   return (
     <div>
       <p className="text-xs text-neutral-500 mb-4">
-        Diensten die verschoven kunnen worden naar iemand met nog ruimte in zijn streefbereik.
+        Diensten die verschoven kunnen worden naar iemand met nog ruimte in het eigen streefbereik.
         Niets wordt automatisch aangepast. Controleer elk voorstel en pas toe wat je wilt
         overnemen.
       </p>
@@ -135,9 +145,9 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
         {suggestions.map((s) => (
           <div key={s.assignment_id} className="border rounded p-3">
             <p className="text-sm">
-              Verschuif de {TELLER_LABEL[s.teller]} op <span className="font-medium">{s.datum}</span> van{' '}
-              <span className="font-medium">{s.from_codenaam}</span> ({s.from_count} van {s.from_max}, 1
-              boven bereik) naar <span className="font-medium">{s.to_codenaam}</span> ({s.to_count} van{' '}
+              Verschuif de {TELLER_LABEL[s.teller]} op <span className="font-medium">{datumTekst(s.datum)}</span> van{' '}
+              <span className="font-medium">{s.from_codenaam}</span> ({s.from_count} van {s.from_max},{' '}
+              {s.from_count - s.from_max} boven bereik) naar <span className="font-medium">{s.to_codenaam}</span> ({s.to_count} van{' '}
               {s.to_max}).
             </p>
             {s.warning && <p className="text-xs text-amber-700 mt-1">{s.warning}</p>}

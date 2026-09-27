@@ -337,7 +337,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
       </p>
       <p className="text-xs text-amber-700 mb-4">
         Het getal achter een naam, bijv. <span className="font-medium">(0 van 1)</span>, toont
-        hoeveel diensten van dit type die persoon al heeft ten opzichte van zijn of haar
+        hoeveel diensten van dit type die persoon al heeft ten opzichte van het eigen
         streefbereik voor deze periode. Dit is puur ter informatie en houdt niemand tegen.
       </p>
 
@@ -395,7 +395,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                     )}
                     <select
                       className="text-sm border border-neutral-300 rounded px-2 py-1"
-                      title="Het getal achter een naam toont het aantal diensten van dit type dat iemand al heeft, ten opzichte van zijn of haar streefbereik"
+                      title="Het getal achter een naam toont het aantal diensten van dit type dat iemand al heeft, ten opzichte van het eigen streefbereik"
                       value={selection[slot.slot_id] || ''}
                       disabled={applying}
                       onChange={(e) =>

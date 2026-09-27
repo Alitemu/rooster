@@ -21,7 +21,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import {
   resolvePriorAssignmentWeeks,
-  calculatePriorAssignmentRange,
+  calculatePriorAssignmentRange, priorAssignmentAnchor,
 } from '@/lib/priorAssignmentDerive';
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
          ORDER BY eind_datum DESC LIMIT 1`
       )
       .get(period.pool_id, period.start_datum) as { eind_datum: string } | undefined;
-    const lookbackAnchor = prevPeriod?.eind_datum || period.start_datum;
+    const lookbackAnchor = priorAssignmentAnchor(prevPeriod?.eind_datum, period.start_datum);
 
     const weeksToLookBack = resolvePriorAssignmentWeeks(period);
     const [startDate, endDate] = calculatePriorAssignmentRange(lookbackAnchor, weeksToLookBack);

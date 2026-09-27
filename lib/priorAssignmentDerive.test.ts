@@ -9,6 +9,7 @@ import {
   calculatePriorAssignmentWeeks,
   resolvePriorAssignmentWeeks,
   calculatePriorAssignmentRange,
+  priorAssignmentAnchor,
   generateSkeletonPriorAssignments,
   doRangesOverlap,
   countPriorAssignmentEntries,
@@ -97,6 +98,17 @@ describe('Prior Assignment Derivation', () => {
 
     it('handles large window weeks', () => {
       expect(calculatePriorAssignmentWeeks(52)).toBe(51);
+    });
+  });
+
+  describe('priorAssignmentAnchor', () => {
+    it('ends a first period\'s window the day before it starts, never inside it', () => {
+      expect(priorAssignmentAnchor(undefined, '2027-01-04')).toBe('2027-01-03');
+      expect(priorAssignmentAnchor(undefined, '2027-01-01')).toBe('2026-12-31');
+    });
+
+    it('uses the previous published period\'s end when there is one', () => {
+      expect(priorAssignmentAnchor('2026-12-27', '2027-01-04')).toBe('2026-12-27');
     });
   });
 

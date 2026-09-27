@@ -28,5 +28,14 @@ export type CodenaamValidation =
  */
 export function validateCodenaam(raw: unknown): CodenaamValidation {
   const result = validateSingleLine(raw, 'Codenaam', CODENAAM_MAX_LENGTH);
-  return result.valid ? { valid: true, codenaam: result.value } : result;
+  if (!result.valid) return result;
+  // The app keeps no e-mail addresses (the Power Automate flow's own sheet
+  // maps codenaam to address), so one must not slip in as a codenaam.
+  if (result.value.includes('@')) {
+    return {
+      valid: false,
+      message: 'Een codenaam mag geen e-mailadres zijn. Gebruik een schuilnaam, bijvoorbeeld Persoon-32.',
+    };
+  }
+  return { valid: true, codenaam: result.value };
 }

@@ -77,6 +77,19 @@ export function resolvePriorAssignmentWeeks(period: {
  *
  * Returns [startDate, endDate] as ISO strings
  */
+/**
+ * The last day before this period that the lookback window ends on: the
+ * previous published period's end, or, for a pool's first period, the day
+ * before this one starts. (It used to be the start date itself, so the
+ * window reached one day into the period it was looking back from.)
+ */
+export function priorAssignmentAnchor(previousPeriodEnd: string | undefined, periodStart: string): string {
+  if (previousPeriodEnd) return previousPeriodEnd;
+  const dayBefore = parseISO(periodStart);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  return dateToISO(dayBefore);
+}
+
 export function calculatePriorAssignmentRange(
   previousPeriodEndDate: string,
   weeksToLookBack: number

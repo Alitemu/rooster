@@ -12,6 +12,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { parseCsv } from '@/lib/csv';
 import { withBasePath } from '@/lib/basePath';
+import { deadlineTekst } from '@/lib/verzendlijst';
 
 interface PriorAssignment {
   datum: string;
@@ -181,7 +182,12 @@ export default function PriorAssignmentsPage() {
     dataLines.forEach(([datum, , diensttype, codenaam], i) => {
       const rowNum = i + 2; // header is row 1
       if (!datum) return;
-      const teller = (diensttype || '').trim().toUpperCase();
+      if (diensttype === undefined) {
+        warnings.push(`Rij ${rowNum}: niet genoeg kolommen, overgeslagen`);
+        return;
+      }
+      // "Avond" (as the roster CSV writes it), "AVOND" or "avonddienst".
+      const teller = diensttype.trim().toUpperCase().replace(/DIENST$/, '');
       if (!['AVOND', 'WEEKEND', 'FEESTDAG'].includes(teller)) {
         warnings.push(`Rij ${rowNum}: onbekend diensttype "${diensttype}", overgeslagen`);
         return;
@@ -279,7 +285,7 @@ export default function PriorAssignmentsPage() {
         </p>
         {period.overloop_bevestigd_op && (
           <p className="text-sm text-green-700 mt-2">
-            ✓ Bevestigd op {new Date(period.overloop_bevestigd_op).toLocaleString('nl-NL')}
+            ✓ Bevestigd op {deadlineTekst(period.overloop_bevestigd_op)}
           </p>
         )}
       </div>

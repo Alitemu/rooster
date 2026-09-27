@@ -354,8 +354,8 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
         </span>
       </div>
       <p className="text-xs text-neutral-500">
-        Klik met de rechtermuisknop op een dienst om deze handmatig toe te wijzen, te wisselen of
-        te verwijderen.
+        Klik op een dienst om deze handmatig toe te wijzen, te wisselen of te verwijderen. Op een
+        telefoon tik je erop.
       </p>
 
       {/* Calendar, one card per calendar month */}
@@ -412,13 +412,16 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
                                 return (
                                   <div
                                     key={`${datum}-${counter}`}
+                                    // A plain click (a tap on a phone, which has no
+                                    // right-click) opens the same menu.
+                                    onClick={(e) => openContextMenu(e, slot)}
                                     onContextMenu={(e) => openContextMenu(e, slot)}
                                     role="button"
                                     tabIndex={-1}
                                     title={
                                       assignment
-                                        ? `${COUNTER_LABEL[counter] || counter}: ${assignment.codenaam} (rechtsklik om te wijzigen)`
-                                        : `${COUNTER_LABEL[counter] || counter}: nog niemand toegewezen (rechtsklik om in te vullen)`
+                                        ? `${COUNTER_LABEL[counter] || counter}: ${assignment.codenaam} (klik om te wijzigen)`
+                                        : `${COUNTER_LABEL[counter] || counter}: nog niemand toegewezen (klik om in te vullen)`
                                     }
                                     className={`w-full rounded border px-1 py-0.5 cursor-context-menu select-none
                                       ${assignment ? 'bg-blue-50 border-blue-100' : 'bg-neutral-50 border-dashed border-neutral-300'}`}
@@ -542,7 +545,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
                 {eligiblePeople && eligiblePeople.length > 0 && (
                   <div
                     className="px-3 pt-1 text-[10px] text-neutral-400"
-                    title="Het getal achter een naam toont het aantal diensten van dit type dat iemand al heeft, ten opzichte van zijn of haar streefbereik"
+                    title="Het getal achter een naam toont het aantal diensten van dit type dat iemand al heeft, ten opzichte van het eigen streefbereik"
                   >
                     (aantal / streefbereik) ⓘ
                   </div>

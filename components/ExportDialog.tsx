@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { deadlineTekst } from '@/lib/verzendlijst';
 
 export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
@@ -43,9 +44,9 @@ interface Props {
   initialType?: ExportType;
 }
 
+/** Written the way the mails write it (lib/verzendlijst.ts), weekday included. */
 function formatDeadline(deadline: string): string {
-  const d = new Date(deadline);
-  return isNaN(d.getTime()) ? deadline : d.toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
+  return isNaN(new Date(deadline).getTime()) ? deadline : deadlineTekst(deadline);
 }
 
 export function ExportDialog({

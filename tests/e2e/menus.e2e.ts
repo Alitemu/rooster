@@ -77,7 +77,7 @@ test.describe('Keuzemenu’s sluiten na een keuze', () => {
     test('kalender: menu sluit na kiezen + reden + Bevestigen', async ({ page }) => {
       await openRoster(page);
       await page.getByRole('button', { name: /Kalender/ }).click();
-      const cell = page.locator('[title*="rechtsklik om te wijzigen"]').first();
+      const cell = page.locator('[title*="klik om te wijzigen"]').first();
       await expect(cell).toBeVisible();
       await cell.click({ button: 'right' });
       const menu = page.getByRole('menu');
@@ -91,13 +91,21 @@ test.describe('Keuzemenu’s sluiten na een keuze', () => {
       await expect(page.getByRole('menu')).toHaveCount(0, { timeout: 5000 });
     });
 
+    // A phone has no right-click: a plain click (a tap) opens the same menu.
+    test('kalender: een gewone klik opent het menu ook', async ({ page }) => {
+      await openRoster(page);
+      await page.getByRole('button', { name: /Kalender/ }).click();
+      await page.locator('[title*="klik om te wijzigen"]').first().click();
+      await expect(page.getByRole('menu')).toBeVisible();
+    });
+
     // The menu sits at a fixed pixel position, so really scrolling the page
     // away still closes it - only the small scroll right after opening
     // (momentum, the browser bringing the day into view) doesn't.
     test('kalender: menu sluit wel als de pagina echt wegscrollt', async ({ page }) => {
       await openRoster(page);
       await page.getByRole('button', { name: /Kalender/ }).click();
-      const cell = page.locator('[title*="rechtsklik om te wijzigen"]').first();
+      const cell = page.locator('[title*="klik om te wijzigen"]').first();
       await cell.click({ button: 'right' });
       await expect(page.getByRole('menu')).toBeVisible();
       await page.evaluate(() => window.scrollBy(0, 10));

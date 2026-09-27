@@ -394,9 +394,10 @@ rec('No horizontal page overflow at 375px once the roster panel is shown', mobil
 
 await mpage.click('button:has-text("Kalender")');
 await mpage.waitForTimeout(800);
-const mobileCell = mpage.locator('[role="button"][title*="rechtsklik"]').first();
+// A phone has no right-click: a plain click (a tap) opens the menu.
+const mobileCell = mpage.locator('[role="button"][title*="klik om"]').first();
 await mobileCell.scrollIntoViewIfNeeded();
-await mobileCell.click({ button: 'right' });
+await mobileCell.click();
 await mpage.waitForTimeout(500);
 const mobileMenu = mpage.locator('[role="menu"]');
 const scrollTopBefore = await mobileMenu.evaluate((el) => el.scrollTop).catch(() => null);
@@ -549,8 +550,8 @@ if (rosterPeriod) {
   rec('…en die wissel is weer ongedaan gemaakt', (await undoLast()) === 200);
 
   await page.locator('button:has-text("📅 Kalender")').click();
-  await page.waitForSelector('[title*="rechtsklik om te wijzigen"]');
-  const filled = page.locator('[title*="rechtsklik om te wijzigen"]');
+  await page.waitForSelector('[title*="klik om te wijzigen"]');
+  const filled = page.locator('[title*="klik om te wijzigen"]');
   const lateCell = filled.nth((await filled.count()) - 5);
   await lateCell.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);

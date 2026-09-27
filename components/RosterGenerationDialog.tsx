@@ -328,7 +328,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
             const notDone = (stats.not_started || 0) + (stats.in_progress || 0);
             setNotReadyWarning(
               notDone > 0
-                ? `${notDone} ${notDone === 1 ? 'personeelslid heeft zijn/haar voorkeuren' : 'personeelsleden hebben hun voorkeuren'} nog niet bevestigd en de deadline is nog niet verstreken. Genereer je nu, dan tellen hun voorkeuren mogelijk niet (volledig) mee.`
+                ? `${notDone} ${notDone === 1 ? 'personeelslid heeft de voorkeuren' : 'personeelsleden hebben hun voorkeuren'} nog niet bevestigd en de deadline is nog niet verstreken. Genereer je nu, dan tellen hun voorkeuren mogelijk niet (volledig) mee.`
                 : null
             );
           })

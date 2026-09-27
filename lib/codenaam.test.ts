@@ -58,6 +58,12 @@ describe('validateCodenaam', () => {
     }
   });
 
+  it('rejects an e-mail address, which the app must never store', () => {
+    const result = validateCodenaam('jan@ziekenhuis.nl');
+    expect(result.valid).toBe(false);
+    if (!result.valid) expect(result.message).toContain('geen e-mailadres');
+  });
+
   it('still allows the punctuation real pseudonyms use', () => {
     for (const input of ['Persoon-01', 'AIOS 3', "O'Hara-01", 'Arts_A', 'Persoon (nacht)']) {
       expect(validateCodenaam(input).valid, input).toBe(true);
