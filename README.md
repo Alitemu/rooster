@@ -54,8 +54,8 @@ npm run test
 
 Na `npm run seed`:
 
-- **Planner:** codenaam `planner` (kleine letters - inloggen is
-  hoofdlettergevoelig), wachtwoord zoals gezet in `DEFAULT_TEST_PASSWORD`
+- **Planner en beheerder:** codenamen `planner` en `admin` (hoofdletters
+  maken bij het inloggen niet uit), wachtwoord zoals gezet in `DEFAULT_TEST_PASSWORD`
   (`lib/seedPassword.ts`) - wijzig dit voordat de app voor een echte
   afdeling gebruikt wordt. De server waarschuwt bij elke start zolang een
   account dit standaardwachtwoord nog heeft.
@@ -288,9 +288,9 @@ tot een named volume. Bij een eigen `DATA_DIR` moet die map zelf van
 tevoren worden aangemaakt.
 
 `SEED_ON_START` staat standaard op `planner`: de eerste keer dat `DATA_DIR`
-(zie `.env.example`) leeg is, maakt de app alleen het planneraccount
-(codenaam `planner`), de pool, de soorten diensten en de berichtteksten
-aan. Er komen geen voorbeelddeelnemers of voorbeeldperiode bij. Veilig om
+(zie `.env.example`) leeg is, maakt de app alleen het beheerdersaccount
+(codenaam `admin`), de pool, de soorten diensten en de berichtteksten
+aan. De beheerder maakt daarna zelf de planners aan. Er komen geen voorbeelddeelnemers of voorbeeldperiode bij. Veilig om
 aan te laten staan bij herstarts en herinstallaties, want het gebeurt maar
 één keer, op een echt verse database. Zet `SEED_ON_START=true` in `.env`
 voor een testinstallatie met voorbeelddata.
@@ -458,10 +458,11 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
 
 1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist).
 2. **Een schone start:** dat is de standaard (`SEED_ON_START=planner`).
-   De app maakt alleen het planneraccount, de pool, de soorten diensten en
-   de berichtteksten aan, zonder voorbeelddeelnemers of voorbeeldperiode.
-   Bij de eerste keer inloggen kies je een eigen
-   wachtwoord. Deelnemers voeg je toe via de pagina van de pool.
+   De app maakt alleen het beheerdersaccount `admin`, de pool, de soorten
+   diensten en de berichtteksten aan, zonder voorbeelddeelnemers of
+   voorbeeldperiode. Bij de eerste keer inloggen kies je een eigen
+   wachtwoord. Planners maak je aan bij *Accounts beheren*, deelnemers voeg
+   je toe via de pagina van de pool.
 3. **Back-ups:** de app maakt elke dag zelf een kopie van de database in
    `data/backups/database/` (`rooster-JJJJ-MM-DD.db`) en bewaart de laatste
    14. Zo'n kopie is compleet, ook terwijl de app draait. Kopieer
@@ -506,7 +507,7 @@ de stroom al gebouwd?".
 ### Beveiliging
 
 - **Geen inloggegevens in de repository** (`.env` staat in `.gitignore`)
-- **Startwachtwoord:** het wachtwoord dat de seed voor `planner` instelt,
+- **Startwachtwoord:** het wachtwoord dat de seed voor `admin` instelt,
   staat openbaar in deze repository. Wie ermee inlogt, moet eerst een eigen
   wachtwoord kiezen en kan daarvoor niets anders.
 - **TOTP-tweestapsverificatie** voor planner/beheerder, zelf te beheren.
@@ -520,9 +521,9 @@ de stroom al gebouwd?".
   inlogpagina. De app kent geen e-mailadres om een link naar te sturen, en
   een herstel dat iedereen op de inlogpagina kan starten, is ook een weg
   naar binnen. Wie bij de NAS kan, zet een nieuw wachtwoord met
-  `docker compose exec -u node web npx tsx scripts/reset-password.ts planner`.
+  `docker compose exec -u node web npx tsx scripts/reset-password.ts <codenaam>`.
   Het script vraagt het nieuwe wachtwoord twee keer, zonder het te tonen.
-  Daarvoor gelden dezelfde regels als in de app. De planner wordt overal
+  Daarvoor gelden dezelfde regels als in de app. Het account wordt overal
   uitgelogd en de wijziging staat in de wijzigingsgeschiedenis.
   Tweestapsverificatie blijft aan. Is ook de telefoon weg, draai dan daarna
   ook `reset-totp.ts`. Is er een beheerder, dan kan die dit ook in de app
@@ -531,15 +532,18 @@ de stroom al gebouwd?".
   daarnaast de accounts, bij *Accounts beheren* op de lijst met periodes:
   een planner of beheerder toevoegen, iemand een tijdelijk wachtwoord geven,
   tweestapsverificatie uitzetten, een account uitschakelen of de rol
-  wijzigen. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
+  wijzigen. Bij een nieuw account kies je ook de dienst: Achterwacht of
+  AIOS. Het rooster voor de AIOS is nog niet in productie. Kies je AIOS,
+  dan meldt de app dat en maakt hij het account niet aan. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
   vervangen, en de sessies van dat account worden beëindigd. Je eigen
   account beheer je met *Wachtwoord wijzigen* en *Tweestapsverificatie*.
-  Een installatie heeft standaard twee accounts: `planner` en de beheerder
-  `admin`, allebei met het startwachtwoord. Log na de eerste start of de
-  update meteen met beide in en kies een eigen wachtwoord: tot dan kan
-  iedereen die de inlogpagina bereikt het account claimen. (Een installatie
-  die al een beheerder heeft, krijgt geen `admin` erbij.) Zijn beide
-  wachtwoorden vergeten, dan is er op de server
+  Een nieuwe installatie begint met één account: de beheerder `admin`, met
+  het startwachtwoord. Log meteen na de eerste start in en kies een eigen
+  wachtwoord: tot dan kan iedereen die de inlogpagina bereikt het account
+  claimen. Daarna maak je de planners aan, met een naam naar keuze. Een
+  bestaande installatie houdt haar `planner` en krijgt `admin` erbij als
+  er nog geen beheerder is. `planner` kun je daarna uitschakelen bij
+  *Accounts beheren*. Zijn alle wachtwoorden vergeten, dan is er op de server
   `docker compose exec -u node web npx tsx scripts/reset-password.ts admin`,
   en met
   `docker compose exec -u node web npx tsx scripts/create-account.ts <codenaam>`

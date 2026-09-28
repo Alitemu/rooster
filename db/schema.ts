@@ -37,6 +37,10 @@ export const person = sqliteTable(
     // (/api/admin/accounts): the next login may only choose a new one, like
     // a login with the seed password. Cleared by change-password.
     wachtwoord_moet_wijzigen: integer('wachtwoord_moet_wijzigen', { mode: 'boolean' }).default(false).notNull(),
+    // Staff accounts only: which kind of dienst they plan (lib/staffAccounts.ts
+    // DIENST_TYPES). Only ACHTERWACHT is in production; AIOS is offered but
+    // refused until it is. NULL for participants.
+    dienst_type: text('dienst_type'),
     aangemaakt_op: text('aangemaakt_op').notNull().$defaultFn(() => new Date().toISOString()),
   }
 );

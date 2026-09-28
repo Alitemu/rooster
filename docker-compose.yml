@@ -83,8 +83,8 @@ services:
       # The app logs a warning on every start while the seeded password is
       # still in place.
       #
-      # Defaults to planner: the planner account, pool, shift types and
-      # notice wording, no demo participants or period, so a production
+      # Defaults to planner: the beheerder account "admin", pool, shift types
+      # and notice wording, no demo participants or period, so a production
       # installation never gets demo data by accident. A test installation
       # sets SEED_ON_START=true in .env for the demo data.
       SEED_ON_START: "${SEED_ON_START:-planner}"
@@ -99,7 +99,7 @@ services:
       # auto-detection by always giving the app *something*, even when the
       # operator never set BASE_URL themselves.
       BASE_URL: "${BASE_URL:-}"
-      # Optional override for the seeded planner account's password - see
+      # Optional override for the first seeded account's password - see
       # .env.example. Only has an effect on an account with no password
       # yet. Left unset (the default), docker-entrypoint.sh's claim-password
       # step is skipped entirely.

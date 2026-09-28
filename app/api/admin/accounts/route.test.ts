@@ -180,4 +180,24 @@ describe('/api/admin/accounts', () => {
       for (const o of others) db.prepare('UPDATE dienstrooster_person SET actief = 1 WHERE id = ?').run(o.id);
     }
   });
+
+  it('stores the chosen dienst and refuses AIOS until it is in production', async () => {
+    const admin = await account('ADMIN');
+    const aios = await POST(
+      req('/api/admin/accounts', admin.id, 'POST', { codenaam: `AIOS-${crypto.randomUUID().slice(0, 6)}`, rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type: 'AIOS' })
+    );
+    expect(aios.status).toBe(409);
+    expect((await aios.json()).error.message).toContain('nog niet in productie');
+
+    const codenaam = `AW-${crypto.randomUUID().slice(0, 6)}`;
+    const ok = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam, rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type: 'ACHTERWACHT' }));
+    expect(ok.status).toBe(201);
+    const id = (await ok.json()).data.id;
+    created.push(id);
+    const list = await (await GET(req('/api/admin/accounts', admin.id))).json();
+    expect(list.data.find((a: { id: string }) => a.id === id).dienst_type).toBe('ACHTERWACHT');
+
+    const wrong = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: 'x-onbekend', rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type: 'NEURO' }));
+    expect(wrong.status).toBe(400);
+  });
 });

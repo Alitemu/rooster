@@ -1,7 +1,8 @@
 /**
  * GET  /api/admin/accounts - the staff accounts (ADMIN only).
- * POST /api/admin/accounts - { codenaam, rol: 'PLANNER' | 'ADMIN', wachtwoord }
- *   adds one with a temporary password (lib/staffAccounts.ts).
+ * POST /api/admin/accounts - { codenaam, rol: 'PLANNER' | 'ADMIN', wachtwoord, dienst_type? }
+ *   adds one with a temporary password (lib/staffAccounts.ts). dienst_type
+ *   ACHTERWACHT (the default) or AIOS, which is refused until it is in production.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -22,11 +23,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requireAdminAccess(auth)) return unauthorizedResponse();
-    const body = await parseJsonBody<{ codenaam?: unknown; rol?: unknown; wachtwoord?: unknown }>(req);
+    const body = await parseJsonBody<{ codenaam?: unknown; rol?: unknown; wachtwoord?: unknown; dienst_type?: unknown }>(req);
     const result = await createStaffAccount(auth!.userId, {
       codenaam: body?.codenaam,
       rol: body?.rol,
       wachtwoord: body?.wachtwoord,
+      dienst_type: body?.dienst_type,
     });
     if (!result.ok) {
       return NextResponse.json({ success: false, error: { code: result.code, message: result.message } }, { status: result.status });

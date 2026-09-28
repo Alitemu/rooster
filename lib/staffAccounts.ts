@@ -23,6 +23,17 @@ import { revokeAllSessions } from './sessionVersion';
 
 export type StaffRol = 'ADMIN' | 'PLANNER';
 
+/**
+ * The kind of dienst a staff account plans. Offered now so accounts are
+ * ready for a second rooster later; only the achterwacht is in production,
+ * so an AIOS account is refused with a message saying so.
+ */
+export const DIENST_TYPES = ['ACHTERWACHT', 'AIOS'] as const;
+export type DienstType = (typeof DIENST_TYPES)[number];
+export const DIENSTEN_IN_PRODUCTIE: readonly DienstType[] = ['ACHTERWACHT'];
+export const DIENST_NIET_IN_PRODUCTIE =
+  'Het rooster voor de AIOS is nog niet in productie. Kies voorlopig Achterwacht.';
+
 export interface StaffAccount {
   id: string;
   codenaam: string;
@@ -31,6 +42,7 @@ export interface StaffAccount {
   tweestapsverificatie: boolean;
   wachtwoord_ingesteld: boolean;
   wachtwoord_moet_wijzigen: boolean;
+  dienst_type: DienstType | null;
 }
 
 export type AccountResult = { ok: true } | { ok: false; status: number; code: string; message: string };
@@ -41,7 +53,7 @@ export function listStaffAccounts(): StaffAccount[] {
   return (
     db
       .prepare(
-        `SELECT id, codenaam, rol, actief, totp_secret, wachtwoord_hash, wachtwoord_moet_wijzigen
+        `SELECT id, codenaam, rol, actief, totp_secret, wachtwoord_hash, wachtwoord_moet_wijzigen, dienst_type
          FROM dienstrooster_person WHERE rol IN ('ADMIN', 'PLANNER') ORDER BY rol, codenaam`
       )
       .all() as Array<{
@@ -52,6 +64,7 @@ export function listStaffAccounts(): StaffAccount[] {
       totp_secret: string | null;
       wachtwoord_hash: string | null;
       wachtwoord_moet_wijzigen: number;
+      dienst_type: DienstType | null;
     }>
   ).map((r) => ({
     id: r.id,
@@ -61,6 +74,7 @@ export function listStaffAccounts(): StaffAccount[] {
     tweestapsverificatie: Boolean(r.totp_secret),
     wachtwoord_ingesteld: Boolean(r.wachtwoord_hash),
     wachtwoord_moet_wijzigen: Boolean(r.wachtwoord_moet_wijzigen),
+    dienst_type: r.dienst_type,
   }));
 }
 
@@ -106,11 +120,16 @@ function activeAdminCount(): number {
 
 export async function createStaffAccount(
   actorId: string,
-  input: { codenaam: unknown; rol: unknown; wachtwoord: unknown }
+  input: { codenaam: unknown; rol: unknown; wachtwoord: unknown; dienst_type?: unknown }
 ): Promise<AccountResult & { id?: string }> {
   const naam = validateCodenaam(input.codenaam);
   if (!naam.valid) return fail(400, 'INVALID_CODENAAM', naam.message);
   if (input.rol !== 'ADMIN' && input.rol !== 'PLANNER') return fail(400, 'INVALID_ROL', 'Kies planner of beheerder');
+  const dienst = input.dienst_type ?? 'ACHTERWACHT';
+  if (!DIENST_TYPES.includes(dienst as DienstType)) return fail(400, 'INVALID_DIENST', 'Kies Achterwacht of AIOS');
+  if (!DIENSTEN_IN_PRODUCTIE.includes(dienst as DienstType)) {
+    return fail(409, 'DIENST_NIET_IN_PRODUCTIE', DIENST_NIET_IN_PRODUCTIE);
+  }
   const problems = temporaryPasswordProblems(input.wachtwoord);
   if (problems.length > 0) return fail(400, 'WEAK_PASSWORD', problems.join(', '));
   // Staff log in without regard to case, so "Planner" next to "planner"
@@ -122,10 +141,11 @@ export async function createStaffAccount(
   const id = crypto.randomUUID();
   db.transaction(() => {
     db.prepare(
-      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, wachtwoord_moet_wijzigen, aangemaakt_op)
-       VALUES (?, ?, ?, 1, ?, 1, ?)`
-    ).run(id, naam.codenaam, input.rol, hash, new Date().toISOString());
-    audit(actorId, id, { wijziging: 'account aangemaakt', rol: input.rol });
+      `INSERT INTO dienstrooster_person
+         (id, codenaam, rol, actief, wachtwoord_hash, wachtwoord_moet_wijzigen, dienst_type, aangemaakt_op)
+       VALUES (?, ?, ?, 1, ?, 1, ?, ?)`
+    ).run(id, naam.codenaam, input.rol, hash, dienst, new Date().toISOString());
+    audit(actorId, id, { wijziging: 'account aangemaakt', rol: input.rol, dienst_type: dienst });
   })();
   return { ok: true, id };
 }

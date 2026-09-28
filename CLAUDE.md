@@ -463,10 +463,16 @@ Show live in settings screen with interpretation in plain Dutch/English.
      "tijdelijk wachtwoord"), change-password clears it. Every change
      revokes that account's sessions and is audit-logged without password
      material. Never one's own account (409), never the last active admin.
-     The seed creates 'admin' (ADMIN) next to 'planner', both with the
-     seed password, so both must choose their own at the first login
-     (ensureAdminAccount; also added to an existing database at the next
-     start, but only while it has no ADMIN at all). The backup on the
+     A staff account has a `dienst_type` (migration 0022; DIENST_TYPES
+     ACHTERWACHT | AIOS, lib/staffAccounts.ts): the admin picks it when
+     adding an account, AIOS is offered but refused with "nog niet in
+     productie" (409 DIENST_NIET_IN_PRODUCTIE; the page shows the notice
+     and disables Toevoegen) until it is. A production start
+     (--alleen-planner) creates only 'admin' (ADMIN, seed password or
+     SEED_PLANNER_PASSWORD), who adds the planners with names of their own;
+     the demo seed also creates 'planner', which the browser checks log in
+     as. ensureAdminAccount also adds 'admin' to an existing database at the
+     next start while it has no ADMIN at all; an existing 'planner' stays. The backup on the
      server: scripts/reset-password.ts, and `scripts/create-account.ts
      <codenaam> [--planner | --beheerder]` (hidden prompt,
      scripts/hiddenPrompt.ts; --beheerder promotes an existing planner).
@@ -679,7 +685,7 @@ date), from the hourly scheduler, keeping the newest 14 - a plain file copy
 of a WAL database misses what is still in -wal. The key for everything stored
 encrypted (`<db dir>/.session_secret`, or SESSION_SECRET) is deliberately
 not in it; the README tells the operator to keep it apart. SEED_ON_START=planner runs
-`scripts/seed.ts --alleen-planner`: planner account, ruleset, pool, shift
+`scripts/seed.ts --alleen-planner`: beheerder account admin, ruleset, pool, shift
 types and notification templates, no demo people or period (the
 production start and compose's default; true adds the demo data); a rerun
 on a seeded database only upgrades the schema.

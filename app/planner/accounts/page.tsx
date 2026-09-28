@@ -20,7 +20,13 @@ interface Account {
   tweestapsverificatie: boolean;
   wachtwoord_ingesteld: boolean;
   wachtwoord_moet_wijzigen: boolean;
+  dienst_type: 'ACHTERWACHT' | 'AIOS' | null;
 }
+
+// Mirrors lib/staffAccounts.ts DIENST_TYPES / DIENSTEN_IN_PRODUCTIE (that
+// module reads the database, so it can't be imported here).
+const DIENST_LABEL: Record<'ACHTERWACHT' | 'AIOS', string> = { ACHTERWACHT: 'Achterwacht', AIOS: 'AIOS' };
+const DIENST_IN_PRODUCTIE: Record<'ACHTERWACHT' | 'AIOS', boolean> = { ACHTERWACHT: true, AIOS: false };
 
 const ROL_LABEL: Record<Account['rol'], string> = { ADMIN: 'Beheerder', PLANNER: 'Planner' };
 
@@ -54,7 +60,12 @@ export default function AccountsPage() {
   const [error, setError] = useState<string | null>(null);
   const [melding, setMelding] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [nieuw, setNieuw] = useState({ codenaam: '', rol: 'PLANNER' as Account['rol'], wachtwoord: '' });
+  const [nieuw, setNieuw] = useState({
+    codenaam: '',
+    rol: 'PLANNER' as Account['rol'],
+    dienst_type: 'ACHTERWACHT' as 'ACHTERWACHT' | 'AIOS',
+    wachtwoord: '',
+  });
   // The temporary password just set, shown once so it can be passed on.
   const [getoond, setGetoond] = useState<{ codenaam: string; wachtwoord: string } | null>(null);
   const [resetVoor, setResetVoor] = useState<{ id: string; wachtwoord: string } | null>(null);
@@ -97,11 +108,11 @@ export default function AccountsPage() {
   const addAccount = async () => {
     const ok = await run(
       () => send('/api/admin/accounts', 'POST', nieuw),
-      `${nieuw.codenaam.trim()} is toegevoegd als ${ROL_LABEL[nieuw.rol].toLowerCase()}.`
+      `${nieuw.codenaam.trim()} is toegevoegd als ${ROL_LABEL[nieuw.rol].toLowerCase()} voor de achterwacht.`
     );
     if (ok) {
       setGetoond({ codenaam: nieuw.codenaam.trim(), wachtwoord: nieuw.wachtwoord });
-      setNieuw({ codenaam: '', rol: 'PLANNER', wachtwoord: '' });
+      setNieuw({ codenaam: '', rol: 'PLANNER', dienst_type: 'ACHTERWACHT', wachtwoord: '' });
     }
   };
 
@@ -138,6 +149,7 @@ export default function AccountsPage() {
           beheert daarnaast deze accounts. Een nieuw account of een gereset wachtwoord krijgt een
           tijdelijk wachtwoord. Bij de eerste keer inloggen kiest die persoon zelf een nieuw
           wachtwoord. Je eigen account beheer je met Wachtwoord wijzigen en Tweestapsverificatie.
+          Elk account hoort bij een dienst. Voorlopig is alleen de achterwacht in productie.
         </p>
       </div>
 
@@ -168,6 +180,7 @@ export default function AccountsPage() {
             <tr>
               <th className="px-3 py-2 text-left">Codenaam</th>
               <th className="px-3 py-2 text-left">Rol</th>
+              <th className="px-3 py-2 text-left">Dienst</th>
               <th className="px-3 py-2 text-left">Status</th>
               <th className="px-3 py-2 text-left">Tweestapsverificatie</th>
               <th className="px-3 py-2 text-left">Acties</th>
@@ -203,6 +216,7 @@ export default function AccountsPage() {
                       </select>
                     )}
                   </td>
+                  <td className="px-3 py-2">{a.dienst_type ? DIENST_LABEL[a.dienst_type] : 'Achterwacht'}</td>
                   <td className="px-3 py-2">
                     {!a.actief
                       ? 'Uitgeschakeld'
@@ -279,7 +293,7 @@ export default function AccountsPage() {
 
       <div className="card p-6 space-y-3">
         <p className="text-sm font-medium text-neutral-800">Nieuw account</p>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
           <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-codenaam">
               Codenaam
@@ -308,6 +322,20 @@ export default function AccountsPage() {
             </select>
           </div>
           <div>
+            <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-dienst">
+              Dienst
+            </label>
+            <select
+              id="nieuw-dienst"
+              value={nieuw.dienst_type}
+              onChange={(e) => setNieuw({ ...nieuw, dienst_type: e.target.value as 'ACHTERWACHT' | 'AIOS' })}
+              className="w-full px-2 py-2 border rounded text-sm"
+            >
+              <option value="ACHTERWACHT">Achterwacht</option>
+              <option value="AIOS">AIOS (nog niet in productie)</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-wachtwoord">
               Tijdelijk wachtwoord
             </label>
@@ -330,12 +358,18 @@ export default function AccountsPage() {
           </div>
           <button
             className="btn-primary"
-            disabled={busy || !nieuw.codenaam.trim() || !nieuw.wachtwoord}
+            disabled={busy || !nieuw.codenaam.trim() || !nieuw.wachtwoord || !DIENST_IN_PRODUCTIE[nieuw.dienst_type]}
             onClick={addAccount}
           >
             Toevoegen
           </button>
         </div>
+        {!DIENST_IN_PRODUCTIE[nieuw.dienst_type] && (
+          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-300 rounded p-3" role="status" data-testid="dienst-niet-in-productie">
+            Het rooster voor de AIOS is nog niet in productie. Een account voor de AIOS kun je daarom
+            nog niet aanmaken. Kies voorlopig Achterwacht.
+          </p>
+        )}
       </div>
     </div>
   );

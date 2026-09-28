@@ -110,7 +110,8 @@ async function createTables() {
       totp_secret TEXT,
       sessie_versie INTEGER NOT NULL DEFAULT 1,
       aangemaakt_op TEXT NOT NULL,
-      wachtwoord_moet_wijzigen INTEGER NOT NULL DEFAULT 0
+      wachtwoord_moet_wijzigen INTEGER NOT NULL DEFAULT 0,
+      dienst_type TEXT
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_person_access_link (
@@ -570,6 +571,7 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_person: {
     sessie_versie: 'INTEGER NOT NULL DEFAULT 1',
     wachtwoord_moet_wijzigen: 'INTEGER NOT NULL DEFAULT 0',
+    dienst_type: 'TEXT',
   },
   dienstrooster_swap_request: {
     reden_afwijzing: 'TEXT',
@@ -612,6 +614,9 @@ const LATER_COLUMN_BACKFILL: Record<string, string> = {
       WHERE verwijderd_op IS NULL AND status != 'CONCEPT' AND basis_url IS NOT NULL
       ORDER BY start_datum DESC LIMIT 1
     )`,
+  // Every staff account so far planned the achterwacht.
+  'dienstrooster_person.dienst_type': `
+    UPDATE dienstrooster_person SET dienst_type = 'ACHTERWACHT' WHERE rol IN ('ADMIN', 'PLANNER')`,
   'dienstrooster_schedule_period.definitief_op': `
     UPDATE dienstrooster_schedule_period
     SET definitief_op = gepubliceerd_op, definitief_door_person_id = gepubliceerd_door_person_id
@@ -689,14 +694,14 @@ function refreshRewordedTemplates() {
  * at all: an installation that already has a beheerder gets no second one.
  * Returns whether it was added.
  */
-async function ensureAdminAccount(): Promise<boolean> {
+async function ensureAdminAccount(passwordHash?: string): Promise<boolean> {
   const hasAdmin = db.prepare(`SELECT 1 FROM dienstrooster_person WHERE rol = 'ADMIN' LIMIT 1`).get();
   const nameTaken = db.prepare(`SELECT 1 FROM dienstrooster_person WHERE codenaam = 'admin' COLLATE NOCASE`).get();
   if (hasAdmin || nameTaken) return false;
   db.prepare(
-    `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
-     VALUES (?, 'admin', 'ADMIN', 1, ?, ?)`
-  ).run(uuid(), await hashPassword(DEFAULT_TEST_PASSWORD), new Date().toISOString());
+    `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, dienst_type, aangemaakt_op)
+     VALUES (?, 'admin', 'ADMIN', 1, ?, 'ACHTERWACHT', ?)`
+  ).run(uuid(), passwordHash ?? (await hashPassword(DEFAULT_TEST_PASSWORD)), new Date().toISOString());
   return true;
 }
 
@@ -708,10 +713,14 @@ function logAdminAdded() {
   );
 }
 
-/** True once a previous seed run has populated this database. */
+/**
+ * True once a previous seed run has populated this database: it has a
+ * staff account. (A production start creates only 'admin'; an installation
+ * from before that has 'planner'.)
+ */
 function alreadySeeded(): boolean {
   const row = db
-    .prepare(`SELECT COUNT(*) as count FROM dienstrooster_person WHERE codenaam = 'planner'`)
+    .prepare(`SELECT COUNT(*) as count FROM dienstrooster_person WHERE rol IN ('ADMIN', 'PLANNER')`)
     .get() as { count: number };
   return row.count > 0;
 }
@@ -868,7 +877,7 @@ async function seed() {
         console.log('Added the default beheerder account:');
         logAdminAdded();
       } else {
-        console.log('The planner account already exists; nothing else to do.');
+        console.log('Staff accounts already exist; nothing else to do.');
       }
       return;
     }
@@ -887,25 +896,24 @@ async function seed() {
 
     const now = new Date().toISOString();
 
-    // 1. Create planner user, with DEFAULT_TEST_PASSWORD already set (see
-    // the warning on that constant above). /planner/login's "first run"
-    // form (app/api/auth/first-run-setup/route.ts) only ever acts on an
-    // account whose wachtwoord_hash is still NULL, so it has nothing left
-    // to do here - log in directly with the password above.
-    //
-    // Codenaam is lowercase 'planner' by explicit request - login is
-    // case-sensitive, so this is what gets typed at /planner/login. The
-    // beheerder 'admin' comes right after (ensureAdminAccount).
-    console.log('Creating planner user...');
+    // 1. The staff accounts. A production start (--alleen-planner) creates
+    // only the beheerder 'admin', who adds the planners (with a name of
+    // their own) under Accounts beheren. The demo data also creates
+    // 'planner', which the browser checks and e2e suite log in as.
+    // SEED_PLANNER_PASSWORD, when set, is the first account's own password
+    // instead of the public seed password (see the warning on that
+    // constant above); otherwise the first login must choose one.
+    const { hash: firstPasswordHash, usedOverride: plannerPasswordFromEnv } = await resolvePlannerPassword();
     const plannerId = uuid();
-    const { hash: plannerPasswordHash, usedOverride: plannerPasswordFromEnv } = await resolvePlannerPassword();
+    if (!alleenPlanner) {
+      console.log('Creating planner user...');
+      db.prepare(`
+        INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, dienst_type, aangemaakt_op)
+        VALUES (?, ?, ?, ?, ?, 'ACHTERWACHT', ?)
+      `).run(plannerId, 'planner', 'PLANNER', 1, firstPasswordHash, now);
+    }
 
-    db.prepare(`
-      INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(plannerId, 'planner', 'PLANNER', 1, plannerPasswordHash, now);
-
-    const adminAdded = await ensureAdminAccount();
+    const adminAdded = await ensureAdminAccount(alleenPlanner ? firstPasswordHash : undefined);
 
     // Only when the account still needs the interactive /planner/login
     // "first run" form - SEED_PLANNER_PASSWORD already claimed it above,
@@ -1018,14 +1026,15 @@ async function seed() {
 
     if (alleenPlanner) {
       createNotificationTemplates();
-      console.log('\n✅ Planner account, pool, shift types and notice wording created (no demo data).');
-      console.log(
-        plannerPasswordFromEnv
-          ? '  Planner: planner / password from SEED_PLANNER_PASSWORD'
-          : '  Planner: planner / the seed password. The app asks for a new one at the first login.'
-      );
-      if (adminAdded) console.log('  Beheerder: admin / the seed password. The app asks for a new one at the first login.');
-      console.log('  Add participants under the pool\'s staff page, then create a period.');
+      console.log('\n✅ Beheerder account, pool, shift types and notice wording created (no demo data).');
+      if (adminAdded) {
+        console.log(
+          plannerPasswordFromEnv
+            ? '  Beheerder: admin / password from SEED_PLANNER_PASSWORD'
+            : '  Beheerder: admin / the seed password. The app asks for a new one at the first login.'
+        );
+      }
+      console.log('  Add planners under Accounts beheren, participants under the pool\'s staff page, then create a period.');
       return;
     }
 

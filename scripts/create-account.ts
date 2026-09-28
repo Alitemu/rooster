@@ -90,8 +90,8 @@ async function main() {
     const id = crypto.randomUUID();
     db.transaction(() => {
       db.prepare(
-        `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
-         VALUES (?, ?, ?, 1, ?, ?)`
+        `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, dienst_type, aangemaakt_op)
+         VALUES (?, ?, ?, 1, ?, 'ACHTERWACHT', ?)`
       ).run(id, naam.codenaam, rol, hash, new Date().toISOString());
       audit(db, id, { wijziging: 'account aangemaakt op de server', rol });
     })();
