@@ -45,8 +45,8 @@ function main() {
   const db = new Database(resolveDbPath());
   try {
     const person = db
-      .prepare(`SELECT id, totp_secret FROM dienstrooster_person WHERE codenaam = ? AND rol IN ('ADMIN', 'PLANNER')`)
-      .get(codenaam) as { id: string; totp_secret: string | null } | undefined;
+      .prepare(`SELECT id, totp_secret FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE AND rol IN ('ADMIN', 'PLANNER') ORDER BY codenaam = ? DESC LIMIT 1`)
+      .get(codenaam, codenaam) as { id: string; totp_secret: string | null } | undefined;
     if (!person) {
       console.error(`${codenaam}: geen planner met deze codenaam.`);
       process.exit(1);

@@ -75,9 +75,10 @@ async function main() {
     const person = db
       .prepare(
         `SELECT id, wachtwoord_hash FROM dienstrooster_person
-         WHERE codenaam = ? AND rol IN ('ADMIN', 'PLANNER')`
+         WHERE codenaam = ? COLLATE NOCASE AND rol IN ('ADMIN', 'PLANNER')
+         ORDER BY codenaam = ? DESC LIMIT 1`
       )
-      .get(codenaam) as { id: string; wachtwoord_hash: string | null } | undefined;
+      .get(codenaam, codenaam) as { id: string; wachtwoord_hash: string | null } | undefined;
 
     if (!person) {
       console.log(`${codenaam}: account bestaat niet - overgeslagen.`);

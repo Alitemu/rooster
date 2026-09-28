@@ -96,7 +96,7 @@ export function ChangePasswordDialog({ isOpen, onClose }: Props) {
         <div className="border-b p-6 flex-shrink-0">
           <h2 className="text-xl font-bold">Wachtwoord wijzigen</h2>
           <p className="text-sm text-neutral-600 mt-1">
-            Minimaal 12 tekens, met hoofdletters, kleine letters, cijfers en een leesteken.
+            Minimaal 8 tekens, met hoofdletters, kleine letters, cijfers en een leesteken.
           </p>
         </div>
 

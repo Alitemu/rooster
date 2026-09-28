@@ -82,9 +82,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const person = db
       .prepare(
         `SELECT id, wachtwoord_hash FROM dienstrooster_person
-         WHERE codenaam = ? AND rol IN ('ADMIN', 'PLANNER')`
+         WHERE codenaam = ? COLLATE NOCASE AND rol IN ('ADMIN', 'PLANNER')
+         ORDER BY codenaam = ? DESC LIMIT 1`
       )
-      .get(codenaam) as { id: string; wachtwoord_hash: string | null } | undefined;
+      .get(codenaam, codenaam) as { id: string; wachtwoord_hash: string | null } | undefined;
 
     // Same response whether the account doesn't exist or already has a
     // password - a caller probing which accounts are already claimed

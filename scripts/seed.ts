@@ -691,7 +691,7 @@ function refreshRewordedTemplates() {
  */
 async function ensureAdminAccount(): Promise<boolean> {
   const hasAdmin = db.prepare(`SELECT 1 FROM dienstrooster_person WHERE rol = 'ADMIN' LIMIT 1`).get();
-  const nameTaken = db.prepare(`SELECT 1 FROM dienstrooster_person WHERE codenaam = 'admin'`).get();
+  const nameTaken = db.prepare(`SELECT 1 FROM dienstrooster_person WHERE codenaam = 'admin' COLLATE NOCASE`).get();
   if (hasAdmin || nameTaken) return false;
   db.prepare(
     `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)

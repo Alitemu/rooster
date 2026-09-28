@@ -78,4 +78,23 @@ describe('POST /api/auth/staff-login rate limiting', () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it('accepts the codenaam in any case, but still only with the right password', async () => {
+    const planner = await createPlanner();
+    expect((await login(planner.toUpperCase(), PASSWORD)).status).toBe(200);
+    expect((await login(planner.toLowerCase(), PASSWORD)).status).toBe(200);
+    expect((await login(planner.toUpperCase(), 'fout')).status).toBe(401);
+  });
+
+  it('prefers the exact spelling when two staff accounts differ only in case', async () => {
+    const planner = await createPlanner();
+    const other = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
+       VALUES (?, ?, 'PLANNER', 1, ?, datetime('now'))`
+    ).run(other, planner.toUpperCase(), await hashPassword('Ander-Wachtwoord-1!'));
+    createdIds.push(other);
+    expect((await login(planner, PASSWORD)).status).toBe(200);
+    expect((await login(planner.toUpperCase(), 'Ander-Wachtwoord-1!')).status).toBe(200);
+  });
 });

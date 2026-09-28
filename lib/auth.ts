@@ -140,8 +140,8 @@ export function isTokenValid(retractedOn: string | null): boolean {
 export function validatePasswordStrength(password: string): string[] {
   const errors: string[] = [];
 
-  if (password.length < 12) {
-    errors.push('Wachtwoord moet minimaal 12 tekens bevatten');
+  if (password.length < 8) {
+    errors.push('Wachtwoord moet minimaal 8 tekens bevatten');
   }
   if (!/[a-z]/.test(password)) {
     errors.push('Wachtwoord moet kleine letters bevatten');

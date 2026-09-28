@@ -168,7 +168,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
             ))}
 
             <p className="text-xs text-neutral-500 mb-4">
-              Minimaal 12 tekens, met kleine letters, hoofdletters, cijfers en een speciaal teken.
+              Minimaal 8 tekens, met kleine letters, hoofdletters, cijfers en een speciaal teken.
             </p>
 
             {error && <p className="text-sm text-red-600 mb-4">{error}</p>}

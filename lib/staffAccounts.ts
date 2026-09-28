@@ -113,7 +113,9 @@ export async function createStaffAccount(
   if (input.rol !== 'ADMIN' && input.rol !== 'PLANNER') return fail(400, 'INVALID_ROL', 'Kies planner of beheerder');
   const problems = temporaryPasswordProblems(input.wachtwoord);
   if (problems.length > 0) return fail(400, 'WEAK_PASSWORD', problems.join(', '));
-  if (db.prepare('SELECT 1 FROM dienstrooster_person WHERE codenaam = ?').get(naam.codenaam)) {
+  // Staff log in without regard to case, so "Planner" next to "planner"
+  // would make one of them unreachable.
+  if (db.prepare('SELECT 1 FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE').get(naam.codenaam)) {
     return fail(409, 'CODENAAM_TAKEN', 'Deze codenaam is al in gebruik');
   }
   const hash = await hashPassword(input.wachtwoord as string);

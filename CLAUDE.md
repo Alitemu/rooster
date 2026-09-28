@@ -417,7 +417,13 @@ Show live in settings screen with interpretation in plain Dutch/English.
      deliberate manual act, not a side effect of exporting.
 
 2. **Password + TOTP** (planner/admin)
-   - bcrypt (the native binding) for password hashing
+   - bcrypt (the native binding) for password hashing; a password needs 8+
+     characters with lower case, upper case, a digit and a special
+     character (validatePasswordStrength)
+   - The codenaam at login is case-insensitive (COLLATE NOCASE in
+     staff-login, first-run-setup and the server scripts; an exact match
+     wins if two staff accounts differ only in case). New staff accounts
+     can't differ from an existing codenaam only in case.
    - Speakeasy for TOTP generation
    - No email required (pseudonymous)
    - The password is changed through POST /api/auth/change-password

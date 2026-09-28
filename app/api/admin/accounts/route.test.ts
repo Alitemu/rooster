@@ -113,6 +113,8 @@ describe('/api/admin/accounts', () => {
     expect((await add({ codenaam: 'zwak-ww', rol: 'PLANNER', wachtwoord: 'kort' })).status).toBe(400);
     expect((await add({ codenaam: 'iemand@example.org', rol: 'PLANNER', wachtwoord: TIJDELIJK })).status).toBe(400);
     expect((await add({ codenaam: other.codenaam, rol: 'PLANNER', wachtwoord: TIJDELIJK })).status).toBe(409);
+    // Only differing in case would make one of the two unreachable at login.
+    expect((await add({ codenaam: other.codenaam.toLowerCase(), rol: 'PLANNER', wachtwoord: TIJDELIJK })).status).toBe(409);
     expect((await add({ codenaam: 'rare-rol', rol: 'DEELNEMER', wachtwoord: TIJDELIJK })).status).toBe(400);
   });
 

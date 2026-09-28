@@ -59,7 +59,7 @@ async function main() {
   const db = new Database(resolveDbPath());
   try {
     const existing = db
-      .prepare('SELECT id, rol FROM dienstrooster_person WHERE codenaam = ?')
+      .prepare('SELECT id, rol FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE')
       .get(naam.codenaam) as { id: string; rol: string } | undefined;
     if (existing) {
       if (existing.rol === 'PLANNER' && args.includes('--beheerder')) {

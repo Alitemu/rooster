@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { generateTOTPSecret, generateTOTPCode, verifyTOTPCode } from './auth';
+import { generateTOTPSecret, generateTOTPCode, verifyTOTPCode, validatePasswordStrength } from './auth';
 
 /**
  * One rule = one test: a valid TOTP code must be accepted once, and a
@@ -29,5 +29,12 @@ describe('verifyTOTPCode replay protection', () => {
   it('rejects an invalid code', () => {
     const { secret } = generateTOTPSecret('Test Persoon 2');
     expect(verifyTOTPCode(secret, '000000')).toBe(false);
+  });
+});
+
+describe('validatePasswordStrength', () => {
+  it('accepts 8 characters and refuses 7', () => {
+    expect(validatePasswordStrength('Abcde1!x')).toEqual([]);
+    expect(validatePasswordStrength('Abcd1!x')).toContain('Wachtwoord moet minimaal 8 tekens bevatten');
   });
 });

@@ -71,9 +71,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .prepare(
         `SELECT id, codenaam, rol, actief, wachtwoord_hash, totp_secret, wachtwoord_moet_wijzigen
          FROM dienstrooster_person
-         WHERE codenaam = ? AND rol IN ('ADMIN', 'PLANNER')`
+         WHERE codenaam = ? COLLATE NOCASE AND rol IN ('ADMIN', 'PLANNER')
+         ORDER BY codenaam = ? DESC LIMIT 1`
       )
-      .get(codenaam) as
+      .get(codenaam, codenaam) as
       | {
           id: string;
           codenaam: string;
