@@ -624,6 +624,9 @@ const LATER_COLUMN_BACKFILL: Record<string, string> = {
 };
 
 function applyMissingColumns() {
+  // Backfills run once every column is there: one may fill a column added
+  // after its own (definitief_op also sets definitief_door_person_id).
+  const backfills: string[] = [];
   for (const [table, columns] of Object.entries(LATER_COLUMNS)) {
     const existing = new Set(
       (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name)
@@ -633,9 +636,30 @@ function applyMissingColumns() {
       console.log(`  Adding missing column ${table}.${column}`);
       db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
       const backfill = LATER_COLUMN_BACKFILL[`${table}.${column}`];
-      if (backfill) db.exec(backfill);
+      if (backfill) backfills.push(backfill);
     }
   }
+  for (const backfill of backfills) db.exec(backfill);
+  repairDefinitiefBackfill();
+}
+
+/**
+ * 0.7.0 and before ran the definitief_op backfill before
+ * definitief_door_person_id existed, so it failed on its first start and
+ * the next start added the columns without it: a roster published before
+ * the voorlopig stage then showed as voorlopig. Such a roster is
+ * recognisable on every later start: GEPUBLICEERD without definitief_op and
+ * without the snapshot every voorlopig publication stores.
+ */
+function repairDefinitiefBackfill() {
+  const repaired = db
+    .prepare(
+      `UPDATE dienstrooster_schedule_period
+       SET definitief_op = gepubliceerd_op, definitief_door_person_id = gepubliceerd_door_person_id
+       WHERE status = 'GEPUBLICEERD' AND definitief_op IS NULL AND voorlopig_rooster_json IS NULL`
+    )
+    .run().changes;
+  if (repaired > 0) console.log(`  Marked ${repaired} roster(s) published before the voorlopig stage as definitief`);
 }
 
 /**
