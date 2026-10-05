@@ -1,7 +1,7 @@
 /**
  * POST /api/admin/period/[id]/preferences-import - read the preferences
  * overview back in (lib/preferencesImport.ts). A test tool, ADMIN only.
- * Body: { csv: string, toepassen?: boolean }. Without `toepassen` nothing
+ * Body: { bestand: string (the .xlsx as base64), toepassen?: boolean }. Without `toepassen` nothing
  * changes: the response lists what would.
  */
 
@@ -15,8 +15,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requireAdminAccess(auth)) return unauthorizedResponse();
-    const body = (await parseJsonBody(req)) as { csv?: unknown; toepassen?: unknown };
-    const result = importPreferences(auth!.userId, id, body?.csv, body?.toepassen === true);
+    const body = (await parseJsonBody(req)) as { bestand?: unknown; toepassen?: unknown };
+    const result = importPreferences(auth!.userId, id, body?.bestand, body?.toepassen === true);
     if (!result.ok) {
       return NextResponse.json({ success: false, error: { code: result.code, message: result.message } }, { status: result.status });
     }

@@ -1,7 +1,9 @@
 /**
- * Bulk import of the preferences overview (GET /api/exports/preferences):
- * the same grid read back, one row per shift slot, one column per
- * codenaam. A test tool for the beheerder only (POST
+ * Bulk import of the preferences overview (GET /api/exports/preferences)
+ * after it was filled in and saved in Excel: the same grid, one row per
+ * shift slot, one column per codenaam, read from the .xlsx (lib/xlsx.ts).
+ * Only .xlsx: a CSV that Excel re-saves loses its separator or encoding
+ * depending on the machine. A test tool for the beheerder only (POST
  * /api/admin/period/[id]/preferences-import).
  *
  * Only markings made by hand are imported. A cell the export wrote with a
@@ -20,7 +22,7 @@
  */
 
 import { db } from '@/db/client';
-import { parseCsv } from './csv';
+import { readFirstSheet, excelSerialToDate, XlsxError } from './xlsx';
 import { markSubmissionStarted } from './submissionStatus';
 import { syncPatternsForPerson } from './parttimeSync';
 import { syncAbsencesForPerson } from './absenceSync';
@@ -74,10 +76,11 @@ interface Write {
 }
 
 /**
- * Excel turns 2027-01-04 into 4-1-2027 when it opens the file and keeps it
- * that way when it saves, so both are read.
+ * Excel reads 2027-01-04 in the downloaded file as a date and stores it as
+ * its day number; typed as text it can be 2027-01-04 or 4-1-2027.
  */
 export function parseDatum(value: string): string | null {
+  if (/^\d{5}(\.0+)?$/.test(value)) return excelSerialToDate(Number(value));
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (iso) return value;
   const nl = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(value);
@@ -87,19 +90,12 @@ export function parseDatum(value: string): string | null {
   return Number.isNaN(Date.parse(`${datum}T12:00:00Z`)) ? null : datum;
 }
 
-function readGrid(text: string): string[][] {
-  const clean = text.replace(/^﻿/, '');
-  const firstLine = clean.split(/\r?\n/, 1)[0] ?? '';
-  return parseCsv(clean, firstLine.includes(';') ? ';' : ',');
-}
-
-function plan(periodId: string, text: string): { plan: ImportPlan; writes: Write[] } {
+function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: Write[] } {
   const problemen: string[] = [];
   const wijzigingen: ImportChange[] = [];
   const writes: Write[] = [];
   let overgeslagen = 0;
 
-  const rows = readGrid(text);
   const header = rows[0] ?? [];
   const lower = header.map((h) => h.toLowerCase());
   const datumCol = lower.indexOf('datum');
@@ -219,9 +215,10 @@ function plan(periodId: string, text: string): { plan: ImportPlan; writes: Write
   };
 }
 
-export function importPreferences(actorId: string, periodId: string, text: unknown, toepassen: boolean): ImportResult {
-  if (typeof text !== 'string' || text.trim() === '') {
-    return { ok: false, status: 400, code: 'NO_FILE', message: 'Kies eerst een bestand.' };
+/** `bestand`: the .xlsx as base64, as the dialog sends it. */
+export function importPreferences(actorId: string, periodId: string, bestand: unknown, toepassen: boolean): ImportResult {
+  if (typeof bestand !== 'string' || bestand.trim() === '') {
+    return { ok: false, status: 400, code: 'NO_FILE', message: 'Kies eerst een Excel-bestand.' };
   }
   const period = db
     .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
@@ -236,7 +233,14 @@ export function importPreferences(actorId: string, periodId: string, text: unkno
     };
   }
 
-  const { plan: result, writes } = plan(periodId, text);
+  let rows: string[][];
+  try {
+    rows = readFirstSheet(Buffer.from(bestand, 'base64'));
+  } catch (error) {
+    if (error instanceof XlsxError) return { ok: false, status: 400, code: 'NOT_XLSX', message: error.message };
+    throw error;
+  }
+  const { plan: result, writes } = plan(periodId, rows);
   if (!toepassen) return { ok: true, plan: result, toegepast: false };
   if (result.problemen.length > 0) {
     return {

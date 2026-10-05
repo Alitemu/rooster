@@ -4,7 +4,7 @@ import { db } from '@/db/client';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
-import { parseCsv } from '@/lib/csv';
+import { buildXlsx } from '@/tests/fixtures/buildXlsx';
 import { POST } from './route';
 import { GET as exportPreferences } from '../../../../exports/preferences/[period-id]/route';
 
@@ -102,29 +102,44 @@ function req(url: string, actorId: string, method = 'GET', body?: unknown) {
   });
 }
 
-async function exported(f: Fixture): Promise<string> {
+type Grid = Array<Array<string | number | null>>;
+
+const serial = (datum: string) => (Date.parse(`${datum}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86400000;
+
+/** The downloaded overview as Excel opens it: the dates become day numbers, the weeks numbers. */
+async function exported(f: Fixture): Promise<Grid> {
   const res = await exportPreferences(req(`/api/exports/preferences/${f.periodId}`, f.admin), {
     params: Promise.resolve({ 'period-id': f.periodId }),
   });
-  return res.text();
+  // trimStart also drops the byte order mark the export starts with.
+  const lines = (await res.text()).trimStart().split('\r\n');
+  return lines.map((line, i) => {
+    const cells: Array<string | number> = line.split(';').map((c) => c.replace(/^"|"$/g, ''));
+    if (i > 0) {
+      cells[0] = serial(String(cells[0]));
+      cells[2] = Number(cells[2]);
+    }
+    return cells;
+  });
 }
 
-async function importCsv(f: Fixture, csv: string, toepassen: boolean, actor = f.admin) {
-  const res = await POST(req(`/api/admin/period/${f.periodId}/preferences-import`, actor, 'POST', { csv, toepassen }), {
+async function importXlsx(f: Fixture, grid: Grid | Buffer, toepassen: boolean, actor = f.admin) {
+  const bestand = (Buffer.isBuffer(grid) ? grid : buildXlsx(grid, { deflate: true })).toString('base64');
+  const res = await POST(req(`/api/admin/period/${f.periodId}/preferences-import`, actor, 'POST', { bestand, toepassen }), {
     params: Promise.resolve({ id: f.periodId }),
   });
   return { status: res.status, body: await res.json() };
 }
 
-/** The exported grid with one cell replaced, written back with ";". */
-function edit(csv: string, changes: Array<[datum: string, codenaam: string, value: string]>): string {
-  const rows = parseCsv(csv.replace(/^﻿/, ''), ';');
+/** The grid with cells filled in, as someone would in Excel. */
+function edit(grid: Grid, changes: Array<[datum: string, codenaam: string, value: string]>): Grid {
+  const rows = grid.map((r) => [...r]);
   for (const [datum, codenaam, value] of changes) {
     const col = rows[0].indexOf(codenaam);
-    const row = rows.find((r) => r[0] === datum)!;
+    const row = rows.find((r) => r[0] === serial(datum))!;
     row[col] = value;
   }
-  return rows.map((r) => r.join(';')).join('\r\n');
+  return rows;
 }
 
 afterEach(() => {
@@ -146,9 +161,9 @@ afterEach(() => {
 describe('POST /api/admin/period/[id]/preferences-import', () => {
   it('is for a beheerder only', async () => {
     const f = createFixture();
-    const csv = await exported(f);
-    expect((await importCsv(f, csv, false, f.planner)).status).toBe(401);
-    expect((await importCsv(f, csv, false)).status).toBe(200);
+    const grid = await exported(f);
+    expect((await importXlsx(f, grid, false, f.planner)).status).toBe(401);
+    expect((await importXlsx(f, grid, false)).status).toBe(200);
   });
 
   it('changes nothing when the overview is read back unchanged', async () => {
@@ -156,7 +171,7 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     const [a, b] = f.people;
     mark(a.id, f.slots[0].id, 'ABSOLUUT');
     mark(b.id, f.slots[1].id, 'LIEVER_NIET', 'PARTTIME');
-    const { body } = await importCsv(f, await exported(f), false);
+    const { body } = await importXlsx(f, await exported(f), false);
     expect(body.data.wijzigingen).toEqual([]);
     expect(body.data.problemen).toEqual([]);
     expect(body.data.overgeslagen).toBe(1);
@@ -172,7 +187,7 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     mark(b.id, f.slots[3].id, 'ABSOLUUT', 'PARTTIME');
     const before = markings(f);
 
-    const csv = edit(await exported(f), [
+    const grid = edit(await exported(f), [
       [d0, a.codenaam, 'liever niet'], // changed
       [d1, a.codenaam, ''], // cleared
       [d2, a.codenaam, 'Voorkeur'], // new, any case
@@ -180,11 +195,11 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
       [d3, b.codenaam, 'voorkeur (parttime)'], // automatic cell: skipped
     ]);
 
-    const check = await importCsv(f, csv, false);
+    const check = await importXlsx(f, grid, false);
     expect(check.body.data.wijzigingen).toHaveLength(3);
     expect(markings(f)).toEqual(before); // checking changes nothing
 
-    const applied = await importCsv(f, csv, true);
+    const applied = await importXlsx(f, grid, true);
     expect(applied.body.data.toegepast).toBe(true);
     expect(markings(f)).toEqual({
       [`${a.codenaam}|${d0}`]: 'LIEVER_NIET/MANUAL',
@@ -194,36 +209,45 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     });
   });
 
-  it('reads the dates a Dutch Excel writes when it saves the file', async () => {
+  it('reads a date typed as text too, ISO or the Dutch way', async () => {
     const f = createFixture();
     const [a] = f.people;
-    const csv = edit(await exported(f), [[f.slots[0].datum, a.codenaam, 'geblokkeerd']]).replace(/^2027-01-04/m, '4-1-2027');
-    const { body } = await importCsv(f, csv, false);
+    const grid = edit(await exported(f), [[f.slots[0].datum, a.codenaam, 'geblokkeerd']]);
+    grid[1][0] = '4-1-2027';
+    grid[2][0] = f.slots[1].datum;
+    const { body } = await importXlsx(f, grid, false);
     expect(body.data.problemen).toEqual([]);
     expect(body.data.wijzigingen).toEqual([
       { codenaam: a.codenaam, datum: '2027-01-04', dienst: 'avonddienst', van: 'leeg', naar: 'geblokkeerd' },
     ]);
   });
 
+  it('refuses a file that is not .xlsx, such as the CSV itself', async () => {
+    const f = createFixture();
+    const res = await importXlsx(f, Buffer.from('Datum;Dag;Week;Dienst\r\n2027-01-04;maandag;1;avonddienst'), false);
+    expect(res.status).toBe(400);
+    expect(res.body.error.message).toContain('geen Excel-bestand');
+  });
+
   it('refuses a file with problems as a whole', async () => {
     const f = createFixture();
     const [a] = f.people;
-    let csv = edit(await exported(f), [
+    const grid = edit(await exported(f), [
       [f.slots[0].datum, a.codenaam, 'geblokkeerd'],
       [f.slots[1].datum, a.codenaam, 'misschien'],
     ]);
-    csv = csv.replace(/^(Datum;Dag;Week;Dienst;.*)$/m, '$1;Onbekend-99');
-    const check = await importCsv(f, csv, false);
+    grid[0].push('Onbekend-99');
+    const check = await importXlsx(f, grid, false);
     expect(check.body.data.problemen).toHaveLength(2);
-    const applied = await importCsv(f, csv, true);
+    const applied = await importXlsx(f, grid, true);
     expect(applied.status).toBe(400);
     expect(markings(f)).toEqual({});
   });
 
   it('leaves a period whose roster is built alone', async () => {
     const f = createFixture();
-    const csv = await exported(f);
+    const grid = await exported(f);
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(f.periodId);
-    expect((await importCsv(f, csv, false)).status).toBe(409);
+    expect((await importXlsx(f, grid, false)).status).toBe(409);
   });
 });

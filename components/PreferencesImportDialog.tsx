@@ -37,10 +37,17 @@ interface Props {
 
 const SHOWN = 50;
 
+function toBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
 export function PreferencesImportButton({ periodId, periodStatus, onImported }: Props) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [open, setOpen] = useState(false);
-  const [csv, setCsv] = useState<string | null>(null);
+  const [bestandData, setBestandData] = useState<string | null>(null);
   const [bestand, setBestand] = useState('');
   const [plan, setPlan] = useState<Plan | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,7 +62,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
 
   const close = () => {
     setOpen(false);
-    setCsv(null);
+    setBestandData(null);
     setBestand('');
     setPlan(null);
     setError(null);
@@ -66,14 +73,14 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
   if (!isAdmin || periodStatus === 'GEGENEREERD' || periodStatus === 'GEPUBLICEERD') return null;
 
   const send = async (toepassen: boolean) => {
-    if (csv === null) return;
+    if (bestandData === null) return;
     setBusy(true);
     setError(null);
     try {
       const res = await fetch(withBasePath(`/api/admin/period/${periodId}/preferences-import`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ csv, toepassen }),
+        body: JSON.stringify({ bestand: bestandData, toepassen }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
@@ -93,13 +100,13 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
     setPlan(null);
     setError(null);
     if (!file) return;
-    if (!/\.csv$/i.test(file.name)) {
-      setCsv(null);
-      setError('Kies een CSV-bestand. Sla een Excel-bestand eerst op als "CSV UTF-8".');
+    if (!/\.xlsx$/i.test(file.name)) {
+      setBestandData(null);
+      setError('Kies een Excel-bestand (.xlsx). Sla het bestand in Excel op als "Excel-werkmap".');
       return;
     }
     setBestand(file.name);
-    setCsv(await file.text());
+    setBestandData(toBase64(await file.arrayBuffer()));
   };
 
   return (
@@ -122,8 +129,8 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-2">Voorkeuren importeren (test)</h2>
             <p className="text-sm text-neutral-700 mb-2">
-              Lees het bestand van &quot;Voorkeurenoverzicht downloaden&quot; weer in, bijvoorbeeld nadat je het in
-              Excel hebt aangepast. Sla het daar op als CSV.
+              Open het bestand van &quot;Voorkeurenoverzicht downloaden&quot; in Excel, vul de voorkeuren aan en sla
+              het op als Excel-werkmap (.xlsx). Lees het hier weer in.
             </p>
             <ul className="text-sm text-neutral-700 mb-4 list-disc pl-5 space-y-1">
               <li>Geblokkeerd, liever niet en voorkeur worden gezet alsof de planner ze invult. Een lege cel haalt zo&apos;n keuze weg.</li>
@@ -134,11 +141,11 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
 
             <input
               type="file"
-              accept=".csv,text/csv"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               disabled={busy}
               onChange={(e) => pickFile(e.target.files?.[0])}
               className="block w-full text-sm mb-4"
-              aria-label="CSV-bestand met voorkeuren"
+              aria-label="Excel-bestand met voorkeuren"
             />
 
             {error && (
@@ -218,7 +225,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
               {!plan?.toegepast && (
                 <button
                   onClick={() => send(false)}
-                  disabled={busy || csv === null}
+                  disabled={busy || bestandData === null}
                   className="flex-1 py-2 px-4 rounded font-medium bg-neutral-700 text-white hover:bg-neutral-800 transition-colors disabled:opacity-50"
                 >
                   {busy ? 'Bezig...' : `Controleren${bestand ? ` (${bestand})` : ''}`}

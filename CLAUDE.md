@@ -385,8 +385,13 @@ shows blocked days out of all days and speaks of no maximum.
 "Voorkeuren importeren (test)" next to the preferences overview download
 (components/PreferencesImportDialog.tsx, POST
 /api/admin/period/[id]/preferences-import, lib/preferencesImport.ts)
-reads that overview back: `;` or `,`, a BOM, and the d-m-yyyy dates a
-Dutch Excel saves are all read. Hand markings only: a plain level is set
+reads that overview back after it was filled in and saved in Excel - as
+.xlsx only (a re-saved CSV's separator and encoding depend on the
+machine). lib/xlsx.ts reads the first worksheet with Node's zlib, no
+library (size-capped before and while inflating); a date cell arrives as
+Excel's day number, text dates as YYYY-MM-DD or d-m-yyyy. The dialog
+sends the file as base64 within the 1 MB body cap. Tests build their
+workbooks with tests/fixtures/buildXlsx.ts. Hand markings only: a plain level is set
 as MANUAL (like the planner's calendar), an empty cell clears a MANUAL
 row, and a cell with "(parttime)", "(afwezig)" or "(fellow)" - or an
 empty cell over such a row - is skipped. No block budget. Checking
