@@ -237,11 +237,9 @@ rooster op in plaats van alles-of-niets - de planner vult de resterende
 gaten handmatig aan, met duidelijke aanduiding wie een gat wél of niet mag
 invullen.
 
-## Implementatieplan
+## Conventies
 
-Zie `/DIENSTROOSTER_PLAN_v14.md` voor de volledige oorspronkelijke
-requirements, en CLAUDE.md voor de bijgehouden conventies en beslissingen
-die daaruit zijn voortgekomen.
+Zie CLAUDE.md voor de bijgehouden conventies en ontwerpbeslissingen.
 
 ## Implementatie
 
@@ -585,11 +583,11 @@ Draai met `npm run test` (unit/integratie) en `npm run test:e2e`
 ## Bijdragen
 
 1. Lees eerst CLAUDE.md
-2. Volg de codeconventies (TypeScript strict, geen default exports,
-   Nederlandse gebruikerstekst, enz.)
+2. Volg de codeconventies (TypeScript strict, geen default exports behalve
+   waar Next.js die vereist, Nederlandse gebruikerstekst, enz.)
 3. Schrijf een test voor elke harde regel die je toevoegt
 4. Gebruik betekenisvolle commitberichten
-5. Verwijs naar het implementatieplan (v14) bij ontwerpvragen
+5. Leg ontwerpvragen die CLAUDE.md niet beantwoordt eerst voor
 
 ## Licentie
 
@@ -602,9 +600,6 @@ Zie CLAUDE.md voor:
 - Databaseconventies (tekenconventie, constraints, ledger-regels)
 - UI-terminologie (Nederlandse vertalingen van interne termen)
 - Bekende valkuilen en hoe ze te voorkomen
-
-Zie `/DIENSTROOSTER_PLAN_v14.md` voor de volledige oorspronkelijke
-requirements.
 
 Zie [docs/verzendlijst-power-automate.md](docs/verzendlijst-power-automate.md)
 voor het instellen van e-mail via Gmail en Power Automate.

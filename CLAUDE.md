@@ -9,8 +9,6 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 - Part-time support
 - Automatic roster generation with diagnostics
 
-**Phase 0:** Foundation - auth, datamodel, period management, holiday calculations, capacity checks.
-
 ## Stack
 
 | Layer | Technology | Version |
@@ -19,24 +17,24 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 | Language | TypeScript | 5.5+ |
 | Styling | Tailwind CSS + shadcn/ui | 3.3+ |
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |
-| ORM | Drizzle | 0.29+ |
+| ORM | Drizzle | 0.45+ |
 | Auth | Custom (tokens + TOTP) | bcrypt, speakeasy |
-| Solver | Python + FastAPI | 3.11+, 0.104+ |
-| Testing | Vitest + fast-check | 1.0+, 3.14+ |
-| Container | Docker Compose | 3.8+ |
+| Solver | Python + FastAPI + OR-Tools | 3.11, 0.141, 9.8 |
+| Testing | Vitest + fast-check + Playwright | 4.1+, 3.14+, 1.62+ |
+| Container | Docker Compose | - |
 
 ## Code Conventions
 
 ### TypeScript & Structure
 
 - **Strict mode:** All TypeScript files use strict type checking
-- **No default exports:** Use named exports exclusively
+- **No default exports:** Use named exports, except where Next.js
+  requires a default export (`page.tsx`, `layout.tsx` and the like under `app/`)
 - **File organization:**
   ```
   app/          # Next.js routes and pages
   components/   # React components
   lib/          # Utilities, helpers, calculations
-  server/       # Server-side functions, DB queries
   db/           # Drizzle schema, migrations
   types/        # TypeScript types and interfaces
   scripts/      # Setup, seeding, maintenance
@@ -170,26 +168,24 @@ Two things these get wrong easily, and both cost a day to diagnose:
 2. Boundary conditions (start of period, year boundary, etc.)
 3. Error cases (invalid input, constraint violation)
 
-### Naming Conventions (CRITICAL)
+### Naming Conventions
 
 These avoid subtle bugs when UI and code use different sign conventions:
 
 | Concept | Code | UI | Comments |
 |---------|------|----|----|
 | Person identifier | `person.codenaam` | Shown as "Persoon-01" | Only pseudonym, no real names |
-| Service counter | `AVOND`, `WEEKEND`, `FEESTDAG` | "evening", "weekend", "holiday" shifts | Enums in code, words in UI |
-| Time window | `windowWeeks` | "Number of weeks between shifts" | Setting in UI, config in code |
-| Balance amount | Stored as delta, delta < 0 = fewer | "1 fewer shift" | Never show raw sign to user |
-| Balance range | `band[min, max]` | "8 or 9 evening shifts" | Band is internal; show the range |
-| Preference level | `ABSOLUUT`, `LIEVER_NIET`, `VOORKEUR` | "Blocked", "Prefer not", "Preferred" | Enums in code |
+| Service counter | `AVOND`, `WEEKEND`, `FEESTDAG` | "avonddienst", "weekenddienst", "feestdagdienst" | Enums in code, words in UI |
+| Time window | `windowWeeks` | "venster (weken)" | Setting in UI, config in code |
+| Balance amount | Stored as delta, delta < 0 = fewer | "1 avonddienst minder" | Never show raw sign to user |
+| Balance range | `band[min, max]` | "Je krijgt 8 of 9 avonddiensten" | Band is internal; show the range (bereik) |
+| Preference level | `ABSOLUUT`, `LIEVER_NIET`, `VOORKEUR` | "geblokkeerd", "liever niet", "voorkeur" | Enums in code |
 
 ### Server-Side Functions
 
-Use `'use server'` for:
-- Database mutations
-- Auth checks
-- External API calls (solver)
-- Sensitive business logic
+Database mutations, auth checks, solver calls and other sensitive logic run
+server-side, in the route handlers under `app/api` and the `lib/` code they
+call (the app has no server actions).
 
 Never leak implementation details to client:
 - No raw error messages from DB
@@ -204,9 +200,9 @@ Never leak implementation details to client:
 
 Example: If the ORM guarantees a constraint, don't also check in code.
 
-## Datamodel Overview (Phase 0)
+## Datamodel Overview
 
-**Core Tables (Implemented Phase 0):**
+**Core Tables:**
 - `person` - staff members (codenaam, role, password_hash, totp_secret, sessie_versie)
 - `person_access_link` - personal links for participants
 - `pool` - shift pool (name, type, settings reference)
@@ -221,7 +217,6 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - `notification_template` - message templates
 - `reminder_schedule` - reminder timing rules
 
-**Phase 1+:**
 - `availability` - blocking preferences (person + slot + level)
 - `assignment` - final shift assignments
 - `submission` - period status per person
@@ -229,7 +224,7 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 
 ## Holiday Calculation
 
-6 holiday groups (never show raw names to users):
+7 holiday groups (never show raw names to users):
 
 | Group | English | Dates | Rule |
 |-------|---------|-------|------|
@@ -400,7 +395,7 @@ Two formulas, both checked before generation:
    Check: active_participants >= required
 ```
 
-Show live in settings screen with interpretation in plain Dutch/English.
+Show live in settings screen with interpretation in plain Dutch.
 
 ## Authentication
 
@@ -489,10 +484,7 @@ Show live in settings screen with interpretation in plain Dutch/English.
      back - current password only, deliberately never a fresh TOTP code,
      since "I no longer have a code to give" is the ordinary reason to
      call it, not an edge case. All three routes, plus `/api/auth/me`'s
-     `totp_enrolled` flag the dialog reads its own state from, existed
-     server-side since Phase 0 but had no screen calling any of them until
-     this was wired up - `qrcode` sat in package.json unused the whole
-     time.
+     `totp_enrolled` flag the dialog reads its own state from.
 
 **Session revocation**
 
@@ -764,7 +756,7 @@ picks it up too.
 
 **❌ Pitfall: Showing raw balance to user**
 - "-1 shifts" is confusing
-- **Fix:** Always convert to language: "1 fewer shift"
+- **Fix:** Always convert to language: "1 avonddienst minder"
 
 **❌ Pitfall: Storing balance as both value AND ledger sum**
 - Carry-over logic becomes unclear
@@ -784,18 +776,17 @@ picks it up too.
 2. **Add DB schema** if needed - schema change, migration
 3. **Add server function** - query/mutation logic (typed)
 4. **Add form/UI** - client component, validation via Zod
-5. **Add end-to-end test** - full flow via Playwright (phase 2+)
+5. **Add end-to-end test** - full flow via Playwright (`tests/e2e`)
 
 ## When to Ask
 
-- Anything not in this CLAUDE.md or plan v14
+- Anything not covered by this CLAUDE.md
 - Design questions about terminology or UI flow
 - Decisions between multiple valid approaches
 - Anything involving the solver contract
 
 ## Resources
 
-- Implementation plan: v14 (markdown in repo root)
 - Design inspiration: shadcn/ui + Tailwind defaults
 - Database source of truth: `/db/schema.ts`
 - Tests run via: `npm test`
