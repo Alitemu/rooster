@@ -540,7 +540,8 @@ de stroom al gebouwd?".
   wachtwoord: tot dan kan iedereen die de inlogpagina bereikt het account
   claimen. Daarna maak je de planners aan, met een naam naar keuze. Een
   bestaande installatie houdt haar `planner` en krijgt `admin` erbij als
-  er nog geen beheerder is. `planner` kun je daarna uitschakelen bij
+  er nog geen beheerder is. Dat gebeurt bij elke start, wat er ook bij
+  `SEED_ON_START` staat. `planner` kun je daarna uitschakelen bij
   *Accounts beheren*. Zijn alle wachtwoorden vergeten, dan is er op de server
   `docker compose exec -u node web npx tsx scripts/reset-password.ts admin`,
   en met

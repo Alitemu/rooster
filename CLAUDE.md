@@ -466,8 +466,11 @@ Show live in settings screen with interpretation in plain Dutch.
      (--alleen-planner) creates only 'admin' (ADMIN, seed password or
      SEED_PLANNER_PASSWORD), who adds the planners with names of their own;
      the demo seed also creates 'planner', which the browser checks log in
-     as. ensureAdminAccount also adds 'admin' to an existing database at the
-     next start while it has no ADMIN at all; an existing 'planner' stays. The backup on the
+     as. Every start, whatever SEED_ON_START says (seed.ts addAdminIfNone, also
+     in --schema-only and the already-seeded demo run), adds 'admin' to an
+     existing database while it has no ADMIN at all; an existing 'planner'
+     stays. A migration-built database that hasn't caught up yet gets it at
+     the start after. The backup on the
      server: scripts/reset-password.ts, and `scripts/create-account.ts
      <codenaam> [--planner | --beheerder]` (hidden prompt,
      scripts/hiddenPrompt.ts; --beheerder promotes an existing planner).

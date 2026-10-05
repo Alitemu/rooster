@@ -705,6 +705,26 @@ async function ensureAdminAccount(passwordHash?: string): Promise<boolean> {
   return true;
 }
 
+/**
+ * Every start, whatever SEED_ON_START says: an existing database with no
+ * beheerder at all gets 'admin' (seed password, changed at the first
+ * login), so the accounts can always be managed in the app. A database
+ * the migrations built may not have caught up yet at this point (they run
+ * when the app starts, after this); it gets the account at the next start.
+ */
+async function addAdminIfNone() {
+  const tableInfo = (table: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name);
+  if (!tableInfo('dienstrooster_person').includes('dienst_type')) {
+    console.log('Schema not up to date yet; checking for a beheerder at the next start.');
+    return;
+  }
+  if (await ensureAdminAccount()) {
+    console.log('Added the default beheerder account:');
+    logAdminAdded();
+  }
+}
+
 function logAdminAdded() {
   console.log(
     `  - Beheerder: admin / password: ${DEFAULT_TEST_PASSWORD}\n` +
@@ -846,6 +866,7 @@ async function seed() {
   try {
     if (process.argv.includes('--schema-only')) {
       upgradeSchemaOnly();
+      await addAdminIfNone();
       process.exit(0);
     }
 
@@ -873,16 +894,13 @@ async function seed() {
     // about what to do next, on a script the verification scripts document
     // as their first step. Wiping is destructive, so it stays opt-in.
     if (alreadySeeded() && alleenPlanner) {
-      if (await ensureAdminAccount()) {
-        console.log('Added the default beheerder account:');
-        logAdminAdded();
-      } else {
-        console.log('Staff accounts already exist; nothing else to do.');
-      }
+      await addAdminIfNone();
+      console.log('Staff accounts already exist; nothing else to do.');
       return;
     }
     if (alreadySeeded()) {
       if (!process.argv.includes('--reset')) {
+        await addAdminIfNone();
         console.error(
           '\n❌ This database already contains seed data.\n' +
             '   Re-run with `npm run seed -- --reset` to clear it and seed again,\n' +
