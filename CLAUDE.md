@@ -380,6 +380,20 @@ lib/blockBudget.ts blockBudgetLimits: max and whether part-time days are
 exempt), counted the way checkBlockBudget counts; without a budget it
 shows blocked days out of all days and speaks of no maximum.
 
+## Preferences import (test, beheerder only)
+
+"Voorkeuren importeren (test)" next to the preferences overview download
+(components/PreferencesImportDialog.tsx, POST
+/api/admin/period/[id]/preferences-import, lib/preferencesImport.ts)
+reads that overview back: `;` or `,`, a BOM, and the d-m-yyyy dates a
+Dutch Excel saves are all read. Hand markings only: a plain level is set
+as MANUAL (like the planner's calendar), an empty cell clears a MANUAL
+row, and a cell with "(parttime)", "(afwezig)" or "(fellow)" - or an
+empty cell over such a row - is skipped. No block budget. Checking
+(`toepassen` false) writes nothing; applying refuses a file with any
+problem, and a period whose roster is built (409). Audit-logged; cleared
+people are re-synced like the slot route, backups rewritten.
+
 ## Capacity Check (Live)
 
 Two formulas, both checked before generation:

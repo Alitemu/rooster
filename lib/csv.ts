@@ -52,9 +52,10 @@ export function sanitizeFilenamePart(value: string): string {
  * silently misaligning every column after it. This handles the common
  * double-quote CSV convention (a "" inside a quoted field is a literal
  * quote) without pulling in a full CSV library for what's still a simple,
- * few-column import.
+ * few-column import. `;` for files a Dutch Excel wrote (its list
+ * separator), such as the preferences overview after editing.
  */
-export function parseCsv(text: string): string[][] {
+export function parseCsv(text: string, delimiter: ',' | ';' = ','): string[][] {
   const rows: string[][] = [];
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
@@ -81,7 +82,7 @@ export function parseCsv(text: string): string[][] {
         // a literal character, not swallow the next comma as part of the
         // "quoted" text and silently merge two columns.
         inQuotes = true;
-      } else if (char === ',') {
+      } else if (char === delimiter) {
         cells.push(current.trim());
         current = '';
       } else {

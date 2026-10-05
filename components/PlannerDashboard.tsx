@@ -32,6 +32,7 @@ import { periodStatusLabel } from '@/lib/statusLabels';
 import { FellowBadge } from './FellowBadge';
 import { MailSettingsDialog } from './MailSettingsDialog';
 import { MailWarning } from './MailWarning';
+import { PreferencesImportButton } from './PreferencesImportDialog';
 import { withBasePath } from '@/lib/basePath';
 
 interface PersonProgress {
@@ -1112,6 +1113,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           >
             🗓️ Voorkeurenoverzicht downloaden (Excel)
           </a>
+          <PreferencesImportButton periodId={periodId} periodStatus={dashboard.status} onImported={loadData} />
           {/* Only meaningful once there's something in it - bewaar dit
               bestand ergens veilig: het is de aanbevolen manier om een
               toekomstige periode's "Eerdere toewijzingen" in te vullen als
