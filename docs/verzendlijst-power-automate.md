@@ -399,7 +399,9 @@ dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
         slim gekozen codenaam zelfs een verkeerde rij opleveren.
       - **Opstellen**, met als expressie de naam, of de codenaam als er geen
         naam is:
-        `coalesce(first(outputs('Rijen_weergeven_die_in_een_tabel_voorkomen')?['body/value'])?['Naam'], items('Toepassen_op_elk_3'))`
+        `if(empty(first(outputs('Rijen_weergeven_die_in_een_tabel_voorkomen')?['body/value'])?['Naam']), items('Toepassen_op_elk_3'), first(outputs('Rijen_weergeven_die_in_een_tabel_voorkomen')?['body/value'])?['Naam'])`
+        Excel geeft bij een lege naamcel een lege tekst terug. Met
+        `coalesce` zou de codenaam dan door niets vervangen worden.
       - **Opstellen** (tweede), expressie
         `replace(variables('onderwerp'), items('Toepassen_op_elk_3'), outputs('Opstellen'))`
         en daarna **Variabele instellen** `onderwerp` = uitvoer van die
