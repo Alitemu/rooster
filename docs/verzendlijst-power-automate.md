@@ -418,8 +418,10 @@ dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
    naam komt zo in de HTML-tekst.
 
 4. Zet bij beide *Toepassen op elk*-lussen die berichten en personen
-   verwerken onder *Instellingen* het **Gelijktijdigheidsbeheer uit**. De
-   variabelen worden gedeeld, dus de lussen moeten één voor één lopen.
+   verwerken onder *Instellingen* het **Gelijktijdigheidsbeheer aan** en de
+   **Mate van parallelle uitvoering** op **1**. De variabelen worden
+   gedeeld, dus de lussen moeten één voor één lopen. Staat
+   gelijktijdigheidsbeheer uit, dan lopen ze juist parallel.
 
 De volgorde van `personen` is al goed: Dienstrooster zet langere codenamen
 vooraan. Zo wordt "Persoon-10" altijd vervangen voordat "Persoon-1" erin
