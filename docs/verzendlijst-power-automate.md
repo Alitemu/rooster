@@ -324,8 +324,18 @@ versie iets verschillen.
       - **Een rij ophalen** (Excel Online (Business)): het bestand uit stap
         3, tabel `Adressen`, sleutelkolom `Codenaam`, sleutelwaarde
         *codenaam*.
-      - **Een e-mail verzenden (V2)**: Aan = *Email* uit *Een rij ophalen*,
-        Onderwerp = *onderwerp*, Hoofdtekst = *html*.
+      - **Voorwaarde**, zodat een lege of onzinnige cel *Email* geen
+        mislukte run geeft ("To Field cannot be null or empty"). Links de
+        expressie
+        `and(not(empty(trim(string(coalesce(body('Een_rij_ophalen')?['Email'], ''))))), contains(string(coalesce(body('Een_rij_ophalen')?['Email'], '')), '@'))`,
+        dan `is gelijk aan`, rechts de expressie `true`. Gebruik in de
+        expressie de naam van je eigen stap en kolom.
+      - In *Indien ja*: **Een e-mail verzenden (V2)**: Aan = *Email* uit
+        *Een rij ophalen*, Onderwerp = *onderwerp*, Hoofdtekst = *html*.
+      - In *Indien nee*: **Een e-mail verzenden (V2)** aan jezelf, met de
+        *codenaam* waarbij geen geldig adres staat. Een adres met een typfout
+        dat er wel geldig uitziet, gaat gewoon de deur uit. Daarvan krijg je
+        een onbestelbaar-bericht van Outlook terug.
 
    c. Optioneel: **een samenvatting voor jezelf**. Zet ná de lus van stap b
       (dus nog binnen de lus over de bijlagen) een **Voorwaarde**, bijvoorbeeld
