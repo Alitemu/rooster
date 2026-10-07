@@ -2,13 +2,15 @@
  * Period Detail API Route
  *
  * GET    /api/periods/[id]  - Get detailed period information
+ * PATCH  /api/periods/[id]  - Rename a period
  * DELETE /api/periods/[id]  - Move a period to the trash (soft-delete)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { softDeletePeriod, PeriodTrashError } from '@/lib/periodTrash';
 import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -140,6 +142,69 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     return NextResponse.json(response);
   } catch (error) {
     return internalErrorResponse('period-detail', error);
+  }
+}
+
+/**
+ * PATCH /api/periods/[id] - Rename a period
+ *
+ * In any status: the name is only a label (mail subjects, headings,
+ * downloads), and nothing stores a copy of it. Mails already sent keep the
+ * old name. Checked like a new period's name.
+ */
+export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const { id } = await props.params;
+  try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) {
+      return unauthorizedResponse();
+    }
+
+    const body = (await parseJsonBody(req)) as { naam?: unknown };
+    const naamCheck = validateSingleLine(body.naam, 'Naam', PERIODE_NAAM_MAX_LENGTH);
+    if (!naamCheck.valid) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: naamCheck.message },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+
+    const period = db
+      .prepare('SELECT naam FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
+      .get(id) as { naam: string } | undefined;
+    if (!period) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
+      };
+      return NextResponse.json(response, { status: 404 });
+    }
+
+    const naam = naamCheck.value;
+    if (naam !== period.naam) {
+      db.transaction(() => {
+        db.prepare(
+          'UPDATE dienstrooster_schedule_period SET naam = ?, row_version = row_version + 1 WHERE id = ?'
+        ).run(naam, id);
+        db.prepare(
+          `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
+           VALUES (?, ?, 'schedule_period', ?, 'UPDATE', ?, ?, ?)`
+        ).run(
+          crypto.randomUUID(),
+          auth!.userId,
+          id,
+          JSON.stringify({ naam: period.naam }),
+          JSON.stringify({ naam }),
+          new Date().toISOString()
+        );
+      })();
+    }
+
+    const response: ApiSuccessResponse<{ naam: string }> = { success: true, data: { naam } };
+    return NextResponse.json(response);
+  } catch (error) {
+    return internalErrorResponse('period-rename', error);
   }
 }
 

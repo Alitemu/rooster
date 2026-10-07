@@ -9,16 +9,9 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { isValidIsoDate } from '@/lib/isoDate';
-import { validateSingleLine } from '@/lib/vrijeTekst';
+import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { parseISO } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
-
-/**
- * Long enough for the names a ward actually uses ("2027-1",
- * "Zomer 2027 achterwacht") with room to spare, short enough to stay
- * readable as an e-mail subject and a heading in the grid.
- */
-const PERIODE_NAAM_MAX_LENGTH = 60;
 
 interface CreatePeriodRequest {
   naam: string;

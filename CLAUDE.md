@@ -253,6 +253,10 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   (filled in beforehand, corrections) stay, as a regeneration keeps them.
   Not from GEPUBLICEERD (409): unpublish first, which tells participants.
   The deadline can then be moved like any OPEN period's.
+- **Rename** (`PATCH /api/periods/[id]` `{naam}`, "Naam wijzigen" in the
+  period list's row): any status, checked like a new period's name
+  (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),
+  audit-logged. Mails already sent keep the old name.
 
 **Undo on the period page:** a manual assign/reassign/remove leaves one
 "ongedaan maken" (lib/pendingUndo.ts) that records its `onderdeel` - the

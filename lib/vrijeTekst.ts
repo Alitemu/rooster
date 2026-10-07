@@ -25,6 +25,14 @@
 // string and are what corrupt CSV rows, header lines and Excel lookups.
 const CONTROL_CHARS = /[\u0000-\u001F\u007F\u2028\u2029]/;
 
+/**
+ * Long enough for the names a ward actually uses ("2027-1",
+ * "Zomer 2027 achterwacht") with room to spare, short enough to stay
+ * readable as an e-mail subject and a heading in the grid. Creating a
+ * period and renaming one both check it.
+ */
+export const PERIODE_NAAM_MAX_LENGTH = 60;
+
 export type TextValidation =
   | { valid: true; value: string }
   | { valid: false; message: string };

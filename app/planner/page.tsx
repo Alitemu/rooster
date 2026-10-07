@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
@@ -14,6 +14,7 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
+import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 
 interface Period {
   id: string;
@@ -98,6 +99,13 @@ export default function PlannerHomePage() {
   const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Renaming happens in the table row itself.
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const renameInput = useRef<HTMLInputElement>(null);
 
   const [showTrash, setShowTrash] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -203,6 +211,36 @@ export default function PlannerHomePage() {
       setDeleteError(err instanceof Error ? err.message : 'Verwijderen mislukt');
     } finally {
       setDeleteBusy(false);
+    }
+  };
+
+  const startRename = (period: Period) => {
+    setRenameError(null);
+    setRenameValue(period.naam);
+    setRenamingId(period.id);
+  };
+
+  const handleRename = async () => {
+    if (!renamingId) return;
+    setRenameBusy(true);
+    setRenameError(null);
+    try {
+      const res = await fetch(withBasePath(`/api/periods/${renamingId}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ naam: renameValue }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Naam wijzigen mislukt');
+      setPeriods((prev) => prev.map((p) => (p.id === renamingId ? { ...p, naam: data.data.naam } : p)));
+      setRenamingId(null);
+    } catch (err) {
+      setRenameError(err instanceof Error ? err.message : 'Naam wijzigen mislukt');
+    } finally {
+      setRenameBusy(false);
+      // Opslaan was disabled while saving, which drops the focus; back in
+      // the field the planner can correct it or press Escape.
+      setTimeout(() => renameInput.current?.focus(), 0);
     }
   };
 
@@ -349,6 +387,7 @@ export default function PlannerHomePage() {
               type="text"
               className="input w-full"
               value={form.naam}
+              maxLength={PERIODE_NAAM_MAX_LENGTH}
               onChange={(e) => setForm({ ...form, naam: e.target.value })}
               placeholder="bijv. 2027-2"
             />
@@ -440,7 +479,47 @@ export default function PlannerHomePage() {
             <tbody className="divide-y">
               {periods.map((p) => (
                 <tr key={p.id} className="hover:bg-neutral-50">
-                  <td className="px-4 py-2 text-sm font-medium">{p.naam}</td>
+                  <td className="px-4 py-2 text-sm font-medium">
+                    {renamingId === p.id ? (
+                      <form
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleRename();
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Escape' && !renameBusy) setRenamingId(null);
+                        }}
+                        className="space-y-1"
+                      >
+                        <input
+                          type="text"
+                          ref={renameInput}
+                          aria-label="Nieuwe naam periode"
+                          className="input w-full min-w-[10rem]"
+                          value={renameValue}
+                          maxLength={PERIODE_NAAM_MAX_LENGTH}
+                          autoFocus
+                          onChange={(e) => setRenameValue(e.target.value)}
+                        />
+                        <div className="flex gap-3">
+                          <button type="submit" disabled={renameBusy} className="text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50">
+                            {renameBusy ? 'Bezig...' : 'Opslaan'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={renameBusy}
+                            onClick={() => setRenamingId(null)}
+                            className="text-neutral-600 hover:text-neutral-800 font-medium disabled:opacity-50"
+                          >
+                            Annuleren
+                          </button>
+                        </div>
+                        {renameError && <p className="text-xs font-normal text-red-600">{renameError}</p>}
+                      </form>
+                    ) : (
+                      p.naam
+                    )}
+                  </td>
                   <td className="px-4 py-2 text-sm text-neutral-600">
                     {p.start_datum} t/m {p.eind_datum}
                   </td>
@@ -463,6 +542,12 @@ export default function PlannerHomePage() {
                       >
                         {p.status === 'CONCEPT' ? 'Instellen vervolgen' : 'Openen'} →
                       </Link>
+                      <button
+                        onClick={() => startRename(p)}
+                        className="text-neutral-700 hover:text-neutral-900 font-medium"
+                      >
+                        Naam wijzigen
+                      </button>
                       <button
                         onClick={() => handleDeleteClick(p)}
                         className="text-red-600 hover:text-red-700 font-medium"

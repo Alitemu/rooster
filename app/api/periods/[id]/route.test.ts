@@ -9,7 +9,7 @@ import {
   STAFF_SESSION_MAX_AGE_SECONDS,
 } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
-import { GET } from './route';
+import { GET, PATCH } from './route';
 
 /**
  * The hard rule: a participant only ever sees a period they belong to, and
@@ -109,6 +109,7 @@ afterEach(() => {
   while (createdPeriodIds.length > 0) {
     // Links first: geldt_voor_periode_id is a foreign key onto the period.
     const periodId = createdPeriodIds.pop()!;
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE entiteit_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
   }
@@ -196,5 +197,74 @@ describe('GET /api/periods/[id]', () => {
     const body = await (await get(periodId, planner, 'staff')).json();
     expect(body.data.bevroren_ruleset_json).toBe(FROZEN_RULESET);
     expect(body.data.row_version).toBeDefined();
+  });
+});
+
+/**
+ * The rule: a planner can rename a period in any status, the name is
+ * checked like a new period's, and nobody else can rename it.
+ */
+function rename(periodId: string, personId: string, kind: 'person' | 'staff', naam: unknown) {
+  const maxAge = kind === 'staff' ? STAFF_SESSION_MAX_AGE_SECONDS : PERSON_SESSION_MAX_AGE_SECONDS;
+  const token = createSessionToken({ kind, personId, sessionVersion: getSessionVersion(personId)! } as never, maxAge);
+  return PATCH(
+    new NextRequest(`http://localhost/api/periods/${periodId}`, {
+      method: 'PATCH',
+      headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ naam }),
+    }),
+    { params: Promise.resolve({ id: periodId }) }
+  );
+}
+
+const naamVan = (periodId: string) =>
+  (db.prepare('SELECT naam FROM dienstrooster_schedule_period WHERE id = ?').get(periodId) as { naam: string }).naam;
+
+describe('PATCH /api/periods/[id]', () => {
+  it('renames a period, trimmed, and logs it', async () => {
+    const periodId = createPeriod(createPool());
+    const planner = createPerson('PLANNER');
+    const res = await rename(periodId, planner, 'staff', '  Voorjaar 2027 ');
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toEqual({ naam: 'Voorjaar 2027' });
+    expect(naamVan(periodId)).toBe('Voorjaar 2027');
+    const log = db
+      .prepare('SELECT oud_json, nieuw_json FROM dienstrooster_audit_log WHERE entiteit_id = ?')
+      .get(periodId) as { oud_json: string; nieuw_json: string };
+    expect(JSON.parse(log.oud_json)).toEqual({ naam: 'P' });
+    expect(JSON.parse(log.nieuw_json)).toEqual({ naam: 'Voorjaar 2027' });
+  });
+
+  it('works on a published period too', async () => {
+    const periodId = createPeriod(createPool());
+    db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD' WHERE id = ?`).run(periodId);
+    expect((await rename(periodId, createPerson('PLANNER'), 'staff', 'Nieuw')).status).toBe(200);
+    expect(naamVan(periodId)).toBe('Nieuw');
+  });
+
+  it('refuses an empty, multi-line or too long name', async () => {
+    const periodId = createPeriod(createPool());
+    const planner = createPerson('PLANNER');
+    for (const naam of ['   ', 'Twee\nregels', 'x'.repeat(61), undefined]) {
+      const res = await rename(periodId, planner, 'staff', naam);
+      expect(res.status).toBe(400);
+    }
+    expect(naamVan(periodId)).toBe('P');
+  });
+
+  it('is for planners only', async () => {
+    const poolId = createPool();
+    const periodId = createPeriod(poolId);
+    const person = createPerson();
+    createMembership(poolId, person);
+    createLinkForPeriod(person, periodId);
+    expect((await rename(periodId, person, 'person', 'Gekaapt')).status).toBe(401);
+    expect(naamVan(periodId)).toBe('P');
+  });
+
+  it('answers 404 for a period in the trash', async () => {
+    const periodId = createPeriod(createPool());
+    db.prepare(`UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?`).run(periodId);
+    expect((await rename(periodId, createPerson('PLANNER'), 'staff', 'Nieuw')).status).toBe(404);
   });
 });
