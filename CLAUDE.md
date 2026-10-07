@@ -247,6 +247,12 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - **Auto-exclude** days already assigned in published previous periods
 - **Freeze ruleset** when period opens (no retroactive rule changes)
 - **Row versioning** for optimistic concurrency on mutable periods
+- **Back to OPEN** (`POST /api/periods/[id]/reopen`, "Terug naar open" in
+  the period header, two clicks): from GESLOTEN or GEGENEREERD. From
+  GEGENEREERD the SOLVER rows and the pending undo go; MANUAL/OVERRIDE rows
+  (filled in beforehand, corrections) stay, as a regeneration keeps them.
+  Not from GEPUBLICEERD (409): unpublish first, which tells participants.
+  The deadline can then be moved like any OPEN period's.
 
 **Undo on the period page:** a manual assign/reassign/remove leaves one
 "ongedaan maken" (lib/pendingUndo.ts) that records its `onderdeel` - the

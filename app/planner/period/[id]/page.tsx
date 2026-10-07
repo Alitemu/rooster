@@ -35,6 +35,9 @@ export default function PlannerPeriodPage() {
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeConfirmArmed, setCloseConfirmArmed] = useState(false);
+  const [reopening, setReopening] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
+  const [reopenConfirmArmed, setReopenConfirmArmed] = useState(false);
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
@@ -110,6 +113,28 @@ export default function PlannerPeriodPage() {
       setCloseError(err instanceof Error ? err.message : 'Sluiten van periode mislukt');
     } finally {
       setClosing(false);
+    }
+  };
+
+  // Back to OPEN from GESLOTEN or GEGENEREERD (POST .../reopen). From
+  // GEGENEREERD the solver's roster goes; what was filled in by hand stays.
+  const handleReopen = async () => {
+    if (!reopenConfirmArmed) {
+      setReopenConfirmArmed(true);
+      return;
+    }
+    setReopenConfirmArmed(false);
+    setReopening(true);
+    setReopenError(null);
+    try {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/reopen`), { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Terugzetten naar open mislukt');
+      await loadPeriod();
+    } catch (err) {
+      setReopenError(err instanceof Error ? err.message : 'Terugzetten naar open mislukt');
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -262,6 +287,36 @@ export default function PlannerPeriodPage() {
                   )}
                 </div>
                 {closeError && <p className="text-sm text-red-600">{closeError}</p>}
+              </div>
+            )}
+
+            {(period.status === 'GESLOTEN' || period.status === 'GEGENEREERD') && (
+              <div className="flex flex-col items-start gap-2 max-w-xs">
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleReopen}
+                    disabled={reopening}
+                    className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
+                  >
+                    {reopening ? 'Bezig...' : reopenConfirmArmed ? 'Zeker weten? Nogmaals klikken' : '↩️ Terug naar open'}
+                  </button>
+                  {reopenConfirmArmed && (
+                    <button
+                      onClick={() => setReopenConfirmArmed(false)}
+                      className="px-4 py-2 rounded font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                  )}
+                </div>
+                {reopenConfirmArmed && (
+                  <p className="text-sm text-neutral-700" data-testid="terug-naar-open-uitleg">
+                    {period.status === 'GEGENEREERD'
+                      ? 'Het gegenereerde rooster wordt verwijderd. Wat je zelf hebt ingevuld of aangepast, blijft staan. Deelnemers kunnen hun voorkeuren weer wijzigen tot de deadline. Verschuif die zo nodig.'
+                      : 'Deelnemers kunnen hun voorkeuren weer wijzigen tot de deadline. Verschuif die zo nodig.'}
+                  </p>
+                )}
+                {reopenError && <p className="text-sm text-red-600">{reopenError}</p>}
               </div>
             )}
           </div>

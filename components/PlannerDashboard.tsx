@@ -439,6 +439,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       }
       setShowUnpublishConfirm(false);
       await loadData();
+      // The status badge at the top of the page is the page's own state.
+      onPeriodChanged?.();
     } catch (err) {
       setUnpublishError(err instanceof Error ? err.message : 'Intrekken van publicatie mislukt');
     } finally {
