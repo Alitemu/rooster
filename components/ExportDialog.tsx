@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { personaliseReminder } from '@/lib/reminderText';
 import { deadlineTekst } from '@/lib/verzendlijst';
 
 export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
@@ -222,9 +223,10 @@ export function ExportDialog({
     }
   };
 
-  // The template body has the first person's own link baked in - swap it
-  // for each recipient's own link so editing the surrounding text doesn't
-  // break their personal link.
+  // The template body is the first person's: their codenaam and their own
+  // link are baked in. Both are swapped for each recipient's own
+  // (lib/reminderText.ts), so editing the surrounding text keeps everyone's
+  // name and personal link.
   const templateLink = reminders[0]?.personal_link;
   // If a planner edits the textarea so heavily that the exact link string
   // no longer appears, split/join below silently no-ops and every
@@ -236,7 +238,11 @@ export function ExportDialog({
   const reminderBericht = (reminder: ReminderTemplate) => ({
     codenaam: reminder.codenaam,
     onderwerp: editedSubject,
-    tekst: templateLink ? editedBody.split(templateLink).join(reminder.personal_link) : editedBody,
+    tekst: personaliseReminder(
+      editedBody,
+      { codenaam: reminders[0]?.codenaam ?? '', link: templateLink ?? '' },
+      { codenaam: reminder.codenaam, link: reminder.personal_link }
+    ),
   });
 
   const unsentReminders = reminders.filter((r) => reminderSends[r.person_id]?.kind !== 'sent');
@@ -564,7 +570,7 @@ export function ExportDialog({
                   />
                   {linkPlaceholderIntact ? (
                     <p className="text-xs text-neutral-500 italic">
-                      Wijzigingen gelden voor elke herinnering hieronder. Ieders eigen persoonlijke link blijft intact.
+                      Wijzigingen gelden voor elke herinnering hieronder. Iedereen krijgt de eigen codenaam en de eigen persoonlijke link.
                     </p>
                   ) : (
                     <p className="text-xs text-red-700 font-medium">
