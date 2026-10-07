@@ -12,7 +12,19 @@ import { POST } from './route';
  *   reminder with a personal link; someone who handed in never does.
  * - only while the period is open for preferences, only for a planner.
  * - it is logged, so the automatic reminder leaves these people alone.
+ * - someone reminded in the last 24 hours is not reminded again without
+ *   `opnieuw`, however often the button is pressed (a refresh used to
+ *   forget it).
  */
+
+function remindedAgo(periodId: string, personId: string, hours: number) {
+  const op = new Date(Date.now() - hours * 3600_000).toISOString();
+  db.prepare(
+    `INSERT INTO dienstrooster_notification_log (id, person_id, period_id, type, opgesteld_op, gemaild_op)
+     VALUES (?, ?, ?, 'REMINDER', ?, ?)`
+  ).run(crypto.randomUUID(), personId, periodId, op, op);
+  return op;
+}
 
 let sink: SmtpSink;
 beforeAll(async () => {
@@ -196,5 +208,57 @@ describe('POST /api/planner/period/[id]/remind', () => {
 
     expect(res.status).toBe(401);
     expect(sink.received).toHaveLength(0);
+  });
+
+  it('asks before reminding one person again within 24 hours, and does it when told to', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    const op = remindedAgo(f.periodId, f.bezig, 2);
+
+    const eerst = await remind(f.periodId, f.planner, { person_id: f.bezig });
+    expect(eerst.status).toBe(409);
+    expect(eerst.body.error.code).toBe('RECENT_HERINNERD');
+    expect(eerst.body.error.laatste_herinnering_op).toBe(op);
+    expect(sink.received).toHaveLength(0);
+
+    const toch = await remind(f.periodId, f.planner, { person_id: f.bezig, opnieuw: true });
+    expect(toch.status).toBe(200);
+    expect(sink.received).toHaveLength(1);
+  });
+
+  it('a reminder just sent counts too, so pressing twice asks the second time', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+
+    expect((await remind(f.periodId, f.planner, { person_id: f.bezig })).status).toBe(200);
+    expect((await remind(f.periodId, f.planner, { person_id: f.bezig })).body.error.code).toBe('RECENT_HERINNERD');
+    expect(sink.received).toHaveLength(1);
+  });
+
+  it('a reminder more than 24 hours ago does not count', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    remindedAgo(f.periodId, f.bezig, 25);
+
+    expect((await remind(f.periodId, f.planner, { person_id: f.bezig })).status).toBe(200);
+  });
+
+  it('"everyone" leaves out who was reminded in the last 24 hours, unless told otherwise', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    remindedAgo(f.periodId, f.bezig, 1);
+
+    const res = await remind(f.periodId, f.planner);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual({ aantal: 1, overgeslagen: 1 });
+    expect(verzendlijstPayload(sink.received[0].raw).berichten.map((b) => b.codenaam)).toEqual([codenaam(f.nietBegonnen)]);
+
+    // Now both were reminded within the day.
+    const nogmaals = await remind(f.periodId, f.planner);
+    expect(nogmaals.status).toBe(409);
+    expect(nogmaals.body.error.code).toBe('RECENT_HERINNERD');
+
+    const iedereen = await remind(f.periodId, f.planner, { opnieuw: true });
+    expect(iedereen.body.data).toEqual({ aantal: 2, overgeslagen: 0 });
   });
 });

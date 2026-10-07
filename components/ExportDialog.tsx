@@ -11,6 +11,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { personaliseReminder } from '@/lib/reminderText';
+import { herinnerdOpTekst } from '@/lib/herinnerdOp';
 import { deadlineTekst } from '@/lib/verzendlijst';
 
 export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
@@ -30,7 +31,11 @@ interface ReminderTemplate {
   subject: string;
   body: string;
   deadline_bron: string;
+  laatste_herinnering_op: string | null;
 }
+
+/** Who got a reminder in the last 24 hours, from the send route's 409 RECENT_HERINNERD. */
+type RecentHerinnerd = Array<{ codenaam: string; laatste_herinnering_op: string }>;
 
 interface Props {
   periodId: string;
@@ -75,6 +80,13 @@ export function ExportDialog({
   // Per reminder, by person_id: sending one on its own, or already sent
   // (on its own or with the rest). "All" only sends the ones not sent yet.
   const [reminderSends, setReminderSends] = useState<Record<string, SendState>>({});
+  // A send the server held back because someone in it was reminded in the
+  // last 24 hours: asked once more, with who and when.
+  const [recentVraag, setRecentVraag] = useState<{
+    list: ReminderTemplate[];
+    alle: boolean;
+    wie: RecentHerinnerd;
+  } | null>(null);
 
   useEffect(() => {
     if (exportType !== 'reminders') {
@@ -171,6 +183,7 @@ export function ExportDialog({
   // Switching between invitations and reminders starts a fresh send.
   useEffect(() => {
     setSendState({ kind: 'idle' });
+    setRecentVraag(null);
   }, [exportType]);
 
   const postSend = async (url: string, body?: unknown): Promise<SendState> => {
@@ -249,18 +262,49 @@ export function ExportDialog({
   const anyReminderSending =
     sendState.kind === 'sending' || Object.values(reminderSends).some((st) => st.kind === 'sending');
 
-  /** Sends these reminders as one verzendlijst; `alle` also drives the "all" button's state. */
-  const sendReminders = async (list: ReminderTemplate[], alle: boolean) => {
+  /**
+   * Sends these reminders as one verzendlijst; `alle` also drives the "all"
+   * button's state. Without `opnieuw` the server sends nothing while one of
+   * them was reminded in the last 24 hours, and the dialog asks.
+   */
+  const sendReminders = async (list: ReminderTemplate[], alle: boolean, opnieuw = false) => {
     const mark = (state: SendState) =>
       setReminderSends((prev) => ({ ...prev, ...Object.fromEntries(list.map((r) => [r.person_id, state])) }));
+    setRecentVraag(null);
     if (alle) setSendState({ kind: 'sending' });
     mark({ kind: 'sending' });
-    const result = await postSend(withBasePath(`/api/exports/reminders/${periodId}/send`), {
-      deadline: reminders[0]?.deadline_bron,
-      berichten: list.map(reminderBericht),
-    });
+    let result: SendState;
+    try {
+      const res = await fetch(withBasePath(`/api/exports/reminders/${periodId}/send`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deadline: reminders[0]?.deadline_bron,
+          berichten: list.map(reminderBericht),
+          ...(opnieuw ? { opnieuw: true } : {}),
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.error?.code === 'RECENT_HERINNERD') {
+        mark({ kind: 'idle' });
+        if (alle) setSendState({ kind: 'idle' });
+        setRecentVraag({ list, alle, wie: data.error.recent ?? [] });
+        return;
+      }
+      result =
+        !res.ok || !data?.success
+          ? { kind: 'failed', message: data?.error?.message ?? 'Versturen is mislukt.' }
+          : { kind: 'sent', aantal: data.data.aantal };
+    } catch {
+      result = { kind: 'failed', message: 'Geen verbinding met de server. Controleer je netwerk.' };
+    }
     mark(result.kind === 'sent' ? { kind: 'sent', aantal: 1 } : result);
     if (alle) setSendState(result);
+    if (result.kind === 'sent') {
+      const nu = new Date().toISOString();
+      const ids = new Set(list.map((r) => r.person_id));
+      setReminders((prev) => prev.map((r) => (ids.has(r.person_id) ? { ...r, laatste_herinnering_op: nu } : r)));
+    }
   };
 
   const downloadInvitations = async () => {
@@ -608,6 +652,52 @@ export function ExportDialog({
                   )}
                 </div>
 
+                {recentVraag && (
+                  <div role="alert" className="bg-amber-50 border border-amber-300 rounded p-4 mb-6 space-y-3">
+                    <p className="text-sm font-semibold text-amber-900">Al herinnerd in de afgelopen 24 uur</p>
+                    <ul className="text-sm text-amber-900 list-disc pl-5">
+                      {recentVraag.wie.map((w) => (
+                        <li key={w.codenaam}>
+                          {w.codenaam}: {herinnerdOpTekst(w.laatste_herinnering_op)}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-sm text-amber-900">
+                      {recentVraag.list.length === 1 ? 'Toch nog een herinnering sturen?' : 'Toch iedereen een herinnering sturen?'}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => sendReminders(recentVraag.list, recentVraag.alle, true)}
+                        className="py-1.5 px-3 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700"
+                      >
+                        Toch versturen
+                      </button>
+                      {recentVraag.list.length > recentVraag.wie.length && (
+                        <button
+                          onClick={() => {
+                            const wie = new Set(recentVraag.wie.map((w) => w.codenaam));
+                            sendReminders(
+                              recentVraag.list.filter((r) => !wie.has(r.codenaam)),
+                              recentVraag.alle
+                            );
+                          }}
+                          className="py-1.5 px-3 rounded text-sm font-medium bg-white border border-green-600 text-green-800 hover:bg-green-50"
+                        >
+                          Alleen de {recentVraag.list.length - recentVraag.wie.length === 1
+                            ? 'andere'
+                            : `andere ${recentVraag.list.length - recentVraag.wie.length}`}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setRecentVraag(null)}
+                        className="py-1.5 px-3 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+                      >
+                        Annuleren
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <p className="text-sm text-neutral-600 mb-2">Of verstuur de herinnering per persoon.</p>
                 <ul className="space-y-2 mb-6">
                   {reminders.map((reminder) => {
@@ -618,6 +708,11 @@ export function ExportDialog({
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-neutral-900">{reminder.codenaam}</p>
                             <p className="text-xs text-neutral-600">Deadline: {reminder.deadline}</p>
+                            {reminder.laatste_herinnering_op && (
+                              <p className="text-xs text-neutral-600">
+                                Laatst herinnerd: {herinnerdOpTekst(reminder.laatste_herinnering_op)}
+                              </p>
+                            )}
                           </div>
                           {state.kind === 'sent' ? (
                             <span className="text-sm text-green-800 whitespace-nowrap">✓ Verstuurd</span>

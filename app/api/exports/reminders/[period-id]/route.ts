@@ -39,6 +39,7 @@ import { getActiveReminderMilestones, resolveReminderUrgency } from '@/lib/remin
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
 import { rememberBaseUrl } from '@/lib/periodInvitations';
+import { lastRemindedAt } from '@/lib/autoReminders';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ReminderTemplate {
@@ -50,6 +51,8 @@ interface ReminderTemplate {
   body: string;
   /** The period's deadline as stored, which this text was written for. The send route refuses it once that changes. */
   deadline_bron: string;
+  /** When this person last got a reminder for this period, or null. */
+  laatste_herinnering_op: string | null;
 }
 
 function daysBeforeDeadlineFromOverride(override: string | null, deadline: string): number {
@@ -144,6 +147,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const milestones = getActiveReminderMilestones(periodId);
     const urgency = resolveReminderUrgency(daysBeforeDeadline, milestones);
 
+    const laatste = lastRemindedAt(periodId);
     const reminders: ReminderTemplate[] = outstanding.map((person) => {
       // Added to this person's links, not replacing them - their earlier
       // invitation link keeps working (see the module docstring).
@@ -188,6 +192,7 @@ Bedankt!`;
         subject,
         body,
         deadline_bron: period.deadline,
+        laatste_herinnering_op: laatste.get(person.person_id) ?? null,
       };
     });
 

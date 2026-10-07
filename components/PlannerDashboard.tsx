@@ -34,6 +34,7 @@ import { MailSettingsDialog } from './MailSettingsDialog';
 import { MailWarning } from './MailWarning';
 import { PreferencesImportButton } from './PreferencesImportDialog';
 import { withBasePath } from '@/lib/basePath';
+import { herinnerdOpTekst, isRecentHerinnerd } from '@/lib/herinnerdOp';
 
 interface PersonProgress {
   person_id: string;
@@ -45,6 +46,7 @@ interface PersonProgress {
   blocked_days_count: number;
   has_absences: boolean;
   is_fellow: number;
+  laatste_herinnering_op: string | null;
 }
 
 interface ImbalanceItem {
@@ -224,9 +226,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<{ personId: string; message: string } | null>(null);
   const [submittingFor, setSubmittingFor] = useState<string | null>(null);
-  // Who got a reminder from this screen since it was opened: their button
-  // says so instead of inviting a second mail a minute later.
+  // Who got a reminder from this screen since it was opened ("Verstuurd ✓").
   const [remindedIds, setRemindedIds] = useState<Set<string>>(new Set());
+  // Someone reminded in the last 24 hours (laatste_herinnering_op, also
+  // after a refresh): the button asks first, with when that was.
+  const [remindConfirm, setRemindConfirm] = useState<{ personId: string; op: string } | null>(null);
   const [remindAll, setRemindAll] = useState<
     { stage: 'idle' } | { stage: 'confirm' } | { stage: 'sending' } | { stage: 'done'; ok: boolean; message: string }
   >({ stage: 'idle' });
@@ -450,43 +454,83 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
   // A reminder with the standard text, straight away (POST .../remind):
   // one person, or without personId everyone who hasn't handed in yet.
-  const sendReminder = async (personId?: string): Promise<{ ok: true; aantal: number } | { ok: false; message: string }> => {
+  // Without `opnieuw` the server skips (everyone) or refuses (one person)
+  // whoever was reminded in the last 24 hours.
+  type RemindResult =
+    | { ok: true; aantal: number; overgeslagen: number }
+    | { ok: false; message: string; recentOp?: string };
+  const sendReminder = async (personId?: string, opnieuw = false): Promise<RemindResult> => {
     try {
       const res = await fetch(withBasePath(`/api/planner/period/${periodId}/remind`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(personId ? { person_id: personId } : {}),
+        body: JSON.stringify({ ...(personId ? { person_id: personId } : {}), ...(opnieuw ? { opnieuw: true } : {}) }),
       });
       const data = await res.json().catch(() => null);
-      if (!res.ok) return { ok: false, message: data?.error?.message || 'Versturen mislukt' };
-      return { ok: true, aantal: data.data.aantal };
+      if (!res.ok) {
+        return {
+          ok: false,
+          message: data?.error?.message || 'Versturen mislukt',
+          recentOp: data?.error?.code === 'RECENT_HERINNERD' ? data.error.laatste_herinnering_op : undefined,
+        };
+      }
+      return { ok: true, aantal: data.data.aantal, overgeslagen: data.data.overgeslagen ?? 0 };
     } catch {
       return { ok: false, message: 'Versturen mislukt. Controleer de verbinding en probeer het opnieuw.' };
     }
   };
 
-  const handleRemindOne = async (personId: string) => {
-    setSubmittingFor(personId);
+  // Who was reminded when, straight from the server (also what another
+  // planner or the automatic reminder sent meanwhile).
+  const refreshProgress = async () => {
+    try {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/progress`));
+      if (res.ok) setProgress((await res.json()).data);
+    } catch {
+      // The table keeps what it showed; the next load corrects it.
+    }
+  };
+
+  const handleRemindOne = async (person: PersonProgress, opnieuw = false) => {
+    const personId = person.person_id;
     setActionError(null);
-    const result = await sendReminder(personId);
-    if (result.ok) setRemindedIds((prev) => new Set(prev).add(personId));
-    else setActionError({ personId, message: result.message });
+    if (!opnieuw && isRecentHerinnerd(person.laatste_herinnering_op)) {
+      setRemindConfirm({ personId, op: person.laatste_herinnering_op! });
+      return;
+    }
+    setRemindConfirm(null);
+    setSubmittingFor(personId);
+    const result = await sendReminder(personId, opnieuw);
+    if (result.ok) {
+      setRemindedIds((prev) => new Set(prev).add(personId));
+      await refreshProgress();
+    } else if (result.recentOp) {
+      // Someone else (or the automatic reminder) got there first.
+      setRemindConfirm({ personId, op: result.recentOp });
+      await refreshProgress();
+    } else {
+      setActionError({ personId, message: result.message });
+    }
     setSubmittingFor(null);
   };
 
-  const handleRemindAll = async (personIds: string[]) => {
+  const handleRemindAll = async (opnieuw: boolean) => {
     setRemindAll({ stage: 'sending' });
-    const result = await sendReminder();
+    const result = await sendReminder(undefined, opnieuw);
     if (result.ok) {
-      setRemindedIds((prev) => new Set([...prev, ...personIds]));
+      const overgeslagen =
+        result.overgeslagen > 0
+          ? ` ${result.overgeslagen} ${result.overgeslagen === 1 ? 'persoon kreeg' : 'personen kregen'} de afgelopen 24 uur al een herinnering en ${result.overgeslagen === 1 ? 'is' : 'zijn'} overgeslagen.`
+          : '';
       setRemindAll({
         stage: 'done',
         ok: true,
-        message: `Herinnering verstuurd aan ${result.aantal} ${result.aantal === 1 ? 'persoon' : 'personen'}.`,
+        message: `Herinnering verstuurd aan ${result.aantal} ${result.aantal === 1 ? 'persoon' : 'personen'}.${overgeslagen}`,
       });
     } else {
       setRemindAll({ stage: 'done', ok: false, message: result.message });
     }
+    await refreshProgress();
   };
 
   // The planner may change who is a fellow (lib/fellows.ts) until the
@@ -935,23 +979,51 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                     {dashboard.status === 'OPEN' && (() => {
                       const ingediend = person.submission_status === 'BEVESTIGD';
                       const verstuurd = remindedIds.has(person.person_id);
+                      if (remindConfirm?.personId === person.person_id) {
+                        return (
+                          <div className="max-w-[14rem] mx-auto text-left space-y-2" role="alert">
+                            <p className="text-xs text-amber-900">
+                              {person.codenaam} kreeg {herinnerdOpTekst(remindConfirm.op)} al een herinnering. Toch nog
+                              een sturen?
+                            </p>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleRemindOne(person, true)}
+                                className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 whitespace-nowrap"
+                              >
+                                Toch versturen
+                              </button>
+                              <button
+                                onClick={() => setRemindConfirm(null)}
+                                className="text-xs px-2 py-1 rounded bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+                              >
+                                Annuleren
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
                       return (
-                        <button
-                          onClick={() => handleRemindOne(person.person_id)}
-                          disabled={ingediend || verstuurd || submittingFor === person.person_id}
-                          title={
-                            ingediend
-                              ? 'Deze persoon heeft de voorkeuren al ingediend.'
-                              : 'Stuurt een herinnering met een persoonlijke link.'
-                          }
-                          className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 disabled:text-neutral-600 transition-colors whitespace-nowrap"
-                        >
-                          {submittingFor === person.person_id
-                            ? 'Bezig...'
-                            : verstuurd
-                              ? 'Verstuurd ✓'
-                              : 'Herinnering sturen'}
-                        </button>
+                        <>
+                          <button
+                            onClick={() => handleRemindOne(person)}
+                            disabled={ingediend || submittingFor === person.person_id}
+                            title={
+                              ingediend
+                                ? 'Deze persoon heeft de voorkeuren al ingediend.'
+                                : 'Stuurt een herinnering met een persoonlijke link.'
+                            }
+                            className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 disabled:text-neutral-600 transition-colors whitespace-nowrap"
+                          >
+                            {submittingFor === person.person_id ? 'Bezig...' : 'Herinnering sturen'}
+                          </button>
+                          {verstuurd && <p className="mt-1 text-xs text-green-700">Verstuurd ✓</p>}
+                          {person.laatste_herinnering_op && (
+                            <p className="mt-1 text-xs text-neutral-600 whitespace-nowrap">
+                              Laatst herinnerd: {herinnerdOpTekst(person.laatste_herinnering_op)}
+                            </p>
+                          )}
+                        </>
                       );
                     })()}
                     {actionError?.personId === person.person_id && (
@@ -973,7 +1045,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         </div>
 
         {dashboard.status === 'OPEN' && (() => {
-          const open = progress.filter((p) => p.submission_status !== 'BEVESTIGD').map((p) => p.person_id);
+          const open = progress.filter((p) => p.submission_status !== 'BEVESTIGD');
+          const recent = open.filter((p) => isRecentHerinnerd(p.laatste_herinnering_op)).length;
+          const anderen = open.length - recent;
           const aantal = `${open.length} ${open.length === 1 ? 'persoon' : 'personen'}`;
           return (
             <div className="mt-4 border-t pt-4">
@@ -981,12 +1055,28 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 <div className="flex flex-wrap items-center gap-3">
                   <p className="text-sm text-neutral-800">
                     {aantal} {open.length === 1 ? 'krijgt' : 'krijgen'} een herinnering met een persoonlijke link.
+                    {recent > 0 &&
+                      (recent === open.length
+                        ? ` ${open.length === 1 ? 'Die kreeg' : 'Zij kregen allemaal'} de afgelopen 24 uur al een herinnering.`
+                        : ` ${recent} van hen ${recent === 1 ? 'kreeg' : 'kregen'} de afgelopen 24 uur al een herinnering.`)}
                   </p>
+                  {recent > 0 && anderen > 0 && (
+                    <button
+                      onClick={() => handleRemindAll(false)}
+                      className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    >
+                      Alleen de {anderen === 1 ? 'andere' : `andere ${anderen}`}
+                    </button>
+                  )}
                   <button
-                    onClick={() => handleRemindAll(open)}
-                    className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+                    onClick={() => handleRemindAll(true)}
+                    className={`px-4 py-2 rounded font-medium transition-colors ${
+                      recent > 0 && anderen > 0
+                        ? 'bg-neutral-200 text-neutral-900 hover:bg-neutral-300'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
                   >
-                    Versturen
+                    {recent > 0 ? `Iedereen (${open.length})` : 'Versturen'}
                   </button>
                   <button
                     onClick={() => setRemindAll({ stage: 'idle' })}

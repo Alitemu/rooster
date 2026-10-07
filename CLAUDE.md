@@ -644,6 +644,17 @@ automatic reminder's text (reminderBericht), fresh links, logged like any
 reminder, only while OPEN before the deadline. (There used to be a
 "submit on behalf" button there; it is gone on purpose.)
 
+Nobody is reminded by hand twice within 24 hours without the planner
+saying so: the table shows "Laatst herinnerd" (`laatste_herinnering_op` in
+the progress route, lib/autoReminders.ts lastRemindedAt over
+notification_log, automatic and manual alike; lib/herinnerdOp.ts words
+it), and the server enforces it, so a refresh doesn't undo it. One person
+reminded within the day: 409 RECENT_HERINNERD with the time, the row asks
+"Toch versturen". Everyone: without `opnieuw` those people are skipped
+(`overgeslagen`), the confirmation offers "Alleen de andere n" or
+"Iedereen". The export dialog's send route sends nothing while one of
+them is recent (409 with `recent`), and the dialog asks the same way.
+
 "Link kwijt?" on the start page (components/LinkAanvraagForm.tsx, public
 POST /api/link-aanvragen, lib/linkAanvraag.ts): the app can't map an
 address to a codenaam, so it mails the flow a LINK_AANVRAAG verzendlijst

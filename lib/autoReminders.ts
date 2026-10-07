@@ -125,6 +125,38 @@ export function reminderGroupCounts(
   return { nog_niets_ingevuld: personIds.length - bezig, nog_niet_ingediend: bezig };
 }
 
+/**
+ * When each person was last mailed a reminder for this period, automatic or
+ * by hand (every route logs to notification_log), by person_id. Shown in
+ * "Status voorkeuren" and the export dialog.
+ */
+export function lastRemindedAt(periodId: string): Map<string, string> {
+  const rows = db
+    .prepare(
+      `SELECT person_id, MAX(gemaild_op) AS op FROM dienstrooster_notification_log
+       WHERE period_id = ? AND type IN ('REMINDER', 'FINAL_WARNING') AND gemaild_op IS NOT NULL
+       GROUP BY person_id`
+    )
+    .all(periodId) as Array<{ person_id: string; op: string }>;
+  return new Map(rows.map((r) => [r.person_id, r.op]));
+}
+
+/**
+ * Who of these people got a reminder in the last day, with when. A planner
+ * sending one by hand is asked first (opnieuw: true): the button is easy to
+ * press twice, and a page refresh used to forget it had been.
+ */
+export function recentlyReminded(periodId: string, personIds: string[], now: Date): Map<string, string> {
+  const last = lastRemindedAt(periodId);
+  const since = now.getTime() - RECENTLY_REMINDED_MS;
+  const recent = new Map<string, string>();
+  for (const id of personIds) {
+    const op = last.get(id);
+    if (op && new Date(op).getTime() > since) recent.set(id, op);
+  }
+  return recent;
+}
+
 /** Records that these people were mailed a reminder, so nobody gets two within a day. */
 export function logRemindersSent(personIds: string[], periodId: string, laatste: boolean, now: Date): void {
   const insert = db.prepare(

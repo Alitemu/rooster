@@ -8,6 +8,10 @@
  * substituted in. Every codenaam must belong to someone taking part in this
  * period: the flow looks it up in its own list, and an unknown one would
  * only fail there, out of sight.
+ *
+ * Nothing goes out while one of them got a reminder in the last 24 hours,
+ * unless `opnieuw: true`: 409 RECENT_HERINNERD lists who, so the dialog can
+ * ask first (the same rule as "Status voorkeuren").
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,7 +22,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { getInvitationPeriod } from '@/lib/periodInvitations';
 import { buildVerzendlijst, verzendlijstPersonen } from '@/lib/verzendlijst';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
-import { logRemindersSent, reminderGroupCounts } from '@/lib/autoReminders';
+import { logRemindersSent, recentlyReminded, reminderGroupCounts } from '@/lib/autoReminders';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 
 const bodySchema = z.object({
@@ -34,10 +38,11 @@ const bodySchema = z.object({
     )
     .min(1)
     .max(500),
+  opnieuw: z.boolean().optional(),
 });
 
-function fail(status: number, code: string, message: string): NextResponse {
-  return NextResponse.json({ success: false, error: { code, message } }, { status });
+function fail(status: number, code: string, message: string, extra?: Record<string, unknown>): NextResponse {
+  return NextResponse.json({ success: false, error: { code, message, ...extra } }, { status });
 }
 
 export async function POST(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
@@ -78,6 +83,23 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     // soort and personen set here rather than trusted from the client: a
     // reminder only ever names its own recipient.
     const personIds = berichten.map((b) => members.get(b.codenaam)!);
+    const now = new Date();
+    if (parsed.data.opnieuw !== true) {
+      const recent = recentlyReminded(period.id, personIds, now);
+      if (recent.size > 0) {
+        const wie = berichten
+          .map((b) => ({ codenaam: b.codenaam, laatste_herinnering_op: recent.get(members.get(b.codenaam)!) }))
+          .filter((r) => r.laatste_herinnering_op);
+        return fail(
+          409,
+          'RECENT_HERINNERD',
+          wie.length === 1
+            ? `${wie[0].codenaam} kreeg de afgelopen 24 uur al een herinnering.`
+            : `${wie.length} van hen kregen de afgelopen 24 uur al een herinnering.`,
+          { recent: wie }
+        );
+      }
+    }
     const result = await sendVerzendlijst(
       buildVerzendlijst(
         {
@@ -92,7 +114,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
     // So the automatic reminders leave these people alone for a day.
-    logRemindersSent(personIds, period.id, false, new Date());
+    logRemindersSent(personIds, period.id, false, now);
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
     return internalErrorResponse('export-reminders-send', error);

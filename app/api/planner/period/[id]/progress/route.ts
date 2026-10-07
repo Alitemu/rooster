@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { lastRemindedAt } from '@/lib/autoReminders';
 import type { ApiSuccessResponse } from '@/types';
 
 interface PersonProgress {
@@ -21,6 +22,8 @@ interface PersonProgress {
   blocked_days_count: number;
   has_absences: boolean;
   is_fellow: number;
+  // When they last got a reminder for this period, automatic or by hand.
+  laatste_herinnering_op: string | null;
 }
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -89,7 +92,10 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
       ORDER BY is_fellow ASC, p.codenaam ASC
     `);
 
-    const progress = progressStmt.all(periodId, periodId, periodId, periodId, periodId) as PersonProgress[];
+    const laatste = lastRemindedAt(periodId);
+    const progress = (
+      progressStmt.all(periodId, periodId, periodId, periodId, periodId) as Omit<PersonProgress, 'laatste_herinnering_op'>[]
+    ).map((p) => ({ ...p, laatste_herinnering_op: laatste.get(p.person_id) ?? null }));
 
     const response: ApiSuccessResponse<PersonProgress[]> = {
       success: true,

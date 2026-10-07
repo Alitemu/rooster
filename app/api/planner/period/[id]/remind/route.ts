@@ -7,10 +7,14 @@
  * The same message the automatic reminders use (lib/autoReminders.ts
  * reminderBericht: its own text for someone who hasn't started and for
  * someone who hasn't handed in), each with a freshly issued personal link,
- * as one verzendlijst to the flow. Unlike the automatic ones this does not
- * skip anyone reminded in the last day: the planner pressed the button on
- * purpose. It is logged the same way, so the automatic reminder then
- * leaves these people alone for a day.
+ * as one verzendlijst to the flow. It is logged the same way, so the
+ * automatic reminder then leaves these people alone for a day.
+ *
+ * Someone reminded in the last 24 hours (automatic or by hand) is not
+ * reminded again unless the request says `opnieuw: true`: a single person
+ * gets 409 RECENT_HERINNERD with `laatste_herinnering_op`, so the screen can
+ * ask first, and "everyone" leaves them out (`overgeslagen` in the answer).
+ * Checked here rather than only on screen, where a refresh forgot it.
  *
  * Someone who has handed in (BEVESTIGD) never gets one: a single request
  * for them is refused, and "everyone" leaves them out.
@@ -25,13 +29,13 @@ import { getInvitationPeriod, issuePersonLink, rememberBaseUrl } from '@/lib/per
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { buildVerzendlijst } from '@/lib/verzendlijst';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
-import { logRemindersSent, reminderBericht, type ReminderGroep } from '@/lib/autoReminders';
+import { logRemindersSent, recentlyReminded, reminderBericht, type ReminderGroep } from '@/lib/autoReminders';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 
-const bodySchema = z.object({ person_id: z.string().min(1).optional() });
+const bodySchema = z.object({ person_id: z.string().min(1).optional(), opnieuw: z.boolean().optional() });
 
-function fail(status: number, code: string, message: string): NextResponse {
-  return NextResponse.json({ success: false, error: { code, message } }, { status });
+function fail(status: number, code: string, message: string, extra?: Record<string, unknown>): NextResponse {
+  return NextResponse.json({ success: false, error: { code, message, ...extra } }, { status });
 }
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -45,6 +49,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const parsed = bodySchema.safeParse(await parseJsonBody(req));
     if (!parsed.success) return fail(400, 'VALIDATION_ERROR', 'Ongeldig verzoek.');
     const personId = parsed.data.person_id;
+    const opnieuw = parsed.data.opnieuw === true;
 
     const gate = checkRemindersAllowed(period);
     if (!gate.allowed) return fail(409, gate.code, gate.message);
@@ -81,6 +86,33 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return fail(409, 'NOBODY_LEFT', 'Iedereen heeft de voorkeuren al ingediend.');
     }
 
+    const now = new Date();
+    let overgeslagen = 0;
+    if (!opnieuw) {
+      const recent = recentlyReminded(
+        period.id,
+        ontvangers.map((o) => o.person_id),
+        now
+      );
+      if (personId && recent.has(personId)) {
+        return fail(
+          409,
+          'RECENT_HERINNERD',
+          `${ontvangers[0].codenaam} kreeg de afgelopen 24 uur al een herinnering.`,
+          { laatste_herinnering_op: recent.get(personId) }
+        );
+      }
+      overgeslagen = recent.size;
+      ontvangers = ontvangers.filter((o) => !recent.has(o.person_id));
+      if (ontvangers.length === 0) {
+        return fail(
+          409,
+          'RECENT_HERINNERD',
+          'Iedereen die nog niet heeft ingediend kreeg de afgelopen 24 uur al een herinnering.'
+        );
+      }
+    }
+
     const baseUrl = resolveBaseUrl(req);
     rememberBaseUrl(period.id, baseUrl);
     const metGroep = ontvangers.map((o) => ({
@@ -92,7 +124,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     );
     const bezig = metGroep.filter((o) => o.groep === 'BEZIG').length;
 
-    const now = new Date();
     const result = await sendVerzendlijst(
       buildVerzendlijst(
         {
@@ -114,7 +145,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       false,
       now
     );
-    return NextResponse.json({ success: true, data: { aantal: result.aantal } });
+    return NextResponse.json({ success: true, data: { aantal: result.aantal, overgeslagen } });
   } catch (error) {
     return internalErrorResponse('planner-remind', error);
   }
