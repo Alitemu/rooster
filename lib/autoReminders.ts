@@ -168,7 +168,7 @@ export function reminderBericht(
     personen: verzendlijstPersonen(ontvanger.codenaam),
     onderwerp,
     tekst:
-      `Hoi ${ontvanger.codenaam},\n\n${kern}\n\n${slot}` +
+      `Beste ${ontvanger.codenaam},\n\n${kern}\n\n${slot}` +
       `Ga naar je persoonlijke link:\n${link}\n\nHeb je vragen? Neem dan contact op met de roosteraar.`,
   };
 }

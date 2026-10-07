@@ -35,6 +35,10 @@ describe('seed.ts on an existing database', () => {
         ALTER TABLE dienstrooster_schedule_period DROP COLUMN definitief_op;
         ALTER TABLE dienstrooster_submission DROP COLUMN deeltijd_gecontroleerd_op;
       `);
+      // A template text as an earlier version wrote it.
+      db.prepare(
+        `UPDATE dienstrooster_notification_template SET body_md = 'Hoi {{codenaam}},' || char(10) || 'Oude tekst.' WHERE sleutel = 'REMINDER'`
+      ).run();
       const pool = (db.prepare('SELECT id FROM dienstrooster_pool LIMIT 1').get() as { id: string }).id;
       const admin = (db.prepare(`SELECT id FROM dienstrooster_person WHERE codenaam = 'admin'`).get() as { id: string }).id;
       db.prepare(
@@ -55,6 +59,10 @@ describe('seed.ts on an existing database', () => {
       expect(
         after.prepare(`SELECT definitief_op, definitief_door_person_id FROM dienstrooster_schedule_period WHERE id = 'oud'`).get()
       ).toEqual({ definitief_op: '2025-12-10', definitief_door_person_id: admin });
+      // The greeting the planner asked for, also in templates stored earlier.
+      expect(
+        (after.prepare(`SELECT body_md FROM dienstrooster_notification_template WHERE sleutel = 'REMINDER'`).get() as { body_md: string }).body_md
+      ).toBe('Beste {{codenaam}},\nOude tekst.');
       after.close();
     } finally {
       for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });

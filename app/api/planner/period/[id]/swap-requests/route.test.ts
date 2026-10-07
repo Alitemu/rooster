@@ -30,7 +30,7 @@ function ensureTemplate(sleutel: string, onderwerp: string) {
   if (db.prepare('SELECT 1 FROM dienstrooster_notification_template WHERE sleutel = ?').get(sleutel)) return;
   db.prepare(
     'INSERT INTO dienstrooster_notification_template (id, sleutel, onderwerp, body_md) VALUES (?, ?, ?, ?)'
-  ).run(crypto.randomUUID(), sleutel, onderwerp, 'Hoi {{codenaam}}, {{details}}');
+  ).run(crypto.randomUUID(), sleutel, onderwerp, 'Beste {{codenaam}}, {{details}}');
   created.templates.push(sleutel);
 }
 

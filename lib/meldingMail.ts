@@ -280,7 +280,7 @@ export const SWAP_SUBMITTED_TEMPLATE = {
   naam: 'SWAP_SUBMITTED',
   onderwerp: 'Je ruilverzoek aan {{respondent}} is verstuurd',
   tekst:
-    'Hoi {{codenaam}},\n\nJe ruilverzoek aan {{respondent}} is verstuurd.\n\n{{details}}\n\n' +
+    'Beste {{codenaam}},\n\nJe ruilverzoek aan {{respondent}} is verstuurd.\n\n{{details}}\n\n' +
     'Je krijgt een mail zodra {{respondent}} het verzoek heeft goedgekeurd of afgewezen. ' +
     'Tot die tijd blijft je rooster zoals het is.\n\n{{link}}',
 };

@@ -36,7 +36,7 @@ export const SWAP_WITHDRAWN_TEMPLATE = {
   naam: 'SWAP_WITHDRAWN',
   onderwerp: 'Het ruilverzoek van {{aanvrager}} is {{wat}}',
   tekst:
-    'Hoi {{codenaam}},\n\nHet ruilverzoek van {{aanvrager}} is {{wat}}. Je hoeft er niets meer mee te doen.' +
+    'Beste {{codenaam}},\n\nHet ruilverzoek van {{aanvrager}} is {{wat}}. Je hoeft er niets meer mee te doen.' +
     '\n\n{{details}}\n\n{{link}}',
 };
 
@@ -192,7 +192,7 @@ export function closeLapsedSwaps(
       periodId: swap.periode_id,
       type: 'RUIL_AFGEWEZEN',
       onderwerp: 'Je ruilverzoek is vervallen',
-      inhoud: `Hoi ${aanvrager},\n\nJe ruilverzoek is vervallen.\n\n${details}`,
+      inhoud: `Beste ${aanvrager},\n\nJe ruilverzoek is vervallen.\n\n${details}`,
     });
     meldingen.push({
       send: () =>

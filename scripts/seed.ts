@@ -696,6 +696,15 @@ const REWORDED_TEMPLATES: Array<{ sleutel: string; oud: string; nieuw: string }>
 ];
 
 function refreshRewordedTemplates() {
+  // Every message opened with "Hoi"; the planner asked for "Beste".
+  const greeting = db
+    .prepare(
+      `UPDATE dienstrooster_notification_template
+       SET body_md = 'Beste ' || substr(body_md, 5)
+       WHERE body_md LIKE 'Hoi {{codenaam}},%'`
+    )
+    .run().changes;
+  if (greeting > 0) console.log(`  Updated the greeting in ${greeting} notification template(s)`);
   const rows = db
     .prepare('SELECT id, sleutel, body_md FROM dienstrooster_notification_template')
     .all() as Array<{ id: string; sleutel: string; body_md: string }>;
@@ -829,52 +838,52 @@ function createNotificationTemplates() {
     [
       'PERIOD_OPENED',
       '{{periode}}: voorkeuren staan open',
-      'Hoi {{codenaam}},\n\nHet rooster voor **{{periode}}** staat open voor invoer.\n\nGeef de dagen waarop je niet kunt werken door vóór **{{deadline}}**.\n\n{{link}}\n\nVergeet niet je vakantiedagen te blokkeren. Die worden nergens anders vandaan gehaald.',
+      'Beste {{codenaam}},\n\nHet rooster voor **{{periode}}** staat open voor invoer.\n\nGeef de dagen waarop je niet kunt werken door vóór **{{deadline}}**.\n\n{{link}}\n\nVergeet niet je vakantiedagen te blokkeren. Die worden nergens anders vandaan gehaald.',
     ],
     [
       'PARTTIME_CHECK',
       '{{periode}}: controleer je deeltijddagen',
-      'Hoi {{codenaam}},\n\nWe hebben je deeltijddagen voor **{{periode}}** gegenereerd op basis van je patroon.\n\nControleer ze goed, vooral rond de jaarwisseling. Daar kunnen weeknummers verschuiven.\n\n{{link}}',
+      'Beste {{codenaam}},\n\nWe hebben je deeltijddagen voor **{{periode}}** gegenereerd op basis van je patroon.\n\nControleer ze goed, vooral rond de jaarwisseling. Daar kunnen weeknummers verschuiven.\n\n{{link}}',
     ],
     [
       'REMINDER',
       'Herinnering: voorkeuren {{periode}} nog niet ontvangen',
-      'Hoi {{codenaam}},\n\nWe hebben je voorkeuren voor **{{periode}}** nog niet ontvangen.\n\nDe deadline is **{{deadline}}**.\n\n{{link}}',
+      'Beste {{codenaam}},\n\nWe hebben je voorkeuren voor **{{periode}}** nog niet ontvangen.\n\nDe deadline is **{{deadline}}**.\n\n{{link}}',
     ],
     [
       'FINAL_WARNING',
       'Laatste kans: voorkeuren {{periode}} sluiten binnenkort',
-      'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is **{{deadline}}** en je voorkeuren ontbreken nog.\n\nAls er niets binnenkomt, wordt het rooster gegenereerd zonder je geblokkeerde dagen.\n\n{{link}}',
+      'Beste {{codenaam}},\n\nDe deadline voor **{{periode}}** is **{{deadline}}** en je voorkeuren ontbreken nog.\n\nAls er niets binnenkomt, wordt het rooster gegenereerd zonder je geblokkeerde dagen.\n\n{{link}}',
     ],
     [
       'DEADLINE_PASSED',
       '{{periode}}: de deadline is verstreken',
-      'Hoi {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
+      'Beste {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
     ],
     [
       'BLOCK_OVERRIDDEN',
       '{{periode}}: een van je voorkeuren kon niet worden gehonoreerd',
-      'Hoi {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de roosteraar als dit een probleem is.',
+      'Beste {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de roosteraar als dit een probleem is.',
     ],
     [
       'SCHEDULE_PUBLISHED',
       '{{periode}}: het rooster is gepubliceerd',
-      'Hoi {{codenaam}},\n\nHet voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
+      'Beste {{codenaam}},\n\nHet voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
     ],
     [
       'SWAP_REQUESTED',
       'Ruilverzoek van {{aanvrager}}',
-      'Hoi {{codenaam}},\n\n{{aanvrager}} wil een dienst met je ruilen.\n\n{{details}}\n\n{{link}}',
+      'Beste {{codenaam}},\n\n{{aanvrager}} wil een dienst met je ruilen.\n\n{{details}}\n\n{{link}}',
     ],
     [
       'SWAP_RESULT',
       'Je ruilverzoek is {{uitkomst}}',
-      'Hoi {{codenaam}},\n\nJe ruilverzoek is **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
+      'Beste {{codenaam}},\n\nJe ruilverzoek is **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
     ],
     [
       'CORRECTION_BOOKED',
       '{{periode}}: een correctie is geregistreerd',
-      'Hoi {{codenaam}},\n\nEr is een correctie voor je geregistreerd die wordt toegepast op **{{periode}}**.\n\n{{details}}\n\nReden: {{reden}}',
+      'Beste {{codenaam}},\n\nEr is een correctie voor je geregistreerd die wordt toegepast op **{{periode}}**.\n\n{{details}}\n\nReden: {{reden}}',
     ],
   ];
 

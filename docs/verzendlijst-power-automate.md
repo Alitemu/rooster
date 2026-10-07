@@ -255,8 +255,8 @@ versie iets verschillen.
             "codenaam": "Persoon-03",
             "personen": ["Persoon-03"],
             "onderwerp": "Laatste herinnering: geef je voorkeuren voor Voorjaar 2027 door",
-            "tekst": "Hoi Persoon-03, ...",
-            "html": "Hoi Persoon-03,<br><br>..."
+            "tekst": "Beste Persoon-03, ...",
+            "html": "Beste Persoon-03,<br><br>..."
           }
         ]
       }
@@ -371,9 +371,9 @@ staat, bij één of twee codenamen.
 
 ## Stap 5 (optioneel). Echte namen in plaats van codenamen
 
-Zonder deze stap staat er in de mail bijvoorbeeld "Hoi Persoon-07,
+Zonder deze stap staat er in de mail bijvoorbeeld "Beste Persoon-07,
 Persoon-03 wil een dienst met je ruilen." Met deze stap vervangt de stroom
-elke codenaam door de naam uit je Excel-lijst: "Hoi Anna, Bram wil een
+elke codenaam door de naam uit je Excel-lijst: "Beste Anna, Bram wil een
 dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
 
 1. Geef de tabel `Adressen` een derde kolom `Naam`.

@@ -57,12 +57,12 @@ function ensureTemplates() {
     [
       'SWAP_REQUESTED',
       'Ruilverzoek van {{aanvrager}}',
-      'Hoi {{codenaam}},\n\n{{aanvrager}} wil een dienst met je ruilen.\n\n{{details}}\n\n{{link}}',
+      'Beste {{codenaam}},\n\n{{aanvrager}} wil een dienst met je ruilen.\n\n{{details}}\n\n{{link}}',
     ],
     [
       'SWAP_RESULT',
       'Je ruilverzoek is {{uitkomst}}',
-      'Hoi {{codenaam}},\n\nJe ruilverzoek is **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
+      'Beste {{codenaam}},\n\nJe ruilverzoek is **{{uitkomst}}**.\n\n{{details}}\n\n{{link}}',
     ],
   ];
   for (const [sleutel, onderwerp, body] of templates) {

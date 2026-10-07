@@ -167,7 +167,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
             ? `Even een seintje: je hebt nog maar een paar dagen om je voorkeuren in te dienen, uiterlijk ${deadline}.`
             : `Dit is een herinnering dat je dienstvoorkeuren voor ${period.naam} uiterlijk ${deadline} binnen moeten zijn.`;
 
-      const body = `Hoi ${person.codenaam},
+      const body = `Beste ${person.codenaam},
 
 ${urgencyLine}
 

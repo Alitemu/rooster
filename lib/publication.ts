@@ -119,7 +119,7 @@ export function voorlopigBericht(
     codenaam,
     personen: verzendlijstPersonen(codenaam),
     onderwerp: `Voorlopig rooster ${period.naam}`,
-    tekst: `Hoi ${codenaam},
+    tekst: `Beste ${codenaam},
 
 Het voorlopige rooster voor ${period.naam} staat klaar. ${dienstenBlok(eigen)}
 
@@ -149,7 +149,7 @@ export function definitiefBericht(
     codenaam,
     personen: verzendlijstPersonen(codenaam),
     onderwerp: `Definitief rooster ${period.naam}`,
-    tekst: `Hoi ${codenaam},
+    tekst: `Beste ${codenaam},
 
 Het rooster voor ${period.naam} is nu definitief. ${dienstenBlok(eigen)}
 

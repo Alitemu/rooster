@@ -72,7 +72,7 @@ export function linkAanvraagKandidaten(now: Date = new Date()): { periode: strin
     personen: verzendlijstPersonen(m.codenaam),
     onderwerp: `Je persoonlijke link voor het dienstrooster ${period.naam}`,
     tekst:
-      `Hoi ${m.codenaam},\n\nJe hebt je persoonlijke link voor het dienstrooster aangevraagd.\n\n` +
+      `Beste ${m.codenaam},\n\nJe hebt je persoonlijke link voor het dienstrooster aangevraagd.\n\n` +
       `${uitleg}\n\n${issuePersonLink(m.id, period.id, baseUrl)}\n\n` +
       'Heb je dit niet zelf aangevraagd? Dan kun je deze e-mail negeren.\n\n' +
       'Heb je vragen? Neem dan contact op met de roosteraar.',

@@ -10,16 +10,16 @@ import {
 
 describe('renderTemplate', () => {
   it('substitutes every placeholder present in the map', () => {
-    const result = renderTemplate('Hoi {{codenaam}}, welkom bij {{periode}}.', {
+    const result = renderTemplate('Beste {{codenaam}}, welkom bij {{periode}}.', {
       codenaam: 'Persoon-01',
       periode: '2027-1',
     });
-    expect(result).toBe('Hoi Persoon-01, welkom bij 2027-1.');
+    expect(result).toBe('Beste Persoon-01, welkom bij 2027-1.');
   });
 
   it('leaves a placeholder untouched when no value was given for it', () => {
-    const result = renderTemplate('Hoi {{codenaam}}, zie {{link}}.', { codenaam: 'Persoon-01' });
-    expect(result).toBe('Hoi Persoon-01, zie {{link}}.');
+    const result = renderTemplate('Beste {{codenaam}}, zie {{link}}.', { codenaam: 'Persoon-01' });
+    expect(result).toBe('Beste Persoon-01, zie {{link}}.');
   });
 });
 
@@ -40,11 +40,11 @@ describe('renderNotificationTemplate', () => {
     if (previous) {
       db.prepare(
         `UPDATE dienstrooster_notification_template SET onderwerp = ?, body_md = ? WHERE sleutel = ?`
-      ).run('{{periode}}: test', 'Hoi {{codenaam}}, dit is een test voor {{periode}}.', sleutel);
+      ).run('{{periode}}: test', 'Beste {{codenaam}}, dit is een test voor {{periode}}.', sleutel);
     } else {
       db.prepare(
         `INSERT INTO dienstrooster_notification_template (id, sleutel, onderwerp, body_md)
-         VALUES (?, ?, '{{periode}}: test', 'Hoi {{codenaam}}, dit is een test voor {{periode}}.')`
+         VALUES (?, ?, '{{periode}}: test', 'Beste {{codenaam}}, dit is een test voor {{periode}}.')`
       ).run(crypto.randomUUID(), sleutel);
     }
   });
@@ -63,7 +63,7 @@ describe('renderNotificationTemplate', () => {
     const rendered = renderNotificationTemplate(sleutel, { codenaam: 'Persoon-02', periode: '2027-2' });
     expect(rendered).toEqual({
       onderwerp: '2027-2: test',
-      inhoud: 'Hoi Persoon-02, dit is een test voor 2027-2.',
+      inhoud: 'Beste Persoon-02, dit is een test voor 2027-2.',
     });
   });
 
@@ -146,7 +146,7 @@ describe('queueBlockOverriddenNotification', () => {
       db.prepare(
         `INSERT INTO dienstrooster_notification_template (id, sleutel, onderwerp, body_md)
          VALUES (?, 'BLOCK_OVERRIDDEN', '{{periode}}: een van je voorkeuren kon niet worden gehonoreerd',
-                 'Hoi {{codenaam}},\n\n{{details}}\n\nReden: {{reden}}')`
+                 'Beste {{codenaam}},\n\n{{details}}\n\nReden: {{reden}}')`
       ).run(crypto.randomUUID());
     }
 

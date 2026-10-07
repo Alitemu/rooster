@@ -127,7 +127,7 @@ export function invitationBericht(
     codenaam,
     personen: verzendlijstPersonen(codenaam),
     onderwerp: `Geef je voorkeuren door voor ${period.naam}`,
-    tekst: `Hoi ${codenaam},
+    tekst: `Beste ${codenaam},
 
 Het rooster voor ${period.naam} wordt gemaakt. Geef via je persoonlijke link aan op welke dagen je liever wel of juist niet werkt.
 ${indicatie ? `\n${indicatie}\n` : ''}
