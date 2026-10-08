@@ -78,6 +78,11 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   const [offeredSlotId, setOfferedSlotId] = useState('');
   const [requestedSlotId, setRequestedSlotId] = useState('');
   const [notes, setNotes] = useState('');
+  // Where an unequal swap is passed on (Mailinstellingen, lib/appSettings.ts getSwapContacts).
+  const [contacts, setContacts] = useState<{ planner: string | null; roosterbureau: string | null }>({
+    planner: null,
+    roosterbureau: null,
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -112,6 +117,13 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     };
 
     loadAssignments();
+    // Best effort: without them the text below just names no address.
+    fetch(withBasePath(`/api/person/${personId}/swap-contacts`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.success) setContacts(data.data);
+      })
+      .catch(() => {});
   }, [personId, periodId, isOpen]);
 
   // Who could take the offered shift, and how each of them stands towards
@@ -224,6 +236,33 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
 
         {/* Content */}
         <div className="p-6 space-y-4 overflow-y-auto min-h-0">
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-900 space-y-2" data-testid="gelijkwaardige-ruil">
+            <p className="font-semibold">Alleen een gelijkwaardige ruil</p>
+            <p>
+              Via de app ruil je één dienst tegen één dienst van dezelfde soort: avond tegen avond, weekend
+              tegen weekend of feestdag tegen feestdag.
+            </p>
+            <p>
+              Wil je iets anders ruilen, bijvoorbeeld een avonddienst tegen een weekenddienst? Regel dat dan
+              zelf met je collega. Geef de ruil daarna door aan de planner
+              {contacts.planner && (
+                <>
+                  {' '}op <a className="underline font-medium break-all" href={`mailto:${contacts.planner}`}>{contacts.planner}</a>
+                </>
+              )}{' '}
+              én aan het roosterbureau
+              {contacts.roosterbureau && (
+                <>
+                  {' '}op{' '}
+                  <a className="underline font-medium break-all" href={`mailto:${contacts.roosterbureau}`}>
+                    {contacts.roosterbureau}
+                  </a>
+                </>
+              )}
+              .
+            </p>
+          </div>
+
           {loading && (
             <div className="text-center py-8">
               <p className="text-neutral-600">Je diensten laden...</p>

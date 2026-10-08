@@ -191,6 +191,12 @@ Open een periode en klik onder *Exporteren & communicatie* op
 - **Gmail-adres**: het account uit stap 1. De app werkt alleen met Gmail.
 - **App-wachtwoord**: de 16 letters uit stap 1, met of zonder spaties.
 - **Verzendlijst sturen naar**: het adres waar je stroom in stap 4 op let.
+- **E-mailadres van het roosterbureau** (mag leeg blijven).
+
+Via de app kan alleen een gelijkwaardige ruil: één dienst tegen één dienst
+van dezelfde soort. Een andere ruil regelen collega's zelf en geven ze
+daarna door. Het venster voor een ruilverzoek noemt daarvoor het adres bij
+*Verzendlijst sturen naar* (de planner) én het adres van het roosterbureau.
 
 Bij **Opslaan** logt Dienstrooster meteen in bij Gmail. Lukt dat niet, dan
 wordt er niets opgeslagen en zie je waarom. Het wachtwoord wordt versleuteld

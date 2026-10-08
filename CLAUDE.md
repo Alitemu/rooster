@@ -577,7 +577,13 @@ withdrawal SWAP_WITHDRAWN_MAIL_TEMPLATE, lapse; `personen` holds only the
 reader), so the flow can't put a real name to it: the colleague can say
 no without knowing to whom. The in-app notices and lists keep the
 codenamen, which are pseudonyms. The approval mail (`goedgekeurd`) names
-both, with lines to pass on to whoever makes the work rosters. Started after the
+both, with lines to pass on to whoever makes the work rosters. The swap dialog says only an equal swap goes through the app (one shift
+for one of the same kind, which the create route enforces); any other
+trade colleagues agree themselves and pass on to the planner (the
+Mailinstellingen flow mailbox) and the roster office (`roosterbureau`,
+an extra field in Mailinstellingen, lib/appSettings.ts getSwapContacts,
+GET /api/person/[id]/swap-contacts). Both addresses live in the app,
+never in code. Started after the
 commit and never awaited, so a mail failure can't fail or slow the swap.
 A swap mail that can't go out (not set up, or refused) waits in
 dienstrooster_mail_queue with its MeldingMail as JSON - built, personal

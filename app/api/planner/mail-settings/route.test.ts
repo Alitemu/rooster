@@ -23,6 +23,7 @@ import {
   type SmtpSink,
 } from '@/tests/smtpSink';
 import { GET, PUT, DELETE } from './route';
+import { GET as swapContactsGET } from '../../person/[id]/swap-contacts/route';
 
 /**
  * Mailinstellingen in the app, so the operator can set up sending without
@@ -34,6 +35,9 @@ import { GET, PUT, DELETE } from './route';
  *   removing the settings stops sending;
  * - planners only, and every change is in the audit trail without the
  *   password.
+ * - the flow mailbox and the roster office's address are what the swap
+ *   dialog names for a swap the app can't make; a participant reads only
+ *   those two, for themselves.
  */
 
 let sink: SmtpSink;
@@ -82,13 +86,13 @@ const stored = () =>
 
 // Another test file may have left a failed send behind.
 beforeEach(() => {
-  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%'`).run();
+  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%' OR sleutel LIKE 'ruil.%'`).run();
 });
 
 afterEach(() => {
   clearSmtpConfig();
   sink.received.length = 0;
-  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%'`).run();
+  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%' OR sleutel LIKE 'ruil.%'`).run();
   for (const id of people) {
     db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(id);
     db.prepare('DELETE FROM dienstrooster_person_access_link WHERE person_id = ?').run(id);
@@ -230,6 +234,47 @@ describe('Mailinstellingen in de app', () => {
     } finally {
       delete process.env.MAIL_UITGESCHAKELD;
     }
+  });
+
+  it('keeps the roster office address with the settings, and the swap dialog names it with the flow mailbox', async () => {
+    configureSmtpServerOnly(sink);
+    const planner = person('PLANNER');
+    const deelnemer = person('DEELNEMER');
+    const ander = person('DEELNEMER');
+    const contacts = async (as: string, id: string) => {
+      const token = createSessionToken(
+        { kind: 'person', personId: as, sessionVersion: getSessionVersion(as)! } as never,
+        PERSON_SESSION_MAX_AGE_SECONDS
+      );
+      return swapContactsGET(
+        new NextRequest(`http://localhost/api/person/${id}/swap-contacts`, { headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` } }),
+        { params: Promise.resolve({ id }) }
+      );
+    };
+
+    // Not an address: nothing saved, not even the rest.
+    const fout = await PUT(request('PUT', planner, { ...goed, roosterbureau: 'roosterbureau' }));
+    expect(fout.status).toBe(400);
+    expect((await fout.json()).error.message).toBe('Het adres van het roosterbureau is geen geldig e-mailadres.');
+    expect(stored()).toHaveLength(0);
+
+    const res = await PUT(request('PUT', planner, { ...goed, roosterbureau: ' rooster@ziekenhuis.test ' }));
+    expect(res.status).toBe(200);
+    expect((await res.json()).data.roosterbureau).toBe('rooster@ziekenhuis.test');
+    const eigen = await contacts(deelnemer, deelnemer);
+    expect(eigen.status).toBe(200);
+    expect((await eigen.json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roosterbureau: 'rooster@ziekenhuis.test' });
+    // Only their own: a participant can't read it for someone else.
+    expect((await contacts(deelnemer, ander)).status).toBe(403);
+
+    // Left empty: removed.
+    await PUT(request('PUT', planner, { ...goed, roosterbureau: '' }));
+    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roosterbureau: null });
+
+    // Removing the settings removes it too.
+    await PUT(request('PUT', planner, { ...goed, roosterbureau: 'rooster@ziekenhuis.test' }));
+    await DELETE(request('DELETE', planner));
+    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null, roosterbureau: null });
   });
 
   it('is for planners only', async () => {
