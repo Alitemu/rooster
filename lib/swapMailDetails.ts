@@ -11,8 +11,9 @@
  * (lib/verzendlijst.ts `personen`), and a request is anonymous by mail
  * until it is approved, so the colleague can say no without knowing to
  * whom. In the app both sides keep seeing each other's codenaam, which is a
- * pseudonym. Once approved (`goedgekeurd`) the mail names both, with the
- * lines to pass on to whoever makes the work rosters.
+ * pseudonym. Once approved (`goedgekeurd`) the mail names both, and the
+ * planner and the rostering department get the swap with both names
+ * (swapDoorgevenBericht).
  */
 
 const TELLER_LABELS: Record<string, string> = {
@@ -79,9 +80,7 @@ export function swapMailDetails(params: {
       `Jij geeft: je ${shift(geeft)} aan ${ander}`,
       `Jij krijgt: de ${shift(krijgt)} van ${ander}`,
       '',
-      'Geef deze ruil door aan wie de werkroosters maakt:',
-      `${params.aanvrager} neemt de ${shift(params.gevraagd)} over van ${params.collega}.`,
-      `${params.collega} neemt de ${shift(params.aangeboden)} over van ${params.aanvrager}.`,
+      'De planner en de afdeling roostering krijgen deze ruil ook door.',
     ];
   } else if (aanvrager) {
     regels = [`Jij geeft: je ${shift(params.aangeboden)}`, `Jij krijgt: een ${shift(params.gevraagd)}`];
@@ -99,4 +98,38 @@ export function swapMailDetails(params: {
   const reden = params.redenAfwijzing?.trim();
   if (reden) regels.push('', `Reden: ${reden}`);
   return regels.join('\n');
+}
+
+/**
+ * The two codenamen the confirmation of an approved swap is sent to. Not
+ * participants: the planner adds a row for each to the flow's sheet, with
+ * the planner's and the rostering department's address. The app puts no
+ * address in a verzendlijst itself, so a forged one can only ever reach
+ * people in that sheet.
+ */
+export const DOORGEVEN_AAN = ['Planner', 'Afdeling roostering'] as const;
+
+/**
+ * For the planner and the rostering department: who does which shift now.
+ * Names only the two who swapped (`personen`), so the flow writes both
+ * out in full.
+ */
+export function swapDoorgevenBericht(params: {
+  periode: string;
+  aanvrager: string;
+  collega: string;
+  aangeboden: SwapShift;
+  gevraagd: SwapShift;
+}): { onderwerp: string; tekst: string } {
+  return {
+    onderwerp: `Ruil goedgekeurd: ${params.aanvrager} en ${params.collega}`,
+    tekst: [
+      `Er is een ruil goedgekeurd in Dienstrooster, periode ${params.periode}.`,
+      '',
+      `${params.aanvrager} neemt de ${shift(params.gevraagd)} over van ${params.collega}.`,
+      `${params.collega} neemt de ${shift(params.aangeboden)} over van ${params.aanvrager}.`,
+      '',
+      'Het rooster in Dienstrooster is al aangepast.',
+    ].join('\n'),
+  };
 }

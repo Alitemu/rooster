@@ -23,6 +23,7 @@ import { mailBaseUrl } from './baseUrl';
 import { renderNotificationTemplate, renderTemplate } from './notifications';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstSoort } from './verzendlijst';
+import { DOORGEVEN_AAN, swapDoorgevenBericht, type SwapShift } from './swapMailDetails';
 
 export interface MeldingMail {
   personId: string;
@@ -43,6 +44,20 @@ export interface MeldingMail {
   swapId?: string;
 }
 
+/**
+ * The confirmation of an approved swap for the planner and the rostering
+ * department (lib/swapMailDetails.ts DOORGEVEN_AAN): built from the swap
+ * row when it is sent, with today's codenamen, no personal link.
+ */
+export interface DoorgevenMail {
+  doorgeven: true;
+  soort: 'RUIL_DOORGEVEN';
+  swapId: string;
+  periodId: string;
+}
+
+type Mail = MeldingMail | DoorgevenMail;
+
 /** How long a queued mail is still worth sending. */
 export const MAIL_QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -52,7 +67,9 @@ const ONLY_WHILE_PENDING = new Set<VerzendlijstSoort>(['RUILVERZOEK', 'RUIL_BEVE
 type Delivery = 'SENT' | 'FAILED' | 'GONE';
 
 /** Builds the mail (with a fresh personal link) and sends it. GONE: the person, period or template no longer exists. */
-async function deliver(melding: MeldingMail): Promise<Delivery> {
+async function deliver(mail: Mail): Promise<Delivery> {
+  if ('doorgeven' in mail) return deliverDoorgeven(mail);
+  const melding = mail;
   const person = db
     .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
     .get(melding.personId) as { codenaam: string } | undefined;
@@ -100,7 +117,60 @@ async function deliver(melding: MeldingMail): Promise<Delivery> {
   return 'SENT';
 }
 
-function enqueue(melding: MeldingMail): void {
+async function deliverDoorgeven(mail: DoorgevenMail): Promise<Delivery> {
+  const swap = db
+    .prepare(
+      `SELECT p.naam AS periode, a.codenaam AS aanvrager, r.codenaam AS collega,
+              os.datum AS aangeboden_datum, ot.teller AS aangeboden_teller,
+              gs.datum AS gevraagd_datum, gt.teller AS gevraagd_teller
+       FROM dienstrooster_swap_request sr
+       JOIN dienstrooster_schedule_period p ON p.id = sr.periode_id
+       JOIN dienstrooster_person a ON a.id = sr.aanvrager_person_id
+       JOIN dienstrooster_person r ON r.id = sr.respondent_person_id
+       JOIN dienstrooster_shift_slot os ON os.id = sr.aangeboden_slot_id
+       JOIN dienstrooster_shift_type ot ON ot.id = os.shift_type_id
+       JOIN dienstrooster_shift_slot gs ON gs.id = sr.gevraagde_slot_id
+       JOIN dienstrooster_shift_type gt ON gt.id = gs.shift_type_id
+       WHERE sr.id = ? AND sr.status = 'GOEDGEKEURD'`
+    )
+    .get(mail.swapId) as
+    | {
+        periode: string;
+        aanvrager: string;
+        collega: string;
+        aangeboden_datum: string;
+        aangeboden_teller: string;
+        gevraagd_datum: string;
+        gevraagd_teller: string;
+      }
+    | undefined;
+  if (!swap) return 'GONE';
+  const aangeboden: SwapShift = { datum: swap.aangeboden_datum, teller: swap.aangeboden_teller };
+  const gevraagd: SwapShift = { datum: swap.gevraagd_datum, teller: swap.gevraagd_teller };
+  const { onderwerp, tekst } = swapDoorgevenBericht({
+    periode: swap.periode,
+    aanvrager: swap.aanvrager,
+    collega: swap.collega,
+    aangeboden,
+    gevraagd,
+  });
+  // Only the two who swapped: the flow writes them out in full. Longest
+  // first, like verzendlijstPersonen.
+  const personen = verzendlijstPersonen(swap.aanvrager, [swap.collega]);
+  const result = await sendVerzendlijst(
+    buildVerzendlijst(
+      { soort: 'RUIL_DOORGEVEN', automatisch: true, periode: swap.periode },
+      DOORGEVEN_AAN.map((codenaam) => ({ soort: 'RUIL_DOORGEVEN' as const, codenaam, personen, onderwerp, tekst }))
+    )
+  );
+  if (!result.ok) {
+    console.error(`[melding-mail] RUIL_DOORGEVEN not sent: ${result.message}`);
+    return 'FAILED';
+  }
+  return 'SENT';
+}
+
+function enqueue(melding: Mail): void {
   db.prepare(
     `INSERT INTO dienstrooster_mail_queue (id, period_id, swap_id, soort, melding_json, aangemaakt_op)
      VALUES (?, ?, ?, ?, ?, ?)`
@@ -140,7 +210,7 @@ function dropQueuedRequest(swapId: string): boolean {
 const requestsInFlight = new Map<string, Promise<void>>();
 
 /** Resolves once the mail is sent, queued or skipped. Never rejects. */
-export function mailMelding(melding: MeldingMail): Promise<void> {
+export function mailMelding(melding: Mail): Promise<void> {
   const run = sendOrQueue(melding);
   const swapId = melding.swapId;
   if (melding.soort === 'RUILVERZOEK' && swapId) {
@@ -152,7 +222,7 @@ export function mailMelding(melding: MeldingMail): Promise<void> {
   return run;
 }
 
-async function sendOrQueue(melding: MeldingMail): Promise<void> {
+async function sendOrQueue(melding: Mail): Promise<void> {
   try {
     if (melding.soort === 'RUIL_INGETROKKEN' && melding.swapId) {
       await requestsInFlight.get(melding.swapId);
@@ -248,7 +318,7 @@ async function runFlush(now: Date): Promise<{ verstuurd: number; vervallen: numb
       db.prepare(
         'UPDATE dienstrooster_mail_queue SET pogingen = pogingen + 1, laatste_poging_op = ? WHERE id = ?'
       ).run(now.toISOString(), row.id);
-      const delivery = await deliver(JSON.parse(row.melding_json) as MeldingMail);
+      const delivery = await deliver(JSON.parse(row.melding_json) as Mail);
       if (delivery === 'FAILED') break;
       remove.run(row.id);
       if (delivery === 'SENT') result.verstuurd++;
@@ -271,7 +341,8 @@ export function flushAfterSend(): void {
   if (!flushing && queuedMailCount() > 0) void flushMailQueue();
 }
 
-function templateName(melding: MeldingMail): string {
+function templateName(melding: Mail): string {
+  if ('doorgeven' in melding) return melding.soort;
   return 'sleutel' in melding.template ? melding.template.sleutel : melding.template.naam;
 }
 

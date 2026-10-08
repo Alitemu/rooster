@@ -42,10 +42,16 @@ tegen wie. In de app zien beide wel elkaars codenaam: dat is een
 pseudoniem. In `personen` staat dan alleen de lezer zelf, dus de stroom kan
 er ook geen echte naam van maken.
 
-Gaat de ruil door, dan noemt de mail aan de aanvrager beide codenamen, met
-onderaan de regels om door te geven aan wie de werkroosters maakt:
-"Persoon-03 neemt de avonddienst op woensdag 3 maart 2027 over van
-Persoon-07." Met stap 5 staan daar de echte namen.
+Gaat de ruil door, dan noemt de mail aan de aanvrager de collega. De
+planner en de afdeling roostering krijgen dan een bevestiging met beide
+dienstdoenden: "Persoon-03 neemt de avonddienst op woensdag 3 maart 2027
+over van Persoon-07." Met stap 5 staan daar de volledige namen. Die
+bevestiging gaat naar twee vaste codenamen, `Planner` en `Afdeling
+roostering` (soort `RUIL_DOORGEVEN`). Zet die twee als rij in je
+Excel-lijst, met het adres van de planner en van de afdeling roostering
+(stap 3). Dienstrooster zet zelf nooit een e-mailadres in de verzendlijst.
+Zo kan een nagemaakte verzendlijst alleen mensen uit jouw lijst bereiken.
+De stroom hoeft hiervoor niet te veranderen.
 
 **Eén dienst aan meerdere collega's aanbieden.** Een deelnemer mag dezelfde
 dienst tegelijk aan meerdere collega's aanbieden, om de kans op een ruil zo
@@ -229,6 +235,11 @@ Maak in OneDrive of SharePoint een Excel-bestand, bijvoorbeeld
 | Persoon-01 | iemand@ziekenhuis.nl    |
 | Persoon-02 | iemand.anders@ziekenhuis.nl |
 
+Zet er ook twee rijen in voor de bevestiging van een goedgekeurde ruil:
+codenaam `Planner` met het adres van de planner (bijvoorbeeld het gedeelde
+postvak) en codenaam `Afdeling roostering` met het adres van die afdeling.
+Precies zo gespeld.
+
 Selecteer de cellen en kies **Opmaken als tabel**. Geef de tabel de naam
 `Adressen`. Power Automate kan alleen rijen uit een tabel lezen, niet uit
 losse cellen. De codenaam moet precies zo geschreven zijn als in
@@ -283,8 +294,8 @@ versie iets verschillen.
 
       - `soort`: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
         `RUILVERZOEK`, `RUIL_BEVESTIGING`, `RUIL_UITKOMST`,
-        `RUIL_INGETROKKEN`, `LINK_AANVRAAG`, `ROOSTER_VOORLOPIG` of
-        `ROOSTER_DEFINITIEF`.
+        `RUIL_INGETROKKEN`, `LINK_AANVRAAG`, `ROOSTER_VOORLOPIG`,
+        `ROOSTER_DEFINITIEF` of `RUIL_DOORGEVEN`.
       - `aanvraag_email` en `kandidaten` zijn alleen gevuld bij
         `LINK_AANVRAAG` (stap 4d), anders `null`.
       - `html` is dezelfde tekst, klaar om als hoofdtekst van de mail te

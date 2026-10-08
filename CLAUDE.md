@@ -577,7 +577,13 @@ withdrawal SWAP_WITHDRAWN_MAIL_TEMPLATE, lapse; `personen` holds only the
 reader), so the flow can't put a real name to it: the colleague can say
 no without knowing to whom. The in-app notices and lists keep the
 codenamen, which are pseudonyms. The approval mail (`goedgekeurd`) names
-both, with lines to pass on to whoever makes the work rosters. The swap dialog says only an equal swap goes through the app (one shift
+the colleague, and the approval also sends a RUIL_DOORGEVEN verzendlijst
+(DoorgevenMail in lib/meldingMail.ts, queued like any swap mail, built from
+the swap row when sent) with one bericht each for the fixed codenamen
+`Planner` and `Afdeling roostering` (DOORGEVEN_AAN, lib/swapMailDetails.ts):
+who now does which shift, `personen` = both who swapped, no link. The
+operator adds those two rows to the flow's sheet; the app never puts an
+address in a verzendlijst, so a forged one can't reach anyone outside it. The swap dialog says only an equal swap goes through the app (one shift
 for one of the same kind, which the create route enforces); any other
 trade colleagues agree themselves and pass on to the planner (the
 Mailinstellingen flow mailbox) and the rostering department (`roostering`,
@@ -602,7 +608,7 @@ so the requester is told the colleague may only see it in the app for
 now; MailWarning counts what waits. Every
 bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
 RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN, LINK_AANVRAAG,
-ROOSTER_VOORLOPIG, ROOSTER_DEFINITIEF) and an
+ROOSTER_VOORLOPIG, ROOSTER_DEFINITIEF, RUIL_DOORGEVEN) and an
 `html` field: `tekst` escaped with <br> for line breaks (tekstNaarHtml).
 The flow must use `html` as the mail body, never build HTML from `tekst`:
 the text can hold words a participant typed (swap toelichting, rejection
