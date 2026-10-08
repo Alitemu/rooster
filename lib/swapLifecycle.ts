@@ -3,8 +3,12 @@
  * the colleague it was sent to:
  *
  * - INGETROKKEN: the requester takes it back. The colleague had been told
- *   "X wants to swap with you" (in the app, and by mail), so they are told
- *   it is off, rather than finding out by pressing approve.
+ *   about it (in the app, and by mail), so they are told it is off, rather
+ *   than finding out by pressing approve.
+ *
+ * None of these mails names the other side: the swap did not go through
+ * (lib/swapMailDetails.ts). The in-app notices may, codenamen being
+ * pseudonyms.
  * - Vervallen: another swap already moved one of its two shifts. It can
  *   never be approved any more (the approve route checks who holds the
  *   shifts), so it is closed instead of sitting "in behandeling" forever;
@@ -31,12 +35,21 @@ interface SwapRow {
   gevraagde_slot_id: string;
 }
 
-/** For the colleague: the request is off. {{wat}} = "ingetrokken" or "vervallen". */
+/** For the colleague, in the app: the request is off. {{wat}} = "ingetrokken" or "vervallen". */
 export const SWAP_WITHDRAWN_TEMPLATE = {
   naam: 'SWAP_WITHDRAWN',
   onderwerp: 'Het ruilverzoek van {{aanvrager}} is {{wat}}',
   tekst:
     'Beste {{codenaam}},\n\nHet ruilverzoek van {{aanvrager}} is {{wat}}. Je hoeft er niets meer mee te doen.' +
+    '\n\n{{details}}\n\n{{link}}',
+};
+
+/** The same by mail, without naming the requester. */
+export const SWAP_WITHDRAWN_MAIL_TEMPLATE = {
+  naam: 'SWAP_WITHDRAWN_MAIL',
+  onderwerp: 'Een ruilverzoek aan jou is {{wat}}',
+  tekst:
+    'Beste {{codenaam}},\n\nEen ruilverzoek aan jou is {{wat}}. Je hoeft er niets meer mee te doen.' +
     '\n\n{{details}}\n\n{{link}}',
 };
 
@@ -89,9 +102,9 @@ function noticeToColleague(swap: SwapRow, wat: 'ingetrokken' | 'vervallen', rede
         swapId: swap.id,
         personId: swap.respondent_person_id,
         periodId: swap.periode_id,
-        template: SWAP_WITHDRAWN_TEMPLATE,
-        placeholders,
-        anderen: [aanvrager],
+        template: SWAP_WITHDRAWN_MAIL_TEMPLATE,
+        placeholders: { codenaam: collega, wat, details },
+        anderen: [],
         soort: 'RUIL_INGETROKKEN',
         linkIntro: 'Bekijk je rooster via je persoonlijke link:',
       }),
@@ -202,7 +215,7 @@ export function closeLapsedSwaps(
           periodId: swap.periode_id,
           template: { sleutel: 'SWAP_RESULT' },
           placeholders: { codenaam: aanvrager, uitkomst: 'vervallen', details },
-          anderen: [collega],
+          anderen: [],
           soort: 'RUIL_UITKOMST',
           linkIntro: 'Bekijk je rooster via je persoonlijke link:',
         }),

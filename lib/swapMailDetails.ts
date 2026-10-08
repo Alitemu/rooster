@@ -5,6 +5,14 @@
  * fine next to the request in the app, where the rest is on screen. A
  * mail is read on its own, so it says from the reader's own side what they
  * give up and what they get, with the day written out.
+ *
+ * A mail never names the other side of a swap that hasn't gone through:
+ * the planner's flow turns every codenaam it is told about into a real name
+ * (lib/verzendlijst.ts `personen`), and a request is anonymous by mail
+ * until it is approved, so the colleague can say no without knowing to
+ * whom. In the app both sides keep seeing each other's codenaam, which is a
+ * pseudonym. Once approved (`goedgekeurd`) the mail names both, with the
+ * lines to pass on to whoever makes the work rosters.
  */
 
 const TELLER_LABELS: Record<string, string> = {
@@ -51,31 +59,39 @@ export function swapMailDetails(params: {
    */
   afgewezen?: boolean;
   redenAfwijzing?: string | null;
+  /** The swap went through: name both sides and say what to pass on. */
+  goedgekeurd?: boolean;
 }): string {
   const aanvrager = params.lezer === 'aanvrager';
   let regels: string[];
   if (params.afgewezen) {
     regels = [
       aanvrager
-        ? `Je vroeg je ${shift(params.aangeboden)} te ruilen tegen de ${shift(params.gevraagd)} van ${params.collega}.`
-        : `${params.aanvrager} vroeg je ${shift(params.gevraagd)} te ruilen tegen de ${shift(params.aangeboden)} van ${params.aanvrager}.`,
+        ? `Je vroeg je ${shift(params.aangeboden)} te ruilen tegen een ${shift(params.gevraagd)}.`
+        : `Je werd gevraagd je ${shift(params.gevraagd)} te ruilen tegen een ${shift(params.aangeboden)}.`,
       'Je rooster blijft zoals het was.',
     ];
+  } else if (params.goedgekeurd) {
+    const [geeft, krijgt, ander] = aanvrager
+      ? [params.aangeboden, params.gevraagd, params.collega]
+      : [params.gevraagd, params.aangeboden, params.aanvrager];
+    regels = [
+      `Jij geeft: je ${shift(geeft)} aan ${ander}`,
+      `Jij krijgt: de ${shift(krijgt)} van ${ander}`,
+      '',
+      'Geef deze ruil door aan wie de werkroosters maakt:',
+      `${params.aanvrager} neemt de ${shift(params.gevraagd)} over van ${params.collega}.`,
+      `${params.collega} neemt de ${shift(params.aangeboden)} over van ${params.aanvrager}.`,
+    ];
   } else if (aanvrager) {
-    regels = [
-      `Jij geeft: je ${shift(params.aangeboden)}`,
-      `Jij krijgt: de ${shift(params.gevraagd)} van ${params.collega}`,
-    ];
+    regels = [`Jij geeft: je ${shift(params.aangeboden)}`, `Jij krijgt: een ${shift(params.gevraagd)}`];
   } else {
-    regels = [
-      `Jij geeft: je ${shift(params.gevraagd)}`,
-      `Jij krijgt: de ${shift(params.aangeboden)} van ${params.aanvrager}`,
-    ];
+    regels = [`Jij geeft: je ${shift(params.gevraagd)}`, `Jij krijgt: een ${shift(params.aangeboden)}`];
   }
 
   const toelichting = params.toelichting?.trim();
   if (toelichting) {
-    regels.push('', aanvrager ? `Je toelichting: ${toelichting}` : `Toelichting van ${params.aanvrager}: ${toelichting}`);
+    regels.push('', aanvrager ? `Je toelichting: ${toelichting}` : `Toelichting: ${toelichting}`);
   }
   if (params.kortOpElkaar) {
     regels.push('', 'Let op: na deze ruil heb je twee diensten kort op elkaar.');

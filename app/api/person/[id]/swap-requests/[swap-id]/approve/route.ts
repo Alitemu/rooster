@@ -259,6 +259,8 @@ export async function POST(
           collega: collega?.codenaam ?? 'je collega',
           aangeboden: offeredSlot ?? { datum: '', teller: '' },
           gevraagd: requestedSlot ?? { datum: '', teller: '' },
+          // The swap went through: both named, so it can be passed on.
+          goedgekeurd: true,
         }) + ingetrokkenRegel(eigenIngetrokken),
       },
       anderen: [collega?.codenaam ?? ''],

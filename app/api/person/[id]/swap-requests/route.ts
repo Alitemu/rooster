@@ -12,7 +12,7 @@ import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-contex
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { swapMailDetails } from '@/lib/swapMailDetails';
-import { mailMelding, queuedMailCount, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
+import { mailMelding, queuedMailCount, SWAP_REQUESTED_MAIL_TEMPLATE, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
 import { verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { getMailFailure } from '@/lib/appSettings';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
@@ -341,13 +341,17 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     // Also by mail, when the server is set up for it. Started after the
     // commit and not awaited: it must never hold up or undo the request.
+    // Anonymous by mail until the swap goes through (lib/swapMailDetails.ts).
     void mailMelding({
       swapId,
       personId: respondentAssignment.person_id,
       periodId: period_id as string,
-      template: { sleutel: 'SWAP_REQUESTED' },
-      placeholders: { ...placeholders, details: mailDetails('collega', windowConflicts.respondentTooClose) },
-      anderen: [aanvrager?.codenaam ?? ''],
+      template: SWAP_REQUESTED_MAIL_TEMPLATE,
+      placeholders: {
+        codenaam: respondent?.codenaam ?? '',
+        details: mailDetails('collega', windowConflicts.respondentTooClose),
+      },
+      anderen: [],
       soort: 'RUILVERZOEK',
       linkIntro: 'Bekijk het verzoek en geef antwoord via je persoonlijke link:',
     });
@@ -359,10 +363,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       template: SWAP_SUBMITTED_TEMPLATE,
       placeholders: {
         codenaam: aanvrager?.codenaam ?? '',
-        respondent: respondent?.codenaam ?? '',
         details: mailDetails('aanvrager', windowConflicts.requesterTooClose),
       },
-      anderen: [respondent?.codenaam ?? ''],
+      anderen: [],
       soort: 'RUIL_BEVESTIGING',
       linkIntro: 'Je kunt het verzoek volgen of intrekken via je persoonlijke link:',
     });

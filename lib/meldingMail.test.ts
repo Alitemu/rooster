@@ -209,6 +209,18 @@ function berichtenFor(personId: string) {
   return sink.received.flatMap((m) => verzendlijstAttachment(m.raw)).filter((b) => b.codenaam === codenaam(personId));
 }
 
+/**
+ * A mail about a swap that didn't (yet) go through names nobody but its
+ * reader: the flow turns every codenaam in `personen` into a real name, and
+ * the other side must stay anonymous by mail.
+ */
+function expectAnonymous(bericht: ReturnType<typeof berichtenFor>[number], anderen: string[]) {
+  for (const id of anderen) {
+    for (const veld of [bericht.onderwerp, bericht.tekst, bericht.html]) expect(veld).not.toContain(codenaam(id));
+  }
+  expect(bericht.personen).toEqual([bericht.codenaam]);
+}
+
 afterEach(async () => {
   // Mails started in the background, and a queue run a successful send
   // set off, finish before their people and periods are removed.
@@ -252,27 +264,32 @@ afterEach(async () => {
 });
 
 describe('mail about swap requests', () => {
-  it('mails the colleague the request and the requester a confirmation, each from their own side', async () => {
+  it('mails the colleague the request and the requester a confirmation, each from their own side and naming nobody', async () => {
     configureSmtp(sink);
     const f = createFixture();
     await requestSwap(f, 'Ik ben die week op vakantie');
     await waitForMails(sink, 2);
 
     const [naarCollega] = berichtenFor(f.collega);
-    expect(naarCollega.onderwerp).toBe(`Ruilverzoek van ${codenaam(f.aanvrager)}`);
+    expect(naarCollega.onderwerp).toBe('Nieuw ruilverzoek');
+    expect(naarCollega.tekst).toContain('Er is een ruilverzoek voor je ingediend met het volgende voorstel:');
     expect(naarCollega.tekst).toContain('Jij geeft: je avonddienst op dinsdag 14 april 2099');
-    expect(naarCollega.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 3 maart 2099 van ${codenaam(f.aanvrager)}`);
-    expect(naarCollega.tekst).toContain(`Toelichting van ${codenaam(f.aanvrager)}: Ik ben die week op vakantie`);
+    expect(naarCollega.tekst).toContain('Jij krijgt: een avonddienst op dinsdag 3 maart 2099');
+    expect(naarCollega.tekst).toContain('Toelichting: Ik ben die week op vakantie');
     expect(linkOwner(naarCollega.tekst)).toBe(f.collega);
-    // Both people named in it, so a flow can put real names in for either.
-    expect([...naarCollega.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
+    expectAnonymous(naarCollega, [f.aanvrager]);
+    // In the app the requester's codenaam (a pseudonym) is still shown.
+    const inAppNotice = db
+      .prepare(`SELECT onderwerp FROM dienstrooster_notification WHERE person_id = ? AND type = 'RUILVERZOEK'`)
+      .get(f.collega) as { onderwerp: string };
+    expect(inAppNotice.onderwerp).toBe(`Ruilverzoek van ${codenaam(f.aanvrager)}`);
 
     const [bevestiging] = berichtenFor(f.aanvrager);
-    expect(bevestiging.onderwerp).toBe(`Je ruilverzoek aan ${codenaam(f.collega)} is verstuurd`);
+    expect(bevestiging.onderwerp).toBe('Je ruilverzoek is verstuurd');
     expect(bevestiging.tekst).toContain('Jij geeft: je avonddienst op dinsdag 3 maart 2099');
-    expect(bevestiging.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 14 april 2099 van ${codenaam(f.collega)}`);
+    expect(bevestiging.tekst).toContain('Jij krijgt: een avonddienst op dinsdag 14 april 2099');
     expect(linkOwner(bevestiging.tekst)).toBe(f.aanvrager);
-    expect([...bevestiging.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
+    expectAnonymous(bevestiging, [f.collega]);
 
     // Each mail is its own verzendlijst, summarised as one automatic message
     // without a deadline.
@@ -286,7 +303,7 @@ describe('mail about swap requests', () => {
     expect(sink.received.every((m) => m.to.join() === 'stroom@example.test')).toBe(true);
   });
 
-  it('mails the requester when the colleague approves', async () => {
+  it('mails the requester when the colleague approves, naming both so it can be passed on', async () => {
     configureSmtp(sink);
     const f = createFixture();
     const swapId = await requestSwap(f);
@@ -305,7 +322,15 @@ describe('mail about swap requests', () => {
     const uitkomst = berichtenFor(f.aanvrager).find((b) => b.onderwerp === 'Je ruilverzoek is goedgekeurd')!;
     // The in-app **bold** is not left as asterisks in the mail.
     expect(uitkomst.tekst).toContain('Je ruilverzoek is goedgekeurd.');
-    expect(uitkomst.tekst).toContain('Jij krijgt: de avonddienst op dinsdag 14 april 2099');
+    expect(uitkomst.tekst).toContain(`Jij geeft: je avonddienst op dinsdag 3 maart 2099 aan ${codenaam(f.collega)}`);
+    expect(uitkomst.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 14 april 2099 van ${codenaam(f.collega)}`);
+    expect(uitkomst.tekst).toContain('Geef deze ruil door aan wie de werkroosters maakt:');
+    expect(uitkomst.tekst).toContain(
+      `${codenaam(f.aanvrager)} neemt de avonddienst op dinsdag 14 april 2099 over van ${codenaam(f.collega)}.`
+    );
+    expect(uitkomst.tekst).toContain(
+      `${codenaam(f.collega)} neemt de avonddienst op dinsdag 3 maart 2099 over van ${codenaam(f.aanvrager)}.`
+    );
     expect(linkOwner(uitkomst.tekst)).toBe(f.aanvrager);
     expect([...uitkomst.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
   });
@@ -331,6 +356,8 @@ describe('mail about swap requests', () => {
     expect(uitkomst.tekst).toContain('Je rooster blijft zoals het was.');
     expect(uitkomst.tekst).toContain('Reden: Dan ben ik zelf weg');
     expect(uitkomst.tekst).not.toContain('Jij krijgt');
+    expect(uitkomst.tekst).toContain('Je vroeg je avonddienst op dinsdag 3 maart 2099 te ruilen tegen een avonddienst op dinsdag 14 april 2099.');
+    expectAnonymous(uitkomst, [f.collega]);
   });
 
   it('sends nothing and issues no link when SMTP is not configured', async () => {
@@ -512,8 +539,9 @@ describe('a swap request that is withdrawn or lapses', () => {
     expect(row.status).toBe('INGETROKKEN');
 
     const naarDerdeMail = berichtenFor(f.derde).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
-    expect(naarDerdeMail.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.aanvrager)} is ingetrokken`);
+    expect(naarDerdeMail.onderwerp).toBe('Een ruilverzoek aan jou is ingetrokken');
     expect(naarDerdeMail.tekst).toContain('De dienst is al met een andere collega geruild.');
+    expectAnonymous(naarDerdeMail, [f.aanvrager, f.collega]);
 
     // The requester hears it once, in the approval, not as a "vervallen" per colleague.
     const aanAanvrager = berichtenFor(f.aanvrager);
@@ -544,9 +572,13 @@ describe('a swap request that is withdrawn or lapses', () => {
     await waitForMails(sink, 3);
 
     const bericht = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
-    expect(bericht.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.aanvrager)} is ingetrokken`);
+    expect(bericht.onderwerp).toBe('Een ruilverzoek aan jou is ingetrokken');
     expect(bericht.tekst).toContain('Je hoeft er niets meer mee te doen.');
-    expect(bericht.tekst).toContain(`${codenaam(f.aanvrager)} vroeg je avonddienst op dinsdag 14 april 2099 te ruilen`);
+    expect(bericht.tekst).toContain(
+      'Je werd gevraagd je avonddienst op dinsdag 14 april 2099 te ruilen tegen een avonddienst op dinsdag 3 maart 2099.'
+    );
+    expectAnonymous(bericht, [f.aanvrager]);
+    // The app may name the requester: a codenaam is a pseudonym.
     expect(inApp(f.collega).map((n) => n.onderwerp)).toContain(
       `Het ruilverzoek van ${codenaam(f.aanvrager)} is ingetrokken`
     );
@@ -587,10 +619,12 @@ describe('a swap request that is withdrawn or lapses', () => {
 
     const naarDerde = berichtenFor(f.derde).find((b) => b.onderwerp === 'Je ruilverzoek is vervallen')!;
     expect(naarDerde.tekst).toContain('Je rooster blijft zoals het was.');
+    expectAnonymous(naarDerde, [f.collega, f.aanvrager]);
     expect(inApp(f.derde).map((n) => n.onderwerp)).toContain('Je ruilverzoek is vervallen');
 
     const naarCollega = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
-    expect(naarCollega.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.derde)} is vervallen`);
+    expect(naarCollega.onderwerp).toBe('Een ruilverzoek aan jou is vervallen');
+    expectAnonymous(naarCollega, [f.derde]);
   });
 
   it('tells a colleague asked twice by the same requester that they already swapped with each other', async () => {
@@ -631,8 +665,9 @@ describe('a swap request that is withdrawn or lapses', () => {
 
     expect(statusOf(eigen)).toBe('INGETROKKEN');
     const naarDerde = berichtenFor(f.derde).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
-    expect(naarDerde.onderwerp).toBe(`Het ruilverzoek van ${codenaam(f.collega)} is ingetrokken`);
+    expect(naarDerde.onderwerp).toBe('Een ruilverzoek aan jou is ingetrokken');
     expect(naarDerde.tekst).toContain(AL_GERUILD_REDEN);
+    expectAnonymous(naarDerde, [f.collega, f.aanvrager]);
     expect(berichtenFor(f.collega).map((b) => b.onderwerp)).not.toContain('Je ruilverzoek is vervallen');
   });
 });

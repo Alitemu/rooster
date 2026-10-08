@@ -162,7 +162,8 @@ export async function POST(
           redenAfwijzing: reason,
         }),
       },
-      anderen: [collega?.codenaam ?? ''],
+      // Names nobody: the swap did not go through (lib/swapMailDetails.ts).
+      anderen: [],
       soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
     });

@@ -275,12 +275,23 @@ function templateName(melding: MeldingMail): string {
   return 'sleutel' in melding.template ? melding.template.sleutel : melding.template.naam;
 }
 
-/** The requester's confirmation that their swap request went out. */
+/**
+ * The colleague's mail about a new request. Anonymous, unlike the in-app
+ * notice (SWAP_REQUESTED, which shows the requester's codenaam): see
+ * lib/swapMailDetails.ts.
+ */
+export const SWAP_REQUESTED_MAIL_TEMPLATE = {
+  naam: 'SWAP_REQUESTED_MAIL',
+  onderwerp: 'Nieuw ruilverzoek',
+  tekst: 'Beste {{codenaam}},\n\nEr is een ruilverzoek voor je ingediend met het volgende voorstel:\n\n{{details}}\n\n{{link}}',
+};
+
+/** The requester's confirmation that their swap request went out. Names nobody, like every mail before a swap goes through. */
 export const SWAP_SUBMITTED_TEMPLATE = {
   naam: 'SWAP_SUBMITTED',
-  onderwerp: 'Je ruilverzoek aan {{respondent}} is verstuurd',
+  onderwerp: 'Je ruilverzoek is verstuurd',
   tekst:
-    'Beste {{codenaam}},\n\nJe ruilverzoek aan {{respondent}} is verstuurd.\n\n{{details}}\n\n' +
-    'Je krijgt een mail zodra {{respondent}} het verzoek heeft goedgekeurd of afgewezen. ' +
+    'Beste {{codenaam}},\n\nJe ruilverzoek is verstuurd met het volgende voorstel:\n\n{{details}}\n\n' +
+    'Je krijgt een mail zodra je collega het verzoek heeft goedgekeurd of afgewezen. ' +
     'Tot die tijd blijft je rooster zoals het is.\n\n{{link}}',
 };

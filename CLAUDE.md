@@ -570,7 +570,14 @@ has no link. resolveBaseUrl (Host header) is for planner exports only. Swap requ
 a new request mails the colleague (SWAP_REQUESTED) and confirms to the
 requester, and approve/reject mails the requester (SWAP_RESULT), each a
 one-bericht verzendlijst with a fresh personal link and the swap spelled
-out from the reader's side (lib/swapMailDetails.ts). Started after the
+out from the reader's side (lib/swapMailDetails.ts). A mail about a swap
+that hasn't gone through names nobody but its reader (request
+SWAP_REQUESTED_MAIL_TEMPLATE "Nieuw ruilverzoek", confirmation, rejection,
+withdrawal SWAP_WITHDRAWN_MAIL_TEMPLATE, lapse; `personen` holds only the
+reader), so the flow can't put a real name to it: the colleague can say
+no without knowing to whom. The in-app notices and lists keep the
+codenamen, which are pseudonyms. The approval mail (`goedgekeurd`) names
+both, with lines to pass on to whoever makes the work rosters. Started after the
 commit and never awaited, so a mail failure can't fail or slow the swap.
 A swap mail that can't go out (not set up, or refused) waits in
 dienstrooster_mail_queue with its MeldingMail as JSON - built, personal

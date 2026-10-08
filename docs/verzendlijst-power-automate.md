@@ -34,6 +34,19 @@ mail. Daar hoef je niets voor te doen, want het gaat via dezelfde stroom:
 - Trekt de aanvrager een verzoek in, dan krijgt de collega een mail dat het
   verzoek is ingetrokken en dat er niets meer hoeft te gebeuren.
 
+**Anoniem tot de ruil doorgaat.** Zolang een ruil niet is goedgekeurd, noemt
+geen enkele mail de ander. De collega leest "Er is een ruilverzoek voor je
+ingediend met het volgende voorstel", de aanvrager krijgt de bevestiging en
+een afwijzing zonder naam. Zo kan de collega nee zeggen zonder te weten
+tegen wie. In de app zien beide wel elkaars codenaam: dat is een
+pseudoniem. In `personen` staat dan alleen de lezer zelf, dus de stroom kan
+er ook geen echte naam van maken.
+
+Gaat de ruil door, dan noemt de mail aan de aanvrager beide codenamen, met
+onderaan de regels om door te geven aan wie de werkroosters maakt:
+"Persoon-03 neemt de avonddienst op woensdag 3 maart 2027 over van
+Persoon-07." Met stap 5 staan daar de echte namen.
+
 **Eén dienst aan meerdere collega's aanbieden.** Een deelnemer mag dezelfde
 dienst tegelijk aan meerdere collega's aanbieden, om de kans op een ruil zo
 groot mogelijk te maken. Wie het eerst goedkeurt, ruilt:
@@ -396,9 +409,10 @@ staat, bij één of twee codenamen.
 ## Stap 5 (optioneel). Echte namen in plaats van codenamen
 
 Zonder deze stap staat er in de mail bijvoorbeeld "Beste Persoon-07,
-Persoon-03 wil een dienst met je ruilen." Met deze stap vervangt de stroom
-elke codenaam door de naam uit je Excel-lijst: "Beste Anna, Bram wil een
-dienst met je ruilen." Dienstrooster zelf kent die namen nooit.
+Persoon-07 neemt de avonddienst op 3 maart over van Persoon-03." Met deze
+stap vervangt de stroom elke codenaam door de naam uit je Excel-lijst:
+"Beste Anna, Anna neemt de avonddienst op 3 maart over van Bram."
+Dienstrooster zelf kent die namen nooit.
 
 1. Geef de tabel `Adressen` een derde kolom `Naam`.
 
