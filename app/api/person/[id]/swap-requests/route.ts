@@ -212,7 +212,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         {
           success: false,
           error:
-            'Via de app kun je alleen gelijkwaardig ruilen: een dienst tegen een dienst van dezelfde soort. Een andere ruil regel je zelf met je collega. Geef die daarna door aan de planner én aan het roosterbureau.',
+            'Via de app kun je alleen gelijkwaardig ruilen: een dienst tegen een dienst van dezelfde soort. Een andere ruil regel je zelf met je collega. Geef die daarna door aan de planner én aan de afdeling roostering.',
         },
         { status: 400 }
       );

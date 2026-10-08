@@ -79,9 +79,9 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   const [requestedSlotId, setRequestedSlotId] = useState('');
   const [notes, setNotes] = useState('');
   // Where an unequal swap is passed on (Mailinstellingen, lib/appSettings.ts getSwapContacts).
-  const [contacts, setContacts] = useState<{ planner: string | null; roosterbureau: string | null }>({
+  const [contacts, setContacts] = useState<{ planner: string | null; roostering: string | null }>({
     planner: null,
-    roosterbureau: null,
+    roostering: null,
   });
 
   useEffect(() => {
@@ -250,12 +250,12 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                   {' '}op <a className="underline font-medium break-all" href={`mailto:${contacts.planner}`}>{contacts.planner}</a>
                 </>
               )}{' '}
-              én aan het roosterbureau
-              {contacts.roosterbureau && (
+              én aan de afdeling roostering
+              {contacts.roostering && (
                 <>
                   {' '}op{' '}
-                  <a className="underline font-medium break-all" href={`mailto:${contacts.roosterbureau}`}>
-                    {contacts.roosterbureau}
+                  <a className="underline font-medium break-all" href={`mailto:${contacts.roostering}`}>
+                    {contacts.roostering}
                   </a>
                 </>
               )}

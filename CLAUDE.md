@@ -580,7 +580,7 @@ codenamen, which are pseudonyms. The approval mail (`goedgekeurd`) names
 both, with lines to pass on to whoever makes the work rosters. The swap dialog says only an equal swap goes through the app (one shift
 for one of the same kind, which the create route enforces); any other
 trade colleagues agree themselves and pass on to the planner (the
-Mailinstellingen flow mailbox) and the roster office (`roosterbureau`,
+Mailinstellingen flow mailbox) and the rostering department (`roostering`,
 an extra field in Mailinstellingen, lib/appSettings.ts getSwapContacts,
 GET /api/person/[id]/swap-contacts). Both addresses live in the app,
 never in code. Started after the

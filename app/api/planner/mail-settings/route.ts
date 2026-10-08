@@ -1,12 +1,12 @@
 /**
  * GET    /api/planner/mail-settings - whether sending is set up, which
  *        account and which flow mailbox. Never the password.
- * PUT    { gebruiker, wachtwoord?, verzendlijst_aan, roosterbureau? } - save a
+ * PUT    { gebruiker, wachtwoord?, verzendlijst_aan, roostering? } - save a
  *        Gmail account and its app password. Logs in first and refuses
  *        settings that don't work. Leaving the password out keeps the
- *        saved one. verzendlijst_aan and roosterbureau are also the two
+ *        saved one. verzendlijst_aan and roostering are also the two
  *        addresses the swap dialog names for a swap the app can't make
- *        (getSwapContacts); an empty roosterbureau removes it.
+ *        (getSwapContacts); an empty roostering removes it.
  * DELETE - remove the settings. Sending then stops.
  *
  * lib/appSettings.ts, lib/verzendlijstMail.ts. Changes are audit-logged,
@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { deleteMailSettings, getStoredMailSettings, saveMailSettings, setRoosterbureau } from '@/lib/appSettings';
+import { deleteMailSettings, getStoredMailSettings, saveMailSettings, setRoostering } from '@/lib/appSettings';
 import { mailConfigStatus, verifyMailLogin } from '@/lib/verzendlijstMail';
 import { flushMailQueue } from '@/lib/meldingMail';
 
@@ -48,7 +48,7 @@ const putSchema = z.object({
   gebruiker: z.string().trim().max(254),
   wachtwoord: z.string().max(200).optional(),
   verzendlijst_aan: z.string().trim().max(254),
-  roosterbureau: z.string().trim().max(254).optional(),
+  roostering: z.string().trim().max(254).optional(),
 });
 
 export async function PUT(req: NextRequest) {
@@ -66,9 +66,9 @@ export async function PUT(req: NextRequest) {
     if (!EMAIL.test(verzendlijst_aan)) {
       return fail(400, 'Het adres voor de verzendlijst is geen geldig e-mailadres.');
     }
-    const roosterbureau = parsed.data.roosterbureau || null;
-    if (roosterbureau && !EMAIL.test(roosterbureau)) {
-      return fail(400, 'Het adres van het roosterbureau is geen geldig e-mailadres.');
+    const roostering = parsed.data.roostering || null;
+    if (roostering && !EMAIL.test(roostering)) {
+      return fail(400, 'Het adres van de afdeling roostering is geen geldig e-mailadres.');
     }
 
     // Leaving the password empty keeps the saved one - only for the same
@@ -90,11 +90,11 @@ export async function PUT(req: NextRequest) {
 
     const before = mailConfigStatus();
     saveMailSettings({ gebruiker, wachtwoord, verzendlijstAan: verzendlijst_aan }, auth!.userId);
-    setRoosterbureau(roosterbureau, auth!.userId);
+    setRoostering(roostering, auth!.userId);
     audit(
       auth!.userId,
-      { gebruiker: before.gebruiker, verzendlijst_aan: before.verzendlijst_aan, roosterbureau: before.roosterbureau },
-      { gebruiker, verzendlijst_aan, roosterbureau, wachtwoord_gewijzigd: Boolean(typed) },
+      { gebruiker: before.gebruiker, verzendlijst_aan: before.verzendlijst_aan, roostering: before.roostering },
+      { gebruiker, verzendlijst_aan, roostering, wachtwoord_gewijzigd: Boolean(typed) },
       'UPDATE'
     );
     // Swap mails that waited for working settings go out now, not at the
@@ -114,7 +114,7 @@ export async function DELETE(req: NextRequest) {
     if (deleteMailSettings()) {
       audit(
         auth!.userId,
-        { gebruiker: before.gebruiker, verzendlijst_aan: before.verzendlijst_aan, roosterbureau: before.roosterbureau },
+        { gebruiker: before.gebruiker, verzendlijst_aan: before.verzendlijst_aan, roostering: before.roostering },
         null,
         'DELETE'
       );

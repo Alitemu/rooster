@@ -3,7 +3,7 @@
  * (dienstrooster_app_setting): the mail account the verzendlijst goes out
  * from (lib/verzendlijstMail.ts), because once the app runs on a ward
  * server, the person running it may not be able to edit files there, and
- * the roster office's address for the swap dialog (getSwapContacts).
+ * the rostering department's address for the swap dialog (getSwapContacts).
  *
  * The app password is stored encrypted (lib/settingsCrypto.ts) and never
  * sent back to the browser.
@@ -16,7 +16,7 @@ const GEBRUIKER = 'mail.gebruiker';
 const WACHTWOORD = 'mail.wachtwoord';
 const AAN = 'mail.verzendlijst_aan';
 const LAATSTE_FOUT = 'mail.laatste_fout';
-const ROOSTERBUREAU = 'ruil.adres_roosterbureau';
+const ROOSTERING = 'ruil.adres_roostering';
 
 /**
  * The last time sending failed, kept until a send succeeds again (or the
@@ -100,19 +100,19 @@ export function saveMailSettings(settings: { gebruiker: string; wachtwoord: stri
 export function deleteMailSettings(): boolean {
   const removed = db
     .prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN (?, ?, ?, ?)`)
-    .run(GEBRUIKER, WACHTWOORD, AAN, ROOSTERBUREAU);
+    .run(GEBRUIKER, WACHTWOORD, AAN, ROOSTERING);
   clearMailFailure();
   return removed.changes > 0;
 }
 
-export function getRoosterbureau(): string | null {
-  return get(ROOSTERBUREAU) ?? null;
+export function getRoostering(): string | null {
+  return get(ROOSTERING) ?? null;
 }
 
 /** Saved with the mail settings; null removes it. */
-export function setRoosterbureau(adres: string | null, actorId: string | null): void {
+export function setRoostering(adres: string | null, actorId: string | null): void {
   if (!adres) {
-    db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(ROOSTERBUREAU);
+    db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(ROOSTERING);
     return;
   }
   db.prepare(
@@ -120,17 +120,17 @@ export function setRoosterbureau(adres: string | null, actorId: string | null): 
      VALUES (?, ?, ?, ?)
      ON CONFLICT(sleutel) DO UPDATE SET waarde = excluded.waarde, gewijzigd_op = excluded.gewijzigd_op,
        gewijzigd_door = excluded.gewijzigd_door`
-  ).run(ROOSTERBUREAU, adres, new Date().toISOString(), actorId);
+  ).run(ROOSTERING, adres, new Date().toISOString(), actorId);
 }
 
 /**
  * Where a participant passes on a swap the app can't make (the swap
  * dialog): the app only swaps one shift for one of the same kind, any other
  * trade is agreed between colleagues and then reported to the planner (the
- * flow mailbox the verzendlijst goes to) and the roster office. Kept in the
+ * flow mailbox the verzendlijst goes to) and the rostering department. Kept in the
  * app, never in code: they are the ward's own addresses, and the
  * repository is public.
  */
-export function getSwapContacts(): { planner: string | null; roosterbureau: string | null } {
-  return { planner: get(AAN) ?? null, roosterbureau: getRoosterbureau() };
+export function getSwapContacts(): { planner: string | null; roostering: string | null } {
+  return { planner: get(AAN) ?? null, roostering: getRoostering() };
 }

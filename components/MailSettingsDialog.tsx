@@ -18,7 +18,7 @@ interface Status {
   uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
-  roosterbureau: string | null;
+  roostering: string | null;
   wachtwoord_onleesbaar: boolean;
 }
 
@@ -34,7 +34,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
   const [gebruiker, setGebruiker] = useState('');
   const [wachtwoord, setWachtwoord] = useState('');
   const [aan, setAan] = useState('');
-  const [roosterbureau, setRoosterbureau] = useState('');
+  const [roostering, setRoostering] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [melding, setMelding] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     setStatus(s);
     setGebruiker(s.gebruiker ?? '');
     setAan(s.verzendlijst_aan ?? '');
-    setRoosterbureau(s.roosterbureau ?? '');
+    setRoostering(s.roostering ?? '');
     setWachtwoord('');
   };
 
@@ -83,7 +83,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       const res = await fetch(withBasePath('/api/planner/mail-settings'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan, roosterbureau }),
+        body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan, roostering }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
@@ -205,20 +205,20 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
           </div>
 
           <div>
-            <label htmlFor="mail-roosterbureau" className="block text-sm font-semibold text-neutral-900 mb-1">
-              E-mailadres van het roosterbureau
+            <label htmlFor="mail-roostering" className="block text-sm font-semibold text-neutral-900 mb-1">
+              E-mailadres van de afdeling roostering
             </label>
             <input
-              id="mail-roosterbureau"
+              id="mail-roostering"
               type="email"
               autoComplete="off"
-              value={roosterbureau}
-              onChange={(e) => setRoosterbureau(e.target.value)}
+              value={roostering}
+              onChange={(e) => setRoostering(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg text-sm"
             />
             <p className="text-xs text-neutral-500 mt-1">
               Staat ook bij een ruilverzoek. Een ruil die niet via de app kan, geven deelnemers door aan het adres
-              hierboven én aan dit adres. Laat het leeg als er geen roosterbureau is.
+              hierboven én aan dit adres. Laat het leeg als er geen adres is.
             </p>
           </div>
 

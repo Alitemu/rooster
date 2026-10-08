@@ -35,7 +35,7 @@ import { GET as swapContactsGET } from '../../person/[id]/swap-contacts/route';
  *   removing the settings stops sending;
  * - planners only, and every change is in the audit trail without the
  *   password.
- * - the flow mailbox and the roster office's address are what the swap
+ * - the flow mailbox and the rostering department's address are what the swap
  *   dialog names for a swap the app can't make; a participant reads only
  *   those two, for themselves.
  */
@@ -236,7 +236,7 @@ describe('Mailinstellingen in de app', () => {
     }
   });
 
-  it('keeps the roster office address with the settings, and the swap dialog names it with the flow mailbox', async () => {
+  it('keeps the rostering department address with the settings, and the swap dialog names it with the flow mailbox', async () => {
     configureSmtpServerOnly(sink);
     const planner = person('PLANNER');
     const deelnemer = person('DEELNEMER');
@@ -253,28 +253,28 @@ describe('Mailinstellingen in de app', () => {
     };
 
     // Not an address: nothing saved, not even the rest.
-    const fout = await PUT(request('PUT', planner, { ...goed, roosterbureau: 'roosterbureau' }));
+    const fout = await PUT(request('PUT', planner, { ...goed, roostering: 'roostering' }));
     expect(fout.status).toBe(400);
-    expect((await fout.json()).error.message).toBe('Het adres van het roosterbureau is geen geldig e-mailadres.');
+    expect((await fout.json()).error.message).toBe('Het adres van de afdeling roostering is geen geldig e-mailadres.');
     expect(stored()).toHaveLength(0);
 
-    const res = await PUT(request('PUT', planner, { ...goed, roosterbureau: ' rooster@ziekenhuis.test ' }));
+    const res = await PUT(request('PUT', planner, { ...goed, roostering: ' rooster@ziekenhuis.test ' }));
     expect(res.status).toBe(200);
-    expect((await res.json()).data.roosterbureau).toBe('rooster@ziekenhuis.test');
+    expect((await res.json()).data.roostering).toBe('rooster@ziekenhuis.test');
     const eigen = await contacts(deelnemer, deelnemer);
     expect(eigen.status).toBe(200);
-    expect((await eigen.json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roosterbureau: 'rooster@ziekenhuis.test' });
+    expect((await eigen.json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roostering: 'rooster@ziekenhuis.test' });
     // Only their own: a participant can't read it for someone else.
     expect((await contacts(deelnemer, ander)).status).toBe(403);
 
     // Left empty: removed.
-    await PUT(request('PUT', planner, { ...goed, roosterbureau: '' }));
-    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roosterbureau: null });
+    await PUT(request('PUT', planner, { ...goed, roostering: '' }));
+    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roostering: null });
 
     // Removing the settings removes it too.
-    await PUT(request('PUT', planner, { ...goed, roosterbureau: 'rooster@ziekenhuis.test' }));
+    await PUT(request('PUT', planner, { ...goed, roostering: 'rooster@ziekenhuis.test' }));
     await DELETE(request('DELETE', planner));
-    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null, roosterbureau: null });
+    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null, roostering: null });
   });
 
   it('is for planners only', async () => {
