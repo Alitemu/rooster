@@ -1,8 +1,8 @@
 /**
  * GET /api/person/[id]/swap-contacts - where to pass on a swap the app
  * can't make, for the swap dialog (lib/appSettings.ts getSwapContacts):
- * the planner's mailbox from Mailinstellingen and the roster office. Only
- * for the person themselves.
+ * the planner's mailbox from Mailinstellingen. Only for the person
+ * themselves.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

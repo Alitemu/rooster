@@ -2,8 +2,9 @@
  * Settings the operator changes from the app instead of the server's .env
  * (dienstrooster_app_setting): the mail account the verzendlijst goes out
  * from (lib/verzendlijstMail.ts), because once the app runs on a ward
- * server, the person running it may not be able to edit files there, and
- * the rostering department's address for the swap dialog (getSwapContacts).
+ * server, the person running it may not be able to edit files there. The
+ * flow mailbox is also the planner's address in the swap dialog
+ * (getSwapContacts).
  *
  * The app password is stored encrypted (lib/settingsCrypto.ts) and never
  * sent back to the browser.
@@ -16,7 +17,6 @@ const GEBRUIKER = 'mail.gebruiker';
 const WACHTWOORD = 'mail.wachtwoord';
 const AAN = 'mail.verzendlijst_aan';
 const LAATSTE_FOUT = 'mail.laatste_fout';
-const ROOSTERING = 'ruil.adres_roostering';
 
 /**
  * The last time sending failed, kept until a send succeeds again (or the
@@ -99,38 +99,20 @@ export function saveMailSettings(settings: { gebruiker: string; wachtwoord: stri
 
 export function deleteMailSettings(): boolean {
   const removed = db
-    .prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN (?, ?, ?, ?)`)
-    .run(GEBRUIKER, WACHTWOORD, AAN, ROOSTERING);
+    .prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN (?, ?, ?)`)
+    .run(GEBRUIKER, WACHTWOORD, AAN);
   clearMailFailure();
   return removed.changes > 0;
 }
 
-export function getRoostering(): string | null {
-  return get(ROOSTERING) ?? null;
-}
-
-/** Saved with the mail settings; null removes it. */
-export function setRoostering(adres: string | null, actorId: string | null): void {
-  if (!adres) {
-    db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(ROOSTERING);
-    return;
-  }
-  db.prepare(
-    `INSERT INTO dienstrooster_app_setting (sleutel, waarde, gewijzigd_op, gewijzigd_door)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(sleutel) DO UPDATE SET waarde = excluded.waarde, gewijzigd_op = excluded.gewijzigd_op,
-       gewijzigd_door = excluded.gewijzigd_door`
-  ).run(ROOSTERING, adres, new Date().toISOString(), actorId);
-}
-
 /**
  * Where a participant passes on a swap the app can't make (the swap
- * dialog): the app only swaps one shift for one of the same kind, any other
- * trade is agreed between colleagues and then reported to the planner (the
- * flow mailbox the verzendlijst goes to) and the rostering department. Kept in the
- * app, never in code: they are the ward's own addresses, and the
- * repository is public.
+ * dialog): the app only swaps one shift for one of the same kind; any
+ * other trade is agreed between colleagues, who mail it themselves to the
+ * planner (the flow mailbox the verzendlijst goes to) and to the roster
+ * office (named, no address). Kept in the app, never in code: it is the
+ * ward's own address, and the repository is public.
  */
-export function getSwapContacts(): { planner: string | null; roostering: string | null } {
-  return { planner: get(AAN) ?? null, roostering: getRoostering() };
+export function getSwapContacts(): { planner: string | null } {
+  return { planner: get(AAN) ?? null };
 }

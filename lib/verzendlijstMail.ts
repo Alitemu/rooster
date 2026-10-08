@@ -15,7 +15,7 @@
 
 import nodemailer from 'nodemailer';
 import { db } from '@/db/client';
-import { clearMailFailure, getMailFailure, getRoostering, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
+import { clearMailFailure, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
 import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
 interface MailConfig {
@@ -75,8 +75,6 @@ export function mailConfigStatus(): {
   laatste_fout: MailFailure | null;
   /** Swap mails waiting to go out (lib/meldingMail.ts flushMailQueue). */
   wachtrij: number;
-  /** The rostering department's address, shown in the swap dialog (getSwapContacts). */
-  roostering: string | null;
 } {
   // Counted here rather than imported from lib/meldingMail.ts, which
   // imports this module.
@@ -90,7 +88,6 @@ export function mailConfigStatus(): {
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
     laatste_fout: getMailFailure(),
     wachtrij,
-    roostering: getRoostering(),
   };
 }
 

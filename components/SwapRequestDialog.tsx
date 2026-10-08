@@ -78,11 +78,8 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
   const [offeredSlotId, setOfferedSlotId] = useState('');
   const [requestedSlotId, setRequestedSlotId] = useState('');
   const [notes, setNotes] = useState('');
-  // Where an unequal swap is passed on (Mailinstellingen, lib/appSettings.ts getSwapContacts).
-  const [contacts, setContacts] = useState<{ planner: string | null; roostering: string | null }>({
-    planner: null,
-    roostering: null,
-  });
+  // Where an unequal swap is mailed (Mailinstellingen, lib/appSettings.ts getSwapContacts).
+  const [contacts, setContacts] = useState<{ planner: string | null }>({ planner: null });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -194,9 +191,6 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     }
   };
 
-  // The planner's and the rostering department's address, as far as set.
-  const adressen = [contacts.planner, contacts.roostering].filter((a): a is string => Boolean(a));
-
   const getOfferedSlot = () => assignments.find(a => a.slot_id === offeredSlotId);
   const getRequestedSlot = () => candidates?.find((c) => c.slot_id === requestedSlotId);
 
@@ -247,18 +241,18 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
             </p>
             <p>
               Wil je iets anders ruilen, bijvoorbeeld een avonddienst tegen een weekenddienst? Regel dat dan
-              zelf met je collega. Geef de ruil daarna door
-              {adressen.length === 0
-                ? ' aan de planner'
-                : adressen.map((adres, i) => (
-                    <span key={adres}>
-                      {i === 0 ? ' op ' : ' en '}
-                      <a className="underline font-medium break-all" href={`mailto:${adres}`}>
-                        {adres}
-                      </a>
-                    </span>
-                  ))}
-              .
+              zelf met je collega. Stuur daarna zelf een mail over de ruil
+              {contacts.planner ? (
+                <>
+                  {' '}naar{' '}
+                  <a className="underline font-medium break-all" href={`mailto:${contacts.planner}`}>
+                    {contacts.planner}
+                  </a>
+                </>
+              ) : (
+                ' naar de planner'
+              )}{' '}
+              en naar het roosterbureau.
             </p>
           </div>
 

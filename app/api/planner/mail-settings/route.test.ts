@@ -35,9 +35,8 @@ import { GET as swapContactsGET } from '../../person/[id]/swap-contacts/route';
  *   removing the settings stops sending;
  * - planners only, and every change is in the audit trail without the
  *   password.
- * - the flow mailbox and the rostering department's address are what the swap
- *   dialog names for a swap the app can't make; a participant reads only
- *   those two, for themselves.
+ * - the flow mailbox is the planner's address in the swap dialog; a
+ *   participant reads only that, for themselves.
  */
 
 let sink: SmtpSink;
@@ -86,13 +85,13 @@ const stored = () =>
 
 // Another test file may have left a failed send behind.
 beforeEach(() => {
-  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%' OR sleutel LIKE 'ruil.%'`).run();
+  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%'`).run();
 });
 
 afterEach(() => {
   clearSmtpConfig();
   sink.received.length = 0;
-  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%' OR sleutel LIKE 'ruil.%'`).run();
+  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel LIKE 'mail.%'`).run();
   for (const id of people) {
     db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(id);
     db.prepare('DELETE FROM dienstrooster_person_access_link WHERE person_id = ?').run(id);
@@ -236,7 +235,7 @@ describe('Mailinstellingen in de app', () => {
     }
   });
 
-  it('keeps the rostering department address with the settings, and the swap dialog names it with the flow mailbox', async () => {
+  it('gives the swap dialog the flow mailbox as the planner\'s address, and only to the person themselves', async () => {
     configureSmtpServerOnly(sink);
     const planner = person('PLANNER');
     const deelnemer = person('DEELNEMER');
@@ -252,29 +251,16 @@ describe('Mailinstellingen in de app', () => {
       );
     };
 
-    // Not an address: nothing saved, not even the rest.
-    const fout = await PUT(request('PUT', planner, { ...goed, roostering: 'roostering' }));
-    expect(fout.status).toBe(400);
-    expect((await fout.json()).error.message).toBe('Het adres van de afdeling roostering is geen geldig e-mailadres.');
-    expect(stored()).toHaveLength(0);
-
-    const res = await PUT(request('PUT', planner, { ...goed, roostering: ' rooster@ziekenhuis.test ' }));
-    expect(res.status).toBe(200);
-    expect((await res.json()).data.roostering).toBe('rooster@ziekenhuis.test');
+    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null });
+    await PUT(request('PUT', planner, goed));
     const eigen = await contacts(deelnemer, deelnemer);
     expect(eigen.status).toBe(200);
-    expect((await eigen.json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roostering: 'rooster@ziekenhuis.test' });
-    // Only their own: a participant can't read it for someone else.
+    // Only that address: nothing else from the mail settings.
+    expect((await eigen.json()).data).toEqual({ planner: 'flow@ziekenhuis.test' });
     expect((await contacts(deelnemer, ander)).status).toBe(403);
 
-    // Left empty: removed.
-    await PUT(request('PUT', planner, { ...goed, roostering: '' }));
-    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: 'flow@ziekenhuis.test', roostering: null });
-
-    // Removing the settings removes it too.
-    await PUT(request('PUT', planner, { ...goed, roostering: 'rooster@ziekenhuis.test' }));
     await DELETE(request('DELETE', planner));
-    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null, roostering: null });
+    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null });
   });
 
   it('is for planners only', async () => {

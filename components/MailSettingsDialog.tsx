@@ -18,7 +18,6 @@ interface Status {
   uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
-  roostering: string | null;
   wachtwoord_onleesbaar: boolean;
 }
 
@@ -34,7 +33,6 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
   const [gebruiker, setGebruiker] = useState('');
   const [wachtwoord, setWachtwoord] = useState('');
   const [aan, setAan] = useState('');
-  const [roostering, setRoostering] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [melding, setMelding] = useState<string | null>(null);
@@ -47,7 +45,6 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     setStatus(s);
     setGebruiker(s.gebruiker ?? '');
     setAan(s.verzendlijst_aan ?? '');
-    setRoostering(s.roostering ?? '');
     setWachtwoord('');
   };
 
@@ -83,7 +80,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       const res = await fetch(withBasePath('/api/planner/mail-settings'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan, roostering }),
+        body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
@@ -201,24 +198,6 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
             <p className="text-xs text-neutral-500 mt-1">
               De mailbox waar je Power Automate-stroom naar kijkt. Daar komt de mail met de verzendlijst binnen.
               Deelnemers zien dit adres ook bij een ruilverzoek: daar geven ze een ruil door die niet via de app kan.
-            </p>
-          </div>
-
-          <div>
-            <label htmlFor="mail-roostering" className="block text-sm font-semibold text-neutral-900 mb-1">
-              E-mailadres van de afdeling roostering
-            </label>
-            <input
-              id="mail-roostering"
-              type="email"
-              autoComplete="off"
-              value={roostering}
-              onChange={(e) => setRoostering(e.target.value)}
-              className="w-full px-3 py-2 border rounded-lg text-sm"
-            />
-            <p className="text-xs text-neutral-500 mt-1">
-              Staat ook bij een ruilverzoek. Een ruil die niet via de app kan, geven deelnemers door aan het adres
-              hierboven én aan dit adres. Laat het leeg als er geen adres is.
             </p>
           </div>
 
