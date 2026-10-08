@@ -196,7 +196,7 @@ Open een periode en klik onder *Exporteren & communicatie* op
 Via de app kan alleen een gelijkwaardige ruil: één dienst tegen één dienst
 van dezelfde soort. Een andere ruil regelen collega's zelf en geven ze
 daarna door. Het venster voor een ruilverzoek noemt daarvoor het adres bij
-*Verzendlijst sturen naar* (de planner) én het adres van de afdeling roostering.
+*Verzendlijst sturen naar* en het adres van de afdeling roostering.
 
 Bij **Opslaan** logt Dienstrooster meteen in bij Gmail. Lukt dat niet, dan
 wordt er niets opgeslagen en zie je waarom. Het wachtwoord wordt versleuteld

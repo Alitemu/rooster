@@ -194,6 +194,9 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
     }
   };
 
+  // The planner's and the rostering department's address, as far as set.
+  const adressen = [contacts.planner, contacts.roostering].filter((a): a is string => Boolean(a));
+
   const getOfferedSlot = () => assignments.find(a => a.slot_id === offeredSlotId);
   const getRequestedSlot = () => candidates?.find((c) => c.slot_id === requestedSlotId);
 
@@ -244,21 +247,17 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
             </p>
             <p>
               Wil je iets anders ruilen, bijvoorbeeld een avonddienst tegen een weekenddienst? Regel dat dan
-              zelf met je collega. Geef de ruil daarna door aan de planner
-              {contacts.planner && (
-                <>
-                  {' '}op <a className="underline font-medium break-all" href={`mailto:${contacts.planner}`}>{contacts.planner}</a>
-                </>
-              )}{' '}
-              én aan de afdeling roostering
-              {contacts.roostering && (
-                <>
-                  {' '}op{' '}
-                  <a className="underline font-medium break-all" href={`mailto:${contacts.roostering}`}>
-                    {contacts.roostering}
-                  </a>
-                </>
-              )}
+              zelf met je collega. Geef de ruil daarna door
+              {adressen.length === 0
+                ? ' aan de planner'
+                : adressen.map((adres, i) => (
+                    <span key={adres}>
+                      {i === 0 ? ' op ' : ' en '}
+                      <a className="underline font-medium break-all" href={`mailto:${adres}`}>
+                        {adres}
+                      </a>
+                    </span>
+                  ))}
               .
             </p>
           </div>

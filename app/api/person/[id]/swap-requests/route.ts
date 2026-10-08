@@ -211,8 +211,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       return NextResponse.json(
         {
           success: false,
-          error:
-            'Via de app kun je alleen gelijkwaardig ruilen: een dienst tegen een dienst van dezelfde soort. Een andere ruil regel je zelf met je collega. Geef die daarna door aan de planner én aan de afdeling roostering.',
+          // The dialog only offers shifts of the same kind, so this is a
+          // safety net for a request that bypassed it.
+          error: 'Via de app kun je alleen een dienst ruilen tegen een dienst van dezelfde soort.',
         },
         { status: 400 }
       );
