@@ -333,9 +333,19 @@ versie iets verschillen.
       - In *Indien ja*: **Een e-mail verzenden (V2)**: Aan = *Email* uit
         *Een rij ophalen*, Onderwerp = *onderwerp*, Hoofdtekst = *html*.
       - In *Indien nee*: **Een e-mail verzenden (V2)** aan jezelf, met de
-        *codenaam* waarbij geen geldig adres staat. Een adres met een typfout
-        dat er wel geldig uitziet, gaat gewoon de deur uit. Daarvan krijg je
-        een onbestelbaar-bericht van Outlook terug.
+        *codenaam* die niet in de lijst staat of waarbij geen geldig adres
+        staat. Een adres met een typfout dat er wel geldig uitziet, gaat
+        gewoon de deur uit. Daarvan krijg je een onbestelbaar-bericht van
+        Outlook terug.
+      - Zet bij de stap direct onder *Een rij ophalen* (de *Voorwaarde*, of
+        *Variabele instellen* als je stap 5 volgt) onder **Uitvoeren na**
+        zowel *is geslaagd* als *is mislukt* aan. Staat een codenaam niet in
+        de lijst, dan mislukt *Een rij ophalen*. De stappen eronder lopen dan
+        toch, de voorwaarde komt op *Nee* uit en de lus gaat gewoon verder
+        met het volgende bericht. Zonder dit vinkje telt Power Automate die
+        ronde als mislukt, en daarmee de hele lus. Alles wat na de lus komt
+        (een samenvatting, een rapport, het opruimen) wordt dan
+        overgeslagen.
 
    c. Optioneel: **een samenvatting voor jezelf**. Zet ná de lus van stap b
       (dus nog binnen de lus over de bijlagen) een **Voorwaarde**, bijvoorbeeld
@@ -367,14 +377,18 @@ versie iets verschillen.
       manier in dat ene bericht.
 
       Een mislukte *Een rij ophalen* laat de hele run als mislukt zien in
-      Power Automate. Wil je dat niet, zet dan na die actie een lege
-      parallelle tak met *Uitvoeren na* > *is mislukt*.
+      Power Automate. Hier is dat onschuldig: er gaat dan niets weg. Een
+      parallelle tak met *Uitvoeren na* > *is mislukt* verandert daar
+      niets aan. Power Automate kijkt naar de laatste stap van elke tak, en
+      de overgeslagen hoofdtak telt als mislukt.
 
-4. Optioneel maar handig: voeg na *Een rij ophalen* een parallelle tak toe
-   die alleen draait als die actie **mislukt** (*Uitvoeren na* > *is
-   mislukt*) en stuur jezelf dan een mail "Codenaam niet gevonden in de
-   lijst" met de *codenaam*. Anders merk je een ontbrekende rij pas als
-   iemand zegt geen mail te hebben gehad.
+4. Een ontbrekende codenaam meld je via de *Nee*-tak van stap 4b, niet via
+   een aparte parallelle tak die alleen bij **mislukt** draait. Zo'n tak
+   doet wel zijn werk, maar de lus mislukt toch: de hoofdtak is
+   overgeslagen en Power Automate telt dat als mislukt. Zet daarnaast bij
+   de eerste stap ná de lus over de berichten onder **Uitvoeren na** zowel
+   *is geslaagd* als *is mislukt* aan. Weigert Outlook een enkele mail,
+   dan lopen een samenvatting en het opruimen dan nog steeds.
 
 Test de stroom eerst met een Excel-lijst waarin alleen jouw eigen adres
 staat, bij één of twee codenamen.
