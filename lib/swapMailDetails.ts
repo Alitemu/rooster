@@ -12,7 +12,7 @@
  * until it is approved, so the colleague can say no without knowing to
  * whom. In the app both sides keep seeing each other's codenaam, which is a
  * pseudonym. Once approved (`goedgekeurd`) the mail names both, and the
- * planner and the rostering department get the swap with both names
+ * planner and the roster office get the swap with both names
  * (swapDoorgevenBericht).
  */
 
@@ -80,7 +80,7 @@ export function swapMailDetails(params: {
       `Jij geeft: je ${shift(geeft)} aan ${ander}`,
       `Jij krijgt: de ${shift(krijgt)} van ${ander}`,
       '',
-      'De planner en de afdeling roostering krijgen deze ruil ook door.',
+      'De planner en het roosterbureau krijgen deze ruil ook door.',
     ];
   } else if (aanvrager) {
     regels = [`Jij geeft: je ${shift(params.aangeboden)}`, `Jij krijgt: een ${shift(params.gevraagd)}`];
@@ -103,14 +103,14 @@ export function swapMailDetails(params: {
 /**
  * The two codenamen the confirmation of an approved swap is sent to. Not
  * participants: the planner adds a row for each to the flow's sheet, with
- * the planner's and the rostering department's address. The app puts no
+ * the planner's and the roster office's address. The app puts no
  * address in a verzendlijst itself, so a forged one can only ever reach
  * people in that sheet.
  */
-export const DOORGEVEN_AAN = ['Planner', 'Afdeling roostering'] as const;
+export const DOORGEVEN_AAN = ['Planner', 'Roosterbureau'] as const;
 
 /**
- * For the planner and the rostering department: who does which shift now.
+ * For the planner and the roster office: who does which shift now.
  * Names only the two who swapped (`personen`), so the flow writes both
  * out in full.
  */

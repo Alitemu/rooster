@@ -303,7 +303,7 @@ describe('mail about swap requests', () => {
     expect(sink.received.every((m) => m.to.join() === 'stroom@example.test')).toBe(true);
   });
 
-  it('mails the requester when the colleague approves, and the planner and rostering department with both names', async () => {
+  it('mails the requester when the colleague approves, and the planner and roster office with both names', async () => {
     configureSmtp(sink);
     const f = createFixture();
     const swapId = await requestSwap(f);
@@ -324,14 +324,14 @@ describe('mail about swap requests', () => {
     expect(uitkomst.tekst).toContain('Je ruilverzoek is goedgekeurd.');
     expect(uitkomst.tekst).toContain(`Jij geeft: je avonddienst op dinsdag 3 maart 2099 aan ${codenaam(f.collega)}`);
     expect(uitkomst.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 14 april 2099 van ${codenaam(f.collega)}`);
-    expect(uitkomst.tekst).toContain('De planner en de afdeling roostering krijgen deze ruil ook door.');
+    expect(uitkomst.tekst).toContain('De planner en het roosterbureau krijgen deze ruil ook door.');
     expect(linkOwner(uitkomst.tekst)).toBe(f.aanvrager);
 
-    // One verzendlijst for the planner and the rostering department: two
+    // One verzendlijst for the planner and the roster office: two
     // fixed codenamen the flow finds in its own sheet, never an address.
     const doorgeven = sink.received.map((m) => verzendlijstPayload(m.raw)).find((l) => l.soort === 'RUIL_DOORGEVEN')!;
     expect(doorgeven).toMatchObject({ automatisch: true, aantal: 2, aanvraag_email: null, kandidaten: null });
-    expect(doorgeven.berichten.map((b) => b.codenaam)).toEqual(['Planner', 'Afdeling roostering']);
+    expect(doorgeven.berichten.map((b) => b.codenaam)).toEqual(['Planner', 'Roosterbureau']);
     for (const b of doorgeven.berichten) {
       expect(b.onderwerp).toBe(`Ruil goedgekeurd: ${codenaam(f.aanvrager)} en ${codenaam(f.collega)}`);
       expect(b.tekst).toContain(

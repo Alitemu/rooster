@@ -580,7 +580,7 @@ codenamen, which are pseudonyms. The approval mail (`goedgekeurd`) names
 the colleague, and the approval also sends a RUIL_DOORGEVEN verzendlijst
 (DoorgevenMail in lib/meldingMail.ts, queued like any swap mail, built from
 the swap row when sent) with one bericht each for the fixed codenamen
-`Planner` and `Afdeling roostering` (DOORGEVEN_AAN, lib/swapMailDetails.ts):
+`Planner` and `Roosterbureau` (DOORGEVEN_AAN, lib/swapMailDetails.ts):
 who now does which shift, `personen` = both who swapped, no link. The
 operator adds those two rows to the flow's sheet; the app never puts an
 address in a verzendlijst, so a forged one can't reach anyone outside it. The swap dialog says only an equal swap goes through the app (one shift

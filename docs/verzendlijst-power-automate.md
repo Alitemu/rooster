@@ -43,13 +43,12 @@ pseudoniem. In `personen` staat dan alleen de lezer zelf, dus de stroom kan
 er ook geen echte naam van maken.
 
 Gaat de ruil door, dan noemt de mail aan de aanvrager de collega. De
-planner en de afdeling roostering krijgen dan een bevestiging met beide
+planner en het roosterbureau krijgen dan een bevestiging met beide
 dienstdoenden: "Persoon-03 neemt de avonddienst op woensdag 3 maart 2027
 over van Persoon-07." Met stap 5 staan daar de volledige namen. Die
-bevestiging gaat naar twee vaste codenamen, `Planner` en `Afdeling
-roostering` (soort `RUIL_DOORGEVEN`). Zet die twee als rij in je
-Excel-lijst, met het adres van de planner en van de afdeling roostering
-(stap 3). Dienstrooster zet zelf nooit een e-mailadres in de verzendlijst.
+bevestiging gaat naar twee vaste codenamen, `Planner` en `Roosterbureau`
+(soort `RUIL_DOORGEVEN`). Zet die twee als rij in je Excel-lijst, met het
+adres van de planner en van het roosterbureau (stap 3). Dienstrooster zet zelf nooit een e-mailadres in de verzendlijst.
 Zo kan een nagemaakte verzendlijst alleen mensen uit jouw lijst bereiken.
 De stroom hoeft hiervoor niet te veranderen.
 
@@ -236,7 +235,7 @@ Maak in OneDrive of SharePoint een Excel-bestand, bijvoorbeeld
 
 Zet er ook twee rijen in voor de bevestiging van een goedgekeurde ruil:
 codenaam `Planner` met het adres van de planner (bijvoorbeeld het gedeelde
-postvak) en codenaam `Afdeling roostering` met het adres van die afdeling.
+postvak) en codenaam `Roosterbureau` met het adres van het roosterbureau.
 Precies zo gespeld.
 
 Selecteer de cellen en kies **Opmaken als tabel**. Geef de tabel de naam

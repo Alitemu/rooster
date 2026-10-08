@@ -267,7 +267,7 @@ export async function POST(
       soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
     });
-    // And to the planner and the rostering department, with both names.
+    // And to the planner and the roster office, with both names.
     void mailMelding({ doorgeven: true, soort: 'RUIL_DOORGEVEN', swapId, periodId: swapRequest.periode_id });
 
     return NextResponse.json({
