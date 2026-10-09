@@ -793,13 +793,13 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       </div>
                       <p className="text-xs text-neutral-500 mt-1">
                         {ruleset.objectiveMode === 'lexicographic' &&
-                          'Lost eerst dekking zo goed mogelijk op. Daarna volgen een eerlijke verdeling, de liever-niet-voorkeuren en als laatste de voorkeuren. Elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'}
+                          'Lost eerst dekking zo goed mogelijk op. Daarna volgen de verdeling over het personeel, de liever-niet-voorkeuren en als laatste de voorkeuren. Elke stap staat vast voordat de volgende meetelt, zodat een lagere prioriteit een hogere nooit kan verdringen. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'multi_start' &&
                           'Is dezelfde Prioriteitenplanner, meerdere keren gedraaid met telkens een andere toevalsvolgorde. Het beste rooster tot nu toe wordt steeds bewaard. Op de meeste periodes levert dit precies hetzelfde rooster op als één keer de Prioriteitenplanner draaien. Alleen op een krappe periode (weinig personeel, veel blokkades) kan een volgende poging een beter of compleet rooster vinden waar een eerdere poging bleef steken. Stopt vanzelf zodra een perfect rooster is gevonden (alles ingevuld, iedereen exact binnen bereik) of het aantal pogingen hieronder is bereikt. Kan langer duren dan de andere methodes; je kunt tussentijds stoppen. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'randomized' &&
-                          'Vult diensten stap voor stap in met een steeds willekeurig geschud personeelslijstje in plaats van met de solver hierboven. Een keuze wordt niet teruggedraaid als die verderop tot een probleem leidt. Draait meerdere pogingen en bewaart steeds het beste rooster tot nu toe, net als de Herhaalplanner. Kan een minder eerlijke verdeling opleveren dan de Prioriteitenplanner. De punten hieronder gelden niet voor deze methode.'}
+                          'Vult diensten stap voor stap in met een steeds willekeurig geschud personeelslijstje in plaats van met de solver hierboven. Een keuze wordt niet teruggedraaid als die verderop tot een probleem leidt. Draait meerdere pogingen en bewaart steeds het beste rooster tot nu toe, net als de Herhaalplanner. De verdeling kan verder van de streefaantallen afliggen dan bij de Prioriteitenplanner. De punten hieronder gelden niet voor deze methode.'}
                         {ruleset.objectiveMode === 'weighted' &&
-                          'Eén gecombineerde score van alle punten hieronder samen. De solver kiest wat die score het laagst maakt. Kan bij veel personeel of diensten een minder eerlijke verdeling opleveren dan de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
+                          'Eén gecombineerde score van alle punten hieronder samen. De solver kiest wat die score het laagst maakt. Bij veel personeel of diensten kan de verdeling verder van de streefaantallen afliggen dan bij de Prioriteitenplanner, omdat de punten onderling tegen elkaar kunnen opwegen.'}
                       </p>
                     </div>
 
@@ -1182,8 +1182,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <div className="bg-blue-50 border border-blue-200 rounded p-4">
                   <p className="text-sm text-blue-900">
                     De solver had nog niet bewezen dat dit de best mogelijke oplossing is toen de
-                    tijd om was. Langer laten zoeken kan een beter (eerlijker of vollediger) rooster
-                    opleveren, maar is geen garantie.
+                    tijd om was. Langer laten zoeken kan een rooster opleveren dat beter verdeeld of
+                    vollediger is, maar dat is geen garantie.
                   </p>
                   <button
                     onClick={() => handleGenerate(nextTimeLimitSeconds)}

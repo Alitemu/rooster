@@ -1653,7 +1653,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
               Losstaand van de beginsaldi hierboven: geef per persoon aan welke feestdag die persoon in
-              welk jaar heeft gedraaid, zodat de feestdagrotatie eerlijk verdeeld blijft. Formaat:
+              welk jaar heeft gedraaid, zodat de verdeling van de feestdagen doorloopt. Formaat:
             </p>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,holiday_group,year

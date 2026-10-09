@@ -9,11 +9,11 @@ export default function Home() {
           Welkom bij Dienstrooster
         </h2>
         <p className="text-neutral-600 mb-4">
-          Dit systeem helpt bij eerlijke verdeling van diensten voor medische achterwachten.
+          Dit systeem helpt bij de verdeling van diensten voor medische achterwachten.
         </p>
         <ul className="space-y-2 text-neutral-600">
           <li>✓ Automatische roosterplanning op basis van voorkeuren</li>
-          <li>✓ Eerlijke verdeling van diensten</li>
+          <li>✓ Verdeling van diensten</li>
           <li>✓ Feestdagrotatie</li>
           <li>✓ Parttime ondersteuning</li>
         </ul>

@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Dienstrooster',
-  description: 'Eerlijke roosterplanning voor medische afdelingen',
+  description: 'Verdeling van diensten voor medische afdelingen',
 };
 
 /**
@@ -55,7 +55,7 @@ export default function RootLayout({
           </main>
           <footer className="bg-neutral-100 border-t border-neutral-200 mt-8">
             <div className="max-w-7xl mx-auto px-4 py-6 text-center text-sm text-neutral-600">
-              <p>Dienstrooster: eerlijke roosterplanning</p>
+              <p>Dienstrooster: verdeling van diensten</p>
             </div>
           </footer>
         </div>

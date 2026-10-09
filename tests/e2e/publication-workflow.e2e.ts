@@ -225,7 +225,6 @@ test.describe('Roster Publication Workflow - E2E', () => {
       // Balance summary is rendered in words, never as a raw signed number
       // or a [min,max] pair (CLAUDE.md) - "ongeveer 9 avonddiensten".
       await expect(page.getByText('Overzicht saldo')).toBeVisible();
-      await expect(page.getByText('We streven ernaar de diensten zo eerlijk mogelijk te verdelen.')).toBeVisible();
       await expect(
         page.getByText(/Je streefaantal is ongeveer \d+ \w+dienst(en)?\.|Je hoeft deze periode geen \w+diensten te doen\./).first()
       ).toBeVisible();

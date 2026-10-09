@@ -145,7 +145,6 @@ export function PersonalRosterView({
       {/* Balance summary */}
       <div className="card p-6 space-y-4">
         <h3 className="font-bold text-lg">Overzicht saldo</h3>
-        <p className="text-sm text-neutral-600">We streven ernaar de diensten zo eerlijk mogelijk te verdelen.</p>
         <div className="space-y-3">
           {balances.map((balance) => (
             <div key={balance.counter} className="flex items-start gap-4 pb-3 border-b last:border-b-0">

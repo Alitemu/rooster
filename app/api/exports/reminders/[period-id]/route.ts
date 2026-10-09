@@ -178,7 +178,7 @@ ${urgencyLine}
 Ga naar de volgende link om je voorkeuren in te dienen:
 ${personalLink}
 
-Jouw input helpt ons een eerlijk rooster te maken dat rekening houdt met ieders wensen en beschikbaarheid.
+Jouw input helpt ons een rooster te maken dat rekening houdt met ieders wensen en beschikbaarheid.
 
 Heb je vragen? Neem dan contact op met de roosteraar.
 

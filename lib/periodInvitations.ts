@@ -90,7 +90,7 @@ const TELLER_MEERVOUD: Record<Teller, string> = {
 };
 
 /**
- * "We proberen ... ongeveer 9 avonddiensten en 2 weekenddiensten. Dat is
+ * "Naar verwachting krijg je ongeveer 9 avonddiensten en 2 weekenddiensten. Dat is
  * een indicatie. ...": the top of each streefbereik (computeMemberTargets,
  * so deeltijd, instroom and saldo are in it), in words and explicitly an
  * estimate - the final bands are only fixed at generation, when the
@@ -105,7 +105,6 @@ export function indicatieTekst(target: Record<Teller, MemberTarget> | undefined)
   if (delen.length === 0) return '';
   const opsomming = delen.length === 1 ? delen[0] : `${delen.slice(0, -1).join(', ')} en ${delen[delen.length - 1]}`;
   return (
-    'We proberen de diensten zo eerlijk mogelijk te verdelen. ' +
     `Naar verwachting krijg je ${opsomming}. ` +
     'Dat is een indicatie. Het precieze aantal hangt af van de invulling van iedereen.'
   );

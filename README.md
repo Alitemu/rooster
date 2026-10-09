@@ -1,7 +1,7 @@
-# Dienstrooster - Eerlijke Dienstroostering
+# Dienstrooster
 
 Een dienstroosterapplicatie voor verpleegafdelingen (20-40 medewerkers) met
-automatische roostergeneratie, eerlijke verdeling van diensten en
+automatische roostergeneratie, verdeling van diensten en
 voorkeursbeheer.
 
 Alle fasen uit het implementatieplan zijn gebouwd en getest: authenticatie,
