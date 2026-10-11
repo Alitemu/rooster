@@ -332,6 +332,42 @@ Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
 
+##### Op poort 443 met een eigen naam
+
+Op een server met een eigen DNS-naam, bijvoorbeeld
+`https://rooster.voorbeeld.nl`, zet je in `.env`:
+
+```bash
+APP_PORT=443
+```
+
+en laat je `BASE_URL` leeg. De app bepaalt dan zelf zijn adres: uit de naam
+waarmee de planner de app opent. Caddy maakt een certificaat voor elke naam
+waarmee de server wordt aangesproken. Een nieuwe naam vraagt dus geen
+aanpassing in `.env` of `Caddyfile`. Na een naamswijziging gebruiken
+automatische herinneringen en ruilmails het nieuwe adres zodra de planner
+via die naam iets verstuurt (uitnodigingen, een herinnering). Links in mails
+die al verstuurd zijn, bevatten de oude naam. Laat die oude naam daarom nog
+een tijd naar de server wijzen.
+
+Wil je dat `http://rooster.voorbeeld.nl` ook werkt, maak dan naast
+`docker-compose.yml` het bestand `docker-compose.override.yml`:
+
+```yaml
+services:
+  caddy:
+    ports:
+      - "80:80"
+```
+
+Caddy stuurt alles op poort 80 dan door naar https. `docker compose` leest
+dat bestand vanzelf mee. Het staat niet standaard in `docker-compose.yml`,
+omdat poort 80 op een NAS meestal al bezet is.
+
+Staat er een andere reverse proxy van de organisatie voor, dan moet die de
+oorspronkelijke naam (de `Host`-header) ongewijzigd doorgeven. Anders kent
+de app zijn eigen adres niet.
+
 ##### Draaien in een submap
 
 De app kan onder een submap draaien, bijvoorbeeld

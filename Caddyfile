@@ -39,11 +39,23 @@ http://127.0.0.1:9053 {
 	respond /ask 200
 }
 
+# Someone typing the name without https:// lands on port 80. Sent on to
+# https on the app's own port, same host and path. Only reachable when port
+# 80 is published, which docker-compose.yml deliberately doesn't do (on a
+# NAS that port is usually taken): a server that wants it adds
+# docker-compose.override.yml (README, "Op poort 443"). With APP_PORT=443
+# the browser drops the ":443" from the address itself.
+http://:80 {
+	redir https://{host}:{$APP_PORT:8010}{uri} 308
+}
+
 # Port 8010 by default; override with APP_PORT in .env, which moves both
-# the published host port and this listener together. No hostname in the
-# site address - matches any Host, since staff reach this from their own
-# devices via the server's LAN IP or a DNS name, not just localhost on the
-# machine running Docker.
+# the published host port and this listener together (443 on a server with
+# its own name, so the address needs no port). No hostname in the site
+# address - matches any Host, and on-demand TLS issues a certificate for
+# whatever name it is reached by, so renaming the server (DNS) needs no
+# change here. The app takes its own address from the same Host header
+# (lib/baseUrl.ts) as long as BASE_URL is left empty.
 https://:{$APP_PORT:8010} {
 	tls internal {
 		on_demand

@@ -12,6 +12,9 @@ services:
     image: caddy:2-alpine
     ports:
       # Host and container port stay identical - see the note in Caddyfile.
+      # APP_PORT=443 on a server with its own name; 8010 when left out (a
+      # NAS that uses 443 itself). Port 80 (http:// sent on to https) is not
+      # published here: add it in docker-compose.override.yml (README).
       - "${APP_PORT:-8010}:${APP_PORT:-8010}"
     environment:
       APP_PORT: "${APP_PORT:-8010}"

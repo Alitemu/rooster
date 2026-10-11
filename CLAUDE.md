@@ -716,6 +716,15 @@ true) or else
 `scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
 templates, no data; skipped for a migration-built database).
 
+**Port and address:** Caddy listens on APP_PORT (compose default 8010 for
+a NAS that uses 443 itself; .env.example and the IT instructions use 443),
+on any host name, with an on-demand certificate per name, so a renamed
+server needs no config change. `http://:80` in the Caddyfile redirects to
+https on APP_PORT; port 80 is only published through a
+docker-compose.override.yml the operator adds (README "Op poort 443").
+With BASE_URL empty the app takes its address from the Host header
+(resolveBaseUrl) and remembers it per period (basis_url) for mails.
+
 **Sub-folder (basePath):** NEXT_PUBLIC_BASE_PATH at build time (Dockerfile
 arg BASE_PATH, "Bouwen (test)" input `basispad`, empty by default -
 the app got its own subdomain instead;
