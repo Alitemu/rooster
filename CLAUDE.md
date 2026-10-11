@@ -493,7 +493,7 @@ Show live in settings screen with interpretation in plain Dutch.
      productie" (409 DIENST_NIET_IN_PRODUCTIE; the page shows the notice
      and disables Toevoegen) until it is. A production start
      (--alleen-planner) creates only 'admin' (ADMIN, seed password or
-     SEED_PLANNER_PASSWORD), who adds the planners with names of their own;
+     SEED_PLANNER_PASSWORD) as staff, who adds the planners with names of their own;
      the demo seed also creates 'planner', which the browser checks log in
      as. Every start, whatever SEED_ON_START says (seed.ts addAdminIfNone, also
      in --schema-only and the already-seeded demo run), adds 'admin' to an
@@ -739,7 +739,10 @@ of a WAL database misses what is still in -wal. The key for everything stored
 encrypted (`<db dir>/.session_secret`, or SESSION_SECRET) is deliberately
 not in it; the README tells the operator to keep it apart. SEED_ON_START=planner runs
 `scripts/seed.ts --alleen-planner`: beheerder account admin, ruleset, pool, shift
-types and notification templates, no demo people or period (the
+types, notification templates and 30 participants Persoon-01..30 in the pool
+(addBareStartParticipants: membership from 1 January of the current year to
+2099-12-31, factor 1, no access link, preferences, balances, part-time or
+holiday history), no period (the
 production start and compose's default; true adds the demo data); a rerun
 on a seeded database only upgrades the schema.
 

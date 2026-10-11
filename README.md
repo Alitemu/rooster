@@ -286,9 +286,11 @@ tot een named volume. Bij een eigen `DATA_DIR` moet die map zelf van
 tevoren worden aangemaakt.
 
 `SEED_ON_START` staat standaard op `planner`: de eerste keer dat `DATA_DIR`
-(zie `.env.example`) leeg is, maakt de app alleen het beheerdersaccount
-(codenaam `admin`), de pool, de soorten diensten en de berichtteksten
-aan. De beheerder maakt daarna zelf de planners aan. Er komen geen voorbeelddeelnemers of voorbeeldperiode bij. Veilig om
+(zie `.env.example`) leeg is, maakt de app het beheerdersaccount
+(codenaam `admin`), de pool, de soorten diensten, de berichtteksten en 30
+deelnemers (Persoon-01 tot en met Persoon-30) aan. Die deelnemers hebben
+nog niets ingevuld. De beheerder maakt daarna zelf de planners aan. Er
+komt geen voorbeeldperiode bij. Veilig om
 aan te laten staan bij herstarts en herinstallaties, want het gebeurt maar
 één keer, op een echt verse database. Zet `SEED_ON_START=true` in `.env`
 voor een testinstallatie met voorbeelddata.
@@ -456,11 +458,12 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
 
 1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist).
 2. **Een schone start:** dat is de standaard (`SEED_ON_START=planner`).
-   De app maakt alleen het beheerdersaccount `admin`, de pool, de soorten
-   diensten en de berichtteksten aan, zonder voorbeelddeelnemers of
-   voorbeeldperiode. Bij de eerste keer inloggen kies je een eigen
-   wachtwoord. Planners maak je aan bij *Accounts beheren*, deelnemers voeg
-   je toe via de pagina van de pool.
+   De app maakt het beheerdersaccount `admin`, de pool, de soorten
+   diensten, de berichtteksten en 30 deelnemers (Persoon-01 tot en met
+   Persoon-30) aan, zonder voorkeuren en zonder periode. Bij de eerste keer
+   inloggen kies je een eigen wachtwoord. Planners maak je aan bij
+   *Accounts beheren*. Deelnemers pas je aan, voeg je toe of zet je uit via
+   de pagina van de pool.
 3. **Back-ups:** de app maakt elke dag zelf een kopie van de database in
    `data/backups/database/` (`rooster-JJJJ-MM-DD.db`) en bewaart de laatste
    14. Zo'n kopie is compleet, ook terwijl de app draait. Kopieer

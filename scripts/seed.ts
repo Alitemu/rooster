@@ -895,6 +895,37 @@ function createNotificationTemplates() {
   }
 }
 
+/**
+ * How many participants a clean production start (--alleen-planner) puts in
+ * the pool: about a ward's size, so the planner renames, adds or switches
+ * off rather than typing in every one.
+ */
+const BARE_START_PARTICIPANTS = 30;
+
+/**
+ * Persoon-01 .. Persoon-30 in the pool, as the staff page would add them:
+ * the person and a membership from the first of this year with no end in
+ * sight, factor 1. No access link (the invitations issue those), no
+ * preferences, part-time patterns, balances or holiday history.
+ */
+function addBareStartParticipants(poolId: string, now: string): void {
+  const vanaf = `${new Date().getFullYear()}-01-01`;
+  const person = db.prepare(
+    `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', 1, ?)`
+  );
+  const membership = db.prepare(
+    `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
+     VALUES (?, ?, ?, 1.0, ?, '2099-12-31')`
+  );
+  db.transaction(() => {
+    for (let i = 1; i <= BARE_START_PARTICIPANTS; i++) {
+      const id = uuid();
+      person.run(id, `Persoon-${String(i).padStart(2, '0')}`, now);
+      membership.run(uuid(), id, poolId, vanaf);
+    }
+  })();
+}
+
 async function seed() {
   try {
     if (process.argv.includes('--schema-only')) {
@@ -904,8 +935,10 @@ async function seed() {
     }
 
     // --alleen-planner (SEED_ON_START=planner): a clean production start.
-    // The planner account, the ruleset, pool, shift types and notice
-    // wording, and none of the demo participants, period or preferences.
+    // The beheerder account, the ruleset, pool, shift types, notice wording
+    // and BARE_START_PARTICIPANTS participants in the pool, ready to be
+    // renamed or switched off; no period, preferences, balances or demo
+    // part-time patterns.
     const alleenPlanner = process.argv.includes('--alleen-planner');
 
     // The entrypoint runs --alleen-planner on every start. A database the
@@ -1077,7 +1110,10 @@ async function seed() {
 
     if (alleenPlanner) {
       createNotificationTemplates();
-      console.log('\n✅ Beheerder account, pool, shift types and notice wording created (no demo data).');
+      addBareStartParticipants(poolId, now);
+      console.log(
+        `\n✅ Beheerder account, pool, shift types, notice wording and ${BARE_START_PARTICIPANTS} participants created (no preferences, no period).`
+      );
       if (adminAdded) {
         console.log(
           plannerPasswordFromEnv
@@ -1085,7 +1121,7 @@ async function seed() {
             : '  Beheerder: admin / the seed password. The app asks for a new one at the first login.'
         );
       }
-      console.log('  Add planners under Accounts beheren, participants under the pool\'s staff page, then create a period.');
+      console.log('  Add planners under Accounts beheren, adjust the participants on the pool\'s staff page, then create a period.');
       return;
     }
 
