@@ -758,7 +758,9 @@ on a seeded database only upgrades the schema.
 **Container hardening:** the web image is built in two stages (no
 compiler, Python or dev dependencies in the one that runs, no .next/cache),
 code owned by root with only /data and .next/cache writable for `node`,
-NEXT_TELEMETRY_DISABLED. The solver image installs wheels only
+NEXT_TELEMETRY_DISABLED, a HEALTHCHECK that exits as soon as the status
+is in (one that never read the response waited ~6 s for keep-alive, past
+its 5 s timeout, so web showed "unhealthy" until 0.11.1). The solver image installs wheels only
 (--only-binary), no build-essential, own .dockerignore, code root-owned.
 Compose: caddy:2-alpine (Caddy 2.8+ dropped on_demand_tls interval/burst),
 capped json-file logs, no-new-privileges everywhere, init + mem_limit on
