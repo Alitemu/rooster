@@ -390,3 +390,46 @@ describe('Slot Generation', () => {
     });
   });
 });
+
+describe('generateSlotsForPeriod on any period (property)', () => {
+  /** ISO year and week worked out in UTC, independently of lib/holidays. */
+  function isoWeekOf(datum: string): [number, number] {
+    const d = new Date(`${datum}T00:00:00Z`);
+    const day = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - day);
+    const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+    return [d.getUTCFullYear(), Math.ceil(((d.getTime() - yearStart) / 86400000 + 1) / 7)];
+  }
+  const utcDay = (datum: string) => Date.parse(`${datum}T00:00:00Z`) / 86400000;
+
+  // Daylight saving time switches (late March, late October) and year ends,
+  // leap years included: one slot per calendar day, no day twice or skipped,
+  // the right ISO week, and Saturday and Sunday of one weekend sharing a
+  // weekend_id no other weekend has.
+  it('one slot per day with the right ISO week, whatever the start and length', async () => {
+    const fc = (await import('fast-check')).default;
+    fc.assert(
+      fc.property(fc.integer({ min: Date.UTC(2024, 0, 1) / 86400000, max: Date.UTC(2040, 11, 1) / 86400000 }), fc.nat(400), (startDay, length) => {
+        const startDate = new Date(startDay * 86400000).toISOString().slice(0, 10);
+        const endDate = new Date((startDay + length) * 86400000).toISOString().slice(0, 10);
+        const slots = generateSlotsForPeriod({ startDate, endDate, shiftTypes: ['AVOND'] });
+        expect(slots).toHaveLength(length + 1);
+        slots.forEach((slot, i) => {
+          expect(utcDay(slot.datum)).toBe(startDay + i);
+          expect([slot.iso_jaar, slot.iso_week]).toEqual(isoWeekOf(slot.datum));
+          const weekday = new Date(`${slot.datum}T00:00:00Z`).getUTCDay();
+          expect(slot.weekend_id !== '').toBe(weekday === 0 || weekday === 6);
+        });
+        const weekendIds = new Map<string, number[]>();
+        for (const slot of slots.filter((s) => s.weekend_id)) {
+          weekendIds.set(slot.weekend_id, [...(weekendIds.get(slot.weekend_id) ?? []), utcDay(slot.datum)]);
+        }
+        for (const days of weekendIds.values()) {
+          expect(days.length).toBeLessThanOrEqual(2);
+          if (days.length === 2) expect(days[1] - days[0]).toBe(1);
+        }
+      }),
+      { numRuns: 500 }
+    );
+  });
+});
