@@ -277,7 +277,10 @@ title - bump it when releasing. Three numbers only (npm and release.yml
 refuse a fourth): a new feature or changed behaviour raises the middle
 one (0.3.8 -> 0.4.0), a small fix or wording change the last one
 (0.4.0 -> 0.4.1). Bump once per build, not per commit: several small
-changes before one "Bouwen (test)" share one new number.
+changes before one "Bouwen (test)" share one new number. Standing
+instruction from the user: once a version bump is committed and pushed,
+run "Bouwen (test)" and then "Vrijgeven (productie)" for that version
+without asking first, and report the outcome.
 
 **Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
 
