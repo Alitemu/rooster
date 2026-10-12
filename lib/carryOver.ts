@@ -30,7 +30,7 @@ import {
   resolvePeriodBands,
   resolveRulesetConfig,
   scaledBandForMember,
-  type BandMember,
+  loadPeriodMembers,
   type Teller,
 } from '@/lib/rosterBands';
 import { getFellowIds } from '@/lib/fellows';
@@ -91,16 +91,9 @@ export function findPreviousPublishedPeriod(
  * somebody who joined afterwards has nothing to carry.
  */
 export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
-  // One row per person (the first membership overlapping the period), the
-  // same way generate-roster picks it.
-  const rows = db
-    .prepare(
-      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
-       JOIN dienstrooster_person p ON p.id = pm.person_id
-       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
-    )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as BandMember[];
-  const members = [...new Map(rows.map((m) => [m.id, m])).values()];
+  // One per person, all their memberships in the period together - the
+  // same members generate-roster built the period with.
+  const members = loadPeriodMembers(period);
 
   if (members.length === 0) return [];
 
@@ -109,7 +102,7 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
   const fellows = getFellowIds(period.id);
   const config = resolveRulesetConfig(period);
   const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolvePeriodBands(config, countSlotsByTeller(period.id), members, fellows, period, distributionMode);
+  const bands = resolvePeriodBands(config, countSlotsByTeller(period.id), members, fellows, distributionMode);
 
   const actualRows = db
     .prepare(
@@ -162,7 +155,7 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
       // to. Against the period's flat band someone who worked exactly
       // their own streefaantal was booked a debt that grew every period
       // (audit 6).
-      const [ownMin, ownMax] = scaledBandForMember(bands, teller, member, period, distributionMode);
+      const [ownMin, ownMax] = scaledBandForMember(bands, teller, member, distributionMode);
       const adjustedMin = ownMin + shift;
       const adjustedMax = ownMax + shift;
 

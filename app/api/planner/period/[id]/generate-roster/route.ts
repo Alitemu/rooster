@@ -12,13 +12,15 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
 import {
   fellowWeekendBand,
+  loadPeriodMembers,
   resolvePeriodBands,
   resolveRulesetConfig,
+  resolveWindowWeeks,
   scaledBandForMember,
+  type PeriodMember,
   type Teller,
 } from '@/lib/rosterBands';
 import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
-import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
 import {
@@ -157,27 +159,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const manuallyFilledSlotIds = getManuallyFilledSlotIds(periodId);
     const slots = allSlots.filter((s) => !manuallyFilledSlotIds.has(s.id));
 
-    // Fetch pool members whose membership window covers this period
-    // (membership windows are open-ended, not scoped to one period).
-    // Overlapping membership rows for the same person are now rejected at
-    // creation (see pool/[id]/members routes), but this still de-duplicates
-    // defensively - any pre-existing overlap must not double-count someone
-    // in the headcount/bands or leave their deelnamefactor picked
-    // non-deterministically by whichever row SQLite happens to return last.
-    const poolMembersRaw = db
-      .prepare(
-        `SELECT pm.person_id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
-         FROM dienstrooster_pool_membership pm
-         JOIN dienstrooster_person p ON p.id = pm.person_id
-         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
-      )
-      .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
+    // Pool members whose membership overlaps this period, one per person:
+    // someone who stopped and came back within it has two memberships, and
+    // both count for their streefbereik (lib/rosterBands.ts
+    // loadPeriodMembers). The days outside them are blocked further down
+    // (blockOutsideMembership).
+    const poolMembers = loadPeriodMembers(period);
 
-    const poolMembers = Array.from(
-      new Map(poolMembersRaw.map((m) => [m.person_id, m])).values()
-    );
-
-    const people = poolMembers.map((m) => m.person_id);
+    const people = poolMembers.map((m) => m.id);
 
     if (people.length === 0) {
       return NextResponse.json(
@@ -241,7 +230,7 @@ async function runGeneration(args: {
   period: any;
   slots: any[];
   allSlots: any[];
-  poolMembers: any[];
+  poolMembers: PeriodMember[];
   people: string[];
 }): Promise<void> {
   const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people } = args;
@@ -250,7 +239,7 @@ async function runGeneration(args: {
     // see lib/rosterBands's resolveRulesetConfig / the RuleSet comment.
     const participationFactors: Record<string, number> = {};
     for (const m of poolMembers) {
-      participationFactors[m.person_id] = m.deelnamefactor;
+      participationFactors[m.id] = m.deelnamefactor;
     }
 
     // Unlike participationFactors, this applies regardless of
@@ -259,12 +248,7 @@ async function runGeneration(args: {
     // fairness policy choice like deelnamefactor - see lib/coverageFactor.ts.
     const coverageFactors: Record<string, number> = {};
     for (const m of poolMembers) {
-      coverageFactors[m.person_id] = computeCoverageFactor(
-        m.geldig_vanaf,
-        m.geldig_tot,
-        period.start_datum,
-        period.eind_datum
-      );
+      coverageFactors[m.id] = m.dekking;
     }
 
     // Build parameterized placeholders for SQL IN clauses
@@ -358,17 +342,16 @@ async function runGeneration(args: {
     const bands = resolvePeriodBands(
       config,
       slotCountByTeller,
-      poolMembers.map((m) => ({ ...m, id: m.person_id })),
+      poolMembers,
       fellowIds,
-      period,
       distributionMode
     );
     const releasedByFellow = releasedWeekendDays(periodId);
     const bandOverrides: Record<string, { WEEKEND: [number, number] }> = {};
     for (const m of poolMembers) {
-      if (!fellowIds.has(m.person_id)) continue;
-      const scaled = scaledBandForMember(bands, 'WEEKEND', m, period, distributionMode);
-      bandOverrides[m.person_id] = { WEEKEND: fellowWeekendBand(scaled, releasedByFellow.get(m.person_id) ?? 0) };
+      if (!fellowIds.has(m.id)) continue;
+      const scaled = scaledBandForMember(bands, 'WEEKEND', m, distributionMode);
+      bandOverrides[m.id] = { WEEKEND: fellowWeekendBand(scaled, releasedByFellow.get(m.id) ?? 0) };
     }
 
     // Fetch the confirmed carry-over from the previous period (the "Prior
@@ -459,16 +442,18 @@ async function runGeneration(args: {
         window_weeks: typeof config.windowWeeks === 'number' ? config.windowWeeks : 2,
         // Per-teller windows (AVOND on its own, WEEKEND+FEESTDAG pooled
         // together) - only present on a period opened or regenerated after
-        // this existed. undefined here (the key omitted entirely from the
-        // JSON body) matches solver/main.py's RuleSet default of None for
-        // both, which keeps the plain pooled window_weeks above in effect -
-        // a period frozen before this existed must keep behaving exactly
-        // as it always has.
-        ...(typeof config.windowWeeksAvond === 'number'
-          ? { window_weeks_avond: config.windowWeeksAvond }
-          : {}),
-        ...(typeof config.windowWeeksWeekendFeestdag === 'number'
-          ? { window_weeks_weekend_feestdag: config.windowWeeksWeekendFeestdag }
+        // this existed. Omitted entirely when neither is set, which keeps
+        // solver/main.py's plain pooled window_weeks in effect for a period
+        // frozen before then. When one is set, both go, as
+        // resolveWindowWeeks reads them - the solver reads a missing one as
+        // 0 (no window at all, and no floor between avond- and
+        // weekenddiensten), while the publication check, pick lists and
+        // swap warnings fall back to windowWeeks for it (audit 7).
+        ...(typeof config.windowWeeksAvond === 'number' || typeof config.windowWeeksWeekendFeestdag === 'number'
+          ? {
+              window_weeks_avond: resolveWindowWeeks(config).avond,
+              window_weeks_weekend_feestdag: resolveWindowWeeks(config).weekendFeestdag,
+            }
           : {}),
         band_avond: bands.AVOND,
         band_weekend: bands.WEEKEND,

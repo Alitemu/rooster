@@ -9,7 +9,7 @@
 import { db } from '@/db/client';
 import { checkWeekendCapacity } from './capacity';
 import { getFellowIds, releasedWeekendDays } from './fellows';
-import { countSlotsByTeller, resolvePeriodBands, resolveRulesetConfig, resolveWindowWeeks, type Band, type BandMember } from './rosterBands';
+import { countSlotsByTeller, loadPeriodMembers, resolvePeriodBands, resolveRulesetConfig, resolveWindowWeeks, type Band } from './rosterBands';
 
 export interface FellowSummary {
   fellows: Array<{ person_id: string; codenaam: string; vrije_weekenddagen: number }>;
@@ -39,18 +39,10 @@ export function fellowSummary(periodId: string, windowOverride?: number): Fellow
     | undefined;
   if (!period) return null;
 
-  // One row per person (the first membership overlapping the period), the
-  // same way generate-roster picks it.
-  const rows = db
-    .prepare(
-      `SELECT p.id, p.codenaam, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
-       FROM dienstrooster_pool_membership pm
-       JOIN dienstrooster_person p ON p.id = pm.person_id
-       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1
-       ORDER BY p.codenaam`
-    )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<BandMember & { codenaam: string }>;
-  const members = [...new Map(rows.map((m) => [m.id, m])).values()];
+  // One per person, all their memberships in the period together - the
+  // same members generate-roster builds the period with. By codenaam for
+  // the list of fellows shown.
+  const members = loadPeriodMembers(period).sort((a, b) => (a.codenaam < b.codenaam ? -1 : a.codenaam > b.codenaam ? 1 : 0));
 
   const fellowIds = getFellowIds(periodId);
   const released = releasedWeekendDays(periodId);
@@ -83,8 +75,8 @@ export function fellowSummary(periodId: string, windowOverride?: number): Fellow
       venster: window,
       past: capacity.passed,
       voorgesteld_venster: capacity.suggestedWindow,
-      bereik: resolvePeriodBands(config, counts, members, fellowIds, period, distributionMode).WEEKEND,
-      bereik_zonder_fellows: resolvePeriodBands(config, counts, members, new Set(), period, distributionMode).WEEKEND,
+      bereik: resolvePeriodBands(config, counts, members, fellowIds, distributionMode).WEEKEND,
+      bereik_zonder_fellows: resolvePeriodBands(config, counts, members, new Set(), distributionMode).WEEKEND,
     },
   };
 }

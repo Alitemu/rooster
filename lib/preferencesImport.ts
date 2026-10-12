@@ -123,7 +123,12 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
   for (let col = firstPersonCol; col < header.length; col++) {
     const naam = header[col];
     if (!naam) continue;
-    const person = exact.get(naam) ?? anyCase.get(naam.toLowerCase());
+    // A codenaam starting with =, +, - or @ was written as '-Anna by the
+    // export (lib/csv.ts guards against spreadsheet formulas), and Excel
+    // keeps that apostrophe: try the name without it too (audit 7).
+    const unguarded = /^'[=+\-@\t\r]/.test(naam) ? naam.slice(1) : naam;
+    const person =
+      exact.get(naam) ?? anyCase.get(naam.toLowerCase()) ?? exact.get(unguarded) ?? anyCase.get(unguarded.toLowerCase());
     if (!person) {
       problemen.push(`Kolom "${naam}": geen deelnemer met deze codenaam.`);
       continue;

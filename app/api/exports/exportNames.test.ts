@@ -111,20 +111,22 @@ describe('every export downloads, whatever the period is called', () => {
     for (const naam of NAMES) expect(validateSingleLine(naam, 'Naam', PERIODE_NAAM_MAX_LENGTH)).toMatchObject({ valid: true });
   });
 
-  // Audit 7: the three names with a character above U+00FF answer 500 on
+  // Audit 7: the three names with a character above U+00FF answered 500 on
   // every export - "Cannot convert argument to a ByteString" building the
-  // Content-Disposition header.
+  // Content-Disposition header. Now the header carries an ASCII name and the
+  // real one percent-encoded (lib/csv.ts csvAttachment).
   for (const naam of NAMES) {
-    const latin1 = [...naam].every((ch) => ch.codePointAt(0)! <= 0xff);
     for (const [label, handler, method] of EXPORTS) {
-      (latin1 ? it : it.fails)(`${label}: "${naam}"`, async () => {
+      it(`${label}: "${naam}"`, async () => {
         const period = periodNamed(naam);
         const res = await (handler as Handler)(
           new NextRequest(`http://localhost/api/exports/x/${period}`, { method, headers: { Cookie: cookie } }),
           { params: Promise.resolve({ 'period-id': period }) }
         );
         expect(res.status).toBe(200);
-        expect(res.headers.get('Content-Disposition')).toMatch(/^attachment; filename/);
+        const header = res.headers.get('Content-Disposition')!;
+        expect(header).toMatch(/^attachment; filename="[\x20-\x7e]+\.csv"; filename\*=UTF-8''/);
+        expect(decodeURIComponent(header.split("UTF-8''")[1])).toContain(naam.replace(/ /g, '_'));
       });
     }
   }

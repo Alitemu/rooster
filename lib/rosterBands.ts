@@ -13,7 +13,7 @@
 
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
-import { computeCoverageFactor } from '@/lib/coverageFactor';
+import { combinedMembership } from '@/lib/coverageFactor';
 import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
@@ -166,19 +166,70 @@ export function resolveBands(
   return bands;
 }
 
-export interface CoverageAwareMember {
+/** One pool membership row, the way the period queries read it. */
+export interface MembershipRow {
+  id: string;
   deelnamefactor: number;
   geldig_vanaf: string;
   geldig_tot: string;
 }
 
-export interface BandMember extends CoverageAwareMember {
+/**
+ * A person's part in one period: every membership of theirs that overlaps
+ * it, together (lib/coverageFactor.ts combinedMembership). dekking is the
+ * part of the period they are a member, deelnamefactor their factor
+ * weighted over it. What everything below scales by.
+ */
+export interface PeriodMember {
   id: string;
+  dekking: number;
+  deelnamefactor: number;
+}
+
+/**
+ * Membership rows to one PeriodMember per person, in the order each person
+ * first appears. Someone who stopped and came back within the period has
+ * two rows; picking one of them (the last, as every caller used to) left
+ * the other's weeks out of their streefbereik (audit 7).
+ */
+export function combineMemberships<R extends MembershipRow>(
+  rows: R[],
+  period: { start_datum: string; eind_datum: string }
+): Array<PeriodMember & Omit<R, keyof MembershipRow>> {
+  const byPerson = new Map<string, R[]>();
+  for (const row of rows) byPerson.set(row.id, [...(byPerson.get(row.id) ?? []), row]);
+  return [...byPerson.values()].map((own) => {
+    const { id, deelnamefactor: _f, geldig_vanaf: _v, geldig_tot: _t, ...rest } = own[own.length - 1];
+    return { ...rest, id, ...combinedMembership(own, period.start_datum, period.eind_datum) };
+  });
+}
+
+/**
+ * The active participants of a period: everyone in its pool with a
+ * membership overlapping it, one PeriodMember each. The one query behind
+ * generate-roster, the targets, the publication check, carry-over, the
+ * fellow summary and the capacity check, so none of them can count a
+ * person differently.
+ */
+export function loadPeriodMembers(period: {
+  pool_id: string;
+  start_datum: string;
+  eind_datum: string;
+}): Array<PeriodMember & { codenaam: string }> {
+  const rows = db
+    .prepare(
+      `SELECT p.id, p.codenaam, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
+       FROM dienstrooster_pool_membership pm
+       JOIN dienstrooster_person p ON p.id = pm.person_id
+       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
+    )
+    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<MembershipRow & { codenaam: string }>;
+  return combineMemberships(rows, period);
 }
 
 /**
  * How many people a period's shifts are really shared by: each member
- * counts for the part of the period they are a member (coverage), and
+ * counts for the part of the period they are a member (dekking), and
  * under NAAR_RATO for their deelnamefactor as well - exactly the two
  * factors scaledBandForMember then scales each person's band by.
  *
@@ -191,24 +242,14 @@ export interface BandMember extends CoverageAwareMember {
  * the effective headcount the maximums always cover every shift and the
  * minimums never ask for more than there are (lib/calendarRules.test.ts).
  */
-export function effectiveHeadcount(
-  members: CoverageAwareMember[],
-  period: { start_datum: string; eind_datum: string },
-  distributionMode: string
-): number {
-  return members.reduce(
-    (sum, m) =>
-      sum +
-      computeCoverageFactor(m.geldig_vanaf, m.geldig_tot, period.start_datum, period.eind_datum) *
-        (distributionMode === 'NAAR_RATO' ? (m.deelnamefactor ?? 1) : 1),
-    0
-  );
+export function effectiveHeadcount(members: PeriodMember[], distributionMode: string): number {
+  return members.reduce((sum, m) => sum + m.dekking * (distributionMode === 'NAAR_RATO' ? m.deelnamefactor : 1), 0);
 }
 
 /**
  * A single member's effective [min, max] for one counter, scaled from the
  * period's flat band exactly the way solver/constraints.py's
- * add_band_constraints does - coverage_factor always applied first
+ * add_band_constraints does - dekking always applied first
  * (unconditional - a mid-period joiner/leaver is a structural fact, not a
  * distribution_mode-gated policy choice), then the NAAR_RATO deelnamefactor
  * scaling only when distribution_mode asks for it. floor(min)/ceil(max) at
@@ -216,28 +257,14 @@ export function effectiveHeadcount(
  * had one, instead of both ends rounding the same way and collapsing it to
  * a single value.
  *
- * Extracted out of lib/publicationCheck.ts (which used to carry this
- * scaling as its own private closure) so the pre-publication gate and
- * anything else that needs a real person's target - not just the period's
- * flat band - can never disagree about what that target is.
+ * generate-roster sends the solver the same dekking (coverage_factors) and
+ * deelnamefactor (participation_factors), so the two can never disagree
+ * about what that target is (generate-roster/solverContract.test.ts).
  */
-export function scaledBandForMember(
-  bands: BandsByTeller,
-  teller: Teller,
-  member: CoverageAwareMember,
-  period: { start_datum: string; eind_datum: string },
-  distributionMode: string
-): Band {
+export function scaledBandForMember(bands: BandsByTeller, teller: Teller, member: PeriodMember, distributionMode: string): Band {
   const [baseMin, baseMax] = bands[teller];
-
-  const coverageFactor = computeCoverageFactor(
-    member.geldig_vanaf,
-    member.geldig_tot,
-    period.start_datum,
-    period.eind_datum
-  );
-  let min = Math.floor(baseMin * coverageFactor);
-  let max = Math.max(min, Math.ceil(baseMax * coverageFactor));
+  let min = Math.floor(baseMin * member.dekking);
+  let max = Math.max(min, Math.ceil(baseMax * member.dekking));
 
   if (distributionMode === 'NAAR_RATO') {
     min = Math.floor(min * member.deelnamefactor);
@@ -262,17 +289,15 @@ export function scaledBandForMember(
 export function resolvePeriodBands(
   config: Record<string, unknown>,
   slotCountByTeller: Record<Teller, number>,
-  members: BandMember[],
+  members: PeriodMember[],
   fellowIds: ReadonlySet<string>,
-  period: { start_datum: string; eind_datum: string },
   distributionMode: string
 ): BandsByTeller {
-  const everyone = effectiveHeadcount(members, period, distributionMode);
+  const everyone = effectiveHeadcount(members, distributionMode);
   const bands = resolveBands(config, slotCountByTeller, everyone);
   const fellowCount = members.filter((m) => fellowIds.has(m.id)).length;
   const others = effectiveHeadcount(
     members.filter((m) => !fellowIds.has(m.id)),
-    period,
     distributionMode
   );
   if (fellowCount <= 0 || others <= 0) return bands;
@@ -327,21 +352,14 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
   const result = new Map<string, Record<Teller, MemberTarget>>();
   if (!period) return result;
 
-  const members = db
-    .prepare(
-      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
-       FROM dienstrooster_pool_membership pm
-       JOIN dienstrooster_person p ON p.id = pm.person_id
-       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
-    )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<CoverageAwareMember & { id: string }>;
+  const members = loadPeriodMembers(period);
   if (members.length === 0) return result;
 
   const fellows = getFellowIds(periodId);
   const released = releasedWeekendDays(periodId);
   const config = resolveRulesetConfig(period);
   const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolvePeriodBands(config, countSlotsByTeller(periodId), members, fellows, period, distributionMode);
+  const bands = resolvePeriodBands(config, countSlotsByTeller(periodId), members, fellows, distributionMode);
 
   const deltas = new Map<string, number>();
   for (const row of db
@@ -358,7 +376,7 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
   for (const member of members) {
     const byTeller = {} as Record<Teller, MemberTarget>;
     for (const teller of TELLERS) {
-      const scaled = scaledBandForMember(bands, teller, member, period, distributionMode);
+      const scaled = scaledBandForMember(bands, teller, member, distributionMode);
       if (teller === 'WEEKEND' && fellows.has(member.id)) {
         const [min, max] = fellowWeekendBand(scaled, released.get(member.id) ?? 0);
         byTeller[teller] = { min, max, fellow: true };

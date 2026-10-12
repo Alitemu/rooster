@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { csvField, sanitizeFilenamePart } from '@/lib/csv';
+import { csvAttachment, csvField } from '@/lib/csv';
 import type { ApiErrorResponse } from '@/types';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
     return new NextResponse(csvContent, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="status_report_${sanitizeFilenamePart(period.naam.replace(/ /g, '_'))}.csv"`,
+        'Content-Disposition': csvAttachment('status_report', period.naam),
       },
     });
   } catch (error) {

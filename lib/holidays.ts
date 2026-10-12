@@ -138,18 +138,22 @@ export function getHolidaysForYear(year: number, liberationEvery5Years: boolean 
  * Returns [isoYear, isoWeek]
  */
 export function getISOWeek(date: Date): [number, number] {
-  // Strip time-of-day, working in local dates (avoid mutating the input)
-  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  // The calendar date of `date` (local, as everywhere here), then worked out
+  // in UTC: the day count below must not pick up a daylight saving change
+  // between 1 January and the date. In a zone with summer time on 1
+  // January (the southern hemisphere) it did, and some weeks came out one
+  // too high (audit 7). Amsterdam happened to be safe.
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
 
   // Move to the Thursday of this ISO week - the ISO year and week number
   // are both defined relative to that Thursday
-  const dayNum = d.getDay() || 7; // Monday = 1 .. Sunday = 7
-  d.setDate(d.getDate() + 4 - dayNum);
+  const dayNum = d.getUTCDay() || 7; // Monday = 1 .. Sunday = 7
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
 
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  const week = Math.ceil(((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  const yearStart = Date.UTC(d.getUTCFullYear(), 0, 1);
+  const week = Math.ceil(((d.getTime() - yearStart) / 86400000 + 1) / 7);
 
-  return [d.getFullYear(), week];
+  return [d.getUTCFullYear(), week];
 }
 
 /**

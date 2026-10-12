@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { csvField, sanitizeFilenamePart } from '@/lib/csv';
+import { csvAttachment, csvField } from '@/lib/csv';
 import type { ApiErrorResponse } from '@/types';
 
 const TELLER_LABELS: Record<string, string> = {
@@ -197,7 +197,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
     return new NextResponse(csvLines.join('\n'), {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="wijzigingsgeschiedenis_${sanitizeFilenamePart(period.naam.replace(/ /g, '_'))}.csv"`,
+        'Content-Disposition': csvAttachment('wijzigingsgeschiedenis', period.naam),
       },
     });
   } catch (error) {

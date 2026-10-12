@@ -42,6 +42,27 @@ export function sanitizeFilenamePart(value: string): string {
 }
 
 /**
+ * The Content-Disposition value for a CSV download named `${prefix}_${naam}.csv`.
+ *
+ * A header value may only hold characters up to U+00FF; a period name with
+ * an en dash (Word and macOS type one for " - "), a euro sign or an emoji
+ * made building the header throw, and every export of that period answer
+ * 500 (audit 7). So two names, as RFC 6266 has it: `filename` in plain
+ * ASCII (accents dropped, anything else an underscore) for any browser,
+ * and `filename*` with the name as it is, percent-encoded UTF-8, which
+ * every current browser prefers.
+ */
+export function csvAttachment(prefix: string, naam: string): string {
+  const name = `${prefix}_${sanitizeFilenamePart(naam.replace(/ /g, '_'))}.csv`;
+  const ascii = name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7e]/g, '_');
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+/**
  * Parse uploaded CSV text into rows of raw string cells (client-side, no
  * server round-trip - matches this app's other CSV imports, e.g.
  * import-balances/import-holidays, which parse in the browser and send

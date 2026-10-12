@@ -25,7 +25,7 @@ import { getInvitationPeriod, issuePeriodLinks, formatDeadline, rememberBaseUrl 
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
-import { csvField, sanitizeFilenamePart } from '@/lib/csv';
+import { csvAttachment, csvField } from '@/lib/csv';
 import type { ApiErrorResponse } from '@/types';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     return new NextResponse(csvContent, {
       headers: {
         'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': `attachment; filename="invitations_${sanitizeFilenamePart(period.naam.replace(/ /g, '_'))}.csv"`,
+        'Content-Disposition': csvAttachment('invitations', period.naam),
       },
     });
   } catch (error) {

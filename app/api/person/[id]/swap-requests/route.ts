@@ -67,7 +67,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       JOIN dienstrooster_shift_type ast ON aos.shift_type_id = ast.id
       JOIN dienstrooster_shift_slot gvs ON sr.gevraagde_slot_id = gvs.id
       JOIN dienstrooster_shift_type gst ON gvs.shift_type_id = gst.id
-      WHERE sr.aanvrager_person_id = ? OR sr.respondent_person_id = ?
+      WHERE (sr.aanvrager_person_id = ? OR sr.respondent_person_id = ?)
     `;
     const params_list: any[] = [personId, personId];
 

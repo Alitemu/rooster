@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { csvField, sanitizeFilenamePart, parseCsv } from './csv';
+import { csvAttachment, csvField, sanitizeFilenamePart, parseCsv } from './csv';
 
 /**
  * The hard rule: nothing that leaves here can act as anything other than
@@ -114,5 +114,29 @@ describe('sanitizeFilenamePart', () => {
     expect(sanitizeFilenamePart('a\\b')).toBe('a_b');
     expect(sanitizeFilenamePart('a\r\nb')).toBe('a__b');
     expect(sanitizeFilenamePart('x"\r\nContent-Type: text/html')).not.toContain('\n');
+  });
+});
+
+describe('csvAttachment', () => {
+  it('names the file the way it always did when the name is plain', () => {
+    expect(csvAttachment('rooster', 'Voorjaar 2027')).toBe(
+      `attachment; filename="rooster_Voorjaar_2027.csv"; filename*=UTF-8''rooster_Voorjaar_2027.csv`
+    );
+  });
+
+  it('gives any name a header value a response can carry, and the name itself to browsers that read filename*', () => {
+    for (const naam of ['Voorjaar 2027 – 2028', 'Café €', 'Zomer ☀️', "Kerst (oud) 'x' *"]) {
+      const header = csvAttachment('rooster', naam);
+      expect(() => new Headers({ 'Content-Disposition': header })).not.toThrow();
+      expect(header.split('filename="')[1].split('"')[0]).toMatch(/^[\x20-\x7e]+$/);
+      expect(decodeURIComponent(header.split("UTF-8''")[1])).toBe(`rooster_${naam.replace(/ /g, '_')}.csv`);
+    }
+    expect(csvAttachment('rooster', 'Café')).toContain('filename="rooster_Cafe.csv"');
+  });
+
+  it('cannot be broken out of with a quote or a line break', () => {
+    const header = csvAttachment('rooster', 'x"\r\nContent-Type: text/html');
+    expect(header).not.toMatch(/[\r\n]/);
+    expect(header.split('filename="')[1].indexOf('"')).toBe(header.split('filename="')[1].indexOf('.csv"') + 4);
   });
 });

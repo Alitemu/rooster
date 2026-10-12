@@ -16,7 +16,7 @@ import {
   effectiveHeadcount,
   type Teller,
   type BandsByTeller,
-  type BandMember,
+  loadPeriodMembers,
 } from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -58,6 +58,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const periodStmt = db.prepare(`
       SELECT
         id,
+        pool_id,
         start_datum,
         eind_datum,
         status
@@ -138,8 +139,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const distributionModeOverride = req.nextUrl.searchParams.get('distribution_mode');
     const distributionMode = distributionModeOverride === 'NAAR_RATO' ? 'NAAR_RATO' : 'GELIJK';
 
-    // Every overlapping membership, one per person (the first, as
-    // generate-roster picks it), for the effective headcount: each person
+    // Every overlapping membership, one per person with all their
+    // memberships in the period together, for the effective headcount: each person
     // counts for the part of the period they are a member and, NAAR_RATO,
     // their deelnamefactor (lib/rosterBands.ts effectiveHeadcount). The
     // capacity below and the suggested band both use it, so neither
@@ -147,20 +148,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     // cannot take - the suggested band used to be worked out over the
     // plain headcount, and then everyone's maximum together fell short of
     // the shifts (audit 6).
-    const membershipRows = db
-      .prepare(
-        `SELECT pm.person_id AS id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
-         FROM dienstrooster_pool_membership pm
-         JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
-         JOIN dienstrooster_person p ON p.id = pm.person_id
-         WHERE sp.id = ?
-           AND pm.geldig_vanaf <= sp.eind_datum
-           AND pm.geldig_tot >= sp.start_datum
-           AND p.actief = 1`
-      )
-      .all(id) as BandMember[];
-    const bandMembers = [...new Map(membershipRows.map((m) => [m.id, m])).values()];
-    const effectiveParticipants = effectiveHeadcount(bandMembers, period, distributionMode);
+    const effectiveParticipants = effectiveHeadcount(loadPeriodMembers(period), distributionMode);
 
     const startDate = new Date(period.start_datum);
     const endDate = new Date(period.eind_datum);

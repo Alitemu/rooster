@@ -230,6 +230,8 @@ describe('POST /api/auth/change-password', () => {
     expect(JSON.parse(entry.nieuw_json).wijziging).toBe('wachtwoord');
   });
 
+  // Eleven bcrypt comparisons: about 3.5 s alone, past the default 5 s
+  // when the machine is busy (audit 7).
   it('stops guessing the current password after ten failures', async () => {
     const planner = await createStaff();
     const cookie = sessionCookie(planner);
@@ -248,5 +250,5 @@ describe('POST /api/auth/change-password', () => {
     });
     expect(blocked.status).toBe(429);
     expect(await verifyPassword(OLD_PASSWORD, storedHash(planner)!)).toBe(true);
-  });
+  }, 20_000);
 });

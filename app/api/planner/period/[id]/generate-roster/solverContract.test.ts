@@ -250,14 +250,12 @@ describe.each(['GELIJK', 'NAAR_RATO'])('the solver is told the streefbereik the 
     expect(input.slots).toHaveLength(55);
   });
 
-  // Audit 7: a person with two memberships in one period (the planner ended
-  // one and started the next, to change the factor or after a gap) counts
-  // with one of them only. generate-roster keeps the last row per person,
-  // computeMemberTargets overwrites with it, and the coverage of the other
-  // membership is lost: someone present the whole period gets the
-  // streefbereik of three quarters of it (or a quarter, depending on which
-  // row comes last).
-  it.fails('someone present the whole period over two memberships gets a full member’s target', async () => {
+  // Audit 7: a person with two memberships in one period (they stopped and
+  // came back) used to count with one of them only: generate-roster kept
+  // the last row per person, computeMemberTargets overwrote with it, and
+  // someone present the whole period got the streefbereik of three
+  // quarters of it. Both now count all of them (loadPeriodMembers).
+  it('someone present the whole period over two memberships gets a full member’s target', async () => {
     buildPeriod(mode);
     const input = await generate();
     const full = input.people.find((p: string) => ![ids.split, ids.halfway, ids.parttime, ids.ledger, ids.fellow].includes(p));
@@ -289,12 +287,11 @@ describe('the solver is told the windows the app checks against', () => {
   });
 
   // Audit 7: PATCH .../ruleset accepts one per-teller window without the
-  // other. The solver then reads the missing one as 0 (no window, and no
-  // floor between avond- and weekenddiensten either), while the app falls
-  // back to windowWeeks for it - so the publication check warns about
-  // weekenddiensten the solver was told were fine. The screens always save
-  // both, so only the API can get here.
-  it.fails('only the avond window set', async () => {
+  // other. The solver read the missing one as 0 (no window, and no floor
+  // between avond- and weekenddiensten either), while the app falls back to
+  // windowWeeks for it - so the publication check warned about
+  // weekenddiensten the solver had been told were fine.
+  it('only the avond window set', async () => {
     const rules = { windowWeeks: 3, windowWeeksAvond: 2 };
     buildPeriod('GELIJK', rules);
     const input = await generate();

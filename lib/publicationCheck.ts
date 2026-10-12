@@ -53,6 +53,7 @@ import {
   TELLERS,
   computeMemberTargets,
   countSlotsByTeller,
+  loadPeriodMembers,
   resolvePeriodBands,
   resolveRulesetConfig,
   resolveWindowWeeks,
@@ -60,7 +61,6 @@ import {
 } from '@/lib/rosterBands';
 import { getFellowIds } from '@/lib/fellows';
 import { countWindowRuleViolations } from '@/lib/windowRule';
-import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { formatSwapDate } from './swapMailDetails';
 
 export interface PublicationCheckResult {
@@ -178,18 +178,8 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // ledger delta, a fellow's weekend). Comparing against the flat band
   // instead flagged every part-timer under NAAR_RATO, and would flag every
   // fellow for having no weekend shifts.
-  const members = db
-    .prepare(
-      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
-       JOIN dienstrooster_person p ON p.id = pm.person_id
-       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
-    )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{
-    id: string;
-    deelnamefactor: number;
-    geldig_vanaf: string;
-    geldig_tot: string;
-  }>;
+  // One per person, all their memberships in the period together.
+  const members = loadPeriodMembers(period);
 
   const config = resolveRulesetConfig(period);
   const fellows = getFellowIds(periodId);
@@ -198,7 +188,6 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     countSlotsByTeller(periodId),
     members,
     fellows,
-    period,
     typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK'
   );
   const targets = computeMemberTargets(periodId);
@@ -223,9 +212,7 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   let bandViolations = 0;
   let anyPartialCoverage = false;
   for (const member of members) {
-    if (computeCoverageFactor(member.geldig_vanaf, member.geldig_tot, period.start_datum, period.eind_datum) < 1) {
-      anyPartialCoverage = true;
-    }
+    if (member.dekking < 1) anyPartialCoverage = true;
     const target = targets.get(member.id);
     if (!target) continue;
     for (const teller of TELLERS) {

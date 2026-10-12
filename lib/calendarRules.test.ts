@@ -13,7 +13,7 @@ import {
   dateToISO,
 } from './holidays';
 import { reminderMoment, REMINDER_HOUR } from './autoReminders';
-import { resolvePeriodBands, scaledBandForMember, fellowWeekendBand, type Teller } from './rosterBands';
+import { combineMemberships, resolvePeriodBands, scaledBandForMember, fellowWeekendBand, type Teller } from './rosterBands';
 
 /**
  * The calendar the roster is built on, checked against independent
@@ -210,10 +210,11 @@ describe('streefbereik: the targets leave room for every shift', () => {
   const full = { deelnamefactor: 1, geldig_vanaf: '2020-01-01', geldig_tot: '2099-12-31' };
   type M = typeof full;
 
-  function room(slots: number, members: M[], mode = 'GELIJK') {
-    const withIds = members.map((m, i) => ({ ...m, id: `p${i}` }));
-    const bands = resolvePeriodBands({}, { AVOND: slots, WEEKEND: 0, FEESTDAG: 0 }, withIds, new Set(), period, mode);
-    const scaled = members.map((m) => scaledBandForMember(bands, teller, m, period, mode));
+  /** Membership rows; rows with the same `id` are one person's memberships. */
+  function room(slots: number, rows: Array<M & { id?: string }>, mode = 'GELIJK') {
+    const members = combineMemberships(rows.map((m, i) => ({ ...m, id: m.id ?? `p${i}` })), period);
+    const bands = resolvePeriodBands({}, { AVOND: slots, WEEKEND: 0, FEESTDAG: 0 }, members, new Set(), mode);
+    const scaled = members.map((m) => scaledBandForMember(bands, teller, m, mode));
     return {
       scaled,
       minSum: scaled.reduce((s, [min]) => s + min, 0),
@@ -244,13 +245,45 @@ describe('streefbereik: the targets leave room for every shift', () => {
     );
   });
 
+  // Audit 7: someone who stopped and came back within the period has two
+  // memberships; together they count for their target, not one of them.
+  it('for any pool where some stop and come back: the same, and two halves make one whole member', () => {
+    const split = fc
+      .tuple(fc.constantFrom('2027-02-01', '2027-03-15', '2027-05-02'), fc.integer({ min: 0, max: 21 }), fc.constantFrom(1, 0.8, 0.5))
+      .map(([stop, gap, factor]) => {
+        const back = new Date(Date.parse(`${stop}T00:00:00Z`) + (gap + 1) * 86400000).toISOString().slice(0, 10);
+        return [
+          { deelnamefactor: factor, geldig_vanaf: '2020-01-01', geldig_tot: stop },
+          { deelnamefactor: factor, geldig_vanaf: back, geldig_tot: '2099-12-31' },
+        ];
+      });
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 400 }),
+        fc.array(fc.oneof(member.map((m) => [m]), split), { minLength: 1, maxLength: 30 }),
+        fc.constantFrom('GELIJK', 'NAAR_RATO'),
+        (slots, people, mode) => {
+          const rows = people.flatMap((own, i) => own.map((m) => ({ ...m, id: `p${i}` })));
+          const { minSum, maxSum, scaled } = room(slots, rows, mode);
+          expect(scaled).toHaveLength(people.length);
+          expect(minSum).toBeLessThanOrEqual(slots);
+          expect(maxSum).toBeGreaterThanOrEqual(slots);
+        }
+      ),
+      { numRuns: 1000 }
+    );
+    // Stopped on 31 March and back on 1 April: there all period, a full target.
+    const whole = room(110, [full, full, { ...full, id: 'x', geldig_tot: '2027-03-31' }, { ...full, id: 'x', geldig_vanaf: '2027-04-01' }]);
+    expect(whole.scaled).toEqual([whole.scaled[0], whole.scaled[0], whole.scaled[0]]);
+  });
+
   it('with fellows: the others alone still cover every weekend shift, and a fellow never gets more than they released', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 120 }), fc.integer({ min: 2, max: 40 }), fc.nat(), fc.nat(30), (weekend, people, f, released) => {
         const fellows = f % people;
         const members = Array.from({ length: people }, (_, i) => ({ ...full, id: `p${i}` }));
         const fellowIds = new Set(members.slice(0, fellows).map((m) => m.id));
-        const bands = resolvePeriodBands({}, { AVOND: 0, WEEKEND: weekend, FEESTDAG: 0 }, members, fellowIds, period, 'GELIJK');
+        const bands = resolvePeriodBands({}, { AVOND: 0, WEEKEND: weekend, FEESTDAG: 0 }, combineMemberships(members, period), fellowIds, 'GELIJK');
         const [min, max] = bands.WEEKEND;
         expect(min * (people - fellows)).toBeLessThanOrEqual(weekend);
         expect(max * (people - fellows)).toBeGreaterThanOrEqual(weekend);

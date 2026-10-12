@@ -161,13 +161,13 @@ const codenaamArb = (lead: fc.Arbitrary<string>) =>
   fc
     .tuple(lead, fc.stringMatching(/^[A-Za-zÀ-ÿ0-9 ;"'.-]{1,10}$/))
     .map(([l, body]) => `${l}${body.trim()}-${crypto.randomUUID().slice(0, 4)}`)
-    .filter((naam) => validateCodenaam(naam).valid && !/^[\d=+\-@]/.test(naam));
+    .filter((naam) => validateCodenaam(naam).valid && !/^\d/.test(naam));
 
 describe('preferences overview: download, open in Excel, save, read back', () => {
-  it('changes nothing for any codenamen and markings that do not look like a formula', async () => {
+  it('changes nothing for any codenamen and markings', async () => {
     await fc.assert(
       fc.asyncProperty(
-        fc.uniqueArray(codenaamArb(fc.constantFrom('', 'P', 'Ö')), { minLength: 1, maxLength: 4, selector: (n) => n.toLowerCase() }),
+        fc.uniqueArray(codenaamArb(fc.constantFrom('', 'P', 'Ö', '-', '+', '=')), { minLength: 1, maxLength: 4, selector: (n) => n.toLowerCase() }),
         fc.array(fc.nat(3), { minLength: 1, maxLength: 28 }),
         async (codenamen, marks) => {
           const result = await roundTrip(codenamen, marks);
@@ -182,10 +182,10 @@ describe('preferences overview: download, open in Excel, save, read back', () =>
 
   // Audit 7: a codenaam may start with -, + or = (validateCodenaam only
   // refuses @). The export guards such a name with a leading apostrophe,
-  // Excel keeps it, and the import looks for a participant called
-  // "'-Anna": "geen deelnemer met deze codenaam", and the whole file is
+  // Excel keeps it, and the import used to look for a participant called
+  // "'-Anna": "geen deelnemer met deze codenaam", and the whole file was
   // refused.
-  it.fails('changes nothing when a codenaam starts with a character a spreadsheet reads as a formula', async () => {
+  it('changes nothing when a codenaam starts with a character a spreadsheet reads as a formula', async () => {
     const result = await roundTrip([`-Anna-${crypto.randomUUID().slice(0, 4)}`, `Bert-${crypto.randomUUID().slice(0, 4)}`], [1, 0, 2]);
     expect(result.status, JSON.stringify(result.body)).toBe(200);
     expect(result.body.data.problemen).toEqual([]);

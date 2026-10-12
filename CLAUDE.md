@@ -212,7 +212,7 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - `shift_type` - shift definitions (evening, weekend, holiday)
 - `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type)
 - `holiday_history` - holiday group assignments across years
-- `ledger_entry` - balance adjustments (CARRY_OVER, CORRECTION, BEGINSALDO)
+- `ledger_entry` - balance adjustments (categorie CARRY_OVER, CORRECTIE, BEGINSALDO)
 - `audit_log` - all actions by admins/planners (lib/auditLog.ts
   `writeAuditLog`; never passwords, tokens or link hashes). Since audit 6
   also creating, opening and closing a period, its deadline, rules,
@@ -390,15 +390,28 @@ the membership changed after the roster was made).
   person by the same two factors. Counting heads instead left shifts
   empty: with people joining or leaving halfway everyone's maximum added
   up to fewer shifts than there were. `resolvePeriodBands(config,
-  slotCountByTeller, members, fellowIds, period, distributionMode)` is the
+  slotCountByTeller, members, fellowIds, distributionMode)` is the
   one entry point (generate-roster, computeMemberTargets, fellowSummary;
   the capacity route's suggested band uses effectiveHeadcount too).
+- **One member per person, all memberships together.** `loadPeriodMembers`
+  (lib/rosterBands.ts) is the one query for a period's participants:
+  someone who stopped and came back within the period has two
+  memberships, and `combinedMembership` (lib/coverageFactor.ts) adds their
+  days up (dekking) and weighs the deelnamefactor by them. Picking one row
+  per person gave someone present the whole period the streefbereik of a
+  part of it (audit 7). generate-roster sends the same dekking and factor
+  as coverage_factors/participation_factors;
+  generate-roster/solverContract.test.ts runs it against a fake solver and
+  checks every person's band and the windows against computeMemberTargets
+  and resolveWindowWeeks.
 - **Carry-over per person** (lib/carryOver.ts): each member is measured
   against their own scaled target, the one the solver got, not the flat
   band. Someone at factor 0.5 who did their half carries nothing over.
 - **windowWeeks N = at most one shift in any N consecutive ISO weeks**, so
   1 is one a week and 0 switches the rule off (solver/constraints.py,
-  solver/greedy.py, lib/windowRule.ts). Up to 0.11 a window of 1 counted
+  solver/greedy.py, lib/windowRule.ts). With either per-teller window set,
+  generate-roster sends both as resolveWindowWeeks reads them (the solver
+  would read a missing one as 0). Up to 0.11 a window of 1 counted
   as off. "Nobody twice in one ISO week" is this rule at 1 or more, not a
   rule of its own.
 - **objectiveMode lexicographic** (solver/solver.py `_solve_lexicographic`):
@@ -443,7 +456,10 @@ row, and a cell with "(parttime)", "(afwezig)" or "(fellow)" - or an
 empty cell over such a row - is skipped. No block budget. Checking
 (`toepassen` false) writes nothing; applying refuses a file with any
 problem, and a period whose roster is built (409). Audit-logged; cleared
-people are re-synced like the slot route, backups rewritten.
+people are re-synced like the slot route, backups rewritten. A column
+header "'-Anna" is matched to -Anna too: the export guards a codenaam
+starting with =, +, - or @ with an apostrophe, and Excel keeps it
+(preferences-import/roundtrip.test.ts, generated codenamen).
 
 ## Capacity Check (Live)
 
@@ -737,7 +753,10 @@ stored or logged.
 **Images:** node:22-alpine (Node 20 is end-of-life), dev dependencies
 pruned after the build; `.npmrc` sets legacy-peer-deps because npm 10
 crashes resolving vitest 4's optional peers, and `npm ci` must match the
-lockfile. Built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
+lockfile. `npm audit` reports issues in build-time tools only (braces via
+Tailwind 3's chokidar, postcss-selector-parser): none ship in the image, no
+fixed version exists short of Tailwind 4, and they only ever read this
+repository's own source; `npm audit --omit=dev` must stay at 0. Built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
 builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 only)
 tagged with package.json's `version` and `test`, only after the app's and
 the solver's tests pass and only for a version not built before (bump
@@ -802,6 +821,11 @@ Compose: caddy:2-alpine (Caddy 2.8+ dropped on_demand_tls interval/burst),
 capped json-file logs, no-new-privileges everywhere, init + mem_limit on
 web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
 to commit SHAs.
+
+**Downloads:** every CSV export names its file through lib/csv.ts
+`csvAttachment`: an ASCII `filename` and the real name as `filename*`
+(UTF-8). A header value holds nothing above U+00FF, and a period name with
+an en dash, euro sign or emoji used to make every export answer 500.
 
 **Limits:** request bodies are capped at 1 MB in Caddy and in
 lib/api-errors.ts parseJsonBody (read no further; also before login).

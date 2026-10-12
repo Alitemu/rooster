@@ -257,12 +257,12 @@ describe('swapping, as a state machine through the real routes', () => {
 });
 
 describe('the swap list filters', () => {
-  // Audit 7: the list query reads "WHERE aanvrager = ? OR respondent = ?
+  // Audit 7: the list query read "WHERE aanvrager = ? OR respondent = ?
   // AND periode = ? AND status = ?" without brackets, so the filters only
-  // apply to requests someone received. The ruilpaneel (SwapManagementPanel)
+  // applied to requests someone received. The ruilpaneel (SwapManagementPanel)
   // asks for one period and one status, and showed the participant's own
   // requests from every period and with every status.
-  it.fails('?period_id and ?status apply to requests someone made too', async () => {
+  it('?period_id and ?status apply to requests someone made too', async () => {
     buildRoster();
     const [requester, colleague] = fixture.people;
     const mine = fixture.slots.find((s) => s.teller === 'AVOND' && dbHolders().get(s.id) === requester)!;
