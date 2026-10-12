@@ -263,4 +263,42 @@ describe('carryOver', () => {
 
     expect(applyCarryOverForPeriod(next.periodId, ctx.personIds[0])).toBe(0);
   });
+
+  // Finding (audit 6): the carry-over is measured against the period's
+  // flat band, while the solver, the publication check and "Jouw rooster"
+  // all hold each person to their own scaled band (scaledBandForMember):
+  // lower for someone who joined or left halfway, and under NAAR_RATO for
+  // a part-timer. Someone who worked exactly their own streefaantal is
+  // booked a debt for the next period, which grows every period. Flip to
+  // `it` once computeCarryOver scales the band per person.
+  function periodRow(periodId: string) {
+    return db.prepare('SELECT * FROM dienstrooster_schedule_period WHERE id = ?').get(periodId) as Parameters<typeof computeCarryOver>[0];
+  }
+
+  it.fails('carries nothing for someone who joined halfway and worked their own, lower target', () => {
+    const ctx = createPool(2, [4, 4]);
+    // Member until halfway through the four weeks: their target is 2, not 4.
+    db.prepare(`UPDATE dienstrooster_pool_membership SET geldig_tot = '2027-01-17' WHERE person_id = ?`).run(ctx.personIds[1]);
+    const p1 = createPeriod(ctx, '2027-01-04', '2027-01-31', 'GEPUBLICEERD', [4, 4]);
+    assign(p1.periodId, ctx.personIds[1], p1.slotIds[0]);
+    assign(p1.periodId, ctx.personIds[1], p1.slotIds[1]);
+
+    const entries = computeCarryOver(periodRow(p1.periodId)).filter((e) => e.person_id === ctx.personIds[1]);
+    expect(entries).toEqual([]);
+  });
+
+  it.fails('carries nothing for a part-timer under NAAR_RATO who worked their own, lower target', () => {
+    const ctx = createPool(2, [4, 4]);
+    db.prepare(`UPDATE dienstrooster_pool_membership SET deelnamefactor = 0.5 WHERE person_id = ?`).run(ctx.personIds[1]);
+    const p1 = createPeriod(ctx, '2027-01-04', '2027-01-31', 'GEPUBLICEERD', [4, 4]);
+    db.prepare(`UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ? WHERE id = ?`).run(
+      JSON.stringify({ bandAvond: [4, 4], distributionMode: 'NAAR_RATO' }),
+      p1.periodId
+    );
+    assign(p1.periodId, ctx.personIds[1], p1.slotIds[0]);
+    assign(p1.periodId, ctx.personIds[1], p1.slotIds[1]);
+
+    const entries = computeCarryOver(periodRow(p1.periodId)).filter((e) => e.person_id === ctx.personIds[1]);
+    expect(entries).toEqual([]);
+  });
 });
