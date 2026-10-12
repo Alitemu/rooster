@@ -251,7 +251,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
                   <h3 className="font-semibold text-amber-900">Bewuste uitzonderingen</h3>
                   <p className="text-sm text-amber-800 mt-1">
                     Deze punten houden publiceren niet tegen. Het gaat om handmatige toewijzingen of ruilen
-                    die een regel doorbreken, of om iemand die buiten het streefbereik valt omdat er niet
+                    die een regel doorbreken. Of om iemand die buiten het streefbereik valt, omdat er niet
                     genoeg diensten of mensen waren. Controleer ze voordat je publiceert.
                   </p>
                   <ul className="mt-2 space-y-1 text-sm text-amber-800">

@@ -18,6 +18,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { optionalText } from '@/lib/requestFields';
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
@@ -45,11 +46,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const { person_id, slot_id, reason } = body;
     const now = new Date().toISOString();
 
-    if (!person_id || !slot_id) {
+    if (!person_id || !slot_id || typeof person_id !== 'string' || typeof slot_id !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'person_id of slot_id ontbreekt' },
+        { success: false, error: 'Kies een dienst en een persoon' },
         { status: 400 }
       );
+    }
+    if (!optionalText(reason).ok) {
+      return NextResponse.json({ success: false, error: 'De reden moet tekst zijn' }, { status: 400 });
     }
 
     // Verify period exists and is editable

@@ -354,14 +354,16 @@ async function runGeneration(args: {
     // band of their own through band_overrides - 0 up to the weekend days
     // they left unblocked, no ledger delta.
     const fellowIds = getFellowIds(periodId);
+    const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
     const bands = resolvePeriodBands(
       config,
       slotCountByTeller,
-      people.length,
-      people.filter((p) => fellowIds.has(p)).length
+      poolMembers.map((m) => ({ ...m, id: m.person_id })),
+      fellowIds,
+      period,
+      distributionMode
     );
     const releasedByFellow = releasedWeekendDays(periodId);
-    const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
     const bandOverrides: Record<string, { WEEKEND: [number, number] }> = {};
     for (const m of poolMembers) {
       if (!fellowIds.has(m.person_id)) continue;

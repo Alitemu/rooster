@@ -68,11 +68,7 @@ describe('Dutch text in the app follows the house style', () => {
     expect(hits).toEqual([]);
   });
 
-  // Finding (audit 6): three texts still have ", of": the link error on
-  // the participant page ("verlopen zijn, of horen bij"), the publication
-  // dialog ("doorbreken, of om iemand") and the invitation mail ("niet, of
-  // heb je vakantie"). Flip to `it` once they are reworded.
-  it.fails('puts no comma before "en" or "of"', () => {
+  it('puts no comma before "en" or "of"', () => {
     const hits = all.filter((t) => COMMA_EN_OF.test(t.text)).map((t) => `${t.file}:${t.line}  ${t.text.trim().slice(0, 140)}`);
     expect(hits).toEqual([]);
   });

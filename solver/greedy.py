@@ -197,8 +197,11 @@ def run_greedy_construction(
         )
 
     def window_ok(person_id: str, week: int, counter: str) -> bool:
+        # A window of N weeks allows one shift in any N consecutive weeks,
+        # so 1 is one a week and only 0 switches it off - the same as
+        # constraints.add_window_constraints. 1 used to count as off here.
         if not per_teller_windows:
-            if window_weeks <= 1:
+            if window_weeks <= 0:
                 return True
             return all(
                 abs(week - w) >= window_weeks
@@ -207,7 +210,7 @@ def run_greedy_construction(
 
         # Cross-type floor: the smaller of the two configured windows still
         # applies between every pair of shifts regardless of type.
-        if cross_type_floor > 1 and any(
+        if cross_type_floor > 0 and any(
             abs(week - w) < cross_type_floor
             for w in assigned_weeks[person_id].get('pooled', set())
         ):
@@ -215,7 +218,7 @@ def run_greedy_construction(
 
         # This teller's own (typically larger) same-type cap.
         own_weeks = _own_window_weeks_for(counter)
-        if own_weeks > 1:
+        if own_weeks > 0:
             group = _window_group(counter)
             if any(
                 abs(week - w) < own_weeks

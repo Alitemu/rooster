@@ -80,13 +80,13 @@ const END = '2027-01-10';
 
 function createPeriod(ctx: { poolId: string; shiftTypeId: string }, frozen: Record<string, unknown>) {
   const periodId = crypto.randomUUID();
-  // windowWeeks: 1 ("no window rule") unless a test overrides it - every
+  // windowWeeks: 0 ("no window rule") unless a test overrides it - every
   // AVOND shift going to one person here means they'd otherwise have
   // several shifts in the very same ISO week, which the window rule
-  // genuinely does forbid once windowWeeks >= 2. None of the tests below
+  // genuinely does forbid once windowWeeks >= 1 (1 = one a week). None of the tests below
   // are about that rule; see lib/publicationCheck.test.ts's createPeriod
   // for the identical reasoning.
-  const rulesetConfig = { windowWeeks: 1, ...frozen };
+  const rulesetConfig = { windowWeeks: 0, ...frozen };
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
        (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, aangemaakt_op)

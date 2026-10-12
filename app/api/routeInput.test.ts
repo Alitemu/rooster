@@ -209,26 +209,25 @@ const routes = Object.entries(routeModules)
   .filter((r) => !/^auth\/(staff-login|first-run-setup|verify-link|logout|change-password|totp)/.test(r.route) && r.route !== 'link-aanvragen')
   .sort((a, b) => Number(LAST.test(`${a.method} ${a.route}`)) - Number(LAST.test(`${b.method} ${b.route}`)));
 
-// Finding (audit 6): these answer 500 to a field of the wrong type (an
-// object or number where text or a list belongs) - the value reaches a
-// loop or a database parameter unchecked. The smallest bodies fast-check
-// found: {"rows":-1}, {"period_id":{}}, {"person_id":[]}, {"reason":1.5},
-// {"corrections":-1}, {"rows":{}}. The app's own pages always send the
-// right types, so only a hand-made request gets there. Remove a route here
-// once it answers 400, and its test turns into a plain one.
-const KNOWN_500 = new Map<string, Record<string, unknown>>([
-  ['POST periods/[id]/prior-assignments/import-csv', { rows: -1 }],
-  ['POST person/[id]/preferences/submission', { period_id: {} }],
-  ['POST person/[id]/swap-requests', { requested_slot_id: -1, period_id: { a: 1 }, offered_slot_id: 1 }],
-  ['POST planner/period/[id]/assignments/[assignment-id]/reassign', { person_id: {} }],
-  ['POST planner/period/[id]/assignments/manual-assign', { slot_id: 1e12, person_id: [] }],
-  ['DELETE planner/period/[id]/assignments/[assignment-id]/delete', { reason: [] }],
-  ['POST planner/period/[id]/assignments/undo-last', { reason: 1.5 }],
-  ['POST planner/period/[id]/import-balances', { rows: -1 }],
-  ['POST planner/period/[id]/import-holidays', { rows: {} }],
-  ['POST planner/period/[id]/ledger-corrections', { corrections: -1 }],
-  ['POST planner/period/[id]/staff-links', { person_id: { a: 1 } }],
-]);
+// Audit 6 found eleven routes answering 500 to a field of the wrong type
+// (an object or number where text or a list belongs), the value reaching a
+// loop or a database parameter unchecked: {"rows":-1}, {"period_id":{}},
+// {"person_id":[]}, {"reason":1.5}, {"corrections":-1}, {"rows":{}}. They
+// now answer 400 (lib/requestFields.ts); those bodies are tried first on
+// every route, before the generated ones.
+const AUDIT6_BODIES: Array<Record<string, unknown>> = [
+  { rows: -1 },
+  { rows: {} },
+  { rows: [1, 'x'] },
+  { rows: [{ codenaam: {}, datum: 5, teller: [] }] },
+  { corrections: -1 },
+  { corrections: [{ person_id: {}, aantal: 1, reden: 'x', type: 'AVOND' }] },
+  { period_id: {}, offered_slot_id: 1, requested_slot_id: -1 },
+  { person_id: {}, slot_id: 1e12, reason: [] },
+  { person_id: [], reason: 1.5 },
+  { reason: [] },
+  { reason: { a: 1 } },
+];
 
 describe('no route answers 500 to wrong input from a signed-in user', () => {
   it('finds the routes', () => {
@@ -254,13 +253,9 @@ describe('no route answers 500 to wrong input from a signed-in user', () => {
         }
         expect(status, JSON.stringify(body).slice(0, 300)).not.toBe(500);
       }),
-      { numRuns: 25, examples: KNOWN_500.has(`${r.method} ${r.route}`) ? [[KNOWN_500.get(`${r.method} ${r.route}`)!]] : [] }
+      { numRuns: 25, examples: AUDIT6_BODIES.map((b) => [b]) }
     );
   };
 
-  const name = (r: (typeof routes)[number]) => `${r.method} ${r.route}`;
-  const clean = routes.filter((r) => !KNOWN_500.has(name(r)));
-  const known = routes.filter((r) => KNOWN_500.has(name(r)));
-  it.each(clean.map((r) => [name(r), r] as const))('%s', (_, r) => check(r), 60_000);
-  it.fails.each(known.map((r) => [name(r), r] as const))('%s (known: answers 500)', (_, r) => check(r), 60_000);
+  it.each(routes.map((r) => [`${r.method} ${r.route}`, r] as const))('%s', (_, r) => check(r), 60_000);
 });

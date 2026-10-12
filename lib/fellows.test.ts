@@ -377,19 +377,31 @@ describe('Ik ben fellow: de weekendblokkades', () => {
 });
 
 describe('streefbereik met fellows', () => {
+  const PERIOD = { start_datum: '2027-01-04', eind_datum: '2027-06-06' };
+  /** n members there all period, the first `fellows` of them fellows. */
+  const pool = (n: number, fellows: number) => {
+    const members = Array.from({ length: n }, (_, i) => ({
+      id: `p${i}`,
+      deelnamefactor: 1,
+      geldig_vanaf: '2020-01-01',
+      geldig_tot: '2099-12-31',
+    }));
+    return [members, new Set(members.slice(0, fellows).map((m) => m.id))] as const;
+  };
+
   it('raises the others\' configured weekend band by people / (people - fellows), and leaves the rest alone', () => {
     const counts = { AVOND: 110, WEEKEND: 44, FEESTDAG: 4 };
     const config = { bandAvond: [3, 4], bandWeekend: [1, 2], bandFeestdag: [0, 1] };
-    expect(resolvePeriodBands(config, counts, 31, 0)).toEqual({ AVOND: [3, 4], WEEKEND: [1, 2], FEESTDAG: [0, 1] });
+    expect(resolvePeriodBands(config, counts, ...pool(31, 0), PERIOD, 'GELIJK')).toEqual({ AVOND: [3, 4], WEEKEND: [1, 2], FEESTDAG: [0, 1] });
     // 31 / 26: floor(1.19) = 1, ceil(2.38) = 3.
-    expect(resolvePeriodBands(config, counts, 31, 5)).toEqual({ AVOND: [3, 4], WEEKEND: [1, 3], FEESTDAG: [0, 1] });
+    expect(resolvePeriodBands(config, counts, ...pool(31, 5), PERIOD, 'GELIJK')).toEqual({ AVOND: [3, 4], WEEKEND: [1, 3], FEESTDAG: [0, 1] });
   });
 
   it('works the default weekend band out over the non-fellows when none is configured', () => {
     const counts = { AVOND: 0, WEEKEND: 60, FEESTDAG: 0 };
     // 60 / 30 = 2 -> [2, 3]; 60 / 20 = 3 -> [3, 4].
-    expect(resolvePeriodBands({}, counts, 30, 0).WEEKEND).toEqual([2, 3]);
-    expect(resolvePeriodBands({}, counts, 30, 10).WEEKEND).toEqual([3, 4]);
+    expect(resolvePeriodBands({}, counts, ...pool(30, 0), PERIOD, 'GELIJK').WEEKEND).toEqual([2, 3]);
+    expect(resolvePeriodBands({}, counts, ...pool(30, 10), PERIOD, 'GELIJK').WEEKEND).toEqual([3, 4]);
   });
 
   it('gives a fellow 0 up to their released days, without the ledger, and the others a raised band', async () => {

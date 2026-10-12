@@ -10,7 +10,14 @@ import { checkCapacity, getCapacityInterpretation } from '@/lib/capacity';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
-import { resolveBands, countNominalAvondWeekendDays, type Teller, type BandsByTeller } from '@/lib/rosterBands';
+import {
+  resolveBands,
+  countNominalAvondWeekendDays,
+  effectiveHeadcount,
+  type Teller,
+  type BandsByTeller,
+  type BandMember,
+} from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CapacityCheckResult {
@@ -131,29 +138,29 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const distributionModeOverride = req.nextUrl.searchParams.get('distribution_mode');
     const distributionMode = distributionModeOverride === 'NAAR_RATO' ? 'NAAR_RATO' : 'GELIJK';
 
-    let effectiveParticipants = activeParticipants;
-    if (distributionMode === 'NAAR_RATO') {
-      const factorsStmt = db.prepare(`
-        SELECT DISTINCT pm.person_id, pm.deelnamefactor
-        FROM dienstrooster_pool_membership pm
-        JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
-        JOIN dienstrooster_person p ON p.id = pm.person_id
-        WHERE sp.id = ?
-          AND pm.geldig_vanaf <= sp.eind_datum
-          AND pm.geldig_tot >= sp.start_datum
-          AND p.actief = 1
-      `);
-      const factorRows = factorsStmt.all(id) as Array<{ person_id: string; deelnamefactor: number }>;
-      // A person could theoretically have more than one overlapping
-      // membership row within the same period; take their highest factor
-      // rather than double-counting them via SUM over duplicate rows.
-      const bestFactorByPerson = new Map<string, number>();
-      for (const row of factorRows) {
-        const current = bestFactorByPerson.get(row.person_id) ?? 0;
-        bestFactorByPerson.set(row.person_id, Math.max(current, row.deelnamefactor ?? 1));
-      }
-      effectiveParticipants = [...bestFactorByPerson.values()].reduce((sum, f) => sum + f, 0);
-    }
+    // Every overlapping membership, one per person (the first, as
+    // generate-roster picks it), for the effective headcount: each person
+    // counts for the part of the period they are a member and, NAAR_RATO,
+    // their deelnamefactor (lib/rosterBands.ts effectiveHeadcount). The
+    // capacity below and the suggested band both use it, so neither
+    // promises shifts that people who are only there half the period
+    // cannot take - the suggested band used to be worked out over the
+    // plain headcount, and then everyone's maximum together fell short of
+    // the shifts (audit 6).
+    const membershipRows = db
+      .prepare(
+        `SELECT pm.person_id AS id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
+         FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE sp.id = ?
+           AND pm.geldig_vanaf <= sp.eind_datum
+           AND pm.geldig_tot >= sp.start_datum
+           AND p.actief = 1`
+      )
+      .all(id) as BandMember[];
+    const bandMembers = [...new Map(membershipRows.map((m) => [m.id, m])).values()];
+    const effectiveParticipants = effectiveHeadcount(bandMembers, period, distributionMode);
 
     const startDate = new Date(period.start_datum);
     const endDate = new Date(period.eind_datum);
@@ -228,7 +235,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       const nominal = countNominalAvondWeekendDays(period.start_datum, period.eind_datum);
       slotCountByTeller = { ...slotCountByTeller, AVOND: nominal.AVOND, WEEKEND: nominal.WEEKEND };
     }
-    const suggestedBand = resolveBands({}, slotCountByTeller, activeParticipants);
+    const suggestedBand = resolveBands({}, slotCountByTeller, effectiveParticipants);
 
     // Determine which constraint is more restrictive
     let isConstraining: 'distinct_people' | 'total_capacity' | 'both' | 'none' = 'none';

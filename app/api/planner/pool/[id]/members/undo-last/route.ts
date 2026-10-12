@@ -15,6 +15,7 @@ import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { getPendingUndo, clearPendingUndo } from '@/lib/pendingUndo';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
@@ -58,10 +59,18 @@ export async function POST(
         .get(poolId, payload.person_id, payload.geldig_tot, payload.geldig_vanaf);
       if (overlapping) return false;
 
+      const membershipId = crypto.randomUUID();
       db.prepare(
         `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
          VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(crypto.randomUUID(), payload.person_id, poolId, payload.deelnamefactor, payload.geldig_vanaf, payload.geldig_tot);
+      ).run(membershipId, payload.person_id, poolId, payload.deelnamefactor, payload.geldig_vanaf, payload.geldig_tot);
+      writeAuditLog({
+        actorId: auth!.userId,
+        entiteit: 'pool_membership',
+        entiteitId: membershipId,
+        actie: 'CREATE',
+        nieuw: { wijziging: 'verwijderen ongedaan gemaakt', ...payload },
+      });
       return true;
     })();
 

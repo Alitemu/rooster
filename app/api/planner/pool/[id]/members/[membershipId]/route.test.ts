@@ -82,7 +82,10 @@ afterEach(() => {
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE id = ?').run(createdMembershipIds.pop()!);
   }
   while (createdPersonIds.length > 0) {
-    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(createdPersonIds.pop()!);
+    const removedPersonId = createdPersonIds.pop()!;
+    // Audit rows they wrote as planner point at them (lib/auditLog.ts).
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(removedPersonId);
+    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(removedPersonId);
   }
   while (createdPoolIds.length > 0) {
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(createdPoolIds.pop()!);

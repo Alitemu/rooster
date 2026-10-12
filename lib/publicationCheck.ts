@@ -180,12 +180,13 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   // fellow for having no weekend shifts.
   const members = db
     .prepare(
-      `SELECT p.id, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
+      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
        JOIN dienstrooster_person p ON p.id = pm.person_id
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{
     id: string;
+    deelnamefactor: number;
     geldig_vanaf: string;
     geldig_tot: string;
   }>;
@@ -195,8 +196,10 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
   const bands = resolvePeriodBands(
     config,
     countSlotsByTeller(periodId),
-    members.length,
-    members.filter((m) => fellows.has(m.id)).length
+    members,
+    fellows,
+    period,
+    typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK'
   );
   const targets = computeMemberTargets(periodId);
   const naarRato = config.distributionMode === 'NAAR_RATO';

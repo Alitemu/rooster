@@ -11,6 +11,7 @@ import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
 import { syncAvailabilityForPeriod as syncAbsenceAvailabilityForPeriod } from '@/lib/absenceSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
@@ -90,6 +91,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // staff can actually see and block against)
     syncAvailabilityForPeriod(id);
     syncAbsenceAvailabilityForPeriod(id);
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'period',
+      entiteitId: id,
+      actie: 'UPDATE',
+      nieuw: { wijziging: 'diensten aangemaakt', aantal: result.totalSlotsGenerated, al_aanwezig: result.alreadyExisted },
+    });
 
     const response: ApiSuccessResponse<SlotGenerationResponse> = {
       success: true,

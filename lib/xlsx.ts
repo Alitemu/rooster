@@ -9,12 +9,20 @@
  * XML files. The file comes from a beheerder's upload, so sizes are capped
  * before anything is inflated, and a file that isn't a workbook is
  * refused with a message in Dutch.
+ *
+ * Read in one forward pass (elements(), no regular expression that can
+ * backtrack over the whole sheet): a sheet full of rows that never close
+ * used to take time quadratic in its size, and 20 MB of "<row>" packs into
+ * a 29 kB upload. A cell reference beyond Excel's last column (XFD) is
+ * refused rather than used as an array length.
  */
 
 import zlib from 'zlib';
 
 const MAX_ENTRIES = 2000;
 const MAX_ENTRY_BYTES = 20 * 1024 * 1024;
+/** Excel's last column, XFD. */
+const MAX_COLUMNS = 16384;
 
 export class XlsxError extends Error {}
 
@@ -80,17 +88,68 @@ function decodeXml(text: string): string {
     .replace(/_x([0-9A-Fa-f]{4})_/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
     .replace(/&(#x[0-9A-Fa-f]+|#\d+|amp|lt|gt|quot|apos);/g, (_, ent: string) => {
       if (ent[0] === '#') {
-        return String.fromCodePoint(ent[1] === 'x' ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10));
+        const codePoint = ent[1] === 'x' ? parseInt(ent.slice(2), 16) : parseInt(ent.slice(1), 10);
+        if (!(codePoint <= 0x10ffff)) throw new XlsxError('Het Excel-bestand is beschadigd.');
+        return String.fromCodePoint(codePoint);
       }
       return { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }[ent]!;
     });
 }
 
+interface XmlElement {
+  /** The start tag's attributes, as written. */
+  attrs: string;
+  /** What is between the start and end tag; null for <tag/>. */
+  body: string | null;
+}
+
+/**
+ * Every <tag ...>...</tag> and <tag .../> in `xml`, in order, found by
+ * searching forward only. Not nested in itself (none of the tags read here
+ * are). An element that never closes ends the list, the way the regular
+ * expressions this replaces skipped it.
+ */
+function* elements(xml: string, tag: string): Generator<XmlElement> {
+  const open = `<${tag}`;
+  const close = `</${tag}>`;
+  let at = 0;
+  for (;;) {
+    const start = xml.indexOf(open, at);
+    if (start === -1) return;
+    const next = xml[start + open.length];
+    if (next !== '>' && next !== '/' && next !== ' ' && next !== '\t' && next !== '\n' && next !== '\r') {
+      at = start + open.length;
+      continue;
+    }
+    const tagEnd = xml.indexOf('>', start);
+    if (tagEnd === -1) return;
+    if (xml[tagEnd - 1] === '/') {
+      yield { attrs: xml.slice(start + open.length, tagEnd - 1), body: null };
+      at = tagEnd + 1;
+      continue;
+    }
+    const end = xml.indexOf(close, tagEnd + 1);
+    if (end === -1) return;
+    yield { attrs: xml.slice(start + open.length, tagEnd), body: xml.slice(tagEnd + 1, end) };
+    at = end + close.length;
+  }
+}
+
 /** All <t> text inside a string item, without phonetic hints (<rPh>). */
 function itemText(xml: string): string {
-  const withoutPhonetic = xml.replace(/<rPh\b[\s\S]*?<\/rPh>/g, '');
+  let withoutPhonetic = '';
+  let at = 0;
+  for (;;) {
+    const start = xml.indexOf('<rPh', at);
+    if (start === -1) break;
+    const end = xml.indexOf('</rPh>', start);
+    if (end === -1) break;
+    withoutPhonetic += xml.slice(at, start);
+    at = end + '</rPh>'.length;
+  }
+  withoutPhonetic += xml.slice(at);
   let text = '';
-  for (const m of withoutPhonetic.matchAll(/<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g)) text += m[1];
+  for (const t of elements(withoutPhonetic, 't')) text += t.body ?? '';
   return decodeXml(text);
 }
 
@@ -99,9 +158,13 @@ function attr(tag: string, name: string): string | null {
   return m ? decodeXml(m[1]) : null;
 }
 
+/** "A1" -> 0, "XFD7" -> 16383. Anything else is not a cell of a worksheet. */
 function columnIndex(ref: string): number {
+  const letters = /^([A-Z]{1,3})\d*$/.exec(ref)?.[1];
+  if (!letters) throw new XlsxError('Het Excel-bestand is beschadigd.');
   let n = 0;
-  for (const ch of ref.replace(/\d+$/, '')) n = n * 26 + (ch.charCodeAt(0) - 64);
+  for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
+  if (n > MAX_COLUMNS) throw new XlsxError('Het Excel-bestand heeft een cel buiten het werkblad.');
   return n - 1;
 }
 
@@ -127,20 +190,19 @@ export function readFirstSheet(buf: Buffer): string[][] {
   const entries = readZip(buf);
   const sheet = entryText(buf, entries, firstSheetPath(buf, entries));
   if (sheet === null) throw new XlsxError('Het Excel-bestand heeft geen werkblad.');
-  const shared = [...(entryText(buf, entries, 'xl/sharedStrings.xml') ?? '').matchAll(/<si>([\s\S]*?)<\/si>/g)].map((m) =>
-    itemText(m[1])
-  );
+  const shared = [...elements(entryText(buf, entries, 'xl/sharedStrings.xml') ?? '', 'si')].map((si) => itemText(si.body ?? ''));
 
   const rows: string[][] = [];
-  for (const rowMatch of sheet.matchAll(/<row\b[^>]*?(?:\/>|>([\s\S]*?)<\/row>)/g)) {
+  for (const row of elements(sheet, 'row')) {
     const cells: string[] = [];
-    for (const c of (rowMatch[1] ?? '').matchAll(/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
-      const tag = ` ${c[1]}`;
+    for (const c of elements(row.body ?? '', 'c')) {
+      const tag = ` ${c.attrs}`;
       const ref = attr(tag, 'r');
       const col = ref ? columnIndex(ref) : cells.length;
-      const body = c[2] ?? '';
+      if (col >= MAX_COLUMNS) throw new XlsxError('Het Excel-bestand heeft een cel buiten het werkblad.');
+      const body = c.body ?? '';
       const type = attr(tag, 't');
-      const v = /<v>([\s\S]*?)<\/v>/.exec(body)?.[1];
+      const v = elements(body, 'v').next().value?.body ?? undefined;
       let text = '';
       if (type === 's') text = shared[Number(v)] ?? '';
       else if (type === 'inlineStr') text = itemText(body);

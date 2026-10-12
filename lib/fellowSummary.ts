@@ -9,7 +9,7 @@
 import { db } from '@/db/client';
 import { checkWeekendCapacity } from './capacity';
 import { getFellowIds, releasedWeekendDays } from './fellows';
-import { countSlotsByTeller, resolvePeriodBands, resolveRulesetConfig, resolveWindowWeeks, type Band } from './rosterBands';
+import { countSlotsByTeller, resolvePeriodBands, resolveRulesetConfig, resolveWindowWeeks, type Band, type BandMember } from './rosterBands';
 
 export interface FellowSummary {
   fellows: Array<{ person_id: string; codenaam: string; vrije_weekenddagen: number }>;
@@ -39,14 +39,18 @@ export function fellowSummary(periodId: string, windowOverride?: number): Fellow
     | undefined;
   if (!period) return null;
 
-  const members = db
+  // One row per person (the first membership overlapping the period), the
+  // same way generate-roster picks it.
+  const rows = db
     .prepare(
-      `SELECT DISTINCT p.id, p.codenaam FROM dienstrooster_pool_membership pm
+      `SELECT p.id, p.codenaam, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
+       FROM dienstrooster_pool_membership pm
        JOIN dienstrooster_person p ON p.id = pm.person_id
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1
        ORDER BY p.codenaam`
     )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
+    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<BandMember & { codenaam: string }>;
+  const members = [...new Map(rows.map((m) => [m.id, m])).values()];
 
   const fellowIds = getFellowIds(periodId);
   const released = releasedWeekendDays(periodId);
@@ -55,6 +59,7 @@ export function fellowSummary(periodId: string, windowOverride?: number): Fellow
     .map((m) => ({ person_id: m.id, codenaam: m.codenaam, vrije_weekenddagen: released.get(m.id) ?? 0 }));
 
   const config = resolveRulesetConfig(period);
+  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
   const counts = countSlotsByTeller(periodId);
   const window = windowOverride ?? resolveWindowWeeks(config).weekendFeestdag;
   const weekendSlots = (
@@ -78,8 +83,8 @@ export function fellowSummary(periodId: string, windowOverride?: number): Fellow
       venster: window,
       past: capacity.passed,
       voorgesteld_venster: capacity.suggestedWindow,
-      bereik: resolvePeriodBands(config, counts, members.length, fellows.length).WEEKEND,
-      bereik_zonder_fellows: resolvePeriodBands(config, counts, members.length, 0).WEEKEND,
+      bereik: resolvePeriodBands(config, counts, members, fellowIds, period, distributionMode).WEEKEND,
+      bereik_zonder_fellows: resolvePeriodBands(config, counts, members, new Set(), period, distributionMode).WEEKEND,
     },
   };
 }

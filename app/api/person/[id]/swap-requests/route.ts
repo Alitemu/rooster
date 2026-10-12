@@ -132,7 +132,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }
     const notes = notesCheck.value;
 
-    if (!period_id || !offered_slot_id || !requested_slot_id) {
+    if (
+      typeof period_id !== 'string' ||
+      typeof offered_slot_id !== 'string' ||
+      typeof requested_slot_id !== 'string' ||
+      !period_id ||
+      !offered_slot_id ||
+      !requested_slot_id
+    ) {
       return NextResponse.json(
         { success: false, error: 'Verplichte velden ontbreken' },
         { status: 400 }

@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
+import { objectRows, badRequest } from '@/lib/requestFields';
 import type { ApiSuccessResponse } from '@/types';
 
 interface HolidayRow {
@@ -25,7 +27,7 @@ const VALID_GROUPS = new Set([
 
 export async function POST(
   req: NextRequest,
-  _context: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
     const auth = getAuthContextFromRequest(req);
@@ -33,8 +35,9 @@ export async function POST(
       return unauthorizedResponse();
     }
 
-    const body = (await parseJsonBody(req)) as { rows?: HolidayRow[] };
-    const rows = body.rows || [];
+    const body = await parseJsonBody<{ rows?: unknown }>(req);
+    const rows = objectRows(body.rows) as HolidayRow[] | null;
+    if (rows === null) return badRequest('INVALID_ROWS', 'De rijen moeten een lijst zijn');
 
     const errors: string[] = [];
     let imported = 0;
@@ -47,6 +50,10 @@ export async function POST(
 
     const importAll = db.transaction((importRows: HolidayRow[]) => {
       for (const row of importRows) {
+        if (typeof row.codenaam !== 'string') {
+          errors.push(`Onbekende codenaam: ${String(row.codenaam)}`);
+          continue;
+        }
         if (!VALID_GROUPS.has(row.holiday_group)) {
           errors.push(`Onbekende feestdaggroep: ${row.holiday_group}`);
           continue;
@@ -77,6 +84,13 @@ export async function POST(
     });
 
     importAll(rows);
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'holiday_history',
+      entiteitId: (await context.params).id,
+      actie: 'IMPORT',
+      nieuw: { wijziging: 'feestdaggeschiedenis geïmporteerd', rijen: rows.length, geimporteerd: imported, fouten: errors.length },
+    });
 
     const response: ApiSuccessResponse<{ imported: number; errors: string[] }> = {
       success: true,

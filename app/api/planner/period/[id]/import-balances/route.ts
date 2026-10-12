@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { objectRows, badRequest } from '@/lib/requestFields';
 import { validateLedgerDelta } from '@/lib/ledgerDelta';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
@@ -31,8 +32,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
 
     const periodId = params.id;
-    const body = (await parseJsonBody(req)) as { rows?: BalanceRow[] };
-    const rows = body.rows || [];
+    const body = await parseJsonBody<{ rows?: unknown }>(req);
+    const rows = objectRows(body.rows) as BalanceRow[] | null;
+    if (rows === null) return badRequest('INVALID_ROWS', 'De rijen moeten een lijst zijn');
 
     const period = db
       .prepare('SELECT id, pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
@@ -92,6 +94,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     const importAll = db.transaction((importRows: BalanceRow[]) => {
       for (const row of importRows) {
+        if (typeof row.codenaam !== 'string') {
+          errors.push(`Onbekende codenaam: ${String(row.codenaam)}`);
+          continue;
+        }
         // Same "hoort bij deze periode" convention every other route uses:
         // membership must cover the period's own date range, and the
         // person must still be active - without this, a codenaam that

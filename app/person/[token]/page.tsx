@@ -426,8 +426,8 @@ function PersonalLinkPageContent() {
           {isLinkError && (
             <div className="text-sm text-neutral-600 space-y-2">
               <p>
-                Controleer of je de hele link uit de e-mail hebt gebruikt. De link kan ook verlopen zijn, of horen
-                bij een eerdere periode.
+                Controleer of je de hele link uit de e-mail hebt gebruikt. De link kan ook verlopen zijn. Of hij
+                hoort bij een eerdere periode.
               </p>
               <p>
                 Een nieuwe link vraag je aan op de{' '}

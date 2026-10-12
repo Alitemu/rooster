@@ -1,6 +1,6 @@
 {
   "name": "dienstrooster",
-  "version": "0.11.1",
+  "version": "0.12.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -28,7 +28,7 @@
     "drizzle-orm": "^0.45.2",
     "lodash": "^4.17.21",
     "luxon": "^3.4.1",
-    "next": "16.3.5",
+    "next": "16.3.8",
     "nodemailer": "^10.0.10",
     "qrcode": "^1.5.3",
     "react": "19.3.0",
@@ -36,7 +36,6 @@
     "react-hook-form": "^7.50.0",
     "speakeasy": "^2.0.0",
     "tailwind-merge": "^2.2.2",
-    "tailwindcss": "^3.3.6",
     "tsx": "^4.7.0",
     "typescript": "^5.5.0",
     "uuid": "^14.0.2",
@@ -56,10 +55,11 @@
     "@vitest/ui": "^4.1.11",
     "autoprefixer": "^10.4.16",
     "eslint": "^9.39.5",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.3.8",
     "fast-check": "^3.14.0",
     "postcss": "^8.4.32",
     "smtp-server": "^3.19.13",
+    "tailwindcss": "^3.4.19",
     "vitest": "^4.1.11"
   },
   "overrides": {

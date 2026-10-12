@@ -19,6 +19,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { optionalText } from '@/lib/requestFields';
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
 import { personWouldViolateWindowRule } from '@/lib/windowRule';
 import { queueBlockOverriddenNotification } from '@/lib/notifications';
@@ -50,11 +51,14 @@ export async function POST(
     const { person_id: newPersonId, reason } = body;
     const now = new Date().toISOString();
 
-    if (!newPersonId) {
+    if (!newPersonId || typeof newPersonId !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'person_id ontbreekt' },
+        { success: false, error: 'Kies de persoon die de dienst overneemt' },
         { status: 400 }
       );
+    }
+    if (!optionalText(reason).ok) {
+      return NextResponse.json({ success: false, error: 'De reden moet tekst zijn' }, { status: 400 });
     }
 
     const period = db

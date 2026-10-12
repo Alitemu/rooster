@@ -13,9 +13,9 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Frontend + Backend | Next.js App Router | 16.3 |
+| Frontend + Backend | Next.js App Router | 16.3.8 |
 | Language | TypeScript | 5.5+ |
-| Styling | Tailwind CSS + shadcn/ui | 3.3+ |
+| Styling | Tailwind CSS + shadcn/ui | 3.4+ (build only, devDependencies) |
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |
 | ORM | Drizzle | 0.45+ |
 | Auth | Custom (tokens + TOTP) | bcrypt, speakeasy |
@@ -213,7 +213,12 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type)
 - `holiday_history` - holiday group assignments across years
 - `ledger_entry` - balance adjustments (CARRY_OVER, CORRECTION, BEGINSALDO)
-- `audit_log` - all actions by admins/planners
+- `audit_log` - all actions by admins/planners (lib/auditLog.ts
+  `writeAuditLog`; never passwords, tokens or link hashes). Since audit 6
+  also creating, opening and closing a period, its deadline, rules,
+  slots and automatic reminders, the pool on/off, adding, changing,
+  removing and restoring a member, minting a personal link and the holiday
+  import; app/api/auditLog.test.ts proves each writes exactly one row.
 - `notification_template` - message templates
 - `reminder_schedule` - reminder timing rules
 
@@ -237,8 +242,9 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 | `KERST` | Christmas | Dec 25-26 | Fixed |
 
 **Implementation:**
-- `/lib/holidays.ts` - TypeScript calculation utilities
-- `/solver/holidays.py` - Python solver utilities
+- `/lib/holidays.ts` - TypeScript calculation utilities, the only place
+  holidays are worked out. The solver computes none: it gets each slot's
+  teller (FEESTDAG included) with the slots generate-roster sends.
 - Tests for 2024-2035 including leap years
 
 ## Period Management
@@ -343,8 +349,8 @@ over.
 - A fellow may release weekend days (clear or mark them). Bands: fellows
   don't count for WEEKEND, so the others' band goes up at generation
   (lib/rosterBands.ts `resolvePeriodBands`: a configured band scaled by
-  people / (people - fellows), floor/ceil; otherwise the default over the
-  non-fellows). A fellow's own WEEKEND band is `[0, released days]`,
+  everyone / the non-fellows, both as effective headcounts, floor/ceil;
+  otherwise the default over the non-fellows). A fellow's own WEEKEND band is `[0, released days]`,
   capped at the others' max, without the ledger (`fellowWeekendBand`),
   sent to the solver as `band_overrides` - an optional SolverInput field
   that replaces a person's scaled band and delta for one counter.
@@ -372,6 +378,31 @@ candidates leave the person out; swap create and approve refuse it; and
 the publication check lists such a shift as an issue (only possible when
 the membership changed after the roster was made).
 
+## Streefbereik, venster and the solver's phases
+
+- **Bands over the effective headcount.** The default band per teller is
+  the period's slots over `effectiveHeadcount` (lib/rosterBands.ts: the
+  sum of each member's coverage of the period, times the deelnamefactor
+  under NAAR_RATO), floor/ceil; scaledBandForMember then scales it per
+  person by the same two factors. Counting heads instead left shifts
+  empty: with people joining or leaving halfway everyone's maximum added
+  up to fewer shifts than there were. `resolvePeriodBands(config,
+  slotCountByTeller, members, fellowIds, period, distributionMode)` is the
+  one entry point (generate-roster, computeMemberTargets, fellowSummary;
+  the capacity route's suggested band uses effectiveHeadcount too).
+- **Carry-over per person** (lib/carryOver.ts): each member is measured
+  against their own scaled target, the one the solver got, not the flat
+  band. Someone at factor 0.5 who did their half carries nothing over.
+- **windowWeeks N = at most one shift in any N consecutive ISO weeks**, so
+  1 is one a week and 0 switches the rule off (solver/constraints.py,
+  solver/greedy.py, lib/windowRule.ts). Up to 0.11 a window of 1 counted
+  as off. "Nobody twice in one ISO week" is this rule at 1 or more, not a
+  rule of its own.
+- **objectiveMode lexicographic** (solver/solver.py `_solve_lexicographic`):
+  each phase starts from the previous phase's solution as hints, and a
+  phase that finds nothing in its time falls back to the last phase that
+  did (a warning in the solver log), never to an empty roster.
+
 ## Absences and part-time over what someone marked by hand
 
 One availability row per person per slot, so a sync meets what is there:
@@ -398,7 +429,9 @@ shows blocked days out of all days and speaks of no maximum.
 reads that overview back after it was filled in and saved in Excel - as
 .xlsx only (a re-saved CSV's separator and encoding depend on the
 machine). lib/xlsx.ts reads the first worksheet with Node's zlib, no
-library (size-capped before and while inflating); a date cell arrives as
+library (size-capped before and while inflating, read in one forward pass
+without backtracking regular expressions, a cell past column XFD refused:
+audit 6 packed a sheet of 20 MB of unclosed rows into a 29 kB upload); a date cell arrives as
 Excel's day number, text dates as YYYY-MM-DD or d-m-yyyy. The dialog
 sends the file as base64 within the 1 MB body cap. Tests build their
 workbooks with tests/fixtures/buildXlsx.ts. Hand markings only: a plain level is set
@@ -771,6 +804,14 @@ to commit SHAs.
 lib/api-errors.ts parseJsonBody (read no further; also before login).
 Free text a participant types - swap toelichting, rejection reason,
 absence notitie - goes through lib/freeText.ts (1000 characters).
+parseJsonBody only guarantees a plain object: a field holding a number,
+list or object where text or rows belong goes through
+lib/requestFields.ts (optionalText, rowText, objectRows, badRequest) and
+gets a Dutch 400, never a 500; app/api/routeInput.test.ts calls every
+mutating route with wrong types to prove it. A single-line name (codenaam,
+period name, lib/vrijeTekst.ts) refuses control characters and invisible
+format characters (zero-width, bidi overrides, U+2028/2029), which would
+otherwise make two names look the same.
 
 **Docker Compose (3 services):**
 - `caddy` - TLS termination (internal certs via `tls internal`)

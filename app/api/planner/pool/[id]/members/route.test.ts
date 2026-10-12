@@ -92,6 +92,8 @@ afterEach(() => {
   for (const personId of created.people) {
     db.prepare('DELETE FROM dienstrooster_absence WHERE person_id = ?').run(personId);
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(personId);
+    // Audit rows they wrote as planner point at them (lib/auditLog.ts).
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(personId);
     db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(personId);
   }
   created.pools = [];

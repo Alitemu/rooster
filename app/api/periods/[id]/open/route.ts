@@ -16,6 +16,7 @@ import { applyCarryOverForPeriod } from '@/lib/carryOver';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
@@ -235,6 +236,14 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
              bevroren_ruleset_json = ?, status = 'OPEN', row_version = row_version + 1
          WHERE id = ?`
       ).run(naam, start_datum, eind_datum, deadline, JSON.stringify(ruleset), id);
+      writeAuditLog({
+        actorId: auth!.userId,
+        entiteit: 'period',
+        entiteitId: id,
+        actie: 'UPDATE',
+        oud: { status: 'CONCEPT' },
+        nieuw: { wijziging: 'periode geopend', status: 'OPEN', naam, start_datum, eind_datum, deadline, ruleset },
+      });
 
       // Backfill part-time blocking now that the period is OPEN and pool
       // members can see it

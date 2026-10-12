@@ -13,7 +13,7 @@ import {
   dateToISO,
 } from './holidays';
 import { reminderMoment, REMINDER_HOUR } from './autoReminders';
-import { resolveBands, resolvePeriodBands, scaledBandForMember, fellowWeekendBand, type Teller } from './rosterBands';
+import { resolvePeriodBands, scaledBandForMember, fellowWeekendBand, type Teller } from './rosterBands';
 
 /**
  * The calendar the roster is built on, checked against independent
@@ -208,9 +208,11 @@ describe('streefbereik: the targets leave room for every shift', () => {
   const teller: Teller = 'AVOND';
   const period = { start_datum: '2027-01-04', eind_datum: '2027-06-06' };
   const full = { deelnamefactor: 1, geldig_vanaf: '2020-01-01', geldig_tot: '2099-12-31' };
+  type M = typeof full;
 
-  function room(slots: number, members: Array<typeof full>, mode = 'GELIJK') {
-    const bands = resolveBands({}, { AVOND: slots, WEEKEND: 0, FEESTDAG: 0 }, members.length);
+  function room(slots: number, members: M[], mode = 'GELIJK') {
+    const withIds = members.map((m, i) => ({ ...m, id: `p${i}` }));
+    const bands = resolvePeriodBands({}, { AVOND: slots, WEEKEND: 0, FEESTDAG: 0 }, withIds, new Set(), period, mode);
     const scaled = members.map((m) => scaledBandForMember(bands, teller, m, period, mode));
     return {
       scaled,
@@ -219,14 +221,26 @@ describe('streefbereik: the targets leave room for every shift', () => {
     };
   }
 
-  it('everyone there all period: together their minimums fit and their maximums cover every shift', () => {
+  // Joining from 1 March, leaving end of March, or both halves: every
+  // combination of membership window and deelnamefactor.
+  // Only real memberships that overlap the period: the ones the queries select.
+  const member = fc
+    .record({
+      deelnamefactor: fc.constantFrom(1, 1, 0.8, 0.5, 0.25),
+      geldig_vanaf: fc.constantFrom('2020-01-01', '2027-03-01', '2027-04-19'),
+      geldig_tot: fc.constantFrom('2099-12-31', '2027-03-31', '2027-05-09'),
+    })
+    .filter((m) => m.geldig_vanaf <= m.geldig_tot);
+
+  it('for any pool: the minimums together fit, the maximums together cover every shift', () => {
     fc.assert(
-      fc.property(fc.integer({ min: 0, max: 400 }), fc.integer({ min: 1, max: 40 }), (slots, people) => {
-        const { minSum, maxSum, scaled } = room(slots, Array(people).fill(full));
+      fc.property(fc.integer({ min: 0, max: 400 }), fc.array(member, { minLength: 1, maxLength: 40 }), fc.constantFrom('GELIJK', 'NAAR_RATO'), (slots, members, mode) => {
+        const { minSum, maxSum, scaled } = room(slots, members, mode);
         for (const [min, max] of scaled) expect(0 <= min && min <= max).toBe(true);
         expect(minSum).toBeLessThanOrEqual(slots);
         expect(maxSum).toBeGreaterThanOrEqual(slots);
-      })
+      }),
+      { numRuns: 2000 }
     );
   });
 
@@ -234,7 +248,9 @@ describe('streefbereik: the targets leave room for every shift', () => {
     fc.assert(
       fc.property(fc.integer({ min: 0, max: 120 }), fc.integer({ min: 2, max: 40 }), fc.nat(), fc.nat(30), (weekend, people, f, released) => {
         const fellows = f % people;
-        const bands = resolvePeriodBands({}, { AVOND: 0, WEEKEND: weekend, FEESTDAG: 0 }, people, fellows);
+        const members = Array.from({ length: people }, (_, i) => ({ ...full, id: `p${i}` }));
+        const fellowIds = new Set(members.slice(0, fellows).map((m) => m.id));
+        const bands = resolvePeriodBands({}, { AVOND: 0, WEEKEND: weekend, FEESTDAG: 0 }, members, fellowIds, period, 'GELIJK');
         const [min, max] = bands.WEEKEND;
         expect(min * (people - fellows)).toBeLessThanOrEqual(weekend);
         expect(max * (people - fellows)).toBeGreaterThanOrEqual(weekend);
@@ -245,21 +261,18 @@ describe('streefbereik: the targets leave room for every shift', () => {
     );
   });
 
-  // Finding (audit 6): the band is worked out over the headcount, but
-  // someone who joins or leaves halfway (or, NAAR_RATO, works part-time)
-  // then gets a proportionally lower maximum. Together the maximums can fall
-  // short of the shifts, and the solver keeps every maximum (no overshoot),
-  // so shifts stay empty that the others had room for. Reproduced with the
-  // solver itself: 30 people, 110 avonddiensten, 6 of them half the period:
-  // bereik 3 of 4, maximums add up to 108, 2 shifts left unfilled. Flip to
-  // `it` once the average is taken over the effective headcount.
-  it.fails('also with people who join or leave halfway', () => {
+  // Audit 6: the band was worked out over the headcount, while someone who
+  // joined or left halfway (or, NAAR_RATO, a part-timer) got a lower
+  // maximum, so the maximums together fell short: 30 people, 110
+  // avonddiensten, 6 of them half the period - bereik 3 of 4, maximums
+  // 108, and the solver left 2 shifts empty.
+  it('also with people who join or leave halfway', () => {
     const half = { deelnamefactor: 1, geldig_vanaf: '2020-01-01', geldig_tot: '2027-03-21' };
     const { maxSum } = room(110, [...Array(24).fill(full), ...Array(6).fill(half)]);
     expect(maxSum).toBeGreaterThanOrEqual(110);
   });
 
-  it.fails('also with part-timers when the shifts are shared naar rato', () => {
+  it('also with part-timers when the shifts are shared naar rato', () => {
     const part = { ...full, deelnamefactor: 0.5 };
     const { maxSum } = room(110, [...Array(24).fill(full), ...Array(6).fill(part)], 'NAAR_RATO');
     expect(maxSum).toBeGreaterThanOrEqual(110);

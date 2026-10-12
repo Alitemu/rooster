@@ -138,18 +138,10 @@ def test_hard_rules_hold_on_a_random_period(seed):
         objective_mode=case['objective'],
         random_seed=seed,
     )
-    status = result['diagnostics'].get('solver_status')
-    if not result['success'] and case['objective'] == 'lexicographic' and status == 'UNKNOWN':
-        # Finding (audit 6): in lexicographic mode every phase starts its
-        # search from scratch under the bounds of the phases before it, and
-        # when a later one (2b, "totale afwijking") finds nothing in its
-        # fifth of the time, the whole run returns no roster at all - the
-        # optimal roster phases 1 and 2 had already found is thrown away
-        # (solver.py _solve_lexicographic). Seeds 129 and 130 here, at 2
-        # seconds a phase. Remove this once a failed later phase falls back
-        # to the previous phase's solution (and passes it on as a hint).
-        pytest.xfail('lexicographic phase found nothing in its time slice; earlier solution discarded')
-    assert result['success'], f'seed {seed}: {status}'
+    # Audit 6: in lexicographic mode a later phase that found nothing in its
+    # slice of the time used to throw away the roster the phases before it
+    # had found, and return none at all (seeds 129 and 130 here).
+    assert result['success'], f"seed {seed}: {result['diagnostics'].get('solver_status')}"
     slot_by_id = {s['id']: s for s in case['slots']}
     assignments = result['assignments']
 
@@ -164,9 +156,8 @@ def test_hard_rules_hold_on_a_random_period(seed):
         assert (a['person_id'], a['slot_id']) not in case['blocked'], f'seed {seed}: ABSOLUUT broken {a}'
 
     # Window rule, with the previous period's tail and the shifts filled in
-    # beforehand. From 2 weeks: 0 and 1 both switch it off (see the test
-    # below for why 1 is a finding).
-    if case['window'] >= 2:
+    # beforehand. 0 switches it off; 1 is one shift a week.
+    if case['window'] >= 1:
         weeks = {p: [] for p in case['people']}
         for a in assignments:
             weeks[a['person_id']].append(week_ordinal(slot_by_id[a['slot_id']]['datum']))
@@ -193,15 +184,10 @@ def test_hard_rules_hold_on_a_random_period(seed):
     assert unfilled == set(slot_by_id) - set(taken), f'seed {seed}: unfilled report does not match'
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    'Finding (audit 6): window_weeks = 1 switches the window rule off '
-    '(constraints.py, lib/windowRule.ts), while the capacity check '
-    '(lib/capacity.ts: floor(weeks / windowWeeks)) and the constraint\'s own '
-    'docstring ("at most one assignment in any run of window_weeks '
-    'consecutive weeks") read it as one shift a week. Found by the random '
-    'test above (seed 2: three avonddiensten on three days in one week). '
-    'Remove the mark once 1 means one a week, or once the setting starts at 2.'
-))
+# Audit 6: window_weeks = 1 used to switch the rule off (constraints.py,
+# lib/windowRule.ts), while the capacity check and the constraint's own
+# docstring read it as one shift a week - the random test above found three
+# avonddiensten on three days in one week (seed 2).
 def test_a_window_of_one_week_means_at_most_one_shift_a_week():
     slots = []
     for i, d in enumerate(['2027-01-04', '2027-01-05', '2027-01-06']):

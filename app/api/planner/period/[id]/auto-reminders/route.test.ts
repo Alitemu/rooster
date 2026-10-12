@@ -64,7 +64,11 @@ afterEach(() => {
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(poolId);
     db.prepare('DELETE FROM dienstrooster_ruleset WHERE id = ?').run(pool.ruleset_id);
   }
-  for (const id of created.people) db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(id);
+  for (const id of created.people) {
+    // Audit rows they wrote as planner point at them (lib/auditLog.ts).
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(id);
+    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(id);
+  }
   created.periods = [];
   created.pools = [];
   created.people = [];

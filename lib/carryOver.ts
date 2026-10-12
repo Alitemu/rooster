@@ -29,6 +29,8 @@ import {
   countSlotsByTeller,
   resolvePeriodBands,
   resolveRulesetConfig,
+  scaledBandForMember,
+  type BandMember,
   type Teller,
 } from '@/lib/rosterBands';
 import { getFellowIds } from '@/lib/fellows';
@@ -89,25 +91,25 @@ export function findPreviousPublishedPeriod(
  * somebody who joined afterwards has nothing to carry.
  */
 export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
-  const members = db
+  // One row per person (the first membership overlapping the period), the
+  // same way generate-roster picks it.
+  const rows = db
     .prepare(
-      `SELECT p.id FROM dienstrooster_pool_membership pm
+      `SELECT p.id, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot FROM dienstrooster_pool_membership pm
        JOIN dienstrooster_person p ON p.id = pm.person_id
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
     )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string }>;
+    .all(period.pool_id, period.eind_datum, period.start_datum) as BandMember[];
+  const members = [...new Map(rows.map((m) => [m.id, m])).values()];
 
   if (members.length === 0) return [];
 
   // The same bands the solver built this period with: fellows don't count
   // for the weekend, so everyone else's WEEKEND band was raised.
   const fellows = getFellowIds(period.id);
-  const bands = resolvePeriodBands(
-    resolveRulesetConfig(period),
-    countSlotsByTeller(period.id),
-    members.length,
-    members.filter((m) => fellows.has(m.id)).length
-  );
+  const config = resolveRulesetConfig(period);
+  const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
+  const bands = resolvePeriodBands(config, countSlotsByTeller(period.id), members, fellows, period, distributionMode);
 
   const actualRows = db
     .prepare(
@@ -142,7 +144,6 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
   for (const member of members) {
     for (const teller of TELLERS) {
       const key = `${member.id}|${teller}`;
-      const [min, max] = bands[teller];
       const shift = prior.get(key) || 0;
       const count = actual.get(key) || 0;
 
@@ -156,8 +157,14 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
         continue;
       }
 
-      const adjustedMin = min + shift;
-      const adjustedMax = max + shift;
+      // Their own target, scaled for joining or leaving halfway and, under
+      // NAAR_RATO, for their deelnamefactor - the band the solver held them
+      // to. Against the period's flat band someone who worked exactly
+      // their own streefaantal was booked a debt that grew every period
+      // (audit 6).
+      const [ownMin, ownMax] = scaledBandForMember(bands, teller, member, period, distributionMode);
+      const adjustedMin = ownMin + shift;
+      const adjustedMax = ownMax + shift;
 
       // Measured against the band itself, not its midpoint. The band is
       // what the person was actually promised ("you receive 8 or 9 evening

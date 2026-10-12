@@ -135,7 +135,7 @@ describe('one line of free text (codenaam, period name)', () => {
         expect(result.value).toBe(result.value.trim());
         expect(result.value.length).toBeGreaterThan(0);
         expect(result.value.length).toBeLessThanOrEqual(max);
-        expect(result.value).not.toMatch(/[\u0000-\u001F\u007F\u2028\u2029]/);
+        expect(result.value).not.toMatch(/[\p{Cc}\p{Cf}\u2028\u2029]/u);
         expect(validateSingleLine(result.value, 'Naam', max)).toEqual(result);
       }),
       { numRuns: 2000 }
@@ -154,15 +154,13 @@ describe('one line of free text (codenaam, period name)', () => {
     );
   });
 
-  // Finding (audit 6): the message promises "geen onzichtbare tekens", but
-  // zero-width and direction-changing characters get through. A codenaam
-  // "Persoon-01" + U+200B looks exactly like "Persoon-01" on screen yet is a
-  // different person to the database and to the flow's Excel lookup, which
-  // then finds no mailbox; U+202E turns text around in the mail. Flip to
-  // `it` once vrijeTekst.ts refuses them.
-  it.fails('refuses invisible characters that make two names look the same', () => {
+  // Audit 6: zero-width and direction-changing characters got through,
+  // though the message promises "geen onzichtbare tekens": "Persoon-01" +
+  // U+200B looked exactly like "Persoon-01" but was a different person to
+  // the database and the flow's Excel lookup.
+  it('refuses invisible characters that make two names look the same', () => {
     for (const ch of ['\u200b', '‌', '‍', '⁠', '\ufeff', '­', '‎', '\u202e', '⁦']) {
-      expect(validateSingleLine(`Persoon-01${ch}`, 'Codenaam', 40).valid, JSON.stringify(ch)).toBe(false);
+      expect(validateSingleLine(`Persoon-${ch}01`, 'Codenaam', 40).valid, JSON.stringify(ch)).toBe(false);
     }
   });
 });
@@ -255,13 +253,11 @@ describe('readFirstSheet: an uploaded workbook', () => {
     );
   });
 
-  // Finding (audit 6): fast-check found this one by itself - two bytes
-  // changed, one of them in the packed sheet, and the reader spends 71
-  // seconds filling an array before throwing "Invalid array length"
-  // instead of refusing the file. Same cause as the column finding below.
-  // Skipped only because that takes 71 seconds; turn it back on with the
-  // column fix, which must make it pass quickly.
-  it.skip('a damaged file is refused with a message, never another kind of error', () => {
+  // Audit 6: fast-check found [[815, 144], [4, 0]] by itself - two bytes
+  // changed, one in the packed sheet, and the reader spent 71 seconds
+  // filling an array before throwing "Invalid array length". Kept as the
+  // first example tried.
+  it('a damaged file is refused with a message, never another kind of error', () => {
     const good = buildXlsx([['Codenaam', 'Datum'], ['Persoon-01', 46000]], { deflate: true });
     fc.assert(
       fc.property(fc.array(fc.tuple(fc.nat(good.length - 1), fc.integer({ min: 0, max: 255 })), { minLength: 1, maxLength: 8 }), (edits) => {
@@ -282,28 +278,29 @@ describe('readFirstSheet: an uploaded workbook', () => {
     return buildXlsx([['x']], { deflate: true, sheetOverride: { packed: zlib.deflateRawSync(raw), size: raw.length } });
   };
 
-  // Finding (audit 6): a character reference beyond Unicode throws a
-  // RangeError instead of an XlsxError, so the import answers 500.
-  it.fails('refuses a character reference that is not a character', () => {
+  // Audit 6: a character reference beyond Unicode threw a RangeError, so
+  // the import answered 500.
+  it('refuses a character reference that is not a character', () => {
     expect(() => readFirstSheet(sheet('<row r="1"><c r="A1" t="inlineStr"><is><t>&#99999999;</t></is></c></row>'))).toThrow(XlsxError);
   });
 
-  // Finding (audit 6): the column of a cell reference is used as an array
-  // length. Excel stops at XFD (16384); "ZZZZZ1" already takes seconds and a
-  // few more letters exhaust the server's memory.
-  it.fails('refuses a column beyond what Excel has, at once', () => {
+  // Audit 6: the column of a cell reference was used as an array length.
+  // Excel stops at XFD (16384); "ZZZZZ1" took seconds and a few more
+  // letters exhausted the server's memory.
+  it('refuses a column beyond what Excel has, at once', () => {
     const start = Date.now();
     expect(() => readFirstSheet(sheet('<row r="1"><c r="XFE1"><v>1</v></c></row>'))).toThrow(XlsxError);
     expect(Date.now() - start).toBeLessThan(200);
   });
 
-  // Finding (audit 6): rows and cells are found with lazy regular
-  // expressions, quadratic on rows that never close: 20 000 take a
-  // second, 40 000 four. 20 MB of "<row>" packs into a 29 kB upload and
-  // holds the server for hours.
-  it.fails('reads a sheet in time proportional to its size', () => {
-    const start = Date.now();
-    readFirstSheet(sheet('<row>'.repeat(20_000)));
-    expect(Date.now() - start).toBeLessThan(300);
+  // Audit 6: rows and cells were found with lazy regular expressions,
+  // quadratic on rows that never close: 20 000 took a second, 40 000 four.
+  // 20 MB of "<row>" packs into a 29 kB upload; it must not hold the server.
+  it('reads a sheet in time proportional to its size', () => {
+    for (const xml of ['<row>'.repeat(1_000_000), `<row>${'<c r="A1"><v>'.repeat(200_000)}`, `<row><c t="inlineStr"><is>${'<t>'.repeat(200_000)}`]) {
+      const start = Date.now();
+      readFirstSheet(sheet(xml));
+      expect(Date.now() - start).toBeLessThan(1500);
+    }
   }, 30_000);
 });

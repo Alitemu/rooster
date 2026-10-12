@@ -110,8 +110,12 @@ class ConstraintBuilder:
         """
         self.violations['window_rule'] = 0
 
-        if window_weeks <= 1:
-            return  # No window constraint for 1-week
+        # 0 switches the rule off. 1 means one shift a week at most - what
+        # the capacity check (lib/capacity.ts: floor(weeks / windowWeeks))
+        # and this docstring always said; it used to switch the rule off
+        # too, and a person could get three evenings in one week (audit 6).
+        if window_weeks <= 0:
+            return
 
         relevant_slots = slots if counters is None else [s for s in slots if s.get('shift_type_name') in counters]
 
@@ -281,7 +285,7 @@ class ConstraintBuilder:
         it, and only slots whose shift_type_name is in it, participate in
         THIS call.
         """
-        if window_weeks <= 1 or not prior_assignments:
+        if window_weeks <= 0 or not prior_assignments:
             return
 
         relevant_slots = slots if counters is None else [s for s in slots if s.get('shift_type_name') in counters]

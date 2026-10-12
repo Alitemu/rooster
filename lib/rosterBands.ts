@@ -144,7 +144,10 @@ export function resolveBands(
   const defaultBand = (teller: Teller): Band => {
     const total = slotCountByTeller[teller];
     if (total <= 0) return [0, 0];
-    const avg = total / Math.max(peopleCount, 1);
+    // peopleCount is the effective headcount (effectiveHeadcount), which
+    // can be a fraction: two people who are each there half the period
+    // count as one.
+    const avg = peopleCount > 0 ? total / peopleCount : total;
     const n = Math.floor(avg);
     return [n, n + 1];
   };
@@ -167,6 +170,39 @@ export interface CoverageAwareMember {
   deelnamefactor: number;
   geldig_vanaf: string;
   geldig_tot: string;
+}
+
+export interface BandMember extends CoverageAwareMember {
+  id: string;
+}
+
+/**
+ * How many people a period's shifts are really shared by: each member
+ * counts for the part of the period they are a member (coverage), and
+ * under NAAR_RATO for their deelnamefactor as well - exactly the two
+ * factors scaledBandForMember then scales each person's band by.
+ *
+ * The band used to be worked out over the plain headcount. With someone
+ * joining or leaving halfway (or a part-timer under NAAR_RATO) everyone's
+ * maximum then added up to fewer shifts than there were, and since the
+ * solver never goes past a maximum, shifts stayed empty that others had
+ * room for (audit 6: 30 people, 110 avonddiensten, 6 of them half the
+ * period - bereik 3 of 4, maximums together 108, 2 shifts unfilled). Over
+ * the effective headcount the maximums always cover every shift and the
+ * minimums never ask for more than there are (lib/calendarRules.test.ts).
+ */
+export function effectiveHeadcount(
+  members: CoverageAwareMember[],
+  period: { start_datum: string; eind_datum: string },
+  distributionMode: string
+): number {
+  return members.reduce(
+    (sum, m) =>
+      sum +
+      computeCoverageFactor(m.geldig_vanaf, m.geldig_tot, period.start_datum, period.eind_datum) *
+        (distributionMode === 'NAAR_RATO' ? (m.deelnamefactor ?? 1) : 1),
+    0
+  );
 }
 
 /**
@@ -217,7 +253,8 @@ export function scaledBandForMember(
  * Fellows don't do weekends, so the weekend shifts are shared by the
  * others only and their WEEKEND band goes up:
  * - a band the ruleset names explicitly (set when the period was created,
- *   over everyone) is scaled by people / (people - fellows), floor for the
+ *   over everyone) is scaled by everyone / the others (effective
+ *   headcounts, effectiveHeadcount), floor for the
  *   minimum and ceil for the maximum like every other band scaling here;
  * - without one, the usual default is worked out over the non-fellows.
  * AVOND and FEESTDAG are unchanged: fellows do those like everyone else.
@@ -225,16 +262,24 @@ export function scaledBandForMember(
 export function resolvePeriodBands(
   config: Record<string, unknown>,
   slotCountByTeller: Record<Teller, number>,
-  peopleCount: number,
-  fellowCount: number
+  members: BandMember[],
+  fellowIds: ReadonlySet<string>,
+  period: { start_datum: string; eind_datum: string },
+  distributionMode: string
 ): BandsByTeller {
-  const bands = resolveBands(config, slotCountByTeller, peopleCount);
-  const others = peopleCount - fellowCount;
+  const everyone = effectiveHeadcount(members, period, distributionMode);
+  const bands = resolveBands(config, slotCountByTeller, everyone);
+  const fellowCount = members.filter((m) => fellowIds.has(m.id)).length;
+  const others = effectiveHeadcount(
+    members.filter((m) => !fellowIds.has(m.id)),
+    period,
+    distributionMode
+  );
   if (fellowCount <= 0 || others <= 0) return bands;
 
   const configured = config.bandWeekend;
   if (Array.isArray(configured) && configured.length === 2) {
-    const factor = peopleCount / others;
+    const factor = everyone / others;
     const min = Math.floor(bands.WEEKEND[0] * factor);
     bands.WEEKEND = [min, Math.max(min, Math.ceil(bands.WEEKEND[1] * factor))];
   } else {
@@ -296,12 +341,7 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
   const released = releasedWeekendDays(periodId);
   const config = resolveRulesetConfig(period);
   const distributionMode = typeof config.distributionMode === 'string' ? config.distributionMode : 'GELIJK';
-  const bands = resolvePeriodBands(
-    config,
-    countSlotsByTeller(periodId),
-    members.length,
-    members.filter((m) => fellows.has(m.id)).length
-  );
+  const bands = resolvePeriodBands(config, countSlotsByTeller(periodId), members, fellows, period, distributionMode);
 
   const deltas = new Map<string, number>();
   for (const row of db

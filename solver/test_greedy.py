@@ -101,6 +101,37 @@ def test_window_rule_holds(variant):
 
 
 @pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+@pytest.mark.parametrize('window_weeks,per_week', [(1, 1), (0, 2)])
+def test_a_window_of_one_week_means_at_most_one_shift_a_week(variant, window_weeks, per_week):
+    """
+    Hard rule: window_weeks=1 is "at most one shift in any one week", the
+    same as the CP-SAT model (constraints.py); only 0 switches the rule off.
+    The greedy planner used to treat 1 as off, so one person could get a
+    Monday and a Thursday of the same week. Two slots a week, one person
+    who may take them all: 1 leaves one a week, 0 lets both through.
+    """
+    slots = []
+    for w in range(4):
+        monday = date.fromisocalendar(2027, w + 1, 1)
+        for offset, suffix in ((0, 'ma'), (3, 'do')):
+            d = monday + timedelta(days=offset)
+            slots.append({
+                **make_slots(1)[0],
+                'id': f'slot-w{w + 1}-{suffix}',
+                'datum': d.isoformat(),
+                'iso_week': w + 1,
+            })
+
+    result = run(['p1'], slots, window_weeks=window_weeks, variant=variant)
+
+    per_iso_week: dict[int, int] = {}
+    for a in result['assignments']:
+        week = int(a['slot_id'].split('-')[1].removeprefix('w'))
+        per_iso_week[week] = per_iso_week.get(week, 0) + 1
+    assert per_iso_week == {1: per_week, 2: per_week, 3: per_week, 4: per_week}, per_iso_week
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
 def test_holiday_spread_holds(variant):
     """
     Hard rule: holiday_spread_weeks must keep this one person's FEESTDAG

@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { setPendingUndo } from '@/lib/pendingUndo';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
@@ -133,6 +134,14 @@ export async function PATCH(
     db.prepare(
       `UPDATE dienstrooster_pool_membership SET geldig_vanaf = ?, geldig_tot = ?, deelnamefactor = ? WHERE id = ?`
     ).run(geldig_vanaf, geldig_tot, deelnamefactor, membershipId);
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'pool_membership',
+      entiteitId: membershipId,
+      actie: 'UPDATE',
+      oud: { geldig_vanaf: membership.geldig_vanaf, geldig_tot: membership.geldig_tot, deelnamefactor: membership.deelnamefactor },
+      nieuw: { wijziging: 'lidmaatschap gewijzigd', person_id: membership.person_id, geldig_vanaf, geldig_tot, deelnamefactor },
+    });
 
     // A widened range can bring the person into a period that is already
     // open - same backfill as adding a member (see members/route.ts).
@@ -177,6 +186,21 @@ export async function DELETE(
 
     db.transaction(() => {
       db.prepare('DELETE FROM dienstrooster_pool_membership WHERE id = ?').run(membershipId);
+      writeAuditLog({
+        actorId: auth!.userId,
+        entiteit: 'pool_membership',
+        entiteitId: membershipId,
+        actie: 'DELETE',
+        oud: {
+          wijziging: 'lid verwijderd',
+          pool_id: poolId,
+          person_id: membership.person_id,
+          codenaam: person?.codenaam ?? null,
+          deelnamefactor: membership.deelnamefactor,
+          geldig_vanaf: membership.geldig_vanaf,
+          geldig_tot: membership.geldig_tot,
+        },
+      });
 
       // Undoing this means re-creating the exact same membership row - the
       // staleness check in the pool's own undo-last route refuses unless

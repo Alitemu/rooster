@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { parseISO } from '@/lib/holidays';
@@ -162,6 +163,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const now = new Date().toISOString();
 
     insertStmt.run(periodId, naam, body.pool_id, body.start_datum, body.eind_datum, body.deadline, now);
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'period',
+      entiteitId: periodId,
+      actie: 'CREATE',
+      nieuw: { naam, pool_id: body.pool_id, start_datum: body.start_datum, eind_datum: body.eind_datum, deadline: body.deadline },
+      now,
+    });
 
     const response: ApiSuccessResponse<CreatePeriodResponse> = {
       success: true,

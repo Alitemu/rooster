@@ -70,7 +70,7 @@ export function personWouldViolateWindowRule(
   windows: WindowWeeksConfig,
   excludeSlotId?: string
 ): boolean {
-  if (windows.avond <= 1 && windows.weekendFeestdag <= 1) return false;
+  if (windows.avond <= 0 && windows.weekendFeestdag <= 0) return false;
 
   const rows = db
     .prepare(
@@ -87,7 +87,7 @@ export function personWouldViolateWindowRule(
 
   return rows.some((r) => {
     const required = requiredGapWeeks(targetTeller, r.teller, windows);
-    return required > 1 && isoWeeksApart(r.iso_jaar, r.iso_week, targetIsoYear, targetIsoWeek) < required;
+    return required > 0 && isoWeeksApart(r.iso_jaar, r.iso_week, targetIsoYear, targetIsoWeek) < required;
   });
 }
 
@@ -120,7 +120,7 @@ interface TimedShift {
  * not a violation this period's publication introduces.
  */
 export function countWindowRuleViolations(periodId: string, windows: WindowWeeksConfig): number {
-  if (windows.avond <= 1 && windows.weekendFeestdag <= 1) return 0;
+  if (windows.avond <= 0 && windows.weekendFeestdag <= 0) return 0;
 
   const current = db
     .prepare(
@@ -158,7 +158,7 @@ export function countWindowRuleViolations(periodId: string, windows: WindowWeeks
         const b = shifts[j];
         if (!a.isCurrent && !b.isCurrent) continue; // both history - not this roster's doing
         const required = requiredGapWeeks(a.teller, b.teller, windows);
-        if (required > 1 && isoWeeksApart(a.iso_jaar, a.iso_week, b.iso_jaar, b.iso_week) < required) {
+        if (required > 0 && isoWeeksApart(a.iso_jaar, a.iso_week, b.iso_jaar, b.iso_week) < required) {
           violations++;
         }
       }
@@ -182,7 +182,7 @@ export function getWindowConflictingPersonIds(
   windows: WindowWeeksConfig,
   excludeSlotId?: string
 ): Set<string> {
-  if (windows.avond <= 1 && windows.weekendFeestdag <= 1) return new Set();
+  if (windows.avond <= 0 && windows.weekendFeestdag <= 0) return new Set();
 
   const rows = db
     .prepare(
@@ -203,7 +203,7 @@ export function getWindowConflictingPersonIds(
   const conflicting = new Set<string>();
   for (const row of rows) {
     const required = requiredGapWeeks(targetTeller, row.teller, windows);
-    if (required > 1 && isoWeeksApart(row.iso_jaar, row.iso_week, targetIsoYear, targetIsoWeek) < required) {
+    if (required > 0 && isoWeeksApart(row.iso_jaar, row.iso_week, targetIsoYear, targetIsoWeek) < required) {
       conflicting.add(row.person_id);
     }
   }

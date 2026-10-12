@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { autoReminderStatus } from '@/lib/autoReminders';
 
 function notFound(): NextResponse {
@@ -31,7 +32,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
   try {
-    if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) return unauthorizedResponse();
     const body = await parseJsonBody<{ aan: boolean }>(req);
     if (typeof body.aan !== 'boolean') {
       return NextResponse.json(
@@ -43,6 +45,13 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       .prepare('UPDATE dienstrooster_schedule_period SET auto_herinneren = ? WHERE id = ?')
       .run(body.aan ? 1 : 0, id);
     if (info.changes === 0) return notFound();
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'period',
+      entiteitId: id,
+      actie: 'UPDATE',
+      nieuw: { wijziging: body.aan ? 'automatische herinneringen aan' : 'automatische herinneringen uit', auto_herinneren: body.aan },
+    });
     return NextResponse.json({ success: true, data: autoReminderStatus(id) });
   } catch (error) {
     return internalErrorResponse('auto-reminders-toggle', error);

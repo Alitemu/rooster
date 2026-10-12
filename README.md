@@ -199,7 +199,8 @@ Belangrijkste tabellen:
 ### Feestdagberekening
 
 Alle Nederlandse feestdagen berekend met het Meeus-algoritme
-(`lib/holidays.ts`, gespiegeld in `solver/holidays.py`):
+(`lib/holidays.ts`; de solver rekent zelf geen feestdagen uit, hij krijgt
+ze mee met de diensten):
 Nieuwjaarsdag, Pasen (en gerelateerde dagen), Koningsdag (met
 zondagcorrectie), Bevrijdingsdag (elke 5 jaar), Hemelvaart, Pinksteren,
 Kerst.
@@ -231,11 +232,15 @@ Formule 2 is meestal het beperkendst.
 ### Roostergeneratie (solver)
 
 De Python-solver (CP-SAT via OR-Tools) genereert een rooster dat nooit een
-harde regel schendt (ABSOLUUT-blokkade, twee diensten in dezelfde ISO-week,
-de vensterregel, het streefbereik) en levert bij schaarste een gedeeltelijk
+harde regel schendt (ABSOLUUT-blokkade, de vensterregel, het streefbereik)
+en levert bij schaarste een gedeeltelijk
 rooster op in plaats van alles-of-niets - de planner vult de resterende
 gaten handmatig aan, met duidelijke aanduiding wie een gat wél of niet mag
 invullen.
+
+Een venster van N weken betekent: hoogstens één dienst in elke N
+opeenvolgende weken. Bij 1 is dat één dienst per week, dus nooit twee in
+dezelfde ISO-week. Bij 0 geldt geen vensterregel.
 
 ## Conventies
 

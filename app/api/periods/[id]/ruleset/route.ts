@@ -34,6 +34,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
@@ -207,6 +208,19 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       };
       return NextResponse.json(response, { status: 409 });
     }
+
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'period',
+      entiteitId: id,
+      actie: 'UPDATE',
+      oud: { status: period.status, ruleset: config },
+      nieuw: {
+        wijziging: 'regels gewijzigd',
+        status: period.status === 'GEGENEREERD' ? 'OPEN' : period.status,
+        ruleset: updated,
+      },
+    });
 
     // Re-read rather than compute (period.row_version + 1) - when
     // rowVersion was omitted, the UPDATE has no version guard, so the

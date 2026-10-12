@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
@@ -47,6 +48,14 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
        SET status = 'GESLOTEN', row_version = row_version + 1
        WHERE id = ?`
     ).run(id);
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'period',
+      entiteitId: id,
+      actie: 'UPDATE',
+      oud: { status: 'OPEN' },
+      nieuw: { wijziging: 'periode gesloten', status: 'GESLOTEN' },
+    });
 
     const response: ApiSuccessResponse<{ status: string }> = {
       success: true,

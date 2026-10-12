@@ -14,6 +14,7 @@ import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface StaffLinkMeta {
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const periodId = params.id;
     const body = await parseJsonBody<CreateLinkRequest>(req);
 
-    if (!body.person_id) {
+    if (!body.person_id || typeof body.person_id !== 'string') {
       const response: ApiErrorResponse = {
         success: false,
         error: {
@@ -167,6 +168,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const now = new Date().toISOString();
 
     insertStmt.run(linkId, body.person_id, periodId, tokenHash, now);
+    // The link itself (token or hash) stays out of the log: who got a link for which period is enough.
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'person_access_link',
+      entiteitId: linkId,
+      actie: 'CREATE',
+      nieuw: { wijziging: 'persoonlijke link aangemaakt', person_id: body.person_id, periode_id: periodId },
+      now,
+    });
 
     const response: ApiSuccessResponse<{ token: string; person_codenaam: string }> = {
       success: true,

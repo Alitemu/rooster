@@ -20,10 +20,15 @@
  * value enters the system.
  */
 
-// Control characters (including newline and tab) plus the Unicode line and
-// paragraph separators. These survive a `.trim()` in the middle of a
-// string and are what corrupt CSV rows, header lines and Excel lookups.
-const CONTROL_CHARS = /[\u0000-\u001F\u007F\u2028\u2029]/;
+// Control characters (Cc: newline, tab, C1 controls), the Unicode line and
+// paragraph separators, and format characters (Cf: zero-width spaces and
+// joiners, the soft hyphen, the byte order mark and the marks that change
+// reading direction). The first corrupt CSV rows, header lines and Excel
+// lookups; the last are invisible, so "Persoon-01" with a zero-width space
+// looked exactly like "Persoon-01" while being a different person to the
+// database and to the flow's sheet, and a direction mark could turn text
+// around in a mail (audit 6).
+const CONTROL_CHARS = /[\p{Cc}\p{Cf}\u2028\u2029]/u;
 
 /**
  * Long enough for the names a ward actually uses ("2027-1",

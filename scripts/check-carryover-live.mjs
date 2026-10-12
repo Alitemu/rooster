@@ -58,7 +58,7 @@ async function req(method, path, { jar, body } = {}) {
   return { status: res.status, json };
 }
 
-const RULESET = { windowWeeks: 1, distributionMode: 'EVEN' }; // no explicit bands -> derived from real slot counts
+const RULESET = { windowWeeks: 0, distributionMode: 'EVEN' }; // no explicit bands -> derived from real slot counts
 
 // scripts/seed.ts sets PLANNER to DEFAULT_TEST_PASSWORD directly (see its
 // comment) - this only ever exercises the "already claimed" 409 path now,

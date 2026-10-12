@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePoolRequest {
@@ -49,6 +50,13 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       body.actief ? 1 : 0,
       poolId
     );
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'pool',
+      entiteitId: poolId,
+      actie: 'UPDATE',
+      nieuw: { wijziging: body.actief ? 'pool aangezet' : 'pool uitgezet', actief: !!body.actief },
+    });
 
     const response: ApiSuccessResponse<{ id: string; actief: boolean }> = {
       success: true,

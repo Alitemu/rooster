@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { parseISO } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
@@ -43,8 +44,8 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
 
     const period = db
-      .prepare('SELECT id, status, start_datum, row_version FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(id) as { id: string; status: string; start_datum: string; row_version: number } | undefined;
+      .prepare('SELECT id, status, start_datum, deadline, row_version FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(id) as { id: string; status: string; start_datum: string; deadline: string; row_version: number } | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
@@ -149,6 +150,15 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       };
       return NextResponse.json(response, { status: 409 });
     }
+
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'period',
+      entiteitId: id,
+      actie: 'UPDATE',
+      oud: { deadline: period.deadline },
+      nieuw: { wijziging: 'deadline gewijzigd', deadline: body.deadline },
+    });
 
     // Re-read rather than compute (period.row_version + 1) - when
     // rowVersion was omitted, the UPDATE has no version guard, so the

@@ -9,6 +9,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { optionalText } from '@/lib/requestFields';
 import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
@@ -29,6 +30,9 @@ export async function DELETE(
     const body = await parseJsonBody(request);
     const { reason } = body;
     const now = new Date().toISOString();
+    if (!optionalText(reason).ok) {
+      return NextResponse.json({ success: false, error: 'De reden moet tekst zijn' }, { status: 400 });
+    }
 
     // Verify period exists
     const period = db

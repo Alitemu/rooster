@@ -17,6 +17,7 @@ import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { validateCodenaam } from '@/lib/codenaam';
 import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -198,6 +199,21 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
          VALUES (?, ?, ?, ?, ?, ?)`
       ).run(membershipId, person.id, poolId, deelnamefactor, body.geldig_vanaf, body.geldig_tot);
+      writeAuditLog({
+        actorId: auth!.userId,
+        entiteit: 'pool_membership',
+        entiteitId: membershipId,
+        actie: 'CREATE',
+        nieuw: {
+          wijziging: 'lid toegevoegd',
+          pool_id: poolId,
+          person_id: person.id,
+          codenaam,
+          deelnamefactor,
+          geldig_vanaf: body.geldig_vanaf,
+          geldig_tot: body.geldig_tot,
+        },
+      });
 
       return { conflict: null, membershipId, personId: person.id };
     });

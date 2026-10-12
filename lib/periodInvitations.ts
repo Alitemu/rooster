@@ -135,7 +135,7 @@ ${personalLink}
 
 Je voorkeuren moeten uiterlijk ${formatDeadline(period.deadline)} binnen zijn.
 
-Werk je vaste dagen niet, of heb je vakantie of ander verlof? Geef dat op bij de eerste stap, Deeltijd. Die dagen worden dan automatisch geblokkeerd.
+Werk je vaste dagen niet? Of heb je vakantie of ander verlof? Geef dat op bij de eerste stap, Deeltijd. Die dagen worden dan automatisch geblokkeerd.
 
 Deze link is alleen voor jou. Stuur hem niet door. Ben je hem kwijt? Op ${startpagina(personalLink)} vraag je bij "Link kwijt?" een nieuwe aan met je werk-e-mailadres.
 

@@ -26,6 +26,7 @@ import {
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { objectRows, rowText, badRequest } from '@/lib/requestFields';
 import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
@@ -63,8 +64,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const actorId = auth!.userId;
 
     const { id } = params;
-    const body = (await parseJsonBody(req)) as { rows?: ImportRow[] };
-    const rows = body.rows || [];
+    const body = await parseJsonBody<{ rows?: unknown }>(req);
+    const rows = objectRows(body.rows) as ImportRow[] | null;
+    if (rows === null) return badRequest('INVALID_ROWS', 'De rijen moeten een lijst zijn');
 
     const period = db
       .prepare(
@@ -119,9 +121,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const importAll = db.transaction((importRows: ImportRow[]) => {
       importRows.forEach((row, i) => {
         const rowNum = i + 1;
-        const datum = (row.datum || '').trim();
-        const tellerRaw = (row.teller || '').trim();
-        const codenaam = (row.codenaam || '').trim();
+        const datum = rowText(row.datum);
+        const tellerRaw = rowText(row.teller);
+        const codenaam = rowText(row.codenaam);
 
         if (!isValidIsoDate(datum)) {
           errors.push(`Rij ${rowNum}: "${row.datum}" is geen geldige datum (JJJJ-MM-DD), overgeslagen`);

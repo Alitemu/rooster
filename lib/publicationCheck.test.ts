@@ -74,13 +74,13 @@ function createPeriod(
 ): { period: Period; slotIds: string[] } {
   // Most tests below build a roster with fillEvenly(), which round-robins
   // slotIds - a weekly-recurring shape for whoever holds a fixed position
-  // in the rotation. That is exactly what a windowWeeks >= 2 rule exists to
+  // in the rotation. That is exactly what a windowWeeks >= 1 rule exists to
   // forbid, and none of these tests are about the window rule; they are
-  // about slots_filled/band_compliance/hard-blocking. windowWeeks: 1 (a
+  // about slots_filled/band_compliance/hard-blocking. windowWeeks: 0 (a
   // real, legitimate setting - "no window rule") keeps
   // countWindowRuleViolations a no-op unless a test overrides it, the same
   // way createPool's other defaults keep unrelated checks out of the way.
-  const windowDefault = { windowWeeks: 1 };
+  const windowDefault = { windowWeeks: 0 };
   const rulesetConfig = frozen ? { ...windowDefault, ...frozen } : frozen;
 
   const periodId = crypto.randomUUID();
@@ -552,7 +552,7 @@ describe('runPublicationCheck', () => {
 
   it('warns about a window-rule violation without blocking, the same way as the ABSOLUUT override', () => {
     const ctx = createPool(7, { bandAvond: [4, 4] });
-    // windowWeeks: 2 explicitly, overriding createPeriod's windowWeeks: 1
+    // windowWeeks: 2 explicitly, overriding createPeriod's windowWeeks: 0
     // default - this is the one test in the file that means to exercise
     // the window rule.
     const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [4, 4], windowWeeks: 2 });

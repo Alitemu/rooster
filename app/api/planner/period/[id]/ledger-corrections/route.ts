@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { objectRows, badRequest } from '@/lib/requestFields';
 import { validateLedgerDelta } from '@/lib/ledgerDelta';
 import { validateSingleLine } from '@/lib/vrijeTekst';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
@@ -47,8 +48,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
 
     const periodId = params.id;
-    const body = (await parseJsonBody(req)) as { corrections?: CorrectionInput[] };
-    const corrections = body.corrections || [];
+    const body = await parseJsonBody<{ corrections?: unknown }>(req);
+    const corrections = objectRows(body.corrections) as CorrectionInput[] | null;
+    if (corrections === null) return badRequest('INVALID_CORRECTION', 'De correcties moeten een lijst zijn');
 
     const period = db
       .prepare('SELECT id, pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     );
 
     for (const c of corrections) {
-      if (!c.person_id || !c.reden || !Number.isInteger(c.aantal) || c.aantal === 0) {
+      if (typeof c.person_id !== 'string' || !c.person_id || !c.reden || !Number.isInteger(c.aantal) || c.aantal === 0) {
         const response: ApiErrorResponse = {
           success: false,
           error: { code: 'INVALID_CORRECTION', message: 'Elke correctie heeft een persoon, reden en een aantal ongelijk aan 0 nodig' },

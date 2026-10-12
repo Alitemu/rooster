@@ -19,12 +19,9 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { optionalText } from '@/lib/requestFields';
 import { getPendingUndo, clearPendingUndo } from '@/lib/pendingUndo';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
-
-interface UndoRequest {
-  reason?: string;
-}
 
 export async function POST(
   request: NextRequest,
@@ -38,8 +35,12 @@ export async function POST(
     }
     const actorId = auth!.userId;
     const periodId = params.id;
-    const body = await parseJsonBody<UndoRequest>(request);
-    const reason = body.reason?.trim() || null;
+    const body = await parseJsonBody<{ reason?: unknown }>(request);
+    const reasonField = optionalText(body.reason);
+    if (!reasonField.ok) {
+      return NextResponse.json({ success: false, error: 'De reden moet tekst zijn' }, { status: 400 });
+    }
+    const reason = reasonField.value?.trim() || null;
     const now = new Date().toISOString();
 
     const pending = getPendingUndo(periodId);

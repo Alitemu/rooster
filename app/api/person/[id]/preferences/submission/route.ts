@@ -45,7 +45,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     const { period_id } = body;
 
-    if (!period_id) {
+    if (!period_id || typeof period_id !== 'string') {
       const response: ApiErrorResponse = {
         success: false,
         error: {
