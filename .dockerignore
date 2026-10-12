@@ -54,3 +54,8 @@ backups
 **/.setup_token_hash
 .test-data
 coverage
+# The updater's notes (lib/appUpdate.ts), when the app ran from this folder.
+update
+# The other images' own folders.
+updater
+caddy

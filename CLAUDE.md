@@ -702,24 +702,56 @@ stored or logged.
 pruned after the build; `.npmrc` sets legacy-peer-deps because npm 10
 crashes resolving vitest 4's optional peers, and `npm ci` must match the
 lockfile. Built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
-builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 only)
-tagged with package.json's `version` and `test`, only after the app's and
+builds `ghcr.io/alitemu/rooster-web`, `rooster-solver`, `rooster-caddy`
+(caddy/Dockerfile: caddy:2-alpine + caddy/Caddyfile, so a Caddyfile change
+arrives with an update) and `rooster-updater` (amd64 only) tagged with
+package.json's `version` and `test`, only after the app's and
 the solver's tests pass and only for a version not built before (bump
 package.json for every build); "Vrijgeven (productie)"
 (release.yml) points `stable` at an already built, tested version without
-rebuilding. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
+rebuilding (caddy/updater only when that version has them: they exist from
+0.12.0). Compose pulls `${ROOSTER_VERSION:-stable}` (a test
 installation sets `test`) and keeps `build` for building from source.
-Updating is `docker compose pull && docker compose up -d`. The schema of an
+Updating is the beheerder's "Bijwerken" (below) or by hand
+`docker compose pull && docker compose up -d`. The schema of an
 existing database is brought up to date at every start either way:
 docker-entrypoint.sh runs the seed (SEED_ON_START=planner, the default, or
 true) or else
 `scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
 templates, no data; skipped for a migration-built database).
 
+**Bijwerken (updating from the app):** page /planner/bijwerken (ADMIN,
+linked from the period list, which also shows a notice when a newer
+version is released), GET/POST /api/admin/update and POST .../check,
+lib/appUpdate.ts. The app never gets the Docker socket: the `updater`
+service (updater/updater.sh, docker:29-cli + curl/jq) has it, and the two
+only leave files in `<db dir>/update/`: the updater writes status.json at
+least every 30 s (released version for the tag the web container runs,
+read from the registry's `org.opencontainers.image.version` label every
+6 h or on a `controleren` note; `bezig`; `laatste` outcome GELUKT /
+TERUGGEZET / MISLUKT / AFGEBROKEN with a reden), read field by field
+(readUpdaterStatus) and stale after UPDATER_STIL_MS; the app writes
+bijwerken.json `{versie}` after a VACUUM INTO copy
+(`voor-update-<van>-naar-<naar>-<tijd>.db`, newest 5 kept) and an audit row
+(entiteit 'app'). The updater acts only if `versie` is still what the
+registry says, pulls web/solver/caddy/updater, `up -d` web solver caddy,
+waits up to 5 min for healthy (the web HEALTHCHECK must exit right after
+the status: reading nothing kept it open ~6 s, past its 5 s timeout, so
+web was always unhealthy before 0.12.0) and otherwise re-tags the images
+from before and starts them again. It runs compose with the install
+folder mounted at /rooster and `--project-directory` = the host path from
+its own compose labels (so ./data etc. still mean the host's folders),
+`env -i`, the project's own .env. It replaces itself through a short-lived
+container from the new image and takes no request meanwhile; a request
+under 2 minutes old survives a restart, and an update cut off by one is
+rolled back to the images saved in its own filesystem (never in the
+app-writable folder). README "Bijwerken vanuit de app" (switching it off,
+first time from before 0.12.0 needs one `git pull`).
+
 **Port and address:** Caddy listens on APP_PORT (compose default 8010 for
 a NAS that uses 443 itself; .env.example and the IT instructions use 443),
 on any host name, with an on-demand certificate per name, so a renamed
-server needs no config change. `http://:80` in the Caddyfile redirects to
+server needs no config change. `http://:80` in caddy/Caddyfile redirects to
 https on APP_PORT; port 80 is only published through a
 docker-compose.override.yml the operator adds (README "Op poort 443").
 With BASE_URL empty the app takes its address from the Host header
@@ -760,9 +792,11 @@ compiler, Python or dev dependencies in the one that runs, no .next/cache),
 code owned by root with only /data and .next/cache writable for `node`,
 NEXT_TELEMETRY_DISABLED. The solver image installs wheels only
 (--only-binary), no build-essential, own .dockerignore, code root-owned.
-Compose: caddy:2-alpine (Caddy 2.8+ dropped on_demand_tls interval/burst),
-capped json-file logs, no-new-privileges everywhere, init + mem_limit on
-web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
+Compose: rooster-caddy on caddy:2-alpine (Caddy 2.8+ dropped on_demand_tls
+interval/burst), capped json-file logs, no-new-privileges everywhere, init +
+mem_limit on web, cap_drop ALL + mem_limit on the solver, the updater root
+for the socket with only CHOWN and DAC_OVERRIDE, off the `internal`
+network. Workflow actions are pinned
 to commit SHAs.
 
 **Limits:** request bodies are capped at 1 MB in Caddy and in
@@ -770,10 +804,11 @@ lib/api-errors.ts parseJsonBody (read no further; also before login).
 Free text a participant types - swap toelichting, rejection reason,
 absence notitie - goes through lib/freeText.ts (1000 characters).
 
-**Docker Compose (3 services):**
+**Docker Compose (4 services):**
 - `caddy` - TLS termination (internal certs via `tls internal`)
 - `web` - Next.js + SQLite
 - `solver` - Python FastAPI (healthcheck only, no public ports)
+- `updater` - Docker socket, "Bijwerken" (no ports, own network)
 
 **Volumes:**
 - `web`'s `/data` - SQLite database file and the preferences CSV backups

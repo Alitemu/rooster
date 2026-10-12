@@ -317,7 +317,9 @@ github.com/Alitemu/rooster onder **Actions**:
    versie heet dan `stable`. Er wordt niets opnieuw gebouwd: productie
    krijgt precies de versie die je getest hebt.
 
-Daarna op de productieserver, in de map met `docker-compose.yml`:
+Daarna werkt de beheerder de server bij met de knop **Bijwerken** in de
+app (zie hieronder). Zonder die knop gaat het met de hand, op de server in
+de map met `docker-compose.yml`:
 
 ```bash
 docker compose pull
@@ -325,12 +327,71 @@ docker compose up -d
 ```
 
 De database in `DATA_DIR` blijft staan. Nieuwe kolommen en tabellen worden
-bij het starten automatisch toegevoegd. Maak voor de zekerheid eerst een
-kopie van die map.
+bij het starten automatisch toegevoegd. Maak met de hand voor de zekerheid
+eerst een kopie van die map (de knop doet dat zelf).
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
-*Vrijgeven (productie)* het oudere versienummer op. Of zet
-`ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
+*Vrijgeven (productie)* het oudere versienummer op. De app biedt die versie
+dan aan als *Teruggaan naar ...*. Of zet `ROOSTER_VERSION=0.12.0` in `.env`
+om de server op één versie vast te zetten. Dat kan vanaf 0.12.0: oudere
+versies hebben nog geen eigen image voor Caddy en de updater.
+
+##### Bijwerken vanuit de app
+
+Op de periodepagina ziet de beheerder **Bijwerken**. Daar staat welke
+versie de server draait en welke is vrijgegeven, met een knop om over te
+stappen. Is er een nieuwe versie, dan meldt de periodepagina dat ook.
+
+Wat er gebeurt als de beheerder op de knop drukt:
+
+1. De app maakt een kopie van de database in `data/backups/database/`
+   (`voor-update-<oud>-naar-<nieuw>-<tijd>.db`, de laatste 5 blijven
+   bewaard).
+2. De updater haalt de nieuwe versie op en herstart de app, de solver en
+   Caddy. De app is dan ongeveer een minuut niet bereikbaar.
+3. De updater controleert of alles weer gezond draait. Lukt dat niet
+   binnen vijf minuten, dan zet hij de vorige versie terug en meldt dat in
+   de app.
+
+Het werk doet een aparte container, `updater`. Alleen die container heeft
+toegang tot Docker (`/var/run/docker.sock`). Wie daarbij kan, kan in feite
+alles op de server. Daarom doet de updater niets anders dan nakijken welke
+versie is vrijgegeven en daarnaar overstappen als de beheerder dat vraagt.
+De app zelf, die voor iedereen bereikbaar is, krijgt die toegang niet. De
+app en de updater laten elkaar alleen briefjes achter in `data/update/`.
+De updater heeft internet nodig: `ghcr.io` en
+`pkg-containers.githubusercontent.com`, dezelfde adressen die
+`docker compose pull` gebruikt.
+
+**Eenmalig bij een server met een versie van voor 0.12.0:** de updater en
+het nieuwe Caddy-image staan in `docker-compose.yml`, dus die moet eerst
+zelf bijgewerkt worden:
+
+```bash
+git pull
+docker compose pull
+docker compose up -d
+```
+
+Daarna gaat bijwerken met de knop, ook voor wijzigingen in de
+Caddy-instellingen. Alleen een wijziging in `docker-compose.yml` zelf
+vraagt nog een `git pull`. Dat staat dan bij de versie vermeld.
+
+**Uitzetten:** mag de updater niet bij Docker (beleid van IT), zet hem
+dan uit met dit in `docker-compose.override.yml`:
+
+```yaml
+services:
+  updater:
+    profiles: ["uit"]
+```
+
+en haal de container weg met `docker compose rm -sf updater`. De pagina
+Bijwerken zegt dan dat bijwerken vanuit de app uit staat. Bijwerken gaat
+dan met de hand, zoals hierboven.
+
+Werkt Docker op de server niet met `/var/run/docker.sock` (rootless
+Docker, Podman), pas dan dat pad aan in `docker-compose.override.yml`.
 
 ##### Op poort 443 met een eigen naam
 
@@ -484,11 +545,23 @@ Let op een paar dingen:
 **Optie 2 - een echt, publiek vertrouwd certificaat (Let's Encrypt).**
 Alleen mogelijk met een eigen domeinnaam die vanaf het publieke internet
 bereikbaar is op poort 80/443 - wat haaks staat op het huidige
-"alleen intern netwerk"-ontwerp. Vervang in dat geval in `Caddyfile` de
-regel `https://:{$APP_PORT:8010}` door `https://jouw-domein.voorbeeld.nl`
-en verwijder het blok `tls internal { on_demand }`; Caddy vraagt dan zelf
-automatisch een Let's Encrypt-certificaat aan en vernieuwt dat ook zelf.
-Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
+"alleen intern netwerk"-ontwerp. Kopieer in dat geval `caddy/Caddyfile`
+naar bijvoorbeeld `Caddyfile.eigen`, vervang daarin de regel
+`https://:{$APP_PORT:8010}` door `https://jouw-domein.voorbeeld.nl` en
+verwijder het blok `tls internal { on_demand }`. Koppel dat bestand in
+`docker-compose.override.yml` over het ingebouwde heen:
+
+```yaml
+services:
+  caddy:
+    volumes:
+      - ./Caddyfile.eigen:/etc/caddy/Caddyfile:ro
+```
+
+Caddy vraagt dan zelf automatisch een Let's Encrypt-certificaat aan en
+vernieuwt dat ook zelf. Voordeel: geen enkel apparaat hoeft dan nog iets te
+installeren. Let op: wijzigingen in `caddy/Caddyfile` in een nieuwe versie
+komen dan niet vanzelf in je eigen kopie.
 
 #### Productie
 

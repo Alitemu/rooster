@@ -14,7 +14,7 @@ import { BASE_PATH } from './basePath';
  * triggered the export - the same address the planner is using right now
  * to reach the app. Per docker-compose.yml only Caddy's port is published,
  * so every request reaches this app through Caddy, which forwards the
- * original Host header unchanged (see Caddyfile) - and Caddy always
+ * original Host header unchanged (see caddy/Caddyfile) - and Caddy always
  * terminates TLS in front of it, so the scheme is always https regardless
  * of what this process itself sees on its own plain-HTTP connection to
  * Caddy.

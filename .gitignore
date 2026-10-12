@@ -43,6 +43,10 @@ yarn-error.log*
 # Database
 *.db
 
+# What the updater and the app leave each other next to the database
+# (lib/appUpdate.ts) when the app runs from this folder
+/update/
+
 # Test database (vitest.config.ts + tests/globalSetup.ts) - wiped before every run
 .test-data/
 *.db-shm
