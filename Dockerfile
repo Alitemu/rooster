@@ -68,15 +68,8 @@ EXPOSE 3000
 # IPv4 wildcard - the healthcheck would hang against the unreachable IPv6
 # loopback until it times out, reporting the container unhealthy even
 # though the server is up and answering on IPv4.
-#
-# It exits as soon as the status is in. Waiting for the process to end on
-# its own did not work: the response was never read, so Node held the
-# connection open until the server's keep-alive timeout, about 6 seconds -
-# past the 5-second timeout, so every check failed and the container was
-# always "unhealthy" while the app ran fine. The updater (updater.sh) now
-# relies on this check to decide whether a new version came up.
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=20s \
-  CMD node -e "require('http').get('http://127.0.0.1:3000' + (process.env.NEXT_PUBLIC_BASE_PATH || '') + '/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+  CMD node -e "require('http').get('http://127.0.0.1:3000' + (process.env.NEXT_PUBLIC_BASE_PATH || '') + '/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
 
 # No USER here (deliberately) - the container starts as root so
 # docker-entrypoint.sh can chown DATA_DIR's bind mount before dropping to

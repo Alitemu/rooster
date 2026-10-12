@@ -8,25 +8,20 @@ x-logging: &logging
 
 services:
   caddy:
-    # Caddy with the Caddyfile built in (caddy/Dockerfile), released
-    # together with web, so a change to it arrives with an update too.
-    # Every build takes the newest Caddy 2.x, for its security fixes. A
-    # server with a Caddyfile of its own mounts it over
-    # /etc/caddy/Caddyfile in docker-compose.override.yml.
-    image: "ghcr.io/alitemu/rooster-caddy:${ROOSTER_VERSION:-stable}"
-    build:
-      context: ./caddy
+    # The newest Caddy 2.x on every pull, for its security fixes.
+    image: caddy:2-alpine
     ports:
-      # Host and container port stay identical - see the note in caddy/Caddyfile.
+      # Host and container port stay identical - see the note in Caddyfile.
       # APP_PORT=443 on a server with its own name; 8010 when left out (a
       # NAS that uses 443 itself). Port 80 (http:// sent on to https) is not
       # published here: add it in docker-compose.override.yml (README).
       - "${APP_PORT:-8010}:${APP_PORT:-8010}"
     environment:
       APP_PORT: "${APP_PORT:-8010}"
-      # The app's sub-folder, for the redirect from / (see caddy/Caddyfile).
+      # The app's sub-folder, for the redirect from / (see Caddyfile).
       BASE_PATH: "${BASE_PATH:-}"
     volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
       - caddy_data:/data
     networks:
       - internal
@@ -118,7 +113,7 @@ services:
       NOTIFICATIONS_ENABLED: "${NOTIFICATIONS_ENABLED:-false}"
       # Hardcoded true, not an override: in THIS compose file the app is
       # only ever reachable through Caddy, which replaces X-Real-IP with
-      # the connecting peer's address (see caddy/Caddyfile), so the header can't
+      # the connecting peer's address (see Caddyfile), so the header can't
       # be forged. lib/rateLimit.ts therefore uses it to tell clients
       # apart. Any deployment without that guarantee must leave this unset,
       # or a caller could rotate the header past the rate limit - or spoof
@@ -178,43 +173,6 @@ services:
     logging: *logging
     security_opt:
       - no-new-privileges:true
-
-  # "Bijwerken" in the app (README, "Bijwerken vanuit de app"): checks
-  # which version is released and, when a beheerder asks, pulls it,
-  # restarts web, solver and caddy, and goes back to the previous images
-  # if they don't come up healthy (updater/updater.sh). The only service
-  # with the Docker socket, which amounts to full control of this host:
-  # that is why it is a container of its own that takes no orders but
-  # "check" and "update to the released version" - the web app, which
-  # faces the network, never gets the socket. A server that must not have
-  # it switches the service off in docker-compose.override.yml (README).
-  updater:
-    image: "ghcr.io/alitemu/rooster-updater:${ROOSTER_VERSION:-stable}"
-    build:
-      context: ./updater
-    environment:
-      TZ: "${TZ:-Europe/Amsterdam}"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      # This folder, to run docker compose with the same files and .env
-      # as IT does by hand. Read-only: it changes nothing here.
-      - .:/rooster:ro
-      # Where it and the app leave each other notes (data/update/).
-      - ${DATA_DIR:-./data}:/data
-    # Not on `internal`: it never talks to the other services, only to
-    # the Docker socket and the registry.
-    restart: unless-stopped
-    logging: *logging
-    security_opt:
-      - no-new-privileges:true
-    # Root, for the socket; of root's privileges only what it needs to
-    # hand data/update/ to the app's user and write its status there.
-    cap_drop:
-      - ALL
-    cap_add:
-      - CHOWN
-      - DAC_OVERRIDE
-    mem_limit: 256m
 
 networks:
   internal:

@@ -1,12 +1,9 @@
-# "Bouwen (test)": builds the four images the server runs and publishes
-# them to GitHub's container registry, so the server only downloads them
-# (docker compose pull, or "Bijwerken" in the app) and never builds
-# anything itself:
+# "Bouwen (test)": builds the two images the NAS runs and publishes them
+# to GitHub's container registry, so the server only downloads them
+# (docker compose pull) and never builds anything itself:
 #
 #   ghcr.io/alitemu/rooster-web:<version> and :test
 #   ghcr.io/alitemu/rooster-solver:<version> and :test
-#   ghcr.io/alitemu/rooster-caddy:<version> and :test (Caddy + Caddyfile)
-#   ghcr.io/alitemu/rooster-updater:<version> and :test
 #
 # <version> is package.json's "version" (the one in the app's header).
 # Only ever started by hand (Actions tab > Bouwen (test) > Run workflow),
@@ -68,7 +65,7 @@ jobs:
         env:
           VERSIE: ${{ steps.version.outputs.version }}
         run: |
-          for name in web solver caddy updater; do
+          for name in web solver; do
             if docker manifest inspect "ghcr.io/alitemu/rooster-$name:$VERSIE" > /dev/null 2>&1; then
               echo "::error::Versie $VERSIE bestaat al. Verhoog het versienummer in package.json en bouw opnieuw."
               exit 1
@@ -107,10 +104,6 @@ jobs:
             context: .
           - name: solver
             context: ./solver
-          - name: caddy
-            context: ./caddy
-          - name: updater
-            context: ./updater
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -125,7 +118,7 @@ jobs:
       - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ${{ matrix.context }}
-          # Only the web image uses it; the others ignore an unknown argument.
+          # Only the web image uses it; the solver ignores an unknown argument.
           build-args: |
             BASE_PATH=${{ inputs.basispad }}
           platforms: linux/amd64

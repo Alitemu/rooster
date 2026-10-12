@@ -33,7 +33,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * further than that: nothing here takes more than a few kilobytes, and
  * several of these routes (logging in, first run) are reached before any
  * authentication, so without a cap anyone could make the server hold as
- * much as they cared to send. Caddy caps request bodies too (caddy/Caddyfile);
+ * much as they cared to send. Caddy caps request bodies too (Caddyfile);
  * this covers running the app without it.
  */
 export async function parseJsonBody<T = Record<string, unknown>>(req: NextRequest): Promise<Partial<T>> {

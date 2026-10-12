@@ -112,7 +112,6 @@ export default function PlannerHomePage() {
   const [showTotpSettings, setShowTotpSettings] = useState(false);
   // Only an ADMIN sees "Accounts beheren" (the API checks it too).
   const [isAdmin, setIsAdmin] = useState(false);
-  const [nieuweVersie, setNieuweVersie] = useState<string | null>(null);
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
@@ -174,15 +173,7 @@ export default function PlannerHomePage() {
     loadData();
     fetch(withBasePath('/api/auth/me'))
       .then((res) => res.json())
-      .then(async (data) => {
-        const admin = data?.data?.role === 'ADMIN';
-        setIsAdmin(admin);
-        if (!admin) return;
-        // A released version this server doesn't run yet (lib/appUpdate.ts).
-        const res = await fetch(withBasePath('/api/admin/update'));
-        const update = res.ok ? (await res.json()).data : null;
-        if (update?.richting === 'NIEUWER' && !update.bezig) setNieuweVersie(update.beschikbaar);
-      })
+      .then((data) => setIsAdmin(data?.data?.role === 'ADMIN'))
       .catch(() => {});
   }, []);
 
@@ -353,28 +344,11 @@ export default function PlannerHomePage() {
               Accounts beheren
             </Link>
           )}
-          {isAdmin && (
-            <Link href="/planner/bijwerken" className="btn-secondary">
-              Bijwerken
-            </Link>
-          )}
           <button onClick={handleLogout} className="btn-secondary">
             Uitloggen
           </button>
         </div>
       </div>
-
-      {nieuweVersie && (
-        <div
-          className="rounded-lg border border-blue-200 bg-blue-50 p-4 flex flex-wrap items-center justify-between gap-3"
-          data-testid="nieuwe-versie-melding"
-        >
-          <p className="text-sm text-blue-900">Versie {nieuweVersie} is vrijgegeven. Deze server kan worden bijgewerkt.</p>
-          <Link href="/planner/bijwerken" className="btn-primary">
-            Bekijken
-          </Link>
-        </div>
-      )}
 
       {/* Staff/pool membership is its own thing, independent of any period
           (add/remove someone, change their dates or deelnamefactor) - this

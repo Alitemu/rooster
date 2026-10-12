@@ -55,17 +55,7 @@ jobs:
             # Fails (and stops here) when that version was never built.
             docker buildx imagetools inspect "$image:$VERSIE" > /dev/null
           done
-          # caddy and updater exist from 0.12.0 on. Going back to an older
-          # version leaves their stable where it is: both work with it.
-          names="web solver"
-          for name in caddy updater; do
-            if docker buildx imagetools inspect "ghcr.io/alitemu/rooster-$name:$VERSIE" > /dev/null 2>&1; then
-              names="$names $name"
-            else
-              echo "rooster-$name heeft geen versie $VERSIE; stable blijft daar staan." >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          for name in $names; do
+          for name in web solver; do
             image="ghcr.io/alitemu/rooster-$name"
             docker buildx imagetools create --tag "$image:stable" "$image:$VERSIE"
           done
