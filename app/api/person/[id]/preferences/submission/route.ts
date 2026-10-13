@@ -10,6 +10,7 @@ import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } f
 import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { getParttimeCheck } from '@/lib/submissionStatus';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -129,6 +130,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
       insertStmt.run(crypto.randomUUID(), id, period_id, now, now);
     }
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'ingediend door planner', periode_id: period_id });
 
     try {
       writePreferencesBackup(id, period_id);

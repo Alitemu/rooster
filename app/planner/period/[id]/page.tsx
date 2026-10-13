@@ -209,9 +209,11 @@ export default function PlannerPeriodPage() {
     <div className="container-main py-8 space-y-6">
       {/* Header */}
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
-        <div className="flex items-start justify-between">
+        {/* Stacked on a phone, side by side from sm up: next to each other the
+            two columns were wider than 375px (audit 9). */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-900 mb-2">{period.naam}</h1>
+            <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{period.naam}</h1>
             <p className="text-neutral-600 mb-2">
               {new Date(period.start_datum).toLocaleDateString('nl-NL')} t/m{' '}
               {new Date(period.eind_datum).toLocaleDateString('nl-NL')}
@@ -301,7 +303,7 @@ export default function PlannerPeriodPage() {
 
             {period.status === 'OPEN' && (
               <div className="flex flex-col items-start gap-2">
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <button
                     onClick={handleClosePeriod}
                     disabled={closing}
@@ -324,7 +326,7 @@ export default function PlannerPeriodPage() {
 
             {(period.status === 'GESLOTEN' || period.status === 'GEGENEREERD') && (
               <div className="flex flex-col items-start gap-2 max-w-xs">
-                <div className="flex gap-3">
+                <div className="flex flex-wrap gap-3">
                   <button
                     onClick={handleReopen}
                     disabled={reopening}
@@ -380,7 +382,7 @@ export default function PlannerPeriodPage() {
                       />
                       <span>Ook de diensten die je zelf hebt ingevuld of aangepast verwijderen</span>
                     </label>
-                    <div className="flex gap-3">
+                    <div className="flex flex-wrap gap-3">
                       <button
                         onClick={handleResetRoster}
                         disabled={resetting}

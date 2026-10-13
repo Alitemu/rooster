@@ -50,6 +50,24 @@ export function dateRanges(dates: string[]): string[] {
 }
 
 /**
+ * One sentence per counter whose streefbereik cannot hold its shifts: the
+ * same words after a generation and, in the generation dialog, before it
+ * (lib/bandShortfall.ts).
+ */
+export function explainBereikTekort(bereikTekort: BereikTekort): string[] {
+  return Object.entries(bereikTekort)
+    .filter(([, t]) => t && t.maximaal < t.diensten)
+    .map(([teller, tekort]) => {
+      const soort = MEERVOUD[teller] ?? 'diensten';
+      const voorstel = tekort!.voorgesteld;
+      const advies = voorstel
+        ? `Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar ${voorstel[0] === voorstel[1] ? voorstel[0] : `${voorstel[0]} tot ${voorstel[1]}`} ${soort} per persoon.`
+        : 'Verhoog het bereik onder Venster en streefbereik.';
+      return `Het streefbereik laat samen hoogstens ${tekort!.maximaal} ${soort} toe, terwijl er ${tekort!.diensten} zijn. ${advies}`;
+    });
+}
+
+/**
  * One sentence per cause, the most telling first; empty when nothing
  * stayed empty. `deelsLid`: how many members' Geldig vanaf/tot covers only
  * part of the period, which lowers their streefbereik in proportion.
@@ -81,25 +99,21 @@ export function explainUnfilled(unfilled: UnfilledSlotInfo[], bereikTekort: Bere
     );
   }
 
-  let doorBereik = 0;
-  for (const [teller, tekort] of tekorten) {
-    const soort = MEERVOUD[teller] ?? 'diensten';
-    const voorstel = tekort!.voorgesteld;
-    const advies = voorstel
-      ? `Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar ${voorstel[0] === voorstel[1] ? voorstel[0] : `${voorstel[0]} tot ${voorstel[1]}`} ${soort} per persoon.`
-      : 'Verhoog het bereik onder Venster en streefbereik.';
-    lines.push(`Het streefbereik laat samen hoogstens ${tekort!.maximaal} ${soort} toe, terwijl er ${tekort!.diensten} zijn. ${advies}`);
-    doorBereik += tekort!.diensten - tekort!.maximaal;
-  }
+  lines.push(...explainBereikTekort(bereikTekort));
+  const doorBereik = tekorten.reduce((sum, [, t]) => sum + t!.diensten - t!.maximaal, 0);
 
   // What the causes above leave unexplained: the streefbereik's shortfall
   // accounts for that many of the shifts without a certain reason.
+  // These the people and their bereik could take: a method that searches
+  // differently, or longer, may well fill them (audit 9: "Willekeurig" left
+  // Pinksterzondag that the other three filled).
   const rest = Math.max(0, unfilled.length - geenLid.length - geblokkeerd.length - doorBereik);
   if (rest > 0) {
     lines.push(
-      geenLid.length + geblokkeerd.length + doorBereik === 0
+      (geenLid.length + geblokkeerd.length + doorBereik === 0
         ? `${aantal(rest, 'dienst lukte', 'diensten lukten')} niet binnen het venster en het streefbereik van de beschikbare mensen.`
-        : `Nog ${aantal(rest, 'dienst lukte', 'diensten lukten')} niet binnen het venster en het streefbereik.`
+        : `Nog ${aantal(rest, 'dienst lukte', 'diensten lukten')} niet binnen het venster en het streefbereik.`) +
+        ` Een andere methode of langer zoeken vult ${rest === 1 ? 'hem' : 'ze'} misschien wel.`
     );
   }
   return lines;

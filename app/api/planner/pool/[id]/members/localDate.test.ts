@@ -9,11 +9,11 @@ import { GET as listMembers } from './route';
 /**
  * The rule: "today" on Personeel beheren is today in the Netherlands.
  *
- * The members route takes today from toISOString(), which is UTC: from
+ * The members route took today from toISOString(), which is UTC: from
  * midnight until one (winter) or two (summer) o'clock Dutch time it is
  * still yesterday there, so someone whose membership starts today reads
  * "Begint later" and someone whose last day was yesterday still reads
- * "Actief". Audit 9. (The container runs in Europe/Amsterdam, and so do
+ * "Actief". Audit 9; now lib/localDate.ts. (The container runs in Europe/Amsterdam, and so do
  * these tests; toISOString ignores both.)
  */
 
@@ -84,8 +84,8 @@ describe('Personeel beheren counts today in Dutch time', () => {
   });
 
   // Audit 9: at 00:30 Dutch time (22:30 UTC the day before) the route
-  // still reads the 13th: { begint: false, gestopt: true }.
-  it.fails('half past midnight on 14 October, Dutch time, is already the 14th', async () => {
+  // read the 13th: { begint: false, gestopt: true }.
+  it('half past midnight on 14 October, Dutch time, is already the 14th', async () => {
     expect(await activeAt('2026-10-13T22:30:00Z')).toEqual({ begint: true, gestopt: false });
   });
 });

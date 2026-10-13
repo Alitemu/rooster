@@ -11,6 +11,7 @@ import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { checkBlockBudget } from '@/lib/blockBudget';
 import { matchSlotsToPattern, syncPatternsForPerson, type PatternRule } from '@/lib/parttimeSync';
@@ -220,6 +221,13 @@ export async function PATCH(
       });
       writeAndMark();
     }
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, {
+      wijziging: 'voorkeur gewijzigd door planner',
+      periode_id: slot.period_id,
+      datum: slot.datum,
+      teller: slot.teller,
+      level,
+    });
 
     try {
       writePreferencesBackup(id, slot.period_id);

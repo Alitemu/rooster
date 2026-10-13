@@ -37,11 +37,10 @@ const overflow = (page: import('@playwright/test').Page) =>
 test.describe('at 375px', () => {
   test.use({ viewport: { width: 375, height: 740 } });
 
-  // Audit 9: the header puts the title and the status column side by side
+  // Audit 9: the header put the title and the status column side by side
   // without wrapping - 28px too wide already, 167px with the "Rooster
-  // verwijderen" panel open (its buttons sit in a row past the edge).
+  // verwijderen" panel open (its buttons sat in a row past the edge).
   test('the period page with "Rooster verwijderen" open does not scroll sideways', async ({ page }) => {
-    test.fail();
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.getByRole('button', { name: /Rooster verwijderen/ }).click();
@@ -60,10 +59,9 @@ test.describe('at 375px', () => {
 test.describe('in the Netherlands, just after midnight', () => {
   test.use({ timezoneId: 'Europe/Amsterdam' });
 
-  // Audit 9: the page takes today from toISOString() (UTC), so at 00:30
-  // Dutch time a new member starts yesterday.
+  // Audit 9: the page took today from toISOString() (UTC), so at 00:30
+  // Dutch time a new member started yesterday.
   test('a new member starts today, Dutch time', async ({ page }) => {
-    test.fail();
     await loginAsPlanner(page);
     await page.clock.setFixedTime(new Date('2026-10-13T22:30:00Z'));
     await page.goto(`${getBaseUrl()}/planner/pool/${pools[0]}/staff`);

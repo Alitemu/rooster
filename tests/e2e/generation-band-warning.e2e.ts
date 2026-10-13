@@ -10,9 +10,10 @@ import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner } from '.
  * shifts. Audit 9 (the planner's 160 empty shifts: a band of 5-6
  * avonddiensten worked out for 30 people, then 15 left).
  *
- * The generation dialog should say so before "Genereren" is pressed - it
- * only says so afterwards (lib/unfilledExplanation.ts), after a run that
- * can take minutes and always leaves those shifts empty.
+ * The generation dialog says so before "Genereren" is pressed
+ * (lib/bandShortfall.ts via band-check) - it used to say so only afterwards,
+ * after a run that can take minutes and always leaves those shifts empty -
+ * and "Bereik voor de huidige leden" puts in a band that holds them.
  */
 
 let testData: ReturnType<typeof createTestPeriod>;
@@ -32,10 +33,19 @@ test.afterAll(() => {
 });
 
 test('the dialog warns about a streefbereik too small for the shifts before generating', async ({ page }) => {
-  test.fail();
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await page.getByRole('button', { name: /Rooster genereren met solver/ }).first().click();
   await expect(page.getByText('Venster en streefbereik')).toBeVisible();
-  await expect(page.getByText(/laat samen hoogstens 0 avonddiensten toe/)).toBeVisible({ timeout: 5000 });
+  const warning = page.getByTestId('bereik-tekort');
+  await expect(warning).toContainText(/laat samen hoogstens 0 avonddiensten toe/, { timeout: 5000 });
+
+  // One click puts in the band the app would choose for these members.
+  await warning.getByRole('button', { name: 'Bereik voor de huidige leden' }).click();
+  await expect(warning).toBeHidden({ timeout: 5000 });
+  // Nothing is saved until "Genereren": the frozen band is still zero.
+  const frozen = JSON.parse(
+    (db.prepare('SELECT bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?').get(testData.period.id) as { bevroren_ruleset_json: string }).bevroren_ruleset_json
+  );
+  expect(frozen.bandAvond).toEqual([0, 0]);
 });

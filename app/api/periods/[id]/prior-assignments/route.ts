@@ -15,6 +15,7 @@ import {
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -237,6 +238,9 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       WHERE period_id = ? AND datum = ? AND teller = ?
     `);
 
+    const before = db
+      .prepare('SELECT person_id FROM dienstrooster_prior_assignment WHERE period_id = ? AND datum = ? AND teller = ?')
+      .get(id, datum, teller) as { person_id: string | null } | undefined;
     const result = updateStmt.run(personId, id, datum, teller);
 
     if (result.changes === 0) {
@@ -261,6 +265,16 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         new Date().toISOString()
       );
     }
+
+    // "Rooster vooraf" is what the solver takes as already decided (audit 9).
+    writeAuditLog({
+      actorId,
+      entiteit: 'schedule_period',
+      entiteitId: id,
+      actie: 'UPDATE',
+      oud: before ? { datum, teller, person_id: before.person_id } : undefined,
+      nieuw: { wijziging: 'rooster vooraf aangepast', datum, teller, person_id: personId },
+    });
 
     const response: ApiSuccessResponse<{ updated: boolean }> = {
       success: true,

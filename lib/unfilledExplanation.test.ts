@@ -54,7 +54,7 @@ describe('explainUnfilled', () => {
     expect(lines).toEqual([
       '1 persoon doet volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. Het streefbereik van die persoon is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Medewerkers.',
       'Het streefbereik laat samen hoogstens 170 avonddiensten toe, terwijl er 175 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 6 avonddiensten per persoon.',
-      'Nog 25 diensten lukten niet binnen het venster en het streefbereik.',
+      'Nog 25 diensten lukten niet binnen het venster en het streefbereik. Een andere methode of langer zoeken vult ze misschien wel.',
     ]);
   });
 
@@ -69,7 +69,7 @@ describe('explainUnfilled', () => {
     expect(lines).toEqual([
       'Voor 2 diensten is op die dag niemand lid van de pool: 1 april 2027, 3 april 2027. Controleer Geldig vanaf en Geldig tot bij Medewerkers.',
       'Voor 1 dienst heeft iedereen die dag geblokkeerd.',
-      'Nog 1 dienst lukte niet binnen het venster en het streefbereik.',
+      'Nog 1 dienst lukte niet binnen het venster en het streefbereik. Een andere methode of langer zoeken vult hem misschien wel.',
     ]);
     for (const l of lines) expect(l).not.toMatch(/ - |, en |, of /);
   });

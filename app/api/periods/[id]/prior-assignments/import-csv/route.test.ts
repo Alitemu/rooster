@@ -83,7 +83,10 @@ afterEach(() => {
     db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
   }
   while (createdPersonIds.length > 0) {
-    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(createdPersonIds.pop()!);
+    const personId = createdPersonIds.pop()!;
+    // The import is in the audit log under the planner (audit 9).
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(personId);
+    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(personId);
   }
   while (createdPoolIds.length > 0) {
     db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(createdPoolIds.pop()!);

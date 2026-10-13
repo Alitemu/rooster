@@ -109,6 +109,7 @@ afterEach(() => {
   while (createdPersonIds.length > 0) {
     const personId = createdPersonIds.pop()!;
     db.prepare('DELETE FROM dienstrooster_person_access_link WHERE person_id = ?').run(personId);
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(personId);
     db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(personId);
   }
   while (createdPoolIds.length > 0) {

@@ -26,6 +26,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { csvAttachment, csvField } from '@/lib/csv';
+import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiErrorResponse } from '@/types';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
@@ -55,6 +56,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const baseUrl = resolveBaseUrl(req);
     rememberBaseUrl(period.id, baseUrl);
     const links = issuePeriodLinks(period, baseUrl);
+    // One row for the batch, as staff-links writes one per link: who minted
+    // links for which period, never the links themselves (audit 9).
+    writeAuditLog({
+      actorId: auth!.userId,
+      entiteit: 'schedule_period',
+      entiteitId: period.id,
+      actie: 'CREATE',
+      nieuw: { wijziging: 'persoonlijke links aangemaakt voor de uitnodigingen', aantal: links.length },
+    });
     const deadline = formatDeadline(period.deadline);
     const csvLines: string[] = [
       'Naam,Persoonlijke link,Deadline',

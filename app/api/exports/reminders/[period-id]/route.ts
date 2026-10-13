@@ -35,6 +35,7 @@ import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { getActiveReminderMilestones, resolveReminderUrgency } from '@/lib/reminderSchedule';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
@@ -195,6 +196,19 @@ Bedankt!`;
         laatste_herinnering_op: laatste.get(person.person_id) ?? null,
       };
     });
+
+    // One row for the batch, as staff-links writes one per link: who minted
+    // links for which period, never the links themselves (audit 9).
+    if (reminders.length > 0) {
+      writeAuditLog({
+        actorId: auth!.userId,
+        entiteit: 'schedule_period',
+        entiteitId: periodId,
+        actie: 'CREATE',
+        nieuw: { wijziging: 'persoonlijke links aangemaakt voor de herinneringen', aantal: reminders.length },
+        now,
+      });
+    }
 
     const response: ApiSuccessResponse<ReminderTemplate[]> = {
       success: true,

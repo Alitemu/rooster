@@ -9,15 +9,17 @@ import { refreshCarryOverForPeriod } from '@/lib/carryOver';
  *
  * Carry-over is booked from "the most recent published period before
  * this one" (findPreviousPublishedPeriod), and since 0.13.0 again at every
- * generation. When the period right before is withdrawn for a correction
- * (unpublished) while the one after it is generated, that lookup skips it
- * and lands on the period before that - whose imbalance was already carried
- * into the withdrawn one. Audit 9.
+ * generation. Were the period right before withdrawn (unpublished) while
+ * the one after it is generated, that lookup would land on the period
+ * before that and book its imbalance a second time. Audit 9 found it; the
+ * planner's call: it does not happen. A published roster only changes
+ * through swaps, and withdrawing is only for a roster published by
+ * mistake - never while the next one is being made.
  *
  * Three periods, two people, a band of exactly two avonddiensten:
  * - P0: A did 3, B did 1, so P1 carries A one fewer and B one more;
  * - P1: A did 1, B did 3 - exactly their targets, nothing left over;
- * - P2: nothing to carry. Withdrawing P1 must not change that.
+ * - P2: nothing to carry.
  */
 
 const RULES = { windowWeeks: 0, bandAvond: [2, 2], bandWeekend: [0, 0], bandFeestdag: [0, 0] };
@@ -97,7 +99,7 @@ afterAll(() => {
 });
 
 describe('carry-over over a chain of periods', () => {
-  it('books each period once, also while the one in between is withdrawn', () => {
+  it('books each period once', () => {
     period('2032-01-05', 'GEPUBLICEERD', ['A', 'A', 'A', 'B']);
     const p1 = period('2032-01-19', 'GEPUBLICEERD', ['A', 'B', 'B', 'B']);
     // Book P1 as the open route did: from P0.
@@ -105,15 +107,6 @@ describe('carry-over over a chain of periods', () => {
     expect(carry(p1)).toEqual({ A: -1, B: 1 });
 
     const p2 = period('2032-02-02', 'GESLOTEN', []);
-    refreshCarryOverForPeriod(p2, ids.planner);
-    expect(carry(p2)).toEqual({});
-  });
-
-  // Audit 9: with P1 withdrawn, P2's generation books P0's imbalance a
-  // second time: { A: -1, B: 1 }.
-  it.fails('withdrawing the period in between does not bring the one before it back', () => {
-    const p2 = (db.prepare(`SELECT id FROM dienstrooster_schedule_period WHERE naam = 'Keten 2032-02-02'`).get() as { id: string }).id;
-    db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD', gepubliceerd_op = NULL, definitief_op = NULL WHERE naam = 'Keten 2032-01-19'`).run();
     refreshCarryOverForPeriod(p2, ids.planner);
     expect(carry(p2)).toEqual({});
   });

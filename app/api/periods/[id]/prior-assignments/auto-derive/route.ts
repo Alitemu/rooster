@@ -12,6 +12,7 @@ import {
 } from '@/lib/priorAssignmentDerive';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface AutoDeriveResult {
@@ -148,6 +149,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
         derivedCount++;
       }
+    }
+
+    if (derivedCount > 0) {
+      writeAuditLog({
+        actorId,
+        entiteit: 'schedule_period',
+        entiteitId: id,
+        actie: 'CREATE',
+        nieuw: { wijziging: 'rooster vooraf afgeleid uit de vorige periode', aantal: derivedCount, uit_periode: prevPeriod.id },
+      });
     }
 
     const response: ApiSuccessResponse<AutoDeriveResult> = {

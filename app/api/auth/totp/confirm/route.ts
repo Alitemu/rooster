@@ -11,6 +11,7 @@ import { verifyTOTPCode, isValidTOTPFormat } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { verifyPayload } from '@/lib/session';
 import { encryptTotpSecret } from '@/lib/totpSecret';
+import { writeAuditLog } from '@/lib/auditLog';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { takeAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { TotpSetupPayload } from '../setup/route';
@@ -64,10 +65,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     clearRateLimit(rateLimitKey);
 
-    db.prepare(`UPDATE dienstrooster_person SET totp_secret = ? WHERE id = ?`).run(
-      encryptTotpSecret(setupPayload.secret),
-      auth.userId
-    );
+    db.transaction(() => {
+      db.prepare(`UPDATE dienstrooster_person SET totp_secret = ? WHERE id = ?`).run(
+        encryptTotpSecret(setupPayload.secret),
+        auth.userId
+      );
+      // Switching it off was logged, switching it on was not (audit 9).
+      // Never the secret: only that it happened.
+      writeAuditLog({
+        actorId: auth.userId,
+        entiteit: 'person',
+        entiteitId: auth.userId,
+        actie: 'UPDATE',
+        nieuw: { wijziging: 'totp_ingeschakeld' },
+      });
+    })();
 
     return NextResponse.json({ success: true, data: { totp_enrolled: true } });
   } catch (error) {

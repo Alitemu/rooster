@@ -31,24 +31,6 @@ const EXEMPT: Record<string, string> = {
   'planner/period/[id]/import-balances': 'each ledger row carries aangemaakt_door and reden',
 };
 
-/** Audit 9: changes a planner makes that the audit log never hears of. */
-const KNOWN_GAPS = new Set([
-  // Personal links for everyone at once; one link via staff-links is logged.
-  'exports/invitations/[period-id]',
-  'exports/reminders/[period-id]',
-  // Switching two-step verification on; switching it off is logged.
-  'auth/totp/confirm',
-  // "Rooster vooraf": what the solver must take as already decided.
-  'periods/[id]/prior-assignments',
-  'periods/[id]/prior-assignments/auto-derive',
-  'periods/[id]/prior-assignments/confirm',
-  'periods/[id]/prior-assignments/import-csv',
-  // A planner changing someone's preferences or hand-in for them.
-  'person/[id]/preferences/slot/[slotId]',
-  'person/[id]/preferences/submission',
-  'person/[id]/parttime-check',
-]);
-
 const apiRoot = path.join(process.cwd(), 'app/api');
 
 function walk(dir: string): string[] {
@@ -89,18 +71,16 @@ describe('every change a planner makes reaches the audit log', () => {
     expect(walk(apiRoot).length).toBeGreaterThan(80);
   });
 
-  it('no route outside the known gaps changes data without an audit row or a stated reason', () => {
-    const unexplained = routesWithoutAudit().filter((r) => !(r in EXEMPT) && !KNOWN_GAPS.has(r));
+  // Audit 9 closed the last gaps: links minted for everyone at once, two-
+  // step verification switched on, "Rooster vooraf invullen", and a planner
+  // changing someone's preferences, hand-in or part-time check for them.
+  it('no route changes data without an audit row or a stated reason', () => {
+    const unexplained = routesWithoutAudit().filter((r) => !(r in EXEMPT));
     expect(unexplained).toEqual([]);
   });
 
-  it('every exemption and known gap still names a real route', () => {
+  it('every exemption still names a real route', () => {
     const all = new Set(walk(apiRoot).map((f) => path.relative(apiRoot, path.dirname(f)).split(path.sep).join('/')));
-    expect([...Object.keys(EXEMPT), ...KNOWN_GAPS].filter((r) => !all.has(r))).toEqual([]);
-  });
-
-  // Audit 9: the gaps above.
-  it.fails('the known gaps are closed', () => {
-    expect(routesWithoutAudit().filter((r) => KNOWN_GAPS.has(r))).toEqual([]);
+    expect(Object.keys(EXEMPT).filter((r) => !all.has(r))).toEqual([]);
   });
 });

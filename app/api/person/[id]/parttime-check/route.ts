@@ -19,6 +19,7 @@ import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { getParttimeCheck, setParttimeCheck } from '@/lib/submissionStatus';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 
 const bodySchema = z.object({ period_id: z.string().min(1), gecontroleerd: z.boolean() });
 
@@ -69,7 +70,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 export async function PUT(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
   try {
-    const denied = personAccessDenial(getAuthContextFromRequest(req), id);
+    const auth = getAuthContextFromRequest(req);
+    const denied = personAccessDenial(auth, id);
     if (denied) return denied;
 
     const parsed = bodySchema.safeParse(await parseJsonBody(req));
@@ -83,6 +85,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     if (!gate.allowed) return fail(403, gate.code!, gate.message!);
 
     setParttimeCheck(id, period_id, gecontroleerd);
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, {
+      wijziging: gecontroleerd ? 'deeltijd gecontroleerd door planner' : 'deeltijdcontrole ingetrokken door planner',
+      periode_id: period_id,
+    });
     const op = getParttimeCheck(id, period_id);
     return NextResponse.json({ success: true, data: { gecontroleerd: op !== null, gecontroleerd_op: op } });
   } catch (error) {

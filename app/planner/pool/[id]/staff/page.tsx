@@ -18,6 +18,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { withBasePath } from '@/lib/basePath';
+import { localIsoDate } from '@/lib/localDate';
 import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults } from '@/lib/membershipDefaults';
 
 interface Pool {
@@ -35,7 +36,8 @@ interface StaffMember {
   deelnamefactor: number;
 }
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+// Today on a Dutch calendar, not in UTC (lib/localDate.ts, audit 9).
+const todayISO = () => localIsoDate();
 
 export default function PoolStaffPage() {
   const params = useParams();

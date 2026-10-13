@@ -244,6 +244,12 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   slots and automatic reminders, the pool on/off, adding, changing,
   removing and restoring a member, minting a personal link and the holiday
   import; app/api/auditLog.test.ts proves each writes exactly one row.
+  Since audit 9 also personal links minted for everyone at once (the
+  invitations and reminders exports), two-step verification switched on,
+  every "Rooster vooraf invullen" change, and a planner changing someone's
+  preferences, hand-in or part-time check for them (writeOnBehalfAuditLog;
+  the participant's own input is not logged). app/api/auditCoverage.test.ts
+  sweeps every planner route that changes data.
 - `notification_template` - message templates
 - `reminder_schedule` - reminder timing rules
 
@@ -290,7 +296,8 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   the preferences still closed. The SOLVER rows and the pending undo go;
   with `ook_handmatig: true` the MANUAL/OVERRIDE rows too, for a clean
   start. Not from GEPUBLICEERD (409, unpublish first), nor without a
-  generated roster or while a generation runs (409). Audit-logged.
+  generated roster or while a generation runs (409). Audit-logged. Swap
+  requests play no part: they only exist on a published roster.
 - **Rename** (`PATCH /api/periods/[id]` `{naam}`, "Naam wijzigen" in the
   period list's row): any status, checked like a new period's name
   (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),
@@ -350,7 +357,11 @@ without asking first, and report the outcome.
   `confirmOverrides: true` on `POST .../publish` (409 without it) but never
   block on their own - blocking on the same override a planner just made
   on purpose would mean no roster using it could ever be published.
-- `POST .../unpublish` reverts GEPUBLICEERD back to GEGENEREERD: clears
+- `POST .../unpublish` is for a roster published by mistake (the
+  planner's words after audit 9: a published roster only changes through
+  swaps, and nobody withdraws one while working on the next period - so
+  carry-over, which skips an unpublished period, is not guarded against
+  that). It reverts GEPUBLICEERD back to GEGENEREERD: clears
   `gepubliceerd_op`/`gepubliceerd_door_person_id` and the definitief
   fields and snapshot (publishing again starts voorlopig), keeps every assignment
   (withdrawing is not discarding the roster), keeps notifications already
@@ -413,6 +424,11 @@ candidates leave the person out; swap create and approve refuse it; and
 the publication check lists such a shift as an issue (only possible when
 the membership changed after the roster was made).
 
+"Today" on Personeel beheren (the members route's Actief, the new
+member's start) is the Dutch calendar date (lib/localDate.ts
+`localIsoDate`, Europe/Amsterdam), never `toISOString().slice(0, 10)`: that
+is UTC, still yesterday until 01:00 or 02:00 Dutch time.
+
 Adding someone on "Personeel beheren" starts with the dates of the pool's
 one period being rostered (OPEN, GESLOTEN or GEGENEREERD), like the setup
 wizard's own step, and says so under the form; with none, or two at once,
@@ -467,7 +483,14 @@ of the period got shifts nobody could take.
   words it with lib/unfilledExplanation.ts `explainUnfilled`, per cause,
   instead of one "not enough people" for all of them: a planner whose
   memberships ended halfway the period saw 160 empty shifts with every
-  planner and window and nothing on screen said why.
+  planner and window and nothing on screen said why. The band shortfall is
+  one calculation (lib/bandShortfall.ts `computeBandShortfall`), also shown
+  before generating: the dialog asks GET .../band-check for the bands as
+  typed and warns under "Venster en streefbereik", with "Bereik voor de
+  huidige leden" to put in the suggested band (saved at "Genereren" like any
+  edit there). A period's band is required when it opens and frozen with
+  the then-members, so a pool that changed afterwards needed this (audit 9:
+  5-6 avonddiensten worked out for 30 people, generated for 15).
 - **windowWeeks N = at most one shift in any N consecutive ISO weeks**, so
   1 is one a week and 0 switches the rule off (solver/constraints.py,
   solver/greedy.py, lib/windowRule.ts). With either per-teller window set,

@@ -16,6 +16,7 @@ import { db } from '@/db/client';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { localIsoDate } from '@/lib/localDate';
 import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateCodenaam } from '@/lib/codenaam';
@@ -46,7 +47,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     }
 
     const poolId = params.id;
-    const today = new Date().toISOString().split('T')[0];
+    // Today on a Dutch calendar, not in UTC (lib/localDate.ts, audit 9).
+    const today = localIsoDate();
     const periodStart = req.nextUrl.searchParams.get('period_start') || today;
     const periodEnd = req.nextUrl.searchParams.get('period_end') || today;
 

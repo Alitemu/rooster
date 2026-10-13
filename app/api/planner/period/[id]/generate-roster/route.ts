@@ -11,18 +11,14 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
 import {
-  effectiveHeadcount,
-  fellowWeekendBand,
   loadPeriodMembers,
-  resolveBands,
   resolvePeriodBands,
   resolveRulesetConfig,
   resolveWindowWeeks,
-  scaledBandForMember,
   type PeriodMember,
   type Teller,
 } from '@/lib/rosterBands';
-import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
+import { getFellowIds } from '@/lib/fellows';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
 import {
@@ -38,7 +34,7 @@ import {
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { blockOutsideMembership, coversDate, membershipWindows } from '@/lib/membershipWindow';
 import { refreshCarryOverForPeriod } from '@/lib/carryOver';
-import type { BereikTekort } from '@/lib/unfilledExplanation';
+import { computeBandShortfall, fellowBandOverrides } from '@/lib/bandShortfall';
 import { writeAuditLog } from '@/lib/auditLog';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -361,40 +357,22 @@ async function runGeneration(args: {
       fellowIds,
       distributionMode
     );
-    const releasedByFellow = releasedWeekendDays(periodId);
-    const bandOverrides: Record<string, { WEEKEND: [number, number] }> = {};
-    for (const m of poolMembers) {
-      if (!fellowIds.has(m.id)) continue;
-      const scaled = scaledBandForMember(bands, 'WEEKEND', m, distributionMode);
-      bandOverrides[m.id] = { WEEKEND: fellowWeekendBand(scaled, releasedByFellow.get(m.id) ?? 0) };
-    }
+    const bandOverrides = fellowBandOverrides(periodId, bands, poolMembers, fellowIds, distributionMode);
 
     // What the streefbereik allows at most per counter, everyone together,
-    // next to how many shifts there are: when the maximums fall short, the
-    // solver must leave the rest empty (it never goes past a maximum), and
-    // the planner should be told that rather than "not enough people".
-    // With a band typed in under "Venster en streefbereik" that is too low
-    // - say one worked out while the pool still had 30 people - the band
-    // the app would choose itself for the members there are now goes with
-    // it, in the same terms as that input (`voorgesteld`).
-    const suggestedBands = resolveBands({}, slotCountByTeller, effectiveHeadcount(poolMembers, distributionMode));
-    const CONFIG_KEY: Record<Teller, string> = { AVOND: 'bandAvond', WEEKEND: 'bandWeekend', FEESTDAG: 'bandFeestdag' };
-    const bereikTekort: BereikTekort = {};
-    for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG'] as Teller[]) {
-      let maximaal = 0;
-      for (const m of poolMembers) {
-        const override = teller === 'WEEKEND' ? bandOverrides[m.id]?.WEEKEND : undefined;
-        maximaal += override ? override[1] : Math.max(0, scaledBandForMember(bands, teller, m, distributionMode)[1] + (balances[m.id]?.[teller] ?? 0));
-      }
-      if (maximaal >= slotCountByTeller[teller]) continue;
-      const configured = config[CONFIG_KEY[teller]];
-      const voorgesteld = suggestedBands[teller];
-      bereikTekort[teller] = {
-        maximaal,
-        diensten: slotCountByTeller[teller],
-        ...(Array.isArray(configured) && voorgesteld[1] > Number(configured[1]) ? { voorgesteld } : {}),
-      };
-    }
+    // next to how many shifts there are (lib/bandShortfall.ts, the same
+    // calculation the generation dialog shows before generating): when the
+    // maximums fall short, the solver must leave the rest empty, and the
+    // planner should be told that rather than "not enough people".
+    const bereikTekort = computeBandShortfall({
+      config,
+      bands,
+      slotCountByTeller,
+      members: poolMembers,
+      balances,
+      bandOverrides,
+      distributionMode,
+    });
     // Members whose Geldig vanaf/tot covers only part of the period: their
     // streefbereik is lower in proportion, which is right for someone who
     // starts or leaves halfway and a puzzle when the dates were a slip.

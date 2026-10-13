@@ -12,7 +12,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { FellowWeekendNotice } from './FellowWeekendNotice';
 import { withBasePath } from '@/lib/basePath';
-import { explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
+import { explainBereikTekort, explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
 
 // Native fetch() throws a plain TypeError with a browser-specific, English,
 // technical message ("Failed to fetch", "NetworkError when attempting to
@@ -245,6 +245,53 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       pollCancelledRef.current = true;
     };
   }, []);
+
+  // Whether the streefbereik as typed can hold every shift, asked before
+  // "Genereren" (lib/bandShortfall.ts, audit 9): a band frozen when the pool
+  // had other people leaves shifts empty with every method and window, and
+  // that used to show only after a run.
+  const [bandTekort, setBandTekort] = useState<BereikTekort>({});
+  const bandKey = ruleset
+    ? [ruleset.bandAvond, ruleset.bandWeekend, ruleset.bandFeestdag].map((b) => b.join(',')).join('|')
+    : '';
+  useEffect(() => {
+    if (!isOpen || !ruleset) return;
+    const bands = [ruleset.bandAvond, ruleset.bandWeekend, ruleset.bandFeestdag];
+    if (bands.some(([min, max]) => min > max)) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      const query = new URLSearchParams({
+        bandAvond: ruleset.bandAvond.join(','),
+        bandWeekend: ruleset.bandWeekend.join(','),
+        bandFeestdag: ruleset.bandFeestdag.join(','),
+      });
+      fetch(withBasePath(`/api/planner/period/${periodId}/band-check?${query.toString()}`))
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!cancelled) setBandTekort(data?.data?.bereik_tekort ?? {});
+        })
+        .catch(() => {
+          // Only a hint: generating still works and reports it afterwards.
+        });
+    }, 300);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // bandKey stands for the three bands; the rest of the ruleset doesn't matter here.
+  }, [isOpen, periodId, bandKey]);
+
+  /** Every band that falls short, set to the one the app would choose for the current members. */
+  const applySuggestedBands = () => {
+    if (!ruleset) return;
+    const next = { ...ruleset };
+    for (const [teller, tekort] of Object.entries(bandTekort)) {
+      if (!tekort?.voorgesteld) continue;
+      const key = `band${teller.charAt(0)}${teller.slice(1).toLowerCase()}` as 'bandAvond' | 'bandWeekend' | 'bandFeestdag';
+      next[key] = tekort.voorgesteld;
+    }
+    setRuleset(next);
+  };
 
   // Load the period's current frozen window/band every time the dialog
   // opens - it's otherwise invisible once a period leaves the setup
@@ -752,6 +799,25 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       <p className="text-xs text-red-600">
                         Min mag niet groter zijn dan max. Controleer de streefbereiken hierboven.
                       </p>
+                    )}
+                    {!bandInvalid && explainBereikTekort(bandTekort).length > 0 && (
+                      <div className="bg-amber-50 border border-amber-200 rounded p-3 space-y-2" data-testid="bereik-tekort">
+                        {explainBereikTekort(bandTekort).map((line) => (
+                          <p key={line} className="text-xs text-amber-900">
+                            {line}
+                          </p>
+                        ))}
+                        <p className="text-xs text-amber-900">Zo blijven er diensten leeg, bij elke methode en elk venster.</p>
+                        {Object.values(bandTekort).some((t) => t?.voorgesteld) && (
+                          <button
+                            type="button"
+                            onClick={applySuggestedBands}
+                            className="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                          >
+                            Bereik voor de huidige leden
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )}

@@ -26,6 +26,7 @@ import {
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { writeAuditLog } from '@/lib/auditLog';
 import { objectRows, rowText, badRequest } from '@/lib/requestFields';
 import { isValidIsoDate } from '@/lib/isoDate';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
@@ -162,6 +163,16 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     });
 
     importAll(rows);
+    if (imported > 0) {
+      writeAuditLog({
+        actorId,
+        entiteit: 'schedule_period',
+        entiteitId: id,
+        actie: 'IMPORT',
+        nieuw: { wijziging: 'rooster vooraf geïmporteerd', aantal: imported },
+        now,
+      });
+    }
 
     const response: ApiSuccessResponse<ImportResult> = {
       success: true,

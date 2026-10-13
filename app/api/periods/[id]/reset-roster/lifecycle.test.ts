@@ -9,17 +9,17 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { getRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 import { POST as resetRoster } from './route';
 import { POST as generate } from '../../../planner/period/[id]/generate-roster/route';
-import { POST as unpublish } from '../../../planner/period/[id]/unpublish/route';
 
 /**
  * "Rooster verwijderen" next to the rest of a period's life (audit 9):
  *
- * - while a regeneration runs it is refused, and the regeneration's own
- *   roster is what is left afterwards - never a reset half-overwritten;
- * - a swap request still open from when the roster was published (an
- *   unpublish leaves those alone, as the approve route re-checks who holds
- *   what) is about shifts the reset removed. It should close then, not
- *   come back to the colleague's list once a new roster is published.
+ * while a regeneration runs it is refused, and the regeneration's own
+ * roster is what is left afterwards - never a reset half-overwritten.
+ *
+ * Swap requests play no part: a roster is only removed before it is
+ * published, and swaps only exist on a published one. (A roster published
+ * by mistake and withdrawn at once has none either - the planner's call
+ * after audit 9.)
  */
 
 const ids: Record<string, string> = {};
@@ -153,23 +153,5 @@ describe('Rooster verwijderen in the life of a period', () => {
 
     // Afterwards it goes through.
     expect((await call(resetRoster, `/api/periods/${p.id}/reset-roster`, p.id, {})).status).toBe(200);
-  });
-
-  // Audit 9: the request stays PENDING through unpublish and reset alike.
-  it.fails('closes a swap request still open about the shifts it removes', async () => {
-    const p = period('GEPUBLICEERD');
-    const swap = insert('dienstrooster_swap_request', {
-      periode_id: p.id,
-      aanvrager_person_id: ids.A,
-      aangeboden_slot_id: p.slots[0],
-      gevraagde_slot_id: p.slots[1],
-      respondent_person_id: ids.B,
-      status: 'PENDING',
-      aangemaakt_op: new Date().toISOString(),
-    });
-    expect((await call(unpublish, `/api/planner/period/${p.id}/unpublish`, p.id)).status).toBe(200);
-    expect((await call(resetRoster, `/api/periods/${p.id}/reset-roster`, p.id, {})).status).toBe(200);
-    const row = db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(swap) as { status: string };
-    expect(row.status).not.toBe('PENDING');
   });
 });

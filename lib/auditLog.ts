@@ -49,3 +49,15 @@ export function writeAuditLog(entry: {
     entry.now ?? new Date().toISOString()
   );
 }
+
+/**
+ * A planner acting on a participant's own input - preferences, the hand-in,
+ * the part-time check - for them. Logged, unlike the participant's own
+ * actions, which are not audit-log material (audit 9). `plannerId` is the
+ * planner's id when a planner made the request, null when the participant
+ * did: callers pass `requirePlannerAccess(auth) ? auth.userId : null`.
+ */
+export function writeOnBehalfAuditLog(plannerId: string | null, personId: string, nieuw: Record<string, unknown>): void {
+  if (!plannerId) return;
+  writeAuditLog({ actorId: plannerId, entiteit: 'person', entiteitId: personId, actie: 'UPDATE', nieuw });
+}
