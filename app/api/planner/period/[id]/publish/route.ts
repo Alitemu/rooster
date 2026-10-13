@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
@@ -42,6 +43,11 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const publishedByPersonId = auth!.userId;
 
     const periodId = params.id;
+    // A regeneration under way replaces the roster this would mail to
+    // everyone - and then dies on the row_version publishing moves (audit 11).
+    if (hasRunningJobForPeriod(periodId)) {
+      return NextResponse.json({ success: false, error: GENERATION_RUNNING_MESSAGE }, { status: 409 });
+    }
     const now = new Date().toISOString();
     const body = await parseJsonBody<PublishRequest>(request);
 

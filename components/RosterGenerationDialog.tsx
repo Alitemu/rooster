@@ -192,7 +192,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // loaded, or just PATCHed. Compared against `ruleset` in handleGenerate
   // so a plain "opnieuw genereren"/"langer proberen" click (nothing
   // edited) can skip the PATCH entirely: that PATCH unconditionally
-  // demotes a GEGENEREERD period back to OPEN (see ruleset/route.ts) even
+  // demotes a GEGENEREERD period back to GESLOTEN (see ruleset/route.ts) even
   // when nothing actually changed, which briefly hides the very
   // assignments/gap-filling UI this dialog's result is about to report on
   // if the generate call after it fails for any reason.

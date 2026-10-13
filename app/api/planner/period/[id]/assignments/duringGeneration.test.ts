@@ -13,6 +13,7 @@ import { POST as manualAssign } from './manual-assign/route';
 import { POST as reassign } from './[assignment-id]/reassign/route';
 import { DELETE as remove } from './[assignment-id]/delete/route';
 import { POST as undoLast } from './undo-last/route';
+import { POST as publish } from '../publish/route';
 
 /**
  * The rule: while a generation runs, nobody changes the roster under it
@@ -26,7 +27,7 @@ import { POST as undoLast } from './undo-last/route';
  * waiting for it; on another day the solver could give the same person a
  * second shift that week, a window-rule break nobody chose. "Rooster
  * verwijderen" already refused while a generation ran; manual-assign,
- * reassign, delete and undo now do too.
+ * reassign, delete and undo now do too, and publish (audit 11).
  */
 
 const ids: Record<string, string> = {};
@@ -175,6 +176,14 @@ describe('the roster stays as it is while a generation runs', () => {
     const undone = await undoLast(request(`/api/planner/period/${ids.period}/assignments/undo-last`, 'POST'), period);
     expect(undone.status).toBe(409);
     expect(JSON.stringify(await undone.json())).toMatch(/roostergeneratie/);
+    // Audit 11: publishing the roster being replaced mails everyone the
+    // old one - and the generation then dies on the changed row_version.
+    const published = await publish(
+      request(`/api/planner/period/${ids.period}/publish`, 'POST', { confirmOverrides: true }),
+      period
+    );
+    expect(published.status).toBe(409);
+    expect(JSON.stringify(await published.json())).toMatch(/roostergeneratie/);
 
     release!();
     for (let i = 0; i < 200; i++) {

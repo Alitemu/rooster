@@ -153,19 +153,20 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     };
 
     // A period already sitting on a generated roster (GEGENEREERD) must go
-    // back to OPEN when its ruleset changes - otherwise the existing
-    // assignments (made under the old window/band) could reach
-    // GEPUBLICEERD without ever being regenerated against the new one.
-    // OPEN is exactly the status generate-roster already accepts and
-    // re-promotes to GEGENEREERD on its own next run, so this doesn't
-    // block the normal "adjust, then regenerate" flow this route exists
-    // for - it just removes the gap where a planner could adjust and then
-    // skip regenerating.
+    // back when its ruleset changes - otherwise the existing assignments
+    // (made under the old window/band) could reach GEPUBLICEERD without
+    // ever being regenerated against the new one. Back to GESLOTEN, as
+    // "Rooster verwijderen" does: generate-roster accepts it and re-promotes
+    // it on its next run, and the preferences stay closed as they were
+    // under the generated roster. It used to be OPEN, which opened them
+    // again whenever the deadline was still ahead - a planner who changed
+    // the window in the generation dialog and then saw the generation
+    // fail had preferences open without knowing it (audit 11).
     let sql: string;
     const sqlParams: unknown[] = [JSON.stringify(updated)];
     if (period.status === 'GEGENEREERD') {
       sql = 'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, status = ?, row_version = row_version + 1 WHERE id = ?';
-      sqlParams.push('OPEN', id);
+      sqlParams.push('GESLOTEN', id);
     } else {
       sql = 'UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ?, row_version = row_version + 1 WHERE id = ?';
       sqlParams.push(id);
@@ -217,7 +218,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       oud: { status: period.status, ruleset: config },
       nieuw: {
         wijziging: 'regels gewijzigd',
-        status: period.status === 'GEGENEREERD' ? 'OPEN' : period.status,
+        status: period.status === 'GEGENEREERD' ? 'GESLOTEN' : period.status,
         ruleset: updated,
       },
     });

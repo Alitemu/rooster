@@ -57,9 +57,63 @@ export function requiredGapWeeks(tellerA: string, tellerB: string, windows: Wind
 }
 
 /**
- * True if `personId` already has an assignment elsewhere in the period
- * that sits too close (per requiredGapWeeks) to a shift of `targetTeller`
- * in `targetIsoYear`/`targetIsoWeek`.
+ * The shifts a warning about `periodId` weighs, for one person or for
+ * everyone (audit 11): the period's own, the person's shifts in the
+ * pool's other periods outside the prullenbak - a generated or published
+ * roster, or a shift filled in by hand beforehand in one still being
+ * made (a SOLVER row of a period waiting to be generated again is no
+ * roster) - and the period's own "Eerdere toewijzingen", which carry
+ * history from before the app. The solver and the publication check
+ * already looked across the boundary; the warnings while filling, moving
+ * or swapping a shift looked inside the period only, so someone who
+ * worked the last Sunday before it was offered for the Monday after
+ * without a word. Only the years around the target matter for a window
+ * of weeks, so only those are read.
+ */
+function shiftsAround(
+  periodId: string,
+  targetIsoYear: number,
+  personId: string | null,
+  excludeSlotId?: string
+): Array<{ person_id: string; iso_jaar: number; iso_week: number; teller: string }> {
+  const personClause = personId ? 'AND a.person_id = @person' : '';
+  return db
+    .prepare(
+      `SELECT a.person_id, s.iso_jaar, s.iso_week, st.teller
+       FROM dienstrooster_assignment a
+       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+       WHERE a.schedule_version_id = @period ${personClause}
+         ${excludeSlotId ? 'AND a.slot_id != @exclude' : ''}
+       UNION ALL
+       SELECT a.person_id, s.iso_jaar, s.iso_week, st.teller
+       FROM dienstrooster_assignment a
+       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
+       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+       JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
+       WHERE sp.pool_id = (SELECT pool_id FROM dienstrooster_schedule_period WHERE id = @period)
+         AND sp.id != @period AND sp.verwijderd_op IS NULL
+         AND (sp.status IN ('GEGENEREERD', 'GEPUBLICEERD') OR a.bron IN ('MANUAL', 'OVERRIDE'))
+         AND s.iso_jaar BETWEEN @year - 1 AND @year + 1 ${personClause}
+       UNION ALL
+       SELECT pa.person_id, pa.iso_jaar, pa.iso_week, pa.teller
+       FROM dienstrooster_prior_assignment pa
+       WHERE pa.period_id = @period AND pa.person_id IS NOT NULL
+         ${personId ? 'AND pa.person_id = @person' : ''}`
+    )
+    .all({
+      period: periodId,
+      year: targetIsoYear,
+      ...(personId ? { person: personId } : {}),
+      ...(excludeSlotId ? { exclude: excludeSlotId } : {}),
+    }) as Array<{ person_id: string; iso_jaar: number; iso_week: number; teller: string }>;
+}
+
+/**
+ * True if `personId` already has a shift (shiftsAround: this period, the
+ * pool's other periods, "Eerdere toewijzingen") that sits too close (per
+ * requiredGapWeeks) to a shift of `targetTeller` in
+ * `targetIsoYear`/`targetIsoWeek`.
  */
 export function personWouldViolateWindowRule(
   periodId: string,
@@ -72,18 +126,7 @@ export function personWouldViolateWindowRule(
 ): boolean {
   if (windows.avond <= 0 && windows.weekendFeestdag <= 0) return false;
 
-  const rows = db
-    .prepare(
-      `SELECT s.iso_jaar, s.iso_week, st.teller
-       FROM dienstrooster_assignment a
-       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
-       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-       WHERE a.schedule_version_id = ? AND a.person_id = ?
-         ${excludeSlotId ? 'AND a.slot_id != ?' : ''}`
-    )
-    .all(
-      ...(excludeSlotId ? [periodId, personId, excludeSlotId] : [periodId, personId])
-    ) as Array<{ iso_jaar: number; iso_week: number; teller: string }>;
+  const rows = shiftsAround(periodId, targetIsoYear, personId, excludeSlotId);
 
   return rows.some((r) => {
     const required = requiredGapWeeks(targetTeller, r.teller, windows);
@@ -168,8 +211,8 @@ export function countWindowRuleViolations(periodId: string, windows: WindowWeeks
 }
 
 /**
- * Person ids that already have an assignment elsewhere in the period too
- * close (per requiredGapWeeks) to a shift of `targetTeller` in
+ * Person ids that already have a shift (shiftsAround) too close (per
+ * requiredGapWeeks) to a shift of `targetTeller` in
  * `targetIsoYear`/`targetIsoWeek` - i.e. who would violate the window rule
  * if assigned to that slot. Used to categorise a candidate list in one
  * query instead of calling personWouldViolateWindowRule per person.
@@ -184,21 +227,7 @@ export function getWindowConflictingPersonIds(
 ): Set<string> {
   if (windows.avond <= 0 && windows.weekendFeestdag <= 0) return new Set();
 
-  const rows = db
-    .prepare(
-      `SELECT a.person_id, s.iso_jaar, s.iso_week, st.teller
-       FROM dienstrooster_assignment a
-       JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
-       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-       WHERE a.schedule_version_id = ?
-         ${excludeSlotId ? 'AND a.slot_id != ?' : ''}`
-    )
-    .all(...(excludeSlotId ? [periodId, excludeSlotId] : [periodId])) as Array<{
-    person_id: string;
-    iso_jaar: number;
-    iso_week: number;
-    teller: string;
-  }>;
+  const rows = shiftsAround(periodId, targetIsoYear, null, excludeSlotId);
 
   const conflicting = new Set<string>();
   for (const row of rows) {
