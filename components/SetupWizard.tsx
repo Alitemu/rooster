@@ -1596,6 +1596,14 @@ export function SetupWizard({ period, onComplete }: Props) {
               Upload een CSV-bestand met beginsaldi uit de vorige periode: hoeveel diensten iemand
               per diensttype meer of minder heeft gedraaid dan het eigen streefaantal. Formaat:
             </p>
+            {/* Audit 10: a planner importing the saldo of a period the app
+                rostered itself counted it twice, once by hand and once
+                through the automatic overloop. */}
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
+              Alleen nodig voor de eerste periode die je in deze app roostert. Is de vorige periode hier
+              gepubliceerd, dan neemt de app het saldo daaruit bij het openen vanzelf mee. Een import telt
+              daar nog eens bij op.
+            </div>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,AVOND_delta,WEEKEND_delta
               <br />
@@ -1653,8 +1661,16 @@ export function SetupWizard({ period, onComplete }: Props) {
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
               Losstaand van de beginsaldi hierboven: geef per persoon aan welke feestdag die persoon in
-              welk jaar heeft gedraaid, zodat de verdeling van de feestdagen doorloopt. Formaat:
+              welk jaar heeft gedraaid. Formaat:
             </p>
+            {/* Audit 10: the text promised the rotation would carry on, but
+                nothing reads holiday_history yet - not the solver, not the
+                app. */}
+            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
+              Dit wordt bewaard, maar telt nog niet mee bij het verdelen. Hoeveel feestdagdiensten
+              iemand krijgt, regelt het streefbereik. Wie welke feestdag krijgt, houdt nog geen rekening
+              met vorige jaren.
+            </div>
             <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
               codenaam,holiday_group,year
               <br />

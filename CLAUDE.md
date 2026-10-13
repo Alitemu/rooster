@@ -5,7 +5,8 @@
 Dienstrooster is a scheduling application for medical wards (20-40 staff members) with:
 - Fair shift distribution using solver (CP-SAT)
 - Preference blocking (absolute + soft)
-- Holiday rotation tracking
+- Holiday history (imported and stored; not yet used for distributing
+  feestdagdiensten - the solver doesn't read it, and the wizard says so)
 - Part-time support
 - Automatic roster generation with diagnostics
 
@@ -236,8 +237,13 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
 - `shift_type` - shift definitions (evening, weekend, holiday)
 - `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type)
-- `holiday_history` - holiday group assignments across years
-- `ledger_entry` - balance adjustments (categorie CARRY_OVER, CORRECTIE, BEGINSALDO)
+- `holiday_history` - holiday group assignments across years (stored by
+  the wizard's import, read by nothing yet: the solver's holiday rotation
+  is not modelled, solver/objective.py)
+- `ledger_entry` - balance adjustments (categorie CARRY_OVER, CORRECTIE, BEGINSALDO).
+  BEGINSALDO (the wizard's "Beginsaldi importeren") is for a pool's first
+  period in the app only; after a period published here the carry-over is
+  booked by itself, and the wizard warns that an import counts on top.
 - `audit_log` - all actions by admins/planners (lib/auditLog.ts
   `writeAuditLog`; never passwords, tokens or link hashes). Since audit 6
   also creating, opening and closing a period, its deadline, rules,
@@ -302,6 +308,22 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   period list's row): any status, checked like a new period's name
   (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),
   audit-logged. Mails already sent keep the old name.
+- **The prullenbak** (lib/periodTrash.ts): any status may go in, a
+  published one too (participants lose it at once), restorable for 30
+  days, then purged with everything that references it (its pending undo
+  included). A period in the trash is no previous period: the one lookup
+  of "the previous published period" (lib/previousPeriod.ts
+  findPreviousPublishedPeriod - carry-over, the overloop confirmation gate,
+  "Eerdere toewijzingen") skips it, and lib/previousPeriod.test.ts fails on
+  any other place that queries it itself (audit 10). Carry-over already
+  booked from it stays when nothing else comes before, as for a roster
+  unpublished for the moment.
+- **While a generation runs** manual-assign, reassign, delete and undo
+  answer 409 (GENERATION_RUNNING_MESSAGE, lib/rosterGenerationJobs.ts), as
+  reset-roster does: the solver's answer, written when it comes, was built
+  without the change - on the same day it killed the whole result on the
+  UNIQUE constraint, on another it could give someone a second shift that
+  week (audit 10).
 
 **Undo on the period page:** a manual assign/reassign/remove leaves one
 "ongedaan maken" (lib/pendingUndo.ts) that records its `onderdeel` - the
@@ -309,7 +331,8 @@ heading it was made under (ROOSTER, VOORAF = "Rooster vooraf invullen",
 HERVERDELING = "Voorstellen voor herverdeling"; the client sends it, the
 route falls back to ROOSTER). PlannerDashboard shows the button inside that
 section, so it folds away with it; a hidden herverdeling section hands it
-to the roster.
+to the roster. A generation clears it, like "Rooster verwijderen" and
+"Terug naar open": it belonged to the roster that was replaced (audit 10).
 
 **Version:** the header shows `versie` from package.json, right of the
 title - bump it when releasing. Three numbers only (npm and release.yml
@@ -468,7 +491,18 @@ of the period got shifts nobody could take.
   audit row): the previous roster keeps being corrected while the next
   period is open for preferences, and a correction made after it opened
   never reached a ledger (audit 8). A published next period is not
-  generated again, so it keeps what it had.
+  generated again, so it keeps what it had. Rows are dated ISO like every
+  other ledger row (they used datetime('now'), which sorts wrong as text).
+- **"Eerdere toewijzingen"** (dienstrooster_prior_assignment, the previous
+  roster's last weeks for the window rule across the boundary, read by the
+  solver and lib/windowRule.ts): the AFGELEID rows follow the previous
+  roster as it is now - `refreshDerivedPriorAssignments`
+  (lib/previousPeriod.ts) at "afleiden" and before every generation, with
+  an audit row when something changed. A day someone else works since (a
+  swap) gets them, a day nobody works loses its row, rows from a period
+  that is no longer the previous one go; HANDMATIG rows (including a day
+  the planner cleared) and ONBEKEND stay. They used to be a snapshot that
+  "afleiden" again never touched (audit 10).
 - **Why shifts stayed empty.** generate-roster marks each unfilled slot
   with `reden`: GEEN_LID (no member's Geldig vanaf/tot covers that date)
   or IEDEREEN_GEBLOKKEERD (every member who covers it has ABSOLUUT, the
@@ -600,7 +634,9 @@ Show live in settings screen with interpretation in plain Dutch.
    - The codenaam at login is case-insensitive (COLLATE NOCASE in
      staff-login, first-run-setup and the server scripts; an exact match
      wins if two staff accounts differ only in case). New staff accounts
-     can't differ from an existing codenaam only in case.
+     can't differ from an existing codenaam only in case (asked again in
+     the transaction that writes it: two requests at once both passed the
+     check while the password was hashed, audit 10).
    - Ten wrong guesses per account (and per client) per quarter of an
      hour, also when they arrive at the same moment: staff-login,
      change-password, totp/disable, totp/confirm and first-run-setup take

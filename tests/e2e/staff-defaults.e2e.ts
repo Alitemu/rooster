@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
+import { localIsoDate } from '@/lib/localDate';
 import { getBaseUrl, loginAsPlanner } from './setup';
 
 /**
@@ -64,7 +65,9 @@ test('a new member starts with the dates of the period being rostered', async ({
 test('without a period being rostered: today until 31 December 2029', async ({ page }) => {
   const id = pool('E2E-Geen-periode');
   const { vanaf, tot, uitleg } = await newMemberDates(page, id);
-  await expect(vanaf).toHaveValue(new Date().toISOString().slice(0, 10));
+  // The Dutch date, like the page: in UTC it is still yesterday until 01:00
+  // or 02:00 (audit 10 caught this test failing at 00:47).
+  await expect(vanaf).toHaveValue(localIsoDate());
   await expect(tot).toHaveValue('2029-12-31');
   await expect(uitleg).toHaveText('Geldig vanaf staat op vandaag en Geldig tot op 31 december 2029.');
 });

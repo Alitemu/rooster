@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
+import fs from 'fs';
+import path from 'path';
 import { localIsoDate } from './localDate';
 
 /**
@@ -32,5 +34,24 @@ describe('localIsoDate', () => {
         expect(local).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       })
     );
+  });
+});
+
+describe('nobody works out today in UTC', () => {
+  // Static, over the app and everything that checks it: audit 10 found the
+  // e2e test for "Personeel beheren" doing what audit 9 took out of the page
+  // itself, and failing at 00:47 Dutch time while the page was right.
+  it('no new Date().toISOString() cut to a date outside lib/localDate.ts', () => {
+    const walk = (dir: string): string[] =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.name === 'node_modules' ? [] : e.isDirectory() ? walk(path.join(dir, e.name)) : /\.(tsx?|mjs)$/.test(e.name) ? [path.join(dir, e.name)] : []
+      );
+    const todayInUtc = /new Date\(\)\.toISOString\(\)\.(slice\(0, ?10\)|split\('T'\)\[0\]|substring\(0, ?10\))/;
+    const offenders = ['app', 'lib', 'components', 'tests', 'scripts']
+      .flatMap((d) => walk(path.join(process.cwd(), d)))
+      .filter((f) => !f.endsWith(path.join('lib', 'localDate.ts')) && !f.endsWith(path.join('lib', 'localDate.test.ts')))
+      .filter((f) => todayInUtc.test(fs.readFileSync(f, 'utf8')))
+      .map((f) => path.relative(process.cwd(), f));
+    expect(offenders).toEqual([]);
   });
 });
