@@ -116,7 +116,9 @@ class RosterSolver:
         objective_mode: str = 'weighted',
         window_weeks_avond: Optional[int] = None,
         window_weeks_weekend_feestdag: Optional[int] = None,
-        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None
+        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None,
+        feestdag_targets: Optional[dict[str, float]] = None,
+        feestdag_history_weight: float = 1.0
     ) -> dict:
         """
         Build the CP-SAT model: every constraint always, the combined
@@ -257,6 +259,18 @@ class RosterSolver:
             band_overrides=band_overrides
         )
 
+        # Feestdagdiensten over the years (objective.py
+        # add_feestdag_history_objective): built in both modes, since the
+        # lexicographic planner minimises the same deviations as a phase of
+        # its own. Nothing without targets - a caller that predates them.
+        feestdag_cost = 0
+        feestdag_deviations: list = []
+        if feestdag_targets:
+            feestdag_cost, feestdag_deviations = ObjectiveBuilder(self.model).add_feestdag_history_objective(
+                assignment_vars, people, slots, feestdag_targets,
+                already_assigned=already_assigned, weight=feestdag_history_weight
+            )
+
         objective_builder = None
         if objective_mode == 'weighted':
             objective_builder = ObjectiveBuilder(self.model)
@@ -303,6 +317,7 @@ class RosterSolver:
                 band_slack_cost=band_slack_cost,
                 soft_cost=soft_cost,
                 imbalance_cost=imbalance_cost,
+                holiday_cost=feestdag_cost,
                 preference_reward_cost=preference_reward_cost
             )
         else:
@@ -319,6 +334,7 @@ class RosterSolver:
             'assignment_vars': assignment_vars,
             'shortfall_vars': shortfall_vars,
             'band_slack_vars': band_slack_vars,
+            'feestdag_deviations': feestdag_deviations,
             'constraints_builder': constraint_builder,
             'objective_builder': objective_builder
         }
@@ -406,6 +422,10 @@ class RosterSolver:
             repeat 2 on the second-worst, third-worst, etc. - this is a
             lighter approximation of the same idea, one extra solve
             instead of up to N).
+        2c. Feestdagdiensten over the years - only with feestdag_targets:
+            minimize everyone's distance to their own target
+            (objective.py add_feestdag_history_objective), within the
+            bands 2 and 2b fixed. Before liever-niet on purpose.
         3. Soft blocking - minimize weighted LIEVER_NIET violations.
         4. Preference - maximize weighted VOORKEUR honoured, with
            everything above already locked in.
@@ -429,7 +449,8 @@ class RosterSolver:
         band_slack_vars = model_data['band_slack_vars']
         assignment_vars = model_data['assignment_vars']
 
-        PHASES = 5
+        feestdag_deviations = model_data.get('feestdag_deviations') or []
+        PHASES = 6 if feestdag_deviations else 5
         phase_time_limit = max(1.0, self.time_limit_seconds / PHASES)
         total_start = time.time()
 
@@ -506,6 +527,17 @@ class RosterSolver:
             if not ok:
                 return stop_at_failed_phase('2b eerlijkheid (totale afwijking)')
             model.Add(sum(deviations) <= round(sum_dev_opt))
+
+        # Phase 2c: feestdagdiensten over the years (objective.py
+        # add_feestdag_history_objective) - fairness too, so before
+        # liever-niet: someone who marks every feestdag liever niet must not
+        # keep them off their count for years. Within the bands phase 2
+        # already fixed, and never against a hard block.
+        if feestdag_deviations:
+            ok, feestdag_opt = run_phase(sum(feestdag_deviations), 'min', '2c feestdagen over de jaren')
+            if not ok:
+                return stop_at_failed_phase('2c feestdagen over de jaren')
+            model.Add(sum(feestdag_deviations) <= round(feestdag_opt))
 
         # Phase 3: soft blocking (LIEVER_NIET).
         soft_terms = [
@@ -659,7 +691,8 @@ class RosterSolver:
         random_seed: Optional[int] = None,
         window_weeks_avond: Optional[int] = None,
         window_weeks_weekend_feestdag: Optional[int] = None,
-        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None
+        band_overrides: Optional[dict[str, dict[str, tuple[int, int]]]] = None,
+        feestdag_targets: Optional[dict[str, float]] = None
     ) -> dict:
         """
         End-to-end: build model, solve (weighted or lexicographic per
@@ -691,7 +724,8 @@ class RosterSolver:
                 preference_reward_weight, objective_mode,
                 window_weeks_avond=window_weeks_avond,
                 window_weeks_weekend_feestdag=window_weeks_weekend_feestdag,
-                band_overrides=band_overrides
+                band_overrides=band_overrides,
+                feestdag_targets=feestdag_targets
             )
 
             # Solve

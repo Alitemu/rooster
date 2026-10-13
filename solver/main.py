@@ -9,6 +9,7 @@ Phase 2: Constraint implementation and solver execution
 import asyncio
 import functools
 import logging
+import math
 import os
 import time
 from contextlib import asynccontextmanager
@@ -316,6 +317,23 @@ class SolverInput(BaseModel):
     # themselves (lib/fellows.ts, lib/rosterBands.ts). Empty for everyone
     # else and for any caller that predates it.
     band_overrides: dict[str, dict[str, tuple[int, int]]] = {}
+    # person_id -> how many feestdagdiensten this person would ideally get
+    # this period: their fair share of this period's feestdagen plus what
+    # they are behind (minus what they are ahead) from every period before,
+    # in proportion to the time they took part (lib/feestdagHistory.ts).
+    # The number over the years is what matters, not which feestdag. The
+    # solver pulls each count toward it rounded to a whole shift, within
+    # the bands (objective.py add_feestdag_history_objective). Empty for a
+    # caller that predates it: nothing changes then.
+    feestdag_targets: dict[str, float] = {}
+
+    @field_validator('feestdag_targets')
+    @classmethod
+    def _feestdag_targets_are_finite(cls, value: dict[str, float]) -> dict[str, float]:
+        for target in value.values():
+            if not math.isfinite(target) or abs(target) > 1000:
+                raise ValueError('feestdag target must be a finite number of shifts')
+        return value
 
     @field_validator('band_overrides')
     @classmethod
@@ -555,6 +573,7 @@ async def solve_roster(request: SolverInput, raw_request: Request):
             participation_factors=request.participation_factors,
             coverage_factors=request.coverage_factors,
             band_overrides=request.band_overrides,
+            feestdag_targets=request.feestdag_targets,
             band_deviation_penalty=request.rules.band_deviation_penalty,
             band_deviation_multiplier=request.rules.band_deviation_multiplier,
             holiday_spread_weeks=request.rules.holiday_spread_weeks,
@@ -663,6 +682,7 @@ async def solve_roster_greedy(request: GreedySolverInput, raw_request: Request):
             participation_factors=request.participation_factors,
             coverage_factors=request.coverage_factors,
             band_overrides=request.band_overrides,
+            feestdag_targets=request.feestdag_targets,
             holiday_spread_weeks=request.rules.holiday_spread_weeks,
             variant=request.variant,
             random_seed=request.rules.random_seed,

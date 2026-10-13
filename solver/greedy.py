@@ -99,6 +99,7 @@ def run_greedy_construction(
     random_seed: Optional[int] = None,
     window_weeks_avond: Optional[int] = None,
     window_weeks_weekend_feestdag: Optional[int] = None,
+    feestdag_targets: Optional[dict[str, float]] = None,
 ) -> dict:
     """
     One construction attempt. Returns the same result shape
@@ -133,6 +134,7 @@ def run_greedy_construction(
     participation_factors = participation_factors or {}
     coverage_factors = coverage_factors or {}
     band_overrides = band_overrides or {}
+    feestdag_targets = feestdag_targets or {}
     counters = ['AVOND', 'WEEKEND', 'FEESTDAG']
 
     per_teller_windows = window_weeks_avond is not None or window_weeks_weekend_feestdag is not None
@@ -275,6 +277,19 @@ def run_greedy_construction(
         ]
         if not eligible:
             return None
+
+        # Feestdagdiensten over the years (objective.py
+        # add_feestdag_history_objective, the same whole shifts): only who
+        # is furthest from their own target takes part in the tiers below,
+        # the way the CP-SAT planners put it before liever-niet.
+        if counter == 'FEESTDAG' and feestdag_targets:
+            def still_to_go(p: str) -> int:
+                target = feestdag_targets.get(p)
+                if target is None:
+                    return 0
+                return math.floor(target + 0.5) - assigned_count[p].get('FEESTDAG', 0)
+            furthest = max(still_to_go(p) for p in eligible)
+            eligible = [p for p in eligible if still_to_go(p) == furthest]
 
         preferred = [p for p in eligible if (p, slot['id']) in preferred_slots]
         if preferred:

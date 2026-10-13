@@ -337,17 +337,68 @@ class ObjectiveBuilder:
         self.objective_terms['band_slack'] = slack_cost
         return slack_cost
     # ========================================================================
-    # Holiday rotation equity: not modelled
+    # Feestdagdiensten over the years
     # ========================================================================
-    #
-    # An add_holiday_equity_objective() stub used to sit here. It was never
-    # called by solver.py, and its inner loop ended in `pass` before adding
-    # any cost - so it always returned 0 and contributed nothing.
-    #
-    # Fair holiday rotation is currently tracked outside the solver, in the
-    # holiday_history table (see lib/holidays.ts and the import-holidays
-    # route). Folding it into the objective is a real piece of work, not a
-    # gap to paper over with an empty function.
+
+    def add_feestdag_history_objective(
+        self,
+        assignment_vars: dict[tuple[str, str], cp_model.IntVar],
+        people: list[str],
+        slots: list[dict],
+        targets: dict[str, float],
+        already_assigned: Optional[dict[str, dict[str, int]]] = None,
+        weight: float = 1.0,
+    ):
+        """
+        Objective: everyone about as many feestdagdiensten over the years.
+
+        What matters to the planner is the number over the years, not which
+        feestdag (the planner's words). A period has few of them - 7 for 15
+        people from January to September gives everyone a band of 0 or 1 -
+        and the overloop only books what falls outside the band, so who got
+        the one and who got none was forgotten, and the next period could
+        pick the same people again.
+
+        `targets` (person_id -> how many feestdagdiensten they would ideally
+        get this period: their fair share of this period plus what they are
+        behind, or minus what they are ahead, from every period before, all
+        in proportion to the time they took part - lib/feestdagHistory.ts)
+        comes from the app. This term pulls each person's count, the
+        manual pre-fills included, toward that target rounded to a whole
+        shift. Whole shifts on purpose: someone 1.4 behind and someone 1.3
+        behind are the same here, so a liever-niet or a voorkeur still
+        decides between them; only a real difference does.
+
+        It never moves a band: the band constraints and their slack come
+        first. Returns the cost and the per-person deviations, which the
+        lexicographic planner minimises as a phase of its own.
+        """
+        deviations = []
+        for person_id in people:
+            if person_id not in targets:
+                continue
+            counter_vars = [
+                assignment_vars[(person_id, slot['id'])]
+                for slot in slots
+                if slot.get('shift_type_name') == 'FEESTDAG' and (person_id, slot['id']) in assignment_vars
+            ]
+            if not counter_vars:
+                continue
+            already = already_assigned.get(person_id, {}).get('FEESTDAG', 0) if already_assigned else 0
+            # Half up, not Python's round (half to even): 0.5 behind counts
+            # as a whole shift, for everyone alike.
+            target = math.floor(targets[person_id] + 0.5)
+            low = already - target
+            high = already + len(counter_vars) - target
+            diff = self.model.NewIntVar(low, high, f'feestdag_diff_{person_id}')
+            self.model.Add(diff == sum(counter_vars) + already - target)
+            deviation = self.model.NewIntVar(0, max(abs(low), abs(high)), f'feestdag_dev_{person_id}')
+            self.model.AddAbsEquality(deviation, diff)
+            deviations.append(deviation)
+
+        cost = weight * sum(deviations) if deviations else 0
+        self.objective_terms['feestdag_history'] = cost
+        return cost, deviations
 
     # ========================================================================
     # Combined Objective
