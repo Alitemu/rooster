@@ -11,8 +11,10 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
 import {
+  effectiveHeadcount,
   fellowWeekendBand,
   loadPeriodMembers,
+  resolveBands,
   resolvePeriodBands,
   resolveRulesetConfig,
   resolveWindowWeeks,
@@ -36,6 +38,7 @@ import {
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { blockOutsideMembership, coversDate, membershipWindows } from '@/lib/membershipWindow';
 import { refreshCarryOverForPeriod } from '@/lib/carryOver';
+import type { BereikTekort } from '@/lib/unfilledExplanation';
 import { writeAuditLog } from '@/lib/auditLog';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -370,15 +373,32 @@ async function runGeneration(args: {
     // next to how many shifts there are: when the maximums fall short, the
     // solver must leave the rest empty (it never goes past a maximum), and
     // the planner should be told that rather than "not enough people".
-    const bereikTekort: Partial<Record<Teller, { maximaal: number; diensten: number }>> = {};
+    // With a band typed in under "Venster en streefbereik" that is too low
+    // - say one worked out while the pool still had 30 people - the band
+    // the app would choose itself for the members there are now goes with
+    // it, in the same terms as that input (`voorgesteld`).
+    const suggestedBands = resolveBands({}, slotCountByTeller, effectiveHeadcount(poolMembers, distributionMode));
+    const CONFIG_KEY: Record<Teller, string> = { AVOND: 'bandAvond', WEEKEND: 'bandWeekend', FEESTDAG: 'bandFeestdag' };
+    const bereikTekort: BereikTekort = {};
     for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG'] as Teller[]) {
       let maximaal = 0;
       for (const m of poolMembers) {
         const override = teller === 'WEEKEND' ? bandOverrides[m.id]?.WEEKEND : undefined;
         maximaal += override ? override[1] : Math.max(0, scaledBandForMember(bands, teller, m, distributionMode)[1] + (balances[m.id]?.[teller] ?? 0));
       }
-      if (maximaal < slotCountByTeller[teller]) bereikTekort[teller] = { maximaal, diensten: slotCountByTeller[teller] };
+      if (maximaal >= slotCountByTeller[teller]) continue;
+      const configured = config[CONFIG_KEY[teller]];
+      const voorgesteld = suggestedBands[teller];
+      bereikTekort[teller] = {
+        maximaal,
+        diensten: slotCountByTeller[teller],
+        ...(Array.isArray(configured) && voorgesteld[1] > Number(configured[1]) ? { voorgesteld } : {}),
+      };
     }
+    // Members whose Geldig vanaf/tot covers only part of the period: their
+    // streefbereik is lower in proportion, which is right for someone who
+    // starts or leaves halfway and a puzzle when the dates were a slip.
+    const deelsLid = poolMembers.filter((m) => m.dekking < 1).length;
 
     // Fetch the confirmed carry-over from the previous period (the "Prior
     // Assignments" screen, gated above by overloop_bevestigd_op) - without
@@ -724,6 +744,7 @@ async function runGeneration(args: {
       unfilled_slots: unfilledSlots,
       fully_covered: unfilledSlots.length === 0,
       bereik_tekort: bereikTekort,
+      deels_lid: deelsLid,
       cost: solverOutput.diagnostics.total_cost,
       violations: solverOutput.diagnostics.violations,
       time_seconds: solverOutput.diagnostics.time_seconds,

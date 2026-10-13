@@ -33,6 +33,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import type { BereikTekort } from '@/lib/unfilledExplanation';
 
 export type RosterGenerationJobStatus = 'RUNNING' | 'DONE' | 'ERROR';
 
@@ -54,8 +55,11 @@ export interface RosterGenerationJobResult {
     reden: 'GEEN_LID' | 'IEDEREEN_GEBLOKKEERD' | null;
   }>;
   fully_covered: boolean;
-  // Counters whose maximums, everyone together, are fewer than its shifts.
-  bereik_tekort: Partial<Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', { maximaal: number; diensten: number }>>;
+  // Counters whose maximums, everyone together, are fewer than its shifts,
+  // with the band the app would choose itself when a typed one is lower.
+  bereik_tekort: BereikTekort;
+  // Members whose Geldig vanaf/tot covers only part of the period.
+  deels_lid: number;
   cost: number;
   violations: Record<string, number>;
   time_seconds: number;

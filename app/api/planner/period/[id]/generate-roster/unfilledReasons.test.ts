@@ -136,7 +136,11 @@ describe('generate-roster says why shifts stayed empty', () => {
     expect(reden['2031-01-06']).toBe('IEDEREEN_GEBLOKKEERD');
     // The rest of the first week: people were there, the band of one each stopped them.
     for (const datum of ['2031-01-07', '2031-01-08', '2031-01-09', '2031-01-10']) expect(reden[datum]).toBeNull();
-    // Two people, at most one avonddienst each (scaled for half the period: still one), ten avonddiensten.
-    expect(result.bereik_tekort.AVOND).toEqual({ maximaal: 2, diensten: 10 });
+    // Two people, at most one avonddienst each (scaled for half the period:
+    // still one), ten avonddiensten. Both there half the period are one
+    // effective person, so the band the app would choose itself is all ten
+    // (and one to spare, as its default bands always have).
+    expect(result.bereik_tekort.AVOND).toEqual({ maximaal: 2, diensten: 10, voorgesteld: [10, 11] });
+    expect(result.deels_lid).toBe(2);
   });
 });

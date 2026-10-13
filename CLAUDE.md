@@ -390,6 +390,13 @@ candidates leave the person out; swap create and approve refuse it; and
 the publication check lists such a shift as an issue (only possible when
 the membership changed after the roster was made).
 
+Adding someone on "Personeel beheren" starts with the dates of the pool's
+one period being rostered (OPEN, GESLOTEN or GEGENEREERD), like the setup
+wizard's own step, and says so under the form; with none, or two at once,
+today until 2029-12-31 (lib/membershipDefaults.ts). It used to start at
+today and an empty Geldig tot, and a planner who typed an end date short
+of the period got shifts nobody could take.
+
 ## Streefbereik, venster and the solver's phases
 
 - **Bands over the effective headcount.** The default band per teller is
@@ -428,7 +435,12 @@ the membership changed after the roster was made).
   or IEDEREEN_GEBLOKKEERD (every member who covers it has ABSOLUUT, the
   membership blocks included), otherwise null; and `bereik_tekort` per
   teller when the members' maximums together (scaled band plus balance, a
-  fellow's own weekend band) are fewer than the slots. RosterGenerationDialog
+  fellow's own weekend band) are fewer than the slots, with `voorgesteld`
+  (the band the app would choose itself for the members there are now)
+  when a typed band is lower; `deels_lid` counts the members whose
+  membership covers only part of the period. The shortfall accounts for
+  that many of the unexplained shifts, so they are not named twice.
+  RosterGenerationDialog
   words it with lib/unfilledExplanation.ts `explainUnfilled`, per cause,
   instead of one "not enough people" for all of them: a planner whose
   memberships ended halfway the period saw 160 empty shifts with every

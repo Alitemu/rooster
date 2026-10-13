@@ -18,6 +18,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { withBasePath } from '@/lib/basePath';
+import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults } from '@/lib/membershipDefaults';
 
 interface Pool {
   id: string;
@@ -49,10 +50,13 @@ export default function PoolStaffPage() {
   const [staffLoading, setStaffLoading] = useState(true);
   const [staffError, setStaffError] = useState<string | null>(null);
 
+  // Until the periods are in: today until the fallback end, never an empty
+  // Geldig tot (lib/membershipDefaults.ts).
+  const [defaults, setDefaults] = useState<MembershipDefaults>(() => newMembershipDefaults([], poolId, todayISO()));
   const [newMember, setNewMember] = useState({
     codenaam: '',
-    geldig_vanaf: todayISO(),
-    geldig_tot: '',
+    geldig_vanaf: defaults.geldig_vanaf,
+    geldig_tot: defaults.geldig_tot,
     deelnamefactor: 1,
   });
   const [addingMember, setAddingMember] = useState(false);
@@ -120,6 +124,29 @@ export default function PoolStaffPage() {
     loadPendingUndo();
   }, [loadStaff, loadPendingUndo]);
 
+  // The period being rostered gives the new member's dates; a date the
+  // planner already changed stays theirs.
+  useEffect(() => {
+    fetch(withBasePath('/api/periods'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data) return;
+        const next = newMembershipDefaults((data.data || []) as PeriodForDefaults[], poolId, todayISO());
+        setNewMember((prev) => {
+          const initial = newMembershipDefaults([], poolId, todayISO());
+          return {
+            ...prev,
+            geldig_vanaf: prev.geldig_vanaf === initial.geldig_vanaf ? next.geldig_vanaf : prev.geldig_vanaf,
+            geldig_tot: prev.geldig_tot === initial.geldig_tot ? next.geldig_tot : prev.geldig_tot,
+          };
+        });
+        setDefaults(next);
+      })
+      .catch(() => {
+        // Keep today until the fallback end.
+      });
+  }, [poolId]);
+
   const handleUndoLast = async () => {
     setUndoing(true);
     setUndoError(null);
@@ -156,7 +183,7 @@ export default function PoolStaffPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
 
-      setNewMember({ codenaam: '', geldig_vanaf: todayISO(), geldig_tot: '', deelnamefactor: 1 });
+      setNewMember({ codenaam: '', geldig_vanaf: defaults.geldig_vanaf, geldig_tot: defaults.geldig_tot, deelnamefactor: 1 });
       await loadStaff({ silent: true });
     } catch (err) {
       setStaffError(err instanceof Error ? err.message : 'Toevoegen mislukt');
@@ -448,6 +475,11 @@ export default function PoolStaffPage() {
               </button>
             </div>
           </div>
+          <p className="text-xs text-neutral-600" data-testid="geldig-uitleg">
+            {defaults.periode
+              ? `Geldig vanaf en Geldig tot staan op de periode ${defaults.periode}. Doet deze persoon daarna ook mee? Zet Geldig tot dan later.`
+              : 'Geldig vanaf staat op vandaag en Geldig tot op 31 december 2029.'}
+          </p>
           <p className="text-xs text-neutral-500">
             Bestaat de codenaam al (bijv. iemand die eerder in een andere pool zat), dan wordt die
             persoon hergebruikt in plaats van dubbel aangemaakt.

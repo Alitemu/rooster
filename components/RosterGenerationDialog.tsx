@@ -164,6 +164,7 @@ interface GenerateResult {
   unfilled_slots: UnfilledSlot[];
   fully_covered: boolean;
   bereik_tekort?: BereikTekort;
+  deels_lid?: number;
   cost: number;
   violations: Record<string, number>;
   time_seconds: number;
@@ -1114,7 +1115,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                   </p>
                   {/* Why, by cause (lib/unfilledExplanation.ts): nobody a member that
                       day, everyone blocked, or a streefbereik too small. */}
-                  {explainUnfilled(result.unfilled_slots, result.bereik_tekort).map((line) => (
+                  {explainUnfilled(result.unfilled_slots, result.bereik_tekort, result.deels_lid).map((line) => (
                     <p key={line} className="text-xs text-amber-800 mt-1">
                       {line}
                     </p>

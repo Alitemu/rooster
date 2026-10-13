@@ -18,7 +18,9 @@ export interface UnfilledSlotInfo {
   reden?: 'GEEN_LID' | 'IEDEREEN_GEBLOKKEERD' | null;
 }
 
-export type BereikTekort = Partial<Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', { maximaal: number; diensten: number }>>;
+export type BereikTekort = Partial<
+  Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', { maximaal: number; diensten: number; voorgesteld?: [number, number] }>
+>;
 
 const MEERVOUD: Record<string, string> = {
   AVOND: 'avonddiensten',
@@ -47,8 +49,12 @@ export function dateRanges(dates: string[]): string[] {
   return ranges.map(([a, b]) => (a === b ? datumTekst(a) : `${datumTekst(a)} t/m ${datumTekst(b)}`));
 }
 
-/** One sentence per cause, the most telling first; empty when nothing stayed empty. */
-export function explainUnfilled(unfilled: UnfilledSlotInfo[], bereikTekort: BereikTekort = {}): string[] {
+/**
+ * One sentence per cause, the most telling first; empty when nothing
+ * stayed empty. `deelsLid`: how many members' Geldig vanaf/tot covers only
+ * part of the period, which lowers their streefbereik in proportion.
+ */
+export function explainUnfilled(unfilled: UnfilledSlotInfo[], bereikTekort: BereikTekort = {}, deelsLid = 0): string[] {
   if (unfilled.length === 0) return [];
   const lines: string[] = [];
 
@@ -67,20 +73,33 @@ export function explainUnfilled(unfilled: UnfilledSlotInfo[], bereikTekort: Bere
     lines.push(`Voor ${aantal(geblokkeerd.length, 'dienst', 'diensten')} heeft iedereen die dag geblokkeerd.`);
   }
 
-  for (const [teller, tekort] of Object.entries(bereikTekort)) {
-    if (!tekort) continue;
+  const tekorten = Object.entries(bereikTekort).filter(([, t]) => t && t.maximaal < t.diensten);
+  if (deelsLid > 0 && (tekorten.length > 0 || unfilled.length > geenLid.length + geblokkeerd.length)) {
     lines.push(
-      `Het streefbereik laat samen hoogstens ${tekort.maximaal} ${MEERVOUD[teller] ?? 'diensten'} toe, terwijl er ${tekort.diensten} zijn. ` +
-        'Verhoog het bereik onder Venster en streefbereik.'
+      `${deelsLid === 1 ? '1 persoon doet' : `${deelsLid} mensen doen`} volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. ` +
+        `${deelsLid === 1 ? 'Het streefbereik van die persoon' : 'Hun streefbereik'} is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Medewerkers.`
     );
   }
 
-  const rest = unfilled.length - geenLid.length - geblokkeerd.length;
+  let doorBereik = 0;
+  for (const [teller, tekort] of tekorten) {
+    const soort = MEERVOUD[teller] ?? 'diensten';
+    const voorstel = tekort!.voorgesteld;
+    const advies = voorstel
+      ? `Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar ${voorstel[0] === voorstel[1] ? voorstel[0] : `${voorstel[0]} tot ${voorstel[1]}`} ${soort} per persoon.`
+      : 'Verhoog het bereik onder Venster en streefbereik.';
+    lines.push(`Het streefbereik laat samen hoogstens ${tekort!.maximaal} ${soort} toe, terwijl er ${tekort!.diensten} zijn. ${advies}`);
+    doorBereik += tekort!.diensten - tekort!.maximaal;
+  }
+
+  // What the causes above leave unexplained: the streefbereik's shortfall
+  // accounts for that many of the shifts without a certain reason.
+  const rest = Math.max(0, unfilled.length - geenLid.length - geblokkeerd.length - doorBereik);
   if (rest > 0) {
     lines.push(
-      lines.length === 0
+      geenLid.length + geblokkeerd.length + doorBereik === 0
         ? `${aantal(rest, 'dienst lukte', 'diensten lukten')} niet binnen het venster en het streefbereik van de beschikbare mensen.`
-        : `De overige ${aantal(rest, 'dienst lukte', 'diensten lukten')} niet binnen het venster en het streefbereik.`
+        : `Nog ${aantal(rest, 'dienst lukte', 'diensten lukten')} niet binnen het venster en het streefbereik.`
     );
   }
   return lines;
