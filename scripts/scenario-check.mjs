@@ -236,6 +236,9 @@ for (const objectiveMode of MODES) {
 
 // ---------- ROOSTER VERWIJDEREN, THEN AGAIN ----------
 const reset = await req('POST', `/api/periods/${periodId}/reset-roster`, { jar: planner, body: { ook_handmatig: true } });
+// Generated again with a method that fills what can be filled: the loop
+// above left the last one in place, possibly "Willekeurig" (a heuristic).
+await req('PATCH', `/api/periods/${periodId}/ruleset`, { jar: planner, body: { windowWeeks: 2, objectiveMode: 'weighted' } });
 const left = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(periodId).n;
 rec('Rooster verwijderen: everything gone, back to gesloten', reset.status === 200 && left === 0 && reset.json?.data?.status === 'GESLOTEN', `${reset.json?.data?.verwijderd} verwijderd`);
 const again = await generate(periodId, planner);

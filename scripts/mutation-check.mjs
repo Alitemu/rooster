@@ -115,9 +115,30 @@ const MUTATIONS = [
   {
     name: 'explanation: the streefbereik shortfall counted twice',
     file: 'lib/unfilledExplanation.ts',
-    find: 'doorBereik += tekort!.diensten - tekort!.maximaal;',
-    replace: '',
+    find: 'const doorBereik = tekorten.reduce((sum, [, t]) => sum + t!.diensten - t!.maximaal, 0);',
+    replace: 'const doorBereik = 0;',
     tests: ['lib/unfilledExplanation'],
+  },
+  {
+    name: 'band check: a streefbereik too small passes as enough',
+    file: 'lib/bandShortfall.ts',
+    find: 'if (maximaal >= slotCountByTeller[teller]) continue;',
+    replace: 'continue;',
+    tests: ['app/api/planner/period/[id]/band-check', 'app/api/planner/period/[id]/generate-roster/unfilledReasons'],
+  },
+  {
+    name: 'today: taken in UTC again',
+    file: 'lib/localDate.ts',
+    find: "export const APP_TIME_ZONE = 'Europe/Amsterdam';",
+    replace: "export const APP_TIME_ZONE = 'UTC';",
+    tests: ['lib/localDate', 'app/api/planner/pool/[id]/members/localDate'],
+  },
+  {
+    name: 'audit log: a planner acting for someone goes unlogged',
+    file: 'lib/auditLog.ts',
+    find: '  if (!plannerId) return;',
+    replace: '  return;',
+    tests: ['app/api/person/[id]/onBehalfAudit'],
   },
   {
     name: 'membership defaults: a period picked out of two',
