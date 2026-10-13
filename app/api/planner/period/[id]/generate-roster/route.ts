@@ -34,6 +34,8 @@ import {
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { blockOutsideMembership, coversDate, membershipWindows } from '@/lib/membershipWindow';
 import { refreshCarryOverForPeriod } from '@/lib/carryOver';
+import { findPreviousPublishedPeriod, refreshDerivedPriorAssignments } from '@/lib/previousPeriod';
+import { clearPendingUndo } from '@/lib/pendingUndo';
 import { computeBandShortfall, fellowBandOverrides } from '@/lib/bandShortfall';
 import { writeAuditLog } from '@/lib/auditLog';
 
@@ -113,13 +115,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // published period to carry over from - a pool's first-ever period has
     // nothing to confirm.
     if (!period.overloop_bevestigd_op) {
-      const hasPreviousPeriod = db
-        .prepare(
-          `SELECT id FROM dienstrooster_schedule_period
-           WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
-           LIMIT 1`
-        )
-        .get(period.pool_id, period.start_datum);
+      const hasPreviousPeriod = findPreviousPublishedPeriod(period.pool_id, period.start_datum);
 
       if (hasPreviousPeriod) {
         return NextResponse.json(
@@ -217,6 +213,27 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         entiteitId: periodId,
         actie: 'UPDATE',
         nieuw: { wijziging: 'overloop opnieuw berekend bij genereren', regels: carryOver.entries },
+      });
+    }
+
+    // The same for the previous roster's last weeks ("Eerdere
+    // toewijzingen", read further down for the window rule): swaps and sick
+    // leave there go on while this period is open (audit 10).
+    const prior = refreshDerivedPriorAssignments(periodId, actorId, now);
+    if (prior.added + prior.changed + prior.removed > 0) {
+      writeAuditLog({
+        actorId,
+        entiteit: 'schedule_period',
+        entiteitId: periodId,
+        actie: 'UPDATE',
+        nieuw: {
+          wijziging: 'rooster vooraf bijgewerkt bij genereren',
+          nieuw: prior.added,
+          bijgewerkt: prior.changed,
+          verwijderd: prior.removed,
+          uit_periode: prior.previous?.id ?? null,
+        },
+        now,
       });
     }
 
@@ -609,6 +626,9 @@ async function runGeneration(args: {
       // were already excluded from the solver's input above, so there's no
       // conflict when inserting the fresh results below.
       clearSolverAssignments(periodId);
+      // The last "ongedaan maken" belongs to the roster this one replaces,
+      // as with "Rooster verwijderen" and "Terug naar open" (audit 10).
+      clearPendingUndo(periodId);
 
       // Store assignments using raw SQL
       let assignmentCount = 0;

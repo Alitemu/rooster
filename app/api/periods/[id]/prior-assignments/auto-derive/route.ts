@@ -6,10 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import {
-  resolvePriorAssignmentWeeks,
-  calculatePriorAssignmentRange,
-} from '@/lib/priorAssignmentDerive';
+import { refreshDerivedPriorAssignments } from '@/lib/previousPeriod';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
@@ -25,8 +22,8 @@ interface AutoDeriveResult {
 /**
  * POST /api/periods/[id]/prior-assignments/auto-derive - Auto-derive assignments
  *
- * Derives prior assignments from the previous period's published assignments.
- * Only processes the last windowWeeks-1 weeks of the prior period.
+ * Derives prior assignments from the previous period's published assignments,
+ * as they are now. Only processes the last windowWeeks-1 weeks of the prior period.
  */
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
@@ -61,18 +58,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
 
 
-    // Find previous period (most recent before current)
-    const prevStmt = db.prepare(`
-      SELECT id, eind_datum
-      FROM dienstrooster_schedule_period
-      WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
-      ORDER BY eind_datum DESC
-      LIMIT 1
-    `);
+    // Derived again from the previous roster as it is now: a day someone
+    // else works since (a swap) gets them, a day nobody works loses its row,
+    // what the planner set by hand stays (lib/previousPeriod.ts). It used
+    // to skip every day it already had, so "afleiden" again changed nothing.
+    const refresh = refreshDerivedPriorAssignments(id, actorId);
 
-    const prevPeriod = prevStmt.get(period.pool_id, period.start_datum) as any;
-
-    if (!prevPeriod) {
+    if (!refresh.previous || !refresh.range) {
       const response: ApiSuccessResponse<AutoDeriveResult> = {
         success: true,
         data: {
@@ -85,79 +77,22 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response);
     }
 
-    // Calculate lookback range from previous period
-    const weeksToLookBack = resolvePriorAssignmentWeeks(period);
-    const [startDate, endDate] = calculatePriorAssignmentRange(
-      prevPeriod.eind_datum,
-      weeksToLookBack
-    );
-
-    // Fetch assignments from previous period in lookback range
-    const assignmentsStmt = db.prepare(`
-      SELECT
-        a.slot_id,
-        s.datum,
-        s.iso_jaar,
-        s.iso_week,
-        st.teller,
-        a.person_id
-      FROM dienstrooster_assignment a
-      JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
-      JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-      WHERE s.period_id = ? AND s.datum >= ? AND s.datum <= ?
-      ORDER BY s.datum, st.teller
-    `);
-
-    const assignments = assignmentsStmt.all(
-      prevPeriod.id,
-      startDate,
-      endDate
-    ) as any[];
-
-    // Create prior_assignment entries
-    let derivedCount = 0;
-
-    for (const assignment of assignments) {
-      // Check if already exists
-      const existingStmt = db.prepare(`
-        SELECT id FROM dienstrooster_prior_assignment
-        WHERE period_id = ? AND datum = ? AND teller = ?
-      `);
-
-      const existing = existingStmt.get(id, assignment.datum, assignment.teller);
-
-      if (!existing) {
-        // Insert new prior assignment
-        const insertStmt = db.prepare(`
-          INSERT INTO dienstrooster_prior_assignment
-          (id, period_id, datum, iso_jaar, iso_week, teller, person_id, bron, bron_period_id, aangemaakt_door, aangemaakt_op)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'AFGELEID', ?, ?, ?)
-        `);
-
-        insertStmt.run(
-          crypto.randomUUID(),
-          id,
-          assignment.datum,
-          assignment.iso_jaar,
-          assignment.iso_week,
-          assignment.teller,
-          assignment.person_id,
-          prevPeriod.id,
-          actorId,
-          new Date().toISOString()
-        );
-
-        derivedCount++;
-      }
-    }
-
-    if (derivedCount > 0) {
+    const [startDate, endDate] = refresh.range;
+    const derivedCount = refresh.added + refresh.changed;
+    if (derivedCount + refresh.removed > 0) {
       writeAuditLog({
         actorId,
         entiteit: 'schedule_period',
         entiteitId: id,
-        actie: 'CREATE',
-        nieuw: { wijziging: 'rooster vooraf afgeleid uit de vorige periode', aantal: derivedCount, uit_periode: prevPeriod.id },
+        actie: refresh.added > 0 && refresh.changed + refresh.removed === 0 ? 'CREATE' : 'UPDATE',
+        nieuw: {
+          wijziging: 'rooster vooraf afgeleid uit de vorige periode',
+          aantal: derivedCount,
+          nieuw: refresh.added,
+          bijgewerkt: refresh.changed,
+          verwijderd: refresh.removed,
+          uit_periode: refresh.previous.id,
+        },
       });
     }
 
@@ -166,11 +101,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       data: {
         period_id: id,
         derived_count: derivedCount,
-        from_previous_period_id: prevPeriod.id,
+        from_previous_period_id: refresh.previous.id,
         message:
-          derivedCount > 0
-            ? `${derivedCount} toewijzing${derivedCount === 1 ? '' : 'en'} afgeleid uit de vorige periode (${startDate} t/m ${endDate})`
-            : `Niets nieuws gevonden om af te leiden. De vorige periode had niets in het overloopvenster (${startDate} t/m ${endDate}) of alles stond al ingevuld.`,
+          derivedCount + refresh.removed > 0
+            ? `${derivedCount} toewijzing${derivedCount === 1 ? '' : 'en'} afgeleid uit de vorige periode (${startDate} t/m ${endDate})` +
+              (refresh.removed > 0 ? `. ${refresh.removed} dag${refresh.removed === 1 ? '' : 'en'} zonder dienst meer weggehaald.` : '')
+            : `Niets nieuws gevonden om af te leiden. De vorige periode had niets in het overloopvenster (${startDate} t/m ${endDate}) of alles stond al goed.`,
       },
     };
 

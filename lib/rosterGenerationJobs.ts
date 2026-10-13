@@ -149,6 +149,16 @@ export function hasRunningJobForPeriod(periodId: string): boolean {
   return false;
 }
 
+/**
+ * What a hand-made change to the roster answers (409) while a generation
+ * for its period runs: the solver's answer, written when it comes, was
+ * built without it - on the same day it killed the whole result on the
+ * UNIQUE constraint, on another it could hand the same person a second
+ * shift that week (audit 10).
+ */
+export const GENERATION_RUNNING_MESSAGE =
+  'Er loopt een roostergeneratie voor deze periode. Wacht tot die klaar is en probeer het dan opnieuw.';
+
 export function completeRosterGenerationJob(jobId: string, result: RosterGenerationJobResult): void {
   const job = jobs.get(jobId);
   if (job) {

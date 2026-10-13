@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { findPreviousPublishedPeriod } from '@/lib/previousPeriod';
 import { resolvePriorAssignmentWeeks, calculatePriorAssignmentRange } from '@/lib/priorAssignmentDerive';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
@@ -39,14 +40,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       return NextResponse.json(response, { status: 404 });
     }
 
-    const prevPeriod = db
-      .prepare(
-        `SELECT id, eind_datum FROM dienstrooster_schedule_period
-         WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
-         ORDER BY eind_datum DESC
-         LIMIT 1`
-      )
-      .get(period.pool_id, period.start_datum) as { id: string; eind_datum: string } | undefined;
+    const prevPeriod = findPreviousPublishedPeriod(period.pool_id, period.start_datum);
 
     const entryCount = (
       db

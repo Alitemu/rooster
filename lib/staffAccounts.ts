@@ -134,19 +134,25 @@ export async function createStaffAccount(
   if (problems.length > 0) return fail(400, 'WEAK_PASSWORD', problems.join(', '));
   // Staff log in without regard to case, so "Planner" next to "planner"
   // would make one of them unreachable.
-  if (db.prepare('SELECT 1 FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE').get(naam.codenaam)) {
-    return fail(409, 'CODENAAM_TAKEN', 'Deze codenaam is al in gebruik');
-  }
+  const taken = () => Boolean(db.prepare('SELECT 1 FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE').get(naam.codenaam));
+  if (taken()) return fail(409, 'CODENAAM_TAKEN', 'Deze codenaam is al in gebruik');
   const hash = await hashPassword(input.wachtwoord as string);
   const id = crypto.randomUUID();
-  db.transaction(() => {
+  // Asked again with the write: hashing takes a while, and another request
+  // for the same name (a double click, a second beheerder) can pass the
+  // check above meanwhile - it then died on the UNIQUE constraint with a
+  // 500, or, differing only in case, went in as a second account (audit 10).
+  const added = db.transaction(() => {
+    if (taken()) return false;
     db.prepare(
       `INSERT INTO dienstrooster_person
          (id, codenaam, rol, actief, wachtwoord_hash, wachtwoord_moet_wijzigen, dienst_type, aangemaakt_op)
        VALUES (?, ?, ?, 1, ?, 1, ?, ?)`
     ).run(id, naam.codenaam, input.rol, hash, dienst, new Date().toISOString());
     audit(actorId, id, { wijziging: 'account aangemaakt', rol: input.rol, dienst_type: dienst });
+    return true;
   })();
+  if (!added) return fail(409, 'CODENAAM_TAKEN', 'Deze codenaam is al in gebruik');
   return { ok: true, id };
 }
 

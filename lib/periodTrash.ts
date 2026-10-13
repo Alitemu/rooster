@@ -123,6 +123,9 @@ function cascadeDeletePeriod(periodId: string): void {
   db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').run(periodId);
+  // Keyed on the period's id without a foreign key, so nothing else would
+  // ever remove it.
+  db.prepare('DELETE FROM dienstrooster_pending_undo WHERE scope_id = ?').run(periodId);
 
   // The period itself, last.
   db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);

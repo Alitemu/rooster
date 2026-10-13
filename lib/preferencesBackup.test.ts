@@ -217,6 +217,32 @@ describe('writePreferencesBackup', () => {
     expect(fs.readFileSync(pathB, 'utf-8')).toContain('LIEVER_NIET');
   });
 
+  it('does not let two people whose codenamen look alike in a file name overwrite each other\'s backup', () => {
+    // Audit 10: the prefix was built from the codenaam as a file name
+    // ("Zoë" and "Zoé" both become "Zo_"), so the second save deleted the
+    // first person's file. A codenaam may hold accents, spaces and dots.
+    const fixture = trackFixture(createFixture({ codenaam: `Zoë ${crypto.randomUUID().slice(0, 6)}` }));
+    const otherId = crypto.randomUUID();
+    db.prepare(`INSERT INTO dienstrooster_person (id, codenaam, rol, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', datetime('now'))`).run(
+      otherId,
+      fixture.codenaam.replace('ë', 'é')
+    );
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot) VALUES (?, ?, ?, '2020-01-01', '2030-12-31')`
+    ).run(crypto.randomUUID(), otherId, fixture.poolId);
+
+    setBlockingLevel(fixture.personId, fixture.slotIds['2027-01-04'], 'ABSOLUUT');
+    setBlockingLevel(otherId, fixture.slotIds['2027-01-05'], 'LIEVER_NIET');
+    const own = writePreferencesBackup(fixture.personId, fixture.periodId)!;
+    writtenFiles.push(own);
+    const other = writePreferencesBackup(otherId, fixture.periodId)!;
+    writtenFiles.push(other);
+
+    expect(fs.existsSync(own)).toBe(true);
+    expect(fs.readFileSync(own, 'utf-8')).toContain('ABSOLUUT');
+    expect(fs.readFileSync(other, 'utf-8')).toContain('LIEVER_NIET');
+  });
+
   it('still writes an (empty) file for a person with nothing set yet', () => {
     const fixture = trackFixture(createFixture());
     const filePath = writePreferencesBackup(fixture.personId, fixture.periodId)!;

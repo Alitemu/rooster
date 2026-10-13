@@ -109,12 +109,20 @@ export function writePreferencesBackup(personId: string, periodId: string): stri
   // backup for one would silently delete the other's file. periodSlug is
   // still folded into the filename (after the id) purely so a human
   // browsing the backups folder can recognize the period by name.
-  const prefix = `${codenaamSlug}__${periodId}__`;
+  //
+  // The same goes for the person: the codenaam as a file name is no more
+  // unique than the period's name - "Zoë" and "Zoé", "Anna B" and "Anna.B"
+  // all come out the same - so the person's id is in the prefix too
+  // (audit 10). The codenaam stays first, for whoever browses the folder.
+  const prefix = `${codenaamSlug}__${periodId}__${personId}__`;
+  // A file from before the id was in the name (codenaam, period id, period
+  // name): replaced like the person's own, once, on their next save.
+  const legacyPrefix = `${codenaamSlug}__${periodId}__${periodSlug}__`;
 
   // Remove this person+period's previous backup(s) before writing the new
   // one, so a change always leaves exactly one, current file behind.
   for (const existing of fs.readdirSync(BACKUP_DIR)) {
-    if (existing.startsWith(prefix) && existing.endsWith('.csv')) {
+    if ((existing.startsWith(prefix) || existing.startsWith(legacyPrefix)) && existing.endsWith('.csv')) {
       fs.rmSync(path.join(BACKUP_DIR, existing), { force: true });
     }
   }

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
@@ -26,6 +27,10 @@ export async function DELETE(
     const actorId = auth!.userId;
 
     const periodId = params.id;
+    // A generation's answer would land on top of this change (audit 10).
+    if (hasRunningJobForPeriod(periodId)) {
+      return NextResponse.json({ success: false, error: GENERATION_RUNNING_MESSAGE }, { status: 409 });
+    }
     const assignmentId = params['assignment-id'];
     const body = await parseJsonBody(request);
     const { reason } = body;

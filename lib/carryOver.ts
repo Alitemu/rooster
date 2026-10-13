@@ -40,6 +40,10 @@ import {
   type Teller,
 } from '@/lib/rosterBands';
 import { getFellowIds } from '@/lib/fellows';
+import { findPreviousPublishedPeriod } from '@/lib/previousPeriod';
+
+// Where it always lived; lib/previousPeriod.ts owns it now.
+export { findPreviousPublishedPeriod };
 
 // Singular/plural Dutch labels for the ledger_entry.reden text below -
 // CLAUDE.md requires user-facing balance text in words ("1 avonddienst
@@ -69,25 +73,6 @@ interface PeriodRow {
   start_datum: string;
   eind_datum: string;
   bevroren_ruleset_json: string | null;
-}
-
-/**
- * The pool's most recent published period ending before `beforeDate`.
- * Returns undefined for a pool's first-ever period.
- */
-export function findPreviousPublishedPeriod(
-  poolId: string,
-  beforeDate: string
-): PeriodRow | undefined {
-  return db
-    .prepare(
-      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
-       FROM dienstrooster_schedule_period
-       WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
-       ORDER BY eind_datum DESC
-       LIMIT 1`
-    )
-    .get(poolId, beforeDate) as PeriodRow | undefined;
 }
 
 /**
@@ -258,7 +243,7 @@ export function refreshCarryOverForPeriod(periodId: string, actorId: string): { 
     const insert = db.prepare(
       `INSERT INTO dienstrooster_ledger_entry
          (id, person_id, pool_id, teller, geldt_voor_periode_id, delta, reden, categorie, aangemaakt_door, aangemaakt_op)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'CARRY_OVER', ?, datetime('now'))`
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'CARRY_OVER', ?, ?)`
     );
 
     for (const entry of entries) {
@@ -279,7 +264,10 @@ export function refreshCarryOverForPeriod(periodId: string, actorId: string): { 
         periodId,
         entry.delta,
         reden,
-        actorId
+        actorId,
+        // ISO like every other ledger row: datetime('now') wrote
+        // "YYYY-MM-DD HH:MM:SS", which sorts before them as text.
+        new Date().toISOString()
       );
     }
   });

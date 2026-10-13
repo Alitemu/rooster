@@ -118,6 +118,27 @@ describe('/api/admin/accounts', () => {
     expect((await add({ codenaam: 'rare-rol', rol: 'DEELNEMER', wachtwoord: TIJDELIJK })).status).toBe(400);
   });
 
+  // Audit 10: the name was checked, then the password hashed (which takes a
+  // while and lets other requests in), then the row written. Two at once -
+  // a double click, two beheerders - both passed the check: the same name
+  // died on the UNIQUE constraint with a 500, and two names differing only
+  // in case both went in, one of them unreachable at login.
+  it('adds one account when the same name arrives twice at once', async () => {
+    const admin = await account('ADMIN');
+    const codenaam = `Dubbel-${crypto.randomUUID().slice(0, 6)}`;
+    const add = (naam: string) => POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: naam, rol: 'PLANNER', wachtwoord: TIJDELIJK }));
+    for (const pair of [
+      [codenaam, codenaam],
+      [`${codenaam}-b`, `${codenaam}-B`],
+    ]) {
+      const results = await Promise.all(pair.map(add));
+      for (const r of results) if (r.status === 201) created.push((await r.json()).data.id);
+      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      const rows = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE').get(pair[0]) as { n: number };
+      expect(rows.n).toBe(1);
+    }
+  });
+
   it('resets a password: sessions end and the next login must choose a new one', async () => {
     const admin = await account('ADMIN');
     const planner = await account('PLANNER');

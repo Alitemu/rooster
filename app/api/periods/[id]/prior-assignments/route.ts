@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { findPreviousPublishedPeriod } from '@/lib/previousPeriod';
 import {
   resolvePriorAssignmentWeeks,
   calculatePriorAssignmentRange, priorAssignmentAnchor,
@@ -68,16 +69,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
     // The lookback window is relative to the previous published period's
     // end date, not this period's own - matches auto-derive's anchor.
-    const prevPeriodStmt = db.prepare(`
-      SELECT id, eind_datum
-      FROM dienstrooster_schedule_period
-      WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
-      ORDER BY eind_datum DESC
-      LIMIT 1
-    `);
-    const prevPeriod = prevPeriodStmt.get(period.pool_id, period.start_datum) as
-      | { id: string; eind_datum: string }
-      | undefined;
+    const prevPeriod = findPreviousPublishedPeriod(period.pool_id, period.start_datum);
     const lookbackAnchor = priorAssignmentAnchor(prevPeriod?.eind_datum, period.start_datum);
 
 

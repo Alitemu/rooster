@@ -16,6 +16,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
@@ -35,6 +36,11 @@ export async function POST(
     }
     const actorId = auth!.userId;
     const periodId = params.id;
+    // A generation's answer would land on top of this change (audit 10).
+    if (hasRunningJobForPeriod(periodId)) {
+      const response: ApiErrorResponse = { success: false, error: { code: 'GENERATION_RUNNING', message: GENERATION_RUNNING_MESSAGE } };
+      return NextResponse.json(response, { status: 409 });
+    }
     const body = await parseJsonBody<{ reason?: unknown }>(request);
     const reasonField = optionalText(body.reason);
     if (!reasonField.ok) {

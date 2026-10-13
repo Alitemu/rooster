@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { findPreviousPublishedPeriod } from '@/lib/previousPeriod';
 import {
   resolvePriorAssignmentWeeks,
   calculatePriorAssignmentRange, priorAssignmentAnchor,
@@ -90,13 +91,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // previous published period's own end date when there is one, this
     // period's own start otherwise (which calculatePriorAssignmentRange
     // then collapses to an empty range - nothing to carry over).
-    const prevPeriod = db
-      .prepare(
-        `SELECT eind_datum FROM dienstrooster_schedule_period
-         WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?
-         ORDER BY eind_datum DESC LIMIT 1`
-      )
-      .get(period.pool_id, period.start_datum) as { eind_datum: string } | undefined;
+    const prevPeriod = findPreviousPublishedPeriod(period.pool_id, period.start_datum);
     const lookbackAnchor = priorAssignmentAnchor(prevPeriod?.eind_datum, period.start_datum);
 
     const weeksToLookBack = resolvePriorAssignmentWeeks(period);
