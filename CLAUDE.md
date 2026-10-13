@@ -416,6 +416,23 @@ the membership changed after the roster was made).
 - **Carry-over per person** (lib/carryOver.ts): each member is measured
   against their own scaled target, the one the solver got, not the flat
   band. Someone at factor 0.5 who did their half carries nothing over.
+  Booked when a period opens and booked again at every generation
+  (`refreshCarryOverForPeriod` in generate-roster's POST, before the job
+  reads balances; rows that already say the same stay, a change writes one
+  audit row): the previous roster keeps being corrected while the next
+  period is open for preferences, and a correction made after it opened
+  never reached a ledger (audit 8). A published next period is not
+  generated again, so it keeps what it had.
+- **Why shifts stayed empty.** generate-roster marks each unfilled slot
+  with `reden`: GEEN_LID (no member's Geldig vanaf/tot covers that date)
+  or IEDEREEN_GEBLOKKEERD (every member who covers it has ABSOLUUT, the
+  membership blocks included), otherwise null; and `bereik_tekort` per
+  teller when the members' maximums together (scaled band plus balance, a
+  fellow's own weekend band) are fewer than the slots. RosterGenerationDialog
+  words it with lib/unfilledExplanation.ts `explainUnfilled`, per cause,
+  instead of one "not enough people" for all of them: a planner whose
+  memberships ended halfway the period saw 160 empty shifts with every
+  planner and window and nothing on screen said why.
 - **windowWeeks N = at most one shift in any N consecutive ISO weeks**, so
   1 is one a week and 0 switches the rule off (solver/constraints.py,
   solver/greedy.py, lib/windowRule.ts). With either per-teller window set,
@@ -440,6 +457,18 @@ leaves a VOORKEUR (someone wanting to work that particular day), manual
 blocks, absences and fellow blocks. What was marked on a taken-over day is
 gone when the absence or pattern is removed; the day is then open.
 
+A marking the next sync would take back is refused instead (409, slot
+route, audit 8): LIEVER_NIET or VOORKEUR on a day inside one of the
+person's absences (IN_AFWEZIGHEID), LIEVER_NIET on a day one of their
+patterns covers (IN_DEELTIJD). Written anyway, the day stayed open to the
+solver until some unrelated action re-synced it. ABSOLUUT and clearing
+are always taken. Changing or removing a pattern re-syncs all the
+person's patterns and then their absences, so a day another pattern
+covers (switching patterns, the new one added first) is blocked again at
+once. app/api/person/[id]/availabilityModel.test.ts drives random
+sequences of all of this through the routes and checks after every step
+that one more sync of everything changes nothing.
+
 The participant's calendar shows the real block budget per counter
 (`blokkadebudget` in GET /api/person/[id]/preferences/[periodId], from
 lib/blockBudget.ts blockBudgetLimits: max and whether part-time days are
@@ -447,6 +476,11 @@ exempt), counted the way checkBlockBudget counts; without a budget it
 shows blocked days out of all days and speaks of no maximum.
 
 ## Preferences import (test, beheerder only)
+
+The preferences overview itself (GET /api/exports/preferences/[period-id])
+has one column per member of the period (loadPeriodMembers), nobody else:
+someone removed from the pool used to stay in it as long as they had
+markings left.
 
 "Voorkeuren importeren (test)" next to the preferences overview download
 (components/PreferencesImportDialog.tsx, POST
@@ -509,6 +543,14 @@ Show live in settings screen with interpretation in plain Dutch.
      staff-login, first-run-setup and the server scripts; an exact match
      wins if two staff accounts differ only in case). New staff accounts
      can't differ from an existing codenaam only in case.
+   - Ten wrong guesses per account (and per client) per quarter of an
+     hour, also when they arrive at the same moment: staff-login,
+     change-password, totp/disable, totp/confirm and first-run-setup take
+     an attempt with lib/rateLimit.ts `takeAttempt` before bcrypt or the
+     code check runs and give it back (`releaseAttempt`) once the secret
+     matched. Checking first and counting after the asynchronous compare
+     let a burst of thirty all through (audit 8,
+     app/api/auth/rateLimitConcurrency.test.ts).
    - Speakeasy for TOTP generation
    - No email required (pseudonymous)
    - The password is changed through POST /api/auth/change-password

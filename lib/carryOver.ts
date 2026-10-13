@@ -17,6 +17,12 @@
  * period has to exist to be booked against, and when you publish period N
  * period N+1 usually doesn't exist yet. CLAUDE.md says corrections target
  * the next un-generated period, which is exactly the one being opened.
+ * And again just before N+1 is generated (refreshCarryOverForPeriod from
+ * generate-roster): period N's roster keeps being corrected while N+1 is
+ * open for preferences - someone falls ill, the planner gives the shift to
+ * a colleague - and a correction made after N+1 opened otherwise never
+ * reached any ledger (audit 8). Once N+1 has a published roster it is no
+ * longer recomputed.
  *
  * Debt compounds on its own: the target a person was held to in period N
  * already includes N's own carry-over, so anything still unmet rolls
@@ -200,6 +206,16 @@ export function computeCarryOver(period: PeriodRow): CarryOverEntry[] {
  * Returns how many entries were written.
  */
 export function applyCarryOverForPeriod(periodId: string, actorId: string): number {
+  return refreshCarryOverForPeriod(periodId, actorId).entries;
+}
+
+/**
+ * The same, saying whether the booked CARRY_OVER rows changed. Rows that
+ * already say the same are left as they are, with their date and author:
+ * generate-roster calls this on every run and must not make every
+ * generation look like a new booking.
+ */
+export function refreshCarryOverForPeriod(periodId: string, actorId: string): { entries: number; changed: boolean } {
   const period = db
     .prepare(
       `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
@@ -207,12 +223,31 @@ export function applyCarryOverForPeriod(periodId: string, actorId: string): numb
     )
     .get(periodId) as PeriodRow | undefined;
 
-  if (!period) return 0;
+  if (!period) return { entries: 0, changed: false };
 
   const previous = findPreviousPublishedPeriod(period.pool_id, period.start_datum);
-  if (!previous) return 0; // first period for this pool - nothing to carry
+  // First period for this pool - nothing to carry. Also a previous period
+  // unpublished for the moment: what was booked from it stays until it is
+  // published again.
+  if (!previous) return { entries: 0, changed: false };
 
   const entries = computeCarryOver(previous);
+
+  const key = (e: { person_id: string; teller: string; delta: number }) => `${e.person_id}|${e.teller}|${e.delta}`;
+  const booked = (
+    db
+      .prepare(
+        `SELECT person_id, teller, delta FROM dienstrooster_ledger_entry
+         WHERE geldt_voor_periode_id = ? AND categorie = 'CARRY_OVER'`
+      )
+      .all(periodId) as Array<{ person_id: string; teller: string; delta: number }>
+  )
+    .map(key)
+    .sort();
+  const computed = entries.map(key).sort();
+  if (booked.length === computed.length && booked.every((k, i) => k === computed[i])) {
+    return { entries: entries.length, changed: false };
+  }
 
   const write = db.transaction(() => {
     db.prepare(
@@ -250,5 +285,5 @@ export function applyCarryOverForPeriod(periodId: string, actorId: string): numb
   });
 
   write();
-  return entries.length;
+  return { entries: entries.length, changed: true };
 }

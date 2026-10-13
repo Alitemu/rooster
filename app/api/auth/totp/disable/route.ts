@@ -21,7 +21,7 @@ import { db } from '@/db/client';
 import { verifyPassword, DUMMY_PASSWORD_HASH } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { takeAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface DisableTotpRequest {
@@ -40,10 +40,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const rateLimitKey = `totp-disable:${auth.userId}`;
-    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
-    }
 
     const body = await parseJsonBody<DisableTotpRequest>(req);
     const { wachtwoord } = body;
@@ -60,11 +56,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .prepare('SELECT id, wachtwoord_hash, totp_secret FROM dienstrooster_person WHERE id = ?')
       .get(auth.userId) as { id: string; wachtwoord_hash: string | null; totp_secret: string | null } | undefined;
 
+    // Counted now, before the comparison (lib/rateLimit.ts takeAttempt).
+    const rateLimit = takeAttempt([[rateLimitKey, MAX_ATTEMPTS]]);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
+    }
+
     // Same dummy-hash comparison as staff-login/change-password, so the
     // response time can't distinguish "no password set" from "wrong one".
     const passwordMatches = await verifyPassword(wachtwoord, person?.wachtwoord_hash ?? DUMMY_PASSWORD_HASH);
     if (!person || !person.wachtwoord_hash || !passwordMatches) {
-      recordAttempt(rateLimitKey);
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_PASSWORD', message: 'Wachtwoord klopt niet' },
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     if (!person.totp_secret) {
+      clearRateLimit(rateLimitKey);
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'NOT_ENROLLED', message: 'Tweestapsverificatie staat al uit' },

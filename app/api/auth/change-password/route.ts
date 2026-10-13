@@ -29,7 +29,7 @@ import { hashPassword, verifyPassword, validatePasswordStrength, DUMMY_PASSWORD_
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { revokeAllSessions } from '@/lib/sessionVersion';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { takeAttempt, releaseAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ChangePasswordRequest {
@@ -53,10 +53,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // one NAT address, and this route can only ever target the caller's
     // own account anyway.
     const rateLimitKey = `change-password:${auth!.userId}`;
-    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
-    }
 
     const body = await parseJsonBody<ChangePasswordRequest>(req);
     const { huidig_wachtwoord, nieuw_wachtwoord } = body;
@@ -73,6 +69,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       .prepare('SELECT id, wachtwoord_hash FROM dienstrooster_person WHERE id = ?')
       .get(auth!.userId) as { id: string; wachtwoord_hash: string | null } | undefined;
 
+    // Counted now, before the comparison (lib/rateLimit.ts takeAttempt), and
+    // given back below when the current password turns out to be right.
+    const rateLimit = takeAttempt([[rateLimitKey, MAX_ATTEMPTS]]);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
+    }
+
     // Compares against a dummy hash when the account has none, so the
     // response time does not distinguish "no password set" from "wrong
     // password" - same reasoning as staff-login.
@@ -81,13 +84,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       person?.wachtwoord_hash ?? DUMMY_PASSWORD_HASH
     );
     if (!person || !person.wachtwoord_hash || !currentMatches) {
-      recordAttempt(rateLimitKey);
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_PASSWORD', message: 'Huidig wachtwoord klopt niet' },
       };
       return NextResponse.json(response, { status: 401 });
     }
+
+    // The current password was right: what follows is no guess.
+    releaseAttempt(rateLimitKey);
 
     const passwordErrors = validatePasswordStrength(nieuw_wachtwoord);
     if (passwordErrors.length > 0) {

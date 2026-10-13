@@ -12,7 +12,7 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { seedPasswordMustBeChanged } from '@/lib/seedPassword';
 import { encryptTotpSecret, readTotpSecret } from '@/lib/totpSecret';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, getClientIp, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { takeAttempt, releaseAttempt, getClientIp, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 
 interface StaffLoginRequest {
   codenaam: string;
@@ -51,16 +51,21 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const clientIp = getClientIp(req);
     const clientKey = `staff-login-client:${clientIp}`;
     const rateLimitKey = `staff-login:${clientIp}:${codenaam.toLowerCase()}`;
-    for (const [key, max] of [[rateLimitKey, MAX_ATTEMPTS], [clientKey, MAX_ATTEMPTS_PER_CLIENT]] as const) {
-      const rateLimit = checkRateLimit(key, max);
-      if (!rateLimit.allowed) {
-        return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
-      }
+    // Counted now, before the password is compared (lib/rateLimit.ts
+    // takeAttempt); given back below when it was not a failed guess.
+    const rateLimit = takeAttempt([
+      [rateLimitKey, MAX_ATTEMPTS],
+      [clientKey, MAX_ATTEMPTS_PER_CLIENT],
+    ]);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
+    const notAGuess = () => {
+      releaseAttempt(rateLimitKey);
+      releaseAttempt(clientKey);
+    };
 
     const invalidCredentials = () => {
-      recordAttempt(rateLimitKey);
-      recordAttempt(clientKey);
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Ongeldige inloggegevens' } },
         { status: 401 }
@@ -103,6 +108,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (typeof totpCode !== 'string' || !isValidTOTPFormat(totpCode)) {
         // Not counted: the password was right, this is the normal first
         // half of a two-step login, not a failed guess.
+        notAGuess();
         return NextResponse.json(
           { success: false, error: { code: 'TOTP_REQUIRED', message: 'Authenticatiecode is verplicht' } },
           { status: 401 }
@@ -112,6 +118,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!totp.secret) {
         // Only ever said after the right password: the secret is stored
         // encrypted and the server's key changed since (lib/totpSecret.ts).
+        notAGuess();
         return NextResponse.json(
           {
             success: false,
@@ -139,6 +146,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     clearRateLimit(rateLimitKey);
+    releaseAttempt(clientKey);
 
     // The seed password is public with the code: a session opened with it
     // can only change the password (lib/auth-context.ts).

@@ -87,10 +87,12 @@ function createFixture(): Fixture {
   ).run(periodId, poolId);
   created.periods.push(periodId);
 
-  // 2027-01-04 and 2027-01-11 are both Mondays (ISO weeks 1 and 2).
+  // 2027-01-04 and 2027-01-11 are both Mondays (ISO weeks 1 and 2), the
+  // pattern below covers them; Tuesday 2027-01-05 nothing covers.
   const slotIds: Record<string, string> = {};
   for (const [datum, isoWeek] of [
     ['2027-01-04', 1],
+    ['2027-01-05', 1],
     ['2027-01-11', 2],
   ] as const) {
     const slotId = crypto.randomUUID();
@@ -171,7 +173,7 @@ describe('PATCH /api/person/[id]/preferences/slot/[slotId]', () => {
   it('sets a preference on an untouched slot', async () => {
     const f = createFixture();
     const free = db
-      .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-11'`)
+      .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-05'`)
       .get(f.periodId) as { id: string };
 
     const res = await patch(f.personId, free.id, 'VOORKEUR');
@@ -208,7 +210,7 @@ describe('PATCH /api/person/[id]/preferences/slot/[slotId]', () => {
     // reconcilePatternForPeriod deletes its rows by bron_pattern_id, so a
     // row still carrying that id disappears with them.
     const f = createFixture();
-    await patch(f.personId, f.mondaySlotId, 'LIEVER_NIET');
+    expect((await patch(f.personId, f.mondaySlotId, 'VOORKEUR')).status).toBe(200);
 
     // Narrow the pattern so this Monday is no longer one of its days.
     db.prepare(
@@ -218,7 +220,15 @@ describe('PATCH /api/person/[id]/preferences/slot/[slotId]', () => {
 
     const after = row(f.personId, f.mondaySlotId);
     expect(after).toBeDefined();
-    expect(after!.blocking_level).toBe('LIEVER_NIET');
+    expect(after!.blocking_level).toBe('VOORKEUR');
+  });
+
+  it('refuses "liever niet" on a pattern day, which the next sync would take back (audit 8)', async () => {
+    const f = createFixture();
+    const res = await patch(f.personId, f.mondaySlotId, 'LIEVER_NIET');
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('IN_DEELTIJD');
+    expect(row(f.personId, f.mondaySlotId)).toMatchObject({ blocking_level: 'ABSOLUUT', source: 'PARTTIME' });
   });
 
   it('clearing a pattern day lets the pattern take it back', async () => {
@@ -240,7 +250,7 @@ describe('PATCH /api/person/[id]/preferences/slot/[slotId]', () => {
   it('saving the same slot twice updates it instead of failing on the unique index', async () => {
     const f = createFixture();
     const free = db
-      .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-11'`)
+      .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-05'`)
       .get(f.periodId) as { id: string };
 
     expect((await patch(f.personId, free.id, 'VOORKEUR')).status).toBe(200);
@@ -256,7 +266,7 @@ describe('PATCH /api/person/[id]/preferences/slot/[slotId]', () => {
   it('marks the submission as started', async () => {
     const f = createFixture();
     const free = db
-      .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-11'`)
+      .prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND datum = '2027-01-05'`)
       .get(f.periodId) as { id: string };
 
     await patch(f.personId, free.id, 'VOORKEUR');

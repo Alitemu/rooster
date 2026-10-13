@@ -13,12 +13,13 @@ import { POST as disableTotp } from './totp/disable/route';
  * The rule: ten wrong guesses per account, then a quarter of an hour of
  * nothing - also when the guesses arrive at the same moment.
  *
- * The routes check the limit first and count a failed attempt only after
- * bcrypt has compared the password, which is asynchronous. Requests that
- * arrive together all pass the check before the first one is counted, so
- * the limit holds for guesses one after the other but not for a burst.
- * Thirty guesses at once must still get no more than ten answers that
- * actually compared a password; the rest are refused (429) without one.
+ * The routes used to check the limit first and count a failed attempt
+ * only after bcrypt had compared the password, which is asynchronous:
+ * requests that arrived together all passed the check before the first
+ * one was counted, so the limit held for guesses one after the other but
+ * not for a burst (audit 8). Thirty guesses at once must get no more than
+ * ten answers that actually compared a password; the rest are refused
+ * (429) without one.
  */
 
 const PASSWORD = 'Juist-Wachtw00rd!';
@@ -83,15 +84,16 @@ describe('the guessing limit holds for guesses sent at the same moment', () => {
     expect(statuses.slice(LIMIT)).toEqual([429, 429]);
   }, 30_000);
 
-  // Audit 8: all thirty are compared - the check runs before any of them
-  // has been counted.
-  it.fails('logging in: thirty wrong passwords at once, at most ten compared', async () => {
+  // Audit 8: all thirty used to be compared - the check ran before any of
+  // them had been counted. Now each is counted as it arrives
+  // (lib/rateLimit.ts takeAttempt).
+  it('logging in: thirty wrong passwords at once, at most ten compared', async () => {
     const { codenaam } = await staff();
     const result = await burst((i) => post(staffLogin as never, { codenaam, password: `Fout-${i}-Wachtw00rd!` }));
     expect(result.compared, JSON.stringify(result.statuses)).toBeLessThanOrEqual(LIMIT);
   }, 60_000);
 
-  it.fails('changing the password: thirty wrong current passwords at once, at most ten compared', async () => {
+  it('changing the password: thirty wrong current passwords at once, at most ten compared', async () => {
     const { cookie } = await staff();
     const result = await burst((i) =>
       post(changePassword as never, { huidig_wachtwoord: `Fout-${i}-Wachtw00rd!`, nieuw_wachtwoord: 'Nieuw-Wachtw00rd!' }, cookie)
@@ -99,9 +101,25 @@ describe('the guessing limit holds for guesses sent at the same moment', () => {
     expect(result.compared, JSON.stringify(result.statuses)).toBeLessThanOrEqual(LIMIT);
   }, 60_000);
 
-  it.fails('turning two-step verification off: thirty wrong passwords at once, at most ten compared', async () => {
+  it('turning two-step verification off: thirty wrong passwords at once, at most ten compared', async () => {
     const { cookie } = await staff();
     const result = await burst((i) => post(disableTotp as never, { wachtwoord: `Fout-${i}-Wachtw00rd!` }, cookie));
     expect(result.compared, JSON.stringify(result.statuses)).toBeLessThanOrEqual(LIMIT);
+  }, 60_000);
+
+  it('after ten wrong passwords in a burst even the right one waits, like after ten one by one', async () => {
+    const { codenaam } = await staff();
+    const wrong = await burst((i) => post(staffLogin as never, { codenaam, password: `Fout-${i}-Wachtw00rd!` }));
+    expect(wrong.limited).toBe(BURST - LIMIT);
+    // Ten failures used up: even the right password waits now.
+    expect((await post(staffLogin as never, { codenaam, password: PASSWORD })).status).toBe(429);
+  }, 60_000);
+
+  it('a right password does not use up the allowance', async () => {
+    const { codenaam } = await staff();
+    for (let i = 0; i < 15; i++) {
+      expect((await post(staffLogin as never, { codenaam, password: PASSWORD })).status).toBe(200);
+    }
+    expect((await post(staffLogin as never, { codenaam, password: 'Fout-x-Wachtw00rd!' })).status).toBe(401);
   }, 60_000);
 });

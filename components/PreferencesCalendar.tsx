@@ -686,7 +686,7 @@ export function PreferencesCalendar({
                                       title={
                                         slot.fellow && level === 'ABSOLUUT'
                                           ? `${COUNTER_LABEL[counter] || counter}: geblokkeerd omdat je fellow bent (klik om vrij te geven)`
-                                          : `${COUNTER_LABEL[counter] || counter}: ${level || 'beschikbaar'} (rechtsklik voor opties)`
+                                          : `${COUNTER_LABEL[counter] || counter}: ${level ? LEVEL_LABEL[level].toLowerCase() : 'beschikbaar'} (rechtsklik voor opties)`
                                       }
                                     >
                                       {counter[0]}{level ? GLYPH[level] : AVAILABLE_GLYPH}

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { checkRateLimit, recordAttempt, clearRateLimit, getClientIp } from './rateLimit';
+import { checkRateLimit, recordAttempt, clearRateLimit, getClientIp, takeAttempt, releaseAttempt } from './rateLimit';
 
 /**
  * One rule = one test: a key that exceeds its allowance within the window
@@ -65,5 +65,30 @@ describe('getClientIp', () => {
     process.env.TRUST_PROXY_HEADERS = 'true';
     expect(getClientIp(reqWith('10.0.0.1'))).toBe('10.0.0.1');
     expect(getClientIp(reqWith(null))).toBe('unknown');
+  });
+});
+
+describe('takeAttempt', () => {
+  it('counts an attempt on every key at once, and refuses once any key is at its maximum', () => {
+    const a = `take-a-${Math.random()}`;
+    const b = `take-b-${Math.random()}`;
+    for (let i = 0; i < 3; i++) expect(takeAttempt([[a, 3], [b, 10]]).allowed).toBe(true);
+    const refused = takeAttempt([[a, 3], [b, 10]]);
+    expect(refused.allowed).toBe(false);
+    expect(refused.retryAfterSeconds).toBeGreaterThan(0);
+    // The refused attempt counted on neither key.
+    expect(takeAttempt([[b, 4]]).allowed).toBe(true);
+    expect(takeAttempt([[b, 4]]).allowed).toBe(false);
+  });
+
+  it('gives an attempt back with releaseAttempt, and forgets a key at zero', () => {
+    const key = `release-${Math.random()}`;
+    takeAttempt([[key, 1]]);
+    expect(takeAttempt([[key, 1]]).allowed).toBe(false);
+    releaseAttempt(key);
+    expect(takeAttempt([[key, 1]]).allowed).toBe(true);
+    releaseAttempt(key);
+    releaseAttempt(key);
+    expect(checkRateLimit(key, 1).allowed).toBe(true);
   });
 });

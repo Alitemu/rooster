@@ -13,7 +13,7 @@ import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { checkBlockBudget } from '@/lib/blockBudget';
-import { syncPatternsForPerson } from '@/lib/parttimeSync';
+import { matchSlotsToPattern, syncPatternsForPerson, type PatternRule } from '@/lib/parttimeSync';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import type { Teller } from '@/lib/rosterBands';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -61,7 +61,7 @@ export async function PATCH(
 
     // Verify slot exists and its period still accepts preference changes
     const slotStmt = db.prepare(
-      `SELECT s.id, s.period_id, sp.status as period_status, sp.deadline as period_deadline,
+      `SELECT s.id, s.period_id, s.datum, s.iso_week, sp.status as period_status, sp.deadline as period_deadline,
               sp.bevroren_ruleset_json, sp.pool_id, sp.start_datum, sp.eind_datum, st.teller
        FROM dienstrooster_shift_slot s
        JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
@@ -72,6 +72,8 @@ export async function PATCH(
       | {
           id: string;
           period_id: string;
+          datum: string;
+          iso_week: number;
           period_status: string;
           period_deadline: string;
           bevroren_ruleset_json: string | null;
@@ -111,6 +113,35 @@ export async function PATCH(
         error: { code: gate.code!, message: gate.message! },
       };
       return NextResponse.json(response, { status: 403 });
+    }
+
+    // A marking the next sync would take back is refused instead (audit 8):
+    // an absence takes over any softer marking, a part-time pattern takes
+    // over "liever niet". Written anyway, the day stayed open to the solver
+    // until some unrelated action happened to re-sync it - a vacation day
+    // the person "wanted" to work. "Geblokkeerd" stays blocked and the
+    // syncs leave it alone; "voorkeur" on a part-time day is someone who
+    // does want to work that day, which the pattern leaves too.
+    const refuse = (code: string, message: string) =>
+      NextResponse.json({ success: false, error: { code, message } } satisfies ApiErrorResponse, { status: 409 });
+    if (level === 'LIEVER_NIET' || level === 'VOORKEUR') {
+      const inAbsence = db
+        .prepare('SELECT 1 FROM dienstrooster_absence WHERE person_id = ? AND van_datum <= ? AND tot_datum >= ?')
+        .get(id, slot.datum, slot.datum);
+      if (inAbsence) {
+        return refuse('IN_AFWEZIGHEID', 'Deze dag valt in je afwezigheid en blijft daarom geblokkeerd. Pas de afwezigheid aan als die niet klopt.');
+      }
+    }
+    if (level === 'LIEVER_NIET') {
+      const patterns = db
+        .prepare('SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE person_id = ?')
+        .all(id) as PatternRule[];
+      if (patterns.some((p) => matchSlotsToPattern(p, [{ id: slotId, datum: slot.datum, iso_week: slot.iso_week }]).length > 0)) {
+        return refuse(
+          'IN_DEELTIJD',
+          'Op deze dag werk je volgens je deeltijdpatroon niet. Daarom blijft hij geblokkeerd. Wil je deze dag toch werken? Kies dan voorkeur.'
+        );
+      }
     }
 
     // Only ABSOLUUT/LIEVER_NIET count against a block budget - VOORKEUR is a

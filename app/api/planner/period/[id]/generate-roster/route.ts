@@ -34,7 +34,9 @@ import {
   type RosterGenerationStoppedReason,
 } from '@/lib/rosterGenerationJobs';
 import { periodStatusLabel } from '@/lib/statusLabels';
-import { blockOutsideMembership, membershipWindows } from '@/lib/membershipWindow';
+import { blockOutsideMembership, coversDate, membershipWindows } from '@/lib/membershipWindow';
+import { refreshCarryOverForPeriod } from '@/lib/carryOver';
+import { writeAuditLog } from '@/lib/auditLog';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -203,6 +205,22 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
+    // Carry-over from the previous period was booked when this one opened;
+    // that roster may have been corrected since (lib/carryOver.ts, audit 8).
+    // Before the balances are read, here rather than in the job, so the
+    // ledger the publication check and "Jouw rooster" read is the one the
+    // solver got.
+    const carryOver = refreshCarryOverForPeriod(periodId, actorId);
+    if (carryOver.changed) {
+      writeAuditLog({
+        actorId,
+        entiteit: 'period',
+        entiteitId: periodId,
+        actie: 'UPDATE',
+        nieuw: { wijziging: 'overloop opnieuw berekend bij genereren', regels: carryOver.entries },
+      });
+    }
+
     const jobId = createRosterGenerationJob(periodId);
     runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people }).catch(
       (error) => {
@@ -280,14 +298,8 @@ async function runGeneration(args: {
     // is not theirs to work: sent to the solver as a hard block, whatever
     // they marked there (lib/membershipWindow.ts). Not stored, so it
     // follows the membership when that changes.
-    Object.assign(
-      personPreferences,
-      blockOutsideMembership(
-        personPreferences,
-        slots,
-        membershipWindows(period.pool_id, period.start_datum, period.eind_datum)
-      )
-    );
+    const windows = membershipWindows(period.pool_id, period.start_datum, period.eind_datum);
+    Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));
 
     // Fetch balances (ledger sum per person per counter)
     const ledgerEntries = db
@@ -352,6 +364,20 @@ async function runGeneration(args: {
       if (!fellowIds.has(m.id)) continue;
       const scaled = scaledBandForMember(bands, 'WEEKEND', m, distributionMode);
       bandOverrides[m.id] = { WEEKEND: fellowWeekendBand(scaled, releasedByFellow.get(m.id) ?? 0) };
+    }
+
+    // What the streefbereik allows at most per counter, everyone together,
+    // next to how many shifts there are: when the maximums fall short, the
+    // solver must leave the rest empty (it never goes past a maximum), and
+    // the planner should be told that rather than "not enough people".
+    const bereikTekort: Partial<Record<Teller, { maximaal: number; diensten: number }>> = {};
+    for (const teller of ['AVOND', 'WEEKEND', 'FEESTDAG'] as Teller[]) {
+      let maximaal = 0;
+      for (const m of poolMembers) {
+        const override = teller === 'WEEKEND' ? bandOverrides[m.id]?.WEEKEND : undefined;
+        maximaal += override ? override[1] : Math.max(0, scaledBandForMember(bands, teller, m, distributionMode)[1] + (balances[m.id]?.[teller] ?? 0));
+      }
+      if (maximaal < slotCountByTeller[teller]) bereikTekort[teller] = { maximaal, diensten: slotCountByTeller[teller] };
     }
 
     // Fetch the confirmed carry-over from the previous period (the "Prior
@@ -640,15 +666,34 @@ async function runGeneration(args: {
 
     // Enrich the solver's bare slot IDs with what the planner actually
     // needs to see to fill a gap by hand: date and shift type.
+    // And why it stayed empty, where that is certain: nobody is a member on
+    // that date (Geldig vanaf/tot), or every member blocked it. Otherwise
+    // the streefbereik or the window held everyone back (bereik_tekort says
+    // which). A planner whose memberships ended halfway the period saw 160
+    // empty shifts with every planner and window and no hint why.
     const slotById = new Map(slots.map((s) => [s.id, s]));
+    const blocked = new Set(
+      Object.entries(personPreferences).flatMap(([person, prefs]) =>
+        prefs.filter((p) => p.blocking_level === 'ABSOLUUT').map((p) => `${person}|${p.slot_id}`)
+      )
+    );
     const unfilledSlots = (solverOutput.diagnostics.unfilled_slots || []).map(
       (u: { slot_id: string; shortfall: number }) => {
         const slot = slotById.get(u.slot_id);
+        const leden = slot ? people.filter((p) => coversDate(windows.get(p), slot.datum)) : [];
+        const reden: 'GEEN_LID' | 'IEDEREEN_GEBLOKKEERD' | null = !slot
+          ? null
+          : leden.length === 0
+            ? 'GEEN_LID'
+            : leden.every((p) => blocked.has(`${p}|${slot.id}`))
+              ? 'IEDEREEN_GEBLOKKEERD'
+              : null;
         return {
           slot_id: u.slot_id,
           shortfall: u.shortfall,
           datum: slot?.datum ?? null,
           teller: slot?.teller ?? null,
+          reden,
         };
       }
     );
@@ -678,6 +723,7 @@ async function runGeneration(args: {
       assignments_created: assignmentCount,
       unfilled_slots: unfilledSlots,
       fully_covered: unfilledSlots.length === 0,
+      bereik_tekort: bereikTekort,
       cost: solverOutput.diagnostics.total_cost,
       violations: solverOutput.diagnostics.violations,
       time_seconds: solverOutput.diagnostics.time_seconds,

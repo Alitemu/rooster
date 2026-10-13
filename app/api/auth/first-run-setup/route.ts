@@ -24,7 +24,7 @@ import { db } from '@/db/client';
 import { hashPassword, validatePasswordStrength } from '@/lib/auth';
 import { verifySetupToken, clearSetupToken } from '@/lib/setupToken';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, getClientIp, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { takeAttempt, releaseAttempt, getClientIp, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface FirstRunSetupRequest {
@@ -41,26 +41,30 @@ const MAX_ATTEMPTS = 10;
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const rateLimitKey = `first-run-setup:${getClientIp(req)}`;
-    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
-    }
 
     const body = await parseJsonBody<FirstRunSetupRequest>(req);
     const { codenaam, password, setup_token } = body;
+
+    // Counted now, after the last await before the token is compared
+    // (lib/rateLimit.ts takeAttempt), and given back once it is right.
+    const rateLimit = takeAttempt([[rateLimitKey, MAX_ATTEMPTS]]);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
+    }
 
     // Checked before anything else, and before any DB lookup - a request
     // with a wrong/missing token gets the exact same response whether or
     // not the codenaam it named even exists or is still claimable, so it
     // learns nothing about account state either way.
     if (!verifySetupToken(setup_token)) {
-      recordAttempt(rateLimitKey);
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_SETUP_TOKEN', message: 'Ongeldige of ontbrekende setup-token' },
       };
       return NextResponse.json(response, { status: 403 });
     }
+    // The token was right: nothing below is a guess.
+    releaseAttempt(rateLimitKey);
 
     if (!codenaam || !password) {
       const response: ApiErrorResponse = {

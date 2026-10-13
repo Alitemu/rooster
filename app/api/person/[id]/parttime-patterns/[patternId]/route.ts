@@ -11,6 +11,7 @@ import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-contex
 import { internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import {
   syncAvailabilityForPattern,
+  syncPatternsForPerson,
   removePatternAvailability,
   getOpenPeriodsForPerson,
   findDeadlinePassedOverlappingPeriods,
@@ -143,8 +144,11 @@ export async function PATCH(
     const updateAndSync = db.transaction(() => {
       updateStmt.run(...values);
       const result = syncAvailabilityForPattern(patternId);
-      // A shrunk or moved pattern can free a slot one of the person's
-      // absences would cover - same reclaim the delete route does.
+      // A shrunk or moved pattern can free a slot another of the person's
+      // patterns or one of their absences covers - same reclaim the delete
+      // route does. Without the patterns (audit 8) that day stayed open
+      // until some later, unrelated sync.
+      syncPatternsForPerson(id);
       syncAbsencesForPerson(id);
       return result;
     });
@@ -238,9 +242,12 @@ export async function DELETE(
     db.transaction(() => {
       removePatternAvailability(patternId);
       db.prepare(`DELETE FROM dienstrooster_parttime_pattern WHERE id = ? AND person_id = ?`).run(patternId, id);
-      // A released slot may be one of the person's absences would cover
-      // but was skipped for while this pattern held it - see
-      // lib/absenceSync.ts's syncAbsencesForPerson.
+      // A released slot may be one another of the person's patterns or one
+      // of their absences covers but was skipped for while this pattern held
+      // it - see lib/absenceSync.ts's syncAbsencesForPerson. Switching from
+      // an old pattern to a new one over the same weekday (new one added
+      // first) left that day open without the patterns (audit 8).
+      syncPatternsForPerson(id);
       syncAbsencesForPerson(id);
     })();
 

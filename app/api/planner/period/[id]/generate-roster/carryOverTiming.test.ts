@@ -140,9 +140,9 @@ async function generatedBalances(periodId: string): Promise<Record<string, Recor
 }
 
 describe('carry-over follows corrections made after the next period opened', () => {
-  // Audit 8: the next period keeps the carry-over worked out when it
-  // opened; A and B are both still at zero.
-  it.fails('a shift moved from A to B in the running roster reaches the next period', async () => {
+  // Audit 8: the next period kept the carry-over worked out when it
+  // opened, A and B both still at zero. Generating recomputes it now.
+  it('a shift moved from A to B in the running roster reaches the next period', async () => {
     const current = period('2031-01-06', 'GEPUBLICEERD');
     // Everyone exactly at their band of two: nothing carries.
     const owners = ['A', 'A', 'B', 'B', 'C', 'C', 'D', 'D', 'E', 'E'];
@@ -165,5 +165,20 @@ describe('carry-over follows corrections made after the next period opened', () 
 
     const balances = await generatedBalances(next.id);
     expect({ A: balances[ids.A].AVOND, B: balances[ids.B].AVOND }).toEqual({ A: 1, B: -1 });
+
+    // Booked once, said once in the audit log; generating again with nothing
+    // changed leaves the rows (their date and author) alone.
+    const rowsOf = () =>
+      db
+        .prepare(`SELECT id, person_id, delta FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ? AND categorie = 'CARRY_OVER' ORDER BY id`)
+        .all(next.id);
+    const booked = rowsOf();
+    expect(booked).toHaveLength(2);
+    await generatedBalances(next.id);
+    expect(rowsOf()).toEqual(booked);
+    const audits = db
+      .prepare(`SELECT COUNT(*) AS n FROM dienstrooster_audit_log WHERE entiteit_id = ? AND nieuw_json LIKE '%overloop opnieuw berekend%'`)
+      .get(next.id) as { n: number };
+    expect(audits.n).toBe(1);
   });
 });

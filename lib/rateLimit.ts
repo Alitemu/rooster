@@ -83,6 +83,39 @@ export function clearRateLimit(key: string): void {
 }
 
 /**
+ * Checks every key and, only when none of them has reached its maximum,
+ * counts one attempt on each - in one synchronous step, so call it right
+ * before the comparison it guards and after the last await before that.
+ *
+ * Checking first and counting a failure only after an awaited password
+ * comparison let a burst through: thirty guesses sent at once all passed
+ * the check before the first of them was counted, and all thirty were
+ * compared (audit 8, app/api/auth/rateLimitConcurrency.test.ts). Counted
+ * up front, the eleventh is refused whatever the timing. An attempt that
+ * turns out not to be a failed guess (the right password, a first step
+ * that is not a guess at all) is given back with releaseAttempt.
+ */
+export function takeAttempt(limits: ReadonlyArray<readonly [key: string, max: number]>): {
+  allowed: boolean;
+  retryAfterSeconds: number;
+} {
+  for (const [key, max] of limits) {
+    const limit = checkRateLimit(key, max);
+    if (!limit.allowed) return limit;
+  }
+  for (const [key] of limits) recordAttempt(key);
+  return { allowed: true, retryAfterSeconds: 0 };
+}
+
+/** Gives back one attempt takeAttempt counted. */
+export function releaseAttempt(key: string): void {
+  const bucket = buckets.get(key);
+  if (!bucket) return;
+  bucket.count -= 1;
+  if (bucket.count <= 0) buckets.delete(key);
+}
+
+/**
  * Client identifier for rate-limiting keys.
  *
  * Only trusts `X-Real-IP` when TRUST_PROXY_HEADERS is explicitly enabled,

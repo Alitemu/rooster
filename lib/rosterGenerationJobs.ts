@@ -45,8 +45,17 @@ export type RosterGenerationStoppedReason = 'max_attempts' | 'perfect' | 'cancel
 
 export interface RosterGenerationJobResult {
   assignments_created: number;
-  unfilled_slots: Array<{ slot_id: string; shortfall: number; datum: string | null; teller: string | null }>;
+  unfilled_slots: Array<{
+    slot_id: string;
+    shortfall: number;
+    datum: string | null;
+    teller: string | null;
+    // Why it stayed empty, where certain: nobody a member that day, or every member blocked it.
+    reden: 'GEEN_LID' | 'IEDEREEN_GEBLOKKEERD' | null;
+  }>;
   fully_covered: boolean;
+  // Counters whose maximums, everyone together, are fewer than its shifts.
+  bereik_tekort: Partial<Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', { maximaal: number; diensten: number }>>;
   cost: number;
   violations: Record<string, number>;
   time_seconds: number;

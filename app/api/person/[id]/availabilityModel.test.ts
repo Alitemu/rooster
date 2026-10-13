@@ -196,19 +196,11 @@ async function runSequence(steps: Step[]): Promise<void> {
     let res: { status: number; json: Record<string, any> } | null = null;
     switch (step.kind) {
       case 'mark': {
+        // Any day, any level: the route refuses (409) what cannot stay - a
+        // softer marking inside an absence, "liever niet" on a part-time
+        // day - and the checks below prove nothing it lets through leaves
+        // the state unsettled.
         const slot = slots[step.slot];
-        // The calendar locks a part-time or absence day (PreferencesCalendar
-        // never wires its button); the route itself is tested on that below.
-        const source = rows(person).get(slot.id)?.source;
-        if (source === 'PARTTIME' || source === 'ABSENCE') continue;
-        // A day inside an absence that the person had blocked themselves
-        // before: tested on its own below (audit 8), skipped here so the
-        // sequence can look for anything else.
-        const inAbsence = (db.prepare('SELECT van_datum, tot_datum FROM dienstrooster_absence WHERE person_id = ?').all(person) as Array<{
-          van_datum: string;
-          tot_datum: string;
-        }>).some((a) => a.van_datum <= slot.datum && slot.datum <= a.tot_datum);
-        if (inAbsence && step.level !== null && step.level !== 'ABSOLUUT') continue;
         res = await call(markSlot, 'PATCH', person, { slotId: slot.id }, { level: step.level });
         if (res.status < 300 && fellow && slot.weekend) released.add(slot.id);
         break;
@@ -231,13 +223,8 @@ async function runSequence(steps: Step[]): Promise<void> {
         if (res.status < 300) absences.splice(step.which % absences.length, 1);
         break;
       case 'pattern': {
-        // Two patterns over the same day: tested on its own below (audit 8).
-        const rule = { weekdag: step.weekdag, frequentie: step.frequentie, geldig_vanaf: day(step.from), geldig_tot: day(step.from + step.length) };
-        const existing = db.prepare('SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE person_id = ?').all(person) as Array<
-          typeof rule
-        >;
-        const mine = new Set(matchSlotsToPattern(rule, slots));
-        if (existing.some((p) => matchSlotsToPattern(p, slots).some((id) => mine.has(id)))) continue;
+        // Patterns may overlap: switching from an old one to a new one
+        // over the same weekday is how a part-timer changes days.
         res = await call(addPattern, 'POST', person, {}, {
           weekdag: step.weekdag,
           frequentie: step.frequentie,
@@ -250,15 +237,6 @@ async function runSequence(steps: Step[]): Promise<void> {
       case 'editPattern': {
         if (patterns.length === 0) continue;
         const id = patterns[step.which % patterns.length];
-        const own = db.prepare('SELECT geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE id = ?').get(id) as { geldig_vanaf: string; geldig_tot: string };
-        const others = db.prepare('SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE person_id = ? AND id != ?').all(person, id) as Array<{
-          weekdag: Weekdag;
-          frequentie: Frequentie;
-          geldig_vanaf: string;
-          geldig_tot: string;
-        }>;
-        const mine = new Set(matchSlotsToPattern({ weekdag: step.weekdag, frequentie: step.frequentie, ...own }, slots));
-        if (others.some((p) => matchSlotsToPattern(p, slots).some((x) => mine.has(x)))) continue;
         res = await call(editPattern, 'PATCH', person, { patternId: id }, { weekdag: step.weekdag, frequentie: step.frequentie });
         break;
       }
@@ -355,39 +333,62 @@ describe('availability: hand markings, part-time, absences and fellow blocks tog
     );
   }, 300_000);
 
-  // Audit 8: the route takes a marking on a day an absence or part-time
+  // Audit 8: the route took a marking on a day an absence or part-time
   // pattern holds, which the calendar never offers: "voorkeur" by hand on a
-  // vacation day becomes a MANUAL row and the block is gone - until the
-  // next sync of anything (clearing another day, editing a pattern) takes
-  // the absence back. Between the two the solver sees a vacation day the
-  // person "wants" to work.
-  it.fails('a hand marking on a day an absence holds is refused or does not stick', async () => {
+  // vacation day became a MANUAL row and the block was gone - until the
+  // next sync of anything took the absence back. Now refused.
+  it('a hand marking on a day an absence holds is refused', async () => {
     const { person, slots } = buildPerson();
     const made = await call(addAbsence, 'POST', person, {}, { van_datum: day(0), tot_datum: day(0), soort: 'VAKANTIE' });
     expect(made.status).toBe(201);
-    await call(markSlot, 'PATCH', person, { slotId: slots[0].id }, { level: 'VOORKEUR' });
+    const res = await call(markSlot, 'PATCH', person, { slotId: slots[0].id }, { level: 'VOORKEUR' });
+    expect(res.status).toBe(409);
+    expect(res.json.error.code).toBe('IN_AFWEZIGHEID');
     expect(rows(person).get(slots[0].id)?.blocking_level).toBe('ABSOLUUT');
   });
 
   // Audit 8, and reachable from the calendar: someone blocks a Saturday by
   // hand, then registers a vacation over it (the absence leaves their own
   // block alone), then sets that Saturday to "voorkeur" - their own
-  // marking, so the calendar lets them. The vacation day is now open with a
-  // preference to work it, until some later sync lets the absence take it.
-  it.fails('a day inside an absence stays blocked when the person changes their own earlier block on it', async () => {
+  // marking, so the calendar lets them. That left the vacation day open
+  // with a preference to work it. Now refused with a reason; clearing it
+  // instead hands the day to the absence.
+  it('a day inside an absence stays blocked when the person changes their own earlier block on it', async () => {
     const { person, slots } = buildPerson();
     await call(markSlot, 'PATCH', person, { slotId: slots[5].id }, { level: 'ABSOLUUT' });
     expect((await call(addAbsence, 'POST', person, {}, { van_datum: day(0), tot_datum: day(6), soort: 'VAKANTIE' })).status).toBe(201);
-    expect((await call(markSlot, 'PATCH', person, { slotId: slots[5].id }, { level: 'VOORKEUR' })).status).toBe(200);
-    expect(rows(person).get(slots[5].id)?.blocking_level).toBe('ABSOLUUT');
+    for (const level of ['VOORKEUR', 'LIEVER_NIET']) {
+      const res = await call(markSlot, 'PATCH', person, { slotId: slots[5].id }, { level });
+      expect(res.status, level).toBe(409);
+      expect(res.json.error.code).toBe('IN_AFWEZIGHEID');
+      expect(res.json.error.message).toBe('Deze dag valt in je afwezigheid en blijft daarom geblokkeerd. Pas de afwezigheid aan als die niet klopt.');
+      expect(rows(person).get(slots[5].id)?.blocking_level).toBe('ABSOLUUT');
+    }
+    expect((await call(markSlot, 'PATCH', person, { slotId: slots[5].id }, { level: null })).status).toBe(200);
+    expect(rows(person).get(slots[5].id)).toMatchObject({ blocking_level: 'ABSOLUUT', source: 'ABSENCE' });
   });
 
-  // Audit 8: removing (or changing) a part-time pattern re-syncs absences
+  // The same for a part-time day: "liever niet" on a day the pattern
+  // releases for a manual block would be taken back by the next sync.
+  // "Voorkeur" stays allowed - someone wanting to work that particular day.
+  it('a part-time day the person blocked by hand takes voorkeur but not liever niet', async () => {
+    const { person, slots } = buildPerson();
+    await call(markSlot, 'PATCH', person, { slotId: slots[0].id }, { level: 'ABSOLUUT' });
+    expect((await call(addPattern, 'POST', person, {}, { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: day(0), geldig_tot: day(27) })).status).toBe(201);
+    const res = await call(markSlot, 'PATCH', person, { slotId: slots[0].id }, { level: 'LIEVER_NIET' });
+    expect(res.status).toBe(409);
+    expect(res.json.error.code).toBe('IN_DEELTIJD');
+    expect(rows(person).get(slots[0].id)?.blocking_level).toBe('ABSOLUUT');
+    expect((await call(markSlot, 'PATCH', person, { slotId: slots[0].id }, { level: 'VOORKEUR' })).status).toBe(200);
+    expect(rows(person).get(slots[0].id)).toMatchObject({ blocking_level: 'VOORKEUR', source: 'MANUAL' });
+  });
+
+  // Audit 8: removing (or changing) a part-time pattern re-synced absences
   // but not the person's other patterns. Two patterns over the same day -
   // switching from an old pattern to a new one, the new one added first -
-  // and removing the old one leaves that day open although the new one
+  // and removing the old one left that day open although the new one
   // covers it, until some later sync.
-  it.fails('removing one of two patterns over the same day leaves it blocked by the other', async () => {
+  it('removing one of two patterns over the same day leaves it blocked by the other', async () => {
     const { person, slots } = buildPerson();
     const oud = await call(addPattern, 'POST', person, {}, { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: day(0), geldig_tot: day(13) });
     expect(oud.status).toBe(201);

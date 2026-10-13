@@ -12,7 +12,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { verifyPayload } from '@/lib/session';
 import { encryptTotpSecret } from '@/lib/totpSecret';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { checkRateLimit, recordAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
+import { takeAttempt, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { TotpSetupPayload } from '../setup/route';
 
 // Keyed by the authenticated actor (this route requires a session, unlike
@@ -31,10 +31,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const rateLimitKey = `totp-confirm:${auth.userId}`;
-    const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
-    if (!rateLimit.allowed) {
-      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
-    }
 
     const body = await parseJsonBody<{ setup_token: string; code: string }>(request);
     const { setup_token: setupToken, code } = body;
@@ -54,8 +50,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    // Counted now, before the code is compared (lib/rateLimit.ts takeAttempt).
+    const rateLimit = takeAttempt([[rateLimitKey, MAX_ATTEMPTS]]);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
+    }
     if (!verifyTOTPCode(setupPayload.secret, code)) {
-      recordAttempt(rateLimitKey);
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_CODE', message: 'Onjuiste code' } },
         { status: 400 }

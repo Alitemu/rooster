@@ -104,13 +104,13 @@ test.describe('the preferences calendar on a phone', () => {
     }
   });
 
-  // Audit 8: the tooltip on a day the person can click reads
+  // Audit 8: the tooltip on a day the person can click read
   // "Avonddiensten: LIEVER_NIET (rechtsklik voor opties)" - the code word,
   // where every screen says "liever niet", "geblokkeerd" or "voorkeur".
   test('speaks Dutch in the tooltips, not the code words', async ({ page }) => {
-    test.fail();
     await openCalendar(page);
     const titles = await page.locator('button[title]').evaluateAll((els) => els.map((el) => el.getAttribute('title') ?? ''));
     expect(titles.filter((t) => /ABSOLUUT|LIEVER_NIET|VOORKEUR/.test(t))).toEqual([]);
+    for (const word of ['voorkeur', 'liever niet', 'geblokkeerd']) expect(titles.some((t) => t.includes(`: ${word} (`)), word).toBe(true);
   });
 });

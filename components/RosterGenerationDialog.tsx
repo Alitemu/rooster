@@ -12,6 +12,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { FellowWeekendNotice } from './FellowWeekendNotice';
 import { withBasePath } from '@/lib/basePath';
+import { explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
 
 // Native fetch() throws a plain TypeError with a browser-specific, English,
 // technical message ("Failed to fetch", "NetworkError when attempting to
@@ -155,12 +156,14 @@ interface UnfilledSlot {
   shortfall: number;
   datum: string | null;
   teller: string | null;
+  reden?: 'GEEN_LID' | 'IEDEREEN_GEBLOKKEERD' | null;
 }
 
 interface GenerateResult {
   assignments_created: number;
   unfilled_slots: UnfilledSlot[];
   fully_covered: boolean;
+  bereik_tekort?: BereikTekort;
   cost: number;
   violations: Record<string, number>;
   time_seconds: number;
@@ -1109,10 +1112,14 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                     ⚠️ {result.unfilled_slots.length} dienst{result.unfilled_slots.length === 1 ? '' : 'en'} nog
                     niet ingevuld
                   </p>
-                  <p className="text-xs text-amber-800 mt-1">
-                    Er waren niet genoeg mensen beschikbaar binnen de ingestelde grenzen. Vul de rest
-                    hieronder handmatig in op de periodepagina.
-                  </p>
+                  {/* Why, by cause (lib/unfilledExplanation.ts): nobody a member that
+                      day, everyone blocked, or a streefbereik too small. */}
+                  {explainUnfilled(result.unfilled_slots, result.bereik_tekort).map((line) => (
+                    <p key={line} className="text-xs text-amber-800 mt-1">
+                      {line}
+                    </p>
+                  ))}
+                  <p className="text-xs text-amber-800 mt-1">Vul de rest handmatig in op de periodepagina.</p>
                 </div>
               )}
 

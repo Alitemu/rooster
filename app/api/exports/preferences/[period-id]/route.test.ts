@@ -200,6 +200,27 @@ describe('GET /api/exports/preferences/[period-id]', () => {
     expect(rows.slice(1).every((r) => r[col(leeg)] === '')).toBe(true);
   });
 
+  // Reported by the planner: someone removed from the pool after marking
+  // days kept their column, because the export also listed anyone with a
+  // marking. The solver only looks at the period's members, so that column
+  // showed preferences nobody would ever act on.
+  it('leaves out someone who is no longer in the pool, markings or not', async () => {
+    const poolId = createPool();
+    const avond = createShiftType(poolId, 'AVOND');
+    const planner = createPerson('PLANNER');
+    const blijft = createPerson();
+    const weg = createPerson();
+    [blijft, weg].forEach((p) => join(p, poolId));
+    const periodId = createPeriod(poolId, 'Voorjaar 2027', '2027-01-04', '2027-01-17');
+    const maandag = createSlot(periodId, avond, '2027-01-04', 1);
+    mark(weg, maandag, 'ABSOLUUT');
+    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(weg);
+
+    const header = (await grid(periodId, planner))[0];
+    expect(header).toContain(codenaam(blijft));
+    expect(header).not.toContain(codenaam(weg));
+  });
+
   it('shows nothing from another period', async () => {
     const poolId = createPool();
     const avond = createShiftType(poolId);

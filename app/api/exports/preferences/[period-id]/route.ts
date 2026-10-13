@@ -8,7 +8,10 @@
  *
  * Every member of the period's pool gets a column, also someone who marked
  * nothing, so an empty column says "nothing marked" rather than leaving
- * the reader to wonder who is missing.
+ * the reader to wonder who is missing - and only they: the members
+ * generate-roster builds the roster for (lib/rosterBands.ts
+ * loadPeriodMembers). Someone removed from the pool after marking days
+ * kept a column, although the solver no longer sees them.
  *
  * Semicolons and a UTF-8 byte order mark, unlike the other exports: this
  * one exists to be opened in Excel, and a Dutch Excel splits a double-
@@ -27,6 +30,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { csvAttachment, csvField } from '@/lib/csv';
+import { loadPeriodMembers } from '@/lib/rosterBands';
 import type { ApiErrorResponse } from '@/types';
 
 const DIENST: Record<string, string> = {
@@ -88,8 +92,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
     const periodId = params['period-id'];
 
     const period = db
-      .prepare('SELECT naam FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(periodId) as { naam: string } | undefined;
+      .prepare('SELECT naam, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(periodId) as { naam: string; pool_id: string; start_datum: string; eind_datum: string } | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
@@ -109,31 +113,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
       )
       .all(periodId) as SlotRow[];
 
-    // The period's pool members, plus anyone who marked something without
-    // being one (a membership ended later) - leaving them out would hide
-    // markings the solver still sees.
-    const people = db
-      .prepare(
-        `SELECT p.id, p.codenaam
-         FROM dienstrooster_person p
-         WHERE p.id IN (
-             SELECT pm.person_id
-             FROM dienstrooster_pool_membership pm
-             JOIN dienstrooster_schedule_period sp ON sp.id = ?
-             JOIN dienstrooster_person p2 ON p2.id = pm.person_id
-             WHERE pm.pool_id = sp.pool_id
-               AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum
-               AND p2.actief = 1 AND p2.rol = 'DEELNEMER'
-           )
-           OR p.id IN (
-             SELECT a.person_id
-             FROM dienstrooster_availability a
-             JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
-             WHERE s.period_id = ? AND a.blocking_level IS NOT NULL
-           )
-         ORDER BY p.codenaam`
-      )
-      .all(periodId, periodId) as Array<{ id: string; codenaam: string }>;
+    // The period's participants, as the solver sees them.
+    const people = loadPeriodMembers(period).sort((a, b) => (a.codenaam < b.codenaam ? -1 : a.codenaam > b.codenaam ? 1 : 0));
 
     const markings = db
       .prepare(
