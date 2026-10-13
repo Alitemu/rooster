@@ -205,7 +205,21 @@ async function main() {
   // ---------- PARTICIPANT FLOW ----------
   console.log('\n━━ PARTICIPANT FLOW ━━');
   rec('GET preferences', eq((await req('GET', `/api/person/${s1.id}/preferences/${period.id}`, { jar: person })).status, 200));
-  const slot = db.prepare(`SELECT id FROM dienstrooster_shift_slot WHERE period_id=? ORDER BY datum LIMIT 1`).get(period.id);
+  // A day nothing of this person's holds: Persoon-01 has a Monday
+  // part-time pattern, and "liever niet" there is refused (the pattern
+  // would take it back at the next sync).
+  const slot = db.prepare(
+    `SELECT id FROM dienstrooster_shift_slot s WHERE period_id=?
+       AND NOT EXISTS (SELECT 1 FROM dienstrooster_availability a WHERE a.person_id=? AND a.slot_id=s.id)
+     ORDER BY datum LIMIT 1`
+  ).get(period.id, s1.id);
+  const partTimeDay = db.prepare(
+    `SELECT s.id FROM dienstrooster_shift_slot s JOIN dienstrooster_availability a ON a.slot_id=s.id
+     WHERE s.period_id=? AND a.person_id=? AND a.source='PARTTIME' ORDER BY s.datum LIMIT 1`
+  ).get(period.id, s1.id);
+  if (partTimeDay) {
+    rec('PATCH LIEVER_NIET on a part-time day → 409', eq((await req('PATCH', `/api/person/${s1.id}/preferences/slot/${partTimeDay.id}`, { jar: person, body: { level: 'LIEVER_NIET' } })).status, 409));
+  }
   rec('PATCH one slot to LIEVER_NIET', eq((await req('PATCH', `/api/person/${s1.id}/preferences/slot/${slot.id}`, { jar: person, body: { level: 'LIEVER_NIET' } })).status, 200));
   const lvl = db.prepare(`SELECT blocking_level FROM dienstrooster_availability WHERE person_id=? AND slot_id=?`).get(s1.id, slot.id);
   rec('…persisted in DB', lvl?.blocking_level === 'LIEVER_NIET', `level=${lvl?.blocking_level}`);
