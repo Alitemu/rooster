@@ -151,4 +151,44 @@ describe('swap requests and the window between shifts', () => {
       .get(f.periodId, f.offered) as { person_id: string };
     expect(owner.person_id).toBe(f.collega);
   });
+
+  // Audit 9's mutation check: taking the "both still hold their shift"
+  // check out of the approve route left every test green. The planner gives
+  // the offered shift to someone else while the request is open; approving
+  // it then would take that shift off a person who was never asked.
+  it('refuses to approve once the offered shift has moved to someone else, and moves nothing', async () => {
+    const f = createFixture();
+    const createRes = await POST(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_id: f.periodId, offered_slot_id: f.offered, requested_slot_id: f.requested }),
+      }),
+      { params: Promise.resolve({ id: f.aanvrager }) }
+    );
+    const swapId = (await createRes.json()).data.swap_request_id;
+
+    const derde = crypto.randomUUID();
+    db.prepare(`INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`).run(derde, `SR-${derde.slice(0, 8)}`);
+    created.people.push(derde);
+    db.prepare('UPDATE dienstrooster_assignment SET person_id = ? WHERE schedule_version_id = ? AND slot_id = ?').run(derde, f.periodId, f.offered);
+
+    const approveRes = await approve(
+      new NextRequest(`http://localhost/api/person/${f.collega}/swap-requests/${swapId}/approve`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.collega) },
+      }),
+      { params: Promise.resolve({ id: f.collega, 'swap-id': swapId }) }
+    );
+    expect(approveRes.status).toBeGreaterThanOrEqual(400);
+    const owners = Object.fromEntries(
+      (
+        db.prepare('SELECT slot_id, person_id FROM dienstrooster_assignment WHERE schedule_version_id = ? AND slot_id IN (?, ?)').all(f.periodId, f.offered, f.requested) as Array<{
+          slot_id: string;
+          person_id: string;
+        }>
+      ).map((r) => [r.slot_id, r.person_id])
+    );
+    expect(owners).toEqual({ [f.offered]: derde, [f.requested]: f.collega });
+  });
 });

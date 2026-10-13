@@ -1,0 +1,177 @@
+/**
+ * Mutation check: break one hard rule at a time and see the tests notice.
+ *
+ * A test suite that passes says little on its own: a rule nobody tests
+ * for passes just as green. Each mutation below removes or weakens one
+ * guard the app relies on (CLAUDE.md: "One rule = one test that proves it
+ * can't be broken"), runs only the tests that should guard it, and
+ * expects them to fail. A mutation the tests miss ("overleeft") is a rule
+ * without a test. The source is restored after every mutation, also when
+ * the run is interrupted.
+ *
+ * Needs nothing running; uses the vitest test database like npm test.
+ *   node scripts/mutation-check.mjs            # all
+ *   node scripts/mutation-check.mjs reset      # only those whose name contains "reset"
+ */
+import fs from 'fs';
+import path from 'path';
+import { spawnSync } from 'child_process';
+import { fileURLToPath } from 'url';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+const MUTATIONS = [
+  {
+    name: 'slot route: a softer marking inside an absence is taken',
+    file: 'app/api/person/[id]/preferences/slot/[slotId]/route.ts',
+    find: '      if (inAbsence) {',
+    replace: '      if (false && inAbsence) {',
+    tests: ['app/api/person/[id]/availabilityModel'],
+  },
+  {
+    name: 'reset-roster: a published roster can be removed',
+    file: 'app/api/periods/[id]/reset-roster/route.ts',
+    find: "if (period.status === 'GEPUBLICEERD') {",
+    replace: 'if (false) {',
+    tests: ['app/api/periods/[id]/reset-roster/route'],
+  },
+  {
+    name: 'reset-roster: anyone can call it',
+    file: 'app/api/periods/[id]/reset-roster/route.ts',
+    find: 'if (!requirePlannerAccess(auth)) return unauthorizedResponse();',
+    replace: '',
+    tests: ['app/api/periods/[id]/reset-roster/route', 'app/api/routeAccess'],
+  },
+  {
+    name: 'reset-roster: hand-filled shifts always go',
+    file: 'app/api/periods/[id]/reset-roster/route.ts',
+    find: 'const handmatig = ookHandmatig',
+    replace: 'const handmatig = true',
+    tests: ['app/api/periods/[id]/reset-roster/route'],
+  },
+  {
+    name: 'rate limit: an attempt past the limit still goes through',
+    file: 'lib/rateLimit.ts',
+    find: '    if (!limit.allowed) return limit;',
+    replace: '',
+    tests: ['lib/rateLimit', 'app/api/auth/rateLimitConcurrency'],
+  },
+  {
+    name: 'window rule: two shifts one week too close count as fine',
+    file: 'lib/windowRule.ts',
+    find: 'isoWeeksApart(a.iso_jaar, a.iso_week, b.iso_jaar, b.iso_week) < required) {',
+    replace: 'isoWeeksApart(a.iso_jaar, a.iso_week, b.iso_jaar, b.iso_week) < required - 1) {',
+    tests: ['lib/windowRule', 'lib/publicationCheck'],
+  },
+  {
+    name: "fellow: weekend band above the others' maximum",
+    file: 'lib/rosterBands.ts',
+    find: 'Math.min(released, scaled[1])',
+    replace: 'released',
+    tests: ['lib/fellows', 'lib/rosterBands', 'lib/calendarRules'],
+  },
+  {
+    name: 'generate-roster: days outside the membership open to the solver',
+    file: 'app/api/planner/period/[id]/generate-roster/route.ts',
+    find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',
+    replace: '',
+    tests: ['app/api/planner/period/[id]/generate-roster'],
+  },
+  {
+    name: 'manual-assign: a shift outside the membership is taken',
+    file: 'app/api/planner/period/[id]/assignments/manual-assign/route.ts',
+    find: 'if (buitenLidmaatschap) {',
+    replace: 'if (false) {',
+    tests: ['app/api/planner/period/[id]/assignments', 'lib/membershipWindow'],
+  },
+  {
+    name: 'part-time: even and odd weeks swapped',
+    file: 'lib/parttimeSync.ts',
+    find: "if (pattern.frequentie === 'EVEN_WEKEN' && isoWeek % 2 !== 0) return false;",
+    replace: "if (pattern.frequentie === 'EVEN_WEKEN' && isoWeek % 2 === 0) return false;",
+    tests: ['lib/parttimeSync'],
+  },
+  {
+    name: 'carry-over: never booked again at generation',
+    file: 'lib/carryOver.ts',
+    find: 'if (booked.length === computed.length && booked.every((k, i) => k === computed[i])) {',
+    replace: 'if (true) {',
+    tests: ['app/api/planner/period/[id]/generate-roster/carryOverTiming', 'lib/carryOver'],
+  },
+  {
+    name: 'publication check: window violations pass as compliant',
+    file: 'lib/publicationCheck.ts',
+    find: 'window_compliance: windowViolations === 0,',
+    replace: 'window_compliance: true,',
+    tests: ['lib/publicationCheck', 'app/api/planner/period/[id]/publication-check'],
+  },
+  {
+    name: 'swap approve: approved although someone else holds the shift now',
+    file: 'app/api/person/[id]/swap-requests/[swap-id]/approve/route.ts',
+    find: 'requesterAssignment.person_id !== swapRequest.aanvrager_person_id ||\n      respondentAssignment.person_id !== swapRequest.respondent_person_id',
+    replace: 'false',
+    tests: ['app/api/person/[id]/swap-requests'],
+  },
+  {
+    name: 'explanation: the streefbereik shortfall counted twice',
+    file: 'lib/unfilledExplanation.ts',
+    find: 'doorBereik += tekort!.diensten - tekort!.maximaal;',
+    replace: '',
+    tests: ['lib/unfilledExplanation'],
+  },
+  {
+    name: 'membership defaults: a period picked out of two',
+    file: 'lib/membershipDefaults.ts',
+    find: 'if (current.length === 1) {',
+    replace: 'if (current.length >= 1) {',
+    tests: ['lib/membershipDefaults'],
+  },
+];
+
+const only = process.argv[2];
+const chosen = MUTATIONS.filter((m) => !only || m.name.includes(only));
+const originals = new Map();
+const restoreAll = () => {
+  for (const [file, src] of originals) fs.writeFileSync(file, src);
+  originals.clear();
+};
+process.on('SIGINT', () => {
+  restoreAll();
+  process.exit(130);
+});
+
+const survived = [];
+for (const m of chosen) {
+  const file = path.join(repoRoot, m.file);
+  const src = fs.readFileSync(file, 'utf8');
+  if (!src.includes(m.find)) {
+    console.log(`? ${m.name} - the code it breaks is gone, update this mutation`);
+    survived.push(`${m.name} (niet gevonden)`);
+    continue;
+  }
+  originals.set(file, src);
+  try {
+    fs.writeFileSync(file, src.replace(m.find, m.replace));
+    const run = spawnSync('npx', ['vitest', 'run', ...m.tests], { cwd: repoRoot, encoding: 'utf8', timeout: 15 * 60 * 1000 });
+    // A filter that matches nothing fails too: that is a broken mutation,
+    // not a caught one.
+    if (/No test files found/.test(run.stdout + run.stderr)) {
+      console.log(`? ${m.name} - no tests match ${m.tests.join(', ')}`);
+      survived.push(`${m.name} (geen tests gevonden)`);
+      continue;
+    }
+    const caught = run.status !== 0;
+    const summary = (run.stdout.match(/Tests\s+.*$/m) || ['(no summary)'])[0].trim();
+    console.log(`${caught ? '✓ gevangen ' : '✗ OVERLEEFT'}  ${m.name}  [${summary}]`);
+    if (!caught) survived.push(m.name);
+  } finally {
+    restoreAll();
+  }
+}
+
+console.log(`\n${chosen.length - survived.length}/${chosen.length} mutaties gevangen`);
+if (survived.length) {
+  console.log('Overleefd (een regel zonder test die hem bewaakt):');
+  for (const s of survived) console.log(`  - ${s}`);
+  process.exit(1);
+}

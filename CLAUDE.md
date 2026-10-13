@@ -144,6 +144,22 @@ opens a "choose a new password" session (see Authentication):
   ABSOLUUT violation, nobody twice in one ISO week, nobody's window rule
   broken, nobody past their streefbereik).
 - `node scripts/ui-check.mjs` - the two screens people use most.
+- `node scripts/scenario-check.mjs` - the planner's own case end to end:
+  15 people, a fellow with a part-time Monday, 2026-12-28 to 2027-09-05
+  (ISO week 53 and the year boundary), opened with the wizard's
+  suggested streefbereik, generated with all four methods at windows 0-2
+  (SCENARIO_MODES, SCENARIO_WINDOWS, SCENARIO_TIME, default the dialog's
+  120 s): nothing empty, no rule broken, then "Rooster verwijderen" and
+  again. "Willekeurig" leaving a dienst is a warning, not a failure.
+
+`node scripts/mutation-check.mjs [name]` needs nothing running: it breaks
+one hard rule at a time (a guard removed or weakened in the source),
+runs only the tests meant to guard it and expects them to fail; a
+mutation that survives is a rule without a test. The source is restored
+after each. Add a mutation when adding a guard. Two sweeps run with npm
+test: app/api/auditCoverage.test.ts (every planner route that changes data
+writes the audit log or states why not) and app/dutchStyle.test.ts (no
+joining dash, no comma before en/of in user-facing text).
 
 `node scripts/schema-drift.mjs` needs nothing running. It builds one
 database from the seed and one from the migrations and compares them

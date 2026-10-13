@@ -28,6 +28,7 @@ const ids: Record<string, string> = {};
 let rowidsBefore: Map<string, number>;
 let server: http.Server;
 let slotsSent: string[] = [];
+let preferencesSent: Record<string, Array<{ slot_id: string; blocking_level: string }>> = {};
 const savedSolverUrl = process.env.SOLVER_URL;
 
 function tables(): string[] {
@@ -84,7 +85,9 @@ beforeAll(async () => {
     let raw = '';
     req.on('data', (c) => (raw += c));
     req.on('end', () => {
-      slotsSent = JSON.parse(raw).slots.map((s: { id: string }) => s.id);
+      const input = JSON.parse(raw);
+      slotsSent = input.slots.map((s: { id: string }) => s.id);
+      preferencesSent = input.person_preferences;
       res.setHeader('Content-Type', 'application/json');
       res.end(
         JSON.stringify({
@@ -142,5 +145,19 @@ describe('generate-roster says why shifts stayed empty', () => {
     // (and one to spare, as its default bands always have).
     expect(result.bereik_tekort.AVOND).toEqual({ maximaal: 2, diensten: 10, voorgesteld: [10, 11] });
     expect(result.deels_lid).toBe(2);
+  });
+
+  // Audit 9's mutation check: taking blockOutsideMembership out of the
+  // route left every test green - lib/membershipWindow.test.ts proves the
+  // function, nothing proved the route sends its blocks. The second week,
+  // after both memberships ended, has to reach the solver blocked.
+  it('sends every day outside the membership to the solver as blocked', () => {
+    const secondWeek = ['2031-01-13', '2031-01-14', '2031-01-15', '2031-01-16', '2031-01-17'].map((d) => ids[d]);
+    for (const who of ['A', 'B']) {
+      const level = new Map(preferencesSent[ids[who]].map((p) => [p.slot_id, p.blocking_level]));
+      for (const slot of secondWeek) expect(level.get(slot), who).toBe('ABSOLUUT');
+      // The first week stays theirs: only the Monday they blocked themselves.
+      expect(level.get(ids['2031-01-07']), who).not.toBe('ABSOLUUT');
+    }
   });
 });
