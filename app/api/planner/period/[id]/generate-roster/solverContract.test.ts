@@ -8,6 +8,7 @@ import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS 
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { getRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 import { computeMemberTargets, resolveWindowWeeks } from '@/lib/rosterBands';
+import { feestdagTargets } from '@/lib/feestdagHistory';
 import { POST } from './route';
 
 /**
@@ -245,6 +246,10 @@ describe.each(['GELIJK', 'NAAR_RATO'])('the solver is told the streefbereik the 
         expect({ personId, teller, band: [checked.min, checked.max] }).toEqual({ personId, teller, band: told });
       }
     }
+    // Feestdagdiensten over the years (lib/feestdagHistory.ts): one target
+    // per person the solver plans, the same numbers the app works out.
+    expect(Object.keys(input.feestdag_targets).sort()).toEqual([...(input.people as string[])].sort());
+    expect(input.feestdag_targets).toEqual(feestdagTargets(ids.period));
     // The shift filled in by hand went as a fact, not as a slot to fill.
     expect(input.manual_assignments).toEqual([expect.objectContaining({ person_id: ids.ledger, teller: 'AVOND' })]);
     expect(input.slots).toHaveLength(55);

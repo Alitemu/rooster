@@ -14,7 +14,7 @@ export default function Home() {
         <ul className="space-y-2 text-neutral-600">
           <li>✓ Automatische roosterplanning op basis van voorkeuren</li>
           <li>✓ Verdeling van diensten</li>
-          <li>✓ Feestdagrotatie</li>
+          <li>✓ Feestdagdiensten eerlijk verdeeld over de jaren</li>
           <li>✓ Parttime ondersteuning</li>
         </ul>
       </div>

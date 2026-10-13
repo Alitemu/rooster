@@ -5,8 +5,7 @@
 Dienstrooster is a scheduling application for medical wards (20-40 staff members) with:
 - Fair shift distribution using solver (CP-SAT)
 - Preference blocking (absolute + soft)
-- Holiday history (imported and stored; not yet used for distributing
-  feestdagdiensten - the solver doesn't read it, and the wizard says so)
+- Feestdagdiensten fair over the years (the count, not which feestdag)
 - Part-time support
 - Automatic roster generation with diagnostics
 
@@ -237,9 +236,11 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 - `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
 - `shift_type` - shift definitions (evening, weekend, holiday)
 - `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type)
-- `holiday_history` - holiday group assignments across years (stored by
-  the wizard's import, read by nothing yet: the solver's holiday rotation
-  is not modelled, solver/objective.py)
+- `holiday_history` - which feestdag someone had in which year, from the
+  setup wizard's old import step; read by nothing. The wizard step is gone:
+  what counts is the number over the years, which the app keeps itself
+  from its own rosters (lib/feestdagHistory.ts). The route
+  import-holidays and the table stay for old data.
 - `ledger_entry` - balance adjustments (categorie CARRY_OVER, CORRECTIE, BEGINSALDO).
   BEGINSALDO (the wizard's "Beginsaldi importeren") is for a pool's first
   period in the app only; after a period published here the carry-over is
@@ -249,7 +250,7 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   also creating, opening and closing a period, its deadline, rules,
   slots and automatic reminders, the pool on/off, adding, changing,
   removing and restoring a member, minting a personal link and the holiday
-  import; app/api/auditLog.test.ts proves each writes exactly one row.
+  import (route only since the wizard step went); app/api/auditLog.test.ts proves each writes exactly one row.
   Since audit 9 also personal links minted for everyone at once (the
   invitations and reminders exports), two-step verification switched on,
   every "Rooster vooraf invullen" change, and a planner changing someone's
@@ -503,6 +504,29 @@ of the period got shifts nobody could take.
   that is no longer the previous one go; HANDMATIG rows (including a day
   the planner cleared) and ONBEKEND stay. They used to be a snapshot that
   "afleiden" again never touched (audit 10).
+- **Feestdagdiensten over the years** (lib/feestdagHistory.ts, the
+  planner's words after audit 10: "het gaat om het aantal over de jaren
+  heen en niet om een specifieke feestdag"). A period has few of them, so
+  everyone's FEESTDAG band is 0 or 1 and carry-over (band edges) forgot
+  who got the one. Now, per member: over every published period of the
+  pool before this one outside the trash (lib/previousPeriod.ts
+  `publishedPeriodsBefore`), their fair share of its feestdagdiensten (the
+  band weights: dekking, and the deelnamefactor under that period's
+  NAAR_RATO) minus what they did, summed = achterstand; plus this
+  period's fair share = their target. generate-roster sends it as
+  `feestdag_targets` (SolverInput, optional; a caller without it changes
+  nothing). The solver pulls each person's FEESTDAG count (manual
+  pre-fills included) toward the target rounded half up to a whole shift
+  (objective.py add_feestdag_history_objective): a weighted term of 1 per
+  shift of distance (a swap outweighs one liever-niet), lexicographic
+  phase 2c after the band phases and before liever-niet (so marking every
+  feestdag liever niet doesn't keep someone off their count), and in the
+  greedy planner only the people furthest from their target take part in
+  the tiers. Never on a blocked day and never past a band. Newcomers and
+  everyone at the pool's first period start even; there is no import of
+  history from before the app. Fellows count like anyone (weekday
+  feestdagen are theirs too). solverContract.test.ts holds the targets to
+  feestdagTargets; solver/test_feestdag_history.py proves the solver side.
 - **Why shifts stayed empty.** generate-roster marks each unfilled slot
   with `reden`: GEEN_LID (no member's Geldig vanaf/tot covers that date)
   or IEDEREEN_GEBLOKKEERD (every member who covers it has ABSOLUUT, the

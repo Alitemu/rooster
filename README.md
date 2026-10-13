@@ -192,7 +192,7 @@ Belangrijkste tabellen:
 - `shift_slot` / `assignment` - te vullen diensten en de uiteindelijke toewijzingen
 - `availability` - blokkeringsvoorkeuren (ABSOLUUT, LIEVER_NIET, VOORKEUR)
 - `ledger_entry` - saldo-aanpassingen (append-only, nooit overschreven)
-- `holiday_history` - feestdagrotatie over de jaren heen
+- `holiday_history` - welke feestdag iemand in welk jaar had (oude import, wordt niet meer gebruikt)
 - `swap_request` - dienstruilverzoeken
 - `audit_log` - alle acties van planners/beheerders
 
@@ -204,6 +204,14 @@ ze mee met de diensten):
 Nieuwjaarsdag, Pasen (en gerelateerde dagen), Koningsdag (met
 zondagcorrectie), Bevrijdingsdag (elke 5 jaar), Hemelvaart, Pinksteren,
 Kerst.
+
+Over de jaren heen telt het aantal feestdagdiensten, niet welke feestdag.
+De app houdt per persoon bij hoeveel feestdagdiensten iemand in de eerdere
+gepubliceerde periodes naar verhouding had moeten krijgen (naar de tijd dat
+iemand meedeed) en hoeveel het er werden (`lib/feestdagHistory.ts`). Wie
+achterloopt krijgt bij het genereren voorrang, binnen het streefbereik en
+nooit op een geblokkeerde dag. Nieuwkomers beginnen gelijk, net als iedereen
+bij de eerste periode in de app.
 
 ### Authenticatie
 

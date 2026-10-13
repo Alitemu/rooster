@@ -9,8 +9,14 @@
  * 3. Window & Budgets (capacity check)
  * 4. Distribution mode & Factors
  * 5. Import initial balances (preview)
- * 6. Import holiday history (preview)
+ * 6. Manual corrections
  * 7. Confirm and open period
+ *
+ * There used to be a step between 5 and 6 importing which feestdag each
+ * person had in which year. What matters is the number over the years,
+ * not which feestdag (the planner, after audit 10), and the app now keeps
+ * that count itself from its own rosters (lib/feestdagHistory.ts) - the
+ * step's data was read by nothing.
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -20,7 +26,7 @@ import { parseCsv } from '@/lib/csv';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 
-type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'holidays' | 'confirm';
+type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
 // Used only to validate/parse the `stap` URL query param below - the
 // `steps` array further down (with labels/titles for the tab bar) is the
@@ -32,7 +38,6 @@ const STEP_IDS: Step[] = [
   'distribution',
   'balances',
   'corrections',
-  'holidays',
   'confirm',
 ];
 function isStep(value: string | null): value is Step {
@@ -98,12 +103,6 @@ interface BalanceRow {
   codenaam: string;
   AVOND_delta: number;
   WEEKEND_delta: number;
-}
-
-interface HolidayRow {
-  codenaam: string;
-  holiday_group: string;
-  year: number;
 }
 
 type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG' | 'RUIL_AVOND_VOOR_WEEKEND' | 'RUIL_WEEKEND_VOOR_AVOND';
@@ -304,8 +303,6 @@ export function SetupWizard({ period, onComplete }: Props) {
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [balanceParseWarnings, setBalanceParseWarnings] = useState<string[]>([]);
-  const [holidayRows, setHolidayRows] = useState<HolidayRow[]>([]);
-  const [holidayParseWarnings, setHolidayParseWarnings] = useState<string[]>([]);
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [correctionFormOpen, setCorrectionFormOpen] = useState(false);
   const [correctionForm, setCorrectionForm] = useState({
@@ -693,30 +690,6 @@ export function SetupWizard({ period, onComplete }: Props) {
     setBalanceParseWarnings(warnings);
   };
 
-  const handleHolidaysFile = async (file: File) => {
-    const text = await file.text();
-    const [, ...dataLines] = parseCsv(text); // skip header row
-    const warnings: string[] = [];
-    const seen = new Set<string>();
-    const rows: HolidayRow[] = [];
-    dataLines.forEach(([codenaam, holiday_group, year], i) => {
-      const rowNum = i + 2;
-      if (!codenaam) return;
-      const dedupeKey = `${codenaam}|${holiday_group}|${year}`;
-      if (seen.has(dedupeKey)) {
-        warnings.push(`Rij ${rowNum}: "${codenaam}" / ${holiday_group} / ${year} komt al eerder voor in dit bestand`);
-      }
-      seen.add(dedupeKey);
-      const yearParsed = parseOptionalInt(year);
-      if (yearParsed.invalid || yearParsed.value === 0) {
-        warnings.push(`Rij ${rowNum} (${codenaam}): jaartal "${year}" is geen geldig geheel getal`);
-      }
-      rows.push({ codenaam, holiday_group, year: yearParsed.value });
-    });
-    setHolidayRows(rows);
-    setHolidayParseWarnings(warnings);
-  };
-
   const correctionReasonOptions = CORRECTION_REASONS_BY_TOP_LEVEL[correctionForm.topLevel];
   const correctionSelectedReason = correctionReasonOptions[correctionForm.reasonIndex] ?? correctionReasonOptions[0];
 
@@ -887,25 +860,6 @@ export function SetupWizard({ period, onComplete }: Props) {
         }
       }
 
-      if (holidayRows.length > 0) {
-        const holidaysRes = await fetch(withBasePath(`/api/planner/period/${period.id}/import-holidays`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: holidayRows }),
-        }).catch(() => null);
-        if (!holidaysRes || !holidaysRes.ok) {
-          importWarnings.push('Importeren van feestdaghistorie is volledig mislukt.');
-        } else {
-          const holidaysData = await holidaysRes.json().catch(() => null);
-          const rowErrors: string[] = holidaysData?.data?.errors || [];
-          if (rowErrors.length > 0) {
-            importWarnings.push(
-              `${rowErrors.length} rij(en) in de feestdaghistorie zijn overgeslagen: ${rowErrors.join('; ')}`
-            );
-          }
-        }
-      }
-
       let correctionsFailed = false;
       if (corrections.length > 0) {
         const correctionsRes = await fetch(withBasePath(`/api/planner/period/${period.id}/ledger-corrections`), {
@@ -945,9 +899,8 @@ export function SetupWizard({ period, onComplete }: Props) {
     { id: 'window', label: '3. Venster', title: 'Venster en budgetten' },
     { id: 'distribution', label: '4. Verdeling', title: 'Verdelingsmodus' },
     { id: 'balances', label: '5. Saldi', title: 'Beginsaldi importeren' },
-    { id: 'holidays', label: '6. Feestdagen', title: 'Feestdagrotatie importeren' },
-    { id: 'corrections', label: '7. Correcties', title: 'Handmatige correcties' },
-    { id: 'confirm', label: '8. Bevestigen', title: 'Controleren en openen' },
+    { id: 'corrections', label: '6. Correcties', title: 'Handmatige correcties' },
+    { id: 'confirm', label: '7. Bevestigen', title: 'Controleren en openen' },
   ];
 
   // Mirrors the server-side checks in POST /api/planner/periods and
@@ -1612,8 +1565,9 @@ export function SetupWizard({ period, onComplete }: Props) {
               Persoon-02,0,+2
             </div>
             <p className="text-xs text-neutral-500 italic">
-              Het saldo van feestdagdiensten hoort hier niet bij. Welke feestdag iemand wanneer
-              heeft gedraaid, stel je hierna in bij stap 6. Feestdagen.
+              Feestdagdiensten horen hier niet bij. Hoeveel iemand er naar verhouding heeft gehad,
+              houdt de app vanaf de eerste periode hier zelf bij. Wie achterloopt, krijgt bij het
+              verdelen voorrang.
             </p>
 
             <div className="border-2 border-dashed rounded p-6 text-center">
@@ -1656,84 +1610,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           </div>
         )}
 
-        {/* Step 6: Import Holidays */}
-        {currentStep === 'holidays' && (
-          <div className="space-y-4">
-            <p className="text-sm text-neutral-600">
-              Losstaand van de beginsaldi hierboven: geef per persoon aan welke feestdag die persoon in
-              welk jaar heeft gedraaid. Formaat:
-            </p>
-            {/* Audit 10: the text promised the rotation would carry on, but
-                nothing reads holiday_history yet - not the solver, not the
-                app. */}
-            <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
-              Dit wordt bewaard, maar telt nog niet mee bij het verdelen. Hoeveel feestdagdiensten
-              iemand krijgt, regelt het streefbereik. Wie welke feestdag krijgt, houdt nog geen rekening
-              met vorige jaren.
-            </div>
-            <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
-              codenaam,holiday_group,year
-              <br />
-              Persoon-01,NIEUWJAAR,2025
-              <br />
-              Persoon-02,PASEN,2025
-              <br />
-              Persoon-03,KONINGSDAG,2025
-              <br />
-              Persoon-04,BEVRIJDINGSDAG,2025
-              <br />
-              Persoon-05,HEMELVAART,2026
-              <br />
-              Persoon-06,PINKSTEREN,2026
-              <br />
-              Persoon-07,KERST,2026
-            </div>
-            <p className="text-xs text-neutral-500 italic">
-              Geldige waarden voor holiday_group: NIEUWJAAR, PASEN, KONINGSDAG, BEVRIJDINGSDAG,
-              HEMELVAART, PINKSTEREN, KERST.
-            </p>
-
-            <div className="border-2 border-dashed rounded p-6 text-center">
-              <p className="text-sm text-neutral-600 mb-2">Sleep een CSV hierheen of klik om te selecteren</p>
-              <input
-                type="file"
-                accept=".csv"
-                className="w-full"
-                onChange={(e) => e.target.files?.[0] && handleHolidaysFile(e.target.files[0])}
-              />
-            </div>
-
-            {holidayRows.length > 0 && (
-              <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-                <p className="font-medium">{holidayRows.length} records klaar om te importeren</p>
-                <ul className="text-xs mt-1 space-y-0.5">
-                  {holidayRows.slice(0, 5).map((r, i) => (
-                    <li key={i}>
-                      {r.codenaam}: {r.holiday_group} {r.year}
-                    </li>
-                  ))}
-                  {holidayRows.length > 5 && <li>...en {holidayRows.length - 5} meer</li>}
-                </ul>
-              </div>
-            )}
-
-            {holidayParseWarnings.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
-                <p className="font-medium">Let op bij het inlezen van dit bestand:</p>
-                <ul className="text-xs mt-1 space-y-0.5 list-disc pl-4">
-                  {holidayParseWarnings.slice(0, 10).map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                  {holidayParseWarnings.length > 10 && (
-                    <li>...en {holidayParseWarnings.length - 10} meer</li>
-                  )}
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Step 7: Corrections */}
+        {/* Step 6: Corrections */}
         {currentStep === 'corrections' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
@@ -1917,7 +1794,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           </div>
         )}
 
-        {/* Step 8: Confirm */}
+        {/* Step 7: Confirm */}
         {currentStep === 'confirm' && (
           <div className="space-y-4">
             <div className="bg-blue-50 border border-blue-200 rounded p-4">

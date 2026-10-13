@@ -39,6 +39,22 @@ export function findPreviousPublishedPeriod(poolId: string, beforeDate: string):
     .get(poolId, beforeDate) as PreviousPeriodRow | undefined;
 }
 
+/**
+ * Every published period of the pool that ended before `beforeDate`,
+ * outside the trash, oldest first: the history feestdagdiensten are
+ * measured over (lib/feestdagHistory.ts).
+ */
+export function publishedPeriodsBefore(poolId: string, beforeDate: string): PreviousPeriodRow[] {
+  return db
+    .prepare(
+      `SELECT id, pool_id, start_datum, eind_datum, bevroren_ruleset_json
+       FROM dienstrooster_schedule_period
+       WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND verwijderd_op IS NULL AND eind_datum < ?
+       ORDER BY eind_datum ASC`
+    )
+    .all(poolId, beforeDate) as PreviousPeriodRow[];
+}
+
 export interface PriorRefresh {
   /** The period the rows come from now, if there is one. */
   previous: PreviousPeriodRow | undefined;

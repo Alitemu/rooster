@@ -36,6 +36,7 @@ import { blockOutsideMembership, coversDate, membershipWindows } from '@/lib/mem
 import { refreshCarryOverForPeriod } from '@/lib/carryOver';
 import { findPreviousPublishedPeriod, refreshDerivedPriorAssignments } from '@/lib/previousPeriod';
 import { clearPendingUndo } from '@/lib/pendingUndo';
+import { feestdagTargets } from '@/lib/feestdagHistory';
 import { computeBandShortfall, fellowBandOverrides } from '@/lib/bandShortfall';
 import { writeAuditLog } from '@/lib/auditLog';
 
@@ -545,6 +546,10 @@ async function runGeneration(args: {
         teller: r.teller,
       })),
       participation_factors: participationFactors,
+      // Feestdagdiensten over the years: per member their fair share of
+      // this period's plus what they are behind from earlier periods
+      // (lib/feestdagHistory.ts). The number counts, not which feestdag.
+      feestdag_targets: feestdagTargets(periodId),
       coverage_factors: coverageFactors,
       band_overrides: bandOverrides,
       ...(timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}),
