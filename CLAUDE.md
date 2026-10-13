@@ -153,6 +153,15 @@ it is scripts/seed.ts - not db/migrations - that builds the schema, and
 the two drifting apart means production quietly runs a different one than
 every test does.
 
+`node scripts/upgrade-drift.mjs [commit...]` covers the other half: a
+production database was never built from nothing. It builds one with an
+older version's own seed (a git worktree; by default 0.2.0, 0.6.0, 0.8.1
+and 0.11.0), runs the current production start over it (seed.ts
+--alleen-planner) and compares the result with a fresh database - every
+column, index, foreign key and CHECK constraint - and checks no row of the
+core tables was lost. Run it after adding a column; it needs the git
+history, not a shallow clone.
+
 Two things these get wrong easily, and both cost a day to diagnose:
 - **Assert on Dutch.** Every user-facing string is Dutch; a selector looking
   for an English label matches nothing, and a `getByText(/error/i)` that
