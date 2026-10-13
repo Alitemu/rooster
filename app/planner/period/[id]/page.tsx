@@ -38,6 +38,11 @@ export default function PlannerPeriodPage() {
   const [reopening, setReopening] = useState(false);
   const [reopenError, setReopenError] = useState<string | null>(null);
   const [reopenConfirmArmed, setReopenConfirmArmed] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetOokHandmatig, setResetOokHandmatig] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetMelding, setResetMelding] = useState<string | null>(null);
   const [editingDeadline, setEditingDeadline] = useState(false);
   const [deadlineInput, setDeadlineInput] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
@@ -135,6 +140,33 @@ export default function PlannerPeriodPage() {
       setReopenError(err instanceof Error ? err.message : 'Terugzetten naar open mislukt');
     } finally {
       setReopening(false);
+    }
+  };
+
+  // Remove the generated roster (POST .../reset-roster): back to GESLOTEN,
+  // ready to generate again; hand-filled shifts only when ticked.
+  const handleResetRoster = async () => {
+    setResetting(true);
+    setResetError(null);
+    try {
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/reset-roster`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ook_handmatig: resetOokHandmatig }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Verwijderen van het rooster mislukt');
+      const n = data.data.verwijderd as number;
+      setResetMelding(
+        `${n === 1 ? '1 dienst' : `${n} diensten`} verwijderd. De periode staat weer op gesloten, klaar om opnieuw te genereren.`
+      );
+      setResetOpen(false);
+      setResetOokHandmatig(false);
+      await loadPeriod();
+    } catch (err) {
+      setResetError(err instanceof Error ? err.message : 'Verwijderen van het rooster mislukt');
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -318,6 +350,61 @@ export default function PlannerPeriodPage() {
                 )}
                 {reopenError && <p className="text-sm text-red-600">{reopenError}</p>}
               </div>
+            )}
+
+            {period.status === 'GEGENEREERD' && (
+              <div className="flex flex-col items-start gap-2 max-w-xs">
+                {!resetOpen ? (
+                  <button
+                    onClick={() => {
+                      setResetError(null);
+                      setResetMelding(null);
+                      setResetOpen(true);
+                    }}
+                    className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                  >
+                    🗑️ Rooster verwijderen
+                  </button>
+                ) : (
+                  <div className="border border-red-200 bg-red-50 rounded p-3 space-y-2" data-testid="rooster-verwijderen">
+                    <p className="text-sm text-neutral-800">
+                      De diensten die de solver heeft ingedeeld worden verwijderd. De periode gaat terug naar
+                      gesloten, zodat je opnieuw kunt genereren. De voorkeuren blijven dicht.
+                    </p>
+                    <label className="flex items-start gap-2 text-sm text-neutral-800">
+                      <input
+                        type="checkbox"
+                        checked={resetOokHandmatig}
+                        onChange={(e) => setResetOokHandmatig(e.target.checked)}
+                        className="mt-1"
+                      />
+                      <span>Ook de diensten die je zelf hebt ingevuld of aangepast verwijderen</span>
+                    </label>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleResetRoster}
+                        disabled={resetting}
+                        className="px-4 py-2 rounded font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                      >
+                        {resetting ? 'Bezig...' : 'Verwijderen'}
+                      </button>
+                      <button
+                        onClick={() => setResetOpen(false)}
+                        disabled={resetting}
+                        className="px-4 py-2 rounded font-medium text-neutral-600 hover:text-neutral-800 transition-colors"
+                      >
+                        Annuleren
+                      </button>
+                    </div>
+                  </div>
+                )}
+                {resetError && <p className="text-sm text-red-600">{resetError}</p>}
+              </div>
+            )}
+            {resetMelding && (
+              <p className="text-sm text-green-700 max-w-xs" data-testid="rooster-verwijderd">
+                {resetMelding}
+              </p>
             )}
           </div>
         </div>

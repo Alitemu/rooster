@@ -268,6 +268,13 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   (filled in beforehand, corrections) stay, as a regeneration keeps them.
   Not from GEPUBLICEERD (409): unpublish first, which tells participants.
   The deadline can then be moved like any OPEN period's.
+- **Remove the generated roster** (`POST /api/periods/[id]/reset-roster`,
+  "Rooster verwijderen" in the period header, a confirmation with a
+  checkbox): GEGENEREERD back to GESLOTEN, ready to generate afresh with
+  the preferences still closed. The SOLVER rows and the pending undo go;
+  with `ook_handmatig: true` the MANUAL/OVERRIDE rows too, for a clean
+  start. Not from GEPUBLICEERD (409, unpublish first), nor without a
+  generated roster or while a generation runs (409). Audit-logged.
 - **Rename** (`PATCH /api/periods/[id]` `{naam}`, "Naam wijzigen" in the
   period list's row): any status, checked like a new period's name
   (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),

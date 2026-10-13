@@ -198,7 +198,7 @@ function cookie(kind: 'person' | 'staff', personId: string): string {
 }
 
 // Destructive ones last, so the fixture is still there for the rest.
-const LAST = /purge|delete|unpublish|reopen|close|publish|finalize|restore/i;
+const LAST = /purge|delete|unpublish|reopen|reset|close|publish|finalize|restore/i;
 const routes = Object.entries(routeModules)
   .flatMap(([file, mod]) => {
     const route = file.replace(/^\.\//, '').replace(/\/route\.ts$/, '');
