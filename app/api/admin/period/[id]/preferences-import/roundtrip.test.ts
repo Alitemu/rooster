@@ -8,6 +8,7 @@ import { validateCodenaam } from '@/lib/codenaam';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { buildXlsx } from '@/tests/fixtures/buildXlsx';
+import { readFirstSheet } from '@/lib/xlsx';
 import { POST as importPreferences } from './route';
 import { GET as exportPreferences } from '../../../../exports/preferences/[period-id]/route';
 
@@ -16,12 +17,11 @@ import { GET as exportPreferences } from '../../../../exports/preferences/[perio
  * changes nothing - for any codenamen the app accepts and any markings.
  *
  * route.test.ts proves it for one fixed fixture. Here the codenamen and the
- * markings are generated: names with spaces, accents, quotes, semicolons
- * (the export's separator), and names starting with a character a
- * spreadsheet reads as a formula - the export guards those with an
- * apostrophe (lib/csv.ts), which Excel keeps as part of the text when it
- * opens a CSV. The file then goes the way it goes in practice: opened in
- * Excel, dates and weeks turned into numbers, saved as .xlsx, imported.
+ * markings are generated: names with spaces, accents, quotes, semicolons,
+ * and names starting with a character a spreadsheet reads as a formula.
+ * The download is a workbook (lib/xlsxWrite.ts), so the file goes back in
+ * twice: as it was downloaded, and as Excel saves it again - its own
+ * layout, the same cells (tests/fixtures/buildXlsx.ts).
  */
 
 type Grid = Array<Array<string | number | null>>;
@@ -61,40 +61,7 @@ function req(url: string, method = 'GET', body?: unknown): NextRequest {
   });
 }
 
-/** A ;-separated CSV as a spreadsheet reads it: quotes and doubled quotes undone, text otherwise kept as it is. */
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = '';
-  let quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (quoted) {
-      if (ch === '"' && text[i + 1] === '"') {
-        cell += '"';
-        i++;
-      } else if (ch === '"') quoted = false;
-      else cell += ch;
-    } else if (ch === '"') quoted = true;
-    else if (ch === ';') {
-      row.push(cell);
-      cell = '';
-    } else if (ch === '\r' && text[i + 1] === '\n') {
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = '';
-      i++;
-    } else cell += ch;
-  }
-  row.push(cell);
-  rows.push(row);
-  return rows;
-}
-
-const serial = (datum: string) => (Date.parse(`${datum}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86400000;
-
-async function roundTrip(codenamen: string[], marks: number[]): Promise<{ status: number; body: any }> {
+async function roundTrip(codenamen: string[], marks: number[]): Promise<Array<{ status: number; body: any }>> {
   const now = new Date().toISOString();
   const ruleset = insert('dienstrooster_ruleset', { naam: 'Rondgang', config_json: '{}', aangemaakt_op: now });
   const pool = insert('dienstrooster_pool', { naam: 'Rondgang', ruleset_id: ruleset, aangemaakt_op: now });
@@ -132,14 +99,23 @@ async function roundTrip(codenamen: string[], marks: number[]): Promise<{ status
 
   const res = await (exportPreferences as unknown as Handler)(req(`/api/exports/preferences/${period}`), { params: Promise.resolve({ 'period-id': period }) });
   expect(res.status).toBe(200);
-  const grid: Grid = parseCsv((await res.text()).replace(/^﻿/, '')).map((cells, i) =>
-    i === 0 ? cells : cells.map((c, col) => (col === 0 ? serial(c) : col === 2 ? Number(c) : c))
+  const downloaded = Buffer.from(await res.arrayBuffer());
+  const rows = readFirstSheet(downloaded);
+  const resaved: Grid = rows.map((cells, i) =>
+    Array.from({ length: rows[0].length }, (_, col) => {
+      const c = cells[col] ?? '';
+      return i > 0 && (col === 0 || col === 2) ? Number(c) : c;
+    })
   );
-  const bestand = buildXlsx(grid, { deflate: true }).toString('base64');
-  const imported = await (importPreferences as unknown as Handler)(req(`/api/admin/period/${period}/preferences-import`, 'POST', { bestand, toepassen: false }), {
-    params: Promise.resolve({ id: period }),
-  });
-  return { status: imported.status, body: await imported.json() };
+  const results = [];
+  for (const file of [downloaded, buildXlsx(resaved, { deflate: true })]) {
+    const imported = await (importPreferences as unknown as Handler)(
+      req(`/api/admin/period/${period}/preferences-import`, 'POST', { bestand: file.toString('base64'), toepassen: false }),
+      { params: Promise.resolve({ id: period }) }
+    );
+    results.push({ status: imported.status, body: await imported.json() });
+  }
+  return results;
 }
 
 beforeAll(() => {
@@ -170,10 +146,11 @@ describe('preferences overview: download, open in Excel, save, read back', () =>
         fc.uniqueArray(codenaamArb(fc.constantFrom('', 'P', 'Ö', '-', '+', '=')), { minLength: 1, maxLength: 4, selector: (n) => n.toLowerCase() }),
         fc.array(fc.nat(3), { minLength: 1, maxLength: 28 }),
         async (codenamen, marks) => {
-          const result = await roundTrip(codenamen, marks);
-          expect(result.status, JSON.stringify(result.body)).toBe(200);
-          expect(result.body.data.problemen).toEqual([]);
-          expect(result.body.data.wijzigingen).toEqual([]);
+          for (const result of await roundTrip(codenamen, marks)) {
+            expect(result.status, JSON.stringify(result.body)).toBe(200);
+            expect(result.body.data.problemen).toEqual([]);
+            expect(result.body.data.wijzigingen).toEqual([]);
+          }
         }
       ),
       { numRuns: 40, seed: 11 }
@@ -181,13 +158,14 @@ describe('preferences overview: download, open in Excel, save, read back', () =>
   }, 120_000);
 
   // Audit 7: a codenaam may start with -, + or = (validateCodenaam only
-  // refuses @). The export guards such a name with a leading apostrophe,
-  // Excel keeps it, and the import used to look for a participant called
-  // "'-Anna": "geen deelnemer met deze codenaam", and the whole file was
-  // refused.
+  // refuses @). The CSV export guarded such a name with a leading
+  // apostrophe, Excel kept it, and the import looked for a participant
+  // called "'-Anna": "geen deelnemer met deze codenaam", and the whole file
+  // was refused. A workbook holds the name as text, without the apostrophe.
   it('changes nothing when a codenaam starts with a character a spreadsheet reads as a formula', async () => {
-    const result = await roundTrip([`-Anna-${crypto.randomUUID().slice(0, 4)}`, `Bert-${crypto.randomUUID().slice(0, 4)}`], [1, 0, 2]);
-    expect(result.status, JSON.stringify(result.body)).toBe(200);
-    expect(result.body.data.problemen).toEqual([]);
+    for (const result of await roundTrip([`-Anna-${crypto.randomUUID().slice(0, 4)}`, `Bert-${crypto.randomUUID().slice(0, 4)}`], [1, 0, 2])) {
+      expect(result.status, JSON.stringify(result.body)).toBe(200);
+      expect(result.body.data.problemen).toEqual([]);
+    }
   });
 });

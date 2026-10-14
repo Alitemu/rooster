@@ -55,6 +55,29 @@ function formatDeadline(deadline: string): string {
   return isNaN(new Date(deadline).getTime()) ? deadline : deadlineTekst(deadline);
 }
 
+/**
+ * Saves a download fetched with fetch(): under the name the server gave it
+ * (filename*, lib/xlsxWrite.ts xlsxAttachment), or `fallback`.
+ */
+async function saveDownload(res: Response, fallback: string): Promise<void> {
+  const header = res.headers.get('Content-Disposition') ?? '';
+  let name = fallback;
+  try {
+    const encoded = header.split("filename*=UTF-8''")[1];
+    if (encoded) name = decodeURIComponent(encoded);
+  } catch {
+    // A name that doesn't decode: the fallback.
+  }
+  const url = window.URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
 export function ExportDialog({
   periodId,
   periodName,
@@ -313,15 +336,7 @@ export function ExportDialog({
       const res = await fetch(withBasePath(`/api/exports/invitations/${periodId}`), { method: 'POST' });
       if (!res.ok) throw new Error('Downloaden van uitnodigingen mislukt');
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `invitations_${periodName.replace(/ /g, '_')}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      await saveDownload(res, `uitnodigingen_${periodName.replace(/ /g, '_')}.xlsx`);
 
       onClose();
     } catch (err) {
@@ -334,15 +349,7 @@ export function ExportDialog({
       const res = await fetch(withBasePath(`/api/exports/audit-trail/${periodId}`));
       if (!res.ok) throw new Error('Downloaden van wijzigingsgeschiedenis mislukt');
 
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `wijzigingsgeschiedenis_${periodName.replace(/ /g, '_')}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      await saveDownload(res, `wijzigingsgeschiedenis_${periodName.replace(/ /g, '_')}.xlsx`);
 
       onClose();
     } catch (err) {
@@ -425,7 +432,7 @@ export function ExportDialog({
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <p className="font-semibold text-neutral-900">📊 Uitnodigingen downloaden</p>
-                <p className="text-sm text-neutral-600">CSV-bestand met namen en persoonlijke links</p>
+                <p className="text-sm text-neutral-600">Excel-bestand met namen en persoonlijke links</p>
               </button>
 
               <button
@@ -433,7 +440,7 @@ export function ExportDialog({
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <p className="font-semibold text-neutral-900">📄 Wijzigingsgeschiedenis downloaden</p>
-                <p className="text-sm text-neutral-600">CSV met alle handmatige toewijzingen, wisselingen en verwijderingen, voor verantwoording achteraf</p>
+                <p className="text-sm text-neutral-600">Excel-bestand met alle handmatige toewijzingen, wisselingen en verwijderingen, voor verantwoording achteraf</p>
               </button>
             </div>
 
@@ -488,7 +495,7 @@ export function ExportDialog({
             )}
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
-                Het CSV-bestand bevat namen en persoonlijke links naar het voorkeurenformulier.
+                Het Excel-bestand bevat namen en persoonlijke links naar het voorkeurenformulier.
               </p>
               <p className="text-xs text-blue-800 mt-2">
                 Kolommen: Naam, Persoonlijke link, Deadline
@@ -507,7 +514,7 @@ export function ExportDialog({
                 onClick={downloadInvitations}
                 className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
               >
-                📥 CSV downloaden
+                📥 Excel downloaden
               </button>
               <button
                 onClick={() => setExportType(null)}
@@ -536,7 +543,7 @@ export function ExportDialog({
                 onClick={downloadAuditTrail}
                 className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
               >
-                📥 CSV downloaden
+                📥 Excel downloaden
               </button>
               <button
                 onClick={() => setExportType(null)}

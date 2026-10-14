@@ -10,8 +10,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { parseCsv, withoutFormulaGuard } from '@/lib/csv';
-import { parseDutchOrIsoDate } from '@/lib/isoDate';
+import { priorRowsInWindow } from '@/lib/priorAssignmentUpload';
+import { readUploadedRows } from '@/lib/sheetUpload';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 
@@ -169,46 +169,22 @@ export default function PriorAssignmentsPage() {
     }
   };
 
-  // Header row is Datum,Week,Diensttype,Codenaam (see
-  // /api/exports/assignments/[period-id] - built to match this exactly),
-  // but only Datum/Diensttype/Codenaam matter here; Week is derived
-  // server-side from Datum regardless of what a hand-edited file says.
+  // The roster download itself (.xlsx since 0.20.0) or a CSV, read as
+  // lib/priorAssignmentUpload.ts describes.
   const handleCsvFile = async (file: File) => {
     if (!data) return;
-    const text = await file.text();
-    const [, ...dataLines] = parseCsv(text); // skip header row
-    const inRange: Array<{ datum: string; teller: string; codenaam: string }> = [];
-    const warnings: string[] = [];
-    let outOfRange = 0;
-    dataLines.forEach(([rawDatum, , diensttype, codenaam], i) => {
-      const rowNum = i + 2; // header is row 1
-      if (!rawDatum) return;
-      // The roster export saved again by a Dutch Excel writes d-m-yyyy
-      // (audit 12): compared as text it fell outside every window.
-      const datum = parseDutchOrIsoDate(rawDatum);
-      if (!datum) {
-        warnings.push(`Rij ${rowNum}: "${rawDatum}" is geen datum, overgeslagen`);
-        return;
-      }
-      if (diensttype === undefined) {
-        warnings.push(`Rij ${rowNum}: niet genoeg kolommen, overgeslagen`);
-        return;
-      }
-      // "Avond" (as the roster CSV writes it), "AVOND" or "avonddienst".
-      const teller = diensttype.trim().toUpperCase().replace(/DIENST$/, '');
-      if (!['AVOND', 'WEEKEND', 'FEESTDAG'].includes(teller)) {
-        warnings.push(`Rij ${rowNum}: onbekend diensttype "${diensttype}", overgeslagen`);
-        return;
-      }
-      // Automatisch de juiste week selecteren: alles buiten het
-      // overloopvenster hierboven wordt hier al genegeerd, niet pas na
-      // een importpoging.
-      if (datum < data.date_range[0] || datum > data.date_range[1]) {
-        outOfRange++;
-        return;
-      }
-      inRange.push({ datum, teller, codenaam: withoutFormulaGuard((codenaam || '').trim()) });
-    });
+    let rows: string[][];
+    try {
+      rows = await readUploadedRows(file);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.');
+      return;
+    }
+    setError(null);
+    // Automatisch de juiste week selecteren: alles buiten het
+    // overloopvenster hierboven wordt hier al genegeerd, niet pas na
+    // een importpoging.
+    const { rows: inRange, outOfRange, warnings } = priorRowsInWindow(rows, data.date_range);
     setCsvRows(inRange);
     setCsvOutOfRangeCount(outOfRange);
     setCsvParseWarnings(warnings);
@@ -324,16 +300,17 @@ export default function PriorAssignmentsPage() {
           "Automatisch afleiden" hierboven werkt alleen zolang die data hier
           nog live staat. */}
       <div className="card p-4">
-        <p className="text-sm font-medium mb-1">Of: CSV-bestand uploaden</p>
+        <p className="text-sm font-medium mb-1">Of: een bestand uploaden</p>
         <p className="text-xs text-neutral-500 mb-3">
-          Gebruik idealiter een eerder gedownload &quot;Rooster downloaden (CSV)&quot;-bestand
-          (kolommen Datum, Week, Diensttype, Codenaam). Regels buiten het overloopvenster
+          Gebruik idealiter een eerder gedownload &quot;Rooster downloaden (Excel)&quot;-bestand
+          (kolommen Datum, Week, Diensttype, Codenaam). Een CSV met dezelfde kolommen kan ook. Regels buiten het overloopvenster
           hierboven ({data.date_range[0]} t/m {data.date_range[1]}) worden automatisch genegeerd.
           Je hoeft dus niet zelf de juiste week eruit te knippen.
         </p>
         <input
           type="file"
-          accept=".csv"
+          accept=".xlsx,.csv"
+          aria-label="Rooster als Excel- of CSV-bestand"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleCsvFile(file);

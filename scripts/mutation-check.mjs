@@ -260,6 +260,27 @@ const MUTATIONS = [
     tests: ['lib/csv'],
   },
   {
+    name: 'downloads: a control character written into the XML as it is',
+    file: 'lib/xlsxWrite.ts',
+    find: '.replace(/[\\x00-\\x08\\x0B\\x0C\\x0D\\x0E-\\x1F\\uFFFE\\uFFFF]/g,',
+    replace: '.replace(/[]/g,',
+    tests: ['lib/xlsxWrite'],
+  },
+  {
+    name: 'downloads: a date written as text instead of a date',
+    file: 'lib/xlsxWrite.ts',
+    find: "const serial = 'date' in value ? dateSerial(value.date) : momentSerial(value.moment);",
+    replace: "const serial = 'date' in value ? null : momentSerial(value.moment);",
+    tests: ['lib/xlsxWrite', 'app/api/exports/preferences'],
+  },
+  {
+    name: 'uploads: a workbook date cell not read as a date',
+    file: 'lib/isoDate.ts',
+    find: 'if (/^\\d{5}(\\.0+)?$/.test(value.trim())) return excelSerialToDate(Number(value));',
+    replace: '',
+    tests: ['lib/isoDate', 'app/api/planner/read-workbook', 'app/api/admin/period/[id]/preferences-import'],
+  },
+  {
     name: 'eerdere toewijzingen import: a d-m-yyyy date refused',
     file: 'app/api/periods/[id]/prior-assignments/import-csv/route.ts',
     find: 'const datum = parseDutchOrIsoDate(rowText(row.datum));',

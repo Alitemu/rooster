@@ -2,9 +2,11 @@
  * Preferences Export Route
  *
  * GET /api/exports/preferences/[period-id] - the period's preferences as a
- * grid for Excel: one row per shift slot (date, weekday, ISO week, kind of
+ * workbook: one row per shift slot (date, weekday, ISO week, kind of
  * shift), then one column per participant holding what they marked for
- * that slot, empty when they marked nothing. Planners print this.
+ * that slot, empty when they marked nothing. Planners print this: the
+ * header and the first four columns stay in view and on every page,
+ * landscape with grid lines.
  *
  * Every member of the period's pool gets a column, also someone who marked
  * nothing, so an empty column says "nothing marked" rather than leaving
@@ -13,11 +15,9 @@
  * loadPeriodMembers). Someone removed from the pool after marking days
  * kept a column, although the solver no longer sees them.
  *
- * Semicolons and a UTF-8 byte order mark, unlike the other exports: this
- * one exists to be opened in Excel, and a Dutch Excel splits a double-
- * clicked CSV on ";" (the list separator of Dutch regional settings) and
- * only reads it as UTF-8 with the mark - with "," every row lands in one
- * cell.
+ * "Voorkeuren importeren (test)" reads this file back after it was
+ * filled in (lib/preferencesImport.ts): the date a real date, the
+ * codenamen as they are.
  *
  * Read straight from dienstrooster_availability, not from the per-person
  * backup files in backups/preferences/ (lib/preferencesBackup.ts): those
@@ -29,7 +29,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { csvAttachment, csvField } from '@/lib/csv';
+import { xlsxDownload } from '@/lib/xlsxWrite';
 import { loadPeriodMembers } from '@/lib/rosterBands';
 import type { ApiErrorResponse } from '@/types';
 
@@ -126,25 +126,29 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
       .all(periodId) as MarkingRow[];
     const bySlotAndPerson = new Map(markings.map((m) => [`${m.slot_id}|${m.person_id}`, cell(m)]));
 
-    const csvLines: string[] = [
-      ['Datum', 'Dag', 'Week', 'Dienst', ...people.map((p) => p.codenaam)].map(csvField).join(';'),
-      ...slots.map((slot) =>
-        [
-          csvField(slot.datum),
-          csvField(weekdag(slot.datum)),
+    return xlsxDownload(
+      {
+        name: 'Voorkeuren',
+        columns: [
+          { header: 'Datum' },
+          { header: 'Dag' },
+          { header: 'Week' },
+          { header: 'Dienst' },
+          ...people.map((p) => ({ header: p.codenaam })),
+        ],
+        rows: slots.map((slot) => [
+          { date: slot.datum },
+          weekdag(slot.datum),
           slot.iso_week,
-          csvField(DIENST[slot.teller] ?? slot.teller),
-          ...people.map((p) => csvField(bySlotAndPerson.get(`${slot.id}|${p.id}`) ?? '')),
-        ].join(';')
-      ),
-    ];
-
-    return new NextResponse('\uFEFF' + csvLines.join('\r\n'), {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': csvAttachment('voorkeuren', period.naam),
+          DIENST[slot.teller] ?? slot.teller,
+          ...people.map((p) => bySlotAndPerson.get(`${slot.id}|${p.id}`) ?? null),
+        ]),
+        frozenColumns: 4,
+        printGrid: true,
       },
-    });
+      'voorkeuren',
+      period.naam
+    );
   } catch (error) {
     return internalErrorResponse('export-preferences', error);
   }

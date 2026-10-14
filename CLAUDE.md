@@ -72,7 +72,7 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 
 **Language: all user-facing text is Dutch.** Every screen a participant or
 planner sees - labels, buttons, error messages, notification templates,
-exported CSV/mailto content - is in Dutch. English stays in code
+exported files and mail content - is in Dutch. English stays in code
 identifiers, DB fields, comments, and console/log output only.
 
 **Dutch writing style in user-facing text:**
@@ -635,7 +635,8 @@ markings left.
 /api/admin/period/[id]/preferences-import, lib/preferencesImport.ts)
 reads that overview back after it was filled in and saved in Excel - as
 .xlsx only (a re-saved CSV's separator and encoding depend on the
-machine). lib/xlsx.ts reads the first worksheet with Node's zlib, no
+machine). The overview is a workbook itself since 0.20.0, so the
+downloaded file goes back in as it is. lib/xlsx.ts reads the first worksheet with Node's zlib, no
 library (size-capped before and while inflating, read in one forward pass
 without backtracking regular expressions, a cell past column XFD refused:
 audit 6 packed a sheet of 20 MB of unclosed rows into a 29 kB upload); a date cell arrives as
@@ -648,9 +649,11 @@ empty cell over such a row - is skipped. No block budget. Checking
 (`toepassen` false) writes nothing; applying refuses a file with any
 problem, and a period whose roster is built (409). Audit-logged; cleared
 people are re-synced like the slot route, backups rewritten. A column
-header "'-Anna" is matched to -Anna too: the export guards a codenaam
-starting with =, +, - or @ with an apostrophe, and Excel keeps it
-(preferences-import/roundtrip.test.ts, generated codenamen).
+header "'-Anna" is matched to -Anna too: the CSV export before 0.20.0
+guarded a codenaam starting with =, +, - or @ with an apostrophe, and
+Excel keeps it; the workbook holds the name as it is
+(preferences-import/roundtrip.test.ts, generated codenamen, the download
+itself and as Excel saves it again).
 
 ## Capacity Check (Live)
 
@@ -813,7 +816,7 @@ next successful send or new settings; "not set up" is never recorded as
 a failure) - automatic reminders and swap mails fail where nobody
 watches. There is deliberately no other way out: the old manual JSON
 download and the per-person mailto links are gone, and a single reminder
-goes through the flow too. The invitations CSV download stays. The recipient is always the flow mailbox from Mailinstellingen, never
+goes through the flow too. The invitations download (a workbook) stays. The recipient is always the flow mailbox from Mailinstellingen, never
 anything from a request. Links in mails a participant sets off (swap
 mails, lib/meldingMail.ts) use lib/baseUrl.ts `mailBaseUrl`: BASE_URL or
 the period's `basis_url` from the planner's export, never the Host header
@@ -876,7 +879,7 @@ AFGEWEZEN ("vervallen", both sides told) (lib/swapLifecycle.ts). One
 participant may start at most 20 swap requests per 24 hours, withdrawn
 ones included (lib/swapQuota.ts, 429): each mails two people, and the
 sending account's daily limit is shared with invitations and reminders. Invitations go out only for an OPEN period before
-its deadline, like reminders (lib/reminderGate.ts); the CSV of links is
+its deadline, like reminders (lib/reminderGate.ts); the download of links is
 not gated. SMTP on any port but 465 requires STARTTLS (requireTLS).
 
 Automatic reminders (lib/autoReminders.ts, run every hour from
@@ -1023,19 +1026,40 @@ capped json-file logs, no-new-privileges everywhere, init + mem_limit on
 web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
 to commit SHAs.
 
-**CSV imports** (the wizard's beginsaldi, "Eerdere toewijzingen"):
-lib/csv.ts parseCsv takes commas or semicolons, whichever the header line
-uses, and drops a byte order mark - a Dutch Excel saves "CSV" with
-semicolons, and every line became one cell (audit 12). The "Eerdere
-toewijzingen" import also reads d-m-yyyy dates (lib/isoDate.ts
-parseDutchOrIsoDate, shared with the preferences import) and a codenaam
-with the formula-guard apostrophe (withoutFormulaGuard): the app's own
-roster export saved again by a Dutch Excel.
+**Uploads** (the wizard's beginsaldi, "Eerdere toewijzingen"): an .xlsx
+or a CSV (lib/sheetUpload.ts readUploadedRows). A workbook is read by the
+server, POST /api/planner/read-workbook (planner only, the same reader as
+the preferences import, writes nothing), and the rows come back to the
+page; "Eerdere toewijzingen" previews them with
+lib/priorAssignmentUpload.ts priorRowsInWindow. The roster download is a
+workbook since 0.20.0, and the import that reads it back took CSV only
+(read-workbook/route.test.ts: download, upload, import). A date cell
+arrives as Excel's day number (lib/isoDate.ts parseSheetDate, also text
+dates). lib/csv.ts parseCsv takes commas or semicolons, whichever the
+header line uses, and drops a byte order mark - a Dutch Excel saves "CSV"
+with semicolons, and every line became one cell (audit 12). The "Eerdere
+toewijzingen" import also reads d-m-yyyy dates and a codenaam with the
+formula-guard apostrophe (withoutFormulaGuard): the old CSV roster export
+saved again by a Dutch Excel.
 
-**Downloads:** every CSV export names its file through lib/csv.ts
-`csvAttachment`: an ASCII `filename` and the real name as `filename*`
-(UTF-8). A header value holds nothing above U+00FF, and a period name with
-an en dash, euro sign or emoji used to make every export answer 500.
+**Downloads:** every download is a one-sheet workbook (.xlsx, 0.20.0):
+rooster, statusrapport, voorkeurenoverzicht, uitnodigingen,
+wijzigingsgeschiedenis (app/api/exports). They were CSV, which a Dutch
+Excel opened in one column (it splits on ";" and wants a byte order mark),
+and a CSV saved again changes with the machine. lib/xlsxWrite.ts writes
+them with Node's zlib, no library, like the reader: a date is a real date
+(Excel's day number in its own date format, shown the reader's way), a
+moment is the Dutch clock time (`{ moment }`; the CSVs gave UTC), the
+header row is bold, frozen, filtered and on every printed page, and the
+voorkeurenoverzicht keeps its first four columns in view too and prints
+landscape with grid lines. A text cell is never a formula (no <f> is ever
+written), so no apostrophe guard; what XML can't hold is written as
+_xHHHH_ the way Excel does, or Excel calls the file corrupt. The file name
+goes through `xlsxAttachment`: an ASCII `filename` and the real name as
+`filename*` (UTF-8). A header value holds nothing above U+00FF, and a
+period name with an en dash, euro sign or emoji used to make every export
+answer 500. Not cached (the invitations hold personal links). lib/csv.ts
+stays for the preferences backups on disk and for CSV uploads.
 
 **Limits:** request bodies are capped at 1 MB in Caddy and in
 lib/api-errors.ts parseJsonBody (read no further; also before login).

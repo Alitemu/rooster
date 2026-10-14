@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidIsoDate, parseDutchOrIsoDate } from './isoDate';
+import { isValidIsoDate, parseDutchOrIsoDate, parseSheetDate } from './isoDate';
 
 /**
  * The hard rule: only a real calendar date in YYYY-MM-DD form passes.
@@ -48,6 +48,22 @@ describe('isValidIsoDate', () => {
     for (const value of [null, undefined, 20270104, {}, new Date()]) {
       expect(isValidIsoDate(value), String(value)).toBe(false);
     }
+  });
+});
+
+describe('parseSheetDate', () => {
+  // 0.20.0: the downloads write real dates, which a workbook holds as
+  // Excel's day number; the imports that read them back get that number.
+  it('reads the day number of a workbook date cell, and text as parseDutchOrIsoDate does', () => {
+    expect(parseSheetDate('46391')).toBe('2027-01-04');
+    expect(parseSheetDate('46387')).toBe('2026-12-31');
+    expect(parseSheetDate('46812.0')).toBe('2028-02-29');
+    expect(parseSheetDate('4-1-2027')).toBe('2027-01-04');
+    expect(parseSheetDate('2027-01-04')).toBe('2027-01-04');
+  });
+
+  it('takes no other number for a date', () => {
+    for (const value of ['53', '2027', '46391.5', '-46391', '463910', '']) expect(parseSheetDate(value)).toBeNull();
   });
 });
 

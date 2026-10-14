@@ -1,18 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { csvAttachment, csvField, sanitizeFilenamePart, parseCsv } from './csv';
+import { csvField, parseCsv } from './csv';
 
 /**
  * The hard rule: nothing that leaves here can act as anything other than
  * text.
  *
- * Every export in this application is built for a spreadsheet, and the
- * fields going into it are planner-entered free text (codenaam, period
- * name, a reason). Two things can escape a CSV cell: a leading character
+ * The preferences backups are written to be opened in a spreadsheet, and
+ * the fields going into them are planner-entered free text (codenaam,
+ * period name). Two things can escape a CSV cell: a leading character
  * that makes the cell a formula, and an unescaped quote that ends the
- * field early and lets the rest be read as more columns.
- *
- * This module had no test of its own, even though four export routes and
- * the preference backups all rely on it.
+ * field early and lets the rest be read as more columns. (The downloads
+ * are workbooks since 0.20.0, lib/xlsxWrite.test.ts.)
  */
 
 describe('csvField', () => {
@@ -99,45 +97,6 @@ describe('parseCsv', () => {
 
   it('trims whitespace around unquoted cells', () => {
     expect(parseCsv(' a , b ,c')).toEqual([['a', 'b', 'c']]);
-  });
-});
-
-describe('sanitizeFilenamePart', () => {
-  it('keeps an ordinary period name unchanged', () => {
-    expect(sanitizeFilenamePart('2027-1')).toBe('2027-1');
-  });
-
-  it('removes what would break out of a quoted Content-Disposition filename', () => {
-    // A quote ends the filename early; a CR/LF splits the response header
-    // in two, which is header injection.
-    expect(sanitizeFilenamePart('a"b')).toBe('a_b');
-    expect(sanitizeFilenamePart('a\\b')).toBe('a_b');
-    expect(sanitizeFilenamePart('a\r\nb')).toBe('a__b');
-    expect(sanitizeFilenamePart('x"\r\nContent-Type: text/html')).not.toContain('\n');
-  });
-});
-
-describe('csvAttachment', () => {
-  it('names the file the way it always did when the name is plain', () => {
-    expect(csvAttachment('rooster', 'Voorjaar 2027')).toBe(
-      `attachment; filename="rooster_Voorjaar_2027.csv"; filename*=UTF-8''rooster_Voorjaar_2027.csv`
-    );
-  });
-
-  it('gives any name a header value a response can carry, and the name itself to browsers that read filename*', () => {
-    for (const naam of ['Voorjaar 2027 – 2028', 'Café €', 'Zomer ☀️', "Kerst (oud) 'x' *"]) {
-      const header = csvAttachment('rooster', naam);
-      expect(() => new Headers({ 'Content-Disposition': header })).not.toThrow();
-      expect(header.split('filename="')[1].split('"')[0]).toMatch(/^[\x20-\x7e]+$/);
-      expect(decodeURIComponent(header.split("UTF-8''")[1])).toBe(`rooster_${naam.replace(/ /g, '_')}.csv`);
-    }
-    expect(csvAttachment('rooster', 'Café')).toContain('filename="rooster_Cafe.csv"');
-  });
-
-  it('cannot be broken out of with a quote or a line break', () => {
-    const header = csvAttachment('rooster', 'x"\r\nContent-Type: text/html');
-    expect(header).not.toMatch(/[\r\n]/);
-    expect(header.split('filename="')[1].indexOf('"')).toBe(header.split('filename="')[1].indexOf('.csv"') + 4);
   });
 });
 

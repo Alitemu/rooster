@@ -5,6 +5,7 @@ import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
+import { readFirstSheet } from '@/lib/xlsx';
 import { GET as assignments } from './assignments/[period-id]/route';
 import { GET as auditTrail } from './audit-trail/[period-id]/route';
 import { POST as invitations } from './invitations/[period-id]/route';
@@ -12,7 +13,8 @@ import { GET as preferences } from './preferences/[period-id]/route';
 import { GET as statusReport } from './status-report/[period-id]/route';
 
 /**
- * The rule: any name a period may get, every export of it downloads.
+ * The rule: any name a period may get, every export of it downloads - as
+ * a workbook Excel opens, not a CSV (0.20.0).
  *
  * The period's name goes into the download's file name, in the
  * Content-Disposition header. A header value may only hold characters up
@@ -114,7 +116,7 @@ describe('every export downloads, whatever the period is called', () => {
   // Audit 7: the three names with a character above U+00FF answered 500 on
   // every export - "Cannot convert argument to a ByteString" building the
   // Content-Disposition header. Now the header carries an ASCII name and the
-  // real one percent-encoded (lib/csv.ts csvAttachment).
+  // real one percent-encoded (lib/xlsxWrite.ts xlsxAttachment).
   for (const naam of NAMES) {
     for (const [label, handler, method] of EXPORTS) {
       it(`${label}: "${naam}"`, async () => {
@@ -125,8 +127,11 @@ describe('every export downloads, whatever the period is called', () => {
         );
         expect(res.status).toBe(200);
         const header = res.headers.get('Content-Disposition')!;
-        expect(header).toMatch(/^attachment; filename="[\x20-\x7e]+\.csv"; filename\*=UTF-8''/);
+        expect(header).toMatch(/^attachment; filename="[\x20-\x7e]+\.xlsx"; filename\*=UTF-8''/);
         expect(decodeURIComponent(header.split("UTF-8''")[1])).toContain(naam.replace(/ /g, '_'));
+        expect(res.headers.get('Content-Type')).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        // A workbook with a header row, whatever the export holds.
+        expect(readFirstSheet(Buffer.from(await res.arrayBuffer()))[0].length).toBeGreaterThan(1);
       });
     }
   }

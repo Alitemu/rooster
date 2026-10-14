@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
+import { readFirstSheet } from '@/lib/xlsx';
 import { GET } from './route';
 
 /**
@@ -108,12 +109,15 @@ function plannerRequest(periodId: string, plannerId: string): NextRequest {
   });
 }
 
-async function exportCsv(periodId: string, plannerId: string): Promise<string> {
+/** The downloaded workbook's cells, one line per row, tab-separated. */
+async function exportText(periodId: string, plannerId: string): Promise<string> {
   const res = await GET(plannerRequest(periodId, plannerId), {
     params: Promise.resolve({ 'period-id': periodId }),
   });
   expect(res.status).toBe(200);
-  return res.text();
+  return readFirstSheet(Buffer.from(await res.arrayBuffer()))
+    .map((row) => row.join('\t'))
+    .join('\n');
 }
 
 afterEach(() => {
@@ -156,13 +160,13 @@ describe('GET /api/exports/audit-trail/[period-id]', () => {
     recordManualAssign(planner, participant, slotA, 'Vulling A');
     recordManualAssign(planner, participant, slotB, 'Vulling B');
 
-    const csvA = await exportCsv(periodA, planner);
-    expect(csvA).toContain('Vulling A');
-    expect(csvA).not.toContain('Vulling B');
+    const textA = await exportText(periodA, planner);
+    expect(textA).toContain('Vulling A');
+    expect(textA).not.toContain('Vulling B');
 
-    const csvB = await exportCsv(periodB, planner);
-    expect(csvB).toContain('Vulling B');
-    expect(csvB).not.toContain('Vulling A');
+    const textB = await exportText(periodB, planner);
+    expect(textB).toContain('Vulling B');
+    expect(textB).not.toContain('Vulling A');
   });
 
   it('keeps a manual fill in the trail after the assignment it created is deleted', async () => {
@@ -194,9 +198,9 @@ describe('GET /api/exports/audit-trail/[period-id]', () => {
 
     db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(assignmentId);
 
-    const csv = await exportCsv(periodId, planner);
-    expect(csv).toContain('Vulling voor verwijdering');
-    expect(csv).toContain('Toegewezen (open plek ingevuld)');
+    const text = await exportText(periodId, planner);
+    expect(text).toContain('Vulling voor verwijdering');
+    expect(text).toContain('Toegewezen (open plek ingevuld)');
   });
 
   it('names the overridden rule when a manual fill overruled one', async () => {
@@ -218,7 +222,7 @@ describe('GET /api/exports/audit-trail/[period-id]', () => {
       JSON.stringify({ person_id: participant, slot_id: slotId, reason: null, override: { code: 'BLOCKED_OVERRIDE' } })
     );
 
-    const csv = await exportCsv(periodId, planner);
-    expect(csv).toContain('Geblokkeerde dag overschreven');
+    const text = await exportText(periodId, planner);
+    expect(text).toContain('Geblokkeerde dag overschreven');
   });
 });

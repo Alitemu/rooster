@@ -1,16 +1,16 @@
 /**
  * Invitations Export Route
  *
- * POST /api/exports/invitations/[period-id] - Generate CSV with staff links
+ * POST /api/exports/invitations/[period-id] - a workbook of everyone's personal link
  *
  * The plaintext access token is never persisted (only its hash), so it can't
  * be read back for an existing link. This route issues a fresh token for
- * every active pool member on each export, so the CSV always contains
+ * every active pool member on each export, so the file always contains
  * working links.
  *
  * Those are issued ALONGSIDE any link a member already has, not instead of
  * them: this used to revoke the previous ones first, so downloading the
- * CSV a second time silently broke the link everyone had already been
+ * file a second time silently broke the link everyone had already been
  * sent. A link is only valid for its own period anyway, and being able to
  * go back to the original mail is worth more than retiring an older token.
  * See the reminders export for the same reasoning.
@@ -25,7 +25,7 @@ import { getInvitationPeriod, issuePeriodLinks, formatDeadline, rememberBaseUrl 
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
-import { csvAttachment, csvField } from '@/lib/csv';
+import { xlsxDownload } from '@/lib/xlsxWrite';
 import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiErrorResponse } from '@/types';
 
@@ -66,20 +66,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       nieuw: { wijziging: 'persoonlijke links aangemaakt voor de uitnodigingen', aantal: links.length },
     });
     const deadline = formatDeadline(period.deadline);
-    const csvLines: string[] = [
-      'Naam,Persoonlijke link,Deadline',
-      ...links.map((link) => [csvField(link.codenaam), csvField(link.personalLink), csvField(deadline)].join(',')),
-    ];
-
-    const csvContent = csvLines.join('\n');
-
-    // Return as CSV file
-    return new NextResponse(csvContent, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': csvAttachment('invitations', period.naam),
+    return xlsxDownload(
+      {
+        name: 'Uitnodigingen',
+        columns: [{ header: 'Naam' }, { header: 'Persoonlijke link' }, { header: 'Deadline' }],
+        rows: links.map((link) => [link.codenaam, link.personalLink, deadline]),
       },
-    });
+      'uitnodigingen',
+      period.naam
+    );
   } catch (error) {
     return internalErrorResponse('export-invitations', error);
   }

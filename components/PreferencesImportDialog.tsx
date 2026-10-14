@@ -130,7 +130,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
             <h2 className="text-xl font-bold mb-2">Voorkeuren importeren (test)</h2>
             <p className="text-sm text-neutral-700 mb-2">
               Open het bestand van &quot;Voorkeurenoverzicht downloaden&quot; in Excel, vul de voorkeuren aan en sla
-              het op als Excel-werkmap (.xlsx). Lees het hier weer in.
+              het op. Lees het hier weer in.
             </p>
             <ul className="text-sm text-neutral-700 mb-4 list-disc pl-5 space-y-1">
               <li>Geblokkeerd, liever niet en voorkeur worden gezet alsof de planner ze invult. Een lege cel haalt zo&apos;n keuze weg.</li>

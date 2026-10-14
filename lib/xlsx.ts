@@ -182,6 +182,11 @@ function firstSheetPath(buf: Buffer, entries: Map<string, ZipEntry>): string {
   return 'xl/worksheets/sheet1.xml';
 }
 
+/** One part of the file as text (e.g. "xl/styles.xml"), null when it has none. For tests of the writer. */
+export function readPart(buf: Buffer, name: string): string | null {
+  return entryText(buf, readZip(buf), name);
+}
+
 /** Rows of the first worksheet, cells as text, empty rows left out. */
 export function readFirstSheet(buf: Buffer): string[][] {
   if (buf.length < 22 || buf.readUInt32LE(0) !== 0x04034b50) {
@@ -216,8 +221,5 @@ export function readFirstSheet(buf: Buffer): string[][] {
   return rows;
 }
 
-/** Excel's day number (1 = 1900-01-01, with its 1900 leap-day quirk) as YYYY-MM-DD. */
-export function excelSerialToDate(serial: number): string {
-  const ms = Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000;
-  return new Date(ms).toISOString().slice(0, 10);
-}
+// Moved to lib/isoDate.ts, which the browser can load too.
+export { excelSerialToDate } from './isoDate';

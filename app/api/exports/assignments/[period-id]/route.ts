@@ -1,12 +1,12 @@
 /**
  * Assignments (Roster) Export Route
  *
- * GET /api/exports/assignments/[period-id] - CSV of every assignment in
+ * GET /api/exports/assignments/[period-id] - a workbook of every assignment in
  * this period (datum, week, diensttype, codenaam) - a backup of "who
  * worked when" a planner can keep for a period, and later re-upload on a
  * FUTURE period's "Eerdere toewijzingen" screen if that future period's
  * own overloop can't be auto-derived (e.g. this period's own data is no
- * longer in this deployment - see that screen's CSV-upload feature,
+ * longer in this deployment - see that screen's upload,
  * app/planner/period/[id]/prior-assignments/page.tsx, and
  * import-csv/route.ts, which is built to read exactly this shape back).
  */
@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { csvAttachment, csvField } from '@/lib/csv';
+import { xlsxDownload } from '@/lib/xlsxWrite';
 import type { ApiErrorResponse } from '@/types';
 
 const TELLER_LABELS: Record<string, string> = {
@@ -58,21 +58,15 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
       )
       .all(periodId) as Array<{ datum: string; iso_week: number; teller: string; codenaam: string }>;
 
-    const csvLines: string[] = [
-      'Datum,Week,Diensttype,Codenaam',
-      ...rows.map((r) =>
-        [csvField(r.datum), r.iso_week, csvField(TELLER_LABELS[r.teller] || r.teller), csvField(r.codenaam)].join(',')
-      ),
-    ];
-
-    const csvContent = csvLines.join('\n');
-
-    return new NextResponse(csvContent, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': csvAttachment('rooster', period.naam),
+    return xlsxDownload(
+      {
+        name: 'Rooster',
+        columns: [{ header: 'Datum' }, { header: 'Week' }, { header: 'Diensttype' }, { header: 'Codenaam' }],
+        rows: rows.map((r) => [{ date: r.datum }, r.iso_week, TELLER_LABELS[r.teller] || r.teller, r.codenaam]),
       },
-    });
+      'rooster',
+      period.naam
+    );
   } catch (error) {
     return internalErrorResponse('export-assignments', error);
   }

@@ -301,6 +301,26 @@ async function main() {
   rec('Export reminders rejects GET (state-changing, not link-clickable)',
       eq((await req('GET', `/api/exports/reminders/${period.id}`, { jar: planner })).status, 405));
   rec('Export status report', eq((await req('GET', `/api/exports/status-report/${period.id}`, { jar: planner })).status, 200));
+  // Every download is a workbook (0.20.0): a Dutch Excel opened the CSVs
+  // in one column. A zip starts with "PK".
+  const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+  for (const [label, method, path] of [
+    ['rooster', 'GET', `/api/exports/assignments/${period.id}`],
+    ['statusrapport', 'GET', `/api/exports/status-report/${period.id}`],
+    ['voorkeurenoverzicht', 'GET', `/api/exports/preferences/${period.id}`],
+    ['uitnodigingen', 'POST', `/api/exports/invitations/${period.id}`],
+    ['wijzigingsgeschiedenis', 'GET', `/api/exports/audit-trail/${period.id}`],
+  ]) {
+    const res = await fetch(BASE + path, { method, headers: { Cookie: ch(planner) } });
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    const type = res.headers.get('content-type');
+    const name = decodeURIComponent((res.headers.get('content-disposition') ?? '').split("UTF-8''")[1] ?? '');
+    rec(
+      `Download ${label} is an .xlsx workbook`,
+      res.status === 200 && type === XLSX_TYPE && bytes[0] === 0x50 && bytes[1] === 0x4b && name.endsWith('.xlsx'),
+      `status=${res.status} type=${type} name=${name}`
+    );
+  }
 
   // ---------- GENERATION + MANUAL COMPLETION ----------
   console.log('\n━━ GENERATION + MANUAL COMPLETION ━━');

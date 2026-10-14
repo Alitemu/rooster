@@ -22,7 +22,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
-import { parseCsv } from '@/lib/csv';
+import { readUploadedRows } from '@/lib/sheetUpload';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { periodRangeProblem } from '@/lib/isoDate';
@@ -665,8 +665,16 @@ export function SetupWizard({ period, onComplete }: Props) {
   };
 
   const handleBalancesFile = async (file: File) => {
-    const text = await file.text();
-    const [, ...dataLines] = parseCsv(text); // skip header row
+    let fileRows: string[][];
+    try {
+      // An Excel workbook or a CSV (lib/sheetUpload.ts).
+      fileRows = await readUploadedRows(file);
+    } catch (err) {
+      setBalanceRows([]);
+      setBalanceParseWarnings([err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.']);
+      return;
+    }
+    const [, ...dataLines] = fileRows; // skip header row
     const warnings: string[] = [];
     const seenCodenamen = new Set<string>();
     const rows: BalanceRow[] = [];
@@ -1549,7 +1557,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'balances' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Upload een CSV-bestand met beginsaldi uit de vorige periode: hoeveel diensten iemand
+              Upload een Excel- of CSV-bestand met beginsaldi uit de vorige periode: hoeveel diensten iemand
               per diensttype meer of minder heeft gedraaid dan het eigen streefaantal. Formaat:
             </p>
             {/* Audit 10: a planner importing the saldo of a period the app
@@ -1574,10 +1582,10 @@ export function SetupWizard({ period, onComplete }: Props) {
             </p>
 
             <div className="border-2 border-dashed rounded p-6 text-center">
-              <p className="text-sm text-neutral-600 mb-2">Sleep een CSV hierheen of klik om te selecteren</p>
+              <p className="text-sm text-neutral-600 mb-2">Sleep een bestand hierheen of klik om te selecteren</p>
               <input
                 type="file"
-                accept=".csv"
+                accept=".xlsx,.csv"
                 className="w-full"
                 onChange={(e) => e.target.files?.[0] && handleBalancesFile(e.target.files[0])}
               />

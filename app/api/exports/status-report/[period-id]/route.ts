@@ -1,7 +1,7 @@
 /**
  * Status Report Export Route
  *
- * GET /api/exports/status-report/[period-id] - Generate CSV of per-person
+ * GET /api/exports/status-report/[period-id] - a workbook of per-person
  * submission status, matching what the Planner Dashboard's Staff Status
  * table shows.
  */
@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { csvAttachment, csvField } from '@/lib/csv';
+import { xlsxDownload } from '@/lib/xlsxWrite';
 import type { ApiErrorResponse } from '@/types';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
@@ -76,28 +76,27 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
       BEVESTIGD: 'Bevestigd',
     };
 
-    const csvLines: string[] = [
-      'Codenaam,Status,Ingediend op,Geblokkeerde dagen,Heeft deeltijdpatroon',
-      ...rows.map(
-        (r) =>
-          [
-            csvField(r.codenaam),
-            csvField(statusLabels[r.status] || r.status),
-            csvField(r.submitted_at || ''),
-            r.blocked_days_count,
-            csvField(r.has_parttime_patterns),
-          ].join(',')
-      ),
-    ];
-
-    const csvContent = csvLines.join('\n');
-
-    return new NextResponse(csvContent, {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': csvAttachment('status_report', period.naam),
+    return xlsxDownload(
+      {
+        name: 'Status',
+        columns: [
+          { header: 'Codenaam' },
+          { header: 'Status' },
+          { header: 'Ingediend op' },
+          { header: 'Geblokkeerde dagen' },
+          { header: 'Heeft deeltijdpatroon' },
+        ],
+        rows: rows.map((r) => [
+          r.codenaam,
+          statusLabels[r.status] || r.status,
+          r.submitted_at ? { moment: r.submitted_at } : null,
+          r.blocked_days_count,
+          r.has_parttime_patterns,
+        ]),
       },
-    });
+      'statusrapport',
+      period.naam
+    );
   } catch (error) {
     return internalErrorResponse('export-status-report', error);
   }

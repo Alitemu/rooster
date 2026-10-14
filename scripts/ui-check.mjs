@@ -275,6 +275,27 @@ const overloopRange = await page.evaluate(
   `${BASE}/api/periods/${period.id}/prior-assignments`
 );
 const [rangeStart] = overloopRange.data.date_range;
+
+// The roster download itself, a workbook since 0.20.0, goes in as it is:
+// read by the server (POST /api/planner/read-workbook, through the base
+// path a sub-folder build tests) and previewed like a CSV. All its days
+// lie in this period, after the carry-over window.
+const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const rosterDownload = await page.evaluate(async (url) => {
+  const res = await fetch(url);
+  return { type: res.headers.get('Content-Type'), bytes: Array.from(new Uint8Array(await res.arrayBuffer())) };
+}, `${BASE}/api/exports/assignments/${period.id}`);
+const assignmentTotal = db.prepare('SELECT COUNT(*) c FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(period.id).c;
+await page.setInputFiles('input[type="file"]', { name: 'rooster.xlsx', mimeType: XLSX_TYPE, buffer: Buffer.from(rosterDownload.bytes) });
+await page.waitForTimeout(800);
+rec(
+  'The roster download is a workbook, and the upload takes it as it is',
+  rosterDownload.type === XLSX_TYPE &&
+    assignmentTotal > 0 &&
+    (await page.locator(`text=0 regels binnen het overloopvenster gevonden, ${assignmentTotal} daarbuiten genegeerd`).isVisible().catch(() => false)),
+  `type=${rosterDownload.type} toewijzingen=${assignmentTotal}`
+);
+
 const csvContent = [
   'Datum,Week,Diensttype,Codenaam',
   `"${rangeStart}",1,"Avond","Persoon-01"`,

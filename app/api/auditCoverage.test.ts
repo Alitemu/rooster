@@ -29,6 +29,7 @@ const EXEMPT: Record<string, string> = {
   'planner/period/[id]/remind': 'every send is in notification_log',
   'planner/period/[id]/ledger-corrections': 'each ledger row carries aangemaakt_door and reden',
   'planner/period/[id]/import-balances': 'each ledger row carries aangemaakt_door and reden',
+  'planner/read-workbook': 'reads an uploaded workbook and returns its rows, writes nothing',
 };
 
 const apiRoot = path.join(process.cwd(), 'app/api');

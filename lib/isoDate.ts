@@ -41,6 +41,23 @@ export function parseDutchOrIsoDate(value: string): string | null {
   return isValidIsoDate(datum) ? datum : null;
 }
 
+/** Excel's day number (1 = 1900-01-01, with its 1900 leap-day quirk) as YYYY-MM-DD. */
+export function excelSerialToDate(serial: number): string {
+  const ms = Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * A date cell of a planner's upload: Excel's day number when it came from
+ * a workbook (lib/xlsx.ts gives a date cell's number, the downloads write
+ * real dates), otherwise as parseDutchOrIsoDate reads text. YYYY-MM-DD or
+ * null.
+ */
+export function parseSheetDate(value: string): string | null {
+  if (/^\d{5}(\.0+)?$/.test(value.trim())) return excelSerialToDate(Number(value));
+  return parseDutchOrIsoDate(value);
+}
+
 /**
  * The longest a period may be, in days: two years, and some room for
  * rounding to whole ISO weeks. There was no limit at all, and every day

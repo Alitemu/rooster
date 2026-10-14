@@ -1,7 +1,7 @@
 /**
  * Audit Trail Export Route
  *
- * GET /api/exports/audit-trail/[period-id] - CSV of every manual change
+ * GET /api/exports/audit-trail/[period-id] - a workbook of every manual change
  * to this period's assignments, for accountability toward staff ("why was
  * I moved off this shift" should always have a answerable, downloadable
  * record).
@@ -24,7 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
-import { csvAttachment, csvField } from '@/lib/csv';
+import { xlsxDownload } from '@/lib/xlsxWrite';
 import type { ApiErrorResponse } from '@/types';
 
 const TELLER_LABELS: Record<string, string> = {
@@ -178,28 +178,33 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
 
     rows.sort((a, b) => a.wijziging_op.localeCompare(b.wijziging_op));
 
-    const csvLines = [
-      'Datum wijziging,Actie,Betreft,Dienstdatum,Diensttype,Reden,Overrule,Aangepast door',
-      ...rows.map((r) =>
-        [
-          csvField(r.wijziging_op),
-          csvField(r.actie),
-          csvField(r.persoon),
-          csvField(r.dienst_datum),
-          csvField(r.teller),
-          csvField(r.reden),
-          csvField(r.overrule),
-          csvField(r.door),
-        ].join(',')
-      ),
-    ];
-
-    return new NextResponse(csvLines.join('\n'), {
-      headers: {
-        'Content-Type': 'text/csv; charset=utf-8',
-        'Content-Disposition': csvAttachment('wijzigingsgeschiedenis', period.naam),
+    return xlsxDownload(
+      {
+        name: 'Wijzigingsgeschiedenis',
+        columns: [
+          { header: 'Datum wijziging' },
+          { header: 'Actie' },
+          { header: 'Betreft' },
+          { header: 'Dienstdatum' },
+          { header: 'Diensttype' },
+          { header: 'Reden' },
+          { header: 'Overrule' },
+          { header: 'Aangepast door' },
+        ],
+        rows: rows.map((r) => [
+          { moment: r.wijziging_op },
+          r.actie,
+          r.persoon,
+          { date: r.dienst_datum },
+          r.teller,
+          r.reden,
+          r.overrule,
+          r.door,
+        ]),
       },
-    });
+      'wijzigingsgeschiedenis',
+      period.naam
+    );
   } catch (error) {
     return internalErrorResponse('export-audit-trail', error);
   }

@@ -2,8 +2,8 @@
  * Bulk import of the preferences overview (GET /api/exports/preferences)
  * after it was filled in and saved in Excel: the same grid, one row per
  * shift slot, one column per codenaam, read from the .xlsx (lib/xlsx.ts).
- * Only .xlsx: a CSV that Excel re-saves loses its separator or encoding
- * depending on the machine. A test tool for the beheerder only (POST
+ * The overview is a workbook itself since 0.20.0. Only .xlsx: a CSV that
+ * Excel re-saves loses its separator or encoding depending on the machine. A test tool for the beheerder only (POST
  * /api/admin/period/[id]/preferences-import).
  *
  * Only markings made by hand are imported. A cell the export wrote with a
@@ -22,12 +22,12 @@
  */
 
 import { db } from '@/db/client';
-import { readFirstSheet, excelSerialToDate, XlsxError } from './xlsx';
+import { readFirstSheet, XlsxError } from './xlsx';
 import { markSubmissionStarted } from './submissionStatus';
 import { syncPatternsForPerson } from './parttimeSync';
 import { syncAbsencesForPerson } from './absenceSync';
 import { writePreferencesBackup } from './preferencesBackup';
-import { parseDutchOrIsoDate } from './isoDate';
+import { parseSheetDate } from './isoDate';
 import { withoutFormulaGuard } from './csv';
 
 type Level = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
@@ -77,15 +77,6 @@ interface Write {
   level: Level | null;
 }
 
-/**
- * Excel reads 2027-01-04 in the downloaded file as a date and stores it as
- * its day number; typed as text it can be 2027-01-04 or 4-1-2027.
- */
-export function parseDatum(value: string): string | null {
-  if (/^\d{5}(\.0+)?$/.test(value)) return excelSerialToDate(Number(value));
-  return parseDutchOrIsoDate(value);
-}
-
 function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: Write[] } {
   const problemen: string[] = [];
   const wijzigingen: ImportChange[] = [];
@@ -120,8 +111,9 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
     const naam = header[col];
     if (!naam) continue;
     // A codenaam starting with =, +, - or @ was written as '-Anna by the
-    // export (lib/csv.ts guards against spreadsheet formulas), and Excel
-    // keeps that apostrophe: try the name without it too (audit 7).
+    // CSV export before 0.20.0 (lib/csv.ts guards against spreadsheet
+    // formulas), and Excel keeps that apostrophe: try the name without it
+    // too (audit 7). The workbook holds the name as it is.
     const unguarded = withoutFormulaGuard(naam);
     const person =
       exact.get(naam) ?? anyCase.get(naam.toLowerCase()) ?? exact.get(unguarded) ?? anyCase.get(unguarded.toLowerCase());
@@ -163,7 +155,8 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const regel = r + 1;
-    const datum = parseDatum(row[datumCol] ?? '');
+    // A date cell is Excel's day number; typed as text it can be 2027-01-04 or 4-1-2027.
+    const datum = parseSheetDate(row[datumCol] ?? '');
     const dienstWoord = (row[dienstCol] ?? '').toLowerCase();
     const teller = TELLER_BY_WORD[dienstWoord];
     if (!datum || !teller) {

@@ -3,13 +3,15 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
+import { readFirstSheet, readPart } from '@/lib/xlsx';
 import { GET } from './route';
 
 /**
  * The hard rules: one row per slot of this period, one column per
  * participant, every marking in words in the right cell with why it is
  * there, an empty cell where nothing was marked - and nothing from another
- * period. Only a planner may download it.
+ * period. Only a planner may download it. It is a workbook, the date a
+ * real date (lib/xlsxWrite.ts).
  */
 
 const createdPeriodIds: string[] = [];
@@ -91,17 +93,18 @@ function join(personId: string, poolId: string): void {
   ).run(crypto.randomUUID(), personId, poolId);
 }
 
+const fromSerial = (serial: string) => new Date(Date.UTC(1899, 11, 30) + Number(serial) * 86400000).toISOString().slice(0, 10);
+
 /**
- * The body split into rows of raw cells, after checking it starts with the
- * UTF-8 byte order mark (read as bytes: res.text() drops the mark).
+ * The workbook's rows as text, every row as wide as the header (the reader
+ * leaves trailing empty cells out) and the dates, which Excel stores as
+ * day numbers, as YYYY-MM-DD again.
  */
 async function grid(periodId: string, plannerId: string): Promise<string[][]> {
-  const bytes = await exportBytes(periodId, plannerId);
-  expect(Array.from(bytes.slice(0, 3))).toEqual([0xef, 0xbb, 0xbf]);
-  return new TextDecoder()
-    .decode(bytes)
-    .split('\r\n')
-    .map((line) => line.split(';').map((c) => c.replace(/^"|"$/g, '')));
+  const rows = readFirstSheet(Buffer.from(await exportBytes(periodId, plannerId)));
+  return rows.map((cells, i) =>
+    Array.from({ length: rows[0].length }, (_, c) => (i > 0 && c === 0 ? fromSerial(cells[0]) : (cells[c] ?? '')))
+  );
 }
 
 function codenaam(personId: string): string {
@@ -124,6 +127,7 @@ async function exportBytes(periodId: string, plannerId: string): Promise<Uint8Ar
     params: Promise.resolve({ 'period-id': periodId }),
   });
   expect(res.status).toBe(200);
+  expect(res.headers.get('Content-Type')).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   return new Uint8Array(await res.arrayBuffer());
 }
 
@@ -198,6 +202,23 @@ describe('GET /api/exports/preferences/[period-id]', () => {
     expect(row('2027-01-04')[col(b)]).toBe('');
     expect(row('2027-01-13')[col(a)]).toBe('');
     expect(rows.slice(1).every((r) => r[col(leeg)] === '')).toBe(true);
+  });
+
+  it('holds the date as a date and keeps the first four columns in view and on paper', async () => {
+    const poolId = createPool();
+    const avond = createShiftType(poolId, 'AVOND');
+    const planner = createPerson('PLANNER');
+    join(createPerson(), poolId);
+    const periodId = createPeriod(poolId, 'Voorjaar 2027', '2027-01-04', '2027-01-17');
+    createSlot(periodId, avond, '2027-01-04', 1);
+
+    const book = Buffer.from(await exportBytes(periodId, planner));
+    const sheet = readPart(book, 'xl/worksheets/sheet1.xml')!;
+    // 46391 is 4 January 2027; style 2 is the date format.
+    expect(sheet).toContain('<c r="A2" s="2"><v>46391</v></c>');
+    expect(sheet).toContain('<pane xSplit="4" ySplit="1"');
+    expect(sheet).toContain('<printOptions gridLines="1"/>');
+    expect(readPart(book, 'xl/workbook.xml')).toContain("'Voorkeuren'!$A:$D,'Voorkeuren'!$1:$1");
   });
 
   // Reported by the planner: someone removed from the pool after marking

@@ -1,10 +1,11 @@
 /**
- * Shared CSV field/filename helpers for the planner's exports
- * (invitations, audit-trail, status-report).
+ * CSV for the files the app writes for itself (the preferences backups,
+ * lib/preferencesBackup.ts) and reads from a planner's upload (beginsaldi,
+ * "Eerdere toewijzingen").
  *
- * Was duplicated near-identically in all three routes; kept in one place
- * now so a fix like the formula-injection guard below only has to happen
- * once.
+ * The downloads are workbooks now (lib/xlsxWrite.ts); the formula guard
+ * below stays for the backups, which are written to be opened in a
+ * spreadsheet, and withoutFormulaGuard for a CSV download from before.
  */
 
 // Leading =, +, -, @ (also tab/CR, which some spreadsheet apps treat the
@@ -41,36 +42,6 @@ export function withoutFormulaGuard(value: string): string {
 export function csvField(value: string | number | null | undefined): string {
   const str = guardFormulaInjection(String(value ?? ''));
   return `"${str.replace(/"/g, '""')}"`;
-}
-
-/**
- * Sanitize free text (e.g. a period's planner-entered naam) for use inside
- * a quoted Content-Disposition filename - a `"` would break out of the
- * quoted string and a CR/LF could corrupt the response header.
- */
-export function sanitizeFilenamePart(value: string): string {
-  return value.replace(/[\r\n"\\]/g, '_');
-}
-
-/**
- * The Content-Disposition value for a CSV download named `${prefix}_${naam}.csv`.
- *
- * A header value may only hold characters up to U+00FF; a period name with
- * an en dash (Word and macOS type one for " - "), a euro sign or an emoji
- * made building the header throw, and every export of that period answer
- * 500 (audit 7). So two names, as RFC 6266 has it: `filename` in plain
- * ASCII (accents dropped, anything else an underscore) for any browser,
- * and `filename*` with the name as it is, percent-encoded UTF-8, which
- * every current browser prefers.
- */
-export function csvAttachment(prefix: string, naam: string): string {
-  const name = `${prefix}_${sanitizeFilenamePart(naam.replace(/ /g, '_'))}.csv`;
-  const ascii = name
-    .normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\x20-\x7e]/g, '_');
-  const encoded = encodeURIComponent(name).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 /**

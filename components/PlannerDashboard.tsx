@@ -814,7 +814,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
             De vensterregel (niemand twee keer binnen het ingestelde venster) geldt ook over de
             grens van de vorige periode heen. De solver moet dus weten wie aan het eind daarvan
             welke dienst had. Hier leg je dat vast. Dat gaat automatisch vanuit de vorige
-            gepubliceerde periode, via een CSV-bestand of met de hand. Bevestigen is verplicht
+            gepubliceerde periode, met een geüpload rooster of met de hand. Bevestigen is verplicht
             voordat je het rooster kunt genereren. Alleen de allereerste periode van een team slaat
             dit over, want die heeft niets om over te dragen.
           </p>
@@ -1216,7 +1216,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               href={withBasePath(`/api/exports/assignments/${periodId}`)}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
             >
-              📅 Rooster downloaden (CSV)
+              📅 Rooster downloaden (Excel)
             </a>
           )}
         </div>

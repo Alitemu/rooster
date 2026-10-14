@@ -5,6 +5,7 @@ import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { buildXlsx } from '@/tests/fixtures/buildXlsx';
+import { readFirstSheet } from '@/lib/xlsx';
 import { POST } from './route';
 import { GET as exportPreferences } from '../../../../exports/preferences/[period-id]/route';
 
@@ -106,20 +107,24 @@ type Grid = Array<Array<string | number | null>>;
 
 const serial = (datum: string) => (Date.parse(`${datum}T00:00:00Z`) - Date.UTC(1899, 11, 30)) / 86400000;
 
-/** The downloaded overview as Excel opens it: the dates become day numbers, the weeks numbers. */
-async function exported(f: Fixture): Promise<Grid> {
+/** The downloaded overview, the file itself. */
+async function download(f: Fixture): Promise<Buffer> {
   const res = await exportPreferences(req(`/api/exports/preferences/${f.periodId}`, f.admin), {
     params: Promise.resolve({ 'period-id': f.periodId }),
   });
-  // trimStart also drops the byte order mark the export starts with.
-  const lines = (await res.text()).trimStart().split('\r\n');
-  return lines.map((line, i) => {
-    const cells: Array<string | number> = line.split(';').map((c) => c.replace(/^"|"$/g, ''));
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/** The downloaded overview as Excel holds it: the dates day numbers, the weeks numbers. */
+async function exported(f: Fixture): Promise<Grid> {
+  const rows = readFirstSheet(await download(f));
+  return rows.map((cells, i) => {
+    const full: Array<string | number> = Array.from({ length: rows[0].length }, (_, c) => cells[c] ?? '');
     if (i > 0) {
-      cells[0] = serial(String(cells[0]));
-      cells[2] = Number(cells[2]);
+      full[0] = Number(full[0]);
+      full[2] = Number(full[2]);
     }
-    return cells;
+    return full;
   });
 }
 
@@ -174,6 +179,20 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     const { body } = await importXlsx(f, await exported(f), false);
     expect(body.data.wijzigingen).toEqual([]);
     expect(body.data.problemen).toEqual([]);
+    expect(body.data.overgeslagen).toBe(1);
+  });
+
+  // 0.20.0: the overview is a workbook itself, so the downloaded file goes
+  // back in as it is, without "Opslaan als" first.
+  it('reads the downloaded file itself back, changing nothing', async () => {
+    const f = createFixture();
+    const [a, b] = f.people;
+    mark(a.id, f.slots[0].id, 'VOORKEUR');
+    mark(b.id, f.slots[2].id, 'ABSOLUUT', 'PARTTIME');
+    const { status, body } = await importXlsx(f, await download(f), false);
+    expect(status, JSON.stringify(body)).toBe(200);
+    expect(body.data.problemen).toEqual([]);
+    expect(body.data.wijzigingen).toEqual([]);
     expect(body.data.overgeslagen).toBe(1);
   });
 
