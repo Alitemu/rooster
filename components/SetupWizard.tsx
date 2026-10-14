@@ -26,6 +26,7 @@ import { readUploadedRows } from '@/lib/sheetUpload';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { periodRangeProblem } from '@/lib/isoDate';
+import { validateRulesetFields } from '@/lib/rulesetValidation';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -230,6 +231,8 @@ function datumKort(datum: string): string {
   if (!datum) return '';
   return new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
 }
+
+const COUNTER_NAAM: Record<string, string> = { AVOND: 'avond', WEEKEND: 'weekend', FEESTDAG: 'feestdag' };
 
 export function SetupWizard({ period, onComplete }: Props) {
   const router = useRouter();
@@ -776,6 +779,44 @@ export function SetupWizard({ period, onComplete }: Props) {
     setCorrections((prev) => prev.filter((c) => c.id !== id));
   };
 
+  // The ruleset "Periode openen" freezes onto the period, and the
+  // "Venster" step checks with the server's own rules before moving on
+  // (audit 15): a minimum above a maximum came back from the server only
+  // at the last step.
+  const wizardRuleset = () => ({
+    // Kept for anything still reading the old singular field (see
+    // open/route.ts's RulesetConfig) - not itself consulted by
+    // generation once the two fields below are present.
+    windowWeeks: windowConfig.windowWeeksAvond,
+    windowWeeksAvond: windowConfig.windowWeeksAvond,
+    windowWeeksWeekendFeestdag: windowConfig.windowWeeksWeekendFeestdag,
+    bandAvond: [windowConfig.band_min.AVOND, windowConfig.band_max.AVOND],
+    bandWeekend: [windowConfig.band_min.WEEKEND, windowConfig.band_max.WEEKEND],
+    bandFeestdag: [windowConfig.band_min.FEESTDAG, windowConfig.band_max.FEESTDAG],
+    distributionMode: distributionConfig.mode,
+    blockBudget: {
+      AVOND: { maxFraction: blockBudgetConfig.hardPercent / 100 },
+      WEEKEND: { maxFraction: blockBudgetConfig.hardPercent / 100 },
+      FEESTDAG: { maxFraction: blockBudgetConfig.hardPercent / 100 },
+      parttimeExempt: blockBudgetConfig.parttimeExempt,
+    },
+    softBlockBudget: {
+      AVOND: { maxFraction: blockBudgetConfig.softPercent / 100 },
+      WEEKEND: { maxFraction: blockBudgetConfig.softPercent / 100 },
+      FEESTDAG: { maxFraction: blockBudgetConfig.softPercent / 100 },
+      parttimeExempt: blockBudgetConfig.parttimeExempt,
+    },
+    // New periods default to the Prioriteitenplanner (strict
+    // priority order: dekking > eerlijkheid > liever-niet >
+    // voorkeur) rather than the older Puntenplanner (weighted sum) -
+    // a planner can still switch a period back to 'weighted' later
+    // via "Geavanceerde instellingen". Periods opened before this
+    // field existed have no objectiveMode in their frozen ruleset at
+    // all, and the solver's own backward-compat default for that
+    // case is 'weighted', not this one - see solver/main.py.
+    objectiveMode: 'lexicographic',
+  });
+
   const handleOpenPeriod = async () => {
     setLoading(true);
     setError(null);
@@ -790,39 +831,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           start_datum: periodData.start_datum,
           eind_datum: periodData.eind_datum,
           deadline: periodData.deadline,
-          ruleset: {
-            // Kept for anything still reading the old singular field (see
-            // open/route.ts's RulesetConfig) - not itself consulted by
-            // generation once the two fields below are present.
-            windowWeeks: windowConfig.windowWeeksAvond,
-            windowWeeksAvond: windowConfig.windowWeeksAvond,
-            windowWeeksWeekendFeestdag: windowConfig.windowWeeksWeekendFeestdag,
-            bandAvond: [windowConfig.band_min.AVOND, windowConfig.band_max.AVOND],
-            bandWeekend: [windowConfig.band_min.WEEKEND, windowConfig.band_max.WEEKEND],
-            bandFeestdag: [windowConfig.band_min.FEESTDAG, windowConfig.band_max.FEESTDAG],
-            distributionMode: distributionConfig.mode,
-            blockBudget: {
-              AVOND: { maxFraction: blockBudgetConfig.hardPercent / 100 },
-              WEEKEND: { maxFraction: blockBudgetConfig.hardPercent / 100 },
-              FEESTDAG: { maxFraction: blockBudgetConfig.hardPercent / 100 },
-              parttimeExempt: blockBudgetConfig.parttimeExempt,
-            },
-            softBlockBudget: {
-              AVOND: { maxFraction: blockBudgetConfig.softPercent / 100 },
-              WEEKEND: { maxFraction: blockBudgetConfig.softPercent / 100 },
-              FEESTDAG: { maxFraction: blockBudgetConfig.softPercent / 100 },
-              parttimeExempt: blockBudgetConfig.parttimeExempt,
-            },
-            // New periods default to the Prioriteitenplanner (strict
-            // priority order: dekking > eerlijkheid > liever-niet >
-            // voorkeur) rather than the older Puntenplanner (weighted sum) -
-            // a planner can still switch a period back to 'weighted' later
-            // via "Geavanceerde instellingen". Periods opened before this
-            // field existed have no objectiveMode in their frozen ruleset at
-            // all, and the solver's own backward-compat default for that
-            // case is 'weighted', not this one - see solver/main.py.
-            objectiveMode: 'lexicographic',
-          },
+          ruleset: wizardRuleset(),
         }),
       });
       const openData = await openRes.json();
@@ -938,12 +947,15 @@ export function SetupWizard({ period, onComplete }: Props) {
   };
 
   const handleNext = () => {
-    if (currentStep === 'period') {
-      const validationError = validatePeriodStep();
-      if (validationError) {
-        setError(validationError);
-        return;
-      }
+    const validationError =
+      currentStep === 'period'
+        ? validatePeriodStep()
+        : currentStep === 'window'
+          ? (validateRulesetFields(wizardRuleset(), { requireBands: true })?.message ?? null)
+          : null;
+    if (validationError) {
+      setError(validationError);
+      return;
     }
 
     setError(null);
@@ -967,8 +979,11 @@ export function SetupWizard({ period, onComplete }: Props) {
   const handleStepClick = (targetStep: Step) => {
     const currentIndex = steps.findIndex((s) => s.id === currentStep);
     const targetIndex = steps.findIndex((s) => s.id === targetStep);
-    if (targetIndex > currentIndex && currentStep === 'period') {
-      const validationError = validatePeriodStep();
+    if (targetIndex > currentIndex && (currentStep === 'period' || currentStep === 'window')) {
+      const validationError =
+        currentStep === 'period'
+          ? validatePeriodStep()
+          : (validateRulesetFields(wizardRuleset(), { requireBands: true })?.message ?? null);
       if (validationError) {
         setError(validationError);
         return;
@@ -1393,9 +1408,7 @@ export function SetupWizard({ period, onComplete }: Props) {
               <div className="grid grid-cols-2 gap-4">
                 {['AVOND', 'WEEKEND', 'FEESTDAG'].map((counter) => (
                   <div key={counter}>
-                    <label className="block text-xs font-medium mb-2">
-                      {counter === 'AVOND' ? 'Avond' : counter === 'WEEKEND' ? 'Weekend' : 'Feestdag'}
-                    </label>
+                    <p className="block text-xs font-medium mb-2 capitalize">{COUNTER_NAAM[counter]}</p>
                     <div className="flex gap-2">
                       <input
                         type="number"
@@ -1413,6 +1426,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                         }}
                         className="w-1/2 px-2 py-1 border rounded text-sm"
                         placeholder="Min"
+                        aria-label={`Streefbereik ${COUNTER_NAAM[counter]} minimum`}
                       />
                       <input
                         type="number"
@@ -1430,6 +1444,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                         }}
                         className="w-1/2 px-2 py-1 border rounded text-sm"
                         placeholder="Max"
+                        aria-label={`Streefbereik ${COUNTER_NAAM[counter]} maximum`}
                       />
                     </div>
                   </div>

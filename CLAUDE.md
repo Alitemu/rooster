@@ -649,7 +649,10 @@ out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
 - **objectiveMode lexicographic** (solver/solver.py `_solve_lexicographic`):
   each phase starts from the previous phase's solution as hints, and a
   phase that finds nothing in its time falls back to the last phase that
-  did (a warning in the solver log), never to an empty roster. The run is
+  did (a warning in the solver log), never to an empty roster. The phases
+  after it still run from that roster (only phase 1 finding nothing ends
+  the run): they were skipped, so "eerlijkheid" out of time meant
+  liever-niet and voorkeur were never looked at (audit 15). The run is
   OPTIMAL only when every phase was proven optimal; otherwise FEASIBLE,
   so the dialog offers "langer proberen". It reported the last phase's
   status: a phase 1 out of time with 8 shifts empty and a last phase
@@ -659,8 +662,10 @@ out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
   to the ones after it: every phase had a fixed share decided up front,
   and the planner's scenario used 67 of 120 seconds (audit 14). A larger
   share for phase 1 was tried and left it at 3 empty shifts instead of 8
-  on OR-Tools 9.8; weighted, the default, left 1 in the same 120 s, so
-  the split stayed even.
+  on OR-Tools 9.8; weighted left 1 in the same 120 s, so the split stayed
+  even. Lexicographic is what the wizard opens every new period with
+  (objectiveMode in the frozen ruleset); weighted is the default only for
+  a period frozen before that field existed.
 
 ## Absences and part-time over what someone marked by hand
 

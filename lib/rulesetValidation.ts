@@ -102,31 +102,33 @@ export function validateRulesetFields(
     }
   }
 
-  for (const key of ['bandAvond', 'bandWeekend', 'bandFeestdag'] as const) {
+  // In the words of the screen, never the field name: "bandAvond: min en
+  // max ... (min <= max)" reached the wizard as it was (audit 15).
+  const bandLabels = [
+    ['bandAvond', 'Streefbereik avond'],
+    ['bandWeekend', 'Streefbereik weekend'],
+    ['bandFeestdag', 'Streefbereik feestdag'],
+  ] as const;
+  for (const [key, label] of bandLabels) {
     const band = input[key];
-    if (band === undefined) {
-      if (options.requireBands) {
-        return {
-          code: 'INVALID_BAND',
-          message: `${key}: min en max moeten hele getallen zijn (min <= max, min >= 0)`,
-        };
-      }
-      continue;
-    }
-    if (!isValidBand(band)) {
+    if (band === undefined ? options.requireBands : !isValidBand(band)) {
       return {
         code: 'INVALID_BAND',
-        message: `${key}: min en max moeten hele getallen zijn (min <= max, min >= 0)`,
+        message: `${label}: vul twee hele getallen van 0 of meer in. Het minimum mag niet hoger zijn dan het maximum.`,
       };
     }
   }
 
-  for (const key of ['blockBudget', 'softBlockBudget'] as const) {
+  const budgetLabels = [
+    ['blockBudget', 'Blokkadebudget geblokkeerd'],
+    ['softBlockBudget', 'Blokkadebudget liever niet'],
+  ] as const;
+  for (const [key, label] of budgetLabels) {
     const budget = input[key];
     if (budget !== undefined && !isValidBudget(budget)) {
       return {
         code: 'INVALID_BUDGET',
-        message: `${key}: percentage per teller moet tussen 0 en 100 liggen`,
+        message: `${label}: vul een percentage tussen 0 en 100 in`,
       };
     }
   }

@@ -282,3 +282,65 @@ describe('holidays.ts', () => {
     });
   });
 });
+
+/**
+ * Every year from 1900 to 2400, held against a second calculation that
+ * shares no code with lib/holidays.ts (audit 15): Gauss's Easter
+ * algorithm, and the weekday each derived feestdag must fall on. The
+ * fixed years above check a dozen dates; this checks five centuries.
+ */
+describe('feestdagen 1900-2400 against an independent calculation', () => {
+  function gaussEaster(year: number): string {
+    const a = year % 19;
+    const b = year % 4;
+    const c = year % 7;
+    const k = Math.floor(year / 100);
+    const p = Math.floor((13 + 8 * k) / 25);
+    const q = Math.floor(k / 4);
+    const M = (15 - p + k - q) % 30;
+    const N = (4 + k - q) % 7;
+    const d = (19 * a + M) % 30;
+    const e = (2 * b + 4 * c + 6 * d + N) % 7;
+    let offset = 22 + d + e; // days after the last of February: 22 March + d + e
+    if (d === 29 && e === 6) offset = 50; // 19 April
+    else if (d === 28 && e === 6 && (11 * M + 11) % 30 < 19) offset = 49; // 18 April
+    const date = new Date(Date.UTC(year, 2, 1) + (offset - 1) * 86_400_000);
+    return date.toISOString().slice(0, 10);
+  }
+  const plus = (iso: string, days: number) =>
+    new Date(Date.parse(`${iso}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  const weekday = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay();
+  const years = Array.from({ length: 501 }, (_, i) => 1900 + i);
+
+  it('puts Pasen, Hemelvaart and Pinksteren where Gauss does, on the right weekday', () => {
+    for (const year of years) {
+      const byGroup = (g: string) => getHolidaysForYear(year).filter((h) => h.group === g).map((h) => h.date);
+      const easter = gaussEaster(year);
+      expect(byGroup('PASEN'), `Pasen ${year}`).toEqual([easter, plus(easter, 1)]);
+      expect(weekday(easter), `Eerste Paasdag ${year} on a Sunday`).toBe(0);
+      expect(byGroup('HEMELVAART'), `Hemelvaart ${year}`).toEqual([plus(easter, 39)]);
+      expect(weekday(plus(easter, 39)), `Hemelvaart ${year} on a Thursday`).toBe(4);
+      expect(byGroup('PINKSTEREN'), `Pinksteren ${year}`).toEqual([plus(easter, 49), plus(easter, 50)]);
+    }
+  });
+
+  it('puts Koningsdag on 27 April, or on the Saturday 26 April when the 27th is a Sunday', () => {
+    for (const year of years) {
+      const koningsdag = getHolidaysForYear(year).filter((h) => h.group === 'KONINGSDAG').map((h) => h.date);
+      const the27th = `${year}-04-27`;
+      expect(koningsdag, `Koningsdag ${year}`).toEqual([weekday(the27th) === 0 ? `${year}-04-26` : the27th]);
+      expect(weekday(koningsdag[0]), `Koningsdag ${year} never on a Sunday`).not.toBe(0);
+    }
+  });
+
+  it('gives Bevrijdingsdag every fifth year only, and the fixed days every year', () => {
+    for (const year of years) {
+      const dates = getHolidaysForYear(year).map((h) => `${h.group}:${h.date}`);
+      expect(dates.includes(`BEVRIJDINGSDAG:${year}-05-05`), `Bevrijdingsdag ${year}`).toBe(year % 5 === 0);
+      for (const fixed of [`NIEUWJAAR:${year}-01-01`, `KERST:${year}-12-25`, `KERST:${year}-12-26`]) {
+        expect(dates, `${fixed}`).toContain(fixed);
+      }
+      expect(getHolidaysForYear(year).every((h) => h.date.startsWith(`${year}-`))).toBe(true);
+    }
+  });
+});

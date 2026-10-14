@@ -152,3 +152,36 @@ describe('validateRulesetFields', () => {
     });
   });
 });
+
+/**
+ * What a planner reads when the wizard's "Periode openen" or the
+ * generation dialog is refused (audit 15): the words of the screen, never
+ * a field name from the code. "bandAvond: min en max moeten hele getallen
+ * zijn (min <= max, min >= 0)" and "blockBudget: percentage per teller"
+ * reached the wizard as they were, where nobody calls it a band, a
+ * teller or min <= max (CLAUDE.md: never "band" to users, it is "bereik").
+ */
+describe('every refusal is worded for the planner', () => {
+  const invalid: Array<Record<string, unknown>> = [
+    { bandAvond: [6, 5] },
+    { bandWeekend: [-1, 2] },
+    { bandFeestdag: [0.5, 1] },
+    { bandAvond: 'x' },
+    { blockBudget: { AVOND: { maxFraction: 2 } } },
+    { softBlockBudget: { WEEKEND: { maxFraction: -0.1 } } },
+    { windowWeeksAvond: 99 },
+  ];
+
+  it.each(invalid)('%j', (input) => {
+    const result = validateRulesetFields(input);
+    expect(result).not.toBeNull();
+    const message = result!.message;
+    expect(message).not.toMatch(/\b[a-z]+[A-Z][A-Za-z]*\b/); // a camelCase field name
+    expect(message).not.toMatch(/\bband\b|teller|<=|>=/i);
+  });
+
+  it('names the streefbereik it is about', () => {
+    expect(validateRulesetFields({ bandWeekend: [3, 2] })!.message).toMatch(/streefbereik weekend/i);
+    expect(validateRulesetFields({}, { requireBands: true })!.message).toMatch(/streefbereik avond/i);
+  });
+});
