@@ -70,10 +70,14 @@ async function req(method, path, { jar, body } = {}) {
   } catch {}
   return { status: res.status, json };
 }
-async function generate(periodId, jar) {
-  const start = await req('POST', `/api/planner/period/${periodId}/generate-roster`, { jar, body: { time_limit_seconds: TIME_LIMIT } });
+// "Langer proberen", as the dialog offers it (RosterGenerationDialog
+// nextTimeLimitSeconds: 300 s, then 600 s after its own 120 s), scaled to
+// SCENARIO_TIME.
+const LONGER = [TIME_LIMIT * 2.5, TIME_LIMIT * 5];
+async function generateOnce(periodId, jar, timeLimit) {
+  const start = await req('POST', `/api/planner/period/${periodId}/generate-roster`, { jar, body: { time_limit_seconds: timeLimit } });
   if (start.status !== 200) return { ok: false, detail: `start ${start.status} ${JSON.stringify(start.json)}` };
-  const until = Date.now() + 5 * 60 * 1000;
+  const until = Date.now() + (timeLimit + 300) * 1000;
   while (Date.now() < until) {
     const poll = await req('GET', `/api/planner/period/${periodId}/generate-roster/status?job_id=${start.json.data.job_id}`, { jar });
     const status = poll.json?.data?.status;
@@ -82,6 +86,25 @@ async function generate(periodId, jar) {
     await new Promise((r) => setTimeout(r, 500));
   }
   return { ok: false, detail: 'timed out' };
+}
+// What a planner does: generate, and while shifts stay empty and the
+// dialog offers it (a CP-SAT result not proven best), try longer. The
+// window counts days since 0.22.0, and at window 2 these 15 people need
+// more than the first 120 seconds (audit 14).
+async function generate(periodId, jar) {
+  let run = await generateOnce(periodId, jar, TIME_LIMIT);
+  let langer = 0;
+  while (
+    run.ok &&
+    run.result.unfilled_slots.length > 0 &&
+    run.result.solver_status === 'FEASIBLE' &&
+    run.result.attempts_tried === undefined &&
+    langer < LONGER.length
+  ) {
+    run = await generateOnce(periodId, jar, LONGER[langer++]);
+  }
+  if (run.ok) run.langer = langer;
+  return run;
 }
 const insert = (table, row) => {
   const id = nodeCrypto.randomUUID();
@@ -210,10 +233,12 @@ for (const objectiveMode of MODES) {
     const tekort = Object.values(r.bereik_tekort ?? {}).reduce((sum, t) => sum + t.diensten - t.maximaal, 0);
     // "Willekeurig" is a heuristic over a few attempts: it may leave a
     // dienst another method fills (audit 9: Pinksterzondag at window 2).
-    (objectiveMode === 'randomized' ? warn : rec)(
+    // "Herhaalplanner" runs 3 attempts here, where the dialog runs up to
+    // 100: at window 2 those 3 may leave a dienst too (audit 14).
+    (objectiveMode === 'randomized' || (objectiveMode === 'multi_start' && windowWeeks >= 2) ? warn : rec)(
       `${label}: every dienst filled`,
       r.unfilled_slots.length === 0,
-      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld`
+      `${r.unfilled_slots.length} leeg, ${r.assignments_created} ingedeeld${run.langer ? `, na ${run.langer}x langer proberen` : ''}`
     );
     rec(`${label}: the explanation never claims more than is empty`, tekort <= r.unfilled_slots.length, `tekort ${tekort}`);
 

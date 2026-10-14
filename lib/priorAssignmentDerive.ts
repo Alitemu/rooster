@@ -2,8 +2,8 @@
  * Prior Assignment Derivation Utilities
  *
  * Derives prior assignments (overloopdiensten) from the previous period's
- * published assignments. These are the last N-1 weeks of the prior period
- * that carry over to the new period.
+ * published assignments. These are the last N weeks of the prior period
+ * that carry over to the new period (calculatePriorAssignmentWeeks).
  *
  * Convention: Dates stored as ISO-8601 strings (YYYY-MM-DD)
  */

@@ -150,13 +150,26 @@ opens a "choose a new password" session (see Authentication):
   suggested streefbereik, generated with all four methods at windows 0-2
   (SCENARIO_MODES, SCENARIO_WINDOWS, SCENARIO_TIME, default the dialog's
   120 s): nothing empty, no rule broken, then "Rooster verwijderen" and
-  again. "Willekeurig" leaving a dienst is a warning, not a failure.
+  again. Where shifts stay empty and the dialog offers "langer proberen"
+  (a CP-SAT result not proven best) it tries longer like a planner does,
+  2.5 and then 5 times SCENARIO_TIME (300 and 600 s): since the window
+  counts days, window 2 for these 15 people needs more than 120 seconds
+  (audit 14). "Willekeurig" leaving a dienst is a warning, not a failure,
+  and so is "Herhaalplanner" at window 2 (3 attempts here, up to 100 in
+  the dialog).
 
 `node scripts/mutation-check.mjs [name]` needs nothing running: it breaks
 one hard rule at a time (a guard removed or weakened in the source),
 runs only the tests meant to guard it and expects them to fail; a
 mutation that survives is a rule without a test. The source is restored
-after each. Add a mutation when adding a guard. Two sweeps run with npm
+after each. Add a mutation when adding a guard. A solver guard gets one
+too (`runner: 'pytest'`, run in ./solver with SOLVER_PYTHON, a Python
+with solver/requirements.txt and pytest; audit 14).
+
+The solver the browser checks talk to should run the OR-Tools version
+of solver/requirements.txt (9.8, the image's): another version searches
+differently: in the planner's scenario at window 2 and 120 seconds
+lexicographic left 1 shift empty on 9.12 and 8 on 9.8 (audit 14). Two sweeps run with npm
 test: app/api/auditCoverage.test.ts (every planner route that changes data
 writes the audit log or states why not) and app/dutchStyle.test.ts (no
 joining dash, no comma before en/of in user-facing text).
@@ -550,7 +563,11 @@ out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
   swap) gets them, a day nobody works loses its row, rows from a period
   that is no longer the previous one go; HANDMATIG rows (including a day
   the planner cleared) and ONBEKEND stay. They used to be a snapshot that
-  "afleiden" again never touched (audit 10).
+  "afleiden" again never touched (audit 10). A row is a day before the
+  period: the PATCH route refuses a day of the period or after it (400
+  NOT_BEFORE_PERIOD, 404 for no period), as the CSV import skips one. It
+  took any date, and a row inside the period was a fixed shift for the
+  solver and the window checks that nobody held (audit 14).
 - **Feestdagdiensten over the years** (lib/feestdagHistory.ts, the
   planner's words after audit 10: "het gaat om het aantal over de jaren
   heen en niet om een specifieke feestdag"). A period has few of them, so
@@ -624,11 +641,26 @@ out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
   "Nobody twice in one ISO week" follows from this rule at 1 or more, not
   a rule of its own. The holiday spread (holidaySpreadWeeks) still counts
   weeks. The way back, should rosters no longer solve, is the previous
-  release (0.21.0), not a setting.
+  release (0.21.0), not a setting. The period header shows the windows
+  the period generates with (lib/windowWeeks.ts vensterTekst, pure, so the
+  page can use resolveWindowWeeks too): it showed the old `windowWeeks`,
+  which the wizard sets to the avond window at opening and the generation
+  dialog never changes (audit 14).
 - **objectiveMode lexicographic** (solver/solver.py `_solve_lexicographic`):
   each phase starts from the previous phase's solution as hints, and a
   phase that finds nothing in its time falls back to the last phase that
-  did (a warning in the solver log), never to an empty roster.
+  did (a warning in the solver log), never to an empty roster. The run is
+  OPTIMAL only when every phase was proven optimal; otherwise FEASIBLE,
+  so the dialog offers "langer proberen". It reported the last phase's
+  status: a phase 1 out of time with 8 shifts empty and a last phase
+  proven optimal behind it read as "Optimaal" (audit 14). Each phase
+  gets what is left of the budget over the phases still to run, so time a
+  quick phase leaves (or a phase with nothing to do, never started) goes
+  to the ones after it: every phase had a fixed share decided up front,
+  and the planner's scenario used 67 of 120 seconds (audit 14). A larger
+  share for phase 1 was tried and left it at 3 empty shifts instead of 8
+  on OR-Tools 9.8; weighted, the default, left 1 in the same 120 s, so
+  the split stayed even.
 
 ## Absences and part-time over what someone marked by hand
 

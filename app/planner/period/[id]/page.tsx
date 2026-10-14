@@ -11,6 +11,7 @@ import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
+import { vensterTekst } from '@/lib/windowWeeks';
 
 interface Period {
   id: string;
@@ -265,7 +266,7 @@ export default function PlannerPeriodPage() {
                 const cfg = JSON.parse(period.bevroren_ruleset_json);
                 return (
                   <p className="text-sm text-neutral-600 mt-1">
-                    Venster: {cfg.windowWeeks ?? '?'} weken · Avond {cfg.bandAvond?.[0] ?? '?'}-
+                    {vensterTekst(cfg)} · Avond {cfg.bandAvond?.[0] ?? '?'}-
                     {cfg.bandAvond?.[1] ?? '?'} · Weekend {cfg.bandWeekend?.[0] ?? '?'}-
                     {cfg.bandWeekend?.[1] ?? '?'} · Feestdag {cfg.bandFeestdag?.[0] ?? '?'}-
                     {cfg.bandFeestdag?.[1] ?? '?'}

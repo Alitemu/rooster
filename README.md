@@ -246,9 +246,14 @@ rooster op in plaats van alles-of-niets - de planner vult de resterende
 gaten handmatig aan, met duidelijke aanduiding wie een gat wél of niet mag
 invullen.
 
-Een venster van N weken betekent: hoogstens één dienst in elke N
-opeenvolgende weken. Bij 1 is dat één dienst per week, dus nooit twee in
-dezelfde ISO-week. Bij 0 geldt geen vensterregel.
+Een venster van N weken betekent: minstens 7 × N dagen tussen twee
+diensten van dezelfde persoon (sinds 0.22.0). Bij 2 weken zitten er dus
+minstens 14 dagen tussen. Een zondag en de maandag twee weken later liggen
+8 dagen uit elkaar en mogen dan niet. Bij 1 week is het minstens 7 dagen,
+dus nooit twee diensten in dezelfde ISO-week. Bij 0 geldt geen
+vensterregel. Met een apart venster voor avonddiensten en voor weekend- en
+feestdagdiensten geldt het kleinste van de twee ook tussen een avonddienst
+en een weekend- of feestdagdienst.
 
 ## Conventies
 

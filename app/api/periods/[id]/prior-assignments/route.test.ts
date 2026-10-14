@@ -158,12 +158,60 @@ describe('PATCH /api/periods/[id]/prior-assignments', () => {
     expect(rowCount(periodId)).toBe(0);
   });
 
+  // "Eerdere toewijzingen" are shifts before the period (audit 14). A row on
+  // a day of the period itself became a fixed shift for the solver and the
+  // window checks, while nobody holds that shift in the roster; the CSV
+  // import already skipped such rows, this route took any date.
+  it.each([
+    ['its first day', '2027-01-04'],
+    ['a day in it', '2027-01-10'],
+    ['a day after it', '2027-02-01'],
+  ])('refuses %s, never touching the database', async (_label, datum) => {
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const periodId = createPeriod(poolId);
+
+    const res = await PATCH(plannerRequest(periodId, planner, { datum, teller: 'AVOND' }), {
+      params: Promise.resolve({ id: periodId }),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('NOT_BEFORE_PERIOD');
+    expect(rowCount(periodId)).toBe(0);
+  });
+
+  it('answers 404 for a period that does not exist', async () => {
+    const planner = createPerson('PLANNER');
+    const missing = crypto.randomUUID();
+
+    const res = await PATCH(plannerRequest(missing, planner, { datum: '2027-01-03', teller: 'AVOND' }), {
+      params: Promise.resolve({ id: missing }),
+    });
+
+    expect(res.status).toBe(404);
+    expect(rowCount(missing)).toBe(0);
+  });
+
+  it('accepts the day before the period starts', async () => {
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const periodId = createPeriod(poolId);
+
+    const res = await PATCH(plannerRequest(periodId, planner, { datum: '2027-01-03', teller: 'WEEKEND' }), {
+      params: Promise.resolve({ id: periodId }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(rowCount(periodId)).toBe(1);
+  });
+
   it('accepts a real date and inserts a correctly-computed iso_jaar/iso_week', async () => {
     const poolId = createPool();
     const planner = createPerson('PLANNER');
     const periodId = createPeriod(poolId);
 
-    const res = await PATCH(plannerRequest(periodId, planner, { datum: '2027-01-04', teller: 'AVOND' }), {
+    // The last day before the period: Sunday 3 January 2027 is ISO week 53 of 2026.
+    const res = await PATCH(plannerRequest(periodId, planner, { datum: '2027-01-03', teller: 'AVOND' }), {
       params: Promise.resolve({ id: periodId }),
     });
 
@@ -171,6 +219,6 @@ describe('PATCH /api/periods/[id]/prior-assignments', () => {
     const row = db
       .prepare('SELECT datum, iso_jaar, iso_week FROM dienstrooster_prior_assignment WHERE period_id = ?')
       .get(periodId) as { datum: string; iso_jaar: number; iso_week: number };
-    expect(row).toEqual({ datum: '2027-01-04', iso_jaar: 2027, iso_week: 1 });
+    expect(row).toEqual({ datum: '2027-01-03', iso_jaar: 2026, iso_week: 53 });
   });
 });

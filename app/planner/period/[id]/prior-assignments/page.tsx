@@ -2,8 +2,10 @@
  * Prior Assignments (Overloop) Screen
  *
  * Lets a planner review, auto-derive, manually fill in, and confirm the
- * carry-over assignments from the last (windowWeeks - 1) weeks of the
- * previous published period, before roster generation is allowed to run.
+ * carry-over assignments from the last windowWeeks weeks of the previous
+ * published period (lib/priorAssignmentDerive.ts
+ * calculatePriorAssignmentWeeks), before roster generation is allowed to
+ * run.
  */
 
 'use client';

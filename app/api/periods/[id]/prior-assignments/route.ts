@@ -213,6 +213,23 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       return badRequest('INVALID_INPUT', 'Codenaam moet tekst zijn');
     }
 
+    const period = db.prepare('SELECT start_datum FROM dienstrooster_schedule_period WHERE id = ?').get(id) as
+      | { start_datum: string }
+      | undefined;
+    if (!period) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
+      };
+      return NextResponse.json(response, { status: 404 });
+    }
+    // Shifts before the period only, as the CSV import keeps them: a row on
+    // a day of the period became a fixed shift for the solver and the
+    // window checks that nobody holds in the roster (audit 14).
+    if (datum >= period.start_datum) {
+      return badRequest('NOT_BEFORE_PERIOD', 'Een eerdere toewijzing ligt vóór de start van de periode');
+    }
+
     // Look up person ID if person_codenaam provided
     let personId: string | null = null;
     if (person_codenaam) {
