@@ -326,7 +326,15 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   "Eerdere toewijzingen") skips it, and lib/previousPeriod.test.ts fails on
   any other place that queries it itself (audit 10). Carry-over already
   booked from it stays when nothing else comes before, as for a roster
-  unpublished for the moment.
+  unpublished for the moment. Participants lose it at once on every route
+  that looks up a period or acts on a swap request: lib/periodAccess.ts
+  isPeriodVisibleToPerson, LIVE_SWAP_REQUEST_SQL for approve, reject and
+  cancel, or `verwijderd_op IS NULL` in the query
+  (app/api/person/trashSweep.test.ts). The own roster and every swap action
+  still answered, and approving moved shifts in a roster nobody could see
+  (audit 13). Restoring refuses days another period took meanwhile (409
+  PERIOD_OVERLAP, lib/periodOverlap.ts); a draft comes back whatever its
+  dates.
 - **While a generation runs** manual-assign, reassign, delete and undo
   answer 409 (GENERATION_RUNNING_MESSAGE, lib/rosterGenerationJobs.ts), as
   reset-roster does: the solver's answer, written when it comes, was built
@@ -471,6 +479,13 @@ the membership changed after the roster was made).
 member's start) is the Dutch calendar date (lib/localDate.ts
 `localIsoDate`, Europe/Amsterdam), never `toISOString().slice(0, 10)`: that
 is UTC, still yesterday until 01:00 or 02:00 Dutch time.
+
+Adding someone reuses an existing participant by codenaam, the exact
+spelling; one that differs only in capitals is refused (409
+CODENAAM_HOOFDLETTERS, naming the existing one). "persoon-01" for an
+existing "Persoon-01" made a second person, and the first one's
+carry-over, feestdagdiensten over the years and the flow's row for their
+mail stayed behind (audit 13).
 
 Adding someone on "Personeel beheren" starts with the dates of the pool's
 one period being rostered (OPEN, GESLOTEN or GEGENEREERD), like the setup
@@ -665,7 +680,10 @@ van de N wijzigingen"), and the button reads "Toepassen (N wijzigingen)":
 "En nog 3442 wijzigingen" under 50 of 3492 read as the total, and the
 check seemed to count wrong until Toepassen said 3492 (the planner's
 report; tests/e2e/preferences-import.e2e.ts). Check and apply count the
-same plan.
+same plan. A codenaam column twice, a day twice and a column for someone
+who does not take part in the period (loadPeriodMembers) are problems:
+the copies counted twice and the last one won, and any participant's
+codenaam was taken, also from another pool (audit 13).
 
 ## Capacity Check (Live)
 
