@@ -263,6 +263,67 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     expect(markings(f)).toEqual({});
   });
 
+  // Audit 13: a codenaam column twice (copied in Excel to fill it in more
+  // easily) counted every cell twice and wrote the last of the two; a day
+  // twice wrote whichever row came last. The count the planner read, and
+  // what landed, depended on the order of the copies.
+  it('refuses a codenaam column that appears twice', async () => {
+    const f = createFixture();
+    const [a] = f.people;
+    const grid = edit(await exported(f), [[f.slots[0].datum, a.codenaam, 'geblokkeerd']]);
+    const col = grid[0].indexOf(a.codenaam);
+    for (const row of grid) row.push(row[col]);
+    grid[1][grid[0].length - 1] = 'voorkeur';
+    const check = await importXlsx(f, grid, false);
+    expect(check.body.data.problemen).toEqual([`Kolom "${a.codenaam}" staat twee keer in het bestand.`]);
+    expect((await importXlsx(f, grid, true)).status).toBe(400);
+    expect(markings(f)).toEqual({});
+  });
+
+  it('refuses a day that appears twice', async () => {
+    const f = createFixture();
+    const [a] = f.people;
+    const grid = edit(await exported(f), [[f.slots[0].datum, a.codenaam, 'geblokkeerd']]);
+    const copy = [...grid[1]];
+    copy[grid[0].indexOf(a.codenaam)] = 'voorkeur';
+    grid.push(copy);
+    const check = await importXlsx(f, grid, false);
+    expect(check.body.data.problemen).toEqual([`Regel ${grid.length}: de avonddienst op ${f.slots[0].datum} staat ook op regel 2.`]);
+    expect((await importXlsx(f, grid, true)).status).toBe(400);
+    expect(markings(f)).toEqual({});
+  });
+
+  // Audit 13: any participant's codenaam was taken, also someone outside
+  // this period's pool or whose Geldig vanaf/tot misses the period. The
+  // markings went in and counted as changes, while the overview, the
+  // solver and "Status voorkeuren" never see that person.
+  it('refuses a column for someone who does not take part in this period', async () => {
+    const f = createFixture();
+    const outsider = crypto.randomUUID();
+    const gone = crypto.randomUUID();
+    for (const id of [outsider, gone]) {
+      db.prepare(`INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`).run(id, `Imp-${id.slice(0, 8)}`);
+      f.people.push({ id, codenaam: `Imp-${id.slice(0, 8)}` });
+    }
+    // A member once, gone before the period starts.
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot) VALUES (?, ?, ?, '2020-01-01', '2026-12-31')`
+    ).run(crypto.randomUUID(), gone, f.poolId);
+    const grid = await exported(f);
+    for (const id of [outsider, gone]) {
+      grid[0].push(`Imp-${id.slice(0, 8)}`);
+      grid.slice(1).forEach((row) => row.push('geblokkeerd'));
+    }
+    const check = await importXlsx(f, grid, false);
+    expect(check.body.data.problemen).toEqual([
+      `Kolom "Imp-${outsider.slice(0, 8)}": doet niet mee aan deze periode.`,
+      `Kolom "Imp-${gone.slice(0, 8)}": doet niet mee aan deze periode.`,
+    ]);
+    expect(check.body.data.wijzigingen).toEqual([]);
+    expect((await importXlsx(f, grid, true)).status).toBe(400);
+    expect(markings(f)).toEqual({});
+  });
+
   it('leaves a period whose roster is built alone', async () => {
     const f = createFixture();
     const grid = await exported(f);

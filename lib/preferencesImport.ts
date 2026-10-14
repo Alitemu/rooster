@@ -29,6 +29,7 @@ import { syncAbsencesForPerson } from './absenceSync';
 import { writePreferencesBackup } from './preferencesBackup';
 import { parseSheetDate } from './isoDate';
 import { withoutFormulaGuard } from './csv';
+import { loadPeriodMembers } from './rosterBands';
 
 type Level = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 
@@ -77,7 +78,15 @@ interface Write {
   level: Level | null;
 }
 
-function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: Write[] } {
+interface ImportPeriod {
+  id: string;
+  pool_id: string;
+  start_datum: string;
+  eind_datum: string;
+}
+
+function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; writes: Write[] } {
+  const periodId = period.id;
   const problemen: string[] = [];
   const wijzigingen: ImportChange[] = [];
   const writes: Write[] = [];
@@ -105,6 +114,11 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
     .all() as Array<{ id: string; codenaam: string }>;
   const exact = new Map(people.map((p) => [p.codenaam, p]));
   const anyCase = new Map(people.map((p) => [p.codenaam.toLowerCase(), p]));
+  // Only the period's own participants, the people the overview has a
+  // column for and the solver builds the roster for. Any participant's
+  // codenaam was taken (audit 13): someone from another pool, or whose
+  // Geldig vanaf/tot misses the period, got markings nothing ever reads.
+  const members = new Set(loadPeriodMembers(period).map((m) => m.id));
 
   const columns: Array<{ col: number; id: string; codenaam: string }> = [];
   for (let col = firstPersonCol; col < header.length; col++) {
@@ -119,6 +133,16 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
       exact.get(naam) ?? anyCase.get(naam.toLowerCase()) ?? exact.get(unguarded) ?? anyCase.get(unguarded.toLowerCase());
     if (!person) {
       problemen.push(`Kolom "${naam}": geen deelnemer met deze codenaam.`);
+      continue;
+    }
+    if (!members.has(person.id)) {
+      problemen.push(`Kolom "${naam}": doet niet mee aan deze periode.`);
+      continue;
+    }
+    // A column copied in Excel counted every cell twice and wrote whichever
+    // copy came last (audit 13).
+    if (columns.some((c) => c.id === person.id)) {
+      problemen.push(`Kolom "${naam}" staat twee keer in het bestand.`);
       continue;
     }
     columns.push({ col, id: person.id, codenaam: person.codenaam });
@@ -152,6 +176,9 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
     ).map((r) => [`${r.slot_id}|${r.person_id}`, r])
   );
 
+  // The row each day and dienst was first read on: a day twice wrote
+  // whichever row came last.
+  const seenOn = new Map<string, number>();
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r];
     const regel = r + 1;
@@ -168,6 +195,12 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
       problemen.push(`Regel ${regel}: geen ${dienstWoord} op ${datum} in deze periode.`);
       continue;
     }
+    const eerder = seenOn.get(slotId);
+    if (eerder !== undefined) {
+      problemen.push(`Regel ${regel}: de ${dienstWoord} op ${datum} staat ook op regel ${eerder}.`);
+      continue;
+    }
+    seenOn.set(slotId, regel);
 
     for (const { col, id, codenaam } of columns) {
       const cell = (row[col] ?? '').trim().toLowerCase();
@@ -215,8 +248,8 @@ export function importPreferences(actorId: string, periodId: string, bestand: un
     return { ok: false, status: 400, code: 'NO_FILE', message: 'Kies eerst een Excel-bestand.' };
   }
   const period = db
-    .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
-    .get(periodId) as { status: string } | undefined;
+    .prepare('SELECT id, pool_id, start_datum, eind_datum, status FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
+    .get(periodId) as (ImportPeriod & { status: string }) | undefined;
   if (!period) return { ok: false, status: 404, code: 'NOT_FOUND', message: 'Periode niet gevonden' };
   if (ROSTER_BUILT.includes(period.status)) {
     return {
@@ -234,7 +267,7 @@ export function importPreferences(actorId: string, periodId: string, bestand: un
     if (error instanceof XlsxError) return { ok: false, status: 400, code: 'NOT_XLSX', message: error.message };
     throw error;
   }
-  const { plan: result, writes } = plan(periodId, rows);
+  const { plan: result, writes } = plan(period, rows);
   if (!toepassen) return { ok: true, plan: result, toegepast: false };
   if (result.problemen.length > 0) {
     return {

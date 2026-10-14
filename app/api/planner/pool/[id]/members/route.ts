@@ -161,17 +161,28 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       // Reuse an existing person by codenaam (e.g. someone moving between
       // pools, or rejoining after their previous membership ended) rather
       // than creating a duplicate - codenaam is globally unique.
-      let person = db
-        .prepare('SELECT id, rol FROM dienstrooster_person WHERE codenaam = ?')
-        .get(codenaam) as { id: string; rol: string } | undefined;
+      // Looked up without regard to capitals, the exact spelling first:
+      // "persoon-01" for an existing "Persoon-01" made a second person, and
+      // the first one's carry-over, feestdagdiensten over the years and the
+      // flow's row for their mail stayed behind (audit 13).
+      const found = db
+        .prepare(
+          `SELECT id, rol, codenaam FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE
+           ORDER BY codenaam = ? DESC LIMIT 1`
+        )
+        .get(codenaam, codenaam) as { id: string; rol: string; codenaam: string } | undefined;
 
       // Only participants take shifts. Reusing by codenaam without this
       // check let the planner's own login ("planner") be added as a pool
       // member - it then showed up in the solver's headcount and bands
       // like anyone else.
-      if (person && person.rol !== 'DEELNEMER') {
+      if (found && found.rol !== 'DEELNEMER') {
         return { conflict: 'STAFF_ACCOUNT' as const };
       }
+      if (found && found.codenaam !== codenaam) {
+        return { conflict: 'CODENAAM_HOOFDLETTERS' as const, bestaand: found.codenaam };
+      }
+      let person: { id: string; rol: string } | undefined = found;
 
       if (!person) {
         const personId = crypto.randomUUID();
@@ -223,7 +234,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     let result:
       | { conflict: null; membershipId: string; personId: string }
       | { conflict: 'OVERLAP' }
-      | { conflict: 'STAFF_ACCOUNT' };
+      | { conflict: 'STAFF_ACCOUNT' }
+      | { conflict: 'CODENAAM_HOOFDLETTERS'; bestaand: string };
     try {
       result = addMember();
     } catch (error) {
@@ -246,6 +258,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         error: {
           code: 'STAFF_ACCOUNT',
           message: 'Deze codenaam hoort bij een planner- of beheerdersaccount en kan geen diensten draaien. Kies een andere codenaam.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
+    }
+
+    if (result.conflict === 'CODENAAM_HOOFDLETTERS') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'CODENAAM_HOOFDLETTERS',
+          message: `Er is al iemand met de codenaam "${result.bestaand}". Bedoel je die persoon, schrijf de codenaam dan precies zo. Anders kies je een andere codenaam.`,
         },
       };
       return NextResponse.json(response, { status: 409 });

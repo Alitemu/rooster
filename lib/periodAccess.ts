@@ -55,3 +55,14 @@ export function isPeriodVisibleToPerson(personId: string, period: PeriodScope): 
     .get(personId, period.pool_id, period.eind_datum, period.start_datum);
   return Boolean(viaMembership);
 }
+
+/**
+ * A swap request, read the way the participant's swap routes act on one:
+ * not at all once its period is in the prullenbak. Approving still moved
+ * the shifts of a roster nobody could see any more, and rejecting or
+ * withdrawing mailed colleagues about it (audit 13). It comes back with
+ * the period.
+ */
+export const LIVE_SWAP_REQUEST_SQL = `SELECT sr.* FROM dienstrooster_swap_request sr
+  JOIN dienstrooster_schedule_period p ON p.id = sr.periode_id
+  WHERE sr.id = ? AND p.verwijderd_op IS NULL`;

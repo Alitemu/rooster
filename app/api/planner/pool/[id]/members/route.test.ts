@@ -125,6 +125,29 @@ describe('POST /api/planner/pool/[id]/members', () => {
     expect((await res.json()).data.person_id).toBe(participant.id);
   });
 
+  // Audit 13: re-adding someone with their codenaam typed in other capitals
+  // made a second person. Their carry-over, feestdagdiensten over the years
+  // and the flow's row for their mail stayed with the first; the planner
+  // saw two people who looked like one.
+  it('refuses a codenaam that differs from an existing one only in capitals', async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const staff = createPerson('PLANNER');
+    const { poolId } = createPool();
+    const before = (db.prepare('SELECT COUNT(*) AS c FROM dienstrooster_person').get() as { c: number }).c;
+
+    const res = await addMember(planner.id, poolId, participant.codenaam.toLowerCase());
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe('CODENAAM_HOOFDLETTERS');
+    expect(body.error.message).toBe(
+      `Er is al iemand met de codenaam "${participant.codenaam}". Bedoel je die persoon, schrijf de codenaam dan precies zo. Anders kies je een andere codenaam.`
+    );
+    // Nor a participant who looks like a planner's login.
+    expect((await addMember(planner.id, poolId, staff.codenaam.toLowerCase())).status).toBe(409);
+    expect((db.prepare('SELECT COUNT(*) AS c FROM dienstrooster_person').get() as { c: number }).c).toBe(before);
+  });
+
   it("applies the new member's existing absence to a period that is already open", async () => {
     const planner = createPerson('PLANNER');
     const participant = createPerson('DEELNEMER');

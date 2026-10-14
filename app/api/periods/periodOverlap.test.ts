@@ -7,6 +7,7 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { softDeletePeriod } from '@/lib/periodTrash';
 import { POST as createPeriod } from '@/app/api/planner/periods/route';
 import { POST as openPeriod } from './[id]/open/route';
+import { POST as restorePeriod } from './[id]/restore/route';
 
 /**
  * The rule: every day belongs to at most one period of a pool (audit 12).
@@ -153,5 +154,36 @@ describe('every day belongs to at most one period of a pool', () => {
     });
     softDeletePeriod(trashed, ids.planner);
     expect((await create('2034-11-06', '2034-12-03')).status).toBe(201);
+  });
+
+  // Audit 13: a period in the prullenbak takes no days, so another could be
+  // opened on them meanwhile - and "Terugzetten" then put two periods on
+  // the same days after all, both rosters filling them.
+  it('refuses to restore a period onto days another one took while it was in the prullenbak', async () => {
+    const restore = (periodId: string) => restorePeriod(request(`/api/periods/${periodId}/restore`, {}), { params: Promise.resolve({ id: periodId }) });
+    const trashed = insert('dienstrooster_schedule_period', {
+      pool_id: ids.pool,
+      naam: 'Oud',
+      start_datum: '2035-01-01',
+      eind_datum: '2035-01-28',
+      deadline: '2034-07-01T12:00',
+      status: 'OPEN',
+      aangemaakt_op: new Date().toISOString(),
+    });
+    softDeletePeriod(trashed, ids.planner);
+    const draft = concept('2035-01-15', '2035-02-25');
+    softDeletePeriod(draft, ids.planner);
+    const next = concept('2035-01-15', '2035-02-25');
+    expect((await open(next, '2035-01-15', '2035-02-25')).status).toBe(200);
+
+    const res = await restore(trashed);
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe('PERIOD_OVERLAP');
+    expect(body.error.message).toMatch(/Volgende/);
+    const row = db.prepare('SELECT verwijderd_op FROM dienstrooster_schedule_period WHERE id = ?').get(trashed) as { verwijderd_op: string | null };
+    expect(row.verwijderd_op).not.toBeNull();
+    // A draft takes no days, so it comes back whatever its dates.
+    expect((await restore(draft)).status).toBe(200);
   });
 });

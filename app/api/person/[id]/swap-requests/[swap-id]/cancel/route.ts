@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { LIVE_SWAP_REQUEST_SQL } from '@/lib/periodAccess';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { internalErrorResponse } from '@/lib/api-errors';
@@ -35,7 +36,7 @@ export async function POST(
     const now = new Date().toISOString();
 
     const swapRequest = db
-      .prepare('SELECT * FROM dienstrooster_swap_request WHERE id = ?')
+      .prepare(LIVE_SWAP_REQUEST_SQL)
       .get(swapId) as any;
 
     if (!swapRequest) {

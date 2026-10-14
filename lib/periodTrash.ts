@@ -19,13 +19,14 @@
  */
 
 import { db } from '@/db/client';
+import { overlapMessage, overlappingPeriod } from './periodOverlap';
 
 export const RETENTION_DAYS = 30;
 
 export class PeriodTrashError extends Error {
   constructor(
     message: string,
-    public code: 'NOT_FOUND' | 'NOT_DELETED' | 'ALREADY_DELETED'
+    public code: 'NOT_FOUND' | 'NOT_DELETED' | 'ALREADY_DELETED' | 'PERIOD_OVERLAP'
   ) {
     super(message);
   }
@@ -34,13 +35,16 @@ export class PeriodTrashError extends Error {
 interface PeriodRow {
   id: string;
   naam: string;
+  pool_id: string;
+  start_datum: string;
+  eind_datum: string;
   status: string;
   verwijderd_op: string | null;
 }
 
 function getPeriod(periodId: string): PeriodRow | undefined {
   return db
-    .prepare('SELECT id, naam, status, verwijderd_op FROM dienstrooster_schedule_period WHERE id = ?')
+    .prepare('SELECT id, naam, pool_id, start_datum, eind_datum, status, verwijderd_op FROM dienstrooster_schedule_period WHERE id = ?')
     .get(periodId) as PeriodRow | undefined;
 }
 
@@ -83,6 +87,14 @@ export function restorePeriod(periodId: string, actorId: string): void {
   const period = getPeriod(periodId);
   if (!period) throw new PeriodTrashError(`Periode ${periodId} niet gevonden`, 'NOT_FOUND');
   if (!period.verwijderd_op) throw new PeriodTrashError('Periode staat niet in de prullenbak', 'NOT_DELETED');
+  // A period in the trash takes no days (lib/periodOverlap.ts), so another
+  // may have been opened on them meanwhile; coming back would put two
+  // periods, and two rosters, on the same days (audit 13). A draft takes
+  // no days either way.
+  if (period.status !== 'CONCEPT') {
+    const other = overlappingPeriod(period.pool_id, period.start_datum, period.eind_datum, period.id);
+    if (other) throw new PeriodTrashError(overlapMessage(other), 'PERIOD_OVERLAP');
+  }
 
   db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = NULL WHERE id = ?').run(periodId);
   logAudit(actorId, periodId, 'UPDATE', { verwijderd_op: period.verwijderd_op }, { verwijderd_op: null, type: 'RESTORE' });

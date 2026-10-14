@@ -8,7 +8,8 @@
  * achterwacht day. Nothing checked for overlap. Creating and opening a
  * period now refuse days another period of the pool already has - one past
  * CONCEPT (a draft has no slots yet and its dates are not final) and
- * outside the prullenbak.
+ * outside the prullenbak - and so does restoring one from the prullenbak
+ * (lib/periodTrash.ts, audit 13).
  */
 
 import { db } from '@/db/client';

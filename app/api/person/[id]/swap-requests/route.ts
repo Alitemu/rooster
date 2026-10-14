@@ -194,8 +194,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Only on a published roster, and only for shifts still ahead - see
     // lib/swapEligibility.ts for why both matter. Re-checked at approval
     // time too, since a period can move on while a request sits pending.
+    // Not in the prullenbak: a period there is gone for its participants (audit 13).
     const period = db
-      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
+      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
       .get(period_id as string) as { status: string; pool_id: string } | undefined;
     if (!period) {
       return NextResponse.json({ success: false, error: 'Periode niet gevonden' }, { status: 404 });

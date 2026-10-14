@@ -52,7 +52,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     }
 
     const period = db
-      .prepare('SELECT status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+      .prepare('SELECT status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
       .get(periodId) as { status: string; start_datum: string; eind_datum: string } | undefined;
 
     if (!period) {
