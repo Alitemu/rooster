@@ -15,7 +15,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { withBasePath } from '@/lib/basePath';
 import { localIsoDate } from '@/lib/localDate';
@@ -62,6 +62,21 @@ export default function PoolStaffPage() {
     deelnamefactor: 1,
   });
   const [addingMember, setAddingMember] = useState(false);
+  // Each error shows where it was made: under Toevoegen, or under the row
+  // being edited or removed. They all showed above the list, out of sight
+  // under a long one, at the planner's report.
+  const [addError, setAddError] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ membershipId: string; message: string } | null>(null);
+  const addErrorRef = useRef<HTMLDivElement>(null);
+  const rowErrorRef = useRef<HTMLDivElement>(null);
+  // Scrolled into sight when it appears: with the button at the bottom of
+  // the screen, the line under it is just out of view.
+  useEffect(() => {
+    if (addError) addErrorRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [addError]);
+  useEffect(() => {
+    if (rowError) rowErrorRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [rowError]);
 
   const [editingMembershipId, setEditingMembershipId] = useState<string | null>(null);
   const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '', deelnamefactor: 1 });
@@ -167,15 +182,15 @@ export default function PoolStaffPage() {
 
   const handleAddMember = async () => {
     if (!newMember.codenaam.trim() || !newMember.geldig_vanaf || !newMember.geldig_tot) {
-      setStaffError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
+      setAddError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
       return;
     }
     if (Number.isNaN(newMember.deelnamefactor)) {
-      setStaffError('Deelnamefactor is verplicht');
+      setAddError('Deelnamefactor is verplicht');
       return;
     }
     setAddingMember(true);
-    setStaffError(null);
+    setAddError(null);
     try {
       const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members`), {
         method: 'POST',
@@ -188,25 +203,25 @@ export default function PoolStaffPage() {
       setNewMember({ codenaam: '', geldig_vanaf: defaults.geldig_vanaf, geldig_tot: defaults.geldig_tot, deelnamefactor: 1 });
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Toevoegen mislukt');
+      setAddError(err instanceof Error ? err.message : 'Toevoegen mislukt');
     } finally {
       setAddingMember(false);
     }
   };
 
   const startEditMembership = (member: StaffMember) => {
-    setStaffError(null);
+    setRowError(null);
     setEditingMembershipId(member.id);
     setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot, deelnamefactor: member.deelnamefactor });
   };
 
   const handleSaveMembership = async (membershipId: string) => {
     if (Number.isNaN(editDates.deelnamefactor)) {
-      setStaffError('Deelnamefactor is verplicht');
+      setRowError({ membershipId, message: 'Deelnamefactor is verplicht' });
       return;
     }
     setSavingMembership(true);
-    setStaffError(null);
+    setRowError(null);
     try {
       const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/${membershipId}`), {
         method: 'PATCH',
@@ -219,7 +234,7 @@ export default function PoolStaffPage() {
       setEditingMembershipId(null);
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setRowError({ membershipId, message: err instanceof Error ? err.message : 'Opslaan mislukt' });
     } finally {
       setSavingMembership(false);
     }
@@ -231,7 +246,7 @@ export default function PoolStaffPage() {
       setRemovingMembershipId(membershipId);
       return;
     }
-    setStaffError(null);
+    setRowError(null);
     try {
       const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/${membershipId}`), { method: 'DELETE' });
       const data = await res.json();
@@ -240,7 +255,7 @@ export default function PoolStaffPage() {
       await loadStaff({ silent: true });
       await loadPendingUndo();
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      setRowError({ membershipId, message: err instanceof Error ? err.message : 'Verwijderen mislukt' });
     } finally {
       setRemovingMembershipId(null);
     }
@@ -324,92 +339,107 @@ export default function PoolStaffPage() {
               <tbody className="divide-y">
                 {members.map((member) => {
                   const isEditing = editingMembershipId === member.id;
+                  const error = rowError?.membershipId === member.id ? rowError.message : null;
                   return (
-                    <tr key={member.id} className="hover:bg-neutral-50">
-                      <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
-                      <td className="px-4 py-2 text-sm">
-                        <span className={member.is_active ? 'text-green-600 font-medium' : 'text-neutral-500'}>
-                          {member.is_active ? 'Actief' : member.geldig_vanaf > todayISO() ? 'Begint later' : 'Gestopt'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-sm">
-                        {isEditing ? (
-                          <input
-                            type="date"
-                            value={editDates.geldig_vanaf}
-                            onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
-                            className="px-2 py-1 border rounded text-sm w-36"
-                          />
-                        ) : (
-                          member.geldig_vanaf
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-sm">
-                        {isEditing ? (
-                          <input
-                            type="date"
-                            value={editDates.geldig_tot}
-                            onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
-                            className="px-2 py-1 border rounded text-sm w-36"
-                          />
-                        ) : (
-                          member.geldig_tot
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-sm">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            min="0.1"
-                            max="1"
-                            step="0.1"
-                            value={editDates.deelnamefactor}
-                            onChange={(e) =>
-                              setEditDates({ ...editDates, deelnamefactor: parseFloat(e.target.value) })
-                            }
-                            className="px-2 py-1 border rounded text-sm w-20"
-                          />
-                        ) : member.deelnamefactor < 1 ? (
-                          `${Math.round(member.deelnamefactor * 100)}%`
-                        ) : (
-                          'Voltijd'
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-sm whitespace-nowrap">
-                        {isEditing ? (
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => handleSaveMembership(member.id)}
-                              disabled={savingMembership}
-                              className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
-                            >
-                              {savingMembership ? 'Bezig…' : 'Opslaan'}
-                            </button>
-                            <button
-                              onClick={() => setEditingMembershipId(null)}
-                              className="text-xs font-medium text-neutral-600 hover:text-neutral-800"
-                            >
-                              Annuleren
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex gap-3">
-                            <button
-                              onClick={() => startEditMembership(member)}
-                              className="text-xs font-medium text-blue-600 hover:text-blue-800"
-                            >
-                              Bewerken
-                            </button>
-                            <button
-                              onClick={() => handleRemoveMembership(member.id)}
-                              className="text-xs font-medium text-red-600 hover:text-red-800"
-                            >
-                              {removingMembershipId === member.id ? 'Zeker weten?' : 'Verwijderen'}
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
+                    <Fragment key={member.id}>
+                      <tr className="hover:bg-neutral-50">
+                        <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
+                        <td className="px-4 py-2 text-sm">
+                          <span className={member.is_active ? 'text-green-600 font-medium' : 'text-neutral-500'}>
+                            {member.is_active ? 'Actief' : member.geldig_vanaf > todayISO() ? 'Begint later' : 'Gestopt'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              value={editDates.geldig_vanaf}
+                              onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
+                              className="px-2 py-1 border rounded text-sm w-36"
+                            />
+                          ) : (
+                            member.geldig_vanaf
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {isEditing ? (
+                            <input
+                              type="date"
+                              value={editDates.geldig_tot}
+                              onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
+                              className="px-2 py-1 border rounded text-sm w-36"
+                            />
+                          ) : (
+                            member.geldig_tot
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-sm">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              min="0.1"
+                              max="1"
+                              step="0.1"
+                              value={editDates.deelnamefactor}
+                              onChange={(e) =>
+                                setEditDates({ ...editDates, deelnamefactor: parseFloat(e.target.value) })
+                              }
+                              className="px-2 py-1 border rounded text-sm w-20"
+                            />
+                          ) : member.deelnamefactor < 1 ? (
+                            `${Math.round(member.deelnamefactor * 100)}%`
+                          ) : (
+                            'Voltijd'
+                          )}
+                        </td>
+                        <td className="px-4 py-2 text-sm whitespace-nowrap">
+                          {isEditing ? (
+                            <div className="flex gap-3">
+                              <button
+                                onClick={() => handleSaveMembership(member.id)}
+                                disabled={savingMembership}
+                                className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                              >
+                                {savingMembership ? 'Bezig…' : 'Opslaan'}
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingMembershipId(null);
+                                  setRowError(null);
+                                }}
+                                className="text-xs font-medium text-neutral-600 hover:text-neutral-800"
+                              >
+                                Annuleren
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-3">
+                              <button
+                                onClick={() => startEditMembership(member)}
+                                className="text-xs font-medium text-blue-600 hover:text-blue-800"
+                              >
+                                Bewerken
+                              </button>
+                              <button
+                                onClick={() => handleRemoveMembership(member.id)}
+                                className="text-xs font-medium text-red-600 hover:text-red-800"
+                              >
+                                {removingMembershipId === member.id ? 'Zeker weten?' : 'Verwijderen'}
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                      {error && (
+                        <tr>
+                          <td colSpan={6} className="px-4 pb-3">
+                            <div ref={rowErrorRef} role="alert" data-testid="rij-fout" className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">
+                              {error}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
                 {members.length === 0 && (
@@ -477,6 +507,11 @@ export default function PoolStaffPage() {
               </button>
             </div>
           </div>
+          {addError && (
+            <div ref={addErrorRef} role="alert" data-testid="toevoegen-fout" className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+              {addError}
+            </div>
+          )}
           <p className="text-xs text-neutral-600" data-testid="geldig-uitleg">
             {defaults.periode
               ? `Geldig vanaf en Geldig tot staan op de periode ${defaults.periode}. Doet deze persoon daarna ook mee? Zet Geldig tot dan later.`

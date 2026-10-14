@@ -479,6 +479,12 @@ today until 2029-12-31 (lib/membershipDefaults.ts). It used to start at
 today and an empty Geldig tot, and a planner who typed an end date short
 of the period got shifts nobody could take.
 
+A mistake on Personeel beheren is told where it was made
+(app/planner/pool/[id]/staff/page.tsx): under Toevoegen for a new member,
+under its own row for a change or a removal, scrolled into sight; only a
+failed load of the list shows above it. Everything showed above the list,
+out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
+
 ## Streefbereik, venster and the solver's phases
 
 - **Bands over the effective headcount.** The default band per teller is
