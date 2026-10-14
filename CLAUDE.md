@@ -660,6 +660,12 @@ guarded a codenaam starting with =, +, - or @ with an apostrophe, and
 Excel keeps it; the workbook holds the name as it is
 (preferences-import/roundtrip.test.ts, generated codenamen, the download
 itself and as Excel saves it again).
+The dialog lists the first 50 changes and says so ("Hieronder de eerste 50
+van de N wijzigingen"), and the button reads "Toepassen (N wijzigingen)":
+"En nog 3442 wijzigingen" under 50 of 3492 read as the total, and the
+check seemed to count wrong until Toepassen said 3492 (the planner's
+report; tests/e2e/preferences-import.e2e.ts). Check and apply count the
+same plan.
 
 ## Capacity Check (Live)
 

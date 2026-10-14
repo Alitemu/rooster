@@ -179,11 +179,21 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                         <li key={p}>{p}</li>
                       ))}
                     </ul>
-                    {plan.problemen.length > SHOWN && <p className="text-amber-900 mt-1">En nog {plan.problemen.length - SHOWN} meer.</p>}
+                    {plan.problemen.length > SHOWN && (
+                      <p className="text-amber-900 mt-1">De andere {plan.problemen.length - SHOWN} problemen staan niet in deze lijst.</p>
+                    )}
                   </div>
                 )}
                 {!plan.toegepast && plan.wijzigingen.length > 0 && (
                   <div className="overflow-x-auto">
+                    {/* The total stays the one above: "En nog 3442 wijzigingen"
+                        under the first 50 of 3492 read as the total, and the
+                        count looked wrong until Toepassen said 3492. */}
+                    {plan.wijzigingen.length > SHOWN && (
+                      <p className="text-neutral-600 mb-1" data-testid="import-lijst-uitleg">
+                        Hieronder de eerste {SHOWN} van de {plan.wijzigingen.length} wijzigingen.
+                      </p>
+                    )}
                     <table className="w-full text-left border-collapse">
                       <thead>
                         <tr className="border-b">
@@ -207,7 +217,10 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                       </tbody>
                     </table>
                     {plan.wijzigingen.length > SHOWN && (
-                      <p className="mt-1 text-neutral-600">En nog {plan.wijzigingen.length - SHOWN} wijzigingen.</p>
+                      <p className="mt-1 text-neutral-600" data-testid="import-lijst-rest">
+                        De andere {plan.wijzigingen.length - SHOWN} staan niet in deze lijst. Toepassen voert alle{' '}
+                        {plan.wijzigingen.length} wijzigingen door.
+                      </p>
                     )}
                   </div>
                 )}
@@ -237,7 +250,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                   disabled={busy}
                   className="flex-1 py-2 px-4 rounded font-medium bg-blue-700 text-white hover:bg-blue-800 transition-colors disabled:opacity-50"
                 >
-                  {busy ? 'Bezig...' : 'Toepassen'}
+                  {busy ? 'Bezig...' : `Toepassen (${plan.wijzigingen.length} ${plan.wijzigingen.length === 1 ? 'wijziging' : 'wijzigingen'})`}
                 </button>
               )}
             </div>
