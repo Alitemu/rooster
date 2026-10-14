@@ -1337,6 +1337,114 @@ def test_lexicographic_honours_preference_when_choice_is_otherwise_tied():
     assert assigned == ['p1'], f'expected the preferred person p1 to get the sole shift, got {assigned}'
 
 
+def _cp_solver_that_reports(monkeypatch, status_for_call):
+    """
+    Replace CP-SAT's CpSolver with one that solves as usual and then reports
+    status_for_call(n, real_status) for the n-th Solve (1-based): the phase
+    of a lexicographic run that ran out of its time, without a test that
+    depends on timing.
+    """
+    from ortools.sat.python import cp_model
+    real_solver = cp_model.CpSolver
+    calls = []
+
+    class ReportingSolver(real_solver):
+        def Solve(self, model, *args, **kwargs):
+            real_status = super().Solve(model, *args, **kwargs)
+            calls.append(real_status)
+            return status_for_call(len(calls), real_status)
+
+    monkeypatch.setattr(cp_model, 'CpSolver', ReportingSolver)
+    return calls
+
+
+def _lexicographic_case():
+    # Two people, a band to balance and a liever-niet: phases 1, 2, 2b and
+    # 3 all run, each proven optimal in a moment.
+    slots = make_slots(4)
+    people = ['p1', 'p2']
+    soft = {('p1', slots[0]['id']): 1.0}
+    return solve(people, slots, window_weeks=1, soft=soft, objective_mode='lexicographic',
+                 band={'AVOND': [2, 2], 'WEEKEND': [0, 4], 'FEESTDAG': [0, 4]})
+
+
+def test_lexicographic_is_optimal_only_when_every_phase_was(monkeypatch):
+    """
+    The reported status was the last phase's. Phase 1 (dekking) out of time
+    with shifts still empty, and the last phase proven optimal within what
+    phase 1 left it, read as "Optimaal": the dialog offered no "langer
+    proberen", where more time fills the roster (audit 14: 8 empty shifts
+    reported OPTIMAL at 120 seconds, none at 600).
+    """
+    from ortools.sat.python import cp_model
+    calls = _cp_solver_that_reports(
+        monkeypatch, lambda n, real: cp_model.FEASIBLE if n == 1 and real == cp_model.OPTIMAL else real)
+
+    result = _lexicographic_case()
+
+    assert len(calls) > 1 and all(s == cp_model.OPTIMAL for s in calls), calls
+    assert result['success']
+    assert result['diagnostics']['solver_status'] == 'FEASIBLE'
+
+
+def test_lexicographic_is_not_optimal_when_a_phase_found_nothing(monkeypatch):
+    """
+    A phase that found nothing in its time hands back the roster of the one
+    before it, and the phases after it never run: not proven either, so
+    FEASIBLE, never the earlier phase's OPTIMAL.
+    """
+    from ortools.sat.python import cp_model
+    _cp_solver_that_reports(monkeypatch, lambda n, real: cp_model.UNKNOWN if n == 2 else real)
+
+    result = _lexicographic_case()
+
+    assert result['success']
+    assert len(result['assignments']) == 4
+    assert result['diagnostics']['solver_status'] == 'FEASIBLE'
+
+
+def test_lexicographic_passes_time_a_phase_leaves_unused_on_to_the_next(monkeypatch):
+    """
+    Every phase got a fixed share of the budget, decided before the first
+    one ran: a phase finished in a moment, or one with nothing to do, left
+    its share unused, and a later phase stopped at its own share with time
+    on the clock (audit 14: 67 of 120 seconds used). Now each phase gets
+    what is left over the phases still to run, never more than the budget.
+    """
+    from ortools.sat.python import cp_model
+    real_solver = cp_model.CpSolver
+    limits = []
+
+    class RecordingSolver(real_solver):
+        def Solve(self, model, *args, **kwargs):
+            limits.append(self.parameters.max_time_in_seconds)
+            return super().Solve(model, *args, **kwargs)
+
+    monkeypatch.setattr(cp_model, 'CpSolver', RecordingSolver)
+    slots = make_slots(4)
+    soft = {('p1', slots[0]['id']): 1.0}
+    RosterSolver(time_limit_seconds=60).generate_roster(
+        period_id='test', people=['p1', 'p2'], slots=slots, blocked_slots=set(), soft_slots=soft,
+        band_ranges={'AVOND': [2, 2], 'WEEKEND': [0, 4], 'FEESTDAG': [0, 4]},
+        balances={p: {'AVOND': 0, 'WEEKEND': 0, 'FEESTDAG': 0} for p in ['p1', 'p2']},
+        window_weeks=1, objective_mode='lexicographic',
+    )
+
+    # Phases 1, 2, 2b and 3 run; 2c (no feestdagen) and 4 (no voorkeur) have nothing to do.
+    assert len(limits) == 4, limits
+    assert limits[0] == pytest.approx(15, abs=0.5), 'the budget over the four phases that run'
+    assert limits[-1] > 50, f'the last phase gets what the quick ones left, got {limits}'
+    assert all(limit <= 60 for limit in limits)
+
+
+def test_lexicographic_reports_optimal_when_every_phase_was_proven():
+    from ortools.sat.python import cp_model
+    result = _lexicographic_case()
+
+    assert result['success']
+    assert result['diagnostics']['solver_status'] == 'OPTIMAL'
+
+
 # ---------------------------------------------------------------------------
 # random_seed / diagnostics fields the "Herhaalplanner" multi-start loop
 # (Next.js) relies on to rank repeated /solve calls against each other

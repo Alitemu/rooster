@@ -9,7 +9,10 @@
  * without a test. The source is restored after every mutation, also when
  * the run is interrupted.
  *
- * Needs nothing running; uses the vitest test database like npm test.
+ * Needs nothing running; uses the vitest test database like npm test. A
+ * mutation with `runner: 'pytest'` breaks a solver rule and runs the
+ * solver's own tests in ./solver, with SOLVER_PYTHON (default python3): a
+ * Python with solver/requirements.txt and pytest installed.
  *   node scripts/mutation-check.mjs            # all
  *   node scripts/mutation-check.mjs reset      # only those whose name contains "reset"
  */
@@ -85,6 +88,45 @@ const MUTATIONS = [
     find: 'if (!TELLERS.includes(teller)) {',
     replace: 'if (false) {',
     tests: ['app/api/periods/[id]/prior-assignments/route.test'],
+  },
+  {
+    name: 'rooster vooraf: a day of the period itself taken as an eerdere toewijzing',
+    file: 'app/api/periods/[id]/prior-assignments/route.ts',
+    find: 'if (datum >= period.start_datum) {',
+    replace: 'if (false) {',
+    tests: ['app/api/periods/[id]/prior-assignments/route.test'],
+  },
+  {
+    name: 'solver: two shifts one day short of 7 x N days apart allowed again',
+    file: 'solver/constraints.py',
+    find: 'span = 7 * window_weeks',
+    replace: 'span = 7 * window_weeks - 1',
+    runner: 'pytest',
+    tests: ['test_solver.py', '-k', 'window'],
+  },
+  {
+    name: 'solver: an eerdere toewijzing one day short of the window allowed again',
+    file: 'solver/constraints.py',
+    find: "if abs(_day_ordinal(slot['datum']) - prior_day) < 7 * window_weeks:",
+    replace: "if abs(_day_ordinal(slot['datum']) - prior_day) < 7 * window_weeks - 1:",
+    runner: 'pytest',
+    tests: ['test_solver.py', '-k', 'window'],
+  },
+  {
+    name: 'greedy: two shifts one day short of 7 x N days apart allowed again',
+    file: 'solver/greedy.py',
+    find: 'abs(day - d) >= 7 * window_weeks',
+    replace: 'abs(day - d) >= 7 * window_weeks - 1',
+    runner: 'pytest',
+    tests: ['test_greedy.py', '-k', 'window'],
+  },
+  {
+    name: 'solver: the last lexicographic phase reports OPTIMAL for the whole run',
+    file: 'solver/solver.py',
+    find: "if result['status'] == 'OPTIMAL' and not every_phase_proven[0]:",
+    replace: 'if False:',
+    runner: 'pytest',
+    tests: ['test_solver.py', '-k', 'lexicographic'],
   },
   {
     name: 'publicatiecontrole: a fellow tick of someone no longer in the period counts again',
@@ -406,16 +448,31 @@ for (const m of chosen) {
   originals.set(file, src);
   try {
     fs.writeFileSync(file, src.replace(m.find, m.replace));
-    const run = spawnSync('npx', ['vitest', 'run', ...m.tests], { cwd: repoRoot, encoding: 'utf8', timeout: 15 * 60 * 1000 });
+    // A solver mutation runs the solver's own tests (pytest in ./solver,
+    // SOLVER_PYTHON or python3 with OR-Tools and pytest installed).
+    const pytest = m.runner === 'pytest';
+    const run = pytest
+      ? spawnSync(process.env.SOLVER_PYTHON || 'python3', ['-m', 'pytest', '-q', '-p', 'no:cacheprovider', ...m.tests], {
+          cwd: path.join(repoRoot, 'solver'),
+          encoding: 'utf8',
+          timeout: 15 * 60 * 1000,
+        })
+      : spawnSync('npx', ['vitest', 'run', ...m.tests], { cwd: repoRoot, encoding: 'utf8', timeout: 15 * 60 * 1000 });
+    const output = `${run.stdout ?? ''}${run.stderr ?? ''}`;
     // A filter that matches nothing fails too: that is a broken mutation,
-    // not a caught one.
-    if (/No test files found/.test(run.stdout + run.stderr)) {
-      console.log(`? ${m.name} - no tests match ${m.tests.join(', ')}`);
+    // not a caught one. So is a Python without pytest or OR-Tools.
+    if (
+      /No test files found/.test(output) ||
+      (pytest && (run.error || run.status === 5 || /No module named|ModuleNotFoundError/.test(output)))
+    ) {
+      console.log(`? ${m.name} - no tests ran for ${m.tests.join(' ')}`);
       survived.push(`${m.name} (geen tests gevonden)`);
       continue;
     }
     const caught = run.status !== 0;
-    const summary = (run.stdout.match(/Tests\s+.*$/m) || ['(no summary)'])[0].trim();
+    const summary = (
+      (pytest ? output.match(/^.*\b(failed|passed)\b.* in [\d.]+s.*$/m) : run.stdout.match(/Tests\s+.*$/m)) || ['(no summary)']
+    )[0].trim();
     console.log(`${caught ? '✓ gevangen ' : '✗ OVERLEEFT'}  ${m.name}  [${summary}]`);
     if (!caught) survived.push(m.name);
   } finally {

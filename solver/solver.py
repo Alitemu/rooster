@@ -440,9 +440,10 @@ class RosterSolver:
         already speaks for the whole model as far as that phase is
         concerned.
 
-        Each phase gets an equal slice of self.time_limit_seconds - a
-        planner's configured budget is a promise about total wall-clock
-        time, not a per-phase one.
+        Each phase gets what is left of self.time_limit_seconds over the
+        phases still to run - a planner's configured budget is a promise
+        about total wall-clock time, not a per-phase one, and a phase that
+        finishes early leaves its time to the ones after it.
         """
         model = model_data['model']
         shortfall_vars = model_data['shortfall_vars']
@@ -450,8 +451,28 @@ class RosterSolver:
         assignment_vars = model_data['assignment_vars']
 
         feestdag_deviations = model_data.get('feestdag_deviations') or []
-        PHASES = 6 if feestdag_deviations else 5
-        phase_time_limit = max(1.0, self.time_limit_seconds / PHASES)
+        deviations = [under + over for (under, over) in band_slack_vars.values()]
+        soft_terms = [
+            penalty * assignment_vars[(p, s)]
+            for (p, s), penalty in soft_slots.items()
+            if (p, s) in assignment_vars
+        ]
+        preference_terms = [
+            value * assignment_vars[(p, s)]
+            for (p, s), value in (preferred_slots or {}).items()
+            if (p, s) in assignment_vars
+        ]
+        # The phases that will run: each gets what is left of the budget
+        # over the phases still to come, so time a quick phase (or one
+        # with nothing to do) leaves goes to the ones after it. A fixed
+        # share each, decided up front, left it on the clock (audit 14).
+        phases_to_run = [
+            1
+            + (2 if deviations else 0)
+            + (1 if feestdag_deviations else 0)
+            + (1 if soft_terms else 0)
+            + (1 if preference_terms else 0)
+        ]
         total_start = time.time()
 
         # The latest phase that found a roster: its solver still holds that
@@ -463,6 +484,12 @@ class RosterSolver:
         # bounds, ran out of time (audit 6: about 3% of random periods at
         # 2 seconds a phase).
         last_good: list = []
+        # Proven optimal only when every phase was: each phase is optimal
+        # within the bounds the phases before it fixed, so a phase 1 that
+        # ran out of time with shifts still empty and a last phase proven
+        # optimal after it read as "Optimaal" - and the dialog offered no
+        # "langer proberen" (audit 14).
+        every_phase_proven = [True]
 
         def hint_vars():
             yield from assignment_vars.values()
@@ -477,14 +504,21 @@ class RosterSolver:
             for var in hint_vars():
                 model.AddHint(var, self.solver.Value(var))
 
+        def finish():
+            result = self._extract_result(model_data, time.time() - total_start)
+            if result['status'] == 'OPTIMAL' and not every_phase_proven[0]:
+                result['status'] = 'FEASIBLE'
+            return result
+
         def stop_at_failed_phase(label: str):
+            every_phase_proven[0] = False
             if last_good:
                 logger.warning(
                     f"Lexicographic phase '{label}' found no solution in its time; "
                     f"keeping the roster of the phase before it"
                 )
                 self.solver, self.status = last_good[0]
-            return self._extract_result(model_data, time.time() - total_start)
+            return finish()
 
         def run_phase(objective_expr, sense: str, label: str):
             if sense == 'min':
@@ -492,13 +526,17 @@ class RosterSolver:
             else:
                 model.Maximize(objective_expr)
             self.solver = cp_model.CpSolver()
-            self.solver.parameters.max_time_in_seconds = phase_time_limit
+            remaining = self.time_limit_seconds - (time.time() - total_start)
+            self.solver.parameters.max_time_in_seconds = max(1.0, remaining / max(1, phases_to_run[0]))
+            phases_to_run[0] -= 1
             if self.random_seed is not None:
                 self.solver.parameters.random_seed = self.random_seed
             self.solver.parameters.log_search_progress = logger.isEnabledFor(logging.DEBUG)
             self._apply_stop_request()
             self.status = self.solver.Solve(model)
             ok = self.status in (cp_model.OPTIMAL, cp_model.FEASIBLE)
+            if self.status != cp_model.OPTIMAL:
+                every_phase_proven[0] = False
             value = self.solver.ObjectiveValue() if ok else None
             logger.info(f"Lexicographic phase '{label}': status={self.status}, value={value}")
             if ok:
@@ -514,7 +552,6 @@ class RosterSolver:
             model.Add(sum(shortfall_vars.values()) <= round(shortfall_opt))
 
         # Phase 2 (+2b): fairness.
-        deviations = [under + over for (under, over) in band_slack_vars.values()]
         if deviations:
             max_dev = model.NewIntVar(0, 100_000, 'lex_max_deviation')
             model.AddMaxEquality(max_dev, deviations)
@@ -540,11 +577,6 @@ class RosterSolver:
             model.Add(sum(feestdag_deviations) <= round(feestdag_opt))
 
         # Phase 3: soft blocking (LIEVER_NIET).
-        soft_terms = [
-            penalty * assignment_vars[(p, s)]
-            for (p, s), penalty in soft_slots.items()
-            if (p, s) in assignment_vars
-        ]
         if soft_terms:
             ok, soft_opt = run_phase(sum(soft_terms), 'min', '3 liever-niet')
             if not ok:
@@ -553,19 +585,13 @@ class RosterSolver:
 
         # Phase 4: preference (VOORKEUR) - final phase, nothing left to fix
         # afterward.
-        preference_terms = [
-            value * assignment_vars[(p, s)]
-            for (p, s), value in (preferred_slots or {}).items()
-            if (p, s) in assignment_vars
-        ]
         if preference_terms:
             ok, _ = run_phase(sum(preference_terms), 'max', '4 voorkeur')
             if not ok:
                 return stop_at_failed_phase('4 voorkeur')
 
-        elapsed = time.time() - total_start
-        logger.info(f"Lexicographic solve completed in {elapsed:.2f}s across all phases")
-        return self._extract_result(model_data, elapsed)
+        logger.info(f"Lexicographic solve completed in {time.time() - total_start:.2f}s across all phases")
+        return finish()
 
     # ========================================================================
     # Shared result extraction
