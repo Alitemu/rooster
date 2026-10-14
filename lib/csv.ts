@@ -28,7 +28,9 @@ function guardFormulaInjection(value: string): string {
  * matching a codenaam a re-imported file names.
  */
 export function withoutFormulaGuard(value: string): string {
-  return /^'[=+\-@\t\r]/.test(value) ? value.slice(1) : value;
+  // \x27 is the apostrophe: a bare one here reads as the start of a string
+  // to app/dutchStyle.test.ts, which then runs on into the comments.
+  return /^\x27[=+\-@\t\r]/.test(value) ? value.slice(1) : value;
 }
 
 /**
@@ -81,13 +83,13 @@ export function csvAttachment(prefix: string, naam: string): string {
  * codenaam or note exported from Excel as `"foo, bar"`) into two cells,
  * silently misaligning every column after it. This handles the common
  * double-quote CSV convention (a "" inside a quoted field is a literal
- * quote) without pulling in a full CSV library for what's still a simple,
+ * quote) without pulling in a full CSV library for what is still a simple,
  * few-column import.
  *
  * Commas or semicolons, whichever the first line uses more of outside
  * quotes: a Dutch Excel saves "CSV" with semicolons (the list separator of
  * Dutch regional settings), and the beginsaldi and "Eerdere toewijzingen"
- * imports turned every such line into one cell - every codenaam unknown,
+ * imports turned every such line into one cell: every codenaam unknown,
  * the beginsaldi only noticed once the period had opened (audit 12). A
  * byte order mark ("CSV UTF-8") is dropped.
  */
