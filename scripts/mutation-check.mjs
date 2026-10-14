@@ -236,7 +236,7 @@ const MUTATIONS = [
     file: 'app/api/person/[id]/notifications/route.ts',
     find: 'const limit = Number.isInteger(requested) && requested >= 1 && requested <= 200 ? requested : 50;',
     replace: "const limit = parseInt(searchParams.get('limit') || '50');",
-    tests: ['app/api/person/[id]/notifications/route'],
+    tests: ['app/api/person/[id]/notifications/route', 'app/api/queryInput'],
   },
   {
     name: 'period length: no maximum',
@@ -244,6 +244,34 @@ const MUTATIONS = [
     find: '  if (days > MAX_PERIODE_DAGEN)',
     replace: '  if (false)',
     tests: ['app/api/periods/periodLength'],
+  },
+  {
+    name: 'sub-folder: a page asks for /api/ without the base path',
+    file: 'components/NotificationCenter.tsx',
+    find: 'let url = withBasePath(`/api/person/',
+    replace: 'let url = (`/api/person/',
+    tests: ['app/basePathSweep'],
+  },
+  {
+    name: 'csv: a semicolon file read as one cell per line',
+    file: 'lib/csv.ts',
+    find: "countOutsideQuotes(lines[0], ';') > countOutsideQuotes(lines[0], ',') ? ';' : ','",
+    replace: "','",
+    tests: ['lib/csv'],
+  },
+  {
+    name: 'eerdere toewijzingen import: a d-m-yyyy date refused',
+    file: 'app/api/periods/[id]/prior-assignments/import-csv/route.ts',
+    find: 'const datum = parseDutchOrIsoDate(rowText(row.datum));',
+    replace: "const datum = /^\\d{4}-\\d{2}-\\d{2}$/.test(rowText(row.datum)) ? rowText(row.datum) : null;",
+    tests: ['app/api/periods/[id]/prior-assignments/import-csv/route'],
+  },
+  {
+    name: 'periods: two of a pool on the same days',
+    file: 'lib/periodOverlap.ts',
+    find: 'AND start_datum <= ? AND eind_datum >= ?',
+    replace: 'AND 0 AND start_datum <= ? AND eind_datum >= ?',
+    tests: ['app/api/periods/periodOverlap'],
   },
   {
     name: 'membership defaults: a period picked out of two',

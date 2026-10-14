@@ -288,7 +288,15 @@ Example: If the ORM guarantees a constraint, don't also check in code.
 ## Period Management
 
 - **Auto-round** to Monday start, Sunday end on ISO-week boundaries
-- **Auto-exclude** days already assigned in published previous periods
+- **One period per day:** every day belongs to at most one period of a
+  pool (lib/periodOverlap.ts; create and open answer 409 PERIOD_OVERLAP,
+  checked on the whole weeks opening rounds to). A period being made
+  (CONCEPT) or in the prullenbak takes no days. Opening rounds the start
+  back to Monday, and a next period typed to start mid-week reached into
+  the last week of the one before: both rosters filled those days, two
+  people on one achterwacht day (audit 12). This line used to promise
+  "days already assigned in published previous periods are excluded",
+  which no code did.
 - **Freeze ruleset** when period opens (no retroactive rule changes)
 - **Row versioning** for optimistic concurrency on mutable periods
 - **Back to OPEN** (`POST /api/periods/[id]/reopen`, "Terug naar open" in
@@ -1015,6 +1023,15 @@ capped json-file logs, no-new-privileges everywhere, init + mem_limit on
 web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
 to commit SHAs.
 
+**CSV imports** (the wizard's beginsaldi, "Eerdere toewijzingen"):
+lib/csv.ts parseCsv takes commas or semicolons, whichever the header line
+uses, and drops a byte order mark - a Dutch Excel saves "CSV" with
+semicolons, and every line became one cell (audit 12). The "Eerdere
+toewijzingen" import also reads d-m-yyyy dates (lib/isoDate.ts
+parseDutchOrIsoDate, shared with the preferences import) and a codenaam
+with the formula-guard apostrophe (withoutFormulaGuard): the app's own
+roster export saved again by a Dutch Excel.
+
 **Downloads:** every CSV export names its file through lib/csv.ts
 `csvAttachment`: an ASCII `filename` and the real name as `filename*`
 (UTF-8). A header value holds nothing above U+00FF, and a period name with
@@ -1026,7 +1043,10 @@ Free text a participant types - swap toelichting, rejection reason,
 absence notitie - goes through lib/freeText.ts (1000 characters).
 A number in a query string is checked like one in a body: the
 participant's notices take `limit` 1-200, anything else the default (it
-was parseInt: "abc" a 500, "-1" no limit). parseJsonBody only guarantees a plain object: a field holding a number,
+was parseInt: "abc" a 500, "-1" no limit); app/api/queryInput.test.ts
+calls every GET that reads a query parameter, with real ids, with odd
+values for each, and allows no 500 (audit 12). app/basePathSweep.test.ts
+holds every '/api/' address in pages and components to withBasePath. parseJsonBody only guarantees a plain object: a field holding a number,
 list or object where text or rows belong goes through
 lib/requestFields.ts (optionalText, rowText, objectRows, badRequest) and
 gets a Dutch 400, never a 500; app/api/routeInput.test.ts calls every

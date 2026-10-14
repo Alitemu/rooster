@@ -11,7 +11,8 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
-import { parseISO } from '@/lib/holidays';
+import { parseISO, roundToMonday, roundToSunday, dateToISO } from '@/lib/holidays';
+import { overlappingPeriod, overlapMessage } from '@/lib/periodOverlap';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CreatePeriodRequest {
@@ -153,6 +154,22 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         error: { code: 'POOL_NOT_FOUND', message: `Pool ${body.pool_id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // Every day belongs to at most one period of the pool - checked on the
+    // whole weeks opening will round these dates to (lib/periodOverlap.ts,
+    // audit 12), so the planner hears it now rather than at "Openen".
+    const overlap = overlappingPeriod(
+      body.pool_id,
+      dateToISO(roundToMonday(parseISO(body.start_datum))),
+      dateToISO(roundToSunday(parseISO(body.eind_datum)))
+    );
+    if (overlap) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PERIOD_OVERLAP', message: overlapMessage(overlap) },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // Create period

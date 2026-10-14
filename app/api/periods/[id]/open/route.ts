@@ -19,6 +19,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
+import { overlappingPeriod, overlapMessage } from '@/lib/periodOverlap';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
@@ -191,6 +192,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         error: { code: 'INVALID_STATUS', message: `Periode kan niet geopend worden vanuit status "${periodStatusLabel(period.status)}"` },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // Every day belongs to at most one period of the pool: the rounding to
+    // Monday above could otherwise reach back into the last week of the
+    // one before (lib/periodOverlap.ts, audit 12).
+    const overlap = overlappingPeriod(period.pool_id, start_datum, eind_datum, period.id);
+    if (overlap) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PERIOD_OVERLAP', message: overlapMessage(overlap) },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // A period with nobody active to fill it isn't a mistake the planner
