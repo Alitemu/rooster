@@ -120,6 +120,44 @@ describe('PATCH /api/periods/[id]/prior-assignments', () => {
     expect(rowCount(periodId)).toBe(0);
   });
 
+  // The CHECK on teller refused these inside the INSERT, which answered 500
+  // (routeInput.test.ts found it with an id where the teller belongs).
+  it.each([
+    ['an id', '0b0e5c1e-7b1a-4c3e-9d2f-1a2b3c4d5e6f'],
+    ['a teller in lower case', 'avond'],
+    ['a number', 1],
+    ['an object', { teller: 'AVOND' }],
+  ])('refuses %s as teller, never touching the database', async (_label, teller) => {
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const periodId = createPeriod(poolId);
+
+    const res = await PATCH(plannerRequest(periodId, planner, { datum: '2027-01-04', teller }), {
+      params: Promise.resolve({ id: periodId }),
+    });
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('INVALID_TELLER');
+    expect(rowCount(periodId)).toBe(0);
+  });
+
+  it.each([
+    ['a number', 7],
+    ['an object', { codenaam: 'Persoon-01' }],
+    ['a list', ['Persoon-01']],
+  ])('refuses %s as person_codenaam with a 400', async (_label, person_codenaam) => {
+    const poolId = createPool();
+    const planner = createPerson('PLANNER');
+    const periodId = createPeriod(poolId);
+
+    const res = await PATCH(plannerRequest(periodId, planner, { datum: '2027-01-04', teller: 'AVOND', person_codenaam }), {
+      params: Promise.resolve({ id: periodId }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(rowCount(periodId)).toBe(0);
+  });
+
   it('accepts a real date and inserts a correctly-computed iso_jaar/iso_week', async () => {
     const poolId = createPool();
     const planner = createPerson('PLANNER');

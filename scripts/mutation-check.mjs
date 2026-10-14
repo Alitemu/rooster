@@ -80,6 +80,13 @@ const MUTATIONS = [
     tests: ['lib/priorAssignmentDerive'],
   },
   {
+    name: 'rooster vooraf: any teller reaches the INSERT again',
+    file: 'app/api/periods/[id]/prior-assignments/route.ts',
+    find: 'if (!TELLERS.includes(teller)) {',
+    replace: 'if (false) {',
+    tests: ['app/api/periods/[id]/prior-assignments/route.test'],
+  },
+  {
     name: "fellow: weekend band above the others' maximum",
     file: 'lib/rosterBands.ts',
     find: 'Math.min(released, scaled[1])',

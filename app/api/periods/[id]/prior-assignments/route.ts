@@ -18,6 +18,8 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate } from '@/lib/isoDate';
+import { TELLERS } from '@/lib/rosterBands';
+import { badRequest, optionalText } from '@/lib/requestFields';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PriorAssignment {
@@ -200,6 +202,15 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         error: { code: 'INVALID_DATE', message: 'Datum moet in het formaat JJJJ-MM-DD staan' },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // The CHECK on teller refused anything else inside the INSERT, a 500.
+    if (!TELLERS.includes(teller)) {
+      return badRequest('INVALID_TELLER', 'Kies avonddienst, weekenddienst of feestdagdienst');
+    }
+    const codenaam = optionalText(person_codenaam);
+    if (!codenaam.ok) {
+      return badRequest('INVALID_INPUT', 'Codenaam moet tekst zijn');
     }
 
     // Look up person ID if person_codenaam provided
