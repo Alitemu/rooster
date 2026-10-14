@@ -462,6 +462,11 @@ over.
   weekend/feestdag window still fits the non-fellows
   (`checkWeekendCapacity`, lib/fellowSummary.ts) - the window itself stays
   the planner's to set.
+- The tick stays when someone's Geldig vanaf/tot moves off the period or
+  they leave the pool, so everything counts fellows among the period's
+  members only (loadPeriodMembers). The publication check's "Fellows
+  tellen niet mee" counted the tick itself and told a planner without
+  fellows that the weekend band was raised for them.
 
 ## Geldig vanaf/tot (membership window)
 

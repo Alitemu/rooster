@@ -163,6 +163,7 @@ afterEach(() => {
          (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)`
     ).run(periodId);
     db.prepare('DELETE FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ?').run(periodId);
+    db.prepare('DELETE FROM dienstrooster_period_fellow WHERE period_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
@@ -320,6 +321,43 @@ describe('runPublicationCheck', () => {
     expect(result.valid).toBe(true);
     expect(result.requiresConfirmation).toBe(true);
     expect(result.issues).toEqual([]);
+  });
+
+  describe('the fellow sentence under a band warning', () => {
+    const FELLOW_NOTE = 'Fellows tellen niet mee';
+
+    function markFellow(periodId: string, personId: string) {
+      db.prepare(
+        `INSERT INTO dienstrooster_period_fellow (id, period_id, person_id, aangemaakt_op) VALUES (?, ?, ?, datetime('now'))`
+      ).run(crypto.randomUUID(), periodId, personId);
+    }
+
+    it('is there when a member of the period is a fellow', () => {
+      const ctx = createPool(8, { bandAvond: [3, 4] });
+      const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [3, 4] });
+      fillEvenly(period.id, slotIds, ctx.personIds.slice(0, 7));
+      markFellow(period.id, ctx.personIds[0]);
+
+      expect(runPublicationCheck(period).warnings.join(' ')).toContain(FELLOW_NOTE);
+    });
+
+    it('is not there for a fellow who no longer takes part in the period', () => {
+      // The planner's report: "er zijn geen fellows", yet the warning said
+      // the others' weekend band was raised for them. The tick stays when
+      // someone's Geldig vanaf/tot moves off the period or they leave the
+      // pool, and the check counted it while nothing else did.
+      const ctx = createPool(8, { bandAvond: [3, 4] });
+      const { period, slotIds } = createPeriod(ctx, START, END, { bandAvond: [3, 4] });
+      fillEvenly(period.id, slotIds, ctx.personIds.slice(0, 6));
+      const gone = ctx.personIds[7];
+      markFellow(period.id, gone);
+      db.prepare(`UPDATE dienstrooster_pool_membership SET geldig_tot = '2026-12-31' WHERE person_id = ?`).run(gone);
+
+      const result = runPublicationCheck(period);
+      // Person 6 got nothing: the band warning itself is there.
+      expect(result.checks.band_compliance).toBe(false);
+      expect(result.warnings.join(' ')).not.toContain(FELLOW_NOTE);
+    });
   });
 
   it('uses the period frozen ruleset, not the pool current one', () => {

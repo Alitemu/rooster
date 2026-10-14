@@ -87,6 +87,13 @@ const MUTATIONS = [
     tests: ['app/api/periods/[id]/prior-assignments/route.test'],
   },
   {
+    name: 'publicatiecontrole: a fellow tick of someone no longer in the period counts again',
+    file: 'lib/publicationCheck.ts',
+    find: 'members.some((m) => fellows.has(m.id))',
+    replace: 'fellows.size > 0',
+    tests: ['lib/publicationCheck'],
+  },
+  {
     name: "fellow: weekend band above the others' maximum",
     file: 'lib/rosterBands.ts',
     find: 'Math.min(released, scaled[1])',

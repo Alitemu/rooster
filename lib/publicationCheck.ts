@@ -226,7 +226,9 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     const scalingNotes = [
       anyPartialCoverage ? 'Voor wie een deel van de periode meedraait, is het bereik automatisch naar rato verlaagd.' : null,
       naarRato ? 'Bij naar-rato-verdeling is het bereik geschaald naar ieders deelnamefactor.' : null,
-      fellows.size > 0
+      // A member who is a fellow, as resolvePeriodBands counts them: the
+      // tick stays when someone's membership moves off the period.
+      members.some((m) => fellows.has(m.id))
         ? 'Fellows tellen niet mee voor de weekenden. Het weekendbereik van de anderen is daarom verhoogd.'
         : null,
     ].filter((note): note is string => note !== null);
