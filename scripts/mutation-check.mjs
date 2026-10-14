@@ -129,6 +129,14 @@ const MUTATIONS = [
     tests: ['test_solver.py', '-k', 'lexicographic'],
   },
   {
+    name: 'solver: the lexicographic phases after one that found nothing are skipped again',
+    file: 'solver/solver.py',
+    find: "                phase_found_nothing('2 eerlijkheid (grootste afwijking)')",
+    replace: "                return stop_at_failed_phase('2 eerlijkheid (grootste afwijking)')",
+    runner: 'pytest',
+    tests: ['test_solver.py', '-k', 'lexicographic'],
+  },
+  {
     name: 'publicatiecontrole: a fellow tick of someone no longer in the period counts again',
     file: 'lib/publicationCheck.ts',
     find: 'members.some((m) => fellows.has(m.id))',

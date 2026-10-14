@@ -1437,6 +1437,31 @@ def test_lexicographic_passes_time_a_phase_leaves_unused_on_to_the_next(monkeypa
     assert all(limit <= 60 for limit in limits)
 
 
+def test_lexicographic_runs_the_phases_after_one_that_found_nothing(monkeypatch):
+    """
+    A phase that found nothing in its time fixed no bound, so the phases
+    after it can still run from the roster before it. They were skipped:
+    in a tight period at short time, "eerlijkheid" running out meant
+    liever-niet and voorkeur were never looked at (audit 15).
+    """
+    from ortools.sat.python import cp_model
+    calls = _cp_solver_that_reports(monkeypatch, lambda n, real: cp_model.UNKNOWN if n == 2 else real)
+
+    slots = make_slots(4)
+    people = ['p1', 'p2']
+    # Phase 1 is free to give p1 the first shift; only phase 3 cares.
+    soft = {('p1', slots[0]['id']): 1.0}
+    result = solve(people, slots, window_weeks=1, soft=soft, objective_mode='lexicographic',
+                   band={'AVOND': [2, 2], 'WEEKEND': [0, 4], 'FEESTDAG': [0, 4]})
+
+    # 1, 2 (found nothing), 2b and 3 all ran.
+    assert len(calls) == 4, calls
+    assert result['success']
+    assert result['diagnostics']['solver_status'] == 'FEASIBLE'
+    first = next(a['person_id'] for a in result['assignments'] if a['slot_id'] == slots[0]['id'])
+    assert first == 'p2', 'phase 3 kept p1 off the liever-niet shift'
+
+
 def test_lexicographic_reports_optimal_when_every_phase_was_proven():
     from ortools.sat.python import cp_model
     result = _lexicographic_case()

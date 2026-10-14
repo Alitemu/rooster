@@ -510,14 +510,21 @@ class RosterSolver:
                 result['status'] = 'FEASIBLE'
             return result
 
-        def stop_at_failed_phase(label: str):
+        def phase_found_nothing(label: str):
+            # It fixed no bound, so the phases after it still run, from the
+            # roster of the last phase that found one. They were skipped:
+            # "eerlijkheid" running out of time meant liever-niet and
+            # voorkeur were never looked at (audit 15).
             every_phase_proven[0] = False
             if last_good:
                 logger.warning(
                     f"Lexicographic phase '{label}' found no solution in its time; "
-                    f"keeping the roster of the phase before it"
+                    f"keeping the roster of the phase before it and going on"
                 )
                 self.solver, self.status = last_good[0]
+
+        def stop_at_failed_phase(label: str):
+            phase_found_nothing(label)
             return finish()
 
         def run_phase(objective_expr, sense: str, label: str):
@@ -556,14 +563,16 @@ class RosterSolver:
             max_dev = model.NewIntVar(0, 100_000, 'lex_max_deviation')
             model.AddMaxEquality(max_dev, deviations)
             ok, max_dev_opt = run_phase(max_dev, 'min', '2 eerlijkheid (grootste afwijking)')
-            if not ok:
-                return stop_at_failed_phase('2 eerlijkheid (grootste afwijking)')
-            model.Add(max_dev <= round(max_dev_opt))
+            if ok:
+                model.Add(max_dev <= round(max_dev_opt))
+            else:
+                phase_found_nothing('2 eerlijkheid (grootste afwijking)')
 
             ok, sum_dev_opt = run_phase(sum(deviations), 'min', '2b eerlijkheid (totale afwijking)')
-            if not ok:
-                return stop_at_failed_phase('2b eerlijkheid (totale afwijking)')
-            model.Add(sum(deviations) <= round(sum_dev_opt))
+            if ok:
+                model.Add(sum(deviations) <= round(sum_dev_opt))
+            else:
+                phase_found_nothing('2b eerlijkheid (totale afwijking)')
 
         # Phase 2c: feestdagdiensten over the years (objective.py
         # add_feestdag_history_objective) - fairness too, so before
@@ -572,23 +581,25 @@ class RosterSolver:
         # already fixed, and never against a hard block.
         if feestdag_deviations:
             ok, feestdag_opt = run_phase(sum(feestdag_deviations), 'min', '2c feestdagen over de jaren')
-            if not ok:
-                return stop_at_failed_phase('2c feestdagen over de jaren')
-            model.Add(sum(feestdag_deviations) <= round(feestdag_opt))
+            if ok:
+                model.Add(sum(feestdag_deviations) <= round(feestdag_opt))
+            else:
+                phase_found_nothing('2c feestdagen over de jaren')
 
         # Phase 3: soft blocking (LIEVER_NIET).
         if soft_terms:
             ok, soft_opt = run_phase(sum(soft_terms), 'min', '3 liever-niet')
-            if not ok:
-                return stop_at_failed_phase('3 liever-niet')
-            model.Add(sum(soft_terms) <= round(soft_opt))
+            if ok:
+                model.Add(sum(soft_terms) <= round(soft_opt))
+            else:
+                phase_found_nothing('3 liever-niet')
 
         # Phase 4: preference (VOORKEUR) - final phase, nothing left to fix
         # afterward.
         if preference_terms:
             ok, _ = run_phase(sum(preference_terms), 'max', '4 voorkeur')
             if not ok:
-                return stop_at_failed_phase('4 voorkeur')
+                phase_found_nothing('4 voorkeur')
 
         logger.info(f"Lexicographic solve completed in {time.time() - total_start:.2f}s across all phases")
         return finish()
