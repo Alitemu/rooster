@@ -24,8 +24,8 @@ def make_slots(num_weeks, teller='AVOND', per_week=1, start_year=2027, start_wee
     (start_year, start_week) and advancing one real week at a time.
 
     Real dates matter here, not just the labelled iso_week: the window
-    rule constraint groups slots by calendar week derived from `datum`
-    (see solver/constraints.py:_week_ordinal), so a fixture whose dates
+    rule counts days between the slots' own dates (see
+    solver/constraints.py:_day_ordinal), so a fixture whose dates
     don't actually advance by 7 days per labelled week would silently
     test something other than what the constraint enforces. Defaulting to
     (2027, 1) keeps every existing call site within a single ISO year;
@@ -204,6 +204,72 @@ def test_window_rule_carry_over_respects_the_configured_gap():
     assert len(result['assignments']) == 1, (
         f"carry-over blocked a gap that exactly matches windowWeeks: {result['assignments']}"
     )
+
+
+def slot_on(datum, teller='AVOND'):
+    """One slot on a given date."""
+    d = date.fromisoformat(datum)
+    iso_year, iso_week, _ = d.isocalendar()
+    return {
+        'id': f'slot-{datum}-{teller}',
+        'datum': datum,
+        'iso_jaar': iso_year,
+        'iso_week': iso_week,
+        'shift_type_id': 'st-1',
+        'shift_type_name': teller,
+        'benodigd_aantal_personen': 1,
+        'is_feestdag': False,
+        'feestdag_groep': None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# HARD RULE: the window counts days (0.22.0): N weeks = at least 7 * N days
+# between two shifts of one person. It counted calendar weeks (one shift
+# in any N consecutive Monday-to-Sunday weeks), and a Sunday and the
+# Monday two weeks later - 8 days apart - both went to one person under a
+# window of 2, where the planner read it as 14 days.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('objective_mode', ['weighted', 'lexicographic'])
+@pytest.mark.parametrize('window_weeks', [1, 2, 4])
+def test_the_window_keeps_seven_times_n_days_between_shifts(window_weeks, objective_mode):
+    span = 7 * window_weeks
+    start = date(2027, 3, 7)  # a Sunday
+    # One day short of the window: never both, whatever the calendar weeks.
+    close = [slot_on(start.isoformat()), slot_on((start + timedelta(days=span - 1)).isoformat())]
+    assert len(solve(['p1'], close, window_weeks=window_weeks, objective_mode=objective_mode)['assignments']) == 1
+    # Exactly the window: both.
+    far = [slot_on(start.isoformat()), slot_on((start + timedelta(days=span)).isoformat())]
+    assert len(solve(['p1'], far, window_weeks=window_weeks, objective_mode=objective_mode)['assignments']) == 2
+
+
+def test_a_sunday_and_the_monday_two_weeks_later_are_too_close_under_a_window_of_two():
+    slots = [slot_on('2027-03-14'), slot_on('2027-03-22')]  # Sunday week 10, Monday week 12: 8 days
+    assert len(solve(['p1'], slots, window_weeks=2)['assignments']) == 1
+
+
+def test_the_window_counts_days_across_the_year_boundary():
+    # Sunday 3 January 2027 is ISO week 53 of 2026; Friday 15 January 12 days on.
+    slots = [slot_on('2027-01-03'), slot_on('2027-01-15')]
+    assert len(solve(['p1'], slots, window_weeks=2)['assignments']) == 1
+
+
+def test_the_window_counts_days_from_the_previous_period_too():
+    prior = [{'person_id': 'p1', 'datum': '2027-01-03', 'teller': 'AVOND'}]
+    assert solve(['p1'], [slot_on('2027-01-16')], window_weeks=2, prior=prior)['assignments'] == []  # 13 days
+    assert len(solve(['p1'], [slot_on('2027-01-17')], window_weeks=2, prior=prior)['assignments']) == 1  # 14 days
+
+
+def test_per_teller_windows_count_days_too():
+    # Avond 4 weeks (28 days), weekend/feestdag 2 (14): the smaller, 14
+    # days, between shifts of different kinds.
+    def both(a, b):
+        return len(solve(['p1'], [a, b], window_weeks=2, window_weeks_avond=4, window_weeks_weekend_feestdag=2)['assignments']) == 2
+    assert not both(slot_on('2027-03-01'), slot_on('2027-03-13', 'WEEKEND'))  # 12 days
+    assert both(slot_on('2027-03-01'), slot_on('2027-03-20', 'WEEKEND'))  # 19 days
+    assert not both(slot_on('2027-03-01'), slot_on('2027-03-22'))  # avond 21 days < 28
+    assert both(slot_on('2027-03-01'), slot_on('2027-03-29'))  # avond 28 days
 
 
 @pytest.mark.parametrize('window_weeks', [2, 3, 4, 5, 7])

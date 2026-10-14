@@ -2,7 +2,7 @@
 CP-SAT Constraint Definitions
 
 Implements hard constraints for roster generation:
-1. Window rule (no consecutive shifts within window_weeks)
+1. Window rule (at least 7 * window_weeks days between two shifts)
 2. Blocking absolute (ABSOLUUT preferences)
 3. Part-time pattern (forced assignments)
 4. Capacity (slots need required number of people)
@@ -34,6 +34,11 @@ def _week_ordinal(datum: str) -> int:
     return monday.toordinal() // 7
 
 
+def _day_ordinal(datum: str) -> int:
+    """The date as a day number, so two dates subtract to the days between them."""
+    return date.fromisoformat(datum).toordinal()
+
+
 # Hard ceiling on how far add_band_constraints lets anyone's assignment
 # count run past their (possibly ledger-adjusted) band maximum - see that
 # function's docstring for why this must be a hard cap, not just a cost.
@@ -53,7 +58,7 @@ class ConstraintBuilder:
         self.violations = {}
 
     # ========================================================================
-    # Window Rule: No consecutive assignments within window_weeks
+    # Window Rule: at least 7 * window_weeks days between two shifts
     # ========================================================================
 
     def add_window_constraints(
@@ -65,94 +70,65 @@ class ConstraintBuilder:
         counters: Optional[list[str]] = None
     ):
         """
-        Constraint: at most one assignment in any run of `window_weeks`
-        consecutive weeks, which is exactly "windowWeeks = number of weeks
-        between shifts" as CLAUDE.md defines the setting.
+        Constraint: at least 7 * window_weeks days between two shifts of
+        one person - at most one assignment in any run of that many
+        consecutive days. With a window of 2, a shift on Monday 1 March
+        rules out everything up to Sunday 14 March and allows Monday 15
+        March again.
 
-        That makes the documented example hold literally: with
-        window_weeks=2, a shift in week 12 rules out weeks 11 and 13 - and
-        nothing further out.
+        It counted calendar weeks (Monday to Sunday): one shift in any
+        `window_weeks` consecutive weeks. A Sunday and the Monday two weeks
+        later were then allowed, 8 days apart under a window of 2 and 22
+        under a window of 4, where the planner read the setting as days -
+        "bij een venster van 2 weken geldt 14 dagen of meer tussen 2
+        diensten" (0.22.0).
 
-        Deliberately a forward-only window [w, w + window_weeks - 1]
-        applied at every start week, rather than a symmetric window around
-        each week. A symmetric [w-k, w+k] spans 2k+1 weeks, so it enforces
-        a gap of 2k+1 rather than window_weeks - far stricter than
-        configured, and stricter than lib/capacity.ts promises the planner
-        (it advertises floor(weeks / windowWeeks) shifts per person). That
-        mismatch made rosters look staffable that the solver then could not
-        actually fill.
-
-        NOTE: this still permits at most one slot per person per week, so a
-        Saturday+Sunday weekend pair is split across two people. The
-        previous docstring claimed same-week pairs were allowed, but the
-        code never implemented that (every slot in week w sits inside w's
-        own window). Behaviour is left as-is here: allowing pairs changes
-        how weekends are staffed and is a scheduling-policy decision, not
-        part of fixing the gap arithmetic.
-
-        Grouped by _week_ordinal(datum) rather than the raw iso_week field:
-        a period that spans a year boundary would otherwise let week 52 (or
-        53) of one year and week 1 of the next - one calendar week apart -
-        sail through unchecked, since neither `range(52, 52+window_weeks)`
-        nor `range(1, 1+window_weeks)` sees the other side of the boundary.
+        Deliberately a forward-only window [d, d + span - 1] applied at
+        every day the person could work, rather than a symmetric one: any
+        two shifts fewer than `span` days apart both fall inside the window
+        starting at the first of them, and a symmetric window would demand
+        twice the gap. Day numbers come from the date itself, so a year
+        boundary (ISO week 53) is no different from any other day.
 
         counters: None (default) pools every slot together regardless of
-        teller, exactly as before - the only behaviour periods frozen
-        before per-teller windows existed have ever seen. When given, only
-        slots whose shift_type_name is in this list count toward the
-        window for THIS call. solver.py's build_model calls this three
-        times for per-teller windows - once with counters=None at the
-        smaller of the two configured windows (a cross-type floor that
-        still applies between every pair of shifts regardless of type, per
-        the planner's own explicit rule), plus once per group at that
-        group's own, typically larger, same-type-only window - see that
-        function's own comment for the full reasoning.
+        teller. When given, only slots whose shift_type_name is in this
+        list count toward the window for THIS call. solver.py's build_model
+        calls this three times for per-teller windows - once with
+        counters=None at the smaller of the two configured windows (a
+        cross-type floor that still applies between every pair of shifts
+        regardless of type, per the planner's own explicit rule), plus once
+        per group at that group's own, typically larger, same-type-only
+        window - see that function's own comment for the full reasoning.
         """
         self.violations['window_rule'] = 0
 
-        # 0 switches the rule off. 1 means one shift a week at most - what
-        # the capacity check (lib/capacity.ts: floor(weeks / windowWeeks))
-        # and this docstring always said; it used to switch the rule off
-        # too, and a person could get three evenings in one week (audit 6).
+        # 0 switches the rule off. 1 means at least 7 days between two
+        # shifts; it used to switch the rule off too, and a person could get
+        # three evenings in one week (audit 6).
         if window_weeks <= 0:
             return
 
         relevant_slots = slots if counters is None else [s for s in slots if s.get('shift_type_name') in counters]
+        span = 7 * window_weeks
 
-        # Build map: week -> list of slots
-        week_slots = {}
+        # Day number -> the slots on that day.
+        day_slots: dict[int, list[dict]] = {}
         for slot in relevant_slots:
-            week = _week_ordinal(slot['datum'])
-            if week not in week_slots:
-                week_slots[week] = []
-            week_slots[week].append(slot)
+            day_slots.setdefault(_day_ordinal(slot['datum']), []).append(slot)
+        days = sorted(day_slots)
 
-        # For each person
         for person_id in people:
-            # For each week
-            for week in sorted(week_slots.keys()):
-                # Slots in this week
-                week_vars = [
-                    assignment_vars.get((person_id, slot['id']))
-                    for slot in week_slots[week]
-                    if (person_id, slot['id']) in assignment_vars
-                ]
-
-                if not week_vars:
+            for i, day in enumerate(days):
+                if not any((person_id, slot['id']) in assignment_vars for slot in day_slots[day]):
                     continue
-
-                # Sum assignments in window [week, week + window_weeks - 1]
+                # Every slot in [day, day + span - 1]: at most one of them.
                 window_vars = []
-
-                for check_week in range(week, week + window_weeks):
-                    if check_week in week_slots:
-                        for slot in week_slots[check_week]:
-                            if (person_id, slot['id']) in assignment_vars:
-                                window_vars.append(
-                                    assignment_vars[(person_id, slot['id'])]
-                                )
-
-                # At most 1 assignment in window
+                j = i
+                while j < len(days) and days[j] < day + span:
+                    for slot in day_slots[days[j]]:
+                        if (person_id, slot['id']) in assignment_vars:
+                            window_vars.append(assignment_vars[(person_id, slot['id'])])
+                    j += 1
                 if window_vars:
                     self.model.Add(sum(window_vars) <= 1)
 
@@ -260,13 +236,13 @@ class ConstraintBuilder:
         add_window_constraints only sees this period's own slots, so on its
         own it has no memory that a person worked the last few days of the
         *previous* period - the same person could then be assigned again
-        within window_weeks of a shift that already happened, right at the
+        within the window of a shift that already happened, right at the
         start of the new period. This was a confirmed bug: rosters the
         solver itself produced could show someone with two shifts a few
         days apart, straddling a period boundary.
 
         prior_assignments carries exactly the tail needed to close that gap
-        - the last (window_weeks - 1) weeks of the previous period, which
+        - the last window_weeks weeks of the previous period, which
         the planner reviews and confirms via the Prior Assignments screen
         before generation is allowed to run (see
         dienstrooster_prior_assignment). Each entry is a shift that has
@@ -294,13 +270,15 @@ class ConstraintBuilder:
             if counters is not None and prior.get('teller') not in counters:
                 continue
             person_id = prior['person_id']
-            prior_week = _week_ordinal(prior['datum'])
+            prior_day = _day_ordinal(prior['datum'])
 
             for slot in relevant_slots:
                 key = (person_id, slot['id'])
                 if key not in assignment_vars:
                     continue
-                if abs(_week_ordinal(slot['datum']) - prior_week) < window_weeks:
+                # Fewer than 7 * window_weeks days from a shift already
+                # worked, the same gap add_window_constraints keeps.
+                if abs(_day_ordinal(slot['datum']) - prior_day) < 7 * window_weeks:
                     self.model.Add(assignment_vars[key] == 0)
 
     # ========================================================================

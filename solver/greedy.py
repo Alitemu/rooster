@@ -41,7 +41,7 @@ import random
 import time
 from typing import Literal, Optional
 
-from constraints import _week_ordinal
+from constraints import _day_ordinal, _week_ordinal
 
 logger = logging.getLogger(__name__)
 
@@ -162,23 +162,26 @@ def run_greedy_construction(
         p: dict(already_assigned.get(p, {})) for p in people
     }
 
-    # Per-person set(s) of assigned week-ordinals, seeded from prior +
+    # Per-person set(s) of assigned day numbers, seeded from prior +
     # manual assignments (the same "immovable facts" solver.py folds in).
     # Every fact populates BOTH a 'pooled' set (all tellers together, used
     # for the cross-type floor / legacy pooled check) AND its own group's
     # set (used for that group's own, typically stricter, same-type cap) -
-    # window_ok below decides which of these actually get consulted.
-    assigned_weeks: dict[str, dict[str, set[int]]] = {p: {} for p in people}
+    # window_ok below decides which of these actually get consulted. The
+    # window counts days (7 * window_weeks between two shifts, as
+    # constraints.add_window_constraints); the holiday spread still counts
+    # weeks.
+    assigned_days: dict[str, dict[str, set[int]]] = {p: {} for p in people}
     assigned_feestdag_weeks: dict[str, set[int]] = {p: set() for p in people}
     for fact in prior_assignments + manual_assignments:
         pid = fact['person_id']
-        if pid not in assigned_weeks:
+        if pid not in assigned_days:
             continue
-        week = _week_ordinal(fact['datum'])
-        assigned_weeks[pid].setdefault('pooled', set()).add(week)
-        assigned_weeks[pid].setdefault(_window_group(fact.get('teller', '')), set()).add(week)
+        day = _day_ordinal(fact['datum'])
+        assigned_days[pid].setdefault('pooled', set()).add(day)
+        assigned_days[pid].setdefault(_window_group(fact.get('teller', '')), set()).add(day)
         if fact.get('teller') == 'FEESTDAG':
-            assigned_feestdag_weeks[pid].add(week)
+            assigned_feestdag_weeks[pid].add(_week_ordinal(fact['datum']))
 
     def actual_band(person_id: str, counter: str) -> tuple[int, int]:
         # A fixed band for this person and counter (a fellow's weekend):
@@ -198,23 +201,23 @@ def run_greedy_construction(
             distribution_mode=distribution_mode,
         )
 
-    def window_ok(person_id: str, week: int, counter: str) -> bool:
-        # A window of N weeks allows one shift in any N consecutive weeks,
-        # so 1 is one a week and only 0 switches it off - the same as
+    def window_ok(person_id: str, day: int, counter: str) -> bool:
+        # A window of N weeks keeps at least 7 * N days between two
+        # shifts, so only 0 switches it off - the same as
         # constraints.add_window_constraints. 1 used to count as off here.
         if not per_teller_windows:
             if window_weeks <= 0:
                 return True
             return all(
-                abs(week - w) >= window_weeks
-                for w in assigned_weeks[person_id].get('pooled', set())
+                abs(day - d) >= 7 * window_weeks
+                for d in assigned_days[person_id].get('pooled', set())
             )
 
         # Cross-type floor: the smaller of the two configured windows still
         # applies between every pair of shifts regardless of type.
         if cross_type_floor > 0 and any(
-            abs(week - w) < cross_type_floor
-            for w in assigned_weeks[person_id].get('pooled', set())
+            abs(day - d) < 7 * cross_type_floor
+            for d in assigned_days[person_id].get('pooled', set())
         ):
             return False
 
@@ -223,8 +226,8 @@ def run_greedy_construction(
         if own_weeks > 0:
             group = _window_group(counter)
             if any(
-                abs(week - w) < own_weeks
-                for w in assigned_weeks[person_id].get(group, set())
+                abs(day - d) < 7 * own_weeks
+                for d in assigned_days[person_id].get(group, set())
             ):
                 return False
 
@@ -235,10 +238,10 @@ def run_greedy_construction(
             return True
         return all(abs(week - w) >= holiday_spread_weeks for w in assigned_feestdag_weeks[person_id])
 
-    def is_hard_eligible(person_id: str, slot: dict, week: int) -> bool:
+    def is_hard_eligible(person_id: str, slot: dict, day: int, week: int) -> bool:
         if (person_id, slot['id']) in blocked_slots:
             return False
-        if not window_ok(person_id, week, slot['shift_type_name']):
+        if not window_ok(person_id, day, slot['shift_type_name']):
             return False
         if not holiday_spread_ok(person_id, week, slot.get('is_feestdag', False)):
             return False
@@ -266,6 +269,7 @@ def run_greedy_construction(
         objective/cost to price it with.
         """
         counter = slot['shift_type_name']
+        day = _day_ordinal(slot['datum'])
         week = _week_ordinal(slot['datum'])
 
         order = list(people)
@@ -273,7 +277,7 @@ def run_greedy_construction(
 
         eligible = [
             p for p in order
-            if is_hard_eligible(p, slot, week) and has_room(p, counter)
+            if is_hard_eligible(p, slot, day, week) and has_room(p, counter)
         ]
         if not eligible:
             return None
@@ -325,11 +329,11 @@ def run_greedy_construction(
                 assignments.append({'person_id': person_id, 'slot_id': slot['id']})
                 counter = slot['shift_type_name']
                 assigned_count[person_id][counter] = assigned_count[person_id].get(counter, 0) + 1
-                week = _week_ordinal(slot['datum'])
-                assigned_weeks[person_id].setdefault('pooled', set()).add(week)
-                assigned_weeks[person_id].setdefault(_window_group(counter), set()).add(week)
+                day = _day_ordinal(slot['datum'])
+                assigned_days[person_id].setdefault('pooled', set()).add(day)
+                assigned_days[person_id].setdefault(_window_group(counter), set()).add(day)
                 if slot.get('is_feestdag'):
-                    assigned_feestdag_weeks[person_id].add(week)
+                    assigned_feestdag_weeks[person_id].add(_week_ordinal(slot['datum']))
                 filled += 1
             if filled < required:
                 unfilled_slots.append({'slot_id': slot['id'], 'shortfall': required - filled})

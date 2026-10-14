@@ -101,14 +101,15 @@ def test_window_rule_holds(variant):
 
 
 @pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
-@pytest.mark.parametrize('window_weeks,per_week', [(1, 1), (0, 2)])
-def test_a_window_of_one_week_means_at_most_one_shift_a_week(variant, window_weeks, per_week):
+@pytest.mark.parametrize('window_weeks', [1, 0])
+def test_a_window_of_one_week_keeps_seven_days_between_shifts(variant, window_weeks):
     """
-    Hard rule: window_weeks=1 is "at most one shift in any one week", the
-    same as the CP-SAT model (constraints.py); only 0 switches the rule off.
-    The greedy planner used to treat 1 as off, so one person could get a
-    Monday and a Thursday of the same week. Two slots a week, one person
-    who may take them all: 1 leaves one a week, 0 lets both through.
+    Hard rule: window_weeks=1 keeps at least 7 days between two shifts,
+    the same as the CP-SAT model (constraints.py); only 0 switches the rule
+    off. The greedy planner used to treat 1 as off, so one person could get
+    a Monday and a Thursday of the same week. Two slots a week, one person
+    who may take them all: 1 leaves them 7 days or more apart, 0 lets every
+    one through.
     """
     slots = []
     for w in range(4):
@@ -124,11 +125,75 @@ def test_a_window_of_one_week_means_at_most_one_shift_a_week(variant, window_wee
 
     result = run(['p1'], slots, window_weeks=window_weeks, variant=variant)
 
-    per_iso_week: dict[int, int] = {}
-    for a in result['assignments']:
-        week = int(a['slot_id'].split('-')[1].removeprefix('w'))
-        per_iso_week[week] = per_iso_week.get(week, 0) + 1
-    assert per_iso_week == {1: per_week, 2: per_week, 3: per_week, 4: per_week}, per_iso_week
+    datum_of = {s['id']: date.fromisoformat(s['datum']) for s in slots}
+    dates = sorted(datum_of[a['slot_id']] for a in result['assignments'])
+    if window_weeks == 0:
+        assert len(dates) == len(slots)
+    else:
+        assert dates, 'nothing assigned at all'
+        assert all((b - a).days >= 7 for a, b in zip(dates, dates[1:])), dates
+
+
+def slot_on(datum, teller='AVOND'):
+    """One slot on a given date."""
+    d = date.fromisoformat(datum)
+    iso_year, iso_week, _ = d.isocalendar()
+    return {
+        'id': f'slot-{datum}-{teller}',
+        'datum': datum,
+        'iso_jaar': iso_year,
+        'iso_week': iso_week,
+        'shift_type_id': 'st-1',
+        'shift_type_name': teller,
+        'benodigd_aantal_personen': 1,
+        'is_feestdag': False,
+        'feestdag_groep': None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# HARD RULE: the window counts days (0.22.0): N weeks = at least 7 * N days
+# between two shifts. It counted calendar weeks, and a Sunday and the
+# Monday two weeks later (8 days) both went to one person under a window
+# of 2 - the planner read it as 14 days.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+@pytest.mark.parametrize('window_weeks', [1, 2, 4])
+def test_the_window_keeps_seven_times_n_days_between_shifts(variant, window_weeks):
+    span = 7 * window_weeks
+    start = date(2027, 3, 7)  # a Sunday
+    # One day short of the window: never both.
+    close = [slot_on(start.isoformat()), slot_on((start + timedelta(days=span - 1)).isoformat())]
+    assert len(run(['p1'], close, window_weeks=window_weeks, variant=variant)['assignments']) == 1
+    # Exactly the window: both.
+    far = [slot_on(start.isoformat()), slot_on((start + timedelta(days=span)).isoformat())]
+    assert len(run(['p1'], far, window_weeks=window_weeks, variant=variant)['assignments']) == 2
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_a_sunday_and_the_monday_two_weeks_later_are_too_close_under_a_window_of_two(variant):
+    slots = [slot_on('2027-03-14'), slot_on('2027-03-22')]  # Sunday week 10, Monday week 12: 8 days
+    assert len(run(['p1'], slots, window_weeks=2, variant=variant)['assignments']) == 1
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_the_window_counts_days_from_the_previous_period_too(variant):
+    prior = [{'person_id': 'p1', 'datum': '2027-01-03', 'teller': 'AVOND'}]  # Sunday, ISO week 53 of 2026
+    assert run(['p1'], [slot_on('2027-01-16')], window_weeks=2, prior=prior, variant=variant)['assignments'] == []
+    assert len(run(['p1'], [slot_on('2027-01-17')], window_weeks=2, prior=prior, variant=variant)['assignments']) == 1
+
+
+@pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
+def test_per_teller_windows_count_days_too(variant):
+    # Avond 4 weeks (28 days), weekend/feestdag 2 (14): the smaller, 14
+    # days, between shifts of different kinds.
+    def both(a, b):
+        return len(run(['p1'], [a, b], window_weeks=2, window_weeks_avond=4, window_weeks_weekend_feestdag=2, variant=variant)['assignments']) == 2
+    assert not both(slot_on('2027-03-01'), slot_on('2027-03-13', 'WEEKEND'))  # 12 days
+    assert both(slot_on('2027-03-01'), slot_on('2027-03-20', 'WEEKEND'))  # 19 days
+    assert not both(slot_on('2027-03-01'), slot_on('2027-03-22'))  # avond 21 days < 28
+    assert both(slot_on('2027-03-01'), slot_on('2027-03-29'))  # avond 28 days
 
 
 @pytest.mark.parametrize('variant', ['medewerker', 'dagen'])
