@@ -27,6 +27,21 @@ export function isValidIsoDate(value: unknown): value is string {
 }
 
 /**
+ * A date as a planner's file may hold it: YYYY-MM-DD, or d-m-yyyy (also
+ * with / or .) the way a Dutch Excel writes a date back when it saves a
+ * CSV it opened. The real calendar date as YYYY-MM-DD, or null.
+ */
+export function parseDutchOrIsoDate(value: string): string | null {
+  const text = value.trim();
+  if (isValidIsoDate(text)) return text;
+  const nl = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(text);
+  if (!nl) return null;
+  const [, d, m, y] = nl;
+  const datum = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+  return isValidIsoDate(datum) ? datum : null;
+}
+
+/**
  * The longest a period may be, in days: two years, and some room for
  * rounding to whole ISO weeks. There was no limit at all, and every day
  * of a period becomes a slot - a year typed as 2207 instead of 2027 made

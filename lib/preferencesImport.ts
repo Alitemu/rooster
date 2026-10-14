@@ -27,6 +27,8 @@ import { markSubmissionStarted } from './submissionStatus';
 import { syncPatternsForPerson } from './parttimeSync';
 import { syncAbsencesForPerson } from './absenceSync';
 import { writePreferencesBackup } from './preferencesBackup';
+import { parseDutchOrIsoDate } from './isoDate';
+import { withoutFormulaGuard } from './csv';
 
 type Level = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 
@@ -81,13 +83,7 @@ interface Write {
  */
 export function parseDatum(value: string): string | null {
   if (/^\d{5}(\.0+)?$/.test(value)) return excelSerialToDate(Number(value));
-  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (iso) return value;
-  const nl = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/.exec(value);
-  if (!nl) return null;
-  const [, d, m, y] = nl;
-  const datum = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  return Number.isNaN(Date.parse(`${datum}T12:00:00Z`)) ? null : datum;
+  return parseDutchOrIsoDate(value);
 }
 
 function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: Write[] } {
@@ -126,7 +122,7 @@ function plan(periodId: string, rows: string[][]): { plan: ImportPlan; writes: W
     // A codenaam starting with =, +, - or @ was written as '-Anna by the
     // export (lib/csv.ts guards against spreadsheet formulas), and Excel
     // keeps that apostrophe: try the name without it too (audit 7).
-    const unguarded = /^'[=+\-@\t\r]/.test(naam) ? naam.slice(1) : naam;
+    const unguarded = withoutFormulaGuard(naam);
     const person =
       exact.get(naam) ?? anyCase.get(naam.toLowerCase()) ?? exact.get(unguarded) ?? anyCase.get(unguarded.toLowerCase());
     if (!person) {

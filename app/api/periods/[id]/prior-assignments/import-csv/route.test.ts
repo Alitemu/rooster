@@ -174,6 +174,39 @@ describe('POST /api/periods/[id]/prior-assignments/import-csv', () => {
     expect(priorRows(periodId)[0].person_id).toBeNull();
   });
 
+  // Audit 12: the file this import was built for is the app's own roster
+  // export - and a planner who opened that in a Dutch Excel and saved it
+  // gets the dates back as d-m-yyyy, and a codenaam the export guarded
+  // against formulas ('-Anna) with the apostrophe still on it. Every row
+  // was refused as "geen geldige datum".
+  it('reads the roster export after a Dutch Excel saved it', async () => {
+    const poolId = createPool();
+    const planner = createPerson('Planner-06', 'PLANNER');
+    const guarded = createPerson(`-Excel-${crypto.randomUUID().slice(0, 6)}`);
+    const plain = createPerson('Persoon-06');
+    const periodId = createPeriod(poolId);
+    const codenaam = (db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(guarded) as { codenaam: string }).codenaam;
+
+    const res = await POST(
+      plannerRequest(periodId, planner, {
+        rows: [
+          { datum: '1-1-2027', teller: 'Avond', codenaam: `'${codenaam}` },
+          { datum: '31-12-2026', teller: 'Avond', codenaam: 'Persoon-06' },
+        ],
+      }),
+      { params: Promise.resolve({ id: periodId }) }
+    );
+
+    expect(res.status).toBe(200);
+    const data = (await res.json()).data;
+    expect(data.errors).toEqual([]);
+    expect(data.imported).toBe(2);
+    expect(priorRows(periodId)).toEqual([
+      { datum: '2026-12-31', teller: 'AVOND', person_id: plain },
+      { datum: '2027-01-01', teller: 'AVOND', person_id: guarded },
+    ]);
+  });
+
   it('an invalid date or diensttype is reported and never reaches the database', async () => {
     const poolId = createPool();
     const planner = createPerson('Planner-05', 'PLANNER');

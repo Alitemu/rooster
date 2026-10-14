@@ -29,7 +29,8 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { objectRows, rowText, badRequest } from '@/lib/requestFields';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { parseDutchOrIsoDate } from '@/lib/isoDate';
+import { withoutFormulaGuard } from '@/lib/csv';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 
 interface ImportRow {
@@ -117,12 +118,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const importAll = db.transaction((importRows: ImportRow[]) => {
       importRows.forEach((row, i) => {
         const rowNum = i + 1;
-        const datum = rowText(row.datum);
+        // A file this app exported and a Dutch Excel saved again (audit 12):
+        // d-m-yyyy dates, and a codenaam starting with =, +, - or @ with
+        // the apostrophe lib/csv.ts guarded it with.
+        const datum = parseDutchOrIsoDate(rowText(row.datum));
         const tellerRaw = rowText(row.teller);
-        const codenaam = rowText(row.codenaam);
+        const codenaam = withoutFormulaGuard(rowText(row.codenaam));
 
-        if (!isValidIsoDate(datum)) {
-          errors.push(`Rij ${rowNum}: "${row.datum}" is geen geldige datum (JJJJ-MM-DD), overgeslagen`);
+        if (!datum) {
+          errors.push(`Rij ${rowNum}: "${row.datum}" is geen geldige datum (JJJJ-MM-DD of D-M-JJJJ), overgeslagen`);
           return;
         }
         const teller = normalizeTeller(tellerRaw);

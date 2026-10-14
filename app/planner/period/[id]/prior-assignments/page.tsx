@@ -10,7 +10,8 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { parseCsv } from '@/lib/csv';
+import { parseCsv, withoutFormulaGuard } from '@/lib/csv';
+import { parseDutchOrIsoDate } from '@/lib/isoDate';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 
@@ -179,9 +180,16 @@ export default function PriorAssignmentsPage() {
     const inRange: Array<{ datum: string; teller: string; codenaam: string }> = [];
     const warnings: string[] = [];
     let outOfRange = 0;
-    dataLines.forEach(([datum, , diensttype, codenaam], i) => {
+    dataLines.forEach(([rawDatum, , diensttype, codenaam], i) => {
       const rowNum = i + 2; // header is row 1
-      if (!datum) return;
+      if (!rawDatum) return;
+      // The roster export saved again by a Dutch Excel writes d-m-yyyy
+      // (audit 12): compared as text it fell outside every window.
+      const datum = parseDutchOrIsoDate(rawDatum);
+      if (!datum) {
+        warnings.push(`Rij ${rowNum}: "${rawDatum}" is geen datum, overgeslagen`);
+        return;
+      }
       if (diensttype === undefined) {
         warnings.push(`Rij ${rowNum}: niet genoeg kolommen, overgeslagen`);
         return;
@@ -199,7 +207,7 @@ export default function PriorAssignmentsPage() {
         outOfRange++;
         return;
       }
-      inRange.push({ datum, teller, codenaam: (codenaam || '').trim() });
+      inRange.push({ datum, teller, codenaam: withoutFormulaGuard((codenaam || '').trim()) });
     });
     setCsvRows(inRange);
     setCsvOutOfRangeCount(outOfRange);

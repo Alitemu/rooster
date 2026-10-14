@@ -23,6 +23,15 @@ function guardFormulaInjection(value: string): string {
 }
 
 /**
+ * A cell as this app wrote it, read back: the apostrophe csvField put in
+ * front of =, +, - or @ comes back from Excel with the value. For
+ * matching a codenaam a re-imported file names.
+ */
+export function withoutFormulaGuard(value: string): string {
+  return /^'[=+\-@\t\r]/.test(value) ? value.slice(1) : value;
+}
+
+/**
  * Quote and escape one CSV field, per RFC 4180 (double any embedded `"`),
  * and guard against formula injection (see above). `null`/`undefined`
  * become an empty field.
@@ -74,12 +83,19 @@ export function csvAttachment(prefix: string, naam: string): string {
  * double-quote CSV convention (a "" inside a quoted field is a literal
  * quote) without pulling in a full CSV library for what's still a simple,
  * few-column import.
+ *
+ * Commas or semicolons, whichever the first line uses more of outside
+ * quotes: a Dutch Excel saves "CSV" with semicolons (the list separator of
+ * Dutch regional settings), and the beginsaldi and "Eerdere toewijzingen"
+ * imports turned every such line into one cell - every codenaam unknown,
+ * the beginsaldi only noticed once the period had opened (audit 12). A
+ * byte order mark ("CSV UTF-8") is dropped.
  */
 export function parseCsv(text: string): string[][] {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '');
+  const delimiter = lines.length > 0 && countOutsideQuotes(lines[0], ';') > countOutsideQuotes(lines[0], ',') ? ';' : ',';
   const rows: string[][] = [];
-  for (const rawLine of text.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line) continue;
+  for (const line of lines) {
     const cells: string[] = [];
     let current = '';
     let inQuotes = false;
@@ -99,10 +115,10 @@ export function parseCsv(text: string): string[][] {
       } else if (char === '"' && current === '') {
         // Only a quote at the very start of a cell opens quoted mode (RFC
         // 4180) - a stray `"` typed mid-field (e.g. `Persoon"05`) must stay
-        // a literal character, not swallow the next comma as part of the
-        // "quoted" text and silently merge two columns.
+        // a literal character, not swallow the next delimiter as part of
+        // the "quoted" text and silently merge two columns.
         inQuotes = true;
-      } else if (char === ',') {
+      } else if (char === delimiter) {
         cells.push(current.trim());
         current = '';
       } else {
@@ -113,4 +129,14 @@ export function parseCsv(text: string): string[][] {
     rows.push(cells);
   }
   return rows;
+}
+
+function countOutsideQuotes(line: string, char: string): number {
+  let count = 0;
+  let inQuotes = false;
+  for (const c of line) {
+    if (c === '"') inQuotes = !inQuotes;
+    else if (c === char && !inQuotes) count++;
+  }
+  return count;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidIsoDate } from './isoDate';
+import { isValidIsoDate, parseDutchOrIsoDate } from './isoDate';
 
 /**
  * The hard rule: only a real calendar date in YYYY-MM-DD form passes.
@@ -48,5 +48,26 @@ describe('isValidIsoDate', () => {
     for (const value of [null, undefined, 20270104, {}, new Date()]) {
       expect(isValidIsoDate(value), String(value)).toBe(false);
     }
+  });
+});
+
+describe('parseDutchOrIsoDate', () => {
+  // Audit 12: a file this app exported and a Dutch Excel saved again
+  // holds its dates as d-m-yyyy.
+  it('reads ISO and the way a Dutch Excel writes a date back', () => {
+    expect(parseDutchOrIsoDate('2027-01-04')).toBe('2027-01-04');
+    expect(parseDutchOrIsoDate('4-1-2027')).toBe('2027-01-04');
+    expect(parseDutchOrIsoDate('04-01-2027')).toBe('2027-01-04');
+    expect(parseDutchOrIsoDate('4/1/2027')).toBe('2027-01-04');
+    expect(parseDutchOrIsoDate(' 31.12.2026 ')).toBe('2026-12-31');
+  });
+
+  it('only real calendar dates', () => {
+    expect(parseDutchOrIsoDate('29-2-2028')).toBe('2028-02-29');
+    expect(parseDutchOrIsoDate('29-2-2027')).toBeNull();
+    expect(parseDutchOrIsoDate('31-4-2027')).toBeNull();
+    expect(parseDutchOrIsoDate('1-13-2027')).toBeNull();
+    expect(parseDutchOrIsoDate('2027')).toBeNull();
+    expect(parseDutchOrIsoDate('')).toBeNull();
   });
 });

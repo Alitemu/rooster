@@ -140,3 +140,35 @@ describe('csvAttachment', () => {
     expect(header.split('filename="')[1].indexOf('"')).toBe(header.split('filename="')[1].indexOf('.csv"') + 4);
   });
 });
+
+describe('parseCsv on a file saved by a Dutch Excel', () => {
+  /**
+   * Audit 12: a Dutch Excel saves "CSV" with semicolons (the list
+   * separator of Dutch regional settings) and "CSV UTF-8" with a byte order
+   * mark. The beginsaldi in the setup wizard and the "Eerdere
+   * toewijzingen" import read only commas: every line became one cell,
+   * every codenaam "unknown" - for the beginsaldi only after the period
+   * had opened. The separator is now the one the header line uses.
+   */
+  it('reads semicolons when the header has them', () => {
+    expect(parseCsv('codenaam;AVOND_delta;WEEKEND_delta\r\nPersoon-01;-1;0\r\nPersoon-02;0;2')).toEqual([
+      ['codenaam', 'AVOND_delta', 'WEEKEND_delta'],
+      ['Persoon-01', '-1', '0'],
+      ['Persoon-02', '0', '2'],
+    ]);
+  });
+
+  it('keeps a semicolon inside quotes and drops the byte order mark', () => {
+    expect(parseCsv('﻿"datum";"teller";"codenaam"\n"2027-01-03";"Avond";"Persoon; 05"')).toEqual([
+      ['datum', 'teller', 'codenaam'],
+      ['2027-01-03', 'Avond', 'Persoon; 05'],
+    ]);
+  });
+
+  it('still reads commas, and a comma file whose names hold a semicolon', () => {
+    expect(parseCsv('codenaam,AVOND_delta\nPersoon;01,1')).toEqual([
+      ['codenaam', 'AVOND_delta'],
+      ['Persoon;01', '1'],
+    ]);
+  });
+});
