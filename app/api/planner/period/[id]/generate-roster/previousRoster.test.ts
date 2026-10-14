@@ -198,8 +198,10 @@ describe('generation takes the previous roster as it is now', () => {
     const p1 = period('2031-01-06', 'GESLOTEN');
     db.prepare('UPDATE dienstrooster_schedule_period SET overloop_bevestigd_op = ? WHERE id = ?').run(new Date().toISOString(), p1.id);
 
+    // A window of 2 weeks looks back both of P0's weeks (0.22.0: the
+    // window counts 14 days, so the whole window is history).
     const first = await derive(p1.id);
-    expect(first.data.derived_count).toBe(7);
+    expect(first.data.derived_count).toBe(14);
 
     // The planner corrected one day themselves.
     db.prepare(`UPDATE dienstrooster_prior_assignment SET person_id = ?, bron = 'HANDMATIG' WHERE period_id = ? AND datum = '2031-01-02'`).run(ids.A, p1.id);
@@ -215,6 +217,13 @@ describe('generation takes the previous roster as it is now', () => {
 
     const { input } = await generate(p1.id);
     expect(sent(input!)).toEqual({
+      '2030-12-23': 'D',
+      '2030-12-24': 'D',
+      '2030-12-25': 'D',
+      '2030-12-26': 'D',
+      '2030-12-27': 'D',
+      '2030-12-28': 'D',
+      '2030-12-29': 'D',
       '2030-12-30': 'A',
       '2030-12-31': 'B',
       '2031-01-01': 'C',

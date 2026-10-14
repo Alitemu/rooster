@@ -157,10 +157,11 @@ describe('Phase 1: Slot Generation', () => {
 });
 
 describe('Phase 1: Prior Assignment Derivation', () => {
-  it('should calculate weeks to look back (N-1)', () => {
-    expect(calculatePriorAssignmentWeeks(7)).toBe(6);
-    expect(calculatePriorAssignmentWeeks(35)).toBe(34);
-    expect(calculatePriorAssignmentWeeks(1)).toBe(0);
+  // 0.22.0: the window counts days, so the history reaches the whole window back.
+  it('should calculate weeks to look back (N)', () => {
+    expect(calculatePriorAssignmentWeeks(7)).toBe(7);
+    expect(calculatePriorAssignmentWeeks(35)).toBe(35);
+    expect(calculatePriorAssignmentWeeks(1)).toBe(1);
   });
 
   it('should calculate correct date range', () => {

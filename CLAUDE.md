@@ -536,7 +536,9 @@ out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
   other ledger row (they used datetime('now'), which sorts wrong as text).
 - **"Eerdere toewijzingen"** (dienstrooster_prior_assignment, the previous
   roster's last weeks for the window rule across the boundary, read by the
-  solver and lib/windowRule.ts): the AFGELEID rows follow the previous
+  solver and lib/windowRule.ts; the whole window back since the window
+  counts days, lib/priorAssignmentDerive.ts calculatePriorAssignmentWeeks,
+  N weeks where N - 1 did in calendar weeks): the AFGELEID rows follow the previous
   roster as it is now - `refreshDerivedPriorAssignments`
   (lib/previousPeriod.ts) at "afleiden" and before every generation, with
   an audit row when something changed. A day someone else works since (a
@@ -602,13 +604,22 @@ out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
   Sunday before a period was offered for its first Monday without a word,
   and a swap in a period's last week said nothing about the next one's
   first. countWindowRuleViolations (publication check) is unchanged.
-- **windowWeeks N = at most one shift in any N consecutive ISO weeks**, so
-  1 is one a week and 0 switches the rule off (solver/constraints.py,
-  solver/greedy.py, lib/windowRule.ts). With either per-teller window set,
+- **windowWeeks N = at least 7 x N days between two shifts of one
+  person** (0.22.0), counted between the shifts' dates, so 1 is 7 days and
+  0 switches the rule off (solver/constraints.py add_window_constraints and
+  add_prior_assignment_constraints, solver/greedy.py window_ok,
+  lib/windowRule.ts tooClose - the warnings, the publication check and
+  swaps). It counted ISO weeks (one shift in any N consecutive
+  Monday-to-Sunday weeks), and a Sunday and the Monday two weeks later, 8
+  days apart, passed a window of 2: the planner read it as "14 dagen of
+  meer tussen 2 diensten". The per-teller windows and the cross-type floor
+  work as before, in days. With either per-teller window set,
   generate-roster sends both as resolveWindowWeeks reads them (the solver
-  would read a missing one as 0). Up to 0.11 a window of 1 counted
-  as off. "Nobody twice in one ISO week" is this rule at 1 or more, not a
-  rule of its own.
+  would read a missing one as 0). Up to 0.11 a window of 1 counted as off.
+  "Nobody twice in one ISO week" follows from this rule at 1 or more, not
+  a rule of its own. The holiday spread (holidaySpreadWeeks) still counts
+  weeks. The way back, should rosters no longer solve, is the previous
+  release (0.21.0), not a setting.
 - **objectiveMode lexicographic** (solver/solver.py `_solve_lexicographic`):
   each phase starts from the previous phase's solution as hints, and a
   phase that finds nothing in its time falls back to the last phase that
@@ -701,6 +712,9 @@ Two formulas, both checked before generation:
 ```
 
 Show live in settings screen with interpretation in plain Dutch.
+Since the window counts days (0.22.0) a person can do floor((days - 1) /
+(7 x windowWeeks)) + 1 shifts at most, so formula 1 stays a cautious
+estimate rather than the exact maximum.
 
 ## Authentication
 
