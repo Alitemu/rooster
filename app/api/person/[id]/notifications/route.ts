@@ -23,7 +23,10 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     const periodId = searchParams.get('period_id');
     const type = searchParams.get('type');
     const unreadOnly = searchParams.get('unread_only') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '50');
+    // A number of notices, 1 to 200; anything else the default. parseInt
+    // turned "abc" into NaN (a 500 from SQLite) and "-1" into no limit.
+    const requested = Number(searchParams.get('limit'));
+    const limit = Number.isInteger(requested) && requested >= 1 && requested <= 200 ? requested : 50;
 
     // Verify person exists
     const person = db

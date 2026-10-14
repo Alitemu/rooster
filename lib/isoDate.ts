@@ -25,3 +25,24 @@ export function isValidIsoDate(value: unknown): value is string {
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
+
+/**
+ * The longest a period may be, in days: two years, and some room for
+ * rounding to whole ISO weeks. There was no limit at all, and every day
+ * of a period becomes a slot - a year typed as 2207 instead of 2027 made
+ * a period of 180 years (66,000 slots when it opened), and the wizard's
+ * live capacity check worked through every day of whatever the address
+ * held, on the one thread that serves everyone (audit 11).
+ */
+export const MAX_PERIODE_DAGEN = 750;
+
+/**
+ * Why `start`..`eind` (both valid YYYY-MM-DD) can't be a period, or null:
+ * start not before the end, or longer than MAX_PERIODE_DAGEN.
+ */
+export function periodRangeProblem(start: string, eind: string): string | null {
+  const days = (Date.parse(`${eind}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / 86_400_000;
+  if (days <= 0) return 'Startdatum moet vóór einddatum liggen';
+  if (days > MAX_PERIODE_DAGEN) return 'Een periode mag hoogstens twee jaar duren. Kijk het jaartal na.';
+  return null;
+}

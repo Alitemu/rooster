@@ -10,6 +10,7 @@ import { checkCapacity, getCapacityInterpretation } from '@/lib/capacity';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
+import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
 import {
   resolveBands,
   countNominalAvondWeekendDays,
@@ -113,6 +114,19 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const eindDatumOverride = req.nextUrl.searchParams.get('eind_datum');
     if (startDatumOverride) period.start_datum = startDatumOverride;
     if (eindDatumOverride) period.eind_datum = eindDatumOverride;
+    // Real dates and a real period only: everything below works through
+    // every day between them, on the one thread that serves everyone. A
+    // year typed as 2207 used to make it count 66,000 days (audit 11).
+    if (startDatumOverride || eindDatumOverride) {
+      const problem =
+        !isValidIsoDate(period.start_datum) || !isValidIsoDate(period.eind_datum)
+          ? 'Ongeldige datumnotatie. Gebruik ISO-8601 (JJJJ-MM-DD)'
+          : periodRangeProblem(period.start_datum, period.eind_datum);
+      if (problem) {
+        const response: ApiErrorResponse = { success: false, error: { code: 'INVALID_PERIOD', message: problem } };
+        return NextResponse.json(response, { status: 400 });
+      }
+    }
 
     // Count active pool members
     const membersStmt = db.prepare(`

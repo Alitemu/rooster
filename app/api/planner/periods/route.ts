@@ -9,7 +9,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { parseISO } from '@/lib/holidays';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -106,12 +106,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 400 });
     }
 
-    if (start >= end) {
+    // Start before end, and at most two years: every day becomes a slot
+    // (lib/isoDate.ts periodRangeProblem, audit 11).
+    const rangeProblem = start >= end ? 'Startdatum moet vóór einddatum liggen' : periodRangeProblem(body.start_datum, body.eind_datum);
+    if (rangeProblem) {
       const response: ApiErrorResponse = {
         success: false,
         error: {
           code: 'INVALID_PERIOD',
-          message: 'Startdatum moet vóór einddatum liggen',
+          message: rangeProblem,
         },
       };
       return NextResponse.json(response, { status: 400 });

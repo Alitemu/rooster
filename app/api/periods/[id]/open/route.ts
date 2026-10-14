@@ -18,7 +18,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
 
@@ -134,10 +134,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 400 });
     }
 
-    if (startCheck >= endCheck) {
+    // Start before end, and at most two years: every day becomes a slot
+    // (lib/isoDate.ts periodRangeProblem, audit 11).
+    const rangeProblem = startCheck >= endCheck ? 'Startdatum moet vóór einddatum liggen' : periodRangeProblem(start_datum, eind_datum);
+    if (rangeProblem) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_PERIOD', message: 'Startdatum moet vóór einddatum liggen' },
+        error: { code: 'INVALID_PERIOD', message: rangeProblem },
       };
       return NextResponse.json(response, { status: 400 });
     }

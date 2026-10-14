@@ -324,7 +324,18 @@ Example: If the ORM guarantees a constraint, don't also check in code.
   reset-roster does: the solver's answer, written when it comes, was built
   without the change - on the same day it killed the whole result on the
   UNIQUE constraint, on another it could give someone a second shift that
-  week (audit 10).
+  week (audit 10). Publish too (audit 11): it mailed everyone the roster
+  being replaced, and the generation then died on the row_version.
+- **Venster/streefbereik of a generated roster** (PATCH
+  /api/periods/[id]/ruleset, the generation dialog saves its edits there
+  at "Genereren"): GEGENEREERD goes back to GESLOTEN, like "Rooster
+  verwijderen", so it waits for a new generation with the preferences
+  still closed. It went to OPEN, which opened them again whenever the
+  deadline was still ahead (audit 11).
+- **Length:** a period is at most two years (lib/isoDate.ts
+  MAX_PERIODE_DAGEN, periodRangeProblem; create, open, the capacity
+  check's date overrides and the wizard's first step). Every day becomes a
+  slot: a year typed as 2207 made a period of 180 years (audit 11).
 
 **Undo on the period page:** a manual assign/reassign/remove leaves one
 "ongedaan maken" (lib/pendingUndo.ts) that records its `onderdeel` - the
@@ -549,6 +560,19 @@ of the period got shifts nobody could take.
   edit there). A period's band is required when it opens and frozen with
   the then-members, so a pool that changed afterwards needed this (audit 9:
   5-6 avonddiensten worked out for 30 people, generated for 15).
+- **Window warnings look across the boundary** (lib/windowRule.ts
+  shiftsAround, audit 11): personWouldViolateWindowRule and
+  getWindowConflictingPersonIds - manual-assign and reassign warnings, the
+  "venster" group in pick lists and herverdeling, swap warnings - weigh the
+  person's shifts in this period, in the pool's other periods outside the
+  prullenbak (a generated or published roster, or a MANUAL/OVERRIDE
+  pre-fill in one still being made; a SOLVER row of a period waiting to be
+  generated again is no roster) and the period's "Eerdere toewijzingen".
+  They looked inside the period only, while the solver and the
+  publication check already looked across: someone who worked the last
+  Sunday before a period was offered for its first Monday without a word,
+  and a swap in a period's last week said nothing about the next one's
+  first. countWindowRuleViolations (publication check) is unchanged.
 - **windowWeeks N = at most one shift in any N consecutive ISO weeks**, so
   1 is one a week and 0 switches the rule off (solver/constraints.py,
   solver/greedy.py, lib/windowRule.ts). With either per-teller window set,
@@ -1000,7 +1024,9 @@ an en dash, euro sign or emoji used to make every export answer 500.
 lib/api-errors.ts parseJsonBody (read no further; also before login).
 Free text a participant types - swap toelichting, rejection reason,
 absence notitie - goes through lib/freeText.ts (1000 characters).
-parseJsonBody only guarantees a plain object: a field holding a number,
+A number in a query string is checked like one in a body: the
+participant's notices take `limit` 1-200, anything else the default (it
+was parseInt: "abc" a 500, "-1" no limit). parseJsonBody only guarantees a plain object: a field holding a number,
 list or object where text or rows belong goes through
 lib/requestFields.ts (optionalText, rowText, objectRows, badRequest) and
 gets a Dutch 400, never a 500; app/api/routeInput.test.ts calls every

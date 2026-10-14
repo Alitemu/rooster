@@ -25,6 +25,7 @@ import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { parseCsv } from '@/lib/csv';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
+import { periodRangeProblem } from '@/lib/isoDate';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -920,6 +921,8 @@ export function SetupWizard({ period, onComplete }: Props) {
       return 'Ongeldige datumnotatie';
     }
     if (start >= end) return 'Startdatum moet vóór einddatum liggen';
+    const rangeProblem = periodRangeProblem(periodData.start_datum, periodData.eind_datum);
+    if (rangeProblem) return rangeProblem;
     if (deadline < new Date()) return 'Deadline mag niet in het verleden liggen';
     if (deadline >= start) return 'Deadline moet vóór de startdatum liggen';
 
