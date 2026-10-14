@@ -247,7 +247,7 @@ export function getEligiblePeopleForSlot(
 
   const windowWeeks = getWindowWeeks(period);
   const windowConflicting = slot
-    ? getWindowConflictingPersonIds(periodId, slot.iso_jaar, slot.iso_week, slot.teller, windowWeeks, slotId)
+    ? getWindowConflictingPersonIds(periodId, slot.datum, slot.teller, windowWeeks, slotId)
     : new Set<string>();
 
   const bandStatus = computeBandStatusByPerson(periodId);
@@ -378,8 +378,7 @@ export function findUnfilledSlots(periodId: string): UnfilledSlot[] {
     const slotPreference = preferenceBySlot.get(slot.id) ?? new Map<string, SlotPreference>();
     const windowConflicting = getWindowConflictingPersonIds(
       periodId,
-      slot.iso_jaar,
-      slot.iso_week,
+      slot.datum,
       slot.teller,
       windowWeeks,
       slot.id

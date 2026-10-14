@@ -746,9 +746,11 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         />
                       </div>
                     </div>
-                    <p className="text-xs text-neutral-500">
-                      Het kleinste van deze twee geldt ook tussen een avonddienst en een weekend-
-                      of feestdagdienst.
+                    <p className="text-xs text-neutral-500" data-testid="venster-uitleg">
+                      Het venster telt in dagen: minstens {7 * ruleset.windowWeeksAvond} dagen tussen
+                      twee avonddiensten en minstens {7 * ruleset.windowWeeksWeekendFeestdag} tussen twee
+                      weekend- of feestdagdiensten van dezelfde persoon. Het kleinste van deze twee geldt
+                      ook tussen een avonddienst en een weekend- of feestdagdienst.
                     </p>
                     <FellowWeekendNotice periodId={periodId} vensterWeekend={ruleset.windowWeeksWeekendFeestdag} />
                     <div className="grid grid-cols-3 gap-3">

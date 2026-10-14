@@ -34,8 +34,7 @@ export interface SwapWindowConflicts {
 }
 
 interface SlotRow {
-  iso_jaar: number;
-  iso_week: number;
+  datum: string;
   teller: string;
 }
 
@@ -53,7 +52,7 @@ export function swapWindowConflicts(sides: SwapSides): SwapWindowConflicts {
   const windows = resolveWindowWeeks(resolveRulesetConfig(period));
 
   const slotStmt = db.prepare(
-    `SELECT s.iso_jaar, s.iso_week, st.teller
+    `SELECT s.datum, st.teller
      FROM dienstrooster_shift_slot s
      JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
      WHERE s.id = ?`
@@ -68,8 +67,7 @@ export function swapWindowConflicts(sides: SwapSides): SwapWindowConflicts {
   const requesterConflicts = personWouldViolateWindowRule(
     sides.periodId,
     sides.requesterPersonId,
-    requested.iso_jaar,
-    requested.iso_week,
+    requested.datum,
     requested.teller,
     windows,
     sides.offeredSlotId
@@ -78,8 +76,7 @@ export function swapWindowConflicts(sides: SwapSides): SwapWindowConflicts {
   const respondentConflicts = personWouldViolateWindowRule(
     sides.periodId,
     sides.respondentPersonId,
-    offered.iso_jaar,
-    offered.iso_week,
+    offered.datum,
     offered.teller,
     windows,
     sides.requestedSlotId

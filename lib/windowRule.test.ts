@@ -84,10 +84,10 @@ function createFixture(personCount: number, startDate: string, endDate: string):
   return trackFixture({ poolId, personIds, periodId, slotIds });
 }
 
-function slotById(slotId: string): { iso_jaar: number; iso_week: number } {
+function slotById(slotId: string): { iso_jaar: number; iso_week: number; datum: string } {
   return db
-    .prepare('SELECT iso_jaar, iso_week FROM dienstrooster_shift_slot WHERE id = ?')
-    .get(slotId) as { iso_jaar: number; iso_week: number };
+    .prepare('SELECT iso_jaar, iso_week, datum FROM dienstrooster_shift_slot WHERE id = ?')
+    .get(slotId) as { iso_jaar: number; iso_week: number; datum: string };
 }
 
 function assign(periodId: string, personId: string, slotId: string) {
@@ -159,8 +159,7 @@ describe('personWouldViolateWindowRule', () => {
     const violates = personWouldViolateWindowRule(
       f.periodId,
       f.personIds[0],
-      target.iso_jaar,
-      target.iso_week,
+      target.datum,
       'AVOND',
       pooled(2)
     );
@@ -178,8 +177,7 @@ describe('personWouldViolateWindowRule', () => {
     const violates = personWouldViolateWindowRule(
       f.periodId,
       f.personIds[0],
-      target.iso_jaar,
-      target.iso_week,
+      target.datum,
       'AVOND',
       pooled(2) // week 2 -> week 4 is exactly 2 weeks apart, allowed
     );
@@ -205,8 +203,7 @@ describe('personWouldViolateWindowRule', () => {
     const violates = personWouldViolateWindowRule(
       f.periodId,
       f.personIds[0],
-      target.iso_jaar,
-      target.iso_week,
+      target.datum,
       'AVOND',
       pooled(2)
     );
@@ -214,23 +211,40 @@ describe('personWouldViolateWindowRule', () => {
     expect(violates).toBe(true);
   });
 
-  it('never flags anything when windowWeeks is 0 or 1', () => {
+  it('flags nothing at a window of 0, and at 1 a shift 7 days on but not 3', () => {
     const f = createFixture(1, '2027-01-04', '2027-01-24');
     const week2Slot = f.slotIds.find((id) => slotById(id).iso_week === 2)!;
     const week3Slot = f.slotIds.find((id) => slotById(id).iso_week === 3)!;
-    assign(f.periodId, f.personIds[0], week2Slot);
+    assign(f.periodId, f.personIds[0], week2Slot); // Monday 11 January
 
-    const target = slotById(week3Slot);
+    const target = slotById(week3Slot); // Monday 18 January, 7 days on
     expect(
       personWouldViolateWindowRule(
-        f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND', pooled(0)
+        f.periodId, f.personIds[0], target.datum, 'AVOND', pooled(0)
       )
     ).toBe(false);
     expect(
       personWouldViolateWindowRule(
-        f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND', pooled(1)
+        f.periodId, f.personIds[0], target.datum, 'AVOND', pooled(1)
       )
     ).toBe(false);
+    expect(personWouldViolateWindowRule(f.periodId, f.personIds[0], '2027-01-14', 'AVOND', pooled(1))).toBe(true);
+  });
+
+  // 0.22.0: the window counts days, 7 * N between two shifts. Counted in
+  // calendar weeks a Sunday and the Monday two weeks later, 8 days apart,
+  // passed a window of 2 - the planner read it as 14 days.
+  it('counts days, not calendar weeks', () => {
+    const f = createFixture(1, '2027-03-01', '2027-03-28');
+    const onDay = (datum: string) => f.slotIds.find((id) => slotById(id).datum === datum)!;
+    assign(f.periodId, f.personIds[0], onDay('2027-03-14')); // Sunday, week 10
+
+    const check = (datum: string) => personWouldViolateWindowRule(f.periodId, f.personIds[0], datum, 'AVOND', pooled(2));
+    expect(check('2027-03-22')).toBe(true); // Monday week 12: 8 days
+    expect(check('2027-03-27')).toBe(true); // 13 days
+    expect(check('2027-03-28')).toBe(false); // 14 days
+    expect(check('2027-03-01')).toBe(true); // 13 days before: too close as well
+    expect(check('2027-02-28')).toBe(false); // 14 days before
   });
 
   it('excludes the slot being reassigned itself', () => {
@@ -245,8 +259,7 @@ describe('personWouldViolateWindowRule', () => {
       personWouldViolateWindowRule(
         f.periodId,
         f.personIds[0],
-        target.iso_jaar,
-        target.iso_week,
+        target.datum,
         'AVOND',
         pooled(2),
         slot
@@ -266,8 +279,7 @@ describe('getWindowConflictingPersonIds', () => {
     const target = slotById(week3Slot);
     const conflicting = getWindowConflictingPersonIds(
       f.periodId,
-      target.iso_jaar,
-      target.iso_week,
+      target.datum,
       'AVOND',
       pooled(2)
     );
@@ -336,7 +348,7 @@ describe('personWouldViolateWindowRule (per-teller windows, cross-type floor)', 
     // avond=2, weekendFeestdag=4 -> floor=2; week2 WEEKEND to week3 AVOND is
     // a 1-week gap, below the floor.
     const violates = personWouldViolateWindowRule(
-      f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND',
+      f.periodId, f.personIds[0], target.datum, 'AVOND',
       { avond: 2, weekendFeestdag: 4 }
     );
     expect(violates).toBe(true);
@@ -356,7 +368,7 @@ describe('personWouldViolateWindowRule (per-teller windows, cross-type floor)', 
     // a 2-week gap, clearing the floor - WEEKEND's own stricter 4-week cap
     // must not apply here, since this pair is cross-type.
     const violates = personWouldViolateWindowRule(
-      f.periodId, f.personIds[0], target.iso_jaar, target.iso_week, 'AVOND',
+      f.periodId, f.personIds[0], target.datum, 'AVOND',
       { avond: 2, weekendFeestdag: 4 }
     );
     expect(violates).toBe(false);
@@ -447,13 +459,23 @@ describe('countWindowRuleViolations', () => {
     db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ?').run(f.periodId);
   });
 
-  it('is a no-op when the window is 1 week or less, same as the per-slot check', () => {
+  it('at a window of 1 counts two shifts 7 days apart as clear and 3 apart as one violation', () => {
     const f = createFixture(1, '2027-01-04', '2027-01-24');
     const week1 = f.slotIds.find((id) => slotById(id).iso_week === 1)!;
     const week2 = f.slotIds.find((id) => slotById(id).iso_week === 2)!;
-    assign(f.periodId, f.personIds[0], week1);
-    assign(f.periodId, f.personIds[0], week2);
+    assign(f.periodId, f.personIds[0], week1); // Monday 4 January
+    assign(f.periodId, f.personIds[0], week2); // Monday 11 January
 
     expect(countWindowRuleViolations(f.periodId, { avond: 1, weekendFeestdag: 1 })).toBe(0);
+    assign(f.periodId, f.personIds[0], f.slotIds.find((id) => slotById(id).datum === '2027-01-14')!);
+    expect(countWindowRuleViolations(f.periodId, { avond: 1, weekendFeestdag: 1 })).toBe(1);
+  });
+
+  it('counts a Sunday and the Monday two weeks later under a window of 2 (0.22.0: days)', () => {
+    const f = createFixture(1, '2027-03-01', '2027-03-28');
+    const onDay = (datum: string) => f.slotIds.find((id) => slotById(id).datum === datum)!;
+    assign(f.periodId, f.personIds[0], onDay('2027-03-14'));
+    assign(f.periodId, f.personIds[0], onDay('2027-03-22'));
+    expect(countWindowRuleViolations(f.periodId, { avond: 2, weekendFeestdag: 2 })).toBe(1);
   });
 });

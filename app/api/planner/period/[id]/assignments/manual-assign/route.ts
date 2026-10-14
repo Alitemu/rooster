@@ -172,8 +172,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       personWouldViolateWindowRule(
         periodId,
         person_id as string,
-        slot.iso_jaar,
-        slot.iso_week,
+        slot.datum,
         slot.teller,
         windowWeeks,
         slot_id as string

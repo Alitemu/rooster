@@ -19,9 +19,9 @@ import { softDeletePeriod } from '@/lib/periodTrash';
  * in every period of the pool (outside the prullenbak) and at the
  * period's own "Eerdere toewijzingen" (history from before the app).
  *
- * A window of two weeks: at most one shift in any two consecutive ISO
- * weeks. P0 (published) is ISO weeks 2-3 of 2035, P1 weeks 4-5, P2 weeks
- * 6-7.
+ * A window of two weeks: at least 14 days between two shifts. P0
+ * (published) is ISO weeks 2-3 of 2035, P1 weeks 4-5, P2 weeks 6-7, one
+ * avonddienst every Wednesday (P1's: 24 and 31 January).
  */
 
 const RULES = { windowWeeks: 2, bandAvond: [0, 9], bandWeekend: [0, 9], bandFeestdag: [0, 9] };
@@ -115,15 +115,15 @@ afterAll(() => {
 
 describe('the window rule warns across the boundary between periods', () => {
   it('a shift in the last week of the period before', () => {
-    expect(personWouldViolateWindowRule(ids.p1, ids.A, 2035, 4, 'AVOND', W)).toBe(true);
-    expect(getWindowConflictingPersonIds(ids.p1, 2035, 4, 'AVOND', W)).toContain(ids.A);
+    expect(personWouldViolateWindowRule(ids.p1, ids.A, '2035-01-24', 'AVOND', W)).toBe(true);
+    expect(getWindowConflictingPersonIds(ids.p1, '2035-01-24', 'AVOND', W)).toContain(ids.A);
     // Two weeks on it is fine again.
-    expect(personWouldViolateWindowRule(ids.p1, ids.A, 2035, 5, 'AVOND', W)).toBe(false);
+    expect(personWouldViolateWindowRule(ids.p1, ids.A, '2035-01-31', 'AVOND', W)).toBe(false);
   });
 
   it('a shift in the first week of the period after', () => {
-    expect(personWouldViolateWindowRule(ids.p1, ids.C, 2035, 5, 'AVOND', W)).toBe(true);
-    expect(getWindowConflictingPersonIds(ids.p1, 2035, 5, 'AVOND', W)).toContain(ids.C);
+    expect(personWouldViolateWindowRule(ids.p1, ids.C, '2035-01-31', 'AVOND', W)).toBe(true);
+    expect(getWindowConflictingPersonIds(ids.p1, '2035-01-31', 'AVOND', W)).toContain(ids.C);
   });
 
   it('history from before the app, in "Eerdere toewijzingen"', () => {
@@ -139,12 +139,12 @@ describe('the window rule warns across the boundary between periods', () => {
       aangemaakt_door: ids.planner,
       aangemaakt_op: now,
     });
-    expect(personWouldViolateWindowRule(ids.p1, ids.D, 2035, 4, 'AVOND', W, slots['P1-0'].id)).toBe(true);
+    expect(personWouldViolateWindowRule(ids.p1, ids.D, '2035-01-24', 'AVOND', W, slots['P1-0'].id)).toBe(true);
   });
 
   it('not from a period in the prullenbak, nor from another pool', () => {
-    expect(personWouldViolateWindowRule(ids.p1, ids.E, 2035, 4, 'AVOND', W)).toBe(false);
-    expect(getWindowConflictingPersonIds(ids.p1, 2035, 4, 'AVOND', W)).not.toContain(ids.E);
+    expect(personWouldViolateWindowRule(ids.p1, ids.E, '2035-01-24', 'AVOND', W)).toBe(false);
+    expect(getWindowConflictingPersonIds(ids.p1, '2035-01-24', 'AVOND', W)).not.toContain(ids.E);
   });
 
   it('a swap in the last week warns about the next period', () => {

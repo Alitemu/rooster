@@ -57,11 +57,27 @@ const MUTATIONS = [
     tests: ['lib/rateLimit', 'app/api/auth/rateLimitConcurrency'],
   },
   {
-    name: 'window rule: two shifts one week too close count as fine',
+    name: 'window rule: two shifts one day short of the window count as fine',
     file: 'lib/windowRule.ts',
-    find: 'isoWeeksApart(a.iso_jaar, a.iso_week, b.iso_jaar, b.iso_week) < required) {',
-    replace: 'isoWeeksApart(a.iso_jaar, a.iso_week, b.iso_jaar, b.iso_week) < required - 1) {',
+    find: 'return weeks > 0 && daysApart(a, b) < 7 * weeks;',
+    replace: 'return weeks > 0 && daysApart(a, b) < 7 * weeks - 1;',
     tests: ['lib/windowRule', 'lib/publicationCheck'],
+  },
+  {
+    name: 'window rule: counted in calendar weeks again, not days',
+    file: 'lib/windowRule.ts',
+    find: 'return weeks > 0 && daysApart(a, b) < 7 * weeks;',
+    // Monday-based week numbers (day 0, 1 January 1970, was a Thursday).
+    replace:
+      'const week = (d: string) => Math.floor((Date.parse(`${d}T00:00:00Z`) / 86_400_000 + 3) / 7); return weeks > 0 && Math.abs(week(a) - week(b)) < weeks;',
+    tests: ['lib/windowRule', 'lib/windowRuleAcrossPeriods'],
+  },
+  {
+    name: 'eerdere toewijzingen: one week of history too little for a window in days',
+    file: 'lib/priorAssignmentDerive.ts',
+    find: 'return Math.max(0, windowWeeks);',
+    replace: 'return Math.max(0, windowWeeks - 1);',
+    tests: ['lib/priorAssignmentDerive'],
   },
   {
     name: "fellow: weekend band above the others' maximum",

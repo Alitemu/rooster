@@ -129,7 +129,7 @@ describe('the roster download, back into "Eerdere toewijzingen"', () => {
       params: Promise.resolve({ id: ids.next }),
     });
     const range = (await window.json()).data.date_range as [string, string];
-    expect(range).toEqual(['2026-12-28', '2027-01-03']);
+    expect(range).toEqual(['2026-12-21', '2027-01-03']);
 
     const preview = priorRowsInWindow(body.data.rows, range);
     expect(preview.warnings).toEqual([]);

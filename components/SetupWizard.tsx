@@ -1346,9 +1346,11 @@ export function SetupWizard({ period, onComplete }: Props) {
               </div>
             </div>
             <p className="text-xs text-neutral-500">
-              Het kleinste van deze twee vensters geldt ook tussen een avonddienst en een weekend-
-              of feestdagdienst. Een avonddienst kan dus wel een weekenddienst in de buurt
-              blokkeren en andersom, maar nooit strenger dan het kleinste ingestelde venster.
+              Het venster telt in dagen: bij 2 weken zitten er minstens 14 dagen tussen twee
+              diensten van dezelfde persoon, bij 4 weken minstens 28. Het kleinste van deze twee
+              vensters geldt ook tussen een avonddienst en een weekend- of feestdagdienst. Een
+              avonddienst kan dus wel een weekenddienst in de buurt blokkeren en andersom, maar
+              nooit strenger dan het kleinste ingestelde venster.
             </p>
 
             <div

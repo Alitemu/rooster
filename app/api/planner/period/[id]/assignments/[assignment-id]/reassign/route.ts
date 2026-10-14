@@ -170,8 +170,7 @@ export async function POST(
       personWouldViolateWindowRule(
         periodId,
         newPersonId as string,
-        slot.iso_jaar,
-        slot.iso_week,
+        slot.datum,
         slot.teller,
         windowWeeks,
         assignment.slot_id

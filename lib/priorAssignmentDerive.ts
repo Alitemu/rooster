@@ -27,17 +27,19 @@ export interface DerivedPriorAssignment {
 }
 
 /**
- * Count the number of weeks from end of prior period back.
- * For a period with 35 weeks, we look at the last (windowWeeks - 1) weeks.
+ * How many weeks of the previous period the window rule needs to see: the
+ * window itself. A window of N weeks keeps 7 * N days between two shifts
+ * (0.22.0), so a shift on the previous period's last Sunday still rules
+ * out the first 7 * N - 1 days of this one, and N whole weeks back cover
+ * that. Counted in calendar weeks the last N - 1 weeks were enough.
  *
- * Example: If previous period was 2026-01-05 to 2026-09-06 (35 weeks),
- * and current window is 7 weeks, we derive the last 6 weeks.
+ * Example: with a window of 7 weeks, the last 7 weeks of the previous
+ * period.
  */
 export function calculatePriorAssignmentWeeks(
   windowWeeks: number
 ): number {
-  // We need windowWeeks - 1 weeks from the previous period
-  return Math.max(0, windowWeeks - 1);
+  return Math.max(0, windowWeeks);
 }
 
 /**
@@ -96,8 +98,8 @@ export function calculatePriorAssignmentRange(
 ): [string, string] {
   // previousPeriodEndDate should be a Sunday
 
-  // weeksToLookBack is legitimately 0 (calculatePriorAssignmentWeeks(1)
-  // returns exactly that) - there's no lookback at all, so the range must
+  // weeksToLookBack is legitimately 0 (calculatePriorAssignmentWeeks(0),
+  // the window switched off) - there's no lookback at all, so the range must
   // come out empty. An inclusive [start, end] tuple can't represent a
   // zero-length range with start <= end, so this returns start = end + 1
   // day instead - still ordered "forward" rather than genuinely inverted,

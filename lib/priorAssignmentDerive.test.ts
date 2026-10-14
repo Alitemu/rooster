@@ -24,14 +24,18 @@ import { dateToISO, parseISO } from './holidays';
 
 describe('Prior Assignment Derivation', () => {
   describe('calculatePriorAssignmentWeeks', () => {
-    it('calculates windowWeeks - 1 weeks to lookback', () => {
-      expect(calculatePriorAssignmentWeeks(7)).toBe(6);
-      expect(calculatePriorAssignmentWeeks(5)).toBe(4);
-      expect(calculatePriorAssignmentWeeks(1)).toBe(0);
+    // 0.22.0: the window counts days, 7 * N between two shifts, so a shift
+    // on the previous period's last Sunday rules out 7 * N - 1 days of the
+    // next one, and the history has to reach the whole window back. In
+    // calendar weeks N - 1 was enough.
+    it('looks back the whole window', () => {
+      expect(calculatePriorAssignmentWeeks(7)).toBe(7);
+      expect(calculatePriorAssignmentWeeks(5)).toBe(5);
+      expect(calculatePriorAssignmentWeeks(1)).toBe(1);
     });
 
-    it('returns 0 for single-week windows', () => {
-      expect(calculatePriorAssignmentWeeks(1)).toBe(0);
+    it('looks back nothing when the window is off', () => {
+      expect(calculatePriorAssignmentWeeks(0)).toBe(0);
     });
   });
 
@@ -48,15 +52,15 @@ describe('Prior Assignment Derivation', () => {
   describe('resolvePriorAssignmentWeeks', () => {
     it('reads the window from the frozen ruleset', () => {
       const period = { pool_id: 'p', bevroren_ruleset_json: JSON.stringify({ windowWeeks: 5 }) };
-      expect(resolvePriorAssignmentWeeks(period)).toBe(4);
+      expect(resolvePriorAssignmentWeeks(period)).toBe(5);
     });
 
     it('falls back to the same default the solver uses, not to 7', () => {
-      // resolveWindowWeeks falls back to 2, so this must give 2 - 1 = 1.
-      // The old code answered 6 here, carrying five weeks of history that
-      // nothing asked for.
+      // resolveWindowWeeks falls back to 2, so this must give 2. The old
+      // code answered 6 here, carrying weeks of history that nothing asked
+      // for.
       const period = { pool_id: 'p', bevroren_ruleset_json: JSON.stringify({}) };
-      expect(resolvePriorAssignmentWeeks(period)).toBe(1);
+      expect(resolvePriorAssignmentWeeks(period)).toBe(2);
     });
 
     it('honours an explicitly configured window of 0', () => {
@@ -77,7 +81,7 @@ describe('Prior Assignment Derivation', () => {
           windowWeeksWeekendFeestdag: 6,
         }),
       };
-      expect(resolvePriorAssignmentWeeks(period)).toBe(5);
+      expect(resolvePriorAssignmentWeeks(period)).toBe(6);
     });
 
     it('lets a per-teller window override the pooled one', () => {
@@ -85,7 +89,7 @@ describe('Prior Assignment Derivation', () => {
         pool_id: 'p',
         bevroren_ruleset_json: JSON.stringify({ windowWeeks: 2, windowWeeksWeekendFeestdag: 8 }),
       };
-      expect(resolvePriorAssignmentWeeks(period)).toBe(7);
+      expect(resolvePriorAssignmentWeeks(period)).toBe(8);
     });
 
     it('survives a ruleset that is not valid JSON', () => {
@@ -97,7 +101,7 @@ describe('Prior Assignment Derivation', () => {
     });
 
     it('handles large window weeks', () => {
-      expect(calculatePriorAssignmentWeeks(52)).toBe(51);
+      expect(calculatePriorAssignmentWeeks(52)).toBe(52);
     });
   });
 
