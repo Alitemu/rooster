@@ -109,7 +109,7 @@ zoals nu bij een geblokkeerde dag.
    | Blok wo t/m vr (avond of nacht) | zaterdag en zondag |
    | Avondblok wo t/m za | zondag |
    | Nachtblok wo t/m za | zondag en maandag |
-   | Dag- of avonddienst op zaterdag, dagdienst op zondag, of allebei | de vrijdag ervoor en de maandag erna |
+   | Dag- of avonddienst op zaterdag en dagdienst op zondag (één ervan of allebei) | de vrijdag ervoor en de maandag erna |
    | Losse nacht op zaterdag | de vrijdag ervoor, de zondag en de maandag erna |
 
 8. Valt een compensatiedag op een werkdag die een feestdag is, dan schuift die
