@@ -431,5 +431,7 @@ describe('generateSlotsForPeriod on any period (property)', () => {
       }),
       { numRuns: 500 }
     );
-  });
+    // 500 periods of up to 401 days: past the 5 s default when the whole
+    // suite runs at once (audit 16).
+  }, 30_000);
 });

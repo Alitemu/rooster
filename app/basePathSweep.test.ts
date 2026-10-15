@@ -52,3 +52,33 @@ describe('every address the browser asks for has the sub-folder in front', () =>
     }
   });
 });
+
+/**
+ * Next.js's metadata files (icon, apple-icon, favicon.ico, opengraph-image,
+ * twitter-image, manifest, sitemap, robots) are linked by the framework
+ * itself, and Turbopack, which builds this app, links them without the
+ * base path: app/icon.tsx came out as /icon in a sub-folder build, a 404
+ * on every page and no tab icon (audit 16). Such a file is an ordinary
+ * route named in app/layout.tsx's metadata through withBasePath instead
+ * (app/tab-icon/route.tsx).
+ */
+describe('no Next.js metadata file the framework links without the sub-folder', () => {
+  it('app/ holds none of them', () => {
+    const conventions = /^(icon|apple-icon|opengraph-image|twitter-image)\d*\.[a-z]+$|^(favicon\.ico|manifest\.(json|webmanifest|ts|js)|sitemap\.(xml|ts|js)|robots\.(txt|ts|js))$/;
+    const found: string[] = [];
+    const walkAll = (dir: string): void => {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, e.name);
+        if (e.isDirectory()) walkAll(full);
+        else if (conventions.test(e.name)) found.push(full);
+      }
+    };
+    walkAll(path.resolve(__dirname));
+    expect(found).toEqual([]);
+  });
+
+  it('the layout names the tab icon with the sub-folder in front', () => {
+    const layout = fs.readFileSync(path.resolve(__dirname, 'layout.tsx'), 'utf8');
+    expect(layout).toMatch(/icons:\s*\{\s*icon:\s*\[\{\s*url:\s*withBasePath\('\/tab-icon'\)/);
+  });
+});

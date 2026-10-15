@@ -613,14 +613,17 @@ rec('The only >=400 is this script\'s own weak-password test',
     failedRequests.every((f) => /change-password/.test(f)),
     failedRequests.join(' | ') || 'none');
 
-// app/icon.tsx generates the browser-tab icon, so the /favicon.ico 404 that
-// every page load used to log is gone. Asserted rather than assumed: it is
-// a generated route, not a file on disk, so a build that stops emitting it
-// would otherwise only show up as that 404 quietly coming back.
-const iconRes = await page.request.get(`${BASE}/icon`);
-rec('The generated tab icon is served',
+// app/tab-icon/route.tsx generates the browser-tab icon, so the
+// /favicon.ico 404 that every page load used to log is gone. Asserted
+// rather than assumed: it is a generated route, not a file on disk, so a
+// build that stops emitting it would otherwise only show up as that 404
+// quietly coming back. Fetched where the page links it, which is where a
+// sub-folder build went wrong (audit 16).
+const iconHref = await page.locator('link[rel="icon"]').first().getAttribute('href');
+const iconRes = await page.request.get(new URL(iconHref || '/missing-icon-link', page.url()).toString());
+rec('The generated tab icon is served where the page links it',
     iconRes.status() === 200 && (iconRes.headers()['content-type'] || '').includes('image/'),
-    `${iconRes.status()} ${iconRes.headers()['content-type'] || ''}`);
+    `${iconHref} ${iconRes.status()} ${iconRes.headers()['content-type'] || ''}`);
 
 await browser.close();
 console.log(`\n${ok.length}/${ok.length + problems.length} passed`);

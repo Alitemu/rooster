@@ -13,12 +13,17 @@ import { ImageResponse } from 'next/og';
  * state the whole app is built around (a slot is either open or someone
  * has confirmed it). primary-600 (#0284c7, tailwind.config.ts) so the tab
  * icon and the app's own header bar read as the same product.
+ *
+ * A route of its own, named in app/layout.tsx's metadata with the
+ * sub-folder in front (lib/basePath.ts), not the app/icon.tsx file
+ * convention: Turbopack, which builds this app, links that one as /icon
+ * without the base path, so an installation in a sub-folder showed no
+ * icon and logged a 404 on every page (audit 16).
  */
 
-export const size = { width: 32, height: 32 };
-export const contentType = 'image/png';
+const size = { width: 32, height: 32 };
 
-export default function Icon() {
+export function GET() {
   return new ImageResponse(
     (
       <div

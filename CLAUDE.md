@@ -821,7 +821,10 @@ estimate rather than the exact maximum.
    - ADMIN ("beheerder") = everything a planner can (requirePlannerAccess)
      plus the staff accounts (requireAdminAccess, lib/staffAccounts.ts,
      /api/admin/accounts, page /planner/accounts linked from the period
-     list for ADMIN only): add a PLANNER/ADMIN with a temporary password,
+     list for ADMIN only; a planner who opens it anyway sees only "Alleen
+     een beheerder kan accounts beheren", no list and no form, and a list
+     that fails to load says so instead of "Accounts laden..." for good,
+     tests/e2e/accounts-access.e2e.ts, audit 16): add a PLANNER/ADMIN with a temporary password,
      give an account a temporary password, turn off its TOTP, switch it
      off or change its role. A temporary password sets
      `person.wachtwoord_moet_wijzigen` (migration 0021): the login session
@@ -997,6 +1000,14 @@ markSubmissionStarted in those routes), and the submission route refuses
 to hand in without it (the client's old `parttime_confirmed` flag is
 ignored).
 
+"Status voorkeuren" and the statusrapport download are one query
+(lib/periodProgress.ts loadPeriodProgress: the period's members, fellows
+last, blocked days without a fellow's weekend blocks, Deeltijd only for a
+pattern that overlaps the period, Deeltijd gecontroleerd, Fellow). The
+download had its own: it counted the fellow blocks as days blocked by
+hand, and both ticked Deeltijd for a pattern that ended a year before
+(audit 16, lib/periodProgress.test.ts).
+
 The planner reminds by hand from "Status voorkeuren": a "Herinnering
 sturen" per person (disabled once BEVESTIGD) and one below the table for
 everyone not BEVESTIGD, both POST /api/planner/period/[id]/remind - the
@@ -1083,8 +1094,16 @@ redirects anything outside it to it (BASE_PATH in .env). A new client
 fetch without withBasePath works at the root and breaks only in a
 sub-folder, so run the browser checks against a sub-folder build too:
 `NEXT_PUBLIC_BASE_PATH=/achterwacht npm run build`, start it the same
-way, and run them with `APP_URL=http://localhost:3000/achterwacht`
-(scripts and tests/e2e read APP_URL).
+way (the variable set at `npm start` too: next.config is read again
+there), and run them with `APP_URL=http://localhost:3000/achterwacht`
+(scripts and tests/e2e read APP_URL). No Next.js metadata file
+convention under app/ (icon.tsx, apple-icon, opengraph-image, favicon.ico,
+manifest, sitemap, robots): Turbopack, which builds this app, links those
+without the base path, and the tab icon was a 404 on every page in a
+sub-folder (audit 16). The icon is its own route, app/tab-icon/route.tsx,
+linked in app/layout.tsx's metadata through withBasePath;
+app/basePathSweep.test.ts refuses such a file and tests/e2e/tab-icon.e2e.ts
+fetches the icon where the page links it.
 
 **Backups and a clean start:** lib/dbBackup.ts writes one `VACUUM INTO`
 copy a day to `<db dir>/backups/database/rooster-YYYY-MM-DD.db` (local

@@ -430,6 +430,27 @@ const MUTATIONS = [
     replace: 'if (current.length >= 1) {',
     tests: ['lib/membershipDefaults'],
   },
+  {
+    name: 'status voorkeuren: a part-time pattern outside the period counted',
+    file: 'lib/periodProgress.ts',
+    find: 'WHERE pp.person_id = p.id AND pp.geldig_vanaf <= sp.eind_datum AND pp.geldig_tot >= sp.start_datum',
+    replace: 'WHERE pp.person_id = p.id',
+    tests: ['lib/periodProgress'],
+  },
+  {
+    name: "status voorkeuren: a fellow's weekend blocks counted as their own",
+    file: 'lib/periodProgress.ts',
+    find: 'AND av.fellow_blok = 0) as blocked_days_count',
+    replace: ') as blocked_days_count',
+    tests: ['lib/periodProgress'],
+  },
+  {
+    name: 'tab icon: linked without the sub-folder',
+    file: 'app/layout.tsx',
+    find: "url: withBasePath('/tab-icon')",
+    replace: "url: '/tab-icon'",
+    tests: ['app/basePathSweep'],
+  },
 ];
 
 const only = process.argv[2];

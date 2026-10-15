@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import { AppHeader } from '@/components/AppHeader';
 import packageJson from '../package.json';
+import { withBasePath } from '@/lib/basePath';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -9,6 +10,8 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'Dienstrooster',
   description: 'Verdeling van diensten voor medische afdelingen',
+  // The tab icon's own route (app/tab-icon/route.tsx), with the sub-folder.
+  icons: { icon: [{ url: withBasePath('/tab-icon'), type: 'image/png', sizes: '32x32' }] },
 };
 
 /**

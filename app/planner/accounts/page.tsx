@@ -58,6 +58,9 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
   const [me, setMe] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A planner without the beheerder role: the notice only, no list and no
+  // form that can only be refused (audit 16).
+  const [geenToegang, setGeenToegang] = useState(false);
   const [melding, setMelding] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [nieuw, setNieuw] = useState({
@@ -78,14 +81,21 @@ export default function AccountsPage() {
       ]);
       const meData = await meRes.json();
       setMe(meData?.data?.person_id ?? null);
+      if (listRes.status === 401 || listRes.status === 403) {
+        setGeenToegang(true);
+        setAccounts([]);
+        return;
+      }
       if (!listRes.ok) {
-        setError('Alleen een beheerder kan accounts beheren.');
+        setError('Laden van accounts mislukt');
         setAccounts([]);
         return;
       }
       setAccounts((await listRes.json()).data);
     } catch {
+      // Without a list the page stayed on "Accounts laden..." for good.
       setError('Laden van accounts mislukt');
+      setAccounts([]);
     }
   }, []);
 
@@ -153,8 +163,13 @@ export default function AccountsPage() {
         </p>
       </div>
 
+      {geenToegang && (
+        <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800" role="alert">
+          Alleen een beheerder kan accounts beheren.
+        </div>
+      )}
       {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>}
-      {melding && (
+      {!geenToegang && melding && (
         <div className="card p-4 bg-green-50 border border-green-200 text-sm text-green-800" role="status">
           {melding}
         </div>
@@ -174,203 +189,207 @@ export default function AccountsPage() {
         </div>
       )}
 
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-neutral-100">
-            <tr>
-              <th className="px-3 py-2 text-left">Codenaam</th>
-              <th className="px-3 py-2 text-left">Rol</th>
-              <th className="px-3 py-2 text-left">Dienst</th>
-              <th className="px-3 py-2 text-left">Status</th>
-              <th className="px-3 py-2 text-left">Tweestapsverificatie</th>
-              <th className="px-3 py-2 text-left">Acties</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {accounts.map((a) => {
-              const eigen = a.id === me;
-              return (
-                <tr key={a.id} className={a.actief ? '' : 'bg-neutral-50 text-neutral-500'}>
-                  <td className="px-3 py-2 font-medium">
-                    {a.codenaam}
-                    {eigen && <span className="ml-2 text-xs text-neutral-500">(jij)</span>}
-                  </td>
-                  <td className="px-3 py-2">
-                    {eigen ? (
-                      ROL_LABEL[a.rol]
-                    ) : (
-                      <select
-                        aria-label={`Rol van ${a.codenaam}`}
-                        value={a.rol}
-                        disabled={busy}
-                        onChange={(e) =>
-                          run(
-                            () => send(`/api/admin/accounts/${a.id}`, 'PATCH', { rol: e.target.value }),
-                            `${a.codenaam} is nu ${ROL_LABEL[e.target.value as Account['rol']].toLowerCase()}.`
-                          )
-                        }
-                        className="px-2 py-1 border rounded text-sm"
-                      >
-                        <option value="PLANNER">Planner</option>
-                        <option value="ADMIN">Beheerder</option>
-                      </select>
-                    )}
-                  </td>
-                  <td className="px-3 py-2">{a.dienst_type ? DIENST_LABEL[a.dienst_type] : 'Achterwacht'}</td>
-                  <td className="px-3 py-2">
-                    {!a.actief
-                      ? 'Uitgeschakeld'
-                      : !a.wachtwoord_ingesteld
-                        ? 'Nog geen wachtwoord'
-                        : a.wachtwoord_moet_wijzigen
-                          ? 'Tijdelijk wachtwoord'
-                          : 'Actief'}
-                  </td>
-                  <td className="px-3 py-2">{a.tweestapsverificatie ? 'Aan' : 'Uit'}</td>
-                  <td className="px-3 py-2">
-                    {eigen ? (
-                      <span className="text-xs text-neutral-500">Via Wachtwoord wijzigen</span>
-                    ) : resetVoor?.id === a.id ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <input
-                          type="text"
-                          aria-label={`Tijdelijk wachtwoord voor ${a.codenaam}`}
-                          value={resetVoor.wachtwoord}
-                          onChange={(e) => setResetVoor({ id: a.id, wachtwoord: e.target.value })}
-                          className="px-2 py-1 border rounded text-sm font-mono w-44"
-                        />
-                        <button className="btn-primary" disabled={busy} onClick={() => resetPassword(a)}>
-                          Instellen
-                        </button>
-                        <button className="btn-secondary" disabled={busy} onClick={() => setResetVoor(null)}>
-                          Annuleren
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-3">
-                        <button
-                          className="text-xs font-medium text-blue-700 hover:underline"
+      {!geenToegang && (
+        <>
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-100">
+              <tr>
+                <th className="px-3 py-2 text-left">Codenaam</th>
+                <th className="px-3 py-2 text-left">Rol</th>
+                <th className="px-3 py-2 text-left">Dienst</th>
+                <th className="px-3 py-2 text-left">Status</th>
+                <th className="px-3 py-2 text-left">Tweestapsverificatie</th>
+                <th className="px-3 py-2 text-left">Acties</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {accounts.map((a) => {
+                const eigen = a.id === me;
+                return (
+                  <tr key={a.id} className={a.actief ? '' : 'bg-neutral-50 text-neutral-500'}>
+                    <td className="px-3 py-2 font-medium">
+                      {a.codenaam}
+                      {eigen && <span className="ml-2 text-xs text-neutral-500">(jij)</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      {eigen ? (
+                        ROL_LABEL[a.rol]
+                      ) : (
+                        <select
+                          aria-label={`Rol van ${a.codenaam}`}
+                          value={a.rol}
                           disabled={busy}
-                          onClick={() => setResetVoor({ id: a.id, wachtwoord: randomPassword() })}
+                          onChange={(e) =>
+                            run(
+                              () => send(`/api/admin/accounts/${a.id}`, 'PATCH', { rol: e.target.value }),
+                              `${a.codenaam} is nu ${ROL_LABEL[e.target.value as Account['rol']].toLowerCase()}.`
+                            )
+                          }
+                          className="px-2 py-1 border rounded text-sm"
                         >
-                          Wachtwoord resetten
-                        </button>
-                        {a.tweestapsverificatie && (
+                          <option value="PLANNER">Planner</option>
+                          <option value="ADMIN">Beheerder</option>
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">{a.dienst_type ? DIENST_LABEL[a.dienst_type] : 'Achterwacht'}</td>
+                    <td className="px-3 py-2">
+                      {!a.actief
+                        ? 'Uitgeschakeld'
+                        : !a.wachtwoord_ingesteld
+                          ? 'Nog geen wachtwoord'
+                          : a.wachtwoord_moet_wijzigen
+                            ? 'Tijdelijk wachtwoord'
+                            : 'Actief'}
+                    </td>
+                    <td className="px-3 py-2">{a.tweestapsverificatie ? 'Aan' : 'Uit'}</td>
+                    <td className="px-3 py-2">
+                      {eigen ? (
+                        <span className="text-xs text-neutral-500">Via Wachtwoord wijzigen</span>
+                      ) : resetVoor?.id === a.id ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            type="text"
+                            aria-label={`Tijdelijk wachtwoord voor ${a.codenaam}`}
+                            value={resetVoor.wachtwoord}
+                            onChange={(e) => setResetVoor({ id: a.id, wachtwoord: e.target.value })}
+                            className="px-2 py-1 border rounded text-sm font-mono w-44"
+                          />
+                          <button className="btn-primary" disabled={busy} onClick={() => resetPassword(a)}>
+                            Instellen
+                          </button>
+                          <button className="btn-secondary" disabled={busy} onClick={() => setResetVoor(null)}>
+                            Annuleren
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-3">
                           <button
                             className="text-xs font-medium text-blue-700 hover:underline"
                             disabled={busy}
+                            onClick={() => setResetVoor({ id: a.id, wachtwoord: randomPassword() })}
+                          >
+                            Wachtwoord resetten
+                          </button>
+                          {a.tweestapsverificatie && (
+                            <button
+                              className="text-xs font-medium text-blue-700 hover:underline"
+                              disabled={busy}
+                              onClick={() =>
+                                run(
+                                  () => send(`/api/admin/accounts/${a.id}/totp-disable`, 'POST'),
+                                  `Tweestapsverificatie van ${a.codenaam} staat uit. ${a.codenaam} logt nu in met alleen het wachtwoord.`
+                                )
+                              }
+                            >
+                              Tweestapsverificatie uitzetten
+                            </button>
+                          )}
+                          <button
+                            className="text-xs font-medium text-red-700 hover:underline"
+                            disabled={busy}
                             onClick={() =>
                               run(
-                                () => send(`/api/admin/accounts/${a.id}/totp-disable`, 'POST'),
-                                `Tweestapsverificatie van ${a.codenaam} staat uit. ${a.codenaam} logt nu in met alleen het wachtwoord.`
+                                () => send(`/api/admin/accounts/${a.id}`, 'PATCH', { actief: !a.actief }),
+                                a.actief ? `${a.codenaam} is uitgeschakeld en kan niet meer inloggen.` : `${a.codenaam} kan weer inloggen.`
                               )
                             }
                           >
-                            Tweestapsverificatie uitzetten
+                            {a.actief ? 'Uitschakelen' : 'Inschakelen'}
                           </button>
-                        )}
-                        <button
-                          className="text-xs font-medium text-red-700 hover:underline"
-                          disabled={busy}
-                          onClick={() =>
-                            run(
-                              () => send(`/api/admin/accounts/${a.id}`, 'PATCH', { actief: !a.actief }),
-                              a.actief ? `${a.codenaam} is uitgeschakeld en kan niet meer inloggen.` : `${a.codenaam} kan weer inloggen.`
-                            )
-                          }
-                        >
-                          {a.actief ? 'Uitschakelen' : 'Inschakelen'}
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="card p-6 space-y-3">
-        <p className="text-sm font-medium text-neutral-800">Nieuw account</p>
-        <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
-          <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-codenaam">
-              Codenaam
-            </label>
-            <input
-              id="nieuw-codenaam"
-              type="text"
-              value={nieuw.codenaam}
-              onChange={(e) => setNieuw({ ...nieuw, codenaam: e.target.value })}
-              placeholder="bijv. planner2"
-              className="w-full px-2 py-2 border rounded text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-rol">
-              Rol
-            </label>
-            <select
-              id="nieuw-rol"
-              value={nieuw.rol}
-              onChange={(e) => setNieuw({ ...nieuw, rol: e.target.value as Account['rol'] })}
-              className="w-full px-2 py-2 border rounded text-sm"
-            >
-              <option value="PLANNER">Planner</option>
-              <option value="ADMIN">Beheerder</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-dienst">
-              Dienst
-            </label>
-            <select
-              id="nieuw-dienst"
-              value={nieuw.dienst_type}
-              onChange={(e) => setNieuw({ ...nieuw, dienst_type: e.target.value as 'ACHTERWACHT' | 'AIOS' })}
-              className="w-full px-2 py-2 border rounded text-sm"
-            >
-              <option value="ACHTERWACHT">Achterwacht</option>
-              <option value="AIOS">AIOS (nog niet in productie)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-wachtwoord">
-              Tijdelijk wachtwoord
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="nieuw-wachtwoord"
-                type="text"
-                value={nieuw.wachtwoord}
-                onChange={(e) => setNieuw({ ...nieuw, wachtwoord: e.target.value })}
-                className="w-full px-2 py-2 border rounded text-sm font-mono"
-              />
-              <button
-                type="button"
-                className="btn-secondary whitespace-nowrap"
-                onClick={() => setNieuw({ ...nieuw, wachtwoord: randomPassword() })}
-              >
-                Maak er een
-              </button>
-            </div>
-          </div>
-          <button
-            className="btn-primary"
-            disabled={busy || !nieuw.codenaam.trim() || !nieuw.wachtwoord || !DIENST_IN_PRODUCTIE[nieuw.dienst_type]}
-            onClick={addAccount}
-          >
-            Toevoegen
-          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-        {!DIENST_IN_PRODUCTIE[nieuw.dienst_type] && (
-          <p className="text-sm text-amber-900 bg-amber-50 border border-amber-300 rounded p-3" role="status" data-testid="dienst-niet-in-productie">
-            Het rooster voor de AIOS is nog niet in productie. Een account voor de AIOS kun je daarom
-            nog niet aanmaken. Kies voorlopig Achterwacht.
-          </p>
-        )}
-      </div>
+
+        <div className="card p-6 space-y-3">
+          <p className="text-sm font-medium text-neutral-800">Nieuw account</p>
+          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 items-end">
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-codenaam">
+                Codenaam
+              </label>
+              <input
+                id="nieuw-codenaam"
+                type="text"
+                value={nieuw.codenaam}
+                onChange={(e) => setNieuw({ ...nieuw, codenaam: e.target.value })}
+                placeholder="bijv. planner2"
+                className="w-full px-2 py-2 border rounded text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-rol">
+                Rol
+              </label>
+              <select
+                id="nieuw-rol"
+                value={nieuw.rol}
+                onChange={(e) => setNieuw({ ...nieuw, rol: e.target.value as Account['rol'] })}
+                className="w-full px-2 py-2 border rounded text-sm"
+              >
+                <option value="PLANNER">Planner</option>
+                <option value="ADMIN">Beheerder</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-dienst">
+                Dienst
+              </label>
+              <select
+                id="nieuw-dienst"
+                value={nieuw.dienst_type}
+                onChange={(e) => setNieuw({ ...nieuw, dienst_type: e.target.value as 'ACHTERWACHT' | 'AIOS' })}
+                className="w-full px-2 py-2 border rounded text-sm"
+              >
+                <option value="ACHTERWACHT">Achterwacht</option>
+                <option value="AIOS">AIOS (nog niet in productie)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="nieuw-wachtwoord">
+                Tijdelijk wachtwoord
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="nieuw-wachtwoord"
+                  type="text"
+                  value={nieuw.wachtwoord}
+                  onChange={(e) => setNieuw({ ...nieuw, wachtwoord: e.target.value })}
+                  className="w-full px-2 py-2 border rounded text-sm font-mono"
+                />
+                <button
+                  type="button"
+                  className="btn-secondary whitespace-nowrap"
+                  onClick={() => setNieuw({ ...nieuw, wachtwoord: randomPassword() })}
+                >
+                  Maak er een
+                </button>
+              </div>
+            </div>
+            <button
+              className="btn-primary"
+              disabled={busy || !nieuw.codenaam.trim() || !nieuw.wachtwoord || !DIENST_IN_PRODUCTIE[nieuw.dienst_type]}
+              onClick={addAccount}
+            >
+              Toevoegen
+            </button>
+          </div>
+          {!DIENST_IN_PRODUCTIE[nieuw.dienst_type] && (
+            <p className="text-sm text-amber-900 bg-amber-50 border border-amber-300 rounded p-3" role="status" data-testid="dienst-niet-in-productie">
+              Het rooster voor de AIOS is nog niet in productie. Een account voor de AIOS kun je daarom
+              nog niet aanmaken. Kies voorlopig Achterwacht.
+            </p>
+          )}
+        </div>
+        </>
+      )}
     </div>
   );
 }

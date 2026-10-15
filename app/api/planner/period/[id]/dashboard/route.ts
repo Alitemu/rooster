@@ -125,13 +125,16 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
 
     const imbalances = imbalancesStmt.all(periodId, periodId, largeBalanceThreshold) as ImbalanceItem[];
 
-    // Get staff with parttime patterns
+    // Staff with a part-time pattern in this period, as lib/periodProgress.ts
+    // counts them: one that ended before it is no part-time now (audit 16).
     const parttimeStmt = db.prepare(`
       SELECT COUNT(DISTINCT p.id) as count
       FROM dienstrooster_person p
       WHERE p.actief = 1
       AND p.id IN (
-        SELECT DISTINCT person_id FROM dienstrooster_parttime_pattern
+        SELECT pp.person_id FROM dienstrooster_parttime_pattern pp
+        JOIN dienstrooster_schedule_period sp1 ON sp1.id = ?
+        WHERE pp.geldig_vanaf <= sp1.eind_datum AND pp.geldig_tot >= sp1.start_datum
       )
       AND p.id IN (
         SELECT DISTINCT pm.person_id
@@ -142,7 +145,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
       )
     `);
 
-    const parttimeCount = parttimeStmt.get(periodId) as any;
+    const parttimeCount = parttimeStmt.get(periodId, periodId) as any;
 
     // Get total staff
     const totalStaffStmt = db.prepare(`
