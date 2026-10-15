@@ -20,7 +20,7 @@ let userIds: string[] = [];
 let token = '';
 
 test.beforeAll(() => {
-  const pool = db.prepare('SELECT id FROM dienstrooster_pool LIMIT 1').get() as { id: string };
+  const pool = db.prepare(`SELECT id FROM dienstrooster_pool WHERE type = 'ACHTERWACHT' ORDER BY rowid LIMIT 1`).get() as { id: string };
   const types = db.prepare('SELECT id, teller FROM dienstrooster_shift_type WHERE pool_id = ?').all(pool.id) as Array<{ id: string; teller: string }>;
   const avond = types.find((t) => t.teller === 'AVOND')!.id;
   const weekend = types.find((t) => t.teller === 'WEEKEND')!.id;

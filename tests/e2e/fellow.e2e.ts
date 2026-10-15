@@ -17,7 +17,7 @@ test.describe('Fellows', () => {
   test.beforeAll(() => {
     testData = createTestPeriod('OPEN');
     // The fixture only has Mondays; a fellow needs a weekend day to block.
-    const weekend = db.prepare(`SELECT id FROM dienstrooster_shift_type WHERE teller = 'WEEKEND' LIMIT 1`).get() as {
+    const weekend = db.prepare(`SELECT id FROM dienstrooster_shift_type WHERE teller = 'WEEKEND' AND code IS NULL LIMIT 1`).get() as {
       id: string;
     };
     db.prepare(

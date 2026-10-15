@@ -445,7 +445,7 @@ await mctx.close();
 // the app treats "on" as the default. Needs its own fresh CONCEPT period:
 // the shared seeded one has usually moved past CONCEPT by the time this
 // script runs after full-check.mjs.
-const wizardPoolId = db.prepare('SELECT id FROM dienstrooster_pool LIMIT 1').get().id;
+const wizardPoolId = db.prepare(`SELECT id FROM dienstrooster_pool WHERE type = 'ACHTERWACHT' ORDER BY rowid LIMIT 1`).get().id;
 const wizardPeriodId = nodeCrypto.randomUUID();
 db.prepare(
   `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)

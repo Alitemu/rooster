@@ -65,7 +65,7 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   const timestamp = Date.now();
 
   // Get existing pool ID from database
-  const pool = db.prepare(`SELECT id FROM dienstrooster_pool LIMIT 1`).get() as any;
+  const pool = db.prepare(`SELECT id FROM dienstrooster_pool WHERE type = 'ACHTERWACHT' ORDER BY rowid LIMIT 1`).get() as any;
   if (!pool) {
     throw new Error('No pool found in database. Run npm run seed first.');
   }
@@ -92,7 +92,7 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   }
 
   // Get shift type IDs
-  const shiftTypes = db.prepare(`SELECT id, teller FROM dienstrooster_shift_type`).all() as Array<{ id: string; teller: string }>;
+  const shiftTypes = db.prepare(`SELECT id, teller FROM dienstrooster_shift_type WHERE pool_id = ?`).all(pool.id) as Array<{ id: string; teller: string }>;
   const eveningShiftType = shiftTypes.find(s => s.teller === 'AVOND') || shiftTypes[0];
   const weekendShiftType = shiftTypes.find(s => s.teller === 'WEEKEND') || shiftTypes[1];
 

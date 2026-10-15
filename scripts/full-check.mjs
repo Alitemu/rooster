@@ -181,7 +181,7 @@ async function main() {
   rec('Capacity check runs both formulas', cap.status === 200 && cap.json?.data?.total_capacity && cap.json?.data?.distinct_people,
       `constraining=${cap.json?.data?.is_constraining}`);
   rec('GET pools', eq((await req('GET', '/api/planner/pools', { jar: planner })).status, 200));
-  const pool = db.prepare('SELECT id FROM dienstrooster_pool LIMIT 1').get();
+  const pool = db.prepare(`SELECT id FROM dienstrooster_pool WHERE type = 'ACHTERWACHT' ORDER BY rowid LIMIT 1`).get();
   const mem = await req('GET', `/api/planner/pool/${pool.id}/members`, { jar: planner });
   rec('Pool members', mem.status === 200, `${mem.json?.data?.length} members`);
 

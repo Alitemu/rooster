@@ -18,7 +18,7 @@ test.afterAll(() => {
 
 test('a minimum above the maximum is told at the window step, in words', async ({ page }) => {
   await loginAsPlanner(page);
-  const pool = db.prepare('SELECT id FROM dienstrooster_pool LIMIT 1').get() as { id: string };
+  const pool = db.prepare(`SELECT id FROM dienstrooster_pool WHERE type = 'ACHTERWACHT' ORDER BY rowid LIMIT 1`).get() as { id: string };
   const created = await page.request.post(`${getBaseUrl()}/api/planner/periods`, {
     data: { naam: `Wizard-bereik ${Date.now()}`, pool_id: pool.id, start_datum: '2032-01-05', eind_datum: '2032-03-28', deadline: '2031-12-15T12:00' },
   });

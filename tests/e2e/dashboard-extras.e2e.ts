@@ -20,7 +20,7 @@ test.describe('Periodepagina', () => {
   test.beforeAll(() => {
     testData = createTestPeriod('OPEN');
     // One open evening to fill "in advance", in a week nobody works yet.
-    const avond = db.prepare(`SELECT id FROM dienstrooster_shift_type WHERE teller = 'AVOND' LIMIT 1`).get() as { id: string };
+    const avond = db.prepare(`SELECT id FROM dienstrooster_shift_type WHERE teller = 'AVOND' AND code IS NULL LIMIT 1`).get() as { id: string };
     freeSlot = uuid();
     db.prepare(
       `INSERT INTO dienstrooster_shift_slot (id, period_id, datum, iso_jaar, iso_week, shift_type_id)
