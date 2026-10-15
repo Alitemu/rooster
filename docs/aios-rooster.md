@@ -1,7 +1,7 @@
 # Ontwerp: het rooster voor de AIOS
 
 Status: ontwerp, nog niet gebouwd. Afgesproken met de planner in oktober 2026.
-Vier punten staan nog open, onderaan. De scheiding tussen de planner van de
+Eén punt staat nog open, onderaan. De scheiding tussen de planner van de
 achterwacht en die van de AIOS bestaat al (docs/development/diensten.md): dit
 rooster komt daarachter.
 
@@ -176,43 +176,11 @@ ongewijzigd.
    publiceren. Ruilen (blok tegen blok) daarna.
 5. AIOS-accounts aanzetten: eerst op de testinstallatie, dan in productie.
 
-## Voorbeeld: de week van Hemelvaart 2026
-
-Een oud rooster van de planner (week 20, codenamen vervangen), Hemelvaart op
-donderdag 14 mei.
-
-| | Avond | Nacht | Uitloop | Dagdienst |
-|---|---|---|---|---|
-| ma 11 | aios08 | aios13 | aios17 | |
-| di 12 | aios08 | aios13 | aios17 | |
-| wo 13 | aios09 | aios14 | aios18 | |
-| do 14 Hemelvaart | aios10 (vanaf 13:30) | aios14 | geen | aios19 |
-| vr 15 | aios10 | aios14 | aios17 | |
-| za 16 | aios11 | aios15 | | aios20 |
-| zo 17 | aios12 | aios16 | | aios21 |
-
-- Het avondblok wo t/m vr is door de feestdag gesplitst: woensdag apart,
-  donderdag en vrijdag samen. De avond op de feestdag begint om 13:30, zoals in
-  het weekend.
-- Het nachtblok wo t/m vr bleef heel.
-- De dagdienst op de feestdag is los. Die AIOS heeft verder geen dienst in die
-  week. Geen uitloopdienst op de feestdag.
-- De compensatiedagen kloppen met regel 7.
-- Uitloopdiensten zijn geen blok: één AIOS had er drie in die week.
-- Het rooster bevat ook een "Algemene dienst" (door de week 16:30-21:30, in het
-  weekend 08:30-17:30), die niet bij de vier AIOS-diensten hoort.
-- Door de week begint de avonddienst hier om 17:36 en de uitloopdienst ook om
-  17:36 (in de mail aan de AIOS: 13:30 en 10:15).
-
 ## Nog open
 
-1. Een avondblok met een feestdag door de week erin: in het voorbeeld werd wo
-   t/m vr gesplitst in woensdag en donderdag met vrijdag. Wat is de regel voor
-   een feestdag op een andere dag (maandag in zo t/m di, Koningsdag op woensdag
-   of vrijdag, kerst op dinsdag)? Eerder zei de planner dat zo t/m di dan heel
-   blijft. Blijven nachtblokken altijd heel?
-2. Een dagdienst op een feestdag door de week: geen dienst op de dag ervoor en
-   de dag erna, zoals bij een dagdienst in het weekend? Het voorbeeld past
-   daarbij.
-3. Hoort de "Algemene dienst" bij het rooster dat de app maakt?
-4. Welke tijden toont de app voor de avond- en uitloopdienst door de week?
+1. Een dagdienst op een feestdag door de week valt in een blok (zo t/m di of
+   wo t/m vr), zoals de planner zei. Gelezen als: zo'n dagdienst krijgt
+   dezelfde dagen zonder dienst als een avondblok in die dagen. Na een
+   dagdienst op Tweede Paasdag (maandag) dus geen dienst op de woensdag. Na een
+   dagdienst op Hemelvaartsdag (donderdag) geen dienst in het weekend erna.
+   Nog te bevestigen.
