@@ -1,7 +1,7 @@
 # Ontwerp: het rooster voor de AIOS
 
 Status: ontwerp, nog niet gebouwd. Afgesproken met de planner in oktober 2026.
-Twee punten staan nog open, onderaan. De scheiding tussen de planner van de
+Drie punten staan nog open, onderaan. De scheiding tussen de planner van de
 achterwacht en die van de AIOS bestaat al (CLAUDE.md, "Diensten: the
 achterwacht and the AIOS"): dit rooster komt daarachter.
 
@@ -30,7 +30,7 @@ Per dienst precies één AIOS.
 | Nachtdienst (ND) | 22:30-08:30 | ja, 1 punt | ja, 1 punt | ja, 1 punt |
 
 - Feestdagen zijn die van lib/holidays.ts. Een feestdag telt als weekenddag.
-- Kerstavond en oudjaarsdag zijn gewone werkdagen.
+- Kerstavond en oudjaarsdag zijn gewone werkdagen: daar mag ook geblokkeerd.
 
 ## Blokken
 
@@ -72,9 +72,22 @@ Per dienst precies één AIOS.
   verzoeken (vrije tekst, hoogstens 120 tekens).
 - Geen reden per dag: die werd niet gebruikt bij het maken van het rooster.
 
+## Inwerken
+
+- De AIOS vinkt "Inwerken" zelf aan in het voorkeurenscherm en vult een begin-
+  en een einddatum in. Niets is vooraf ingevuld. De app controleert dat beide
+  data binnen het kwartaal vallen.
+- Tijdens de inwerkperiode krijgt de AIOS alleen uitloopdiensten en de
+  dagdienst op zaterdag. Na de einddatum kan de AIOS voor alles worden
+  ingepland.
+- Bij het aanvinken staat in beeld wat dat betekent.
+- Dit is iets anders dan niet dienstklaar (n): dan heeft iemand helemaal geen
+  diensten.
+
 ## Harde regels
 
-De solver breekt deze nooit.
+De solver breekt deze nooit. Handmatig indelen kan wel, met een waarschuwing,
+zoals nu bij een geblokkeerde dag.
 
 1. Geen dienst op een geblokkeerde dag, tijdens verlof of buiten Geldig
    vanaf/tot.
@@ -84,8 +97,10 @@ De solver breekt deze nooit.
    Een nachtblok mag wel.
 5. Fulltimers (1,0 fte) nooit in het nachtblok zondag tot en met dinsdag (de
    arbeidstijdenwet).
-6. Geen dienst op een compensatiedag. De compensatie zelf regelt het
-   roosterbureau na de publicatie.
+6. Inwerken: zie hierboven.
+7. Geen dienst op een compensatiedag. De compensatie zelf regelt het
+   roosterbureau na de publicatie. De app blokkeert die dagen automatisch voor
+   de AIOS die de dienst heeft.
 
    | Dienst | Geen andere dienst op |
    |---|---|
@@ -94,11 +109,16 @@ De solver breekt deze nooit.
    | Blok wo t/m vr (avond of nacht) | zaterdag en zondag |
    | Avondblok wo t/m za | zondag |
    | Nachtblok wo t/m za | zondag en maandag |
-   | Losse dienst in het weekend (dag, avond of nacht) | de vrijdag ervoor en de maandag erna |
-   | Losse nacht op zaterdag | daarnaast de zondag |
+   | Dag- of avonddienst op zaterdag, dagdienst op zondag, of allebei | de vrijdag ervoor en de maandag erna |
+   | Losse nacht op zaterdag | de vrijdag ervoor, de zondag en de maandag erna |
 
-7. Inwerken: tussen de begin- en einddatum alleen uitloopdiensten en de
-   dagdienst op zaterdag. Daarna doet de AIOS volledig mee.
+8. Valt een compensatiedag op een werkdag die een feestdag is, dan schuift die
+   een dag op: een compensatiedag vóór de dienst een dag eerder, een
+   compensatiedag na de dienst een dag later. Is dat ook een feestdag, dan nog
+   een dag. Voorbeelden: de vrijdag vóór een zaterdagse dagdienst is Koningsdag,
+   dan wordt het donderdag. De maandag na een zondagse dagdienst is Tweede
+   Paasdag, dan wordt het dinsdag. De donderdag na een nachtblok zo t/m di is
+   Hemelvaartsdag, dan wordt het vrijdag.
 
 Er is verder geen algemene rustregel en geen minimale tijd tussen twee blokken.
 
@@ -109,7 +129,8 @@ Er is verder geen algemene rustregel en geen minimale tijd tussen twee blokken.
   Verlof telt als gewone werkdag. Uitloopdiensten tellen mee (0,2).
 - FTE volgt uit de parttimedagen die de AIOS zelf opgeeft: elke week één dag is
   0,8, om de week één dag is 0,9, geen parttimedag is 1,0. Een patroon dat maar
-  een deel van het kwartaal geldt, telt naar rato.
+  een deel van het kwartaal geldt, telt naar rato. Een parttimedag heeft altijd
+  een vaste weekdag: een variabele parttimedag komt niet voor.
 - Het doel is voor iedereen hetzelfde percentage, over de periodes heen: de app
   telt de punten van alle gepubliceerde roosters bij elkaar (zoals de
   feestdagdiensten over de jaren), zodat een tekort of overschot vanzelf wordt
@@ -120,7 +141,9 @@ Er is verder geen algemene rustregel en geen minimale tijd tussen twee blokken.
   uitloopdiensten 13), dus de AIOS hebben samen minstens 12 fte nodig voor
   gemiddeld 25%.
 - Avonden, nachten en dagdiensten in het weekend en op feestdagen worden elk
-  apart eerlijk naar fte verdeeld, met een streefbereik per soort.
+  apart eerlijk naar fte verdeeld, met een streefbereik per soort. Voor wie
+  inwerkt, telt het streefbereik voor avonden en nachten naar rato van het deel
+  van het kwartaal na de inwerkperiode.
 - Geschiedenis van vóór de app: bij de eerste AIOS-periode een import per AIOS,
   zoals de beginsaldi bij de achterwacht.
 
@@ -151,8 +174,12 @@ ongewijzigd.
 
 ## Nog open
 
-1. Een parttimedag zonder vaste weekdag ("variabel" in het oude formulier): hoe
-   geeft zo iemand de dagen op en hoe volgt daar de fte uit?
+1. De avonddienst op zondag hoort bij het avondblok zo t/m di, dus de maandag
+   erna is zelf een avond van dat blok. Geldt de regel van de vrijdag ervoor en
+   de maandag erna daar niet, zodat alleen de woensdag van het blok telt? Of
+   blokkeert de zondagavond wel de vrijdag ervoor?
 2. Een dagdienst op een feestdag door de week (bijvoorbeeld Tweede Paasdag):
    geldt daar dezelfde regel als voor een losse weekenddienst (geen dienst op de
    dag ervoor en de werkdag erna)?
+3. Een compensatiedag op een feestdag: klopt de richting in regel 8 (vóór de
+   dienst een dag eerder, na de dienst een dag later)?
