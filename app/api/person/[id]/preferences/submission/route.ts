@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       | undefined;
     // Same scoping as the slot route: submitting for a period you have
     // nothing to do with (another pool's) is treated as not existing.
-    if (!period || (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(id, period))) {
+    if (!period || !periodUsableFor(auth!, id, period)) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${period_id} niet gevonden` },

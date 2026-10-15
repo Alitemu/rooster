@@ -13,6 +13,7 @@ import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
@@ -40,6 +41,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
     const publishedByPersonId = auth!.userId;
 
     const periodId = params.id;

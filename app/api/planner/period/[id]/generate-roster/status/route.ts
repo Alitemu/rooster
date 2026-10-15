@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse } from '@/lib/api-errors';
 import { getRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 
@@ -18,6 +19,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
   if (!requirePlannerAccess(auth)) {
     return unauthorizedResponse();
   }
+  const otherDienst = periodDienstDenial(auth, params.id);
+  if (otherDienst) return otherDienst;
 
   const periodId = params.id;
   const jobId = request.nextUrl.searchParams.get('job_id');

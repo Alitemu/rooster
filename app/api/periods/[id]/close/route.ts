@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
@@ -20,6 +21,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id } = params;
 

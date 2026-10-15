@@ -162,7 +162,15 @@ export function getBaseUrl(): string {
  * requirePlannerAccess, so tests that visit /planner/* must call this first.
  */
 export async function loginAsPlanner(page: Page): Promise<void> {
-  const codenaam = process.env.E2E_PLANNER_CODENAAM || 'planner';
+  await loginAsStaff(page, process.env.E2E_PLANNER_CODENAAM || 'planner');
+}
+
+/** The seeded beheerder 'admin' (ADMIN, the same seed password; scripts/seed.ts addAdminIfNone). */
+export async function loginAsBeheerder(page: Page): Promise<void> {
+  await loginAsStaff(page, process.env.E2E_BEHEERDER_CODENAAM || 'admin');
+}
+
+async function loginAsStaff(page: Page, codenaam: string): Promise<void> {
   // Must match DEFAULT_TEST_PASSWORD in lib/seedPassword.ts, which planner is
   // seeded with directly.
   const password = process.env.E2E_PLANNER_PASSWORD || 'Password123!';

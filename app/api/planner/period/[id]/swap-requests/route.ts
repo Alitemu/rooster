@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 
 export interface PlannerSwapRequest {
@@ -41,6 +42,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const periodId = params.id;
     if (!db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(periodId)) {

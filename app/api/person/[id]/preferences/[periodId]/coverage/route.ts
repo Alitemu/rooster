@@ -7,8 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -65,7 +65,7 @@ export async function GET(
     // Aggregate numbers only, no names - but still about a whole pool, and
     // being a participant somewhere was enough to ask about any period.
     // Same scoping rule as the period detail and the swap-target list.
-    if (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(id, period)) {
+    if (!periodUsableFor(auth!, id, period)) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },

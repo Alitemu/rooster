@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { getInvitationPeriod, issuePersonLink, rememberBaseUrl } from '@/lib/periodInvitations';
 import { resolveBaseUrl } from '@/lib/baseUrl';
@@ -42,6 +43,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const params = await props.params;
   try {
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), params.id);
+    if (otherDienst) return otherDienst;
 
     const period = getInvitationPeriod(params.id);
     if (!period) return fail(404, 'NOT_FOUND', 'Periode niet gevonden');

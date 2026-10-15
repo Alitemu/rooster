@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { visibleDienst } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { purgeExpiredPeriods, listTrash, type TrashedPeriod } from '@/lib/periodTrash';
 import type { ApiSuccessResponse } from '@/types';
@@ -23,7 +24,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
     const response: ApiSuccessResponse<TrashedPeriod[]> = {
       success: true,
-      data: listTrash(),
+      data: listTrash(visibleDienst(auth!)),
     };
     return NextResponse.json(response);
   } catch (error) {

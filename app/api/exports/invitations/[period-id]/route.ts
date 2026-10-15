@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getInvitationPeriod, issuePeriodLinks, formatDeadline, rememberBaseUrl } from '@/lib/periodInvitations';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { xlsxDownload } from '@/lib/xlsxWrite';
@@ -36,6 +37,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params['period-id']);
+    if (otherDienst) return otherDienst;
 
     const periodId = params['period-id'];
 

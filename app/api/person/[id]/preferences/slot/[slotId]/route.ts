@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
@@ -92,13 +92,12 @@ export async function PATCH(
     // it.
     if (
       !slot ||
-      (!requirePlannerAccess(auth) &&
-        !isPeriodVisibleToPerson(id, {
-          id: slot.period_id,
-          pool_id: slot.pool_id,
-          start_datum: slot.start_datum,
-          eind_datum: slot.eind_datum,
-        }))
+      !periodUsableFor(auth!, id, {
+        id: slot.period_id,
+        pool_id: slot.pool_id,
+        start_datum: slot.start_datum,
+        eind_datum: slot.eind_datum,
+      })
     ) {
       const response: ApiErrorResponse = {
         success: false,

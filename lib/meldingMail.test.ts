@@ -853,10 +853,11 @@ describe('ruilmails die niet meteen weg konden', () => {
   it('counts what waits, and sends it as soon as mail settings are saved in the app', async () => {
     const f = createFixture();
     await requestSwap(f);
+    // The beheerder: only they save mail settings (the mail-settings route).
     const planner = crypto.randomUUID();
     db.prepare(
-      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'PLANNER', 1, datetime('now'))`
-    ).run(planner, `MM-planner-${planner.slice(0, 6)}`);
+      `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'ADMIN', 1, datetime('now'))`
+    ).run(planner, `MM-beheerder-${planner.slice(0, 6)}`);
     created.people.push(planner);
     const staff = (method: string, body?: unknown) =>
       new NextRequest('http://localhost/api/planner/mail-settings', {

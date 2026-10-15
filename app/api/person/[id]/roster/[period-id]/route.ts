@@ -7,8 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { computeMemberTargets, TELLERS, type Teller } from '@/lib/rosterBands';
 
@@ -44,7 +44,7 @@ export async function GET(
 
     // Gone for its participants once in the prullenbak, like the colleagues'
     // roster next to it (lib/periodAccess.ts, audit 13).
-    if (!period || (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(personId, period))) {
+    if (!period || !periodUsableFor(auth!, personId, period)) {
       return NextResponse.json(
         { success: false, error: 'Periode niet gevonden' },
         { status: 404 }

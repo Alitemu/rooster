@@ -6,6 +6,9 @@
  * (lib/appSettings.ts, /api/planner/mail-settings). Saving logs in first,
  * so settings that don't work are never kept. The saved password is never
  * shown again; leaving the field empty keeps it.
+ *
+ * Only the beheerder changes them: they are shared by the achterwacht and
+ * the AIOS. A planner sees what is set and who to ask.
  */
 
 import { useEffect, useState } from 'react';
@@ -37,6 +40,8 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [melding, setMelding] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Null until known: the form only for the beheerder (the API checks it too).
+  const [beheerder, setBeheerder] = useState<boolean | null>(null);
 
   useBodyScrollLock(isOpen);
   const handleBackdropClick = useDialogDismiss(isOpen, onClose, !busy);
@@ -60,6 +65,10 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
         else setError('De mailinstellingen konden niet geladen worden.');
       })
       .catch(() => setError('De mailinstellingen konden niet geladen worden.'));
+    fetch(withBasePath('/api/auth/me'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setBeheerder(data?.data?.role === 'ADMIN'))
+      .catch(() => setBeheerder(false));
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -131,6 +140,30 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
           </p>
         </div>
 
+        {beheerder === false ? (
+          <div className="p-6 space-y-3 overflow-y-auto min-h-0 text-sm text-neutral-800">
+            <p>
+              Alleen de beheerder kan de mailinstellingen wijzigen. Ze gelden voor de achterwacht en de AIOS samen.
+            </p>
+            {status && (
+              <dl className="space-y-1">
+                <div>
+                  <dt className="inline font-semibold">Gmail-adres: </dt>
+                  <dd className="inline">{status.gebruiker ?? 'nog niet ingesteld'}</dd>
+                </div>
+                <div>
+                  <dt className="inline font-semibold">Verzendlijst naar: </dt>
+                  <dd className="inline">{status.verzendlijst_aan ?? 'nog niet ingesteld'}</dd>
+                </div>
+              </dl>
+            )}
+            {error && (
+              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-900">
+                {error}
+              </div>
+            )}
+          </div>
+        ) : (
         <div className="p-6 space-y-4 overflow-y-auto min-h-0">
           <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 space-y-2">
             <p>De app werkt alleen met Gmail. Gebruik een app-wachtwoord van Google, niet je gewone wachtwoord.</p>
@@ -232,10 +265,11 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
             </div>
           )}
         </div>
+        )}
 
         <div className="border-t p-6 flex-shrink-0 flex flex-wrap justify-between gap-3">
           <div>
-            {opgeslagen && !confirmDelete && (
+            {beheerder && opgeslagen && !confirmDelete && (
               <button
                 onClick={() => setConfirmDelete(true)}
                 disabled={busy}
@@ -249,9 +283,11 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
             <button onClick={onClose} disabled={busy} className="btn-secondary">
               Sluiten
             </button>
-            <button onClick={save} disabled={!canSave} className="btn-primary">
-              {busy && !confirmDelete ? 'Inloggen bij Gmail...' : 'Opslaan'}
-            </button>
+            {beheerder && (
+              <button onClick={save} disabled={!canSave} className="btn-primary">
+                {busy && !confirmDelete ? 'Inloggen bij Gmail...' : 'Opslaan'}
+              </button>
+            )}
           </div>
         </div>
       </div>

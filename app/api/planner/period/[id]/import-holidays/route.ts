@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial, staffMayAccessPerson } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { objectRows, badRequest } from '@/lib/requestFields';
@@ -34,6 +35,8 @@ export async function POST(
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, (await context.params).id);
+    if (otherDienst) return otherDienst;
 
     const body = await parseJsonBody<{ rows?: unknown }>(req);
     const rows = objectRows(body.rows) as HolidayRow[] | null;
@@ -73,7 +76,8 @@ export async function POST(
           .prepare('SELECT id FROM dienstrooster_person WHERE codenaam = ?')
           .get(row.codenaam) as { id: string } | undefined;
 
-        if (!person) {
+        // Someone of the other dienst is no one to this planner (lib/dienstAccess.ts).
+        if (!person || !staffMayAccessPerson(auth!, person.id)) {
           errors.push(`Onbekende codenaam: ${row.codenaam}`);
           continue;
         }

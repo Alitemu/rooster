@@ -25,6 +25,7 @@ import { createSetupToken } from '../lib/setupToken';
 // compare against exactly the same string - a second copy would drift, and
 // the half that drifts is the warning.
 import { DEFAULT_TEST_PASSWORD } from '../lib/seedPassword';
+import { markStafRenamed, renamePersoonToStaf, stafCodenaam } from '../lib/startParticipants';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -903,10 +904,12 @@ function createNotificationTemplates() {
 const BARE_START_PARTICIPANTS = 30;
 
 /**
- * Persoon-01 .. Persoon-30 in the pool, as the staff page would add them:
- * the person and a membership from the first of this year with no end in
+ * staf01 .. staf30 in the pool, as the staff page would add them: the
+ * person and a membership from the first of this year with no end in
  * sight, factor 1. No access link (the invitations issue those), no
- * preferences, part-time patterns, balances or holiday history.
+ * preferences, part-time patterns, balances or holiday history. The names
+ * say the achterwacht (lib/startParticipants.ts); an installation from
+ * before had Persoon-01 .. Persoon-30, renamed once at its next start.
  */
 function addBareStartParticipants(poolId: string, now: string): void {
   const vanaf = `${new Date().getFullYear()}-01-01`;
@@ -920,10 +923,24 @@ function addBareStartParticipants(poolId: string, now: string): void {
   db.transaction(() => {
     for (let i = 1; i <= BARE_START_PARTICIPANTS; i++) {
       const id = uuid();
-      person.run(id, `Persoon-${String(i).padStart(2, '0')}`, now);
+      person.run(id, stafCodenaam(i), now);
       membership.run(uuid(), id, poolId, vanaf);
     }
+    markStafRenamed(db, now);
   })();
+}
+
+/**
+ * A production start (--alleen-planner, --schema-only): Persoon-NN becomes
+ * stafNN once (lib/startParticipants.ts). Not the demo data, which the
+ * browser checks read as Persoon-01 .. Persoon-31.
+ */
+function renameStartParticipants() {
+  const renamed = renamePersoonToStaf(db, new Date().toISOString());
+  if (renamed.length > 0) {
+    console.log(`Renamed ${renamed.length} participants to their staf codenaam: ${renamed.join(', ')}`);
+    console.log('  Rename them in the Power Automate flow\'s address list too, or their mail finds no address.');
+  }
 }
 
 async function seed() {
@@ -931,6 +948,7 @@ async function seed() {
     if (process.argv.includes('--schema-only')) {
       upgradeSchemaOnly();
       await addAdminIfNone();
+      renameStartParticipants();
       process.exit(0);
     }
 
@@ -961,6 +979,7 @@ async function seed() {
     // as their first step. Wiping is destructive, so it stays opt-in.
     if (alreadySeeded() && alleenPlanner) {
       await addAdminIfNone();
+      renameStartParticipants();
       console.log('Staff accounts already exist; nothing else to do.');
       return;
     }

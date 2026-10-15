@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { poolDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { getPendingUndo } from '@/lib/pendingUndo';
 import type { ApiSuccessResponse } from '@/types';
@@ -21,6 +22,8 @@ export async function GET(
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = poolDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const row = getPendingUndo(params.id);
     const response: ApiSuccessResponse<{ pending: { label: string } | null }> = {

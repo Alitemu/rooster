@@ -11,8 +11,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { blockBudgetLimits } from '@/lib/blockBudget';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -64,7 +64,7 @@ export async function GET(
     // The reply lists every slot in the period, so a foreign period id
     // handed back that period's whole shape (dates, weeks, shift types)
     // with the caller's own - empty - preferences joined onto it.
-    if (!period || (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(id, period))) {
+    if (!period || !periodUsableFor(auth!, id, period)) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },

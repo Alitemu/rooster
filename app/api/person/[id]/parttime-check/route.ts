@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { getParttimeCheck, setParttimeCheck } from '@/lib/submissionStatus';
@@ -44,9 +44,7 @@ function findPeriod(req: NextRequest, personId: string, periodId: string): Perio
     )
     .get(periodId) as PeriodRow | undefined;
   if (!period) return undefined;
-  if (!requirePlannerAccess(getAuthContextFromRequest(req)) && !isPeriodVisibleToPerson(personId, period)) {
-    return undefined;
-  }
+  if (!periodUsableFor(getAuthContextFromRequest(req)!, personId, period)) return undefined;
   return period;
 }
 

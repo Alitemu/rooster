@@ -11,6 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { badRequest } from '@/lib/requestFields';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
@@ -22,6 +23,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const { id } = await props.params;
   try {
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), id);
+    if (otherDienst) return otherDienst;
 
     const typed: BandOverridesInput = {};
     for (const key of KEYS) {

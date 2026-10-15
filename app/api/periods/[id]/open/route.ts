@@ -15,6 +15,7 @@ import { syncAvailabilityForPeriod as syncAbsenceAvailabilityForPeriod } from '@
 import { applyCarryOverForPeriod } from '@/lib/carryOver';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
@@ -76,6 +77,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id } = params;
     const body = await parseJsonBody<OpenPeriodRequest>(req);

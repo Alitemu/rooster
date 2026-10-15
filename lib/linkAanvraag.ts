@@ -6,7 +6,7 @@
  * address it is. It hands the question to the Power Automate flow that
  * already owns the address list: one LINK_AANVRAAG verzendlijst with the
  * address and, in `kandidaten`, a ready bericht for everyone taking part in
- * the active period (lib/activePeriod.ts). The flow finds the address in
+ * a pool's active period (lib/activePeriod.ts), of every pool. The flow finds the address in
  * its sheet, takes that codenaam's bericht and sends it to the address in
  * the sheet - so a link only ever goes to an address the planner
  * registered, whatever a visitor types. See lib/verzendlijst.ts for why
@@ -23,7 +23,7 @@
  */
 
 import { db } from '@/db/client';
-import { getActivePeriod, type ActivePeriod } from '@/lib/activePeriod';
+import { getActivePeriods, type ActivePeriod } from '@/lib/activePeriod';
 import { deadlinePassed } from '@/lib/periodInputGate';
 import { mailBaseUrl } from '@/lib/baseUrl';
 import { issuePersonLink } from '@/lib/periodInvitations';
@@ -44,39 +44,48 @@ export function periodeUitleg(period: ActivePeriod, now: Date = new Date()): str
 }
 
 /**
- * A bericht per participant of the active period, each with a fresh link.
- * Nothing when no period is active, or when no address for links is known
- * for it (no BASE_URL, no invitations sent yet): the request's own Host
- * header is never used, anyone can forge it.
+ * A bericht per participant of each pool's active period, each with a
+ * fresh link: the achterwacht's and the AIOS's alike, since the flow and
+ * its address list are shared. A pool contributes nothing when it has no
+ * active period, or no address for links is known for it (no BASE_URL, no
+ * invitations sent yet): the request's own Host header is never used,
+ * anyone can forge it.
  */
 export function linkAanvraagKandidaten(now: Date = new Date()): { periode: string | null; kandidaten: VerzendlijstBericht[] } {
-  const period = getActivePeriod();
-  const baseUrl = period ? mailBaseUrl(period.id) : null;
-  if (!period || !baseUrl) return { periode: null, kandidaten: [] };
+  const namen: string[] = [];
+  const kandidaten: VerzendlijstBericht[] = [];
+  for (const period of getActivePeriods()) {
+    const baseUrl = mailBaseUrl(period.id);
+    if (!baseUrl) continue;
 
-  const members = db
-    .prepare(
-      `SELECT DISTINCT p.id, p.codenaam
-       FROM dienstrooster_pool_membership pm
-       JOIN dienstrooster_person p ON p.id = pm.person_id
-       WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
-         AND p.actief = 1 AND p.rol = 'DEELNEMER'
-       ORDER BY p.codenaam`
-    )
-    .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
+    const members = db
+      .prepare(
+        `SELECT DISTINCT p.id, p.codenaam
+         FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_person p ON p.id = pm.person_id
+         WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ?
+           AND p.actief = 1 AND p.rol = 'DEELNEMER'
+         ORDER BY p.codenaam`
+      )
+      .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
+    if (members.length === 0) continue;
 
-  const uitleg = periodeUitleg(period, now);
-  const kandidaten = members.map((m) => ({
-    soort: 'LINK_AANVRAAG' as const,
-    codenaam: m.codenaam,
-    personen: verzendlijstPersonen(m.codenaam),
-    onderwerp: `Je persoonlijke link voor het dienstrooster ${period.naam}`,
-    tekst:
-      `Beste ${m.codenaam},\n\nJe hebt je persoonlijke link voor het dienstrooster aangevraagd.\n\n` +
-      `${uitleg}\n\n${issuePersonLink(m.id, period.id, baseUrl)}\n\n` +
-      'Heb je dit niet zelf aangevraagd? Dan kun je deze e-mail negeren.\n\n' +
-      'Heb je vragen? Neem dan contact op met de roosteraar.',
-  }));
+    const uitleg = periodeUitleg(period, now);
+    namen.push(period.naam);
+    for (const m of members) {
+      kandidaten.push({
+        soort: 'LINK_AANVRAAG' as const,
+        codenaam: m.codenaam,
+        personen: verzendlijstPersonen(m.codenaam),
+        onderwerp: `Je persoonlijke link voor het dienstrooster ${period.naam}`,
+        tekst:
+          `Beste ${m.codenaam},\n\nJe hebt je persoonlijke link voor het dienstrooster aangevraagd.\n\n` +
+          `${uitleg}\n\n${issuePersonLink(m.id, period.id, baseUrl)}\n\n` +
+          'Heb je dit niet zelf aangevraagd? Dan kun je deze e-mail negeren.\n\n' +
+          'Heb je vragen? Neem dan contact op met de roosteraar.',
+      });
+    }
+  }
 
-  return { periode: period.naam, kandidaten };
+  return { periode: namen.length > 0 ? namen.join(' en ') : null, kandidaten };
 }

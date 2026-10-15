@@ -15,6 +15,7 @@ import {
 } from '@/lib/priorAssignmentDerive';
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial, staffMayAccessPerson } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate } from '@/lib/isoDate';
@@ -50,6 +51,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id } = params;
 
@@ -166,6 +169,8 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
     const actorId = auth!.userId;
 
     const { id } = params;
@@ -237,7 +242,8 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         `SELECT id FROM dienstrooster_person WHERE codenaam = ?`
       );
       const person = personStmt.get(person_codenaam) as any;
-      personId = person?.id || null;
+      // Someone of the other dienst is no one to this planner (lib/dienstAccess.ts).
+      personId = person && staffMayAccessPerson(auth!, person.id) ? person.id : null;
 
       if (!personId) {
         const response: ApiErrorResponse = {

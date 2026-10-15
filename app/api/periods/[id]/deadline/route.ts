@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { parseISO } from '@/lib/holidays';
@@ -31,6 +32,8 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id } = params;
     const body = (await parseJsonBody(req)) as UpdateDeadlineRequest;

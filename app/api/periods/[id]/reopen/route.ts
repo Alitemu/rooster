@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { clearSolverAssignments } from '@/lib/rosterGaps';
@@ -29,6 +30,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(auth, id);
+    if (otherDienst) return otherDienst;
 
     const period = db
       .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')

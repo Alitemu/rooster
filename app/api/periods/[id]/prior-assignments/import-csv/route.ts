@@ -26,6 +26,7 @@ import {
 } from '@/lib/priorAssignmentDerive';
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial, staffMayAccessPerson } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { objectRows, rowText, badRequest } from '@/lib/requestFields';
@@ -64,6 +65,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
     const actorId = auth!.userId;
 
     const { id } = params;
@@ -145,7 +148,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         let personId: string | null = null;
         if (codenaam && codenaam.toUpperCase() !== 'ONBEKEND') {
           const person = personStmt.get(codenaam) as { id: string } | undefined;
-          if (!person) {
+          // Someone of the other dienst is no one to this planner (lib/dienstAccess.ts).
+          if (!person || !staffMayAccessPerson(auth!, person.id)) {
             errors.push(`Rij ${rowNum} (${datum}): onbekende codenaam "${codenaam}", als Onbekend verwerkt`);
           } else {
             personId = person.id;

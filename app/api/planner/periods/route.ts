@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { staffMayAccessPool } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
@@ -148,7 +149,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // as a 500 "er is iets misgegaan" - which says nothing about the one
     // field that is actually wrong.
     const poolExists = db.prepare('SELECT 1 FROM dienstrooster_pool WHERE id = ?').get(body.pool_id);
-    if (!poolExists) {
+    // A pool of the other dienst is no pool to this planner (lib/dienstAccess.ts).
+    if (!poolExists || !staffMayAccessPool(auth!, body.pool_id)) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'POOL_NOT_FOUND', message: `Pool ${body.pool_id} niet gevonden` },

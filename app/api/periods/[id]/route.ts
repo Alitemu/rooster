@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { softDeletePeriod, PeriodTrashError } from '@/lib/periodTrash';
@@ -133,6 +134,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       };
       return NextResponse.json(response);
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const response: ApiSuccessResponse<PeriodDetail> = {
       success: true,
@@ -159,6 +162,8 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, id);
+    if (otherDienst) return otherDienst;
 
     const body = (await parseJsonBody(req)) as { naam?: unknown };
     const naamCheck = validateSingleLine(body.naam, 'Naam', PERIODE_NAAM_MAX_LENGTH);
@@ -222,6 +227,8 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id } = params;
 

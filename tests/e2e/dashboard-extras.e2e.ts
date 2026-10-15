@@ -1,13 +1,14 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, loginAsPlanner, getBaseUrl } from './setup';
+import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, getBaseUrl } from './setup';
 
 /**
  * Four things on the planner's period page:
  * - "Ongedaan maken" sits under the heading the change was made in and
  *   folds away with it (lib/pendingUndo.ts `onderdeel`);
- * - "Mailinstellingen" under Exporteren & communicatie, Gmail only;
+ * - "Mailinstellingen" under Exporteren & communicatie, Gmail only, and
+ *   for the beheerder to change (shared by the achterwacht and the AIOS);
  * - the version number next to the title;
  * - a warning at the top while no mail can go out.
  */
@@ -60,7 +61,7 @@ test.describe('Periodepagina', () => {
   });
 
   test('Mailinstellingen says Gmail only and refuses another address', async ({ page }) => {
-    await loginAsPlanner(page);
+    await loginAsBeheerder(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
     const exportSection = section(page, 'Exporteren & communicatie');
@@ -75,6 +76,21 @@ test.describe('Periodepagina', () => {
     await dialog.getByLabel('Verzendlijst sturen naar').fill('flow@ziekenhuis.test');
     await dialog.getByRole('button', { name: 'Opslaan' }).click();
     await expect(dialog.getByRole('alert')).toContainText('alleen via Gmail');
+  });
+
+  test('a planner sees the mail settings but only the beheerder changes them', async ({ page }) => {
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
+    const exportSection = section(page, 'Exporteren & communicatie');
+    const button = exportSection.getByRole('button', { name: /Mailinstellingen/ });
+    if (!(await button.isVisible())) await exportSection.locator('[role="button"]').first().click();
+    await button.click();
+
+    const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
+    await expect(dialog.getByText('Alleen de beheerder kan de mailinstellingen wijzigen.')).toBeVisible();
+    await expect(dialog.getByLabel('Gmail-adres')).toHaveCount(0);
+    await expect(dialog.getByRole('button', { name: 'Opslaan' })).toHaveCount(0);
   });
 
   test('warns at the top of the page that no mail goes out, and opens Mailinstellingen from there', async ({ page }) => {

@@ -34,6 +34,7 @@ import { deadlineTekst } from '@/lib/verzendlijst';
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { getActiveReminderMilestones, resolveReminderUrgency } from '@/lib/reminderSchedule';
@@ -83,6 +84,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params['period-id']);
+    if (otherDienst) return otherDienst;
 
     const periodId = params['period-id'];
 

@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { poolDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { isValidIsoDate } from '@/lib/isoDate';
@@ -51,6 +52,8 @@ export async function PATCH(
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = poolDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id: poolId, membershipId } = params;
     const body = (await parseJsonBody(req)) as UpdateMembershipRequest;
@@ -168,6 +171,8 @@ export async function DELETE(
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = poolDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id: poolId, membershipId } = params;
 

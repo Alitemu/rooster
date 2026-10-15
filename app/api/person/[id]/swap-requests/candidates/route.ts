@@ -8,8 +8,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { getSwapCandidates } from '@/lib/swapCandidates';
 
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     const period = db
       .prepare('SELECT id, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
       .get(periodId) as { id: string; pool_id: string; start_datum: string; eind_datum: string } | undefined;
-    if (!period || (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(personId, period))) {
+    if (!period || !periodUsableFor(auth!, personId, period)) {
       return NextResponse.json(
         { success: false, error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' } },
         { status: 404 }

@@ -6,6 +6,11 @@
  *        don't work. Leaving the password out keeps the saved one.
  * DELETE - remove the settings. Sending then stops.
  *
+ * Saving and removing are for the beheerder only: the settings are shared by
+ * the achterwacht and the AIOS (the planner's choice), and a planner who
+ * could point the flow mailbox elsewhere would receive the other dienst's
+ * personal links (lib/dienstAccess.ts). Every planner sees the status.
+ *
  * lib/appSettings.ts, lib/verzendlijstMail.ts. Changes are audit-logged,
  * without the password.
  */
@@ -13,11 +18,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
+import { getAuthContextFromRequest, requireAdminAccess, requirePlannerAccess } from '@/lib/auth-context';
+import { unauthorizedResponse, forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { deleteMailSettings, getStoredMailSettings, saveMailSettings } from '@/lib/appSettings';
 import { mailConfigStatus, verifyMailLogin } from '@/lib/verzendlijstMail';
 import { flushMailQueue } from '@/lib/meldingMail';
+
+const ALLEEN_BEHEERDER =
+  'Alleen de beheerder kan de mailinstellingen wijzigen. Ze gelden voor de achterwacht en de AIOS samen.';
 
 const fail = (status: number, message: string) =>
   NextResponse.json({ success: false, error: { code: 'INVALID_INPUT', message } }, { status });
@@ -51,6 +59,7 @@ export async function PUT(req: NextRequest) {
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    if (!requireAdminAccess(auth)) return forbiddenResponse(ALLEEN_BEHEERDER);
 
     const parsed = putSchema.safeParse(await parseJsonBody(req));
     if (!parsed.success) return fail(400, 'Vul het Gmail-adres en het adres voor de verzendlijst in.');
@@ -101,6 +110,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    if (!requireAdminAccess(auth)) return forbiddenResponse(ALLEEN_BEHEERDER);
     const before = mailConfigStatus();
     if (deleteMailSettings()) {
       audit(auth!.userId, { gebruiker: before.gebruiker, verzendlijst_aan: before.verzendlijst_aan }, null, 'DELETE');

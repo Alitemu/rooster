@@ -6,14 +6,15 @@ import path from 'path';
  * The rule (CLAUDE.md, the prullenbak): a period in the prullenbak is gone
  * for its participants at once. A sweep over every participant route that
  * looks up a period, or a swap request to act on: it leaves the prullenbak
- * out (lib/periodAccess.ts isPeriodVisibleToPerson or LIVE_SWAP_REQUEST_SQL,
- * or the query says verwijderd_op IS NULL). The participant's own roster
+ * out (lib/periodAccess.ts isPeriodVisibleToPerson, or periodUsableFor,
+ * which asks it for a participant, or LIVE_SWAP_REQUEST_SQL, or the query
+ * says verwijderd_op IS NULL). The participant's own roster
  * and every swap action did not (audit 13, trashedPeriod.test.ts); a new
  * route that forgets fails here.
  */
 
 const READS = /dienstrooster_schedule_period|FROM dienstrooster_swap_request WHERE id/;
-const LEAVES_TRASH_OUT = /isPeriodVisibleToPerson|LIVE_SWAP_REQUEST_SQL|verwijderd_op IS NULL/;
+const LEAVES_TRASH_OUT = /isPeriodVisibleToPerson|periodUsableFor|LIVE_SWAP_REQUEST_SQL|verwijderd_op IS NULL/;
 
 function walk(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>

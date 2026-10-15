@@ -204,15 +204,17 @@ export interface TrashedPeriod {
  * each entry is auto-purged. Does NOT sweep first - callers that want a
  * guaranteed-fresh view call purgeExpiredPeriods() themselves before this.
  */
-export function listTrash(): TrashedPeriod[] {
+/** dienst: only that dienst's periods (lib/dienstAccess.ts visibleDienst); null for every dienst. */
+export function listTrash(dienst: string | null = null): TrashedPeriod[] {
   const rows = db
     .prepare(
-      `SELECT id, naam, start_datum, eind_datum, status, pool_id, verwijderd_op
-       FROM dienstrooster_schedule_period
-       WHERE verwijderd_op IS NOT NULL
-       ORDER BY verwijderd_op DESC`
+      `SELECT sp.id, sp.naam, sp.start_datum, sp.eind_datum, sp.status, sp.pool_id, sp.verwijderd_op
+       FROM dienstrooster_schedule_period sp
+       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
+       WHERE sp.verwijderd_op IS NOT NULL AND (? IS NULL OR pl.type = ?)
+       ORDER BY sp.verwijderd_op DESC`
     )
-    .all() as Array<Omit<TrashedPeriod, 'dagen_resterend'>>;
+    .all(dienst, dienst) as Array<Omit<TrashedPeriod, 'dagen_resterend'>>;
 
   const now = Date.now();
   return rows.map((row) => {

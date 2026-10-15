@@ -16,6 +16,7 @@ import { db } from '@/db/client';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { poolDienstDenial } from '@/lib/dienstAccess';
 import { localIsoDate } from '@/lib/localDate';
 import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
@@ -45,6 +46,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = poolDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const poolId = params.id;
     // Today on a Dutch calendar, not in UTC (lib/localDate.ts, audit 9).
@@ -98,6 +101,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = poolDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const poolId = params.id;
     const body = (await parseJsonBody(req)) as Partial<AddMemberRequest>;
@@ -148,7 +153,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 400 });
     }
 
-    const pool = db.prepare('SELECT id FROM dienstrooster_pool WHERE id = ?').get(poolId);
+    const pool = db.prepare('SELECT id, type FROM dienstrooster_pool WHERE id = ?').get(poolId) as
+      | { id: string; type: string }
+      | undefined;
     if (!pool) {
       const response: ApiErrorResponse = {
         success: false,
@@ -178,6 +185,20 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       // like anyone else.
       if (found && found.rol !== 'DEELNEMER') {
         return { conflict: 'STAFF_ACCOUNT' as const };
+      }
+      // The achterwacht's and the AIOS's pools share nobody (lib/dienstAccess.ts):
+      // someone of the other dienst would bring their rosters and
+      // preferences into this one's sight.
+      if (
+        found &&
+        db
+          .prepare(
+            `SELECT 1 FROM dienstrooster_pool_membership pm JOIN dienstrooster_pool pl ON pl.id = pm.pool_id
+             WHERE pm.person_id = ? AND pl.type <> ? LIMIT 1`
+          )
+          .get(found.id, pool.type)
+      ) {
+        return { conflict: 'ANDERE_DIENST' as const };
       }
       if (found && found.codenaam !== codenaam) {
         return { conflict: 'CODENAAM_HOOFDLETTERS' as const, bestaand: found.codenaam };
@@ -235,6 +256,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       | { conflict: null; membershipId: string; personId: string }
       | { conflict: 'OVERLAP' }
       | { conflict: 'STAFF_ACCOUNT' }
+      | { conflict: 'ANDERE_DIENST' }
       | { conflict: 'CODENAAM_HOOFDLETTERS'; bestaand: string };
     try {
       result = addMember();
@@ -258,6 +280,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         error: {
           code: 'STAFF_ACCOUNT',
           message: 'Deze codenaam hoort bij een planner- of beheerdersaccount en kan geen diensten draaien. Kies een andere codenaam.',
+        },
+      };
+      return NextResponse.json(response, { status: 409 });
+    }
+
+    if (result.conflict === 'ANDERE_DIENST') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: {
+          code: 'ANDERE_DIENST',
+          message: 'Deze codenaam is al in gebruik bij een andere dienst. Kies een andere codenaam.',
         },
       };
       return NextResponse.json(response, { status: 409 });

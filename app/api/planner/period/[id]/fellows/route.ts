@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { fellowSummary } from '@/lib/fellowSummary';
 
@@ -16,6 +17,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const { id } = await props.params;
   try {
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), id);
+    if (otherDienst) return otherDienst;
     const raw = req.nextUrl.searchParams.get('venster_weekend');
     const parsed = raw === null ? undefined : parseInt(raw, 10);
     const window = parsed !== undefined && Number.isInteger(parsed) && parsed >= 0 && parsed <= 52 ? parsed : undefined;

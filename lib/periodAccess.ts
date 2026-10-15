@@ -9,6 +9,8 @@
  */
 
 import { db } from '@/db/client';
+import { requirePlannerAccess, type AuthContext } from '@/lib/auth-context';
+import { staffMayAccessPeriod } from '@/lib/dienstAccess';
 
 export interface PeriodScope {
   id: string;
@@ -66,3 +68,16 @@ export function isPeriodVisibleToPerson(personId: string, period: PeriodScope): 
 export const LIVE_SWAP_REQUEST_SQL = `SELECT sr.* FROM dienstrooster_swap_request sr
   JOIN dienstrooster_schedule_period p ON p.id = sr.periode_id
   WHERE sr.id = ? AND p.verwijderd_op IS NULL`;
+
+/**
+ * Whether this request may use the period on the person's behalf: a
+ * participant only a period that is theirs (isPeriodVisibleToPerson), a
+ * planner one of their own dienst (lib/dienstAccess.ts), a beheerder any.
+ * Planners used to pass on their role alone: with someone of their own
+ * dienst and a period id of the other one, the fellow and slot routes wrote
+ * into the other dienst's roster.
+ */
+export function periodUsableFor(auth: AuthContext, personId: string, period: PeriodScope): boolean {
+  if (requirePlannerAccess(auth)) return staffMayAccessPeriod(auth, period.id);
+  return isPeriodVisibleToPerson(personId, period);
+}

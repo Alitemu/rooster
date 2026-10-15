@@ -8,8 +8,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 
 export async function GET(
@@ -46,7 +46,7 @@ export async function GET(
     // way, including one belonging to a pool you have nothing to do with.
     // Staff pass by role (they may read every period); a participant has
     // to belong to this one.
-    if (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(personId, period)) {
+    if (!periodUsableFor(auth!, personId, period)) {
       return NextResponse.json(
         { success: false, error: 'Periode niet gevonden' },
         { status: 404 }

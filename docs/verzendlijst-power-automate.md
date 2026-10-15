@@ -1,7 +1,7 @@
 # Persoonlijke links automatisch mailen via Gmail en Power Automate
 
-Dienstrooster kent geen e-mailadressen, alleen codenamen (Persoon-01,
-Persoon-02 ...). Het koppelen van codenaam aan e-mailadres gebeurt daarom
+Dienstrooster kent geen e-mailadressen, alleen codenamen (staf01, staf02
+... voor de achterwacht en aios01, aios02 ... voor de AIOS). Het koppelen van codenaam aan e-mailadres gebeurt daarom
 buiten de app, in een Excel-lijst die alleen jij beheert. Zo gaat het:
 
 1. In Dienstrooster kies je bij **Exporteren & communicatie** voor
@@ -44,8 +44,8 @@ er ook geen echte naam van maken.
 
 Gaat de ruil door, dan noemt de mail aan de aanvrager de collega. De
 planner en het roosterbureau krijgen dan een bevestiging met beide
-dienstdoenden: "Persoon-03 neemt de avonddienst op woensdag 3 maart 2027
-over van Persoon-07." Met stap 5 staan daar de volledige namen. Die
+dienstdoenden: "staf03 neemt de avonddienst op woensdag 3 maart 2027
+over van staf07." Met stap 5 staan daar de volledige namen. Die
 bevestiging gaat naar twee vaste codenamen, `Planner` en `Roosterbureau`
 (soort `RUIL_DOORGEVEN`). Zet die twee als rij in je Excel-lijst, met het
 adres van de planner en van het roosterbureau (stap 3). Dienstrooster zet zelf nooit een e-mailadres in de verzendlijst.
@@ -230,8 +230,15 @@ Maak in OneDrive of SharePoint een Excel-bestand, bijvoorbeeld
 
 | Codenaam   | Email                   |
 |------------|-------------------------|
-| Persoon-01 | iemand@ziekenhuis.nl    |
-| Persoon-02 | iemand.anders@ziekenhuis.nl |
+| staf01     | iemand@ziekenhuis.nl    |
+| staf02     | iemand.anders@ziekenhuis.nl |
+
+De achterwacht en de AIOS gebruiken dezelfde stroom en dezelfde lijst. Zet
+de deelnemers van allebei in deze lijst.
+
+Had je een lijst met Persoon-01, Persoon-02 ...? Vanaf versie 0.25.0 heten
+die deelnemers staf01, staf02 ... in de app. Pas de codenamen in de lijst
+op hetzelfde moment aan, anders vindt de stroom hun adres niet.
 
 Zet er ook twee rijen in voor de bevestiging van een goedgekeurde ruil:
 codenaam `Planner` met het adres van de planner (bijvoorbeeld het gedeelde
@@ -280,11 +287,11 @@ versie iets verschillen.
         "berichten": [
           {
             "soort": "LAATSTE_HERINNERING",
-            "codenaam": "Persoon-03",
-            "personen": ["Persoon-03"],
+            "codenaam": "staf03",
+            "personen": ["staf03"],
             "onderwerp": "Laatste herinnering: geef je voorkeuren voor Voorjaar 2027 door",
-            "tekst": "Beste Persoon-03, ...",
-            "html": "Beste Persoon-03,<br><br>..."
+            "tekst": "Beste staf03, ...",
+            "html": "Beste staf03,<br><br>..."
           }
         ]
       }
@@ -423,8 +430,8 @@ staat, bij één of twee codenamen.
 
 ## Stap 5 (optioneel). Echte namen in plaats van codenamen
 
-Zonder deze stap staat er in de mail bijvoorbeeld "Beste Persoon-07,
-Persoon-07 neemt de avonddienst op 3 maart over van Persoon-03." Met deze
+Zonder deze stap staat er in de mail bijvoorbeeld "Beste staf07,
+staf07 neemt de avonddienst op 3 maart over van staf03." Met deze
 stap vervangt de stroom elke codenaam door de naam uit je Excel-lijst:
 "Beste Anna, Anna neemt de avonddienst op 3 maart over van Bram."
 Dienstrooster zelf kent die namen nooit.

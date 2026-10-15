@@ -306,7 +306,7 @@ tevoren worden aangemaakt.
 `SEED_ON_START` staat standaard op `planner`: de eerste keer dat `DATA_DIR`
 (zie `.env.example`) leeg is, maakt de app het beheerdersaccount
 (codenaam `admin`), de pool, de soorten diensten, de berichtteksten en 30
-deelnemers (Persoon-01 tot en met Persoon-30) aan. Die deelnemers hebben
+deelnemers (staf01 tot en met staf30) aan. Die deelnemers hebben
 nog niets ingevuld. De beheerder maakt daarna zelf de planners aan. Er
 komt geen voorbeeldperiode bij. Veilig om
 aan te laten staan bij herstarts en herinstallaties, want het gebeurt maar
@@ -345,6 +345,15 @@ docker compose up -d
 De database in `DATA_DIR` blijft staan. Nieuwe kolommen en tabellen worden
 bij het starten automatisch toegevoegd. Maak voor de zekerheid eerst een
 kopie van die map.
+
+**Vanaf versie 0.25.0** heten de deelnemers van de achterwacht staf01,
+staf02 enzovoort, en die van de AIOS aios01, aios02 enzovoort. Bij de
+eerste start van 0.25.0 krijgen Persoon-01 tot en met Persoon-30 eenmalig
+de codenaam staf01 tot en met staf30. Hun voorkeuren, diensten en saldi
+blijven gewoon bij hen. Pas dezelfde codenamen ook aan in de Excel-lijst van
+de Power Automate-stroom (zie `docs/verzendlijst-power-automate.md`), anders
+vindt de stroom hun e-mailadres niet en krijgen ze geen mail. Doe dat op
+hetzelfde moment als het bijwerken.
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
@@ -513,8 +522,8 @@ Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
 1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist).
 2. **Een schone start:** dat is de standaard (`SEED_ON_START=planner`).
    De app maakt het beheerdersaccount `admin`, de pool, de soorten
-   diensten, de berichtteksten en 30 deelnemers (Persoon-01 tot en met
-   Persoon-30) aan, zonder voorkeuren en zonder periode. Bij de eerste keer
+   diensten, de berichtteksten en 30 deelnemers (staf01 tot en met
+   staf30) aan, zonder voorkeuren en zonder periode. Bij de eerste keer
    inloggen kies je een eigen wachtwoord. Planners maak je aan bij
    *Accounts beheren*. Deelnemers pas je aan, voeg je toe of zet je uit via
    de pagina van de pool.
@@ -589,7 +598,13 @@ de stroom al gebouwd?".
   tweestapsverificatie uitzetten, een account uitschakelen of de rol
   wijzigen. Bij een nieuw account kies je ook de dienst: Achterwacht of
   AIOS. Het rooster voor de AIOS is nog niet in productie. Kies je AIOS,
-  dan meldt de app dat en maakt hij het account niet aan. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
+  dan meldt de app dat en maakt hij het account niet aan.
+  Een planner ziet alleen de pools, periodes, roosters en voorkeuren van de
+  eigen dienst. De planner van de achterwacht en die van de AIOS zien dus
+  niets van elkaar. De beheerder ziet beide diensten. Een deelnemer hoort
+  bij één dienst: iemand van de achterwacht kan niet ook in de pool van de
+  AIOS. De mailinstellingen gelden voor beide diensten samen. Alleen de
+  beheerder kan ze wijzigen, een planner ziet ze alleen. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
   vervangen, en de sessies van dat account worden beëindigd. Je eigen
   account beheer je met *Wachtwoord wijzigen* en *Tweestapsverificatie*.
   Een nieuwe installatie begint met één account: de beheerder `admin`, met

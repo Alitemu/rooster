@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
 import { insertNotification } from '@/lib/notifications';
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
   try {
     const auth = getAuthContextFromRequest(request);
     if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(auth, periodId);
+    if (otherDienst) return otherDienst;
     const actorId = auth!.userId;
     const body = await parseJsonBody<{ confirmOverrides?: boolean }>(request);
 

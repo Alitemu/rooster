@@ -14,6 +14,7 @@
 import { checkMayBecomeActive, markInvited } from '@/lib/activePeriod';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import {
@@ -36,6 +37,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
   const params = await props.params;
   try {
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), params['period-id']);
+    if (otherDienst) return otherDienst;
 
     const period = getInvitationPeriod(params['period-id']);
     if (!period) return fail(404, 'NOT_FOUND', 'Periode niet gevonden');

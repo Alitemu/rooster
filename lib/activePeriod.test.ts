@@ -1,16 +1,19 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { db } from '@/db/client';
-import { getActivePeriod, checkMayBecomeActive, markInvited } from './activePeriod';
+import { getActivePeriod, getActivePeriods, checkMayBecomeActive, markInvited } from './activePeriod';
 
 /**
- * The rules: the period invited last is the active one, never one in the
- * trash; another period may only be invited once the active one is
- * published; the active one itself may always be invited again.
+ * The rules: the period of a pool invited last is that pool's active one,
+ * never one in the trash; another period of the pool may only be invited
+ * once the active one is published; the active one itself may always be
+ * invited again. Each pool has its own: the AIOS's active period never
+ * keeps the achterwacht from inviting, or the other way round (audit of
+ * the AIOS separation).
  */
 
 const created = { pools: [] as string[], periods: [] as string[], rulesets: [] as string[] };
 
-function createPool(): string {
+function createPool(type: 'ACHTERWACHT' | 'AIOS' = 'ACHTERWACHT'): string {
   const rulesetId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_ruleset (id, naam, config_json, aangemaakt_op) VALUES (?, 'R', '{}', datetime('now'))`
@@ -18,8 +21,8 @@ function createPool(): string {
   created.rulesets.push(rulesetId);
   const poolId = crypto.randomUUID();
   db.prepare(
-    `INSERT INTO dienstrooster_pool (id, naam, ruleset_id, aangemaakt_op) VALUES (?, 'Pool', ?, datetime('now'))`
-  ).run(poolId, rulesetId);
+    `INSERT INTO dienstrooster_pool (id, naam, type, ruleset_id, aangemaakt_op) VALUES (?, 'Pool', ?, ?, datetime('now'))`
+  ).run(poolId, type, rulesetId);
   created.pools.push(poolId);
   return poolId;
 }
@@ -52,15 +55,15 @@ describe('active period', () => {
     const poolId = createPool();
     const voorjaar = createPeriod(poolId, 'Voorjaar', 'OPEN');
     const najaar = createPeriod(poolId, 'Najaar', 'CONCEPT');
-    expect(getActivePeriod()).toBeUndefined();
+    expect(getActivePeriod(poolId)).toBeUndefined();
 
     markInvited(voorjaar, new Date('2098-01-01T10:00:00Z'));
-    expect(getActivePeriod()?.id).toBe(voorjaar);
+    expect(getActivePeriod(poolId)?.id).toBe(voorjaar);
 
     setStatus(voorjaar, 'GEPUBLICEERD');
     setStatus(najaar, 'OPEN');
     markInvited(najaar, new Date('2098-06-01T10:00:00Z'));
-    expect(getActivePeriod()?.id).toBe(najaar);
+    expect(getActivePeriod(poolId)?.id).toBe(najaar);
   });
 
   it('is never a period in the trash', () => {
@@ -69,7 +72,8 @@ describe('active period', () => {
     markInvited(id);
     db.prepare("UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?").run(id);
 
-    expect(getActivePeriod()).toBeUndefined();
+    expect(getActivePeriod(poolId)).toBeUndefined();
+    expect(getActivePeriods().map((p) => p.id)).not.toContain(id);
   });
 
   it('keeps another period from being invited until the active one is published', () => {
@@ -95,5 +99,21 @@ describe('active period', () => {
     markInvited(actief);
 
     expect(checkMayBecomeActive(actief).allowed).toBe(true);
+  });
+
+  it("is each pool's own: the AIOS's open period never holds up the achterwacht", () => {
+    const achterwacht = createPool('ACHTERWACHT');
+    const aios = createPool('AIOS');
+    const aiosActief = createPeriod(aios, 'AIOS voorjaar', 'OPEN');
+    markInvited(aiosActief, new Date('2098-02-01T10:00:00Z'));
+    const staf = createPeriod(achterwacht, 'Achterwacht voorjaar', 'OPEN');
+
+    expect(checkMayBecomeActive(staf).allowed).toBe(true);
+    markInvited(staf, new Date('2098-03-01T10:00:00Z'));
+    // The later invitation of the achterwacht leaves the AIOS's active.
+    expect(getActivePeriod(aios)?.id).toBe(aiosActief);
+    expect(getActivePeriod(achterwacht)?.id).toBe(staf);
+    expect(checkMayBecomeActive(createPeriod(aios, 'AIOS najaar', 'OPEN')).allowed).toBe(false);
+    expect(getActivePeriods().map((p) => p.id)).toEqual(expect.arrayContaining([aiosActief, staf]));
   });
 });

@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { checkCapacity, getCapacityInterpretation } from '@/lib/capacity';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
@@ -52,6 +53,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const { id } = params;
 

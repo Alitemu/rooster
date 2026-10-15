@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { visibleDienst } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse } from '@/types';
 
@@ -40,12 +41,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         COUNT(pm.person_id) as member_count
       FROM dienstrooster_pool p
       LEFT JOIN dienstrooster_pool_membership pm ON p.id = pm.pool_id
-      ${includeInactive ? '' : 'WHERE p.actief = 1'}
+      WHERE (? IS NULL OR p.type = ?) ${includeInactive ? '' : 'AND p.actief = 1'}
       GROUP BY p.id
       ORDER BY p.naam ASC
     `);
 
-    const pools = poolsStmt.all() as Pool[];
+    // The planner's own dienst only, every dienst for a beheerder (lib/dienstAccess.ts).
+    const dienst = visibleDienst(auth!);
+    const pools = poolsStmt.all(dienst, dienst) as Pool[];
 
     const response: ApiSuccessResponse<Pool[]> = {
       success: true,

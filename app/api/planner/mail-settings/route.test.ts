@@ -33,8 +33,11 @@ import { GET as swapContactsGET } from '../../person/[id]/swap-contacts/route';
  * - the password is stored encrypted and never sent back;
  * - the app is the only place sending is set up: .env is not read, and
  *   removing the settings stops sending;
- * - planners only, and every change is in the audit trail without the
- *   password.
+ * - the beheerder saves and removes them, every planner sees the status:
+ *   they are shared by the achterwacht and the AIOS, and a planner who
+ *   could point the flow mailbox elsewhere would get the other dienst's
+ *   personal links (lib/dienstAccess.ts). Every change is in the audit
+ *   trail without the password.
  * - the flow mailbox is the planner's address in the swap dialog; a
  *   participant reads only that, for themselves.
  */
@@ -48,7 +51,7 @@ afterAll(async () => {
 });
 
 const people: string[] = [];
-function person(rol: 'PLANNER' | 'DEELNEMER'): string {
+function person(rol: 'ADMIN' | 'PLANNER' | 'DEELNEMER'): string {
   const id = crypto.randomUUID();
   db.prepare(`INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, ?, 1, datetime('now'))`).run(
     id,
@@ -103,7 +106,7 @@ afterEach(() => {
 describe('Mailinstellingen in de app', () => {
   it('saves a working Gmail account, encrypted, never shows the password and sends with it', async () => {
     configureSmtpServerOnly(sink);
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
 
     const res = await PUT(request('PUT', planner, goed));
     expect(res.status).toBe(200);
@@ -129,9 +132,28 @@ describe('Mailinstellingen in de app', () => {
     expect(sink.logins).toContain(SMTP_SINK_GMAIL_USER);
   });
 
+  it('lets only the beheerder save or remove them: a planner sees the status and changes nothing', async () => {
+    configureSmtpServerOnly(sink);
+    const beheerder = person('ADMIN');
+    expect((await PUT(request('PUT', beheerder, goed))).status).toBe(200);
+    const voor = stored();
+
+    const planner = person('PLANNER');
+    const status = await (await GET(request('GET', planner))).json();
+    expect(status.data).toMatchObject({ ingesteld: true, verzendlijst_aan: goed.verzendlijst_aan });
+    for (const res of [
+      await PUT(request('PUT', planner, { ...goed, verzendlijst_aan: 'eigen@ziekenhuis.test' })),
+      await DELETE(request('DELETE', planner)),
+    ]) {
+      expect(res.status).toBe(403);
+      expect((await res.json()).error.message).toContain('Alleen de beheerder');
+    }
+    expect(stored()).toEqual(voor);
+  });
+
   it('refuses anything but Gmail, a normal password, and a login that fails, and saves nothing', async () => {
     configureSmtpServerOnly(sink);
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
 
     const nietGmail = await PUT(request('PUT', planner, { ...goed, gebruiker: 'iemand@outlook.com' }));
     expect(nietGmail.status).toBe(400);
@@ -150,7 +172,7 @@ describe('Mailinstellingen in de app', () => {
 
   it('keeps the saved password when left empty, but only for the same account', async () => {
     configureSmtpServerOnly(sink);
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
     expect((await PUT(request('PUT', planner, goed))).status).toBe(200);
 
     const zelfde = await PUT(request('PUT', planner, { ...goed, wachtwoord: '', verzendlijst_aan: 'nieuw@ziekenhuis.test' }));
@@ -168,7 +190,7 @@ describe('Mailinstellingen in de app', () => {
     configureSmtpServerOnly(sink);
     // What an older installation may still have in its .env.
     Object.assign(process.env, { SMTP_USER: SMTP_SINK_GMAIL_USER, SMTP_PASS: SMTP_SINK_GMAIL_PASSWORD, VERZENDLIJST_AAN: 'env@ziekenhuis.test' });
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
     try {
       expect((await (await GET(request('GET', planner))).json()).data.ingesteld).toBe(false);
       const loginsBefore = sink.logins.length;
@@ -200,7 +222,7 @@ describe('Mailinstellingen in de app', () => {
 
   it('says so when the saved password can no longer be read, and does not send with it', async () => {
     configureSmtpServerOnly(sink);
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
     await PUT(request('PUT', planner, goed));
     db.prepare(`UPDATE dienstrooster_app_setting SET waarde = 'v1:kapot' WHERE sleutel = 'mail.wachtwoord'`).run();
 
@@ -213,7 +235,7 @@ describe('Mailinstellingen in de app', () => {
 
   it('sends nothing at all while MAIL_UITGESCHAKELD is set, even with working settings saved', async () => {
     configureSmtpServerOnly(sink);
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
     expect((await PUT(request('PUT', planner, goed))).status).toBe(200);
     process.env.MAIL_UITGESCHAKELD = 'true';
     try {
@@ -237,7 +259,7 @@ describe('Mailinstellingen in de app', () => {
 
   it('gives the swap dialog the flow mailbox as the planner\'s address, and only to the person themselves', async () => {
     configureSmtpServerOnly(sink);
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
     const deelnemer = person('DEELNEMER');
     const ander = person('DEELNEMER');
     const contacts = async (as: string, id: string) => {
@@ -271,7 +293,7 @@ describe('Mailinstellingen in de app', () => {
   });
 
   it('remembers the last failed send until one succeeds, and never counts "not set up" as a failure', async () => {
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
     const lijst = (automatisch: boolean) =>
       buildVerzendlijst({ soort: 'HERINNERING', automatisch, periode: 'P', deadline: null }, []);
     const fout = async () => (await (await GET(request('GET', planner))).json()).data.laatste_fout;
@@ -297,7 +319,7 @@ describe('Mailinstellingen in de app', () => {
 
   it('forgets an earlier failure once new settings are saved', async () => {
     configureSmtp(sink, { wachtwoord: 'verkeerd' });
-    const planner = person('PLANNER');
+    const planner = person('ADMIN');
     await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []));
     expect((await (await GET(request('GET', planner))).json()).data.laatste_fout).not.toBeNull();
 

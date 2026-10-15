@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { requestRosterGenerationJobCancel } from '@/lib/rosterGenerationJobs';
 
@@ -25,6 +26,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const periodId = params.id;
     const body = await parseJsonBody<{ job_id?: string }>(request);

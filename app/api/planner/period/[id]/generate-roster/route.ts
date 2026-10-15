@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
 import {
   loadPeriodMembers,
@@ -47,6 +48,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
     const actorId = auth!.userId;
 
     const periodId = params.id;

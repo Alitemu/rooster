@@ -18,7 +18,7 @@ import { z } from 'zod';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
-import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (denied) return denied;
 
     const period = loadPeriod(req.nextUrl.searchParams.get('period_id'));
-    if (!period || (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(id, period))) return notFound();
+    if (!period || !periodUsableFor(auth!, id, period)) return notFound();
 
     const gate = checkPeriodAcceptsInput(period);
     return NextResponse.json({
@@ -92,7 +92,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
     }
     const planner = requirePlannerAccess(auth);
     const period = loadPeriod(parsed.data.period_id);
-    if (!period || (!planner && !isPeriodVisibleToPerson(id, period))) return notFound();
+    if (!period || !periodUsableFor(auth!, id, period)) return notFound();
 
     if (!planner) {
       const gate = checkPeriodAcceptsInput(period);

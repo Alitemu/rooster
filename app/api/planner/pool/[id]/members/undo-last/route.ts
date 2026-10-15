@@ -14,6 +14,7 @@ import { db } from '@/db/client';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { poolDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { getPendingUndo, clearPendingUndo } from '@/lib/pendingUndo';
@@ -37,6 +38,8 @@ export async function POST(
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
+    const otherDienst = poolDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
 
     const poolId = params.id;
     const pending = getPendingUndo(poolId);

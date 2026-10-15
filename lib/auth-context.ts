@@ -11,6 +11,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME, verifySessionToken, type SessionPayload } from '@/lib/session';
 import { unauthorizedResponse, forbiddenResponse } from '@/lib/api-errors';
 import { db } from '@/db/client';
+import type { DienstType } from '@/lib/staffAccounts';
+import { notThisDienstResponse, staffMayAccessPerson } from '@/lib/dienstAccess';
 
 export interface AuthContext {
   userId: string;
@@ -18,6 +20,11 @@ export interface AuthContext {
   timestamp: string;
   /** A staff session opened with the public seed password: it may only change the password. */
   wachtwoordWijzigen?: boolean;
+  /**
+   * Staff only: the dienst whose pools, periods and participants this
+   * account sees (lib/dienstAccess.ts). A beheerder sees every dienst.
+   */
+  dienst?: DienstType;
 }
 
 /**
@@ -61,9 +68,9 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
     // after one is added, instead of a role downgrade only taking effect
     // once the 12-hour cookie naturally expires.
     const current = db
-      .prepare(`SELECT rol, sessie_versie FROM dienstrooster_person WHERE id = ? AND actief = 1`)
+      .prepare(`SELECT rol, sessie_versie, dienst_type FROM dienstrooster_person WHERE id = ? AND actief = 1`)
       .get(session.personId) as
-      | { rol: 'ADMIN' | 'PLANNER' | 'DEELNEMER'; sessie_versie: number }
+      | { rol: 'ADMIN' | 'PLANNER' | 'DEELNEMER'; sessie_versie: number; dienst_type: DienstType | null }
       | undefined;
     if (!current) return null;
     if (!sessionVersionMatches(session, current.sessie_versie)) return null;
@@ -73,6 +80,11 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
       role: current.rol as 'ADMIN' | 'PLANNER',
       timestamp: new Date().toISOString(),
       wachtwoordWijzigen: session.wachtwoordWijzigen === true,
+      // Read live like the role, so moving an account to the other dienst
+      // takes effect at its next request. Every staff account got
+      // ACHTERWACHT when the column came (migration 0022), and that is what
+      // an account is created with unless the beheerder picks otherwise.
+      dienst: current.dienst_type ?? 'ACHTERWACHT',
     };
   }
 
@@ -133,11 +145,15 @@ export function requireAdminAccess(auth: AuthContext | null): boolean {
 }
 
 /**
- * True if the authenticated identity is the given person, or staff acting on their behalf.
+ * True if the authenticated identity is the given person, or staff acting on
+ * their behalf: a planner only for someone of their own dienst
+ * (lib/dienstAccess.ts), a beheerder for anyone.
  */
 export function requirePersonAccess(auth: AuthContext | null, personId: string): boolean {
   if (!auth) return false;
-  if (auth.role === 'ADMIN' || auth.role === 'PLANNER') return requirePlannerAccess(auth);
+  if (auth.role === 'ADMIN' || auth.role === 'PLANNER') {
+    return requirePlannerAccess(auth) && staffMayAccessPerson(auth, personId);
+  }
   return auth.userId === personId;
 }
 
@@ -156,6 +172,11 @@ export function requirePersonAccess(auth: AuthContext | null, personId: string):
  */
 export function personAccessDenial(auth: AuthContext | null, personId: string): NextResponse | null {
   if (!auth) return unauthorizedResponse();
-  if (!requirePersonAccess(auth, personId)) return forbiddenResponse();
+  if (!requirePersonAccess(auth, personId)) {
+    // A planner asking about someone of the other dienst: 404, as for
+    // nobody at all (lib/dienstAccess.ts).
+    if (requirePlannerAccess(auth)) return notThisDienstResponse();
+    return forbiddenResponse();
+  }
   return null;
 }
