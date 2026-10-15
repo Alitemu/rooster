@@ -9,6 +9,34 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 - Part-time support
 - Automatic roster generation with diagnostics
 
+Two rosters with two planners: the achterwacht (in production) and the AIOS
+(designed in docs/aios-rooster.md, not built yet), kept apart in every route
+(docs/development/diensten.md).
+
+This file holds the rules. The background per area - why a rule exists, what
+went wrong before, which file does what - is in docs/development/ (see
+"Where things are"); read the file for the area you work on. A code comment
+that says "CLAUDE.md, ..." points to a section that now lives there.
+
+## Standing instructions from the user
+
+- Answer the user in Dutch, with the Dutch style rules below.
+- The repository is public: no organisation names, domains, e-mail
+  addresses, IP addresses, internal paths or real names of people anywhere
+  in it (code, docs, tests, commit messages). Files the user shares
+  (rosters, forms) stay out of the repository.
+- Never ask for or show the Gmail app password: the beheerder enters it in
+  the app.
+- **Version:** the header shows `versie` from package.json, right of the
+  title - bump it when releasing. Three numbers only (npm and release.yml
+  refuse a fourth): a new feature or changed behaviour raises the middle
+  one (0.3.8 -> 0.4.0), a small fix or wording change the last one
+  (0.4.0 -> 0.4.1). Bump once per build, not per commit: several small
+  changes before one "Bouwen (test)" share one new number. Once a version
+  bump is committed and pushed, run "Bouwen (test)" and then "Vrijgeven
+  (productie)" for that version without asking first, and report the
+  outcome. Run the checks under Testing before the bump.
+
 ## Stack
 
 | Layer | Technology | Version |
@@ -117,1210 +145,124 @@ identifiers, DB fields, comments, and console/log output only.
 - Never hardcode example data in components or routes
 - Fixtures go in `/tests/fixtures/`
 
-### Testing
-
-**One Rule = One Test That Proves It Can't Be Broken:**
-- Example: "Window rule - person with shift in week 12 has no shift in weeks 11, 13"
-  - Test that proves it fails if violated
-  - Not just example data
-
-**Test Organization:**
-- Colocate: `utils.ts` + `utils.test.ts` in same folder
-- Use Vitest: `npm run test`, `npm run test:ui`
-- Property-based tests: `fast-check` for invariants
-- No DB mocks - use seed fixtures with real SQLite
-
-**Browser-level checks** need a seeded database, the solver and the app
-already running (`npm run seed`, `uvicorn main:app --port 8000` from
-`./solver`, then `ALLOW_SEED_PASSWORD=true SOLVER_URL=http://localhost:8000
-npm start`) - none of them starts anything itself. ALLOW_SEED_PASSWORD
-because they all log in with the seed password, which otherwise only
-opens a "choose a new password" session (see Authentication):
-- `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its
-  own period/assignments fixture per file (`tests/e2e/setup.ts`), so it does
-  not read the seeded period, only the pool and shift types it finds.
-- `node scripts/full-check.mjs` - the API lifecycle against real data,
-  including the solver's own hard rules on its untouched output (no
-  ABSOLUUT violation, nobody twice in one ISO week, nobody's window rule
-  broken, nobody past their streefbereik).
-- `node scripts/ui-check.mjs` - the two screens people use most.
-- `node scripts/scenario-check.mjs` - the planner's own case end to end:
-  15 people, a fellow with a part-time Monday, 2026-12-28 to 2027-09-05
-  (ISO week 53 and the year boundary), opened with the wizard's
-  suggested streefbereik, generated with all four methods at windows 0-2
-  (SCENARIO_MODES, SCENARIO_WINDOWS, SCENARIO_TIME, default the dialog's
-  120 s): nothing empty, no rule broken, then "Rooster verwijderen" and
-  again. Where shifts stay empty and the dialog offers "langer proberen"
-  (a CP-SAT result not proven best) it tries longer like a planner does,
-  2.5 and then 5 times SCENARIO_TIME (300 and 600 s): since the window
-  counts days, window 2 for these 15 people needs more than 120 seconds
-  (audit 14). "Willekeurig" leaving a dienst is a warning, not a failure,
-  and so is "Herhaalplanner" at window 2 (3 attempts here, up to 100 in
-  the dialog).
-
-`node scripts/mutation-check.mjs [name]` needs nothing running: it breaks
-one hard rule at a time (a guard removed or weakened in the source),
-runs only the tests meant to guard it and expects them to fail; a
-mutation that survives is a rule without a test. The source is restored
-after each. Add a mutation when adding a guard. A solver guard gets one
-too (`runner: 'pytest'`, run in ./solver with SOLVER_PYTHON, a Python
-with solver/requirements.txt and pytest; audit 14).
-
-The solver the browser checks talk to should run the OR-Tools version
-of solver/requirements.txt (9.8, the image's): another version searches
-differently: in the planner's scenario at window 2 and 120 seconds
-lexicographic left 1 shift empty on 9.12 and 8 on 9.8 (audit 14). Two sweeps run with npm
-test: app/api/auditCoverage.test.ts (every planner route that changes data
-writes the audit log or states why not) and app/dutchStyle.test.ts (no
-joining dash, no comma before en/of in user-facing text).
-
-`node scripts/schema-drift.mjs` needs nothing running. It builds one
-database from the seed and one from the migrations and compares them
-column by column, index by index, foreign key by foreign key. Run it after
-any schema change: SEED_ON_START defaults to planner, so on a real deployment
-it is scripts/seed.ts - not db/migrations - that builds the schema, and
-the two drifting apart means production quietly runs a different one than
-every test does.
-
-`node scripts/upgrade-drift.mjs [commit...]` covers the other half: a
-production database was never built from nothing. It builds one with an
-older version's own seed (a git worktree; by default 0.2.0, 0.6.0, 0.8.1
-and 0.11.0), runs the current production start over it (seed.ts
---alleen-planner) and compares the result with a fresh database - every
-column, index, foreign key and CHECK constraint - and checks no row of the
-core tables was lost. Run it after adding a column; it needs the git
-history, not a shallow clone.
-
-Two things these get wrong easily, and both cost a day to diagnose:
-- **Assert on Dutch.** Every user-facing string is Dutch; a selector looking
-  for an English label matches nothing, and a `getByText(/error/i)` that
-  never matches looks exactly like a passing test.
-- **Fixtures must obey the rules they are not testing.** A fixture that
-  hands one person two shifts in the same ISO week has a window-rule
-  violation in it, so the publication check flags a warning and every swap
-  between those people carries a "two shifts close together" warning -
-  noise that has nothing to do with what the test meant to check.
-
-**Test Files Must Cover:**
-1. Happy path (normal operation)
-2. Boundary conditions (start of period, year boundary, etc.)
-3. Error cases (invalid input, constraint violation)
-
 ### Naming Conventions
-
-These avoid subtle bugs when UI and code use different sign conventions:
 
 | Concept | Code | UI | Comments |
 |---------|------|----|----|
-| Person identifier | `person.codenaam` | Shown as "Persoon-01" | Only pseudonym, no real names |
+| Person identifier | `person.codenaam` | staf01, aios01 (demo: Persoon-01) | Only pseudonym, no real names |
 | Service counter | `AVOND`, `WEEKEND`, `FEESTDAG` | "avonddienst", "weekenddienst", "feestdagdienst" | Enums in code, words in UI |
 | Time window | `windowWeeks` | "venster (weken)" | Setting in UI, config in code |
 | Balance amount | Stored as delta, delta < 0 = fewer | "1 avonddienst minder" | Never show raw sign to user |
 | Balance range | `band[min, max]` | "Je krijgt 8 of 9 avonddiensten" | Band is internal; show the range (bereik) |
 | Preference level | `ABSOLUUT`, `LIEVER_NIET`, `VOORKEUR` | "geblokkeerd", "liever niet", "voorkeur" | Enums in code |
 
-### Server-Side Functions
+### Server-Side Functions and Errors
 
 Database mutations, auth checks, solver calls and other sensitive logic run
 server-side, in the route handlers under `app/api` and the `lib/` code they
-call (the app has no server actions).
-
-Never leak implementation details to client:
-- No raw error messages from DB
-- No internal error codes
-- Return client-safe error messages
-
-### Error Handling
-
-- Validation at system boundaries only (user input, external APIs)
-- Trust internal code and framework guarantees
-- No defensive code for scenarios that can't happen
-
-Example: If the ORM guarantees a constraint, don't also check in code.
-
-## Datamodel Overview
-
-**Core Tables:**
-- `person` - staff members (codenaam, role, password_hash, totp_secret, sessie_versie)
-- `person_access_link` - personal links for participants
-- `pool` - shift pool (name, type, settings reference)
-- `pool_membership` - who's in which pool when
-- `ruleset` - configuration and rules (frozen when period opens)
-- `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
-- `shift_type` - shift definitions (evening, weekend, holiday)
-- `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type)
-- `holiday_history` - which feestdag someone had in which year, from the
-  setup wizard's old import step; read by nothing. The wizard step is gone:
-  what counts is the number over the years, which the app keeps itself
-  from its own rosters (lib/feestdagHistory.ts). The route
-  import-holidays and the table stay for old data.
-- `ledger_entry` - balance adjustments (categorie CARRY_OVER, CORRECTIE, BEGINSALDO).
-  BEGINSALDO (the wizard's "Beginsaldi importeren") is for a pool's first
-  period in the app only; after a period published here the carry-over is
-  booked by itself, and the wizard warns that an import counts on top.
-- `audit_log` - all actions by admins/planners (lib/auditLog.ts
-  `writeAuditLog`; never passwords, tokens or link hashes). Since audit 6
-  also creating, opening and closing a period, its deadline, rules,
-  slots and automatic reminders, the pool on/off, adding, changing,
-  removing and restoring a member, minting a personal link and the holiday
-  import (route only since the wizard step went); app/api/auditLog.test.ts proves each writes exactly one row.
-  Since audit 9 also personal links minted for everyone at once (the
-  invitations and reminders exports), two-step verification switched on,
-  every "Rooster vooraf invullen" change, and a planner changing someone's
-  preferences, hand-in or part-time check for them (writeOnBehalfAuditLog;
-  the participant's own input is not logged). app/api/auditCoverage.test.ts
-  sweeps every planner route that changes data.
-- `notification_template` - message templates
-- `reminder_schedule` - reminder timing rules
-
-- `availability` - blocking preferences (person + slot + level)
-- `assignment` - final shift assignments
-- `submission` - period status per person
-- `swap_request` - shift exchanges
-
-## Holiday Calculation
-
-7 holiday groups (never show raw names to users):
-
-| Group | English | Dates | Rule |
-|-------|---------|-------|------|
-| `NIEUWJAAR` | New Year | Jan 1 | Fixed |
-| `PASEN` | Easter | Easter Sun, Easter Mon | Meeus algorithm |
-| `KONINGSDAG` | King's Day | Apr 27 (or 26 if Sun) | Conditional |
-| `BEVRIJDINGSDAG` | Liberation | May 5 every 5 years | Every 5 years |
-| `HEMELVAART` | Ascension | Easter + 39 days | Variable |
-| `PINKSTEREN` | Pentecost | Easter + 49-50 | Variable |
-| `KERST` | Christmas | Dec 25-26 | Fixed |
-
-**Implementation:**
-- `/lib/holidays.ts` - TypeScript calculation utilities, the only place
-  holidays are worked out. The solver computes none: it gets each slot's
-  teller (FEESTDAG included) with the slots generate-roster sends.
-- Tests for 2024-2035 including leap years
-
-## Period Management
-
-- **Auto-round** to Monday start, Sunday end on ISO-week boundaries
-- **One period per day:** every day belongs to at most one period of a
-  pool (lib/periodOverlap.ts; create and open answer 409 PERIOD_OVERLAP,
-  checked on the whole weeks opening rounds to). A period being made
-  (CONCEPT) or in the prullenbak takes no days. Opening rounds the start
-  back to Monday, and a next period typed to start mid-week reached into
-  the last week of the one before: both rosters filled those days, two
-  people on one achterwacht day (audit 12). This line used to promise
-  "days already assigned in published previous periods are excluded",
-  which no code did.
-- **Freeze ruleset** when period opens (no retroactive rule changes)
-- **Row versioning** for optimistic concurrency on mutable periods
-- **Back to OPEN** (`POST /api/periods/[id]/reopen`, "Terug naar open" in
-  the period header, two clicks): from GESLOTEN or GEGENEREERD. From
-  GEGENEREERD the SOLVER rows and the pending undo go; MANUAL/OVERRIDE rows
-  (filled in beforehand, corrections) stay, as a regeneration keeps them.
-  Not from GEPUBLICEERD (409): unpublish first, which tells participants.
-  The deadline can then be moved like any OPEN period's.
-- **Remove the generated roster** (`POST /api/periods/[id]/reset-roster`,
-  "Rooster verwijderen" in the period header, a confirmation with a
-  checkbox): GEGENEREERD back to GESLOTEN, ready to generate afresh with
-  the preferences still closed. The SOLVER rows and the pending undo go;
-  with `ook_handmatig: true` the MANUAL/OVERRIDE rows too, for a clean
-  start. Not from GEPUBLICEERD (409, unpublish first), nor without a
-  generated roster or while a generation runs (409). Audit-logged. Swap
-  requests play no part: they only exist on a published roster.
-- **Rename** (`PATCH /api/periods/[id]` `{naam}`, "Naam wijzigen" in the
-  period list's row): any status, checked like a new period's name
-  (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),
-  audit-logged. Mails already sent keep the old name.
-- **The prullenbak** (lib/periodTrash.ts): any status may go in, a
-  published one too (participants lose it at once), restorable for 30
-  days, then purged with everything that references it (its pending undo
-  included). A period in the trash is no previous period: the one lookup
-  of "the previous published period" (lib/previousPeriod.ts
-  findPreviousPublishedPeriod - carry-over, the overloop confirmation gate,
-  "Eerdere toewijzingen") skips it, and lib/previousPeriod.test.ts fails on
-  any other place that queries it itself (audit 10). Carry-over already
-  booked from it stays when nothing else comes before, as for a roster
-  unpublished for the moment. Participants lose it at once on every route
-  that looks up a period or acts on a swap request: lib/periodAccess.ts
-  isPeriodVisibleToPerson, LIVE_SWAP_REQUEST_SQL for approve, reject and
-  cancel, or `verwijderd_op IS NULL` in the query
-  (app/api/person/trashSweep.test.ts). The own roster and every swap action
-  still answered, and approving moved shifts in a roster nobody could see
-  (audit 13). Restoring refuses days another period took meanwhile (409
-  PERIOD_OVERLAP, lib/periodOverlap.ts); a draft comes back whatever its
-  dates.
-- **While a generation runs** manual-assign, reassign, delete and undo
-  answer 409 (GENERATION_RUNNING_MESSAGE, lib/rosterGenerationJobs.ts), as
-  reset-roster does: the solver's answer, written when it comes, was built
-  without the change - on the same day it killed the whole result on the
-  UNIQUE constraint, on another it could give someone a second shift that
-  week (audit 10). Publish too (audit 11): it mailed everyone the roster
-  being replaced, and the generation then died on the row_version.
-- **Venster/streefbereik of a generated roster** (PATCH
-  /api/periods/[id]/ruleset, the generation dialog saves its edits there
-  at "Genereren"): GEGENEREERD goes back to GESLOTEN, like "Rooster
-  verwijderen", so it waits for a new generation with the preferences
-  still closed. It went to OPEN, which opened them again whenever the
-  deadline was still ahead (audit 11).
-- **Length:** a period is at most two years (lib/isoDate.ts
-  MAX_PERIODE_DAGEN, periodRangeProblem; create, open, the capacity
-  check's date overrides and the wizard's first step). Every day becomes a
-  slot: a year typed as 2207 made a period of 180 years (audit 11).
-
-**Undo on the period page:** a manual assign/reassign/remove leaves one
-"ongedaan maken" (lib/pendingUndo.ts) that records its `onderdeel` - the
-heading it was made under (ROOSTER, VOORAF = "Rooster vooraf invullen",
-HERVERDELING = "Voorstellen voor herverdeling"; the client sends it, the
-route falls back to ROOSTER). PlannerDashboard shows the button inside that
-section, so it folds away with it; a hidden herverdeling section hands it
-to the roster. A generation clears it, like "Rooster verwijderen" and
-"Terug naar open": it belonged to the roster that was replaced (audit 10).
-
-**Version:** the header shows `versie` from package.json, right of the
-title - bump it when releasing. Three numbers only (npm and release.yml
-refuse a fourth): a new feature or changed behaviour raises the middle
-one (0.3.8 -> 0.4.0), a small fix or wording change the last one
-(0.4.0 -> 0.4.1). Bump once per build, not per commit: several small
-changes before one "Bouwen (test)" share one new number. Standing
-instruction from the user: once a version bump is committed and pushed,
-run "Bouwen (test)" and then "Vrijgeven (productie)" for that version
-without asking first, and report the outcome.
-
-**Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
-
-- Two steps (lib/publication.ts). `POST .../publish` makes the roster
-  voorlopig: status GEPUBLICEERD, `definitief_op` NULL, everyone's shifts
-  kept in `voorlopig_rooster_json`, and each participant mailed their own
-  shifts (verzendlijst soort ROOSTER_VOORLOPIG) to check. `POST
-  .../finalize` ("Definitief maken") is always a manual act, never a timer:
-  it reruns the publication check (same issues/warnings rule as publish),
-  sets `definitief_op`/`definitief_door_person_id` and mails the final
-  shifts with what changed per person since the voorlopige version
-  (ROOSTER_DEFINITIEF). Corrections in between are ordinary manual
-  assignments on a GEPUBLICEERD roster. Both mails go out after the commit;
-  the response's `mail` says whether they did, and the dialog warns before
-  the button is pressed that everyone gets a mail at once. A roster
-  published before this existed counts as definitief (backfill in
-  migration 0020 and LATER_COLUMN_BACKFILL). Participants see a "voorlopige
-  rooster" notice while `definitief_op` is NULL.
-
-- `runPublicationCheck` (lib/publicationCheck.ts) distinguishes two kinds
-  of finding: `issues` (an unfilled slot - genuinely not finished, always
-  blocks) and `warnings` (an ABSOLUUT or window-rule violation already
-  sitting in the roster, or someone outside their streefbereik). The
-  solver can never produce an ABSOLUUT or window-rule violation itself -
-  both are hard constraints on its side - so those warnings always mean a
-  planner deliberately overrode it via manual-assign ("in consultation
-  with the person taking the shift"), or, for the window rule, that two
-  participants agreed to a swap leaving one of them with two shifts close
-  together. That is their own call: swaps are never refused over the
-  window rule, only flagged to both sides (lib/swapWindowRule.ts). A band violation is a warning too:
-  going over is hard-capped in the solver (MAX_BAND_OVERSHOOT = 0), so
-  that is always a manual choice, and going under is deliberately soft
-  there, so it can be a legitimate outcome when supply can't meet demand
-  - either way a planner may knowingly publish it. Warnings require
-  `confirmOverrides: true` on `POST .../publish` (409 without it) but never
-  block on their own - blocking on the same override a planner just made
-  on purpose would mean no roster using it could ever be published.
-- `POST .../unpublish` is for a roster published by mistake (the
-  planner's words after audit 9: a published roster only changes through
-  swaps, and nobody withdraws one while working on the next period - so
-  carry-over, which skips an unpublished period, is not guarded against
-  that). It reverts GEPUBLICEERD back to GEGENEREERD: clears
-  `gepubliceerd_op`/`gepubliceerd_door_person_id` and the definitief
-  fields and snapshot (publishing again starts voorlopig), keeps every assignment
-  (withdrawing is not discarding the roster), keeps notifications already
-  sent (a historical record) and sends a new one telling participants the
-  publication was withdrawn.
-
-## Fellows
-
-Fellows support the AIOS on the voorwacht on Saturdays, so they don't do
-weekends. Per period only (`dienstrooster_period_fellow`), nothing carries
-over.
-
-- "Ik ben fellow" on the participant's preferences step (FellowToggle,
-  `PUT /api/person/[id]/fellow`), until the deadline like any preference;
-  the planner can change it until the roster is generated ("Status
-  voorkeuren", audit-logged; 409 on GEGENEREERD/GEPUBLICEERD: it would move
-  everyone's weekend band under a built roster, and carry-over reads it
-  when the next period opens).
-- Ticking blocks every Saturday and Sunday of the period, feestdagen on a
-  weekend included, never a weekday feestdag, and never a day the person
-  marked themselves (lib/fellows.ts). A weekend day a part-time pattern
-  or absence held becomes a fellow block when that lets go of it
-  (lib/fellowBlocks.ts restoreFellowBlocks, called where parttimeSync and
-  absenceSync delete rows), so it never counts as released. The rows are ordinary ABSOLUUT
-  availability with `fellow_blok = 1` (source stays MANUAL: the CHECK on
-  `source` predates this), so solver, warnings and publication check need
-  nothing special. Unticking removes only `fellow_blok` rows and re-syncs
-  part-time patterns and absences; setting such a day by hand clears the
-  flag (slot route), an absence takes it over. Never counted against a
-  block budget.
-- A fellow may release weekend days (clear or mark them). Bands: fellows
-  don't count for WEEKEND, so the others' band goes up at generation
-  (lib/rosterBands.ts `resolvePeriodBands`: a configured band scaled by
-  everyone / the non-fellows, both as effective headcounts, floor/ceil;
-  otherwise the default over the non-fellows). A fellow's own WEEKEND band is `[0, released days]`,
-  capped at the others' max, without the ledger (`fellowWeekendBand`),
-  sent to the solver as `band_overrides` - an optional SolverInput field
-  that replaces a person's scaled band and delta for one counter.
-  `computeMemberTargets` is the one per-person target (publication check,
-  band room in pick lists, "Jouw rooster", invitation indication).
-  Carry-over: a fellow's weekend saldo waits; shifts taken anyway pay off
-  debt but never create credit (lib/carryOver.ts).
-- Planner views: "Fellow" label in Status voorkeuren, Dienstdoende
-  (weekend "n.v.t."), and every candidate list; fellows sorted to the
-  bottom; own category FELLOW on a fellow-blocked weekend day. The
-  generation dialog shows the raised weekend band and whether the
-  weekend/feestdag window still fits the non-fellows
-  (`checkWeekendCapacity`, lib/fellowSummary.ts) - the window itself stays
-  the planner's to set.
-- The tick stays when someone's Geldig vanaf/tot moves off the period or
-  they leave the pool, so everything counts fellows among the period's
-  members only (loadPeriodMembers). The publication check's "Fellows
-  tellen niet mee" counted the tick itself and told a planner without
-  fellows that the weekend band was raised for them.
-
-## Diensten: the achterwacht and the AIOS
-
-Two rosters with two planners, who never see each other's pools,
-periods, rosters or preferences (the planner's words: "Ze mogen elkaars
-rooster en voorkeuren niet inzien"). The AIOS roster itself is designed
-but not built yet (docs/aios-rooster.md, agreed with the planner: blocks,
-points, the dienstpercentage, the hard rules); until it is, an AIOS account
-is refused (DIENST_NIET_IN_PRODUCTIE) and the separation is ready for it.
-
-- A pool's `type` is its dienst, a staff account's `dienst_type` theirs
-  (AuthContext.dienst, read live like the role; null counts as
-  ACHTERWACHT, what migration 0022 gave every account). The beheerder
-  sees every dienst (the planner's choice), a planner only their own
-  (lib/dienstAccess.ts).
-- Every route with a period or pool id answers 404 "Niet gevonden" for
-  the other dienst's, before anything else (periodDienstDenial /
-  poolDienstDenial right after requirePlannerAccess). A participant of the
-  other dienst is refused by personAccessDenial (requirePersonAccess asks
-  staffMayAccessPerson), and a participant route that takes a period
-  (path, query or body) asks periodUsableFor (lib/periodAccess.ts): a
-  planner passed those on their role alone, and with their own
-  participant and the other dienst's period id the fellow route wrote into
-  that roster. The lists (periods, prullenbak, pools) hold only the own
-  dienst; a period is made only in a pool of it.
-- A participant belongs to one dienst: adding someone who is in a pool of
-  another type is refused (409 ANDERE_DIENST, the beheerder too), and the
-  imports that look a codenaam up (prior assignments, holidays) treat
-  someone of the other dienst as unknown.
-- The active period is per pool (lib/activePeriod.ts getActivePeriod(poolId),
-  getActivePeriods): one for the app kept the AIOS planner from inviting
-  while the achterwacht's period was open, and the refusal named it.
-  "Link kwijt?" offers the links of every pool's active period.
-- One shared Mailinstellingen and flow for both (the planner's choice), so
-  only the beheerder saves or removes them (403 for a planner, who sees
-  them read-only): a planner who could point the flow mailbox elsewhere
-  would get the other dienst's personal links.
-- Codenamen: staf01, staf02, ... for the achterwacht and aios01, ... for
-  the AIOS (lib/startParticipants.ts). A production start creates
-  staf01..staf30; an installation from before had Persoon-01..30, renamed
-  once at its next production start (--alleen-planner or --schema-only,
-  never the demo seed) to stafNN, the setting codenamen.staf_hernoemd
-  keeping it from running again (a Persoon-NN added later stays). The
-  operator renames the rows in the flow's Excel list at the same moment.
-- app/api/dienstSeparation.test.ts holds it: two complete worlds, every
-  route file called by each world's planner with the other's ids (and
-  for participant routes their own participant with the other's period,
-  slot and swap in path, query and body), expecting 401/403/404, nothing
-  of the other world in any answer, and the other world's rows unchanged;
-  the same GETs by the own planner and the beheerder must find their ids.
-  A route added later is covered without anyone remembering to.
-
-## Geldig vanaf/tot (membership window)
-
-Overlapping the period is enough to take part (headcount, coverage factor:
-someone leaving halfway gets a proportionally lower streefbereik), but a
-shift needs the membership to hold on its own date (lib/membershipWindow.ts,
-both ends inclusive). generate-roster sends every slot outside it to the
-solver as ABSOLUUT (blockOutsideMembership, not stored); manual-assign and
-reassign refuse it (notMemberOnSlotDate); pick lists, herverdeling and swap
-candidates leave the person out; swap create and approve refuse it; and
-the publication check lists such a shift as an issue (only possible when
-the membership changed after the roster was made).
-
-"Today" on Personeel beheren (the members route's Actief, the new
-member's start) is the Dutch calendar date (lib/localDate.ts
-`localIsoDate`, Europe/Amsterdam), never `toISOString().slice(0, 10)`: that
-is UTC, still yesterday until 01:00 or 02:00 Dutch time.
-
-Adding someone reuses an existing participant by codenaam, the exact
-spelling; one that differs only in capitals is refused (409
-CODENAAM_HOOFDLETTERS, naming the existing one). "persoon-01" for an
-existing "Persoon-01" made a second person, and the first one's
-carry-over, feestdagdiensten over the years and the flow's row for their
-mail stayed behind (audit 13).
-
-Adding someone on "Personeel beheren" starts with the dates of the pool's
-one period being rostered (OPEN, GESLOTEN or GEGENEREERD), like the setup
-wizard's own step, and says so under the form; with none, or two at once,
-today until 2029-12-31 (lib/membershipDefaults.ts). It used to start at
-today and an empty Geldig tot, and a planner who typed an end date short
-of the period got shifts nobody could take.
-
-A mistake on Personeel beheren is told where it was made
-(app/planner/pool/[id]/staff/page.tsx): under Toevoegen for a new member,
-under its own row for a change or a removal, scrolled into sight; only a
-failed load of the list shows above it. Everything showed above the list,
-out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
-
-## Streefbereik, venster and the solver's phases
-
-- **Bands over the effective headcount.** The default band per teller is
-  the period's slots over `effectiveHeadcount` (lib/rosterBands.ts: the
-  sum of each member's coverage of the period, times the deelnamefactor
-  under NAAR_RATO), floor/ceil; scaledBandForMember then scales it per
-  person by the same two factors. Counting heads instead left shifts
-  empty: with people joining or leaving halfway everyone's maximum added
-  up to fewer shifts than there were. `resolvePeriodBands(config,
-  slotCountByTeller, members, fellowIds, distributionMode)` is the
-  one entry point (generate-roster, computeMemberTargets, fellowSummary;
-  the capacity route's suggested band uses effectiveHeadcount too).
-- **One member per person, all memberships together.** `loadPeriodMembers`
-  (lib/rosterBands.ts) is the one query for a period's participants:
-  someone who stopped and came back within the period has two
-  memberships, and `combinedMembership` (lib/coverageFactor.ts) adds their
-  days up (dekking) and weighs the deelnamefactor by them. Picking one row
-  per person gave someone present the whole period the streefbereik of a
-  part of it (audit 7). generate-roster sends the same dekking and factor
-  as coverage_factors/participation_factors;
-  generate-roster/solverContract.test.ts runs it against a fake solver and
-  checks every person's band and the windows against computeMemberTargets
-  and resolveWindowWeeks.
-- **Carry-over per person** (lib/carryOver.ts): each member is measured
-  against their own scaled target, the one the solver got, not the flat
-  band. Someone at factor 0.5 who did their half carries nothing over.
-  Booked when a period opens and booked again at every generation
-  (`refreshCarryOverForPeriod` in generate-roster's POST, before the job
-  reads balances; rows that already say the same stay, a change writes one
-  audit row): the previous roster keeps being corrected while the next
-  period is open for preferences, and a correction made after it opened
-  never reached a ledger (audit 8). A published next period is not
-  generated again, so it keeps what it had. Rows are dated ISO like every
-  other ledger row (they used datetime('now'), which sorts wrong as text).
-- **"Eerdere toewijzingen"** (dienstrooster_prior_assignment, the previous
-  roster's last weeks for the window rule across the boundary, read by the
-  solver and lib/windowRule.ts; the whole window back since the window
-  counts days, lib/priorAssignmentDerive.ts calculatePriorAssignmentWeeks,
-  N weeks where N - 1 did in calendar weeks): the AFGELEID rows follow the previous
-  roster as it is now - `refreshDerivedPriorAssignments`
-  (lib/previousPeriod.ts) at "afleiden" and before every generation, with
-  an audit row when something changed. A day someone else works since (a
-  swap) gets them, a day nobody works loses its row, rows from a period
-  that is no longer the previous one go; HANDMATIG rows (including a day
-  the planner cleared) and ONBEKEND stay. They used to be a snapshot that
-  "afleiden" again never touched (audit 10). A row is a day before the
-  period: the PATCH route refuses a day of the period or after it (400
-  NOT_BEFORE_PERIOD, 404 for no period), as the CSV import skips one. It
-  took any date, and a row inside the period was a fixed shift for the
-  solver and the window checks that nobody held (audit 14).
-- **Feestdagdiensten over the years** (lib/feestdagHistory.ts, the
-  planner's words after audit 10: "het gaat om het aantal over de jaren
-  heen en niet om een specifieke feestdag"). A period has few of them, so
-  everyone's FEESTDAG band is 0 or 1 and carry-over (band edges) forgot
-  who got the one. Now, per member: over every published period of the
-  pool before this one outside the trash (lib/previousPeriod.ts
-  `publishedPeriodsBefore`), their fair share of its feestdagdiensten (the
-  band weights: dekking, and the deelnamefactor under that period's
-  NAAR_RATO) minus what they did, summed = achterstand; plus this
-  period's fair share = their target. generate-roster sends it as
-  `feestdag_targets` (SolverInput, optional; a caller without it changes
-  nothing). The solver pulls each person's FEESTDAG count (manual
-  pre-fills included) toward the target rounded half up to a whole shift
-  (objective.py add_feestdag_history_objective): a weighted term of 1 per
-  shift of distance (a swap outweighs one liever-niet), lexicographic
-  phase 2c after the band phases and before liever-niet (so marking every
-  feestdag liever niet doesn't keep someone off their count), and in the
-  greedy planner only the people furthest from their target take part in
-  the tiers. Never on a blocked day and never past a band. Newcomers and
-  everyone at the pool's first period start even; there is no import of
-  history from before the app. Fellows count like anyone (weekday
-  feestdagen are theirs too). solverContract.test.ts holds the targets to
-  feestdagTargets; solver/test_feestdag_history.py proves the solver side.
-- **Why shifts stayed empty.** generate-roster marks each unfilled slot
-  with `reden`: GEEN_LID (no member's Geldig vanaf/tot covers that date)
-  or IEDEREEN_GEBLOKKEERD (every member who covers it has ABSOLUUT, the
-  membership blocks included), otherwise null; and `bereik_tekort` per
-  teller when the members' maximums together (scaled band plus balance, a
-  fellow's own weekend band) are fewer than the slots, with `voorgesteld`
-  (the band the app would choose itself for the members there are now)
-  when a typed band is lower; `deels_lid` counts the members whose
-  membership covers only part of the period. The shortfall accounts for
-  that many of the unexplained shifts, so they are not named twice.
-  RosterGenerationDialog
-  words it with lib/unfilledExplanation.ts `explainUnfilled`, per cause,
-  instead of one "not enough people" for all of them: a planner whose
-  memberships ended halfway the period saw 160 empty shifts with every
-  planner and window and nothing on screen said why. The band shortfall is
-  one calculation (lib/bandShortfall.ts `computeBandShortfall`), also shown
-  before generating: the dialog asks GET .../band-check for the bands as
-  typed and warns under "Venster en streefbereik", with "Bereik voor de
-  huidige leden" to put in the suggested band (saved at "Genereren" like any
-  edit there). A period's band is required when it opens and frozen with
-  the then-members, so a pool that changed afterwards needed this (audit 9:
-  5-6 avonddiensten worked out for 30 people, generated for 15).
-- **Window warnings look across the boundary** (lib/windowRule.ts
-  shiftsAround, audit 11): personWouldViolateWindowRule and
-  getWindowConflictingPersonIds - manual-assign and reassign warnings, the
-  "venster" group in pick lists and herverdeling, swap warnings - weigh the
-  person's shifts in this period, in the pool's other periods outside the
-  prullenbak (a generated or published roster, or a MANUAL/OVERRIDE
-  pre-fill in one still being made; a SOLVER row of a period waiting to be
-  generated again is no roster) and the period's "Eerdere toewijzingen".
-  They looked inside the period only, while the solver and the
-  publication check already looked across: someone who worked the last
-  Sunday before a period was offered for its first Monday without a word,
-  and a swap in a period's last week said nothing about the next one's
-  first. countWindowRuleViolations (publication check) is unchanged.
-- **windowWeeks N = at least 7 x N days between two shifts of one
-  person** (0.22.0), counted between the shifts' dates, so 1 is 7 days and
-  0 switches the rule off (solver/constraints.py add_window_constraints and
-  add_prior_assignment_constraints, solver/greedy.py window_ok,
-  lib/windowRule.ts tooClose - the warnings, the publication check and
-  swaps). It counted ISO weeks (one shift in any N consecutive
-  Monday-to-Sunday weeks), and a Sunday and the Monday two weeks later, 8
-  days apart, passed a window of 2: the planner read it as "14 dagen of
-  meer tussen 2 diensten". The per-teller windows and the cross-type floor
-  work as before, in days. With either per-teller window set,
-  generate-roster sends both as resolveWindowWeeks reads them (the solver
-  would read a missing one as 0). Up to 0.11 a window of 1 counted as off.
-  "Nobody twice in one ISO week" follows from this rule at 1 or more, not
-  a rule of its own. The holiday spread (holidaySpreadWeeks) still counts
-  weeks. The way back, should rosters no longer solve, is the previous
-  release (0.21.0), not a setting. The period header shows the windows
-  the period generates with (lib/windowWeeks.ts vensterTekst, pure, so the
-  page can use resolveWindowWeeks too): it showed the old `windowWeeks`,
-  which the wizard sets to the avond window at opening and the generation
-  dialog never changes (audit 14).
-- **objectiveMode lexicographic** (solver/solver.py `_solve_lexicographic`):
-  each phase starts from the previous phase's solution as hints, and a
-  phase that finds nothing in its time falls back to the last phase that
-  did (a warning in the solver log), never to an empty roster. The phases
-  after it still run from that roster (only phase 1 finding nothing ends
-  the run): they were skipped, so "eerlijkheid" out of time meant
-  liever-niet and voorkeur were never looked at (audit 15). The run is
-  OPTIMAL only when every phase was proven optimal; otherwise FEASIBLE,
-  so the dialog offers "langer proberen". It reported the last phase's
-  status: a phase 1 out of time with 8 shifts empty and a last phase
-  proven optimal behind it read as "Optimaal" (audit 14). Each phase
-  gets what is left of the budget over the phases still to run, so time a
-  quick phase leaves (or a phase with nothing to do, never started) goes
-  to the ones after it: every phase had a fixed share decided up front,
-  and the planner's scenario used 67 of 120 seconds (audit 14). A larger
-  share for phase 1 was tried and left it at 3 empty shifts instead of 8
-  on OR-Tools 9.8; weighted left 1 in the same 120 s, so the split stayed
-  even. Lexicographic is what the wizard opens every new period with
-  (objectiveMode in the frozen ruleset); weighted is the default only for
-  a period frozen before that field existed.
-
-## Absences and part-time over what someone marked by hand
-
-One availability row per person per slot, so a sync meets what is there:
-an absence (lib/absenceSync.ts) takes over a part-time or fellow block and
-any softer marking made by hand (LIEVER_NIET, VOORKEUR, or an empty row) -
-a vacation day must never stay open to the solver - and leaves a day
-blocked by hand or by another absence alone. A part-time pattern
-(lib/parttimeSync.ts) takes over LIEVER_NIET and empty manual rows but
-leaves a VOORKEUR (someone wanting to work that particular day), manual
-blocks, absences and fellow blocks. What was marked on a taken-over day is
-gone when the absence or pattern is removed; the day is then open.
-
-A marking the next sync would take back is refused instead (409, slot
-route, audit 8): LIEVER_NIET or VOORKEUR on a day inside one of the
-person's absences (IN_AFWEZIGHEID), LIEVER_NIET on a day one of their
-patterns covers (IN_DEELTIJD). Written anyway, the day stayed open to the
-solver until some unrelated action re-synced it. ABSOLUUT and clearing
-are always taken. Changing or removing a pattern re-syncs all the
-person's patterns and then their absences, so a day another pattern
-covers (switching patterns, the new one added first) is blocked again at
-once. app/api/person/[id]/availabilityModel.test.ts drives random
-sequences of all of this through the routes and checks after every step
-that one more sync of everything changes nothing.
-
-The participant's calendar shows the real block budget per counter
-(`blokkadebudget` in GET /api/person/[id]/preferences/[periodId], from
-lib/blockBudget.ts blockBudgetLimits: max and whether part-time days are
-exempt), counted the way checkBlockBudget counts; without a budget it
-shows blocked days out of all days and speaks of no maximum.
-
-## Preferences import (test, beheerder only)
-
-The preferences overview itself (GET /api/exports/preferences/[period-id])
-has one column per member of the period (loadPeriodMembers), nobody else:
-someone removed from the pool used to stay in it as long as they had
-markings left.
-
-"Voorkeuren importeren (test)" next to the preferences overview download
-(components/PreferencesImportDialog.tsx, POST
-/api/admin/period/[id]/preferences-import, lib/preferencesImport.ts)
-reads that overview back after it was filled in and saved in Excel - as
-.xlsx only (a re-saved CSV's separator and encoding depend on the
-machine). The overview is a workbook itself since 0.20.0, so the
-downloaded file goes back in as it is. lib/xlsx.ts reads the first worksheet with Node's zlib, no
-library (size-capped before and while inflating, read in one forward pass
-without backtracking regular expressions, a cell past column XFD refused:
-audit 6 packed a sheet of 20 MB of unclosed rows into a 29 kB upload); a date cell arrives as
-Excel's day number, text dates as YYYY-MM-DD or d-m-yyyy. The dialog
-sends the file as base64 within the 1 MB body cap. Tests build their
-workbooks with tests/fixtures/buildXlsx.ts. Hand markings only: a plain level is set
-as MANUAL (like the planner's calendar), an empty cell clears a MANUAL
-row, and a cell with "(parttime)", "(afwezig)" or "(fellow)" - or an
-empty cell over such a row - is skipped. No block budget. Checking
-(`toepassen` false) writes nothing; applying refuses a file with any
-problem, and a period whose roster is built (409). Audit-logged; cleared
-people are re-synced like the slot route, backups rewritten. A column
-header "'-Anna" is matched to -Anna too: the CSV export before 0.20.0
-guarded a codenaam starting with =, +, - or @ with an apostrophe, and
-Excel keeps it; the workbook holds the name as it is
-(preferences-import/roundtrip.test.ts, generated codenamen, the download
-itself and as Excel saves it again).
-The dialog lists the first 50 changes and says so ("Hieronder de eerste 50
-van de N wijzigingen"), and the button reads "Toepassen (N wijzigingen)":
-"En nog 3442 wijzigingen" under 50 of 3492 read as the total, and the
-check seemed to count wrong until Toepassen said 3492 (the planner's
-report; tests/e2e/preferences-import.e2e.ts). Check and apply count the
-same plan. A codenaam column twice, a day twice and a column for someone
-who does not take part in the period (loadPeriodMembers) are problems:
-the copies counted twice and the last one won, and any participant's
-codenaam was taken, also from another pool (audit 13).
-
-## Capacity Check (Live)
-
-Two formulas, both checked before generation:
-
-```
-1. Total capacity:
-   max_shifts = floor(weeks / windowWeeks)
-   capacity = active_participants * max_shifts
-   Check: capacity >= total_slots
-
-2. Distinct people per window (more restrictive):
-   required = 7 * windowWeeks
-   Check: active_participants >= required
-```
-
-Show live in settings screen with interpretation in plain Dutch.
-Since the window counts days (0.22.0) a person can do floor((days - 1) /
-(7 x windowWeeks)) + 1 shifts at most, so formula 1 stays a cautious
-estimate rather than the exact maximum.
-
-## Authentication
-
-**Two mechanisms:**
-
-1. **Personal Links** (participants)
-   - Long random token → SHA256 hash in DB
-   - Grants access to own period/preferences only
-   - Read-only after deadline
-   - Valid for its own period; a new export issues an extra link rather
-     than retiring earlier ones, so someone can still use the link in the
-     original invitation mail. `ingetrokken_op` is honoured on every
-     request (lib/auth-context.ts), but no flow sets it - revoking is a
-     deliberate manual act, not a side effect of exporting.
-
-2. **Password + TOTP** (planner/admin)
-   - bcrypt (the native binding) for password hashing; a password needs 8+
-     characters with lower case, upper case, a digit and a special
-     character (validatePasswordStrength)
-   - The codenaam at login is case-insensitive (COLLATE NOCASE in
-     staff-login, first-run-setup and the server scripts; an exact match
-     wins if two staff accounts differ only in case). New staff accounts
-     can't differ from an existing codenaam only in case (asked again in
-     the transaction that writes it: two requests at once both passed the
-     check while the password was hashed, audit 10).
-   - Ten wrong guesses per account (and per client) per quarter of an
-     hour, also when they arrive at the same moment: staff-login,
-     change-password, totp/disable, totp/confirm and first-run-setup take
-     an attempt with lib/rateLimit.ts `takeAttempt` before bcrypt or the
-     code check runs and give it back (`releaseAttempt`) once the secret
-     matched. Checking first and counting after the asynchronous compare
-     let a burst of thirty all through (audit 8,
-     app/api/auth/rateLimitConcurrency.test.ts).
-   - Speakeasy for TOTP generation
-   - No email required (pseudonymous)
-   - The password is changed through POST /api/auth/change-password
-     ("Wachtwoord wijzigen" on the period list), which requires the
-     current one. /api/auth/first-run-setup only ever claims an account
-     that has none yet, so it is not a reset path.
-   - `scripts/seed.ts` sets a known password from `lib/seedPassword.ts` -
-     deliberate, so a seeded database is immediately usable while this is
-     being built. The app logs a warning on every start while an account
-     still has it. The repository is public, so a login with it gets a
-     session flagged `wachtwoordWijzigen` (lib/session.ts): requirePlannerAccess
-     refuses it, only change-password (requireStaffSession), logout and
-     /api/auth/me accept it, and the login page asks for a new password
-     first; the seed password itself is refused as the new one.
-     ALLOW_SEED_PASSWORD=true lifts this for local test runs only;
-     docker-compose.yml does not pass it through.
-   - The TOTP secret is stored encrypted like the mail password
-     (lib/totpSecret.ts, "v1:"; a plain-text one from before is re-saved
-     encrypted at the next login). Unreadable after a key change: the
-     login says so, and `scripts/reset-totp.ts <codenaam>` on the server
-     turns two-step verification off for that account.
-   - A forgotten password: `scripts/reset-password.ts <codenaam>` on the
-     server (`docker compose exec -u node web ...`) asks for a new one twice
-     without echo (NIEUW_WACHTWOORD without a terminal, never an argument),
-     applies validatePasswordStrength, refuses the seed password, raises
-     sessie_versie and writes the audit log. Deliberately no reset on the
-     login page: no e-mail address to send to, and a reset anyone can
-     start is a way in.
-   - ADMIN ("beheerder") = everything a planner can (requirePlannerAccess)
-     plus the staff accounts (requireAdminAccess, lib/staffAccounts.ts,
-     /api/admin/accounts, page /planner/accounts linked from the period
-     list for ADMIN only; a planner who opens it anyway sees only "Alleen
-     een beheerder kan accounts beheren", no list and no form, and a list
-     that fails to load says so instead of "Accounts laden..." for good,
-     tests/e2e/accounts-access.e2e.ts, audit 16): add a PLANNER/ADMIN with a temporary password,
-     give an account a temporary password, turn off its TOTP, switch it
-     off or change its role. A temporary password sets
-     `person.wachtwoord_moet_wijzigen` (migration 0021): the login session
-     is flagged wachtwoordWijzigen like a seed-password login (login says
-     "tijdelijk wachtwoord"), change-password clears it. Every change
-     revokes that account's sessions and is audit-logged without password
-     material. Never one's own account (409), never the last active admin.
-     A staff account has a `dienst_type` (migration 0022; DIENST_TYPES
-     ACHTERWACHT | AIOS, lib/staffAccounts.ts): the admin picks it when
-     adding an account, AIOS is offered but refused with "nog niet in
-     productie" (409 DIENST_NIET_IN_PRODUCTIE; the page shows the notice
-     and disables Toevoegen) until it is. It decides what a planner sees
-     (see "Diensten: the achterwacht and the AIOS"). A production start
-     (--alleen-planner) creates only 'admin' (ADMIN, seed password or
-     SEED_PLANNER_PASSWORD) as staff, who adds the planners with names of their own;
-     the demo seed also creates 'planner', which the browser checks log in
-     as. Every start, whatever SEED_ON_START says (seed.ts addAdminIfNone, also
-     in --schema-only and the already-seeded demo run), adds 'admin' to an
-     existing database while it has no ADMIN at all; an existing 'planner'
-     stays. A migration-built database that hasn't caught up yet gets it at
-     the start after. The backup on the
-     server: scripts/reset-password.ts, and `scripts/create-account.ts
-     <codenaam> [--planner | --beheerder]` (hidden prompt,
-     scripts/hiddenPrompt.ts; --beheerder promotes an existing planner).
-     No real account name goes into the repository.
-   - The login page's `redirect` only goes to a /planner path on this site
-     (lib/safeRedirect.ts, checked with the URL parser: "/\\host" leaves
-     the site in a browser).
-   - TOTP is self-service, mirroring the password: "Tweestapsverificatie"
-     on the period list opens `TotpSettingsDialog`, which calls
-     `/api/auth/totp/setup` (a fresh secret + a server-rendered QR PNG,
-     `qrcode` renders the `otpauth://` URI - nothing is persisted yet) and
-     `/api/auth/totp/confirm` (a live code from that secret is what
-     actually writes `totp_secret`). `/api/auth/totp/disable` is the way
-     back - current password only, deliberately never a fresh TOTP code,
-     since "I no longer have a code to give" is the ordinary reason to
-     call it, not an edge case. All three routes, plus `/api/auth/me`'s
-     `totp_enrolled` flag the dialog reads its own state from.
-
-**Session revocation**
-
-Session cookies are self-contained signed tokens, so nothing server-side
-knows they exist. `person.sessie_versie` is the one thing that does: it is
-baked into every token and compared on each request (lib/sessionVersion.ts).
-Raising it invalidates every token issued for that person in one UPDATE.
-
-- Logging out revokes every session for that person, not just this
-  browser's cookie. `{ "alleenDezeBrowser": true }` on POST /api/auth/logout
-  keeps the others.
-- Changing the password revokes them too, and re-issues a cookie for the
-  browser that made the change.
-- A token from before the column existed carries no version and is
-  refused, so everyone logs in once more after that upgrade.
-
-## Mailing personal links (verzendlijst)
-
-The app never stores e-mail addresses, so it never mails participants
-itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
-`DIENSTROOSTER-VERZENDLIJST` + a JSON attachment: summary fields plus
-`berichten`, each `{soort, codenaam, personen, onderwerp, tekst}`; `personen` = every codenaam
-the text names, longest first, so a flow can swap in real names from its
-sheet without "Persoon-1" matching inside "Persoon-10") to a Power Automate flow on the planner's
-side, which looks each codenaam up in its own Excel list and sends the
-mail. The server sends that mail itself (lib/verzendlijstMail.ts) once an
-account is set up, in the app only ("Mailinstellingen" under Exporteren &
-communicatie, `/api/planner/mail-settings`, lib/appSettings.ts; saved and
-removed by the beheerder only, shared by both diensten - Gmail
-only, a 16-letter app password, the login is tried before saving, the
-password is stored AES-GCM encrypted with a key derived from the session
-secret, lib/settingsCrypto.ts, and never returned). .env is not read for
-it any more (SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN were removed on
-purpose); SMTP_HOST/SMTP_PORT exist only so tests can point it at
-tests/smtpSink.ts. The one mail variable left is MAIL_UITGESCHAKELD=true, a
-kill switch for a test installation on a copy of production's data: nothing
-is sent (readConfig returns null) and MailWarning says so. Without it the export dialog says sending isn't
-set up, and MailWarning at the top of the period page says no mail goes
-out at all. That warning also shows the last failed send (stored as
-`mail.laatste_fout` in app_setting by sendVerzendlijst, cleared by the
-next successful send or new settings; "not set up" is never recorded as
-a failure) - automatic reminders and swap mails fail where nobody
-watches. There is deliberately no other way out: the old manual JSON
-download and the per-person mailto links are gone, and a single reminder
-goes through the flow too. The invitations download (a workbook) stays. The recipient is always the flow mailbox from Mailinstellingen, never
-anything from a request. Links in mails a participant sets off (swap
-mails, lib/meldingMail.ts) use lib/baseUrl.ts `mailBaseUrl`: BASE_URL or
-the period's `basis_url` from the planner's export, never the Host header
-of the participant's request (anyone can forge it, and the colleague's
-fresh personal link would go to that host); with neither known the mail
-has no link. resolveBaseUrl (Host header) is for planner exports only. Swap requests use the same channel (lib/meldingMail.ts):
-a new request mails the colleague (SWAP_REQUESTED) and confirms to the
-requester, and approve/reject mails the requester (SWAP_RESULT), each a
-one-bericht verzendlijst with a fresh personal link and the swap spelled
-out from the reader's side (lib/swapMailDetails.ts). A mail about a swap
-that hasn't gone through names nobody but its reader (request
-SWAP_REQUESTED_MAIL_TEMPLATE "Nieuw ruilverzoek", confirmation, rejection,
-withdrawal SWAP_WITHDRAWN_MAIL_TEMPLATE, lapse; `personen` holds only the
-reader), so the flow can't put a real name to it: the colleague can say
-no without knowing to whom. The in-app notices and lists keep the
-codenamen, which are pseudonyms. The approval mail (`goedgekeurd`) names
-the colleague, and the approval also sends a RUIL_DOORGEVEN verzendlijst
-(DoorgevenMail in lib/meldingMail.ts, queued like any swap mail, built from
-the swap row when sent) with one bericht each for the fixed codenamen
-`Planner` and `Roosterbureau` (DOORGEVEN_AAN, lib/swapMailDetails.ts):
-who now does which shift, `personen` = both who swapped, no link. The
-operator adds those two rows to the flow's sheet; the app never puts an
-address in a verzendlijst, so a forged one can't reach anyone outside it. The swap dialog says only an equal swap goes through the app (one shift
-for one of the same kind, which the create route enforces); any other
-trade colleagues agree themselves and mail it themselves to the planner
-(the Mailinstellingen flow mailbox, lib/appSettings.ts getSwapContacts,
-GET /api/person/[id]/swap-contacts) and to "het roosterbureau", named
-without an address. The address lives in the app, never in code. Started after the
-commit and never awaited, so a mail failure can't fail or slow the swap.
-A swap mail that can't go out (not set up, or refused) waits in
-dienstrooster_mail_queue with its MeldingMail as JSON - built, personal
-link included, only when it is sent - and flushMailQueue sends it hourly
-(instrumentation-node.ts), right after mail settings are saved and after
-any other successful send (flushAfterSend, via a dynamic import from
-lib/verzendlijstMail.ts), oldest first, stopping at the first refusal.
-What no longer applies is pruned on every run, also while sending isn't
-set up, so MailWarning's count stays honest. A withdrawal waits for its
-own request mail if that is still being tried (requestsInFlight). Dropped after 7 days, a
-RUILVERZOEK/RUIL_BEVESTIGING as soon as the swap is no longer PENDING,
-and a withdrawal notice whose request mail never went out takes that
-request mail with it instead of being sent. The create route returns
-`mail_vertraagd` (not set up, a remembered failure, or a non-empty queue)
-so the requester is told the colleague may only see it in the app for
-now; MailWarning counts what waits. Every
-bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
-RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN, LINK_AANVRAAG,
-ROOSTER_VOORLOPIG, ROOSTER_DEFINITIEF, RUIL_DOORGEVEN) and an
-`html` field: `tekst` escaped with <br> for line breaks (tekstNaarHtml).
-The flow must use `html` as the mail body, never build HTML from `tekst`:
-the text can hold words a participant typed (swap toelichting, rejection
-reason, both capped at 1000 characters by lib/freeText.ts). Withdrawing a
-swap tells the colleague. One shift may be offered to several colleagues
-at once (the candidates list marks who was already asked, `al_gevraagd`;
-the exact same request twice is refused): the first to approve wins. That
-approval withdraws the other open requests of either side of that swap
-(INGETROKKEN, only the colleague each was sent to is told; the requester
-hears it in the approval mail, the approver on screen from the response's
-`afgesloten`) and closes anyone else's request on either shift as
-AFGEWEZEN ("vervallen", both sides told) (lib/swapLifecycle.ts). One
-participant may start at most 20 swap requests per 24 hours, withdrawn
-ones included (lib/swapQuota.ts, 429): each mails two people, and the
-sending account's daily limit is shared with invitations and reminders. Invitations go out only for an OPEN period before
-its deadline, like reminders (lib/reminderGate.ts); the download of links is
-not gated. SMTP on any port but 465 requires STARTTLS (requireTLS).
-
-Automatic reminders (lib/autoReminders.ts, run every hour from
-instrumentation-node.ts): for an OPEN period with `auto_herinneren` on,
-one moment per reminder_schedule milestone (7 and 1 days by default) at
-the last 09:00 at least N*24h before the deadline, to everyone not
-BEVESTIGD (own text for NIET_BEGONNEN/no row and for BEZIG), minus anyone
-with a REMINDER/FINAL_WARNING in notification_log in the last 24h (manual
-sends log there too). Each moment is claimed in dienstrooster_reminder_run
-keyed on (period, milestone, deadline) before sending and released if the
-send fails; a moment more than 12h late, or due together with a more
-urgent one, is recorded as OVERGESLAGEN instead. Links use BASE_URL or the
-period's `basis_url`, remembered from the planner's last export request.
-There is no separate summary mail: every verzendlijst is an object
-(lib/verzendlijst.ts `Verzendlijst`) whose fields around `berichten` -
-soort, automatisch, periode, deadline, aantal, and for reminders
-nog_niets_ingevuld/nog_niet_ingediend - let the flow report back to the
-planner itself. runAutoReminders takes `onlyPeriodIds` for tests: the
-test database is shared across test files. Setup for the operator, in
-Dutch: docs/verzendlijst-power-automate.md.
-
-The "Deeltijd" step's check ("my part-time days and absences are right")
-is stored on the submission row (`deeltijd_gecontroleerd_op`, migration
-0019, lib/submissionStatus.ts get/set/clearParttimeCheck, GET/PUT
-/api/person/[id]/parttime-check), not in the browser: it holds on every
-device, "Status voorkeuren" shows it ("Deeltijd gecontroleerd"), every
-create/edit/delete of a part-time pattern or absence clears it (next to
-markSubmissionStarted in those routes), and the submission route refuses
-to hand in without it (the client's old `parttime_confirmed` flag is
-ignored).
-
-"Status voorkeuren" and the statusrapport download are one query
-(lib/periodProgress.ts loadPeriodProgress: the period's members, fellows
-last, blocked days without a fellow's weekend blocks, Deeltijd only for a
-pattern that overlaps the period, Deeltijd gecontroleerd, Fellow). The
-download had its own: it counted the fellow blocks as days blocked by
-hand, and both ticked Deeltijd for a pattern that ended a year before
-(audit 16, lib/periodProgress.test.ts).
-
-The planner reminds by hand from "Status voorkeuren": a "Herinnering
-sturen" per person (disabled once BEVESTIGD) and one below the table for
-everyone not BEVESTIGD, both POST /api/planner/period/[id]/remind - the
-automatic reminder's text (reminderBericht), fresh links, logged like any
-reminder, only while OPEN before the deadline. (There used to be a
-"submit on behalf" button there; it is gone on purpose.)
-
-Nobody is reminded by hand twice within 24 hours without the planner
-saying so: the table shows "Laatst herinnerd" (`laatste_herinnering_op` in
-the progress route, lib/autoReminders.ts lastRemindedAt over
-notification_log, automatic and manual alike; lib/herinnerdOp.ts words
-it), and the server enforces it, so a refresh doesn't undo it. One person
-reminded within the day: 409 RECENT_HERINNERD with the time, the row asks
-"Toch versturen". Everyone: without `opnieuw` those people are skipped
-(`overgeslagen`), the confirmation offers "Alleen de andere n" or
-"Iedereen". The export dialog's send route sends nothing while one of
-them is recent (409 with `recent`), and the dialog asks the same way.
-
-"Link kwijt?" on the start page (components/LinkAanvraagForm.tsx, public
-POST /api/link-aanvragen, lib/linkAanvraag.ts): the app can't map an
-address to a codenaam, so it mails the flow a LINK_AANVRAAG verzendlijst
-with the typed address (`aanvraag_email`, trimmed, lower case) and a
-bericht for every participant of the active period in `kandidaten`, each
-with a fresh link (mailBaseUrl - never the request's Host header) and a
-line saying what it is good for now (periodeUitleg: preferences until the
-deadline, only looking once it passed or the period closed, the roster
-once published). The active period (lib/activePeriod.ts, one per pool) is the one
-whose invitations went out last (`schedule_period.uitgenodigd_op`, set by
-a successful invitation send; a database from before it gets the newest
-non-CONCEPT period with a basis_url, LATER_COLUMN_BACKFILL in the seed and
-migration 0018). Another period's invitations are refused (409
-OTHER_PERIOD_ACTIVE) until the active one is GEPUBLICEERD; the period
-list marks it "Actief".
-`berichten` stays empty on purpose: a flow that doesn't know this soort
-must send nothing rather than mail everyone. The flow looks the address
-up in its sheet and sends only that codenaam's bericht, to the sheet's
-address. The answer is the same for any address; rate-limited per caller
-(3) and in total (10) per 15 minutes, because every request mints a link
-for every participant and costs a Gmail send. The address is never
-stored or logged.
-
-## Deployment
-
-**Images:** node:22-alpine (Node 20 is end-of-life), dev dependencies
-pruned after the build; `.npmrc` sets legacy-peer-deps because npm 10
-crashes resolving vitest 4's optional peers, and `npm ci` must match the
-lockfile. `npm audit` reports issues in build-time tools only (braces via
-Tailwind 3's chokidar, postcss-selector-parser): none ship in the image, no
-fixed version exists short of Tailwind 4, and they only ever read this
-repository's own source; `npm audit --omit=dev` must stay at 0. Built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
-builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 only)
-tagged with package.json's `version` and `test`, only after the app's and
-the solver's tests pass and only for a version not built before (bump
-package.json for every build); "Vrijgeven (productie)"
-(release.yml) points `stable` at an already built, tested version without
-rebuilding. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
-installation sets `test`) and keeps `build` for building from source.
-Updating is `docker compose pull && docker compose up -d`. The schema of an
-existing database is brought up to date at every start either way:
-docker-entrypoint.sh runs the seed (SEED_ON_START=planner, the default, or
-true) or else
-`scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
-templates, no data; skipped for a migration-built database).
-
-**Port and address:** Caddy listens on APP_PORT (compose default 8010 for
-a NAS that uses 443 itself; .env.example and the IT instructions use 443),
-on any host name, with an on-demand certificate per name, so a renamed
-server needs no config change. `http://:80` in the Caddyfile redirects to
-https on APP_PORT; port 80 is only published through a
-docker-compose.override.yml the operator adds (README "Op poort 443").
-With BASE_URL empty the app takes its address from the Host header
-(resolveBaseUrl) and remembers it per period (basis_url) for mails.
-
-**Sub-folder (basePath):** NEXT_PUBLIC_BASE_PATH at build time (Dockerfile
-arg BASE_PATH, "Bouwen (test)" input `basispad`, empty by default -
-the app got its own subdomain instead;
-empty = root, as before) sets next.config basePath. Next.js prefixes
-<Link> and router.push itself; everything else goes through
-lib/basePath.ts `withBasePath` - every client fetch('/api/...'), plain
-<a href>, window.location - and `withoutBasePath` for a browser pathname.
-The session cookie's path is the sub-folder, resolveBaseUrl appends it
-(BASE_URL must include it), the Docker healthcheck uses it, and Caddy
-redirects anything outside it to it (BASE_PATH in .env). A new client
-fetch without withBasePath works at the root and breaks only in a
-sub-folder, so run the browser checks against a sub-folder build too:
-`NEXT_PUBLIC_BASE_PATH=/achterwacht npm run build`, start it the same
-way (the variable set at `npm start` too: next.config is read again
-there), and run them with `APP_URL=http://localhost:3000/achterwacht`
-(scripts and tests/e2e read APP_URL). No Next.js metadata file
-convention under app/ (icon.tsx, apple-icon, opengraph-image, favicon.ico,
-manifest, sitemap, robots): Turbopack, which builds this app, links those
-without the base path, and the tab icon was a 404 on every page in a
-sub-folder (audit 16). The icon is its own route, app/tab-icon/route.tsx,
-linked in app/layout.tsx's metadata through withBasePath;
-app/basePathSweep.test.ts refuses such a file and tests/e2e/tab-icon.e2e.ts
-fetches the icon where the page links it.
-
-**Backups and a clean start:** lib/dbBackup.ts writes one `VACUUM INTO`
-copy a day to `<db dir>/backups/database/rooster-YYYY-MM-DD.db` (local
-date), from the hourly scheduler, keeping the newest 14 - a plain file copy
-of a WAL database misses what is still in -wal. The key for everything stored
-encrypted (`<db dir>/.session_secret`, or SESSION_SECRET) is deliberately
-not in it; the README tells the operator to keep it apart. SEED_ON_START=planner runs
-`scripts/seed.ts --alleen-planner`: beheerder account admin, ruleset, pool, shift
-types, notification templates and 30 participants staf01..staf30 in the pool
-(addBareStartParticipants: membership from 1 January of the current year to
-2099-12-31, factor 1, no access link, preferences, balances, part-time or
-holiday history), no period (the
-production start and compose's default; true adds the demo data); a rerun
-on a seeded database only upgrades the schema.
-
-**Container hardening:** the web image is built in two stages (no
-compiler, Python or dev dependencies in the one that runs, no .next/cache),
-code owned by root with only /data and .next/cache writable for `node`,
-NEXT_TELEMETRY_DISABLED, a HEALTHCHECK that exits as soon as the status
-is in (one that never read the response waited ~6 s for keep-alive, past
-its 5 s timeout, so web showed "unhealthy" until 0.11.1). The solver image installs wheels only
-(--only-binary), no build-essential, own .dockerignore, code root-owned.
-Compose: caddy:2-alpine (Caddy 2.8+ dropped on_demand_tls interval/burst),
-capped json-file logs, no-new-privileges everywhere, init + mem_limit on
-web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
-to commit SHAs.
-
-**Uploads** (the wizard's beginsaldi, "Eerdere toewijzingen"): an .xlsx
-or a CSV (lib/sheetUpload.ts readUploadedRows). A workbook is read by the
-server, POST /api/planner/read-workbook (planner only, the same reader as
-the preferences import, writes nothing), and the rows come back to the
-page; "Eerdere toewijzingen" previews them with
-lib/priorAssignmentUpload.ts priorRowsInWindow. The roster download is a
-workbook since 0.20.0, and the import that reads it back took CSV only
-(read-workbook/route.test.ts: download, upload, import). A date cell
-arrives as Excel's day number (lib/isoDate.ts parseSheetDate, also text
-dates). lib/csv.ts parseCsv takes commas or semicolons, whichever the
-header line uses, and drops a byte order mark - a Dutch Excel saves "CSV"
-with semicolons, and every line became one cell (audit 12). The "Eerdere
-toewijzingen" import also reads d-m-yyyy dates and a codenaam with the
-formula-guard apostrophe (withoutFormulaGuard): the old CSV roster export
-saved again by a Dutch Excel.
-
-**Downloads:** every download is a one-sheet workbook (.xlsx, 0.20.0):
-rooster, statusrapport, voorkeurenoverzicht, uitnodigingen,
-wijzigingsgeschiedenis (app/api/exports). They were CSV, which a Dutch
-Excel opened in one column (it splits on ";" and wants a byte order mark),
-and a CSV saved again changes with the machine. lib/xlsxWrite.ts writes
-them with Node's zlib, no library, like the reader: a date is a real date
-(Excel's day number in its own date format, shown the reader's way), a
-moment is the Dutch clock time (`{ moment }`; the CSVs gave UTC), the
-header row is bold, frozen, filtered and on every printed page, and the
-voorkeurenoverzicht keeps its first four columns in view too and prints
-landscape with grid lines. A text cell is never a formula (no <f> is ever
-written), so no apostrophe guard; what XML can't hold is written as
-_xHHHH_ the way Excel does, or Excel calls the file corrupt. The file name
-goes through `xlsxAttachment`: an ASCII `filename` and the real name as
-`filename*` (UTF-8). A header value holds nothing above U+00FF, and a
-period name with an en dash, euro sign or emoji used to make every export
-answer 500. Not cached (the invitations hold personal links). lib/csv.ts
-stays for the preferences backups on disk and for CSV uploads.
-
-**Limits:** request bodies are capped at 1 MB in Caddy and in
-lib/api-errors.ts parseJsonBody (read no further; also before login).
-Free text a participant types - swap toelichting, rejection reason,
-absence notitie - goes through lib/freeText.ts (1000 characters).
-A number in a query string is checked like one in a body: the
-participant's notices take `limit` 1-200, anything else the default (it
-was parseInt: "abc" a 500, "-1" no limit); app/api/queryInput.test.ts
-calls every GET that reads a query parameter, with real ids, with odd
-values for each, and allows no 500 (audit 12). app/basePathSweep.test.ts
-holds every '/api/' address in pages and components to withBasePath. parseJsonBody only guarantees a plain object: a field holding a number,
-list or object where text or rows belong goes through
-lib/requestFields.ts (optionalText, rowText, objectRows, badRequest) and
-gets a Dutch 400, never a 500; app/api/routeInput.test.ts calls every
-mutating route with wrong types to prove it. A single-line name (codenaam,
-period name, lib/vrijeTekst.ts) refuses control characters and invisible
-format characters (zero-width, bidi overrides, U+2028/2029), which would
-otherwise make two names look the same.
-
-**Docker Compose (3 services):**
-- `caddy` - TLS termination (internal certs via `tls internal`)
-- `web` - Next.js + SQLite
-- `solver` - Python FastAPI (healthcheck only, no public ports)
-
-**Volumes:**
-- `web`'s `/data` - SQLite database file and the preferences CSV backups
-  (`lib/preferencesBackup.ts`). Bind-mounted to `./data` next to
-  `docker-compose.yml` by default (override with `DATA_DIR` in `.env`) -
-  deliberately a plain host folder rather than a Docker-managed named
-  volume, so a NAS's own file manager (e.g. Synology File Station) can
-  browse it directly instead of needing Docker's hidden volume storage.
-  Ships as an empty, git-tracked folder (`data/.gitkeep`) precisely so a
-  fresh clone always has it: a bind mount's host directory has to already
-  exist, unlike a named volume, which Docker creates on demand. A custom
-  `DATA_DIR` doesn't get this for free - create it once, manually, before
-  the first `docker compose up`.
-- `caddy_data` - TLS certificate cache (still a regular named volume - not
-  something an operator needs to browse directly)
-
-**Networking:**
-- All services on internal bridge network
-- Only `caddy` exposes the app port (default 8010) to host
-
-## Seed Script
-
-`npm run seed` loads 31 pseudonymous participants:
-
-- Codenamen: Persoon-01 through Persoon-31
-- Pool: 2-week window (default)
-- Period: 2027-01-04 to 2027-06-06 (22 weeks)
-- Various part-time patterns
-- Mixed balances (some -1, +1, 0)
-- Holiday history for 2025-2028
-- Creates the audit_log table, but does not insert any rows into it - a
-  fresh seed has an empty audit trail until real actions happen
-- Access links get a real random token; only its hash is stored, exactly
-  as in production, so the plaintext is gone the moment the seed ends.
-  Mint a fresh link through the planner's export screen to open someone's
-  page.
-
-All data uses codenamen only, no real personal data.
-
-**The seed builds the schema with its own raw SQL**, and db/client.ts then
-skips migrations for a database that came out of it (migration 0000 would
-collide with the tables already there). A column added to `db/schema.ts`
-therefore needs three things, not one: the schema, a migration under
-`db/migrations`, and an entry in the seed - either in its CREATE TABLE for
-a fresh database, or in `LATER_COLUMNS` so a database seeded weeks ago
-picks it up too.
+call (the app has no server actions). Never leak implementation details:
+no raw DB errors, no internal error codes, client-safe Dutch messages.
+Validate at system boundaries only (user input, external APIs); trust
+internal code and framework guarantees, no defensive code for what can't
+happen.
+
+Every route keeps these, and a sweep test fails when one doesn't:
+- **Access:** `requirePlannerAccess` / `requireAdminAccess` /
+  `personAccessDenial` first; then, for a period or pool id,
+  `periodDienstDenial` / `poolDienstDenial` (lib/dienstAccess.ts), and a
+  participant route that takes a period asks `periodUsableFor`
+  (lib/periodAccess.ts). Lists filter on `visibleDienst`
+  (app/api/routeAccess.test.ts, app/api/dienstSeparation.test.ts).
+- **Audit log:** every planner route that changes data writes
+  `writeAuditLog` or says why not (app/api/auditCoverage.test.ts).
+- **Input:** bodies through `parseJsonBody` and lib/requestFields.ts, query
+  numbers checked, never a 500 for odd input (app/api/routeInput.test.ts,
+  app/api/queryInput.test.ts).
+- **Sub-folder:** every client fetch and plain link through `withBasePath`
+  (app/basePathSweep.test.ts).
+- **Dutch style** in user-facing text (app/dutchStyle.test.ts).
+
+### Testing
+
+- **One rule = one test that proves it can't be broken:** a test that fails
+  when the rule is violated, not just example data. Add a mutation to
+  scripts/mutation-check.mjs for every new guard (`runner: 'pytest'` for a
+  solver guard).
+- Colocate `utils.ts` + `utils.test.ts`; Vitest (`npm test`); fast-check for
+  invariants; no DB mocks, real SQLite with fixtures. Cover the happy path,
+  boundaries (period start, year boundary, ISO week 53) and error cases.
+- **Assert on Dutch.** A selector looking for an English label matches
+  nothing, and a `getByText(/error/i)` that never matches looks exactly like
+  a passing test.
+- **Fixtures must obey the rules they are not testing** (e.g. no two shifts
+  of one person in one window), or every check in the test drowns in
+  warnings that have nothing to do with it.
+
+The gate before a release, all green:
+1. `npx tsc --noEmit -p .`, `npx eslint .`, `npx vitest run`,
+   `npm audit --omit=dev` (must stay 0).
+2. Solver: `python -m pytest -q` in ./solver, on OR-Tools 9.8
+   (solver/requirements.txt; another version searches differently).
+3. `node scripts/mutation-check.mjs` (SOLVER_PYTHON for the solver
+   mutations): every mutation caught. It edits sources while it runs:
+   nothing else meanwhile.
+4. After a schema change: `node scripts/schema-drift.mjs` and
+   `node scripts/upgrade-drift.mjs`.
+5. Browser checks, with a seeded database, the solver and the app running
+   (ALLOW_SEED_PASSWORD=true): `node scripts/full-check.mjs` then
+   `node scripts/ui-check.mjs` on the same seed, `npx playwright test`,
+   `node scripts/scenario-check.mjs` - at the root and in a sub-folder build
+   (`NEXT_PUBLIC_BASE_PATH=/achterwacht` at build and start,
+   `APP_URL=http://localhost:3000/achterwacht`).
+
+How to run them and what each one covers: docs/development/checks.md.
+
+## Where things are
+
+| Area | Read | Key code |
+|---|---|---|
+| Tables, holidays, the seed | docs/development/data-model.md | db/schema.ts, lib/holidays.ts, scripts/seed.ts |
+| Periods, prullenbak, publishing, undo | docs/development/periods.md | lib/periodOverlap.ts, lib/periodTrash.ts, lib/publication.ts, lib/publicationCheck.ts |
+| Fellows, Geldig vanaf/tot, bands, carry-over, window, the solver's phases, absences and part-time, preferences import, capacity | docs/development/roster-rules.md | lib/rosterBands.ts, lib/carryOver.ts, lib/windowRule.ts, lib/fellows.ts, lib/absenceSync.ts, lib/parttimeSync.ts, solver/ |
+| Achterwacht and AIOS apart | docs/development/diensten.md | lib/dienstAccess.ts, lib/activePeriod.ts |
+| The AIOS roster (design) | docs/aios-rooster.md | - |
+| Links, passwords, TOTP, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
+| Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |
+| Images, workflows, compose, sub-folder, backups, uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts |
+| Operator guides (Dutch) | README.md, docs/verzendlijst-power-automate.md | - |
+
+Traps that cost a day each time:
+- **The seed builds the schema with its own SQL.** A new column needs the
+  schema (db/schema.ts), a migration (db/migrations) and the seed (its
+  CREATE TABLE and `LATER_COLUMNS`); then schema-drift and upgrade-drift.
+- **Production starts with `seed.ts --alleen-planner`** at every start
+  (SEED_ON_START=planner), not with the migrations.
+- **Periods:** one period per day per pool; the ruleset is frozen when a
+  period opens; while a generation runs, changes to the roster answer 409.
+- **Mail:** the app never stores e-mail addresses and never mails
+  participants itself; everything goes as a verzendlijst to the
+  operator's flow.
 
 ## Common Patterns & Pitfalls
 
-**❌ Pitfall: Mixing sign conventions**
-- DB has delta < 0 = fewer, code says delta < 0 = more → subtle bugs
-- **Fix:** One convention everywhere, comment it in schema
-
-**❌ Pitfall: Showing raw balance to user**
-- "-1 shifts" is confusing
-- **Fix:** Always convert to language: "1 avonddienst minder"
-
-**❌ Pitfall: Storing balance as both value AND ledger sum**
-- Carry-over logic becomes unclear
-- **Fix:** Only ledger entries; balance is sum of entries for period
-
-**❌ Pitfall: Mocking database in tests**
-- Real constraints not tested
-- **Fix:** Use real SQLite with seed fixtures
-
-**✅ Pattern: One test per hard rule**
-- "Window rule" has one test proving it can't be violated
-- Not an example of correct behavior; proof of enforcement
+- One sign convention everywhere (delta < 0 = fewer shifts), commented in
+  the schema.
+- Never show a raw balance ("-1"): always words ("1 avonddienst minder").
+- A balance is the sum of ledger entries only, never also a stored value.
+- No database mocks: real constraints are part of what a test checks.
 
 ## How to Add a Feature
 
 1. **Identify the hard rule** (if any) - write test first
-2. **Add DB schema** if needed - schema change, migration
+2. **Add DB schema** if needed - schema change, migration, seed
 3. **Add server function** - query/mutation logic (typed)
 4. **Add form/UI** - client component, validation via Zod
 5. **Add end-to-end test** - full flow via Playwright (`tests/e2e`)
+6. **Write down what you learned** in the docs/development file for the area
 
 ## When to Ask
 
-- Anything not covered by this CLAUDE.md
+- Anything not covered by this CLAUDE.md or docs/development/
 - Design questions about terminology or UI flow
 - Decisions between multiple valid approaches
 - Anything involving the solver contract

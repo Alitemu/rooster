@@ -1,0 +1,177 @@
+# Mail: the verzendlijst, reminders, swap mails, "Link kwijt?"
+
+Moved out of CLAUDE.md to keep the context of every session small; the rules
+themselves stay there. Read this when working on what it covers. Code comments
+that say "CLAUDE.md, ..." point to a section that now lives in docs/development/.
+
+## Mailing personal links (verzendlijst)
+
+The app never stores e-mail addresses, so it never mails participants
+itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
+`DIENSTROOSTER-VERZENDLIJST` + a JSON attachment: summary fields plus
+`berichten`, each `{soort, codenaam, personen, onderwerp, tekst}`; `personen` = every codenaam
+the text names, longest first, so a flow can swap in real names from its
+sheet without "Persoon-1" matching inside "Persoon-10") to a Power Automate flow on the planner's
+side, which looks each codenaam up in its own Excel list and sends the
+mail. The server sends that mail itself (lib/verzendlijstMail.ts) once an
+account is set up, in the app only ("Mailinstellingen" under Exporteren &
+communicatie, `/api/planner/mail-settings`, lib/appSettings.ts; saved and
+removed by the beheerder only, shared by both diensten - Gmail
+only, a 16-letter app password, the login is tried before saving, the
+password is stored AES-GCM encrypted with a key derived from the session
+secret, lib/settingsCrypto.ts, and never returned). .env is not read for
+it any more (SMTP_USER/SMTP_PASS/VERZENDLIJST_AAN were removed on
+purpose); SMTP_HOST/SMTP_PORT exist only so tests can point it at
+tests/smtpSink.ts. The one mail variable left is MAIL_UITGESCHAKELD=true, a
+kill switch for a test installation on a copy of production's data: nothing
+is sent (readConfig returns null) and MailWarning says so. Without it the export dialog says sending isn't
+set up, and MailWarning at the top of the period page says no mail goes
+out at all. That warning also shows the last failed send (stored as
+`mail.laatste_fout` in app_setting by sendVerzendlijst, cleared by the
+next successful send or new settings; "not set up" is never recorded as
+a failure) - automatic reminders and swap mails fail where nobody
+watches. There is deliberately no other way out: the old manual JSON
+download and the per-person mailto links are gone, and a single reminder
+goes through the flow too. The invitations download (a workbook) stays. The recipient is always the flow mailbox from Mailinstellingen, never
+anything from a request. Links in mails a participant sets off (swap
+mails, lib/meldingMail.ts) use lib/baseUrl.ts `mailBaseUrl`: BASE_URL or
+the period's `basis_url` from the planner's export, never the Host header
+of the participant's request (anyone can forge it, and the colleague's
+fresh personal link would go to that host); with neither known the mail
+has no link. resolveBaseUrl (Host header) is for planner exports only. Swap requests use the same channel (lib/meldingMail.ts):
+a new request mails the colleague (SWAP_REQUESTED) and confirms to the
+requester, and approve/reject mails the requester (SWAP_RESULT), each a
+one-bericht verzendlijst with a fresh personal link and the swap spelled
+out from the reader's side (lib/swapMailDetails.ts). A mail about a swap
+that hasn't gone through names nobody but its reader (request
+SWAP_REQUESTED_MAIL_TEMPLATE "Nieuw ruilverzoek", confirmation, rejection,
+withdrawal SWAP_WITHDRAWN_MAIL_TEMPLATE, lapse; `personen` holds only the
+reader), so the flow can't put a real name to it: the colleague can say
+no without knowing to whom. The in-app notices and lists keep the
+codenamen, which are pseudonyms. The approval mail (`goedgekeurd`) names
+the colleague, and the approval also sends a RUIL_DOORGEVEN verzendlijst
+(DoorgevenMail in lib/meldingMail.ts, queued like any swap mail, built from
+the swap row when sent) with one bericht each for the fixed codenamen
+`Planner` and `Roosterbureau` (DOORGEVEN_AAN, lib/swapMailDetails.ts):
+who now does which shift, `personen` = both who swapped, no link. The
+operator adds those two rows to the flow's sheet; the app never puts an
+address in a verzendlijst, so a forged one can't reach anyone outside it. The swap dialog says only an equal swap goes through the app (one shift
+for one of the same kind, which the create route enforces); any other
+trade colleagues agree themselves and mail it themselves to the planner
+(the Mailinstellingen flow mailbox, lib/appSettings.ts getSwapContacts,
+GET /api/person/[id]/swap-contacts) and to "het roosterbureau", named
+without an address. The address lives in the app, never in code. Started after the
+commit and never awaited, so a mail failure can't fail or slow the swap.
+A swap mail that can't go out (not set up, or refused) waits in
+dienstrooster_mail_queue with its MeldingMail as JSON - built, personal
+link included, only when it is sent - and flushMailQueue sends it hourly
+(instrumentation-node.ts), right after mail settings are saved and after
+any other successful send (flushAfterSend, via a dynamic import from
+lib/verzendlijstMail.ts), oldest first, stopping at the first refusal.
+What no longer applies is pruned on every run, also while sending isn't
+set up, so MailWarning's count stays honest. A withdrawal waits for its
+own request mail if that is still being tried (requestsInFlight). Dropped after 7 days, a
+RUILVERZOEK/RUIL_BEVESTIGING as soon as the swap is no longer PENDING,
+and a withdrawal notice whose request mail never went out takes that
+request mail with it instead of being sent. The create route returns
+`mail_vertraagd` (not set up, a remembered failure, or a non-empty queue)
+so the requester is told the colleague may only see it in the app for
+now; MailWarning counts what waits. Every
+bericht carries a `soort` (UITNODIGING, HERINNERING, LAATSTE_HERINNERING,
+RUILVERZOEK, RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN, LINK_AANVRAAG,
+ROOSTER_VOORLOPIG, ROOSTER_DEFINITIEF, RUIL_DOORGEVEN) and an
+`html` field: `tekst` escaped with <br> for line breaks (tekstNaarHtml).
+The flow must use `html` as the mail body, never build HTML from `tekst`:
+the text can hold words a participant typed (swap toelichting, rejection
+reason, both capped at 1000 characters by lib/freeText.ts). Withdrawing a
+swap tells the colleague. One shift may be offered to several colleagues
+at once (the candidates list marks who was already asked, `al_gevraagd`;
+the exact same request twice is refused): the first to approve wins. That
+approval withdraws the other open requests of either side of that swap
+(INGETROKKEN, only the colleague each was sent to is told; the requester
+hears it in the approval mail, the approver on screen from the response's
+`afgesloten`) and closes anyone else's request on either shift as
+AFGEWEZEN ("vervallen", both sides told) (lib/swapLifecycle.ts). One
+participant may start at most 20 swap requests per 24 hours, withdrawn
+ones included (lib/swapQuota.ts, 429): each mails two people, and the
+sending account's daily limit is shared with invitations and reminders. Invitations go out only for an OPEN period before
+its deadline, like reminders (lib/reminderGate.ts); the download of links is
+not gated. SMTP on any port but 465 requires STARTTLS (requireTLS).
+
+Automatic reminders (lib/autoReminders.ts, run every hour from
+instrumentation-node.ts): for an OPEN period with `auto_herinneren` on,
+one moment per reminder_schedule milestone (7 and 1 days by default) at
+the last 09:00 at least N*24h before the deadline, to everyone not
+BEVESTIGD (own text for NIET_BEGONNEN/no row and for BEZIG), minus anyone
+with a REMINDER/FINAL_WARNING in notification_log in the last 24h (manual
+sends log there too). Each moment is claimed in dienstrooster_reminder_run
+keyed on (period, milestone, deadline) before sending and released if the
+send fails; a moment more than 12h late, or due together with a more
+urgent one, is recorded as OVERGESLAGEN instead. Links use BASE_URL or the
+period's `basis_url`, remembered from the planner's last export request.
+There is no separate summary mail: every verzendlijst is an object
+(lib/verzendlijst.ts `Verzendlijst`) whose fields around `berichten` -
+soort, automatisch, periode, deadline, aantal, and for reminders
+nog_niets_ingevuld/nog_niet_ingediend - let the flow report back to the
+planner itself. runAutoReminders takes `onlyPeriodIds` for tests: the
+test database is shared across test files. Setup for the operator, in
+Dutch: docs/verzendlijst-power-automate.md.
+
+The "Deeltijd" step's check ("my part-time days and absences are right")
+is stored on the submission row (`deeltijd_gecontroleerd_op`, migration
+0019, lib/submissionStatus.ts get/set/clearParttimeCheck, GET/PUT
+/api/person/[id]/parttime-check), not in the browser: it holds on every
+device, "Status voorkeuren" shows it ("Deeltijd gecontroleerd"), every
+create/edit/delete of a part-time pattern or absence clears it (next to
+markSubmissionStarted in those routes), and the submission route refuses
+to hand in without it (the client's old `parttime_confirmed` flag is
+ignored).
+
+"Status voorkeuren" and the statusrapport download are one query
+(lib/periodProgress.ts loadPeriodProgress: the period's members, fellows
+last, blocked days without a fellow's weekend blocks, Deeltijd only for a
+pattern that overlaps the period, Deeltijd gecontroleerd, Fellow). The
+download had its own: it counted the fellow blocks as days blocked by
+hand, and both ticked Deeltijd for a pattern that ended a year before
+(audit 16, lib/periodProgress.test.ts).
+
+The planner reminds by hand from "Status voorkeuren": a "Herinnering
+sturen" per person (disabled once BEVESTIGD) and one below the table for
+everyone not BEVESTIGD, both POST /api/planner/period/[id]/remind - the
+automatic reminder's text (reminderBericht), fresh links, logged like any
+reminder, only while OPEN before the deadline. (There used to be a
+"submit on behalf" button there; it is gone on purpose.)
+
+Nobody is reminded by hand twice within 24 hours without the planner
+saying so: the table shows "Laatst herinnerd" (`laatste_herinnering_op` in
+the progress route, lib/autoReminders.ts lastRemindedAt over
+notification_log, automatic and manual alike; lib/herinnerdOp.ts words
+it), and the server enforces it, so a refresh doesn't undo it. One person
+reminded within the day: 409 RECENT_HERINNERD with the time, the row asks
+"Toch versturen". Everyone: without `opnieuw` those people are skipped
+(`overgeslagen`), the confirmation offers "Alleen de andere n" or
+"Iedereen". The export dialog's send route sends nothing while one of
+them is recent (409 with `recent`), and the dialog asks the same way.
+
+"Link kwijt?" on the start page (components/LinkAanvraagForm.tsx, public
+POST /api/link-aanvragen, lib/linkAanvraag.ts): the app can't map an
+address to a codenaam, so it mails the flow a LINK_AANVRAAG verzendlijst
+with the typed address (`aanvraag_email`, trimmed, lower case) and a
+bericht for every participant of the active period in `kandidaten`, each
+with a fresh link (mailBaseUrl - never the request's Host header) and a
+line saying what it is good for now (periodeUitleg: preferences until the
+deadline, only looking once it passed or the period closed, the roster
+once published). The active period (lib/activePeriod.ts, one per pool) is the one
+whose invitations went out last (`schedule_period.uitgenodigd_op`, set by
+a successful invitation send; a database from before it gets the newest
+non-CONCEPT period with a basis_url, LATER_COLUMN_BACKFILL in the seed and
+migration 0018). Another period's invitations are refused (409
+OTHER_PERIOD_ACTIVE) until the active one is GEPUBLICEERD; the period
+list marks it "Actief".
+`berichten` stays empty on purpose: a flow that doesn't know this soort
+must send nothing rather than mail everyone. The flow looks the address
+up in its sheet and sends only that codenaam's bericht, to the sheet's
+address. The answer is the same for any address; rate-limited per caller
+(3) and in total (10) per 15 minutes, because every request mints a link
+for every participant and costs a Gmail send. The address is never
+stored or logged.

@@ -2,8 +2,8 @@
 
 Status: ontwerp, nog niet gebouwd. Afgesproken met de planner in oktober 2026.
 Eén punt staat nog open, onderaan. De scheiding tussen de planner van de
-achterwacht en die van de AIOS bestaat al (CLAUDE.md, "Diensten: the
-achterwacht and the AIOS"): dit rooster komt daarachter.
+achterwacht en die van de AIOS bestaat al (docs/development/diensten.md): dit
+rooster komt daarachter.
 
 Codenamen: aios01, aios02 enzovoort.
 
