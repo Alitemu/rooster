@@ -56,7 +56,7 @@ solver plant er één.
 - Aaneengesloten feestdagen (twee of meer feestdagen achter elkaar: Pasen,
   Pinksteren, kerst) vragen om een keuze van de planner, want in oude roosters
   ging dat elk jaar anders. Bij het genereren verschijnt daarom een duidelijke
-  melding per aaneengesloten feestdagen, met de blokken waar ze in vallen, en de
+  melding per aaneengesloten feestdagen, met de blokken waar ze in vallen en de
   vraag wat ermee moet gebeuren. Per blok (avond en nacht apart):
   - heel laten: één AIOS doet het hele blok;
   - opknippen: elke dag van het blok is een losse dienst.
