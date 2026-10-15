@@ -152,7 +152,7 @@ ongewijzigd.
 ## Nog open
 
 1. Een parttimedag zonder vaste weekdag ("variabel" in het oude formulier): hoe
-   geeft zo iemand de dagen op, en hoe volgt daar de fte uit?
+   geeft zo iemand de dagen op en hoe volgt daar de fte uit?
 2. Een dagdienst op een feestdag door de week (bijvoorbeeld Tweede Paasdag):
    geldt daar dezelfde regel als voor een losse weekenddienst (geen dienst op de
    dag ervoor en de werkdag erna)?
