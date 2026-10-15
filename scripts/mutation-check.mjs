@@ -356,7 +356,7 @@ const MUTATIONS = [
   {
     name: 'prullenbak: the own roster of a period in it still shown',
     file: 'app/api/person/[id]/roster/[period-id]/route.ts',
-    find: 'if (!period || (!requirePlannerAccess(auth) && !isPeriodVisibleToPerson(personId, period))) {',
+    find: 'if (!period || !periodUsableFor(auth!, personId, period)) {',
     replace: 'if (!period) {',
     tests: ['app/api/person/trashedPeriod'],
   },
