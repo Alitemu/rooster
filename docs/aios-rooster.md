@@ -1,7 +1,7 @@
 # Ontwerp: het rooster voor de AIOS
 
 Status: ontwerp, nog niet gebouwd. Afgesproken met de planner in oktober 2026.
-Eén punt staat nog open, onderaan. Getoetst aan oude roosters rond Koningsdag,
+Er staat niets meer open. Getoetst aan oude roosters rond Koningsdag,
 Pasen, Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner van de
 achterwacht en die van de AIOS bestaat al (docs/development/diensten.md): dit
 rooster komt daarachter.
@@ -21,9 +21,12 @@ Codenamen: aios01, aios02 enzovoort.
 
 ## Diensten
 
-Per dienst precies één AIOS. Een extra AIOS op een dienst (soms op
-oudjaarsnacht) is een uitzondering die de planner met de hand toevoegt: de
-solver plant er één.
+Per dienst precies één AIOS, met één uitzondering: de nacht van oudjaarsdag op
+nieuwjaarsdag kan twee AIOS hebben. Valt 31 december in de periode, dan vraagt
+de melding bij het genereren (zie "Blokken rond feestdagen") of er één of twee
+AIOS op die nacht moeten. Bij twee plant de solver ze allebei. De nacht blijft
+dan in het blok van de ene AIOS, de tweede doet een losse nacht. Beide tellen
+voor 1 punt.
 
 | Dienst | Tijd | Werkdag | Zaterdag en zondag | Feestdag |
 |---|---|---|---|---|
@@ -134,6 +137,7 @@ zoals nu bij een geblokkeerde dag.
    | Dag- of avonddienst op zaterdag en dagdienst op zondag (één ervan of allebei) | de vrijdag ervoor en de maandag erna |
    | Losse nacht op zaterdag | de vrijdag ervoor, de zondag en de maandag erna |
    | Dagdienst op een feestdag door de week | de dag ervoor en de dag erna |
+   | Losse avond of nacht door de week (een opgeknipt blok, de tweede AIOS op oudjaarsnacht) | de dag erna |
 
    De avonddienst op zondag hoort bij het avondblok zo t/m di. Daarvoor geldt
    alleen de woensdag van dat blok, niet de vrijdag ervoor en de maandag erna.
@@ -177,7 +181,8 @@ Er is verder geen algemene rustregel en geen minimale tijd tussen twee blokken.
 ## In de app
 
 - Een pool van het type AIOS, met eigen diensttypes (UD, DD, AD, ND) en een
-  dienst per type per dag. `shift_slot.shift_block_id` bestaat al in het
+  dienst per type per dag. De tweede AIOS op oudjaarsnacht wordt een tweede
+  dienst op die nacht, zodat elke dienst één AIOS houdt. `shift_slot.shift_block_id` bestaat al in het
   datamodel voor de blokken.
 - De periode van een AIOS-pool rondt af op woensdag tot dinsdag, niet op een
   ISO-week.
@@ -198,10 +203,3 @@ ongewijzigd.
 4. Voor de planner: genereren, het rooster per blok, handmatig aanpassen en
    publiceren. Ruilen (blok tegen blok) daarna.
 5. AIOS-accounts aanzetten: eerst op de testinstallatie, dan in productie.
-
-## Nog open
-
-1. Een losse avond of nacht door de week die ontstaat door het opknippen van een
-   blok rond feestdagen: welke dagen zonder dienst horen daarbij? In de oude
-   roosters had wie een losse nacht op maandag of dinsdag deed in elk geval de
-   dag erna niets. Voorstel: geen dienst op de dag erna.
