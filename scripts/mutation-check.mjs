@@ -419,8 +419,8 @@ const MUTATIONS = [
   {
     name: 'periods: two of a pool on the same days',
     file: 'lib/periodOverlap.ts',
-    find: 'AND start_datum <= ? AND eind_datum >= ?',
-    replace: 'AND 0 AND start_datum <= ? AND eind_datum >= ?',
+    find: 'AND sp.start_datum <= ? AND sp.eind_datum >= ?',
+    replace: 'AND 0 AND sp.start_datum <= ? AND sp.eind_datum >= ?',
     tests: ['app/api/periods/periodOverlap'],
   },
   {
