@@ -181,6 +181,6 @@ ongewijzigd.
 1. Een dagdienst op een feestdag door de week valt in een blok (zo t/m di of
    wo t/m vr), zoals de planner zei. Gelezen als: zo'n dagdienst krijgt
    dezelfde dagen zonder dienst als een avondblok in die dagen. Na een
-   dagdienst op Tweede Paasdag (maandag) dus geen dienst op de woensdag, en na
-   een dagdienst op Hemelvaartsdag (donderdag) geen dienst in het weekend erna.
+   dagdienst op Tweede Paasdag (maandag) dus geen dienst op de woensdag. Na een
+   dagdienst op Hemelvaartsdag (donderdag) geen dienst in het weekend erna.
    Nog te bevestigen.
