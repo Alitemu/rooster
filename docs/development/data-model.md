@@ -13,8 +13,18 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 - `pool_membership` - who's in which pool when
 - `ruleset` - configuration and rules (frozen when period opens)
 - `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
-- `shift_type` - shift definitions (evening, weekend, holiday)
-- `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type)
+- `shift_type` - shift definitions (evening, weekend, holiday). An AIOS
+  pool's have `code` (UD, DD, AD, ADW, ND), `soort` (UITLOOP, DAG, AVOND,
+  NACHT), times and `punten`; their `teller` only fills the NOT NULL
+  column and is never read (lib/aiosDiensten.ts). NULL for the achterwacht.
+- `shift_slot` - individual slots to fill (date, iso_year, iso_week, counter_type).
+  The achterwacht has one per day; the AIOS three (UD, AD, ND on a
+  werkdag, DD, ADW, ND on a weekend day or feestdag), an evening or night
+  pointing at its block through `shift_block_id` (no foreign key: the
+  column is older than the table).
+- `shift_block` - an AIOS evening or night block (soort AVOND or NACHT,
+  vorm ZO_DI, WO_VR, ZA or LOS, start and end): one AIOS does all of it.
+  Made with the period (lib/aiosSlots.ts), purged with it.
 - `holiday_history` - which feestdag someone had in which year, from the
   setup wizard's old import step; read by nothing. The wizard step is gone:
   what counts is the number over the years, which the app keeps itself
@@ -65,6 +75,14 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 - Tests for 2024-2035 including leap years
 
 ## Seed Script
+
+Every start (the demo seed, `--alleen-planner` and `--schema-only`) makes
+sure there is one AIOS pool, "AIOS", with its own empty ruleset and the
+five AIOS shift types, and nobody in it (lib/aiosPool.ts). A database the
+migrations manage gets the columns only when the app starts after the
+seed; its pool comes at the next start (SCHEMA_NIET_KLAAR).
+scripts/seed.bareStart.test.ts holds it, also for an installation from
+before.
 
 `npm run seed` loads 31 pseudonymous participants:
 

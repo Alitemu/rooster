@@ -7,6 +7,20 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 ## Period Management
 
 - **Auto-round** to Monday start, Sunday end on ISO-week boundaries
+- **An AIOS period is a quarter** (lib/aiosQuarter.ts): exactly
+  Wednesday to Tuesday, Q1 on the first Wednesday after 1 January, so the
+  blocks fit. POST /api/planner/periods refuses other dates for an AIOS
+  pool (400) and makes the diensten and blocks right away, in the same
+  transaction (lib/aiosSlots.ts): its dates never change, unlike an
+  achterwacht period's, whose slots wait for "Openen". So an AIOS draft
+  does take its days: a second period on the quarter is refused, and one
+  from the prullenbak comes back only onto a free quarter. Until the AIOS
+  preferences, solver and publishing exist, open, generate-slots and
+  capacity answer 409 AIOS_NOG_NIET (lib/aiosPeriod.ts); the period page
+  shows its diensten per week with the blocks and points instead
+  (components/AiosPeriodOverview.tsx, GET
+  /api/planner/period/[id]/aios-diensten), and the setup wizard sends it
+  there. app/api/periods/aiosPeriod.test.ts holds it.
 - **One period per day:** every day belongs to at most one period of a
   pool (lib/periodOverlap.ts; create and open answer 409 PERIOD_OVERLAP,
   checked on the whole weeks opening rounds to). A period being made

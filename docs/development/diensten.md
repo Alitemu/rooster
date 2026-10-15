@@ -47,6 +47,14 @@ is refused (DIENST_NIET_IN_PRODUCTIE) and the separation is ready for it.
   never the demo seed) to stafNN, the setting codenamen.staf_hernoemd
   keeping it from running again (a Persoon-NN added later stays). The
   operator renames the rows in the flow's Excel list at the same moment.
+- The AIOS roster is built in steps (docs/aios-rooster.md,
+  "Bouwvolgorde"). Step 1 (0.26.0): the AIOS pool exists at every start
+  (lib/aiosPool.ts), an AIOS period is a quarter with its diensten and
+  blocks (lib/aiosQuarter.ts, lib/aiosDiensten.ts, lib/aiosSlots.ts), and
+  its page shows them with the points; opening it is refused until the
+  next steps (lib/aiosPeriod.ts). The pool list sorts without regard to
+  capitals, or "AIOS" came before "Achterwacht" in the beheerder's
+  new-period form.
 - app/api/dienstSeparation.test.ts holds it: two complete worlds, every
   route file called by each world's planner with the other's ids (and
   for participant routes their own participant with the other's period,

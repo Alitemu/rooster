@@ -10,8 +10,8 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 - Automatic roster generation with diagnostics
 
 Two rosters with two planners: the achterwacht (in production) and the AIOS
-(designed in docs/aios-rooster.md, not built yet), kept apart in every route
-(docs/development/diensten.md).
+(designed in docs/aios-rooster.md, built in steps: step 1 is in), kept apart
+in every route (docs/development/diensten.md).
 
 This file holds the rules. The background per area - why a rule exists, what
 went wrong before, which file does what - is in docs/development/ (see
@@ -225,7 +225,7 @@ How to run them and what each one covers: docs/development/checks.md.
 | Periods, prullenbak, publishing, undo | docs/development/periods.md | lib/periodOverlap.ts, lib/periodTrash.ts, lib/publication.ts, lib/publicationCheck.ts |
 | Fellows, Geldig vanaf/tot, bands, carry-over, window, the solver's phases, absences and part-time, preferences import, capacity | docs/development/roster-rules.md | lib/rosterBands.ts, lib/carryOver.ts, lib/windowRule.ts, lib/fellows.ts, lib/absenceSync.ts, lib/parttimeSync.ts, solver/ |
 | Achterwacht and AIOS apart | docs/development/diensten.md | lib/dienstAccess.ts, lib/activePeriod.ts |
-| The AIOS roster (design) | docs/aios-rooster.md | - |
+| The AIOS roster (design, steps) | docs/aios-rooster.md | lib/aiosQuarter.ts, lib/aiosDiensten.ts, lib/aiosSlots.ts, lib/aiosPool.ts, lib/aiosPeriod.ts |
 | Links, passwords, TOTP, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
 | Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |
 | Images, workflows, compose, sub-folder, backups, uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts |

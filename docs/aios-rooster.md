@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: ontwerp, stap 1 in aanbouw. Afgesproken met de planner in oktober 2026,
+Status: stap 1 is gebouwd (versie 0.26.0), de rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -219,7 +219,8 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
 
 ## Eerlijkheid
 
-- Dienstpercentage = punten / (werkdagen in de periode x fte). Eén avond-,
+- Dienstpercentage = punten / (werkdagen in de periode x fte). Werkdagen zijn
+  maandag tot en met vrijdag zonder de feestdagen. Eén avond-,
   nacht- of dagdienst per week is dan 20% bij 1,0 fte en 25% bij 0,8 fte (C4).
   Verlof en ziekte tellen als gewone werkdag, een onderbreking van de opleiding
   niet (G5). Uitloopdiensten tellen mee (0,2).

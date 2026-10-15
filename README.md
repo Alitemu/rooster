@@ -347,13 +347,22 @@ bij het starten automatisch toegevoegd. Maak voor de zekerheid eerst een
 kopie van die map.
 
 **Vanaf versie 0.25.0** heten de deelnemers van de achterwacht staf01,
-staf02 enzovoort, en die van de AIOS aios01, aios02 enzovoort. Bij de
+staf02 enzovoort. Die van de AIOS heten aios01, aios02 enzovoort. Bij de
 eerste start van 0.25.0 krijgen Persoon-01 tot en met Persoon-30 eenmalig
 de codenaam staf01 tot en met staf30. Hun voorkeuren, diensten en saldi
 blijven gewoon bij hen. Pas dezelfde codenamen ook aan in de Excel-lijst van
 de Power Automate-stroom (zie `docs/verzendlijst-power-automate.md`), anders
 vindt de stroom hun e-mailadres niet en krijgen ze geen mail. Doe dat op
 hetzelfde moment als het bijwerken.
+
+**Vanaf versie 0.26.0** staat naast de pool van de achterwacht ook de pool
+AIOS, zonder deelnemers. Zolang het rooster voor de AIOS niet in productie
+is, ziet alleen de beheerder die pool. Een periode van de AIOS is altijd
+een kwartaal van woensdag tot en met dinsdag: bij een nieuwe periode in die
+pool kies je het kwartaal. De pagina van zo'n periode toont de diensten per
+week, de blokken en de punten van het kwartaal. Openen kan nog niet: het
+voorkeurenscherm en het maken van het rooster voor de AIOS komen in een
+volgende versie.
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
