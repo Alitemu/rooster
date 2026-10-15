@@ -261,12 +261,43 @@ export const shiftType = sqliteTable(
     id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
     pool_id: text('pool_id').notNull().references(() => pool.id),
     naam: text('naam').notNull(),
+    // The achterwacht's counter. An AIOS shift type counts by soort and
+    // punten and never reads it (lib/aiosDiensten.ts).
     teller: text('teller', {
       enum: ['AVOND', 'WEEKEND', 'FEESTDAG'],
     }).notNull(),
-    start_tijd: text('start_tijd'), // HH:MM for future use
-    eind_tijd: text('eind_tijd'), // HH:MM for future use
+    start_tijd: text('start_tijd'), // HH:MM; set for the AIOS
+    eind_tijd: text('eind_tijd'), // HH:MM; the next morning for a night
+    // The AIOS only (NULL for the achterwacht): UD, DD, AD, ADW or ND, its
+    // kind of dienst, and its points for the dienstpercentage.
+    code: text('code'),
+    soort: text('soort', {
+      enum: ['UITLOOP', 'DAG', 'AVOND', 'NACHT'],
+    }),
+    punten: real('punten'),
   }
+);
+
+/**
+ * An AIOS evening or night block (docs/aios-rooster.md, "Blokken"): one
+ * AIOS does all of its diensten. ZO_DI and WO_VR are three days, ZA the
+ * Saturday on its own, LOS a single dienst (a block cut up around
+ * feestdagen, the second AIOS on the New Year's Eve night). The diensten
+ * point at it through shift_slot.shift_block_id.
+ */
+export const shiftBlock = sqliteTable(
+  'dienstrooster_shift_block',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id),
+    soort: text('soort', { enum: ['AVOND', 'NACHT'] }).notNull(),
+    vorm: text('vorm', { enum: ['ZO_DI', 'WO_VR', 'ZA', 'LOS'] }).notNull(),
+    start_datum: text('start_datum').notNull(), // ISO date
+    eind_datum: text('eind_datum').notNull(), // ISO date
+  },
+  (table) => ({
+    periodIdx: index('shift_block_period_idx').on(table.period_id),
+  })
 );
 
 export const shiftSlot = sqliteTable(
@@ -285,7 +316,10 @@ export const shiftSlot = sqliteTable(
       enum: ['NIEUWJAAR', 'PASEN', 'KONINGSDAG', 'BEVRIJDINGSDAG', 'HEMELVAART', 'PINKSTEREN', 'KERST'],
     }), // NULL if not a holiday
     benodigd_aantal_personen: integer('benodigd_aantal_personen').default(1).notNull(), // Always 1 in phase 0
-    shift_block_id: text('shift_block_id'), // For phase 4+ (AIOS blocks)
+    // The AIOS block an evening or night belongs to (shift_block); NULL for
+    // the achterwacht and the AIOS's UD and DD. No foreign key: the column is
+    // older than the table, and adding one means rebuilding shift_slot.
+    shift_block_id: text('shift_block_id'),
   },
   (table) => ({
     periodIdx: index('slot_period_idx').on(table.period_id),

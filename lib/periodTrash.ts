@@ -20,6 +20,7 @@
 
 import { db } from '@/db/client';
 import { overlapMessage, overlappingPeriod } from './periodOverlap';
+import { isAiosPool } from './aiosPeriod';
 
 export const RETENTION_DAYS = 30;
 
@@ -90,8 +91,9 @@ export function restorePeriod(periodId: string, actorId: string): void {
   // A period in the trash takes no days (lib/periodOverlap.ts), so another
   // may have been opened on them meanwhile; coming back would put two
   // periods, and two rosters, on the same days (audit 13). A draft takes
-  // no days either way.
-  if (period.status !== 'CONCEPT') {
+  // no days either way, except an AIOS draft, which has its diensten from
+  // the start (lib/periodOverlap.ts).
+  if (period.status !== 'CONCEPT' || isAiosPool(period.pool_id)) {
     const other = overlappingPeriod(period.pool_id, period.start_datum, period.eind_datum, period.id);
     if (other) throw new PeriodTrashError(overlapMessage(other), 'PERIOD_OVERLAP');
   }
@@ -134,6 +136,7 @@ function cascadeDeletePeriod(periodId: string): void {
   db.prepare('DELETE FROM dienstrooster_period_excluded_day WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_prior_assignment WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
+  db.prepare('DELETE FROM dienstrooster_shift_block WHERE period_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').run(periodId);
   // Keyed on the period's id without a foreign key, so nothing else would
   // ever remove it.

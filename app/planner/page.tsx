@@ -15,6 +15,14 @@ import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
+import { addDays, dateToISO } from '@/lib/holidays';
+import {
+  aiosQuarterContaining,
+  aiosQuarterName,
+  aiosQuarterWeeks,
+  nextAiosQuarter,
+  type AiosQuarter,
+} from '@/lib/aiosQuarter';
 
 interface Period {
   id: string;
@@ -61,6 +69,29 @@ function statusLabel(p: { status: string; definitief_op?: string | null }): stri
   return statusLabels[p.status] || p.status;
 }
 
+const datumLang = (datum: string) =>
+  new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+/**
+ * The quarters an AIOS period can be made for: the current one and the
+ * five after it (lib/aiosQuarter.ts). An AIOS period is always exactly one.
+ */
+function aiosKwartalen(): AiosQuarter[] {
+  const lijst = [aiosQuarterContaining(dateToISO(new Date()))];
+  while (lijst.length < 6) lijst.push(nextAiosQuarter(lijst[lijst.length - 1]));
+  return lijst;
+}
+
+/**
+ * The AIOS hand in their preferences 8 weeks before the quarter starts
+ * (docs/aios-rooster.md, "Periode"), as datetime-local; empty when that
+ * moment has passed.
+ */
+function aiosDeadline(q: AiosQuarter): string {
+  const datum = addDays(q.start_datum, -56);
+  return new Date(`${datum}T17:00:00`) > new Date() ? `${datum}T17:00` : '';
+}
+
 // The stakes of deleting a period differ a lot by status - a CONCEPT
 // period nobody has seen yet is low-risk, but deleting an OPEN or
 // published one throws away real participant data (submitted preferences,
@@ -95,6 +126,19 @@ export default function PlannerHomePage() {
     eind_datum: '',
     deadline: '',
   });
+
+  const isAiosPool = (poolId: string) => pools.find((p) => p.id === poolId)?.type === 'AIOS';
+  const aiosGekozen = isAiosPool(form.pool_id);
+  const kwartalen = aiosKwartalen();
+  const kiesKwartaal = (q: AiosQuarter) =>
+    setForm((f) => ({
+      ...f,
+      naam: `AIOS ${aiosQuarterName(q)}`,
+      start_datum: q.start_datum,
+      eind_datum: q.eind_datum,
+      deadline: aiosDeadline(q),
+    }));
+  const gekozenKwartaal = kwartalen.find((q) => q.start_datum === form.start_datum && q.eind_datum === form.eind_datum);
 
   const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -301,7 +345,8 @@ export default function PlannerHomePage() {
         throw new Error(data.error?.message || 'Aanmaken van periode mislukt');
       }
 
-      router.push(`/planner/setup/${data.data.id}`);
+      // An AIOS period has no setup wizard (yet): its own page shows its diensten.
+      router.push(aiosGekozen ? `/planner/period/${data.data.id}` : `/planner/setup/${data.data.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Aanmaken van periode mislukt');
       setCreating(false);
@@ -398,7 +443,25 @@ export default function PlannerHomePage() {
             <select
               className="input w-full"
               value={form.pool_id}
-              onChange={(e) => setForm({ ...form, pool_id: e.target.value })}
+              onChange={(e) => {
+                const poolId = e.target.value;
+                // An AIOS period is a quarter: picking the AIOS pool fills in
+                // the next one; leaving it clears what that filled in.
+                if (isAiosPool(poolId) && !aiosGekozen) {
+                  const q = kwartalen[1];
+                  setForm({
+                    pool_id: poolId,
+                    naam: `AIOS ${aiosQuarterName(q)}`,
+                    start_datum: q.start_datum,
+                    eind_datum: q.eind_datum,
+                    deadline: aiosDeadline(q),
+                  });
+                } else if (!isAiosPool(poolId) && aiosGekozen) {
+                  setForm({ naam: '', pool_id: poolId, start_datum: '', eind_datum: '', deadline: '' });
+                } else {
+                  setForm({ ...form, pool_id: poolId });
+                }
+              }}
             >
               {pools.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -408,26 +471,57 @@ export default function PlannerHomePage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {aiosGekozen ? (
             <div className="form-group">
-              <label className="label">Startdatum</label>
-              <input
-                type="date"
+              <label className="label" htmlFor="aios-kwartaal">
+                Kwartaal
+              </label>
+              <select
+                id="aios-kwartaal"
                 className="input w-full"
-                value={form.start_datum}
-                onChange={(e) => setForm({ ...form, start_datum: e.target.value })}
-              />
+                value={gekozenKwartaal ? `${gekozenKwartaal.jaar}-${gekozenKwartaal.kwartaal}` : ''}
+                onChange={(e) => {
+                  const q = kwartalen.find((k) => `${k.jaar}-${k.kwartaal}` === e.target.value);
+                  if (q) kiesKwartaal(q);
+                }}
+              >
+                {!gekozenKwartaal && <option value="">Kies een kwartaal</option>}
+                {kwartalen.map((q) => (
+                  <option key={`${q.jaar}-${q.kwartaal}`} value={`${q.jaar}-${q.kwartaal}`}>
+                    {aiosQuarterName(q)}
+                  </option>
+                ))}
+              </select>
+              {gekozenKwartaal && (
+                <p className="mt-1 text-xs text-neutral-600">
+                  {datumLang(gekozenKwartaal.start_datum)} t/m {datumLang(gekozenKwartaal.eind_datum)},{' '}
+                  {aiosQuarterWeeks(gekozenKwartaal)} weken. Een periode van de AIOS loopt altijd van woensdag tot en
+                  met dinsdag, zodat de blokken erin passen. De deadline staat op 8 weken voor de start.
+                </p>
+              )}
             </div>
-            <div className="form-group">
-              <label className="label">Einddatum</label>
-              <input
-                type="date"
-                className="input w-full"
-                value={form.eind_datum}
-                onChange={(e) => setForm({ ...form, eind_datum: e.target.value })}
-              />
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="form-group">
+                <label className="label">Startdatum</label>
+                <input
+                  type="date"
+                  className="input w-full"
+                  value={form.start_datum}
+                  onChange={(e) => setForm({ ...form, start_datum: e.target.value })}
+                />
+              </div>
+              <div className="form-group">
+                <label className="label">Einddatum</label>
+                <input
+                  type="date"
+                  className="input w-full"
+                  value={form.eind_datum}
+                  onChange={(e) => setForm({ ...form, eind_datum: e.target.value })}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="form-group">
             <label className="label">Deadline voorkeuren</label>
@@ -536,12 +630,19 @@ export default function PlannerHomePage() {
                   </td>
                   <td className="px-4 py-2 text-sm">
                     <div className="flex items-center gap-4">
-                      <Link
-                        href={p.status === 'CONCEPT' ? `/planner/setup/${p.id}` : `/planner/period/${p.id}`}
-                        className="text-blue-600 hover:text-blue-700 font-medium"
-                      >
-                        {p.status === 'CONCEPT' ? 'Instellen vervolgen' : 'Openen'} →
-                      </Link>
+                      {isAiosPool(p.pool_id) ? (
+                        // No setup wizard for the AIOS yet (lib/aiosPeriod.ts).
+                        <Link href={`/planner/period/${p.id}`} className="text-blue-600 hover:text-blue-700 font-medium">
+                          Bekijken →
+                        </Link>
+                      ) : (
+                        <Link
+                          href={p.status === 'CONCEPT' ? `/planner/setup/${p.id}` : `/planner/period/${p.id}`}
+                          className="text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          {p.status === 'CONCEPT' ? 'Instellen vervolgen' : 'Openen'} →
+                        </Link>
+                      )}
                       <button
                         onClick={() => startRename(p)}
                         className="text-neutral-700 hover:text-neutral-900 font-medium"

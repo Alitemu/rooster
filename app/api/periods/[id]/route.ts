@@ -30,6 +30,8 @@ interface PeriodDetail {
   definitief_op: string | null;
   row_version: number;
   verwijderd_op: string | null;
+  // The pool's dienst: an AIOS period gets its own page (lib/aiosPeriod.ts).
+  pool_type: string;
 }
 
 /**
@@ -73,21 +75,23 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
     const stmt = db.prepare(`
       SELECT
-        id,
-        pool_id,
-        naam,
-        start_datum,
-        eind_datum,
-        deadline,
-        status,
-        bevroren_ruleset_json,
-        overloop_bevestigd_op,
-        gepubliceerd_op,
-        definitief_op,
-        row_version,
-        verwijderd_op
-      FROM dienstrooster_schedule_period
-      WHERE id = ?
+        sp.id,
+        sp.pool_id,
+        sp.naam,
+        sp.start_datum,
+        sp.eind_datum,
+        sp.deadline,
+        sp.status,
+        sp.bevroren_ruleset_json,
+        sp.overloop_bevestigd_op,
+        sp.gepubliceerd_op,
+        sp.definitief_op,
+        sp.row_version,
+        sp.verwijderd_op,
+        pl.type AS pool_type
+      FROM dienstrooster_schedule_period sp
+      JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
+      WHERE sp.id = ?
     `);
 
     const row = stmt.get(id) as PeriodDetail | undefined;

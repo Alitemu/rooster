@@ -9,6 +9,7 @@ import { db } from '@/db/client';
 import { checkCapacity, getCapacityInterpretation } from '@/lib/capacity';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
@@ -55,6 +56,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     }
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
 
     const { id } = params;
 

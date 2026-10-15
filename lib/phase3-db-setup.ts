@@ -162,6 +162,7 @@ export function cleanupPhase3TestData(periodId?: string, personIds?: string[]) {
       db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(periodId);
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId);
       db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(periodId);
+      db.prepare('DELETE FROM dienstrooster_shift_block WHERE period_id = ?').run(periodId);
       db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
     } else {
       // Clean all Phase 3 data

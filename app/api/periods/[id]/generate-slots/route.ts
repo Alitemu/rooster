@@ -11,6 +11,7 @@ import { syncAvailabilityForPeriod } from '@/lib/parttimeSync';
 import { syncAvailabilityForPeriod as syncAbsenceAvailabilityForPeriod } from '@/lib/absenceSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -46,6 +47,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
 
     const { id } = params;
 

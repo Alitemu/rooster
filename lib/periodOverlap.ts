@@ -10,6 +10,11 @@
  * CONCEPT (a draft has no slots yet and its dates are not final) and
  * outside the prullenbak - and so does restoring one from the prullenbak
  * (lib/periodTrash.ts, audit 13).
+ *
+ * An AIOS period is the exception to "a draft has no slots": it is one
+ * quarter whose diensten are made with the period (lib/aiosSlots.ts), so
+ * there a draft takes its days too, and a second period on the same
+ * quarter is refused from the start.
  */
 
 import { db } from '@/db/client';
@@ -18,16 +23,20 @@ export interface OverlappingPeriod {
   naam: string;
   start_datum: string;
   eind_datum: string;
+  // The pool is an AIOS pool: its periods are quarters, not ISO weeks.
+  aios: number;
 }
 
 /** The pool's other period sharing a day with start..eind (both inclusive), if any. */
 export function overlappingPeriod(poolId: string, start: string, eind: string, exceptId?: string): OverlappingPeriod | undefined {
   return db
     .prepare(
-      `SELECT naam, start_datum, eind_datum FROM dienstrooster_schedule_period
-       WHERE pool_id = ? AND id != ? AND status != 'CONCEPT' AND verwijderd_op IS NULL
-         AND start_datum <= ? AND eind_datum >= ?
-       ORDER BY start_datum LIMIT 1`
+      `SELECT sp.naam, sp.start_datum, sp.eind_datum, pl.type = 'AIOS' AS aios
+       FROM dienstrooster_schedule_period sp
+       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
+       WHERE sp.pool_id = ? AND sp.id != ? AND (sp.status != 'CONCEPT' OR pl.type = 'AIOS') AND sp.verwijderd_op IS NULL
+         AND sp.start_datum <= ? AND sp.eind_datum >= ?
+       ORDER BY sp.start_datum LIMIT 1`
     )
     .get(poolId, exceptId ?? '', eind, start) as OverlappingPeriod | undefined;
 }
@@ -39,6 +48,8 @@ const datumTekst = (datum: string) =>
 export function overlapMessage(other: OverlappingPeriod): string {
   return (
     `Deze periode overlapt met "${other.naam}" (${datumTekst(other.start_datum)} t/m ${datumTekst(other.eind_datum)}). ` +
-    'Elke dag hoort bij één periode. Een periode begint altijd op de maandag van de week van de startdatum.'
+    (other.aios
+      ? 'Elke dag hoort bij één periode. Kies een ander kwartaal.'
+      : 'Elke dag hoort bij één periode. Een periode begint altijd op de maandag van de week van de startdatum.')
   );
 }

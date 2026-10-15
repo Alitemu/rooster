@@ -20,6 +20,7 @@ interface Period {
   deadline: string;
   status: string;
   pool_id: string;
+  pool_type?: string;
 }
 
 export default function SetupPage() {
@@ -38,6 +39,11 @@ export default function SetupPage() {
         if (!res.ok) throw new Error('Laden van periode mislukt');
 
         const data = await res.json();
+        // An AIOS period has no setup wizard (yet): its own page shows it.
+        if (data.data?.pool_type === 'AIOS') {
+          router.replace(`/planner/period/${periodId}`);
+          return;
+        }
         setPeriod(data.data);
         setLoading(false);
       } catch (err) {
@@ -48,7 +54,7 @@ export default function SetupPage() {
     };
 
     loadPeriod();
-  }, [periodId]);
+  }, [periodId, router]);
 
   if (loading) {
     return (

@@ -26,6 +26,7 @@ import { createSetupToken } from '../lib/setupToken';
 // the half that drifts is the warning.
 import { DEFAULT_TEST_PASSWORD } from '../lib/seedPassword';
 import { markStafRenamed, renamePersoonToStaf, stafCodenaam } from '../lib/startParticipants';
+import { ensureAiosPool } from '../lib/aiosPool';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -218,7 +219,10 @@ async function createTables() {
       naam TEXT NOT NULL,
       teller TEXT NOT NULL CHECK(teller IN ('AVOND', 'WEEKEND', 'FEESTDAG')),
       start_tijd TEXT,
-      eind_tijd TEXT
+      eind_tijd TEXT,
+      code TEXT,
+      soort TEXT CHECK(soort IN ('UITLOOP', 'DAG', 'AVOND', 'NACHT')),
+      punten REAL
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_shift_slot (
@@ -239,6 +243,16 @@ async function createTables() {
 
     CREATE INDEX IF NOT EXISTS slot_period_idx ON dienstrooster_shift_slot(period_id);
     CREATE INDEX IF NOT EXISTS slot_datum_idx ON dienstrooster_shift_slot(datum);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_shift_block (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      soort TEXT NOT NULL CHECK(soort IN ('AVOND', 'NACHT')),
+      vorm TEXT NOT NULL CHECK(vorm IN ('ZO_DI', 'WO_VR', 'ZA', 'LOS')),
+      start_datum TEXT NOT NULL,
+      eind_datum TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS shift_block_period_idx ON dienstrooster_shift_block(period_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_ledger_entry (
       id TEXT PRIMARY KEY NOT NULL,
@@ -539,6 +553,7 @@ const SEEDED_TABLES = [
   'dienstrooster_holiday_history',
   'dienstrooster_ledger_entry',
   'dienstrooster_shift_slot',
+  'dienstrooster_shift_block',
   'dienstrooster_shift_type',
   'dienstrooster_prior_assignment',
   'dienstrooster_period_excluded_day',
@@ -594,6 +609,11 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   },
   dienstrooster_pending_undo: {
     onderdeel: "TEXT NOT NULL DEFAULT 'ROOSTER'",
+  },
+  dienstrooster_shift_type: {
+    code: 'TEXT',
+    soort: "TEXT CHECK(soort IN ('UITLOOP', 'DAG', 'AVOND', 'NACHT'))",
+    punten: 'REAL',
   },
 };
 
@@ -943,12 +963,25 @@ function renameStartParticipants() {
   }
 }
 
+/**
+ * Every start: the AIOS pool with its shift types, if there is none yet
+ * (lib/aiosPool.ts). The demo data gets one too, empty.
+ */
+function ensureAiosPoolOnStart() {
+  const uitkomst = ensureAiosPool(db, new Date().toISOString());
+  if (uitkomst === 'AANGEMAAKT') console.log('Created the AIOS pool with its shift types (UD, DD, AD, ADW, ND).');
+  if (uitkomst === 'SCHEMA_NIET_KLAAR') {
+    console.log('AIOS pool: the migrations add its columns when the app starts; it is created at the next start.');
+  }
+}
+
 async function seed() {
   try {
     if (process.argv.includes('--schema-only')) {
       upgradeSchemaOnly();
       await addAdminIfNone();
       renameStartParticipants();
+      ensureAiosPoolOnStart();
       process.exit(0);
     }
 
@@ -980,6 +1013,7 @@ async function seed() {
     if (alreadySeeded() && alleenPlanner) {
       await addAdminIfNone();
       renameStartParticipants();
+      ensureAiosPoolOnStart();
       console.log('Staff accounts already exist; nothing else to do.');
       return;
     }
@@ -1126,6 +1160,8 @@ async function seed() {
         VALUES (?, ?, ?, ?)
       `).run(typeId, poolId, type.naam, type.teller);
     }
+
+    ensureAiosPoolOnStart();
 
     if (alleenPlanner) {
       createNotificationTemplates();

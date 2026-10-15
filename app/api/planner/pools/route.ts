@@ -43,7 +43,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       LEFT JOIN dienstrooster_pool_membership pm ON p.id = pm.pool_id
       WHERE (? IS NULL OR p.type = ?) ${includeInactive ? '' : 'AND p.actief = 1'}
       GROUP BY p.id
-      ORDER BY p.naam ASC
+      -- Without NOCASE "AIOS" sorts before "Achterwacht", and the first pool
+      -- is what the new-period form starts on.
+      ORDER BY p.naam COLLATE NOCASE ASC
     `);
 
     // The planner's own dienst only, every dienst for a beheerder (lib/dienstAccess.ts).

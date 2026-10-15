@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
+import { AiosPeriodOverview } from '@/components/AiosPeriodOverview';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { vensterTekst } from '@/lib/windowWeeks';
@@ -24,6 +25,7 @@ interface Period {
   gepubliceerd_op?: string | null;
   definitief_op?: string | null;
   bevroren_ruleset_json?: string | null;
+  pool_type?: string;
 }
 
 export default function PlannerPeriodPage() {
@@ -195,6 +197,9 @@ export default function PlannerPeriodPage() {
       </div>
     );
   }
+
+  // The AIOS roster has its own page while it is being built (lib/aiosPeriod.ts).
+  if (period.pool_type === 'AIOS') return <AiosPeriodOverview period={period} />;
 
   const statusColors: Record<string, { bg: string; text: string }> = {
     CONCEPT: { bg: 'bg-neutral-100', text: 'text-neutral-800' },

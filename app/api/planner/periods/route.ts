@@ -14,6 +14,9 @@ import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { parseISO, roundToMonday, roundToSunday, dateToISO } from '@/lib/holidays';
 import { overlappingPeriod, overlapMessage } from '@/lib/periodOverlap';
+import { isAiosPool } from '@/lib/aiosPeriod';
+import { exactAiosQuarter } from '@/lib/aiosQuarter';
+import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface CreatePeriodRequest {
@@ -158,14 +161,42 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 404 });
     }
 
+    // An AIOS period is exactly one quarter, Wednesday to Tuesday
+    // (lib/aiosQuarter.ts): other dates would cut a block in two. Its
+    // diensten and blocks are made right here, with the period.
+    const aios = isAiosPool(body.pool_id);
+    const aiosTypes = aios ? aiosShiftTypes(body.pool_id) : null;
+    if (aios) {
+      if (!exactAiosQuarter(body.start_datum, body.eind_datum)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'INVALID_PERIOD',
+            message: 'Een periode van de AIOS is een kwartaal, van woensdag tot en met dinsdag. Kies het kwartaal.',
+          },
+        };
+        return NextResponse.json(response, { status: 400 });
+      }
+      if (!aiosTypes) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'NO_SHIFT_TYPES', message: 'Voor deze pool zijn de diensten van de AIOS niet ingesteld' },
+        };
+        return NextResponse.json(response, { status: 409 });
+      }
+    }
+
     // Every day belongs to at most one period of the pool - checked on the
     // whole weeks opening will round these dates to (lib/periodOverlap.ts,
-    // audit 12), so the planner hears it now rather than at "Openen".
-    const overlap = overlappingPeriod(
-      body.pool_id,
-      dateToISO(roundToMonday(parseISO(body.start_datum))),
-      dateToISO(roundToSunday(parseISO(body.eind_datum)))
-    );
+    // audit 12), so the planner hears it now rather than at "Openen". An
+    // AIOS quarter is not rounded.
+    const overlap = aios
+      ? overlappingPeriod(body.pool_id, body.start_datum, body.eind_datum)
+      : overlappingPeriod(
+          body.pool_id,
+          dateToISO(roundToMonday(parseISO(body.start_datum))),
+          dateToISO(roundToSunday(parseISO(body.eind_datum)))
+        );
     if (overlap) {
       const response: ApiErrorResponse = {
         success: false,
@@ -184,7 +215,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const periodId = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    insertStmt.run(periodId, naam, body.pool_id, body.start_datum, body.eind_datum, body.deadline, now);
+    const { start_datum: startDatum, eind_datum: eindDatum } = body;
+    db.transaction(() => {
+      insertStmt.run(periodId, naam, body.pool_id, startDatum, eindDatum, body.deadline, now);
+      if (aiosTypes) persistAiosSlots(periodId, aiosTypes, startDatum, eindDatum);
+    })();
     writeAuditLog({
       actorId: auth!.userId,
       entiteit: 'period',
