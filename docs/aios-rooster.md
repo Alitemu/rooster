@@ -1,7 +1,7 @@
 # Ontwerp: het rooster voor de AIOS
 
 Status: ontwerp, nog niet gebouwd. Afgesproken met de planner in oktober 2026.
-Drie punten staan nog open, onderaan. De scheiding tussen de planner van de
+Eén punt staat nog open, onderaan. De scheiding tussen de planner van de
 achterwacht en die van de AIOS bestaat al (CLAUDE.md, "Diensten: the
 achterwacht and the AIOS"): dit rooster komt daarachter.
 
@@ -112,13 +112,17 @@ zoals nu bij een geblokkeerde dag.
    | Dag- of avonddienst op zaterdag en dagdienst op zondag (één ervan of allebei) | de vrijdag ervoor en de maandag erna |
    | Losse nacht op zaterdag | de vrijdag ervoor, de zondag en de maandag erna |
 
+   De avonddienst op zondag hoort bij het avondblok zo t/m di. Daarvoor geldt
+   alleen de woensdag van dat blok, niet de vrijdag ervoor en de maandag erna.
+
 8. Valt een compensatiedag op een werkdag die een feestdag is, dan schuift die
    een dag op: een compensatiedag vóór de dienst een dag eerder, een
    compensatiedag na de dienst een dag later. Is dat ook een feestdag, dan nog
    een dag. Voorbeelden: de vrijdag vóór een zaterdagse dagdienst is Koningsdag,
    dan wordt het donderdag. De maandag na een zondagse dagdienst is Tweede
    Paasdag, dan wordt het dinsdag. De donderdag na een nachtblok zo t/m di is
-   Hemelvaartsdag, dan wordt het vrijdag.
+   Hemelvaartsdag, dan wordt het vrijdag. De feestdag zelf is dan geen
+   compensatiedag meer.
 
 Er is verder geen algemene rustregel en geen minimale tijd tussen twee blokken.
 
@@ -174,12 +178,9 @@ ongewijzigd.
 
 ## Nog open
 
-1. De avonddienst op zondag hoort bij het avondblok zo t/m di, dus de maandag
-   erna is zelf een avond van dat blok. Geldt de regel van de vrijdag ervoor en
-   de maandag erna daar niet, zodat alleen de woensdag van het blok telt? Of
-   blokkeert de zondagavond wel de vrijdag ervoor?
-2. Een dagdienst op een feestdag door de week (bijvoorbeeld Tweede Paasdag):
-   geldt daar dezelfde regel als voor een losse weekenddienst (geen dienst op de
-   dag ervoor en de werkdag erna)?
-3. Een compensatiedag op een feestdag: klopt de richting in regel 8 (vóór de
-   dienst een dag eerder, na de dienst een dag later)?
+1. Een dagdienst op een feestdag door de week valt in een blok (zo t/m di of
+   wo t/m vr), zoals de planner zei. Gelezen als: zo'n dagdienst krijgt
+   dezelfde dagen zonder dienst als een avondblok in die dagen. Na een
+   dagdienst op Tweede Paasdag (maandag) dus geen dienst op de woensdag, en na
+   een dagdienst op Hemelvaartsdag (donderdag) geen dienst in het weekend erna.
+   Nog te bevestigen.
