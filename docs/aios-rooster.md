@@ -1,7 +1,8 @@
 # Ontwerp: het rooster voor de AIOS
 
 Status: ontwerp, nog niet gebouwd. Afgesproken met de planner in oktober 2026.
-Eén punt staat nog open, onderaan. De scheiding tussen de planner van de
+Eén punt staat nog open, onderaan. Getoetst aan oude roosters rond Koningsdag,
+Pasen, Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner van de
 achterwacht en die van de AIOS bestaat al (docs/development/diensten.md): dit
 rooster komt daarachter.
 
@@ -20,7 +21,9 @@ Codenamen: aios01, aios02 enzovoort.
 
 ## Diensten
 
-Per dienst precies één AIOS.
+Per dienst precies één AIOS. Een extra AIOS op een dienst (soms op
+oudjaarsnacht) is een uitzondering die de planner met de hand toevoegt: de
+solver plant er één.
 
 | Dienst | Tijd | Werkdag | Zaterdag en zondag | Feestdag |
 |---|---|---|---|---|
@@ -44,6 +47,25 @@ Per dienst precies één AIOS.
   behalve bij wie "twee dagdiensten" aangeeft.
 - Per weekend hoogstens één losse weekenddienst per AIOS, behalve de twee
   dagdiensten bij wie dat aangeeft.
+- De dagdienst op een feestdag door de week is een losse dienst.
+
+## Blokken rond feestdagen
+
+- Standaard blijven de blokken heel, ook met een feestdag erin (zo bleef bij
+  Koningsdag op maandag het avond- en het nachtblok zo t/m di bij één AIOS).
+- Aaneengesloten feestdagen (twee of meer feestdagen achter elkaar: Pasen,
+  Pinksteren, kerst) vragen om een keuze van de planner, want in oude roosters
+  ging dat elk jaar anders. Bij het genereren verschijnt daarom een duidelijke
+  melding per aaneengesloten feestdagen, met de blokken waar ze in vallen, en de
+  vraag wat ermee moet gebeuren. Per blok (avond en nacht apart):
+  - heel laten: één AIOS doet het hele blok;
+  - opknippen: elke dag van het blok is een losse dienst.
+
+  Genereren kan pas als elke vraag beantwoord is. De keuze wordt bij de periode
+  bewaard en staat bij een volgende generatie al ingevuld.
+- Een losse feestdag in een blok (zoals Koningsdag of Nieuwjaarsdag) blijft heel,
+  maar de planner kan dat blok op dezelfde plek ook opknippen.
+- Daarna kan de planner een dienst nog met de hand aanpassen, zoals altijd.
 
 ## Verzoeken van de AIOS
 
@@ -111,6 +133,7 @@ zoals nu bij een geblokkeerde dag.
    | Nachtblok wo t/m za | zondag en maandag |
    | Dag- of avonddienst op zaterdag en dagdienst op zondag (één ervan of allebei) | de vrijdag ervoor en de maandag erna |
    | Losse nacht op zaterdag | de vrijdag ervoor, de zondag en de maandag erna |
+   | Dagdienst op een feestdag door de week | de dag ervoor en de dag erna |
 
    De avonddienst op zondag hoort bij het avondblok zo t/m di. Daarvoor geldt
    alleen de woensdag van dat blok, niet de vrijdag ervoor en de maandag erna.
@@ -178,9 +201,7 @@ ongewijzigd.
 
 ## Nog open
 
-1. Een dagdienst op een feestdag door de week valt in een blok (zo t/m di of
-   wo t/m vr), zoals de planner zei. Gelezen als: zo'n dagdienst krijgt
-   dezelfde dagen zonder dienst als een avondblok in die dagen. Na een
-   dagdienst op Tweede Paasdag (maandag) dus geen dienst op de woensdag. Na een
-   dagdienst op Hemelvaartsdag (donderdag) geen dienst in het weekend erna.
-   Nog te bevestigen.
+1. Een losse avond of nacht door de week die ontstaat door het opknippen van een
+   blok rond feestdagen: welke dagen zonder dienst horen daarbij? In de oude
+   roosters had wie een losse nacht op maandag of dinsdag deed in elk geval de
+   dag erna niets. Voorstel: geen dienst op de dag erna.
