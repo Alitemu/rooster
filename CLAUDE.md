@@ -485,9 +485,10 @@ over.
 
 Two rosters with two planners, who never see each other's pools,
 periods, rosters or preferences (the planner's words: "Ze mogen elkaars
-rooster en voorkeuren niet inzien"). The AIOS roster's own rules are still
-to come; until then an AIOS account is refused (DIENST_NIET_IN_PRODUCTIE)
-and the separation is ready for it.
+rooster en voorkeuren niet inzien"). The AIOS roster itself is designed
+but not built yet (docs/aios-rooster.md, agreed with the planner: blocks,
+points, the dienstpercentage, the hard rules); until it is, an AIOS account
+is refused (DIENST_NIET_IN_PRODUCTIE) and the separation is ready for it.
 
 - A pool's `type` is its dienst, a staff account's `dienst_type` theirs
   (AuthContext.dienst, read live like the role; null counts as
