@@ -182,7 +182,9 @@ describe('the 50% counters', () => {
     setAiosVoorkeur(e, ids.period, slot('2034-04-15', 'DD'), 'ABSOLUUT'); // a Saturday day shift
     const t = Object.fromEntries(blokkadeTellers(loadAiosVoorkeurDagen(e, ids.period)).map((x) => [x.groep, x]));
     expect(t.AVONDBLOKKEN).toMatchObject({ geblokkeerd: 1, totaal: 26, boven_helft: false });
-    expect(t.ZATERDAG).toMatchObject({ geblokkeerd: 1, totaal: 26 });
+    // Half per dienst: the Saturday night and evening count apart.
+    expect(t.ZATERDAG_NACHT).toMatchObject({ geblokkeerd: 1, totaal: 13 });
+    expect(t.ZATERDAG_AVOND).toMatchObject({ geblokkeerd: 0, totaal: 13 });
     expect(t.DAGDIENSTEN.geblokkeerd).toBe(1);
     expect(t.NACHTBLOKKEN.geblokkeerd).toBe(0);
 
@@ -193,6 +195,18 @@ describe('the 50% counters', () => {
     for (const slotId of blokken.values()) setAiosVoorkeur(e, ids.period, slotId, 'ABSOLUUT');
     const na = blokkadeTellers(loadAiosVoorkeurDagen(e, ids.period)).find((x) => x.groep === 'AVONDBLOKKEN')!;
     expect(na.boven_helft).toBe(true);
+  });
+
+  it('give the Saturday night a half of its own: every Saturday night blocked warns there, not for the evening', () => {
+    const f = person('f');
+    const zaterdagen = loadAiosVoorkeurDagen(f, ids.period).flatMap((dag) =>
+      dag.diensten.filter((d) => d.blok?.vorm === 'ZA' && d.blok.soort === 'NACHT' && dag.dag_soort !== 'FEESTDAG')
+    );
+    for (const d of zaterdagen) expect(setAiosVoorkeur(f, ids.period, d.slot_id, 'ABSOLUUT')).toEqual({ ok: true });
+    const t = Object.fromEntries(blokkadeTellers(loadAiosVoorkeurDagen(f, ids.period)).map((x) => [x.groep, x]));
+    expect(t.ZATERDAG_NACHT).toMatchObject({ geblokkeerd: zaterdagen.length, totaal: 13, boven_helft: true });
+    expect(t.ZATERDAG_NACHT.erboven).toBe(zaterdagen.length - 6);
+    expect(t.ZATERDAG_AVOND).toMatchObject({ geblokkeerd: 0, boven_helft: false, erboven: 0 });
   });
 });
 
@@ -245,7 +259,7 @@ describe('the routes', () => {
     expect(res.status).toBe(200);
     const { data } = await res.json();
     expect(data.dagen).toHaveLength(91);
-    expect(data.tellers).toHaveLength(4);
+    expect(data.tellers).toHaveLength(5);
     expect(data.invoer).toEqual({ open: true });
 
     const patch = (level: unknown) =>

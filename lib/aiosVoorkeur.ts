@@ -53,7 +53,7 @@ export const LEGE_WENS: AiosWens = {
   opmerking: null,
 };
 
-export type TellerGroep = 'DAGDIENSTEN' | 'ZATERDAG' | 'AVONDBLOKKEN' | 'NACHTBLOKKEN';
+export type TellerGroep = 'DAGDIENSTEN' | 'ZATERDAG_AVOND' | 'ZATERDAG_NACHT' | 'AVONDBLOKKEN' | 'NACHTBLOKKEN';
 
 export interface BlokkadeTeller {
   groep: TellerGroep;
@@ -72,7 +72,8 @@ export interface BlokkadeTeller {
 
 export const TELLER_LABELS: Record<TellerGroep, string> = {
   DAGDIENSTEN: 'dagdiensten in het weekend en op feestdagen',
-  ZATERDAG: 'losse avond- en nachtdiensten op zaterdag',
+  ZATERDAG_AVOND: 'losse avonddiensten op zaterdag',
+  ZATERDAG_NACHT: 'losse nachtdiensten op zaterdag',
   AVONDBLOKKEN: 'avondblokken',
   NACHTBLOKKEN: 'nachtblokken',
 };
@@ -103,7 +104,10 @@ export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'dien
   };
   const groepen: Array<[TellerGroep, { totaal: number; geblokkeerd: number }]> = [
     ['DAGDIENSTEN', { totaal: dd, geblokkeerd: ddGeblokkeerd }],
-    ['ZATERDAG', tel((b) => b.vorm === 'ZA')],
+    // Half per dienst: the Saturday evening and night each on their own
+    // (October 2026; the old form counted them together).
+    ['ZATERDAG_AVOND', tel((b) => b.vorm === 'ZA' && b.soort === 'AVOND')],
+    ['ZATERDAG_NACHT', tel((b) => b.vorm === 'ZA' && b.soort === 'NACHT')],
     ['AVONDBLOKKEN', tel((b) => b.soort === 'AVOND' && (b.vorm === 'ZO_DI' || b.vorm === 'WO_VR'))],
     ['NACHTBLOKKEN', tel((b) => b.soort === 'NACHT' && (b.vorm === 'ZO_DI' || b.vorm === 'WO_VR'))],
   ];

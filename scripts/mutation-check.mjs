@@ -753,6 +753,13 @@ const MUTATIONS = [
     tests: ['lib/aiosAutoHerinneringen'],
   },
   {
+    name: 'aios: the Saturday evening and night share one half again',
+    file: 'lib/aiosVoorkeur.ts',
+    find: "    ['ZATERDAG_NACHT', tel((b) => b.vorm === 'ZA' && b.soort === 'NACHT')],",
+    replace: "    ['ZATERDAG_NACHT', tel((b) => b.vorm === 'ZA')],",
+    tests: ['lib/aiosPreferences'],
+  },
+  {
     name: 'aios: the part above half rounds the half up',
     file: 'lib/aiosVoorkeur.ts',
     find: '    erboven: Math.max(0, t.geblokkeerd - Math.floor(t.totaal / 2)),',

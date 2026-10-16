@@ -136,8 +136,10 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   groep hoogstens `erboven` (lib/aiosVoorkeur.ts blokkadeTellers).
   - Dagdiensten in het weekend en op feestdagen: dagen met geblokkeerd, gedeeld
     door alle weekend- en feestdagen van het kwartaal.
-  - Losse diensten op zaterdag (avond en nacht): gedeeld door twee keer het
-    aantal zaterdagen.
+  - Losse avonddiensten op zaterdag: gedeeld door het aantal zaterdagen.
+  - Losse nachtdiensten op zaterdag: op dezelfde manier. Het oude formulier
+    telde avond en nacht samen; de helft geldt nu per dienst (de keuze van de
+    planner in oktober 2026).
   - Avondblokken met minstens één geblokkeerde avond, gedeeld door alle
     avondblokken.
   - Nachtblokken op dezelfde manier.
