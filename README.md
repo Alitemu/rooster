@@ -333,7 +333,9 @@ github.com/Alitemu/rooster onder **Actions**:
 3. **Vrijgeven (productie):** tevreden? Kies *Vrijgeven (productie)*, dan
    *Run workflow* en vul het versienummer in (bijvoorbeeld 0.2.3). Die
    versie heet dan `stable`. Er wordt niets opnieuw gebouwd: productie
-   krijgt precies de versie die je getest hebt.
+   krijgt precies de versie die je getest hebt. Op GitHub komt er ook een
+   release bij (bij *Releases*), met de wijzigingen sinds de vorige. De
+   release die als laatste is gemarkeerd, is de versie in productie.
 
 Daarna op de productieserver, in de map met `docker-compose.yml`:
 

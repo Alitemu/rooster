@@ -18,7 +18,11 @@ tagged with package.json's `version` and `test`, only after the app's and
 the solver's tests pass and only for a version not built before (bump
 package.json for every build); "Vrijgeven (productie)"
 (release.yml) points `stable` at an already built, tested version without
-rebuilding. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
+rebuilding, and makes the GitHub release `v<version>` on the commit that
+set that version in package.json (found with `git log -S`), with the
+commits since the release before it, marked as the latest. Releasing a
+version again only moves that mark, so the latest release is always what
+production runs. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
 installation sets `test`) and keeps `build` for building from source.
 Updating is `docker compose pull && docker compose up -d`. The schema of an
 existing database is brought up to date at every start either way:
