@@ -484,6 +484,17 @@ eerst op de testinstallatie. Zo begin je:
    AIOS in (zie 0.72.0).
 5. Kies de deadline, open de periode en verstuur de uitnodigingen.
 
+**Vanaf versie 0.82.0** vul je op de pagina van een AIOS-periode bij
+*Voortgangstoets* de datum van de toets in. In de nacht ervoor heeft geen
+AIOS dienst: een fellow doet die nacht. In het rooster en in de download
+staat daar *Fellow*. Wie het is, regel je buiten de app. De andere nachten
+van dat blok doet één AIOS, met de compensatiedagen op de twee dagen na de
+laatste van die nachten. Dat kan tot het rooster gepubliceerd is. Verder
+staat onder het dienstpercentage van elke AIOS nu ook het percentage over
+dit kwartaal en de drie ervoor samen, met de geschiedenis van vóór de app.
+Boven 25% waarschuwt de app daarover bij het publiceren. De AIOS zien het
+bij hun eigen rooster.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
