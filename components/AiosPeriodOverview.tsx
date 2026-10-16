@@ -653,7 +653,7 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
       {period.status !== 'CONCEPT' && <AiosRoosterMaken periodId={period.id} status={period.status} onChanged={herlaad} />}
 
       <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">
-        Het rooster met de hand aanpassen en publiceren komen in een volgende versie.
+        Publiceren komt in een volgende versie.
       </div>
 
       {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
