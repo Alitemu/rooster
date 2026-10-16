@@ -15,6 +15,13 @@ dienstrooster_reminder_run, their own texts, /aios/ links and flow, and a
 switch per period in dienstrooster_aios_periode.auto_herinneren (the
 period's own auto_herinneren stays 0, so the achterwacht's never take an
 AIOS period). Asked for because the AIOS's only went by hand in 0.72.0.
+Swaps between AIOS (lib/aiosRuilen.ts, 0.80.0) send RUILVERZOEK,
+RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN and on approval
+RUIL_DOORGEVEN (to the codenamen Planner and Roosterbureau, `personen` the
+two who swapped) to the AIOS's flow, a request anonymous until it goes
+through, as the achterwacht's. After the commit and not awaited, but not
+queued: a mail that fails is not tried again (the request is on both
+pages, and the failure shows in the AIOS's mail settings).
 Publishing the AIOS's roster (lib/aiosPublicatie.ts, 0.78.0) sends the
 verzendlijst kinds ROOSTER_VOORLOPIG and ROOSTER_DEFINITIEF to that flow,
 with their own texts: per AIOS their diensten, their dienstpercentage

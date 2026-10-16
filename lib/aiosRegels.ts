@@ -356,3 +356,29 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
   }
   return fout;
 }
+
+/**
+ * The violations one AIOS has in `na` and not in `voor`, counting doubles:
+ * what a change adds for them. Only their own diensten are checked, so
+ * another's don't show; the block's own rule (2_BLOK_HEEL) is about the
+ * block, not the AIOS, and is left out, as is whatever `negeer` names.
+ */
+export function nieuweOvertredingen(
+  invoer: Invoer,
+  voor: ReadonlyMap<string, string>,
+  na: ReadonlyMap<string, string>,
+  aiosId: string,
+  negeer: ReadonlySet<Regel> = new Set()
+): Overtreding[] {
+  const van = (rooster: ReadonlyMap<string, string>) =>
+    controleerAiosRooster(invoer, new Map([...rooster].filter(([, wie]) => wie === aiosId))).filter(
+      (o) => o[0] !== '2_BLOK_HEEL' && !negeer.has(o[0])
+    );
+  const rest = van(voor).map((o) => JSON.stringify(o));
+  return van(na).filter((o) => {
+    const i = rest.indexOf(JSON.stringify(o));
+    if (i < 0) return true;
+    rest.splice(i, 1);
+    return false;
+  });
+}

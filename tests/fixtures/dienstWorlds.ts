@@ -51,6 +51,8 @@ export interface World {
   slot: string;
   assignment: string;
   swap: string;
+  // An AIOS swap (lib/aiosRuilen.ts), x asking y.
+  ruil: string;
   absence: string;
   pattern: string;
   notice: string;
@@ -139,6 +141,15 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
     status: 'PENDING',
     aangemaakt_op: now,
   });
+  const ruil = insert('dienstrooster_aios_ruil', {
+    period_id: period,
+    aanvrager_id: x,
+    respondent_id: y,
+    aangeboden_json: JSON.stringify([slots[0]]),
+    gevraagd_json: JSON.stringify([slots[7]]),
+    status: 'IN_BEHANDELING',
+    aangemaakt_op: now,
+  });
   const notice = insert('dienstrooster_notification', { person_id: x, type: 'RUILVERZOEK', onderwerp: 'Ruilverzoek', inhoud: 'Ruilverzoek', aangemaakt_op: now });
   insert('dienstrooster_submission', { person_id: x, schedule_period_id: period, status: 'BEVESTIGD', aangemaakt_op: now });
   insert('dienstrooster_ledger_entry', {
@@ -166,6 +177,7 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
     slot: slots[0],
     assignment,
     swap,
+    ruil,
     absence,
     pattern,
     notice,
@@ -198,6 +210,8 @@ export function fill(path: string, w: World): { url: string; params: Record<stri
         return w.membership;
       case 'swap-id':
         return w.swap;
+      case 'ruilId':
+        return w.ruil;
       case 'absenceId':
         return w.absence;
       case 'patternId':

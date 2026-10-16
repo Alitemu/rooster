@@ -128,7 +128,8 @@ Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
   and the roster as workbooks, 0.78.0: a copy of lib/publication.ts),
   aiosSaldo.ts and aiosGeschiedenis.ts (the saldo into the next quarter and
   the history from before the app, 0.79.0: the AIOS's own, not
-  lib/carryOver.ts or the ledger).
+  lib/carryOver.ts or the ledger), aiosRuilen.ts (swapping, 0.80.0: its own
+  table aios_ruil, not swap_request, which holds one dienst a side).
 - Tables of its own: aios_wens and aios_periode (when the AIOS were
   invited, under which address, and whether their automatic reminders
   are on). An AIOS period never gets

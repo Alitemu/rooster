@@ -733,6 +733,37 @@ export const aiosBeginstand = sqliteTable(
   })
 );
 
+/**
+ * A swap between two AIOS (docs/aios-rooster.md, "Ruilen"; lib/aiosRuilen.ts):
+ * the requester's eenheid (a whole block or a single dienst) for the
+ * colleague's, one of the same kind. Its own table: the achterwacht's
+ * swap_request holds one dienst a side, and an AIOS swaps whole blocks.
+ * The diensten as JSON arrays of slot ids, as they were when asked.
+ */
+export const aiosRuil = sqliteTable(
+  'dienstrooster_aios_ruil',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    aanvrager_id: text('aanvrager_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    respondent_id: text('respondent_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    aangeboden_json: text('aangeboden_json').notNull(),
+    gevraagd_json: text('gevraagd_json').notNull(),
+    status: text('status', { enum: ['IN_BEHANDELING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN', 'VERVALLEN'] }).notNull(),
+    toelichting: text('toelichting'),
+    reden_afwijzing: text('reden_afwijzing'),
+    aangemaakt_op: text('aangemaakt_op').notNull(),
+    beantwoord_op: text('beantwoord_op'),
+  },
+  (table) => ({
+    periode: index('aios_ruil_periode_idx').on(table.period_id),
+    statusCheck: check(
+      'aios_ruil_status_check',
+      sql`${table.status} IN ('IN_BEHANDELING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN', 'VERVALLEN')`
+    ),
+  })
+);
+
 export const periodFellow = sqliteTable(
   'dienstrooster_period_fellow',
   {

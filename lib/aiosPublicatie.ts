@@ -33,6 +33,7 @@ import { PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import { writeAuditLog } from '@/lib/auditLog';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
+import { vervalOpenAiosRuilen } from '@/lib/aiosRuilen';
 
 export interface AiosGepubliceerd {
   person_id: string;
@@ -325,6 +326,8 @@ export function trekAiosPublicatieIn(period: AiosUitnodigPeriode, actorId: strin
            definitief_op = NULL, definitief_door_person_id = NULL, voorlopig_rooster_json = NULL, row_version = row_version + 1
        WHERE id = ?`
     ).run(period.id);
+    // Swaps only on a published roster: what was asked can't go through any more.
+    vervalOpenAiosRuilen(period.id);
     writeAuditLog({
       actorId,
       entiteit: 'period',

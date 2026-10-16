@@ -197,6 +197,13 @@
       "when": 1788888500000,
       "tag": "0027_aios_saldo",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "5",
+      "when": 1788975000000,
+      "tag": "0028_aios_ruil",
+      "breakpoints": true
     }
   ]
 }

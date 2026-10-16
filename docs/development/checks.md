@@ -14,7 +14,8 @@ the AIOS's solver and fails without it, once plain and once over kerst and
 oudjaar with the questions about the blocks around feestdagen;
 tests/e2e/aios-publiceren.e2e.ts reads in the history from before the
 app, publishes one, opens it as the AIOS on their link and makes it
-definitief. ALLOW_SEED_PASSWORD
+definitief; tests/e2e/aios-ruilen.e2e.ts has one AIOS ask a swap and the
+other approve it, each on their own link. ALLOW_SEED_PASSWORD
 because they all log in with the seed password, which otherwise only
 opens a "choose a new password" session (see Authentication):
 - `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its

@@ -18,6 +18,7 @@ import { withBasePath } from '@/lib/basePath';
 import { AiosAutoHerinneringen } from '@/components/AiosAutoHerinneringen';
 import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
+import { AiosRuilenOverzicht } from '@/components/AiosRuilenOverzicht';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { AiosCode } from '@/lib/aiosDiensten';
@@ -659,6 +660,8 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
       )}
 
       {period.status !== 'CONCEPT' && <AiosRoosterMaken periodId={period.id} status={period.status} onChanged={herlaad} />}
+
+      {period.status === 'GEPUBLICEERD' && <AiosRuilenOverzicht periodId={period.id} />}
 
       <AiosGeschiedenis periodId={period.id} />
 

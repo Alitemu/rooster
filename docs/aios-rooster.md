@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0) met de hand aanpassen (versie 0.77.0), publiceren (versie 0.78.0) en het saldo met de geschiedenis van vóór de app (versie 0.79.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
+Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0) met de hand aanpassen (versie 0.77.0), publiceren (versie 0.78.0) het saldo met de geschiedenis van vóór de app (versie 0.79.0) en ruilen (versie 0.80.0): stap 4 is af. De rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -329,6 +329,23 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   blok of een losse dienst uit een blok. Alleen een gelijkwaardige ruil.
 - Een ruil mag de harde regels niet breken (L3), wel de 25% (L4). Wie inwerkt,
   ruilt alleen wat die mag doen (L5).
+- Gelijkwaardig (de keuze van de planner in oktober 2026): blokken worden niet
+  opgesplitst. Een avond- of nachtblok ruil je tegen een blok van dezelfde
+  soort en vorm. Het blok van vier mag uit elkaar: het blok woensdag tot en met
+  vrijdag en de losse zaterdag ruil je apart. De twee dagdiensten van een
+  weekend ruil je per stuk. Een losse dienst ruil je tegen een gelijkwaardige:
+  een dagdienst en een avonddienst in het weekend zijn gelijkwaardig aan
+  elkaar, verder nacht tegen nacht en uitloopdienst tegen uitloopdienst.
+- In de app (0.80.0): op de eigen pagina kiest de AIOS een eigen dienst of
+  blok dat nog komt en ziet alleen de gelijkwaardige diensten van collega's
+  waarmee de ruil voor allebei binnen de harde regels blijft. Eigen
+  blokkades met de hand tellen dan niet: die geeft de AIOS zelf op. De
+  collega keurt goed of wijst af, met een reden als die wil. De aanvrager kan
+  intrekken. Een verzoek vervalt als een van de diensten intussen bij iemand
+  anders is, of als de publicatie wordt ingetrokken. De mail over een verzoek
+  noemt de aanvrager niet, zoals bij de achterwacht. Gaat de ruil door, dan
+  krijgen de planner en het roosterbureau bericht via de stroom van de AIOS.
+  De planner ziet alle verzoeken op de pagina van de periode.
 
 ## In de app
 

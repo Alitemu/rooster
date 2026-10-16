@@ -499,6 +499,22 @@ async function createTables() {
     CREATE UNIQUE INDEX IF NOT EXISTS aios_beginstand_uniq
       ON dienstrooster_aios_beginstand(pool_id, person_id);
 
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_ruil (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      aanvrager_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
+      respondent_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
+      aangeboden_json TEXT NOT NULL,
+      gevraagd_json TEXT NOT NULL,
+      status TEXT NOT NULL,
+      toelichting TEXT,
+      reden_afwijzing TEXT,
+      aangemaakt_op TEXT NOT NULL,
+      beantwoord_op TEXT,
+      CONSTRAINT aios_ruil_status_check CHECK(status IN ('IN_BEHANDELING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN', 'VERVALLEN'))
+    );
+    CREATE INDEX IF NOT EXISTS aios_ruil_periode_idx ON dienstrooster_aios_ruil(period_id);
+
     CREATE TABLE IF NOT EXISTS dienstrooster_period_fellow (
       id TEXT PRIMARY KEY NOT NULL,
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
@@ -613,6 +629,7 @@ const SEEDED_TABLES = [
   'dienstrooster_aios_blokkeuze',
   'dienstrooster_aios_doel',
   'dienstrooster_aios_beginstand',
+  'dienstrooster_aios_ruil',
   'dienstrooster_mail_queue',
   // References a person (gewijzigd_door), so a reset clears it as well.
   'dienstrooster_app_setting',

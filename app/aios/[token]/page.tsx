@@ -1,7 +1,8 @@
 /**
  * The AIOS's personal link page (/aios/<token>): Deeltijd, Voorkeuren,
  * Bevestigen, Ingediend; once the roster is published their own diensten
- * on top (components/AiosMijnRooster.tsx, step 4d).
+ * on top (components/AiosMijnRooster.tsx, step 4d) and swapping
+ * (components/AiosRuilen.tsx, step 4f).
  *
  * The AIOS's own page, next to the achterwacht's app/person/[token], not a
  * change to it (docs/development/diensten.md, "Copied, not changed"). Shared
@@ -22,6 +23,7 @@ import { AiosDeeltijdEditor } from '@/components/AiosDeeltijdEditor';
 import { AiosAfwezigheid, type Absence } from '@/components/AiosAfwezigheid';
 import { AiosBevestigen, AiosVoorkeuren } from '@/components/AiosPreferences';
 import { AiosMijnRooster } from '@/components/AiosMijnRooster';
+import { AiosRuilen } from '@/components/AiosRuilen';
 
 type Stap = 'deeltijd' | 'voorkeuren' | 'bevestigen' | 'ingediend';
 const STAPPEN: Stap[] = ['deeltijd', 'voorkeuren', 'bevestigen', 'ingediend'];
@@ -83,6 +85,8 @@ function AiosLinkPagina() {
   const [patronen, setPatronen] = useState<Patroon[]>([]);
   const [afwezigheden, setAfwezigheden] = useState<Absence[]>([]);
   const [waarschuwing, setWaarschuwing] = useState<string | null>(null);
+  // A swap changes their roster: the roster above loads again.
+  const [geruild, setGeruild] = useState(0);
 
   useEffect(() => {
     const start = async () => {
@@ -188,7 +192,8 @@ function AiosLinkPagina() {
         </div>
       </div>
 
-      {periode.status === 'GEPUBLICEERD' && <AiosMijnRooster personId={personId} periodId={periode.id} />}
+      {periode.status === 'GEPUBLICEERD' && <AiosMijnRooster key={geruild} personId={personId} periodId={periode.id} />}
+      {periode.status === 'GEPUBLICEERD' && <AiosRuilen personId={personId} periodId={periode.id} onGeruild={() => setGeruild((n) => n + 1)} />}
 
       {invoerDicht && (
         <div className="card p-4 bg-amber-50 border border-amber-200">

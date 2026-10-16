@@ -28,6 +28,7 @@ import { controleerAiosRooster, regelZin, type Overtreding, type Regel } from '@
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { sluitVervallenAiosRuilen } from '@/lib/aiosRuilen';
 
 // What the marks say instead: a planner overriding a mark is told it as the mark.
 const ALS_MARKERING: ReadonlySet<Regel> = new Set(['1_GEBLOKKEERD', '1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT', '1_AFWEZIG_OF_PARTTIME']);
@@ -313,6 +314,8 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
     const blok = blokNietHeel(ctx, ids, na);
     if (blok) gevolgen.push(blok);
     gevolgen = gevolgen.filter((w, i) => gevolgen.findIndex((x) => x.tekst === w.tekst) === i);
+    // A swap asked for one of these diensten can never go through now.
+    sluitVervallenAiosRuilen(period.id);
     db.prepare(
       `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
        VALUES (?, ?, 'period', ?, 'UPDATE', ?, ?, ?)`

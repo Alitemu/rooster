@@ -49,6 +49,11 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   they did before the app, read in from the old Excel
   (lib/aiosGeschiedenis.ts): the diensten per soort, the feestdagdiensten
   among them, fte and maanden. A file read in replaces the pool's rows.
+- `aios_ruil` (0.80.0, migration 0028) - a swap between two AIOS
+  (lib/aiosRuilen.ts): the diensten of each side as a JSON array of slot
+  ids (a whole block, or one dienst), status IN_BEHANDELING, GOEDGEKEURD,
+  AFGEWEZEN, INGETROKKEN or VERVALLEN. Approved, the assignments change
+  hands with assignment_edit rows of type RUIL.
 - `assignment_edit` holds the AIOS's changes by hand too (0.77.0,
   lib/aiosHandmatig.ts), with the same edit types as the achterwacht's.
 - `holiday_history` - which feestdag someone had in which year, from the

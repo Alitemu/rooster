@@ -460,6 +460,16 @@ ziet per AIOS in woorden wat het betekent, zoals "5 punten minder". Klopt het,
 klik dan op *Bewaren*. In *Per AIOS* staat bij het rooster wat elke AIOS
 meeneemt.
 
+**Vanaf versie 0.80.0** ruilen de AIOS onderling, zonder de planner. Op hun
+eigen pagina kiezen ze bij *Ruilen* een eigen dienst of blok en zien ze welke
+collega's een gelijkwaardige dienst hebben waarmee de ruil binnen de regels
+blijft. Een blok ruil je tegen een blok van dezelfde soort. Een dagdienst en
+een avonddienst in het weekend zijn gelijkwaardig. De collega keurt goed of
+wijst af. Gaat een ruil door, dan krijgen de planner en het roosterbureau
+bericht via de stroom van de AIOS. Voeg in die stroom daarvoor de rijen
+*Planner* en *Roosterbureau* toe, net als bij de achterwacht. Op de pagina van
+de periode zie je alle ruilverzoeken.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
