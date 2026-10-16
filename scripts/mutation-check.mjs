@@ -16,6 +16,10 @@
  * solver/requirements.txt and pytest installed.
  *   node scripts/mutation-check.mjs            # all
  *   node scripts/mutation-check.mjs reset      # only those whose name contains "reset"
+ *   node scripts/mutation-check.mjs --sinds v0.81.0
+ *       # only those whose file, or one of whose tests, changed since that
+ *       # git ref (the working tree included): what a 0.x.0 release runs,
+ *       # since the previous 0.x.0 (CLAUDE.md, "Testing"; the user's choice)
  */
 import fs from 'fs';
 import path from 'path';
@@ -2011,8 +2015,29 @@ const MUTATIONS = [
   },
 ];
 
-const only = process.argv[2];
-const chosen = MUTATIONS.filter((m) => !only || m.name.includes(only));
+const args = process.argv.slice(2);
+const sindsAt = args.indexOf('--sinds');
+const sinds = sindsAt >= 0 ? args[sindsAt + 1] : null;
+if (sindsAt >= 0 && !sinds) {
+  console.error('--sinds needs a git ref, such as v0.81.0');
+  process.exit(2);
+}
+const only = args.filter((_, i) => sindsAt < 0 || (i !== sindsAt && i !== sindsAt + 1))[0];
+let changed = null;
+if (sinds) {
+  const diff = spawnSync('git', ['diff', '--name-only', sinds], { cwd: repoRoot, encoding: 'utf8' });
+  if (diff.status !== 0) {
+    console.error(`git diff ${sinds} failed: ${diff.stderr}`);
+    process.exit(2);
+  }
+  changed = diff.stdout.split('\n').filter(Boolean);
+}
+// A vitest filter is a path prefix; a pytest one names a file in the solver's folder.
+const testPaths = (m) =>
+  m.runner === 'pytest' ? m.tests.filter((t) => t.endsWith('.py')).map((t) => path.posix.join(m.cwd ?? 'solver', t)) : m.tests;
+const touched = (m) => changed.includes(m.file) || testPaths(m).some((t) => changed.some((c) => c.startsWith(t)));
+const chosen = MUTATIONS.filter((m) => (!only || m.name.includes(only)) && (!changed || touched(m)));
+if (changed) console.log(`${MUTATIONS.filter(touched).length} of ${MUTATIONS.length} mutations: their file or a test of theirs changed since ${sinds}\n`);
 const originals = new Map();
 const restoreAll = () => {
   for (const [file, src] of originals) fs.writeFileSync(file, src);

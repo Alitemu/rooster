@@ -68,6 +68,17 @@ test_gedeeld.py there and lib/aiosRegels.test.ts here check the same
 rosters (tests/fixtures/aios-regels.json): the solver's check and the
 app's copy of the AIOS's hard rules must find the same.
 
+Which mutations a release runs (the user's choice in October 2026; until
+0.81.0 every release ran all of them, about 12 minutes): a 0.x.0 release
+runs `node scripts/mutation-check.mjs --sinds v<the previous 0.x.0>`, the
+mutations whose file changed since then or one of whose tests did (a
+vitest filter as a path prefix, a pytest file in the solver's folder; the
+working tree counts too). Counting from the previous 0.x.0 and not from
+the previous release keeps a 0.0.x in between from slipping through. A
+0.0.x release runs none. For 0.82.0 that was 144 of the 271, the AIOS's
+part; a change to a file with many guards (aios-solver/model.py) runs all
+of its mutations.
+
 The solver the browser checks talk to should run the OR-Tools version
 of solver/requirements.txt (9.8, the image's): another version searches
 differently: in the planner's scenario at window 2 and 120 seconds

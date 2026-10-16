@@ -211,9 +211,11 @@ The gate before a release, all green:
 2. Solvers: `python -m pytest -q` in ./solver and in ./aios-solver, on
    OR-Tools 9.8 (solver/requirements.txt; another version searches
    differently).
-3. `node scripts/mutation-check.mjs` (SOLVER_PYTHON for the solver
-   mutations): every mutation caught. It edits sources while it runs:
-   nothing else meanwhile.
+3. At a 0.x.0 release `node scripts/mutation-check.mjs --sinds v<the
+   previous 0.x.0>` (SOLVER_PYTHON for the solver mutations): the
+   mutations whose file or tests changed since then, every one caught. A
+   0.0.x release runs none (the user's choice). It edits sources while it
+   runs: nothing else meanwhile.
 4. After a schema change: `node scripts/schema-drift.mjs` and
    `node scripts/upgrade-drift.mjs`.
 5. Browser checks, with a seeded database, both solvers (the AIOS's on
