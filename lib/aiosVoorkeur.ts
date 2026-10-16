@@ -102,3 +102,25 @@ export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'dien
   ];
   return groepen.map(([groep, t]) => ({ groep, ...t, boven_helft: t.geblokkeerd * 2 > t.totaal }));
 }
+
+export type MarkeringTelling = Record<Niveau, number>;
+
+/**
+ * How many boxes the AIOS marked by hand, per level: a block counts once,
+ * as they chose it (one tap marks the whole block). Leave and part-time
+ * days are not theirs to count.
+ */
+export function telMarkeringen(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'diensten'>>): MarkeringTelling {
+  const gezien = new Set<string>();
+  const telling: MarkeringTelling = { VOORKEUR: 0, LIEVER_NIET: 0, ABSOLUUT: 0 };
+  for (const dag of dagen) {
+    for (const d of dag.diensten) {
+      if (d.bron !== 'MANUAL' || !d.level) continue;
+      const vak = d.blok && d.blok.vorm !== 'ZA' && d.blok.vorm !== 'LOS' ? d.blok.id : d.slot_id;
+      if (gezien.has(vak)) continue;
+      gezien.add(vak);
+      telling[d.level]++;
+    }
+  }
+  return telling;
+}

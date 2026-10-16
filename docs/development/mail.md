@@ -6,6 +6,14 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 
 ## Mailing personal links (verzendlijst)
 
+Each dienst has its own flow (docs/aios-rooster.md, "Mail"): the AIOS's
+verzendlijst goes to `mail.verzendlijst_aan_aios`, everything of the
+achterwacht to `mail.verzendlijst_aan`, from the one Gmail account.
+sendVerzendlijst and verzendlijstMailConfigured take the dienst
+(dienstVanPeriode, dienstVanPersoon in lib/aiosPeriod.ts); a dienst
+without an address counts as "not set up" for its own mail only. The
+AIOS's flow needs its own rows for `Planner` and `Roosterbureau` too.
+
 The app never stores e-mail addresses, so it never mails participants
 itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
 `DIENSTROOSTER-VERZENDLIJST` + a JSON attachment: summary fields plus
@@ -16,7 +24,7 @@ side, which looks each codenaam up in its own Excel list and sends the
 mail. The server sends that mail itself (lib/verzendlijstMail.ts) once an
 account is set up, in the app only ("Mailinstellingen" under Exporteren &
 communicatie, `/api/planner/mail-settings`, lib/appSettings.ts; saved and
-removed by the beheerder only, shared by both diensten - Gmail
+removed by the beheerder only, the account shared by both diensten - Gmail
 only, a 16-letter app password, the login is tried before saving, the
 password is stored AES-GCM encrypted with a key derived from the session
 secret, lib/settingsCrypto.ts, and never returned). .env is not read for

@@ -6,7 +6,8 @@ import { getBaseUrl, loginAsBeheerder, loginAsPlanner } from './setup';
  * The AIOS roster, step 1 (docs/aios-rooster.md): the beheerder picks the
  * AIOS pool and a quarter, the period comes with its diensten, and its page
  * shows them per week with the blocks and the points, readable at 375
- * pixels. The achterwacht's planner never sees the AIOS pool.
+ * pixels. Opening needs an AIOS taking part. The achterwacht's planner
+ * never sees the AIOS pool. The preferences: aios-voorkeuren.e2e.ts.
  */
 
 const made: string[] = [];
@@ -47,7 +48,10 @@ test('the beheerder makes an AIOS quarter and sees its diensten, blocks and poin
   await expect(page.getByRole('heading', { name: `AIOS ${opties[opties.length - 1]}` })).toBeVisible();
   await expect(page.getByText('Punten in dit kwartaal')).toBeVisible();
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeVisible();
-  await expect(page.getByText(/periode nog niet geopend worden/)).toBeVisible();
+  // Opening asks for an AIOS taking part; the demo's AIOS pool is empty.
+  await expect(page.getByLabel('Deadline voor de voorkeuren')).toBeVisible();
+  await page.getByRole('button', { name: 'Periode openen' }).click();
+  await expect(page.getByText(/Er doet nog geen AIOS mee in dit kwartaal/)).toBeVisible();
   // Thirteen or fourteen weeks, each with its evening and night blocks.
   const weken = await page.getByText(/^Week \d+ en \d+ · /).count();
   expect([13, 14]).toContain(weken);

@@ -364,6 +364,19 @@ week, de blokken en de punten van het kwartaal. Openen kan nog niet: het
 voorkeurenscherm en het maken van het rooster voor de AIOS komen in een
 volgende versie.
 
+**Vanaf versie 0.72.0** kan een periode van de AIOS open. Op de pagina van
+de periode kies je de deadline en klik je op *Periode openen*. Daarna
+nodig je de AIOS uit en stuur je herinneringen, net als bij de
+achterwacht. De AIOS krijgen een eigen scherm: eerst hun deeltijd en
+afwezigheid, dan hun verzoeken voor het kwartaal en per week alle diensten,
+met een avond- of nachtblok als één vak. Onder *Status voorkeuren* zie je
+per AIOS wat er is ingevuld en of iemand meer dan de helft heeft
+geblokkeerd. De AIOS hebben een eigen Power Automate-stroom: vul het adres
+daarvan in bij Mailinstellingen, bij *Verzendlijst van de AIOS sturen
+naar*. Zolang dat leeg is, gaat er geen mail naar de AIOS. Zie
+`docs/verzendlijst-power-automate.md`. Het maken van het rooster voor de
+AIOS komt in een volgende versie.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
@@ -612,8 +625,9 @@ de stroom al gebouwd?".
   eigen dienst. De planner van de achterwacht en die van de AIOS zien dus
   niets van elkaar. De beheerder ziet beide diensten. Een deelnemer hoort
   bij één dienst: iemand van de achterwacht kan niet ook in de pool van de
-  AIOS. De mailinstellingen gelden voor beide diensten samen. Alleen de
-  beheerder kan ze wijzigen, een planner ziet ze alleen. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
+  AIOS. Het Gmail-account in de mailinstellingen geldt voor beide diensten
+  samen, elke dienst heeft een eigen stroomadres. Alleen de beheerder kan ze
+  wijzigen, een planner ziet ze alleen (met het adres van de eigen dienst). Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
   vervangen, en de sessies van dat account worden beëindigd. Je eigen
   account beheer je met *Wachtwoord wijzigen* en *Tweestapsverificatie*.
   Een nieuwe installatie begint met één account: de beheerder `admin`, met

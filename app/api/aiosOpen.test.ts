@@ -12,6 +12,7 @@ import { GET as mailSettings, PUT as saveMailSettingsRoute } from './planner/mai
 import { GET as swapContacts } from './person/[id]/swap-contacts/route';
 import { GET as verzendlijstStatus } from './exports/verzendlijst-status/route';
 import { POST as linkAanvragen } from './link-aanvragen/route';
+import { GET as aiosVoorkeuren } from './planner/period/[id]/aios-voorkeuren/route';
 import {
   buildWorld,
   deleteRowsAfter,
@@ -274,8 +275,7 @@ describe("the AIOS's mail goes to their own flow", () => {
     }
   });
 
-  it("keeps a swap mail of the AIOS waiting while their flow has no address, and sends the achterwacht's", async () => {
-    configureSmtp(sink, { aan: AAN });
+  it("keeps a swap mail of the AIOS waiting while their flow has no address, and sends the achterwacht's after it", async () => {
     const melding = (personId: string, periodId: string, codenaam: string) => ({
       personId,
       periodId,
@@ -285,25 +285,54 @@ describe("the AIOS's mail goes to their own flow", () => {
       soort: 'RUIL_UITKOMST' as const,
       linkIntro: 'Bekijk het via je persoonlijke link:',
     });
-    await mailMelding(melding(aios.x, aios.period, aios.codenaam));
-    const wachtend = () =>
-      (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_mail_queue WHERE period_id = ?').get(aios.period) as { n: number }).n;
-    expect(wachtend()).toBe(1);
-    expect(sink.received).toHaveLength(0);
+    const wachtend = (periodId: string) =>
+      db.prepare('SELECT pogingen FROM dienstrooster_mail_queue WHERE period_id = ?').all(periodId) as Array<{ pogingen: number }>;
 
+    // Nothing set up: both wait, the AIOS's first in line.
+    clearSmtpConfig();
+    await mailMelding(melding(aios.x, aios.period, aios.codenaam));
     await mailMelding(melding(staf.x, staf.period, staf.xCodenaam));
-    await waitForMails(sink, 1);
+    expect(wachtend(aios.period)).toHaveLength(1);
+    expect(wachtend(staf.period)).toHaveLength(1);
+
+    // The achterwacht's flow only: theirs goes, the AIOS's is not even tried.
+    configureSmtp(sink, { aan: AAN });
     await flushMailQueue();
-    expect(sink.received).toHaveLength(1);
-    expect(sink.received[0].to).toEqual([AAN]);
-    expect(wachtend()).toBe(1);
+    await waitForMails(sink, 1);
+    expect(sink.received.map((m) => m.to)).toEqual([[AAN]]);
+    expect(wachtend(staf.period)).toHaveLength(0);
+    expect(wachtend(aios.period)).toEqual([{ pogingen: 0 }]);
 
     // Their flow gets an address: the waiting mail goes there.
     configureSmtp(sink, { aan: AAN, aanAios: AAN_AIOS });
     await flushMailQueue();
     await waitForMails(sink, 2);
     expect(sink.received[1].to).toEqual([AAN_AIOS]);
-    expect(wachtend()).toBe(0);
+    expect(wachtend(aios.period)).toHaveLength(0);
     expect(queuedMailCount()).toBe(0);
+  });
+});
+
+describe('"Status voorkeuren" of an AIOS period', () => {
+  const status = (id: string, who: string) =>
+    aiosVoorkeuren(req(`planner/period/${id}/aios-voorkeuren`, 'GET', staffCookie(who)), ctx({ id }));
+
+  it('lists each AIOS taking part, with their hand-in, marks, requests and counters', async () => {
+    const res = await status(aios.period, aios.planner);
+    expect(res.status).toBe(200);
+    const { deelnemers } = (await res.json()).data;
+    expect(deelnemers).toHaveLength(1);
+    expect(deelnemers[0]).toMatchObject({
+      codenaam: aios.codenaam,
+      status: 'NIET_BEGONNEN',
+      markeringen: { VOORKEUR: 0, LIEVER_NIET: 0, ABSOLUUT: 0 },
+      wens: { vier_avonden: false },
+    });
+    expect(deelnemers[0].tellers.map((t: { groep: string }) => t.groep)).toEqual(['DAGDIENSTEN', 'ZATERDAG', 'AVONDBLOKKEN', 'NACHTBLOKKEN']);
+  });
+
+  it("is nothing to the achterwacht's planner, and no overview for an achterwacht period", async () => {
+    expect((await status(aios.period, staf.planner)).status).toBe(404);
+    expect((await status(staf.period, staf.planner)).status).toBe(409);
   });
 });

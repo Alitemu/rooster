@@ -195,11 +195,15 @@ Open een periode en klik onder *Exporteren & communicatie* op
 
 - **Gmail-adres**: het account uit stap 1. De app werkt alleen met Gmail.
 - **App-wachtwoord**: de 16 letters uit stap 1, met of zonder spaties.
-- **Verzendlijst sturen naar**: het adres waar je stroom in stap 4 op let.
+- **Verzendlijst van de achterwacht sturen naar**: het adres waar de stroom
+  van de achterwacht in stap 4 op let.
+- **Verzendlijst van de AIOS sturen naar**: het adres waar de stroom van de
+  AIOS op let. De AIOS hebben een eigen stroom (zie stap 3). Zolang dit leeg
+  is, gaat er geen mail naar de AIOS. De rest werkt dan gewoon.
 
 Via de app kan alleen een gelijkwaardige ruil: één dienst tegen één dienst
 van dezelfde soort. Een andere ruil regelen collega's zelf. Daarna sturen
-ze zelf een mail naar het adres bij *Verzendlijst sturen naar* en naar het
+ze zelf een mail naar het stroomadres van hun eigen dienst en naar het
 roosterbureau. Het venster voor een ruilverzoek zegt dat, met dat adres.
 
 Bij **Opslaan** logt Dienstrooster meteen in bij Gmail. Lukt dat niet, dan
@@ -233,8 +237,12 @@ Maak in OneDrive of SharePoint een Excel-bestand, bijvoorbeeld
 | staf01     | iemand@ziekenhuis.nl    |
 | staf02     | iemand.anders@ziekenhuis.nl |
 
-De achterwacht en de AIOS gebruiken dezelfde stroom en dezelfde lijst. Zet
-de deelnemers van allebei in deze lijst.
+De AIOS hebben een eigen stroom met een eigen lijst. Bouw die op dezelfde
+manier, met een eigen adres om op te letten (dat vul je in bij
+*Verzendlijst van de AIOS sturen naar*) en een eigen Excel-lijst met de
+codenamen aios01, aios02 enzovoort. In de lijst van de achterwacht staan
+alleen staf01, staf02 enzovoort. Zet in beide lijsten de twee rijen hieronder
+voor een goedgekeurde ruil.
 
 Had je een lijst met Persoon-01, Persoon-02 ...? Vanaf versie 0.25.0 heten
 die deelnemers staf01, staf02 ... in de app. Pas de codenamen in de lijst

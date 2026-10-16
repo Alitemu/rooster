@@ -23,6 +23,7 @@ import { deadlineTekst } from '@/lib/verzendlijst';
 import {
   blokkadeTellers,
   OPMERKING_MAX_LENGTH,
+  telMarkeringen,
   TELLER_LABELS,
   type AiosVoorkeurDag,
   type AiosVoorkeurDienst,
@@ -659,18 +660,7 @@ export function AiosBevestigen({
   if (laadFout) return <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{laadFout}</div>;
   if (!scherm) return <div className="card p-8 text-center text-neutral-600">Laden...</div>;
 
-  // Per box, as the AIOS chose them: a block counts once.
-  const gezien = new Set<string>();
-  const telling: Record<Niveau, number> = { VOORKEUR: 0, LIEVER_NIET: 0, ABSOLUUT: 0 };
-  for (const dag of scherm.dagen) {
-    for (const d of dag.diensten) {
-      if (d.bron !== 'MANUAL' || !d.level) continue;
-      const sleutel = d.blok && d.blok.vorm !== 'ZA' && d.blok.vorm !== 'LOS' ? d.blok.id : d.slot_id;
-      if (gezien.has(sleutel)) continue;
-      gezien.add(sleutel);
-      telling[d.level]++;
-    }
-  }
+  const telling = telMarkeringen(scherm.dagen);
   const w = scherm.wens;
   const verzoeken = [
     w.vier_avonden && '4 avonden',

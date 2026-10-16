@@ -174,6 +174,7 @@ describe('GET /api/periods/[id]', () => {
       eind_datum: '2027-01-17',
       deadline: '2099-01-01T00:00:00Z',
       status: 'OPEN',
+      dienst: 'ACHTERWACHT',
     });
   });
 
