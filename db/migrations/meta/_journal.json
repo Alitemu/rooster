@@ -176,6 +176,13 @@
       "when": 1788801900000,
       "tag": "0024_aios_voorkeuren",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "5",
+      "when": 1788802000000,
+      "tag": "0025_aios_auto_herinneren",
+      "breakpoints": true
     }
   ]
 }

@@ -457,7 +457,8 @@ async function createTables() {
     CREATE TABLE IF NOT EXISTS dienstrooster_aios_periode (
       period_id TEXT PRIMARY KEY NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
       uitgenodigd_op TEXT,
-      basis_url TEXT
+      basis_url TEXT,
+      auto_herinneren INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_fellow (
@@ -634,6 +635,9 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   },
   dienstrooster_pending_undo: {
     onderdeel: "TEXT NOT NULL DEFAULT 'ROOSTER'",
+  },
+  dienstrooster_aios_periode: {
+    auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
   },
   dienstrooster_shift_type: {
     code: 'TEXT',

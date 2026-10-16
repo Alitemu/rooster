@@ -164,6 +164,19 @@ export function startAutoReminderScheduler(): void {
     } catch (error) {
       console.error('[auto-herinneringen] controle mislukt', error);
     }
+    // The AIOS's own automatic reminders (lib/aiosAutoHerinneringen.ts), a
+    // copy apart from the achterwacht's above: a failure in either leaves
+    // the other alone.
+    try {
+      const { runAiosAutoHerinneringen } = await import('./lib/aiosAutoHerinneringen');
+      for (const result of await runAiosAutoHerinneringen()) {
+        if (result.uitkomst !== 'VERSTUURD') {
+          console.warn(`[aios-herinneringen] periode ${result.periodId}, ${result.dagen} dagen: ${result.uitkomst}`);
+        }
+      }
+    } catch (error) {
+      console.error('[aios-herinneringen] controle mislukt', error);
+    }
     // Today's copy of the database, if there is none yet (lib/dbBackup.ts).
     try {
       const { runDailyDatabaseBackup } = await import('./lib/dbBackup');

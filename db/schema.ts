@@ -655,6 +655,9 @@ export const aiosPeriode = sqliteTable('dienstrooster_aios_periode', {
     .references(() => schedulePeriod.id, { onDelete: 'cascade' }),
   uitgenodigd_op: text('uitgenodigd_op'), // the AIOS's invitations went out (ISO timestamp)
   basis_url: text('basis_url'), // the address the links were issued under, for later mails
+  // The AIOS's own automatic reminders (lib/aiosAutoHerinneringen.ts); schedule_period's
+  // auto_herinneren stays 0 for an AIOS period, so the achterwacht's skip it.
+  auto_herinneren: integer('auto_herinneren', { mode: 'boolean' }).default(true).notNull(),
 });
 
 export const periodFellow = sqliteTable(

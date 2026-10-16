@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
+import { AiosAutoHerinneringen } from '@/components/AiosAutoHerinneringen';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { AiosCode } from '@/lib/aiosDiensten';
@@ -366,6 +367,10 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
               Links downloaden
             </button>
           </div>
+          <AiosAutoHerinneringen
+            periodId={period.id}
+            refreshKey={`${period.deadline}|${stand?.uitgenodigd_op}|${stand?.mail_ingesteld}`}
+          />
           <div className="flex flex-wrap items-end gap-2">
             <div>
               <label htmlFor="aios-deadline-wijzigen" className="block text-xs font-medium text-neutral-600 mb-1">
