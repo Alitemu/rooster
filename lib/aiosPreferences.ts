@@ -14,7 +14,7 @@
  *   changes them, and one that would say less than they do is refused
  *   with the reason, as on the achterwacht's screen.
  * - The 50% counters warn, they never refuse. They count only what the
- *   AIOS blocked by hand: leave, part-time days and uitloopdiensten do not
+ *   AIOS blocked by hand: leave and part-time days do not
  *   count, as on the old form (which counted only the "a").
  */
 

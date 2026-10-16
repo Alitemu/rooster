@@ -143,8 +143,11 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   - Avondblokken met minstens één geblokkeerde avond, gedeeld door alle
     avondblokken.
   - Nachtblokken op dezelfde manier.
-  - Uitloopdiensten tellen niet mee, verlof en niet dienstklaar ook niet (het
-    oude formulier telde alleen de a).
+  - Uitloopdiensten: gedeeld door alle uitloopdiensten van het kwartaal. Het
+    oude formulier telde ze niet mee; ze hebben een eigen teller sinds
+    oktober 2026 (de keuze van de planner).
+  - Verlof en niet dienstklaar tellen niet mee (het oude formulier telde
+    alleen de a).
 - Bovenaan het scherm: de parttimedagen (deeltijdpatronen, zoals bij de staf),
   "4 avonden", "4 nachten", "twee dagdiensten", "Inwerken", een onderbreking van
   de opleiding en algemene verzoeken (vrije tekst, hoogstens 120 tekens).

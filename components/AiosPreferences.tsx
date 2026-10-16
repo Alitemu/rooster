@@ -289,8 +289,7 @@ function Tellers({ tellers }: { tellers: BlokkadeTeller[] }) {
       <h3 className="font-semibold text-neutral-900">Hoeveel je hebt geblokkeerd</h3>
       <p className="text-sm text-neutral-600">
         Per soort mag je hoogstens de helft blokkeren. Blokkeer je meer, dan kan het rooster het deel boven de
-        helft alsnog bij jou inplannen. Je verlof en je parttimedagen tellen niet mee, de uitloopdiensten ook
-        niet.
+        helft alsnog bij jou inplannen. Je verlof en je parttimedagen tellen niet mee.
       </p>
       <ul className="space-y-1 text-sm">
         {tellers.map((t) => (

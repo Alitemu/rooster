@@ -753,6 +753,13 @@ const MUTATIONS = [
     tests: ['lib/aiosAutoHerinneringen'],
   },
   {
+    name: 'aios: the uitloopdiensten left out of the counters again',
+    file: 'lib/aiosVoorkeur.ts',
+    find: "      if (d.code === 'UD' || d.code === 'DD') {",
+    replace: "      if (d.code === 'DD') {",
+    tests: ['lib/aiosPreferences'],
+  },
+  {
     name: 'aios: the Saturday evening and night share one half again',
     file: 'lib/aiosVoorkeur.ts',
     find: "    ['ZATERDAG_NACHT', tel((b) => b.vorm === 'ZA' && b.soort === 'NACHT')],",

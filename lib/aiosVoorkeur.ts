@@ -53,7 +53,13 @@ export const LEGE_WENS: AiosWens = {
   opmerking: null,
 };
 
-export type TellerGroep = 'DAGDIENSTEN' | 'ZATERDAG_AVOND' | 'ZATERDAG_NACHT' | 'AVONDBLOKKEN' | 'NACHTBLOKKEN';
+export type TellerGroep =
+  | 'UITLOOPDIENSTEN'
+  | 'DAGDIENSTEN'
+  | 'ZATERDAG_AVOND'
+  | 'ZATERDAG_NACHT'
+  | 'AVONDBLOKKEN'
+  | 'NACHTBLOKKEN';
 
 export interface BlokkadeTeller {
   groep: TellerGroep;
@@ -71,6 +77,7 @@ export interface BlokkadeTeller {
 }
 
 export const TELLER_LABELS: Record<TellerGroep, string> = {
+  UITLOOPDIENSTEN: 'uitloopdiensten',
   DAGDIENSTEN: 'dagdiensten in het weekend en op feestdagen',
   ZATERDAG_AVOND: 'losse avonddiensten op zaterdag',
   ZATERDAG_NACHT: 'losse nachtdiensten op zaterdag',
@@ -81,15 +88,16 @@ export const TELLER_LABELS: Record<TellerGroep, string> = {
 /** The 50% counters for the days of a quarter. */
 export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'diensten'>>): BlokkadeTeller[] {
   const handmatig = (d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>) => d.level === 'ABSOLUUT' && d.bron === 'MANUAL';
-  let dd = 0;
-  let ddGeblokkeerd = 0;
+  // Single diensten: the uitloopdiensten (a counter of their own since
+  // October 2026; the old form left them out) and the dagdiensten.
+  const los = { UD: { totaal: 0, geblokkeerd: 0 }, DD: { totaal: 0, geblokkeerd: 0 } };
   // Per block: whether any of its diensten is blocked by hand.
   const blokken = new Map<string, { soort: BlokSoort; vorm: BlokVorm; geblokkeerd: boolean }>();
   for (const dag of dagen) {
     for (const d of dag.diensten) {
-      if (d.code === 'DD') {
-        dd++;
-        if (handmatig(d)) ddGeblokkeerd++;
+      if (d.code === 'UD' || d.code === 'DD') {
+        los[d.code].totaal++;
+        if (handmatig(d)) los[d.code].geblokkeerd++;
       }
       if (d.blok) {
         const b = blokken.get(d.blok.id) ?? { soort: d.blok.soort, vorm: d.blok.vorm, geblokkeerd: false };
@@ -103,7 +111,8 @@ export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'dien
     return { totaal: lijst.length, geblokkeerd: lijst.filter((b) => b.geblokkeerd).length };
   };
   const groepen: Array<[TellerGroep, { totaal: number; geblokkeerd: number }]> = [
-    ['DAGDIENSTEN', { totaal: dd, geblokkeerd: ddGeblokkeerd }],
+    ['UITLOOPDIENSTEN', los.UD],
+    ['DAGDIENSTEN', los.DD],
     // Half per dienst: the Saturday evening and night each on their own
     // (October 2026; the old form counted them together).
     ['ZATERDAG_AVOND', tel((b) => b.vorm === 'ZA' && b.soort === 'AVOND')],

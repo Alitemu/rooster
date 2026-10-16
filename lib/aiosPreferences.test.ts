@@ -180,12 +180,23 @@ describe('the 50% counters', () => {
     setAiosVoorkeur(e, ids.period, slot('2034-04-17', 'AD'), 'ABSOLUUT'); // one evening block
     setAiosVoorkeur(e, ids.period, slot('2034-04-15', 'ND'), 'ABSOLUUT'); // a Saturday night
     setAiosVoorkeur(e, ids.period, slot('2034-04-15', 'DD'), 'ABSOLUUT'); // a Saturday day shift
+    setAiosVoorkeur(e, ids.period, slot('2034-04-18', 'UD'), 'ABSOLUUT'); // an uitloopdienst
     const t = Object.fromEntries(blokkadeTellers(loadAiosVoorkeurDagen(e, ids.period)).map((x) => [x.groep, x]));
     expect(t.AVONDBLOKKEN).toMatchObject({ geblokkeerd: 1, totaal: 26, boven_helft: false });
     // Half per dienst: the Saturday night and evening count apart.
     expect(t.ZATERDAG_NACHT).toMatchObject({ geblokkeerd: 1, totaal: 13 });
     expect(t.ZATERDAG_AVOND).toMatchObject({ geblokkeerd: 0, totaal: 13 });
     expect(t.DAGDIENSTEN.geblokkeerd).toBe(1);
+    // The uitloopdiensten have a counter of their own, over all of the quarter's.
+    const ud = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM dienstrooster_shift_slot s JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+           WHERE s.period_id = ? AND st.code = 'UD'`
+        )
+        .get(ids.period) as { n: number }
+    ).n;
+    expect(t.UITLOOPDIENSTEN).toMatchObject({ geblokkeerd: 1, totaal: ud, boven_helft: false });
     expect(t.NACHTBLOKKEN.geblokkeerd).toBe(0);
 
     // Every evening block but the ones with a feestdag: more than half.
@@ -259,7 +270,7 @@ describe('the routes', () => {
     expect(res.status).toBe(200);
     const { data } = await res.json();
     expect(data.dagen).toHaveLength(91);
-    expect(data.tellers).toHaveLength(5);
+    expect(data.tellers).toHaveLength(6);
     expect(data.invoer).toEqual({ open: true });
 
     const patch = (level: unknown) =>
