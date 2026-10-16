@@ -134,7 +134,7 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(rij).toContainText('1 geblokkeerd');
   await expect(rij).toContainText('4 nachten');
   await expect(page.getByRole('button', { name: 'Links downloaden' })).toBeVisible();
-  await expect(page.getByText('Mail naar de AIOS')).toBeVisible();
+  await expect(page.getByText('Mail naar de AIOS', { exact: true })).toBeVisible();
   // The AIOS's own automatic reminders, off while their mail is not set up.
   await expect(page.getByTestId('aios-auto-herinneringen')).toContainText('de mail voor de AIOS is nog niet ingesteld');
 
