@@ -22,7 +22,9 @@ const usedCodenamen: string[] = [];
 
 async function createPlanner(): Promise<string> {
   const id = crypto.randomUUID();
-  const codenaam = `L-${id.slice(0, 8)}`;
+  // Lower-case letters in the prefix: an id slice of only digits would
+  // otherwise make toUpperCase() return the same codenaam.
+  const codenaam = `pl-${id.slice(0, 8)}`;
   db.prepare(
     `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, wachtwoord_hash, aangemaakt_op)
      VALUES (?, ?, 'PLANNER', 1, ?, datetime('now'))`
