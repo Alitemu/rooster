@@ -17,6 +17,11 @@
  * Prerequisites, as for full-check: a seeded database, the solver on 8000
  * and the app (ALLOW_SEED_PASSWORD=true SOLVER_URL=http://localhost:8000).
  * Builds its own pool, so the seeded period plays no part.
+ *
+ * `--kort`: one method at one window, and the generation after "Rooster
+ * verwijderen" with the same. About 5 minutes instead of 35: enough for the
+ * sub-folder build and for a release that leaves the solver and the
+ * achterwacht's generation code alone (docs/development/checks.md).
  */
 import Database from 'better-sqlite3';
 import { execFileSync } from 'child_process';
@@ -28,8 +33,11 @@ const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url
 const BASE = process.env.APP_URL || 'http://localhost:3000';
 const START = '2026-12-28';
 const END = '2027-09-05';
-const MODES = (process.env.SCENARIO_MODES || 'weighted,lexicographic,multi_start,randomized').split(',');
-const WINDOWS = (process.env.SCENARIO_WINDOWS || '0,1,2').split(',').map(Number);
+const KORT = process.argv.includes('--kort');
+// Short: weighted at window 1 fills everything within the first 120
+// seconds; window 2 needs "langer proberen" (audit 14).
+const MODES = (process.env.SCENARIO_MODES || (KORT ? 'weighted' : 'weighted,lexicographic,multi_start,randomized')).split(',');
+const WINDOWS = (process.env.SCENARIO_WINDOWS || (KORT ? '1' : '0,1,2')).split(',').map(Number);
 // The dialog's own default (solver/main.py SolverInput.time_limit_seconds).
 const TIME_LIMIT = Number(process.env.SCENARIO_TIME || 120);
 
@@ -263,7 +271,7 @@ for (const objectiveMode of MODES) {
 const reset = await req('POST', `/api/periods/${periodId}/reset-roster`, { jar: planner, body: { ook_handmatig: true } });
 // Generated again with a method that fills what can be filled: the loop
 // above left the last one in place, possibly "Willekeurig" (a heuristic).
-await req('PATCH', `/api/periods/${periodId}/ruleset`, { jar: planner, body: { windowWeeks: 2, objectiveMode: 'weighted' } });
+await req('PATCH', `/api/periods/${periodId}/ruleset`, { jar: planner, body: { windowWeeks: KORT ? WINDOWS[0] : 2, objectiveMode: 'weighted' } });
 const left = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(periodId).n;
 rec('Rooster verwijderen: everything gone, back to gesloten', reset.status === 200 && left === 0 && reset.json?.data?.status === 'GESLOTEN', `${reset.json?.data?.verwijderd} verwijderd`);
 const again = await generate(periodId, planner);

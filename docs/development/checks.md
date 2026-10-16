@@ -30,7 +30,22 @@ opens a "choose a new password" session (see Authentication):
   counts days, window 2 for these 15 people needs more than 120 seconds
   (audit 14). "Willekeurig" leaving a dienst is a warning, not a failure,
   and so is "Herhaalplanner" at window 2 (3 attempts here, up to 100 in
-  the dialog).
+  the dialog). Lexicographic at window 2 leaves 1 or 2 diensten empty on
+  OR-Tools 9.8, even after trying longer: a known result since audit 14,
+  in the achterwacht's solver, which stays as it is.
+
+**Full or short scenario-check.** The full run takes about 35 minutes
+(13 generations of 120 seconds or more); the other browser checks take
+about 5 minutes per build together. `--kort` runs one method at one window
+(weighted, window 1) and the generation after "Rooster verwijderen" with
+the same, about 5 minutes. The user chose (October 2026):
+- the sub-folder build always gets `--kort`: it checks the paths under the
+  base path, and the solver does nothing different there;
+- at the root the full run only when the solver or the achterwacht's code
+  that makes its input changed since the previous release, i.e. when
+  `git diff --name-only v<previous> HEAD -- solver lib app/api
+  ':(exclude)lib/aios*' ':(exclude)app/api/aios' ':(exclude)*.test.ts'`
+  lists a file; otherwise `--kort` there too.
 
 `node scripts/mutation-check.mjs [name]` needs nothing running: it breaks
 one hard rule at a time (a guard removed or weakened in the source),

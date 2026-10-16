@@ -220,7 +220,11 @@ The gate before a release, all green:
    `node scripts/ui-check.mjs` on the same seed, `npx playwright test`,
    `node scripts/scenario-check.mjs` - at the root and in a sub-folder build
    (`NEXT_PUBLIC_BASE_PATH=/achterwacht` at build and start,
-   `APP_URL=http://localhost:3000/achterwacht`).
+   `APP_URL=http://localhost:3000/achterwacht`). The scenario-check runs
+   `--kort` in the sub-folder, and at the root too unless the solver or
+   the achterwacht's lib/ or app/api/ changed since the previous release
+   (the git diff in docs/development/checks.md): the full run takes 35
+   minutes.
 
 How to run them and what each one covers: docs/development/checks.md.
 
