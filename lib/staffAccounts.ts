@@ -24,15 +24,12 @@ import { revokeAllSessions } from './sessionVersion';
 export type StaffRol = 'ADMIN' | 'PLANNER';
 
 /**
- * The kind of dienst a staff account plans. Offered now so accounts are
- * ready for a second rooster later; only the achterwacht is in production,
- * so an AIOS account is refused with a message saying so.
+ * The kind of dienst a staff account plans. Until 0.81.0 an AIOS account
+ * was refused while the AIOS roster was being built (docs/aios-rooster.md,
+ * step 5); both are in use now.
  */
 export const DIENST_TYPES = ['ACHTERWACHT', 'AIOS'] as const;
 export type DienstType = (typeof DIENST_TYPES)[number];
-export const DIENSTEN_IN_PRODUCTIE: readonly DienstType[] = ['ACHTERWACHT'];
-export const DIENST_NIET_IN_PRODUCTIE =
-  'Het rooster voor de AIOS is nog niet in productie. Kies voorlopig Achterwacht.';
 
 export interface StaffAccount {
   id: string;
@@ -127,9 +124,6 @@ export async function createStaffAccount(
   if (input.rol !== 'ADMIN' && input.rol !== 'PLANNER') return fail(400, 'INVALID_ROL', 'Kies planner of beheerder');
   const dienst = input.dienst_type ?? 'ACHTERWACHT';
   if (!DIENST_TYPES.includes(dienst as DienstType)) return fail(400, 'INVALID_DIENST', 'Kies Achterwacht of AIOS');
-  if (!DIENSTEN_IN_PRODUCTIE.includes(dienst as DienstType)) {
-    return fail(409, 'DIENST_NIET_IN_PRODUCTIE', DIENST_NIET_IN_PRODUCTIE);
-  }
   const problems = temporaryPasswordProblems(input.wachtwoord);
   if (problems.length > 0) return fail(400, 'WEAK_PASSWORD', problems.join(', '));
   // Staff log in without regard to case, so "Planner" next to "planner"

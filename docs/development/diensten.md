@@ -11,8 +11,10 @@ periods, rosters or preferences (the planner's words: "Ze mogen elkaars
 rooster en voorkeuren niet inzien"). The AIOS roster is designed in
 docs/aios-rooster.md (agreed with the planner: blocks, points, the
 dienstpercentage, the hard rules) and built in steps, on code of its own
-("Copied, not changed" below); until its accounts are switched on (step
-5), an AIOS account is refused (DIENST_NIET_IN_PRODUCTIE).
+("Copied, not changed" below). Its accounts are on since 0.81.0 (step 5):
+the beheerder adds an AIOS planner at Accounts beheren
+(tests/e2e/aios-planner-account.e2e.ts follows that planner from the
+temporary password to the AIOS pool).
 
 - A pool's `type` is its dienst, a staff account's `dienst_type` theirs
   (AuthContext.dienst, read live like the role; null counts as

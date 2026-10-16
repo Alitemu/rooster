@@ -470,6 +470,20 @@ bericht via de stroom van de AIOS. Voeg in die stroom daarvoor de rijen
 *Planner* en *Roosterbureau* toe, net als bij de achterwacht. Op de pagina van
 de periode zie je alle ruilverzoeken.
 
+**Vanaf versie 0.81.0** is het rooster voor de AIOS in gebruik. Probeer het
+eerst op de testinstallatie. Zo begin je:
+
+1. De beheerder maakt bij *Accounts beheren* een account voor de planner van
+   de AIOS: rol *Planner*, dienst *AIOS*. Geef het tijdelijke wachtwoord
+   persoonlijk door.
+2. De planner logt in en kiest een eigen wachtwoord. Daarna ziet de planner
+   alleen de pool AIOS en niets van de achterwacht.
+3. Bij *Personeel beheren* voeg je de AIOS toe: aios01, aios02 enzovoort.
+4. Maak bij *+ Nieuwe periode* het kwartaal. De beheerder vult op de pagina
+   van die periode bij *Mail naar de AIOS* het adres van de stroom van de
+   AIOS in (zie 0.72.0).
+5. Kies de deadline, open de periode en verstuur de uitnodigingen.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
@@ -712,8 +726,7 @@ de stroom al gebouwd?".
   een planner of beheerder toevoegen, iemand een tijdelijk wachtwoord geven,
   tweestapsverificatie uitzetten, een account uitschakelen of de rol
   wijzigen. Bij een nieuw account kies je ook de dienst: Achterwacht of
-  AIOS. Het rooster voor de AIOS is nog niet in productie. Kies je AIOS,
-  dan meldt de app dat en maakt hij het account niet aan.
+  AIOS.
   Een planner ziet alleen de pools, periodes, roosters en voorkeuren van de
   eigen dienst. De planner van de achterwacht en die van de AIOS zien dus
   niets van elkaar. De beheerder ziet beide diensten. Een deelnemer hoort

@@ -401,6 +401,8 @@ accounts uit stap 5 eind oktober klaar zijn, zodat de AIOS hun voorkeuren voor
 4. Voor de planner: genereren, het rooster per blok, handmatig aanpassen en
    publiceren. Ruilen daarna.
 5. AIOS-accounts aanzetten: eerst op de testinstallatie, dan in productie.
+   Aan sinds 0.81.0, in beide tegelijk: de beheerder test het eerst zelf op
+   de testinstallatie (de keuze van de beheerder in oktober 2026).
 
 ## Nog open
 

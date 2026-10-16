@@ -202,21 +202,18 @@ describe('/api/admin/accounts', () => {
     }
   });
 
-  it('stores the chosen dienst and refuses AIOS until it is in production', async () => {
+  it('stores the chosen dienst, the AIOS too since step 5', async () => {
     const admin = await account('ADMIN');
-    const aios = await POST(
-      req('/api/admin/accounts', admin.id, 'POST', { codenaam: `AIOS-${crypto.randomUUID().slice(0, 6)}`, rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type: 'AIOS' })
-    );
-    expect(aios.status).toBe(409);
-    expect((await aios.json()).error.message).toContain('nog niet in productie');
-
-    const codenaam = `AW-${crypto.randomUUID().slice(0, 6)}`;
-    const ok = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam, rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type: 'ACHTERWACHT' }));
-    expect(ok.status).toBe(201);
-    const id = (await ok.json()).data.id;
-    created.push(id);
+    const ids: Record<string, string> = {};
+    for (const dienst_type of ['ACHTERWACHT', 'AIOS'] as const) {
+      const codenaam = `${dienst_type.slice(0, 2)}-${crypto.randomUUID().slice(0, 6)}`;
+      const ok = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam, rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type }));
+      expect(ok.status).toBe(201);
+      ids[dienst_type] = (await ok.json()).data.id;
+      created.push(ids[dienst_type]);
+    }
     const list = await (await GET(req('/api/admin/accounts', admin.id))).json();
-    expect(list.data.find((a: { id: string }) => a.id === id).dienst_type).toBe('ACHTERWACHT');
+    for (const [dienst, id] of Object.entries(ids)) expect(list.data.find((a: { id: string }) => a.id === id).dienst_type).toBe(dienst);
 
     const wrong = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: 'x-onbekend', rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type: 'NEURO' }));
     expect(wrong.status).toBe(400);

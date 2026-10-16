@@ -80,9 +80,8 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
      material. Never one's own account (409), never the last active admin.
      A staff account has a `dienst_type` (migration 0022; DIENST_TYPES
      ACHTERWACHT | AIOS, lib/staffAccounts.ts): the admin picks it when
-     adding an account, AIOS is offered but refused with "nog niet in
-     productie" (409 DIENST_NIET_IN_PRODUCTIE; the page shows the notice
-     and disables Toevoegen) until it is. It decides what a planner sees
+     adding an account (until 0.81.0, step 5 of docs/aios-rooster.md, AIOS
+     was refused with "nog niet in productie"). It decides what a planner sees
      (see "Diensten: the achterwacht and the AIOS"). A production start
      (--alleen-planner) creates only 'admin' (ADMIN, seed password or
      SEED_PLANNER_PASSWORD) as staff, who adds the planners with names of their own;
