@@ -112,7 +112,10 @@ function waarschuwingen(ctx: Context, a: AiosSolverAios, diensten: string[], voo
   if (op('ABSOLUUT', 'ABSENCE').length) uit.push({ code: 'AFWEZIG', tekst: `Afwezig op ${lijst(op('ABSOLUUT', 'ABSENCE'))}.` });
   if (op('ABSOLUUT', 'PARTTIME').length) uit.push({ code: 'PARTTIMEDAG', tekst: `Parttimedag op ${lijst(op('ABSOLUUT', 'PARTTIME'))}.` });
   if (op('ABSOLUUT', 'MANUAL').length) uit.push({ code: 'GEBLOKKEERD', tekst: `Heeft ${lijst(op('ABSOLUUT', 'MANUAL'))} geblokkeerd.` });
-  if (op('LIEVER_NIET').length) uit.push({ code: 'LIEVER_NIET', tekst: `Liever niet op ${lijst(op('LIEVER_NIET'))}.` });
+  if (op('LIEVER_NIET', 'PARTTIME').length) uit.push({ code: 'LIEVER_NIET', tekst: `Parttimedag op ${lijst(op('LIEVER_NIET', 'PARTTIME'))}: liever niet.` });
+  if (op('LIEVER_NIET', 'MANUAL').length || op('LIEVER_NIET', 'ABSENCE').length) {
+    uit.push({ code: 'LIEVER_NIET', tekst: `Liever niet op ${lijst([...op('LIEVER_NIET', 'MANUAL'), ...op('LIEVER_NIET', 'ABSENCE')])}.` });
+  }
   const nieuw = erbij(vanAios(ctx.invoer, voor, a.id), vanAios(ctx.invoer, na, a.id));
   for (const regel of new Set(nieuw.map((s) => (JSON.parse(s) as Overtreding)[0]))) uit.push({ code: regel, tekst: regelZin(regel) });
   const pct = percentage(ctx, a, na);

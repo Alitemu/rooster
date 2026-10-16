@@ -197,7 +197,8 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   - Wat niet geblokkeerd kan worden, telt ook niet mee in het totaal: geen
     dienst op een feestdag en geen blok met een feestdag erin (de keuze van
     de planner in oktober 2026). Anders lag de helft te hoog.
-- Bovenaan het scherm: de parttimedagen (deeltijdpatronen, zoals bij de staf),
+- Bovenaan het scherm: de parttimedagen (deeltijdpatronen, zoals bij de staf; zie
+  harde regel 4 voor wat ze betekenen),
   "4 avonden", "4 nachten", "twee dagdiensten", "Inwerken", een onderbreking van
   de opleiding en algemene verzoeken (vrije tekst, hoogstens 120 tekens).
 - Geen reden per dag: die werd niet gebruikt bij het maken van het rooster.
@@ -249,8 +250,13 @@ solver.
    de helft bij de 50%-regel (zie "Verzoeken van de AIOS").
 2. Blokken altijd heel. Elke dienst precies één AIOS.
 3. Nooit twee diensten op één dag voor dezelfde AIOS.
-4. Op de parttimedag geen uitloopdienst en geen avondblok waar die dag in valt.
-   Een nachtblok mag wel.
+4. Op de parttimedag geen uitloopdienst. De avond en de nacht van die dag mogen
+   wel, maar staan voor die AIOS op liever niet: het avond- of nachtblok waar de
+   dag in valt dus ook (de keuze van de planner in oktober 2026; tot 0.82.0 was
+   het avondblok verboden). Blokkeert de AIOS die avond of nacht zelf, dan is
+   dat een gewone blokkade: die telt mee voor de 50%-regel. Lager dan liever
+   niet kan de AIOS het daar niet zetten. Bij ruilen telt het ook zo: een
+   parttimer kan een avond of nacht op de parttimedag ruilen.
 5. Fulltimers (1,0 fte) nooit in het nachtblok zondag tot en met dinsdag: dat
    is voor parttimers (F7).
 6. Inwerken: zie hierboven.

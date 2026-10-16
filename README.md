@@ -493,7 +493,11 @@ laatste van die nachten. Dat kan tot het rooster gepubliceerd is. Verder
 staat onder het dienstpercentage van elke AIOS nu ook het percentage over
 dit kwartaal en de drie ervoor samen, met de geschiedenis van vóór de app.
 Boven 25% waarschuwt de app daarover bij het publiceren. De AIOS zien het
-bij hun eigen rooster.
+bij hun eigen rooster. En op een parttimedag krijgt een AIOS nog steeds geen
+uitloopdienst, maar de avond en de nacht van die dag staan nu op *liever
+niet*: het rooster plant ze alleen als het niet anders kan. Blokkeert de AIOS
+ze zelf, dan telt dat mee voor de 50%-regel. Bij ruilen kan een parttimer ook
+een avond of nacht op de parttimedag krijgen.
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet

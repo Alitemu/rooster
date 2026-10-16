@@ -12,11 +12,16 @@
  * The AIOS's rules:
  * - leave blocks its days; on a feestdag it is liever niet, as the
  *   feestdagen are shared out fairly, leave or not;
- * - a part-time day blocks that day's uitloopdienst and evening (so the
- *   evening block it is in); the night and the weekend diensten stay open;
+ * - a part-time day blocks that day's uitloopdienst; its evening (so the
+ *   evening block it is in) and its night are liever niet: they may be
+ *   planned, but rather not (the planner's choice in October 2026; until
+ *   0.82.0 the evening was blocked too). The weekend diensten stay open;
  * - leave or a part-time day takes over a softer mark the AIOS made by hand
- *   (liever niet, voorkeur, empty): left soft, the solver could put them on
- *   it. A day they blocked by hand stays theirs.
+ *   (for leave liever niet, voorkeur or empty; for a part-time day's
+ *   evening or night voorkeur or empty): left softer, the solver could put
+ *   them on it more readily. A stronger one stays theirs, so an evening on
+ *   a part-time day they blocked by hand is theirs and counts for the 50%
+ *   rule (lib/aiosVoorkeur.ts blokkadeTellers).
  * Only a period that takes input (OPEN, not in the prullenbak, before the
  * deadline) is written, as at the achterwacht.
  */
@@ -166,50 +171,60 @@ function verzoenAfwezigheid(a: Afwezigheid, periodId: string, alleen?: string): 
   return gezet;
 }
 
-/** One pattern against one AIOS period: its uitloop- and avonddiensten only. */
+/** What a part-time day puts on its diensten (the header above). */
+const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'LIEVER_NIET', ADW: 'LIEVER_NIET', ND: 'LIEVER_NIET' } as const;
+// How much a mark keeps someone off a dienst (lib/aiosVoorkeur.ts STERKTE); no level is between voorkeur and liever niet.
+const sterkte = (niveau: string | null) => ({ VOORKEUR: 0, LIEVER_NIET: 2, ABSOLUUT: 3 })[niveau ?? ''] ?? 1;
+
+/** One pattern against one AIOS period: its uitloopdiensten, evenings and nights. */
 function verzoenPatroon(p: Patroon, periodId: string): number {
   const slots = db
     .prepare(
-      `SELECT s.id, s.datum, s.iso_week, s.is_feestdag FROM dienstrooster_shift_slot s
+      `SELECT s.id, s.datum, s.iso_week, s.is_feestdag, st.code FROM dienstrooster_shift_slot s
        JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-       WHERE s.period_id = ? AND st.code IN ('UD', 'AD', 'ADW')`
+       WHERE s.period_id = ? AND st.code IN ('UD', 'AD', 'ADW', 'ND')`
     )
-    .all(periodId) as Slot[];
-  const doel = new Set(slots.filter((s) => patroonDekt(p, s.datum, s.iso_week)).map((s) => s.id));
-  const nu = new Set(
+    .all(periodId) as Array<Slot & { code: keyof typeof OP_PARTTIMEDAG }>;
+  const doel = new Map(slots.filter((s) => patroonDekt(p, s.datum, s.iso_week)).map((s) => [s.id, OP_PARTTIMEDAG[s.code]]));
+  const nu = new Map(
     (
       db
         .prepare(
-          `SELECT av.slot_id FROM dienstrooster_availability av
+          `SELECT av.slot_id, av.blocking_level FROM dienstrooster_availability av
            JOIN dienstrooster_shift_slot s ON s.id = av.slot_id
            WHERE av.bron_pattern_id = ? AND s.period_id = ?`
         )
-        .all(p.id, periodId) as Array<{ slot_id: string }>
-    ).map((r) => r.slot_id)
+        .all(p.id, periodId) as Array<{ slot_id: string; blocking_level: string }>
+    ).map((r) => [r.slot_id, r.blocking_level])
   );
   const weg = db.prepare('DELETE FROM dienstrooster_availability WHERE bron_pattern_id = ? AND slot_id = ?');
-  for (const slotId of nu) if (!doel.has(slotId)) weg.run(p.id, slotId);
+  // A row from before 0.82.0, when the evening was blocked, to what it is now.
+  const herzien = db.prepare('UPDATE dienstrooster_availability SET blocking_level = ? WHERE bron_pattern_id = ? AND slot_id = ?');
+  for (const [slotId, niveau] of nu) {
+    if (!doel.has(slotId)) weg.run(p.id, slotId);
+    else if (doel.get(slotId) !== niveau) herzien.run(doel.get(slotId), p.id, slotId);
+  }
 
   const insert = db.prepare(
     `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, bron_pattern_id, aangemaakt_op)
-     VALUES (?, ?, ?, 'ABSOLUUT', 'PARTTIME', ?, ?)`
+     VALUES (?, ?, ?, ?, 'PARTTIME', ?, ?)`
   );
   const overnemen = db.prepare(
     `UPDATE dienstrooster_availability
-     SET blocking_level = 'ABSOLUUT', source = 'PARTTIME', bron_pattern_id = ?, bron_absence_id = NULL
+     SET blocking_level = ?, source = 'PARTTIME', bron_pattern_id = ?, bron_absence_id = NULL
      WHERE person_id = ? AND slot_id = ?`
   );
   const now = new Date().toISOString();
   let gezet = 0;
-  for (const slotId of doel) {
+  for (const [slotId, niveau] of doel) {
     if (nu.has(slotId)) continue;
     const er = bestaand().get(p.person_id, slotId) as { source: string; blocking_level: string | null } | undefined;
     if (!er) {
-      insert.run(crypto.randomUUID(), p.person_id, slotId, p.id, now);
+      insert.run(crypto.randomUUID(), p.person_id, slotId, niveau, p.id, now);
       gezet++;
-    } else if (er.source === 'MANUAL' && er.blocking_level !== 'ABSOLUUT') {
-      // A voorkeur gives way too: the day cannot be worked.
-      overnemen.run(p.id, p.person_id, slotId);
+    } else if (er.source === 'MANUAL' && sterkte(er.blocking_level) < sterkte(niveau)) {
+      // A voorkeur gives way too: the uitloopdienst cannot be worked, the evening and night rather not.
+      overnemen.run(niveau, p.id, p.person_id, slotId);
       gezet++;
     }
   }

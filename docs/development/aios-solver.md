@@ -197,8 +197,11 @@ scripts/mutation-check.mjs with `cwd: 'aios-solver'`):
    most `erboven` such options, each costing W_BOVEN_HELFT;
 2. every dienst at most one AIOS, a block whole (options are whole blocks);
 3. one dienst a day per AIOS;
-4. on a part-time day no UD and no evening option with that day in it, a night
-   may (`regel_4_parttime`, on parttime_dagen itself, the marks aside);
+4. on a part-time day no UD (`regel_4_parttime`, on parttime_dagen itself,
+   the marks aside). Its evening and night may: the app marks them
+   LIEVER_NIET with bron PARTTIME (lib/aiosSync.ts), which costs what any
+   liever niet costs (0.82.0, the planner's choice; the evening was a hard
+   rule before). controle.py and lib/aiosRegels.ts check the UD only;
 5. fte 1.0 never in the night block zo t/m di;
 6. inwerken: only UD and DD on Saturday and Sunday;
 7. and 8. no dienst on another option's compensation day (kalender.py

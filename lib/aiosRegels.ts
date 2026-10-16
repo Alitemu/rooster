@@ -48,7 +48,7 @@ export const REGEL_WOORDEN: Record<Regel, string> = {
   '1_AFWEZIG_OF_PARTTIME': 'afwezig of op een parttimedag',
   '1_GEBLOKKEERD': 'een geblokkeerde dienst',
   '1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT': 'meer geblokkeerde diensten dan het deel boven de helft',
-  '4_PARTTIMEDAG': 'een uitloopdienst of avond op de parttimedag',
+  '4_PARTTIMEDAG': 'een uitloopdienst op de parttimedag',
   '5_FULLTIME_NACHTBLOK': 'een fulltimer in het nachtblok zo t/m di',
   '6_INWERKEN': 'tijdens het inwerken: dan alleen uitloopdiensten en dagdiensten in het weekend',
   '3_TWEE_OP_EEN_DAG': 'twee diensten op één dag',
@@ -285,8 +285,8 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
           if (m.bron !== 'MANUAL') fout.push(['1_AFWEZIG_OF_PARTTIME', aiosId, [s.id]]);
           else blokHand = true;
         }
-        // Rule 4.
-        if (a.parttime_dagen.includes(s.datum) && (s.code === 'UD' || s.code === 'AD' || s.code === 'ADW')) {
+        // Rule 4: the uitloopdienst only; an evening or night there is liever niet (lib/aiosSync.ts).
+        if (a.parttime_dagen.includes(s.datum) && s.code === 'UD') {
           fout.push(['4_PARTTIMEDAG', aiosId, [s.id]]);
         }
         // Rule 6.

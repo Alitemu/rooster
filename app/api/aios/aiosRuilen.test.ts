@@ -302,3 +302,27 @@ describe('the planner', () => {
     expect(stafRes.status).toBe(404);
   });
 });
+
+describe('a parttimer', () => {
+  it("is offered for an evening on their part-time day, never for its uitloopdienst", () => {
+    // Since 0.82.0 a part-time day's evening and night are liever niet, not
+    // a hard rule (the planner's choice): a swap may put the parttimer there.
+    const p = insert('dienstrooster_person', { codenaam: cn('p'), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    const q = insert('dienstrooster_person', { codenaam: cn('q'), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    for (const id of [p, q]) {
+      insert('dienstrooster_pool_membership', { person_id: id, pool_id: w.pool, deelnamefactor: 1, geldig_vanaf: '2090-01-01', geldig_tot: '2099-12-31' });
+    }
+    insert('dienstrooster_parttime_pattern', { person_id: p, weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2090-01-01', geldig_tot: '2099-12-31', aangemaakt_door: p, aangemaakt_op: now });
+    // Evening blocks zo t/m di: q's over Monday 30 augustus, p's over Monday 13 september.
+    geef(blokDiensten(blokVan('ADW', '2094-08-29')), q);
+    geef(blokDiensten(blokVan('ADW', '2094-09-12')), p);
+    // Uitloopdiensten: q's on Monday 20 september, p's on Tuesday 21 september.
+    geef([slot('UD', '2094-09-20').id], q);
+    geef([slot('UD', '2094-09-21').id], p);
+    const periode = aiosUitnodigPeriode(w.period)!;
+    const nu = new Date('2094-08-01T12:00:00');
+    const voor = (eenheid: string) => aiosRuilKandidaten(periode, q, eenheid, nu)!.map((k) => k.eenheid.id);
+    expect(voor(`blok:${blokVan('ADW', '2094-08-29')}`)).toContain(`blok:${blokVan('ADW', '2094-09-12')}`);
+    expect(voor(`dienst:${slot('UD', '2094-09-20').id}`)).not.toContain(`dienst:${slot('UD', '2094-09-21').id}`);
+  });
+});

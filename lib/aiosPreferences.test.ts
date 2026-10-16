@@ -156,15 +156,44 @@ describe('marking an AIOS dienst', () => {
     expect(marks(c, '2034-04-10')).toMatchObject({ ADW: 'LIEVER_NIET/ABSENCE' });
   });
 
-  it("blocks a part-time day's UD and evening, not its night, and keeps it so", () => {
+  it("blocks a part-time day's UD, makes its evening and night liever niet, and lets the AIOS block those", () => {
     const d = person('d');
     insert('dienstrooster_parttime_pattern', { person_id: d, weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2030-01-01', geldig_tot: '2099-12-31', aangemaakt_door: d, aangemaakt_op: new Date().toISOString() });
     syncAiosPersoon(d);
-    expect(marks(d, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'ABSOLUUT/PARTTIME', ND: null });
-    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), 'VOORKEUR')).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
-    // The night block over that Monday is free to mark.
-    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'ND'), 'VOORKEUR')).toEqual({ ok: true });
-    expect(marks(d, '2034-04-18')).toMatchObject({ ND: 'VOORKEUR/MANUAL' });
+    // The planner's choice in October 2026: the evening and night may be planned, rather not.
+    expect(marks(d, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'LIEVER_NIET/PARTTIME', ND: 'LIEVER_NIET/PARTTIME' });
+    // Less than liever niet on the evening block over that Monday: refused, nothing written.
+    const nee = setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), 'VOORKEUR');
+    expect(nee).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
+    expect((nee as { message: string }).message).toContain('liever niet');
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'UD'), 'LIEVER_NIET')).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
+    // Blocking it is theirs, the Monday too, and counts for the 50% rule.
+    const voor = blokkadeTellers(loadAiosVoorkeurDagen(d, ids.period)).find((t) => t.groep === 'AVONDBLOKKEN')!.geblokkeerd;
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), 'ABSOLUUT')).toEqual({ ok: true });
+    expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'ABSOLUUT/MANUAL' });
+    expect(blokkadeTellers(loadAiosVoorkeurDagen(d, ids.period)).find((t) => t.groep === 'AVONDBLOKKEN')!.geblokkeerd).toBe(voor + 1);
+    // Another sync leaves it theirs; clearing it brings the liever niet back.
+    syncAiosPersoon(d);
+    expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'ABSOLUUT/MANUAL' });
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), null)).toEqual({ ok: true });
+    expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'LIEVER_NIET/PARTTIME' });
+    // The night the same way.
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'ND'), 'VOORKEUR')).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'ND'), 'ABSOLUUT')).toEqual({ ok: true });
+    expect(marks(d, '2034-04-18')).toMatchObject({ ND: 'ABSOLUUT/MANUAL' });
+  });
+
+  it("puts a part-time evening blocked before 0.82.0 at liever niet, and takes a voorkeur over", () => {
+    const f = person('f');
+    // A voorkeur for the night block over that Monday, from before the part-time day.
+    expect(setAiosVoorkeur(f, ids.period, slot('2034-04-16', 'ND'), 'VOORKEUR')).toEqual({ ok: true });
+    insert('dienstrooster_parttime_pattern', { person_id: f, weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2030-01-01', geldig_tot: '2099-12-31', aangemaakt_door: f, aangemaakt_op: new Date().toISOString() });
+    syncAiosPersoon(f);
+    db.prepare(`UPDATE dienstrooster_availability SET blocking_level = 'ABSOLUUT' WHERE person_id = ? AND source = 'PARTTIME'`).run(f);
+    syncAiosPersoon(f);
+    expect(marks(f, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'LIEVER_NIET/PARTTIME', ND: 'LIEVER_NIET/PARTTIME' });
+    // The part-time day's liever niet took the voorkeur over; the Sunday's night keeps it.
+    expect(marks(f, '2034-04-16')).toMatchObject({ ND: 'VOORKEUR/MANUAL' });
   });
 });
 

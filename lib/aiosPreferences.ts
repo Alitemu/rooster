@@ -214,11 +214,18 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
       : weiger(
           409,
           'IN_DEELTIJD',
-          'Op je parttimedag krijg je geen uitloopdienst en geen avondblok. Pas je parttimedagen aan als die niet kloppen.'
+          t.level === 'ABSOLUUT'
+            ? 'Op je parttimedag krijg je geen uitloopdienst. Pas je parttimedagen aan als die niet kloppen.'
+            : 'Op je parttimedag staan je avond en nacht op liever niet. Blokkeren kan wel. Pas je parttimedagen aan als die niet kloppen.'
         );
   }
 
-  const eigen = targets.filter((t) => !t.level || t.bron === 'MANUAL').map((t) => t.id);
+  // Their own marks, and a part-time day's liever niet they make stronger:
+  // an evening or night they block there is theirs (lib/aiosSync.ts), and
+  // counts for the 50% rule. Clearing it brings the liever niet back.
+  const eigen = targets
+    .filter((t) => !t.level || t.bron === 'MANUAL' || (t.bron === 'PARTTIME' && level !== null && strength(level) > strength(t.level)))
+    .map((t) => t.id);
   db.transaction(() => {
     if (level === null) {
       const del = db.prepare(`DELETE FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ? AND source = 'MANUAL'`);

@@ -166,8 +166,8 @@ def controleer(slots, blok_vorm, aios, feestdagen: set[date], toewijzingen: dict
                         fout.append(('1_AFWEZIG_OF_PARTTIME', aios_id, [s.id]))
                     else:
                         blok_hand = True
-                # Rule 4.
-                if s.datum in a.parttime_dagen and s.code in ('UD', 'AD', 'ADW'):
+                # Rule 4: the uitloopdienst only; an evening or night there is liever niet.
+                if s.datum in a.parttime_dagen and s.code == 'UD':
                     fout.append(('4_PARTTIMEDAG', aios_id, [s.id]))
                 # Rule 6.
                 if a.inwerken and a.inwerken[0] <= s.datum <= a.inwerken[1]:

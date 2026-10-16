@@ -124,14 +124,30 @@ def test_regel_3_one_dienst_a_day():
 # ---- rule 4 -----------------------------------------------------------------
 
 
-def test_regel_4_no_uitloopdienst_nor_evening_on_a_part_time_day():
+def test_regel_4_no_uitloopdienst_on_a_part_time_day():
     inp = weken(1)
     x = aios(inp, 'x', parttime_dagen=[dag(5).isoformat()])  # a Monday
-    avond = blok(inp, 'AVOND', 'ZO_DI', dag(4))
-    _alleen(inp, x, avond + [dienst('UD', dag(5))])
+    _alleen(inp, x, [dienst('UD', dag(5)), dienst('UD', dag(6))])
     uit, t = los_op(inp)
-    assert not t, 'neither the Monday uitloopdienst nor the evening block over the Monday'
-    assert all(leeg.redenen == {'PARTTIMEDAG': 1} for leeg in uit.leeg if leeg.dienst_id in avond)
+    assert t == {dienst('UD', dag(6)): 'x'}, 'the Tuesday, never the Monday'
+    assert next(leeg for leeg in uit.leeg if leeg.dienst_id == dienst('UD', dag(5))).redenen == {'PARTTIMEDAG': 1}
+
+
+def test_regel_4_the_evening_block_over_a_part_time_day_may_as_liever_niet():
+    # Since 0.82.0 (the planner's choice): the app marks the evening and the
+    # night of a part-time day liever niet. The solver may take them, as a
+    # last resort: another AIOS first.
+    inp = weken(1)
+    avond = blok(inp, 'AVOND', 'ZO_DI', dag(4))
+    x = aios(inp, 'x', parttime_dagen=[dag(5).isoformat()])
+    markeer(x, [dienst('AD', dag(5))], 'LIEVER_NIET', 'PARTTIME')
+    _alleen(inp, x, avond)
+    _, t = los_op(inp)
+    assert van(t, 'x') == set(avond), 'only x can: then x'
+    y = aios(inp, 'y')
+    _alleen(inp, y, avond)
+    _, t = los_op(inp)
+    assert van(t, 'y') == set(avond), 'y can too: y, not x on a part-time day'
 
 
 def test_regel_4_the_night_block_over_a_part_time_day_may():

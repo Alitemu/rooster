@@ -175,9 +175,10 @@ describe('opening an AIOS period, on its own route', () => {
     const verlof = markeringen(aios.x, 'ABSENCE');
     expect(verlof.filter((m) => m.level === 'LIEVER_NIET').length).toBeGreaterThan(0);
     expect(verlof.filter((m) => m.level === 'ABSOLUUT').length).toBeGreaterThan(0);
-    // A part-time Monday: uitloop and evening (on Easter Monday the
-    // weekend evening), not the night and not the day.
-    expect([...new Set(markeringen(aios.y, 'PARTTIME').map((m) => m.code))].sort()).toEqual(['AD', 'ADW', 'UD']);
+    // A part-time Monday: the uitloopdienst blocked, the evening (on Easter
+    // Monday the weekend evening) and the night liever niet, not the day.
+    const pt = markeringen(aios.y, 'PARTTIME');
+    expect([...new Set(pt.map((m) => `${m.code} ${m.level}`))].sort()).toEqual(['AD LIEVER_NIET', 'ADW LIEVER_NIET', 'ND LIEVER_NIET', 'UD ABSOLUUT']);
   });
 
   it('opens only once, and an AIOS route takes no achterwacht period', async () => {
