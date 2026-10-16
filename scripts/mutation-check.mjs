@@ -697,6 +697,13 @@ const MUTATIONS = [
     tests: ['app/api/aios/aiosApart'],
   },
   {
+    name: 'aios: the part above half rounds the half up',
+    file: 'lib/aiosVoorkeur.ts',
+    find: '    erboven: Math.max(0, t.geblokkeerd - Math.floor(t.totaal / 2)),',
+    replace: '    erboven: Math.max(0, t.geblokkeerd - Math.ceil(t.totaal / 2)),',
+    tests: ['lib/aiosVoorkeur'],
+  },
+  {
     name: 'aios screen: a tap never gets back to leeg',
     file: 'lib/aiosVoorkeur.ts',
     find: '  return keuzes.length > 0 ? keuzes[(keuzes.indexOf(eigen) + 1) % keuzes.length] : eigen;',

@@ -19,7 +19,7 @@ import { deadlineTekst } from '@/lib/verzendlijst';
 import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { AiosCode } from '@/lib/aiosDiensten';
 import type { AiosDag, AiosDienstenOverzicht, AiosDienstRegel } from '@/lib/aiosSlots';
-import { TELLER_LABELS, type AiosWens, type BlokkadeTeller, type MarkeringTelling } from '@/lib/aiosVoorkeur';
+import { bovenHelftPlanner, type AiosWens, type BlokkadeTeller, type MarkeringTelling } from '@/lib/aiosVoorkeur';
 
 interface Period {
   id: string;
@@ -525,7 +525,7 @@ function StatusVoorkeuren({ periodId, refreshKey }: { periodId: string; refreshK
               {d.wens.opmerking && <p className="text-neutral-700">&ldquo;{d.wens.opmerking}&rdquo;</p>}
               {teVeel.map((t) => (
                 <p key={t.groep} className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-950">
-                  ⚠ Meer dan de helft van de {TELLER_LABELS[t.groep]} geblokkeerd: {t.geblokkeerd} van de {t.totaal}.
+                  ⚠ {bovenHelftPlanner(t)}
                 </p>
               ))}
             </li>

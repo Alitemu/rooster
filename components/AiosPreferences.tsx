@@ -20,8 +20,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
+import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
 import {
   blokkadeTellers,
+  bovenHelftUitleg,
   OPMERKING_MAX_LENGTH,
   telMarkeringen,
   TELLER_LABELS,
@@ -286,8 +288,9 @@ function Tellers({ tellers }: { tellers: BlokkadeTeller[] }) {
     <div className="space-y-2">
       <h3 className="font-semibold text-neutral-900">Hoeveel je hebt geblokkeerd</h3>
       <p className="text-sm text-neutral-600">
-        Per soort mag je hoogstens de helft blokkeren. Je verlof en je parttimedagen tellen niet mee, de
-        uitloopdiensten ook niet.
+        Per soort mag je hoogstens de helft blokkeren. Blokkeer je meer, dan kan het rooster het deel boven de
+        helft alsnog bij jou inplannen. Je verlof en je parttimedagen tellen niet mee, de uitloopdiensten ook
+        niet.
       </p>
       <ul className="space-y-1 text-sm">
         {tellers.map((t) => (
@@ -295,12 +298,7 @@ function Tellers({ tellers }: { tellers: BlokkadeTeller[] }) {
             <span>
               {t.geblokkeerd} van de {t.totaal} {TELLER_LABELS[t.groep]} geblokkeerd, hoogstens {Math.floor(t.totaal / 2)}.
             </span>
-            {t.boven_helft && (
-              <span className="block mt-1">
-                ⚠ Dat is meer dan de helft. Je kunt toch indienen, maar dan kan het rooster niet al je wensen volgen.
-                Overleg zo nodig met de roosteraar.
-              </span>
-            )}
+            {t.boven_helft && <span className="block mt-1">⚠ {bovenHelftUitleg(t)}</span>}
           </li>
         ))}
       </ul>
@@ -556,10 +554,8 @@ export function AiosVoorkeuren({
             Tik op een dienst om te wisselen tussen geen voorkeur, voorkeur, liever niet en geblokkeerd. Een vak met
             een dikke rand is een blok: één AIOS doet het hele blok, dus je kiest voor het hele blok tegelijk.
           </p>
-          <p className="text-sm text-neutral-600">
-            Op een feestdag kun je niet blokkeren, want de feestdagen worden eerlijk verdeeld. Liever niet kan wel.
-          </p>
         </div>
+        {feestdagen.length > 0 && <AiosFeestdagUitleg />}
         <Legenda />
         {fout && (
           <div role="alert" className="p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">

@@ -61,6 +61,13 @@ export interface BlokkadeTeller {
   totaal: number;
   // More than half blocked: a warning, never a refusal.
   boven_helft: boolean;
+  /**
+   * How many blocked above half: the most the AIOS's solver may still
+   * roster them on in this group, when the roster won't fill or be fair
+   * otherwise (docs/aios-rooster.md, "Verzoeken van de AIOS"). 0 at or
+   * below half.
+   */
+  erboven: number;
 }
 
 export const TELLER_LABELS: Record<TellerGroep, string> = {
@@ -100,7 +107,29 @@ export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'dien
     ['AVONDBLOKKEN', tel((b) => b.soort === 'AVOND' && (b.vorm === 'ZO_DI' || b.vorm === 'WO_VR'))],
     ['NACHTBLOKKEN', tel((b) => b.soort === 'NACHT' && (b.vorm === 'ZO_DI' || b.vorm === 'WO_VR'))],
   ];
-  return groepen.map(([groep, t]) => ({ groep, ...t, boven_helft: t.geblokkeerd * 2 > t.totaal }));
+  return groepen.map(([groep, t]) => ({
+    groep,
+    ...t,
+    boven_helft: t.geblokkeerd * 2 > t.totaal,
+    erboven: Math.max(0, t.geblokkeerd - Math.floor(t.totaal / 2)),
+  }));
+}
+
+/** What the AIOS reads under a counter above half: what it may cost them. */
+export function bovenHelftUitleg(t: Pick<BlokkadeTeller, 'groep' | 'erboven'>): string {
+  return (
+    `Dat is meer dan de helft. Je kunt toch indienen. Maar het rooster kan dan hoogstens ${t.erboven} van je ` +
+    `geblokkeerde ${TELLER_LABELS[t.groep]} alsnog bij jou inplannen, als het anders niet rond komt of oneerlijk ` +
+    'wordt. Welke dat zijn, kies je niet zelf. Blokkeer dus alleen wat echt niet kan.'
+  );
+}
+
+/** The same for the planner, under an AIOS in Status voorkeuren. */
+export function bovenHelftPlanner(t: Pick<BlokkadeTeller, 'groep' | 'geblokkeerd' | 'totaal' | 'erboven'>): string {
+  return (
+    `Meer dan de helft van de ${TELLER_LABELS[t.groep]} geblokkeerd: ${t.geblokkeerd} van de ${t.totaal}. ` +
+    `Het rooster kan er hoogstens ${t.erboven} van alsnog bij deze AIOS inplannen.`
+  );
 }
 
 export type MarkeringTelling = Record<Niveau, number>;

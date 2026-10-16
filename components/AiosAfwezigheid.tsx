@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
+import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
 
 export interface Absence {
   id: string;
@@ -150,10 +151,10 @@ export function AiosAfwezigheid({
         <h3 className="font-bold text-lg mb-1">Afwezigheid opgeven</h3>
         <p className="text-sm text-neutral-600">
           Vakantie, ziekte of ander verlof: geef de periode hier op, dan krijg je op die dagen geen diensten.
-          Op een feestdag wordt dat liever niet, want de feestdagen worden eerlijk verdeeld. Bij de volgende
-          stap zie je per dienst wat er geblokkeerd is.
+          Bij de volgende stap zie je per dienst wat er geblokkeerd is.
         </p>
       </div>
+      <AiosFeestdagUitleg />
 
       {error && (
         <div className="p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>

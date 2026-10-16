@@ -124,8 +124,16 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
 - Vaste dagen zonder dienst (onderwijs, terugkomdag) blokkeert de AIOS zelf
   (I5). Vakantie en verlof geeft de AIOS zelf op voordat het rooster gemaakt
   wordt (I4).
-- 50%-regel, alleen als waarschuwing en nooit als weigering (I3): per groep een
-  teller met het maximum.
+- 50%-regel, als waarschuwing en nooit als weigering (I3): per groep een
+  teller met het maximum. Wie in een groep meer dan de helft blokkeert, houdt
+  de helft als harde blokkade. Voor het deel erboven mag de solver een
+  blokkade negeren als het rooster anders niet rond komt of oneerlijk wordt,
+  hoogstens zoveel als die AIOS boven de helft zit: wie 12 van de 20
+  blokkeert, met hoogstens 10, kan er 2 kwijtraken. De solver kiest welke.
+  Het scherm zegt dat bij de teller, met het aantal, zodat niemand zomaar
+  alles blokkeert (de keuze van de planner in oktober 2026). Voor de solver:
+  zulke blokkades zwaarder dan liever niet, maar geen harde regel, en per
+  groep hoogstens `erboven` (lib/aiosVoorkeur.ts blokkadeTellers).
   - Dagdiensten in het weekend en op feestdagen: dagen met geblokkeerd, gedeeld
     door alle weekend- en feestdagen van het kwartaal.
   - Losse diensten op zaterdag (avond en nacht): gedeeld door twee keer het
@@ -172,7 +180,8 @@ De solver breekt deze nooit. Handmatig indelen kan wel, met een waarschuwing,
 zoals nu bij een geblokkeerde dag (F8).
 
 1. Geen dienst op een geblokkeerde dag, tijdens verlof, tijdens een
-   onderbreking of buiten Geldig vanaf/tot.
+   onderbreking of buiten Geldig vanaf/tot. Een uitzondering: het deel boven
+   de helft bij de 50%-regel (zie "Verzoeken van de AIOS").
 2. Blokken altijd heel. Elke dienst precies één AIOS.
 3. Nooit twee diensten op één dag voor dezelfde AIOS.
 4. Op de parttimedag geen uitloopdienst en geen avondblok waar die dag in valt.
