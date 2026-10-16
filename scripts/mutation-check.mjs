@@ -697,6 +697,27 @@ const MUTATIONS = [
     tests: ['app/api/aios/aiosApart'],
   },
   {
+    name: 'aios downloads: leave on a dienst without saying so',
+    file: 'lib/aiosDownloads.ts',
+    find: "  if (d.bron === 'ABSENCE') return `${keuze} (afwezig)`;",
+    replace: '',
+    tests: ['app/api/aios/aiosDownloads'],
+  },
+  {
+    name: 'aios downloads: above half without how many may still be rostered',
+    file: 'lib/aiosDownloads.ts',
+    find: '      t.erboven > 0 ? `meer dan de helft, hoogstens ${t.erboven} alsnog in te plannen` : null,',
+    replace: '      null,',
+    tests: ['app/api/aios/aiosDownloads'],
+  },
+  {
+    name: "aios downloads: the achterwacht's planner downloads the AIOS's preferences",
+    file: 'app/api/aios/periode/[id]/download-voorkeuren/route.ts',
+    find: '    if (otherDienst) return otherDienst;',
+    replace: '',
+    tests: ['app/api/aios/aiosDownloads'],
+  },
+  {
     name: 'aios auto-reminders: a paused period reminded all the same',
     file: 'lib/aiosAutoHerinneringen.ts',
     find: '         AND COALESCE(ap.auto_herinneren, 1) = 1`',

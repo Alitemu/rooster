@@ -476,8 +476,53 @@ function wensTekst(w: AiosWens): string[] {
   ].filter((x): x is string => Boolean(x));
 }
 
+/** The two workbooks of the quarter's preferences (lib/aiosDownloads.ts). */
+function Downloads({ periodId, periodNaam }: { periodId: string; periodNaam: string }) {
+  const [bezig, setBezig] = useState<string | null>(null);
+  const [fout, setFout] = useState<string | null>(null);
+  const download = async (pad: string, naam: string) => {
+    setBezig(pad);
+    setFout(null);
+    try {
+      const res = await fetch(withBasePath(`/api/aios/periode/${periodId}/${pad}`));
+      if (!res.ok) await antwoord(res, 'Downloaden is mislukt');
+      const url = window.URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${naam}-${periodNaam}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : 'Downloaden is mislukt');
+    } finally {
+      setBezig(null);
+    }
+  };
+  const knop = 'px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
+  return (
+    <div className="space-y-1">
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className={knop} disabled={bezig !== null} onClick={() => download('download-voorkeuren', 'voorkeuren-aios')}>
+          {bezig === 'download-voorkeuren' ? 'Bezig...' : '⬇ Voorkeuren per dienst'}
+        </button>
+        <button type="button" className={knop} disabled={bezig !== null} onClick={() => download('download-verzoeken', 'verzoeken-aios')}>
+          {bezig === 'download-verzoeken' ? 'Bezig...' : '⬇ Verzoeken per AIOS'}
+        </button>
+      </div>
+      <p className="text-xs text-neutral-500">
+        Twee Excel-bestanden. Het eerste toont per dienst wat elke AIOS heeft aangegeven. Het tweede toont per AIOS de
+        verzoeken (4 avonden, 4 nachten, twee dagdiensten, inwerken en onderbreking), de parttimedagen, de afwezigheid
+        en de tellers.
+      </p>
+      {fout && <p className="text-sm text-red-700">{fout}</p>}
+    </div>
+  );
+}
+
 /** "Status voorkeuren": per AIOS, with the 50% warnings. */
-function StatusVoorkeuren({ periodId, refreshKey }: { periodId: string; refreshKey: string }) {
+function StatusVoorkeuren({ periodId, periodNaam, refreshKey }: { periodId: string; periodNaam: string; refreshKey: string }) {
   const [deelnemers, setDeelnemers] = useState<Deelnemer[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
@@ -506,6 +551,7 @@ function StatusVoorkeuren({ periodId, refreshKey }: { periodId: string; refreshK
       <p className="text-sm text-neutral-700">
         {ingediend} van de {deelnemers.length} AIOS {ingediend === 1 ? 'heeft' : 'hebben'} ingediend.
       </p>
+      <Downloads periodId={periodId} periodNaam={periodNaam} />
       {deelnemers.length === 0 && (
         <p className="text-sm text-neutral-600">Er doet nog geen AIOS mee in dit kwartaal. Voeg ze toe bij Personeel.</p>
       )}
@@ -594,7 +640,7 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
 
       <Stappen period={period} stand={stand} onChanged={herlaad} />
       {period.status !== 'CONCEPT' && (
-        <StatusVoorkeuren periodId={period.id} refreshKey={`${period.status}|${period.deadline}`} />
+        <StatusVoorkeuren periodId={period.id} periodNaam={period.naam} refreshKey={`${period.status}|${period.deadline}`} />
       )}
 
       <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">
