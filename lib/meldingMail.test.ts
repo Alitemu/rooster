@@ -226,6 +226,14 @@ afterEach(async () => {
   // set off, finish before their people and periods are removed.
   await new Promise((r) => setTimeout(r, 50));
   await mailQueueSettled();
+  // And until the sink has been quiet for a while: on a busy machine a mail
+  // a route sent off without waiting still came in during the next test,
+  // whose count of mails it then made complete too early.
+  for (let stil = 0; stil < 2; ) {
+    const n = sink.received.length;
+    await new Promise((r) => setTimeout(r, 100));
+    stil = sink.received.length === n ? stil + 1 : 0;
+  }
   clearSmtpConfig();
   sink.received.length = 0;
   // Mail settings saved through the app, and a refused send remembered
