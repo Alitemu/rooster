@@ -8,8 +8,14 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 
 The AIOS have their own flow (docs/aios-rooster.md, "Mail"): their mail
 goes through lib/aiosMail.ts, a copy of the sending here, to the address
-under `aios.mail.verzendlijst_aan`, from the same Gmail account. What
-follows is the achterwacht's, unchanged for the AIOS
+under `aios.mail.verzendlijst_aan`, from the same Gmail account. Their
+automatic reminders (lib/aiosAutoHerinneringen.ts, 0.73.0) are a copy of
+the achterwacht's below: the same moments, the same groups and claims in
+dienstrooster_reminder_run, their own texts, /aios/ links and flow, and a
+switch per period in dienstrooster_aios_periode.auto_herinneren (the
+period's own auto_herinneren stays 0, so the achterwacht's never take an
+AIOS period). Asked for because the AIOS's only went by hand in 0.72.0.
+What follows is the achterwacht's, unchanged for the AIOS
 (docs/development/diensten.md, "Copied, not changed").
 
 The app never stores e-mail addresses, so it never mails participants

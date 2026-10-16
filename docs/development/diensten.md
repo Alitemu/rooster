@@ -102,7 +102,8 @@ Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
   participant (their screen, a mark, their requests, handing in, deeltijd,
   afwezigheid), periode/[id]/... for the planner (the period, openen,
   deadline, sluiten, heropenen, uitnodigingen, links, herinneringen,
-  voorkeuren), mail-instellingen (the AIOS's flow address, beheerder only)
+  auto-herinneringen, voorkeuren, download-voorkeuren, download-verzoeken),
+  mail-instellingen (the AIOS's flow address, beheerder only)
   and link-aanvragen. Every one loads only an AIOS period
   (lib/aiosRoute.ts, loadAiosPeriode).
 - Libraries: lib/aios*.ts. aiosMail.ts (the verzendlijst to the AIOS's own
@@ -111,9 +112,12 @@ Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
   rules), aiosDeeltijd.ts (the part-time and absence routes' logic),
   aiosUitnodigen.ts (links to /aios/, the texts, who to remind),
   aiosOpen.ts and aiosStatus.ts (the steps), aiosPreferences.ts and
-  aiosVoorkeur.ts (the screen's rules), aiosVoorkeurBackup.ts.
+  aiosVoorkeur.ts (the screen's rules), aiosVoorkeurBackup.ts,
+  aiosAutoHerinneringen.ts (a copy of lib/autoReminders.ts, 0.73.0) and
+  aiosDownloads.ts (the planner's two workbooks, 0.73.0).
 - Tables of its own: aios_wens and aios_periode (when the AIOS were
-  invited and under which address). An AIOS period never gets
+  invited, under which address, and whether their automatic reminders
+  are on). An AIOS period never gets
   schedule_period.uitgenodigd_op: that makes a period the achterwacht's
   active one, which its "Link kwijt?" runs over. Both tables cascade on
   delete, so the achterwacht's prullenbak takes them with the period.
@@ -122,7 +126,12 @@ The achterwacht's code keeps refusing an AIOS period (aiosNotYetDenial,
 periodUsableFor, the syncs' AIOS exclusion). Where it runs over every
 period by itself, the AIOS's data keeps it away instead of a change to it:
 an AIOS period opens with auto_herinneren = 0, so the achterwacht's
-automatic reminders (lib/autoReminders.ts) never take it. The one shared
+automatic reminders (lib/autoReminders.ts) never take it. The AIOS's own
+(lib/aiosAutoHerinneringen.ts) take only AIOS periods and keep their
+switch in aios_periode. The server's hourly check (instrumentation-node.ts)
+runs them in a try of their own after the achterwacht's: one line added
+there, the achterwacht's call unchanged, and a failure in either leaves
+the other alone. The one shared
 screen part that knows both is "Link kwijt?" on the start page
 (components/LinkAanvraagForm.tsx), part of the login page: it asks both
 routes and takes the achterwacht's answer first.

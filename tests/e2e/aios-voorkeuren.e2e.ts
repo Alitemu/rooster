@@ -1,9 +1,11 @@
+import fs from 'fs';
 import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { aiosQuarter } from '@/lib/aiosQuarter';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
+import { readFirstSheet } from '@/lib/xlsx';
 import { getBaseUrl, loginAsBeheerder } from './setup';
 
 /**
@@ -75,6 +77,9 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
 
   await expect(page.getByRole('heading', { name: 'Je voorkeuren per dienst' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  // What a feestdag means, in a box of its own (components/AiosFeestdagUitleg.tsx).
+  await expect(page.getByText('★ Let op bij feestdagen')).toBeVisible();
+  await expect(page.getByText(/Ben je afwezig op een feestdag, dan telt die dag als liever niet/)).toBeVisible();
 
   // The first evening block of a whole week, Sunday to Tuesday: one box.
   const blok = page.getByRole('button', { name: /^Avonddienst \(blok zo .*: geen voorkeur/ }).first();
@@ -130,4 +135,19 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(rij).toContainText('4 nachten');
   await expect(page.getByRole('button', { name: 'Links downloaden' })).toBeVisible();
   await expect(page.getByText('Mail naar de AIOS')).toBeVisible();
+  // The AIOS's own automatic reminders, off while their mail is not set up.
+  await expect(page.getByTestId('aios-auto-herinneringen')).toContainText('de mail voor de AIOS is nog niet ingesteld');
+
+  // The requests as a workbook, with this AIOS's 4 nachten in it.
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '⬇ Verzoeken per AIOS' }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^verzoeken-aios-.*\.xlsx$/);
+  const [kop, ...rijen] = readFirstSheet(fs.readFileSync((await download.path())!));
+  const mijn = rijen.find((r) => r[0] === ids.codenaam)!;
+  expect(mijn[kop.indexOf('Status')]).toBe('Ingediend');
+  expect(mijn[kop.indexOf('4 nachten (wo t/m za)')]).toBe('ja');
+  expect(mijn[kop.indexOf('Opmerking')]).toBe('Liever geen nachten in mei');
+  const [perDienst] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '⬇ Voorkeuren per dienst' }).click()]);
+  const [dienstKop, ...diensten] = readFirstSheet(fs.readFileSync((await perDienst.path())!));
+  const kolom = dienstKop.indexOf(ids.codenaam);
+  expect(diensten.filter((r) => r[5]?.startsWith('avondblok zo t/m di') && r[kolom] === 'geblokkeerd').length).toBe(3);
 });

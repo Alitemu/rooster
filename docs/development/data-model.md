@@ -25,6 +25,11 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 - `shift_block` - an AIOS evening or night block (soort AVOND or NACHT,
   vorm ZO_DI, WO_VR, ZA or LOS, start and end): one AIOS does all of it.
   Made with the period (lib/aiosSlots.ts), purged with it.
+- `aios_wens` and `aios_periode` - an AIOS's requests for a quarter, and
+  per AIOS period when the invitations went out, under which address and
+  whether the AIOS's automatic reminders are on (`auto_herinneren`, 0.73.0,
+  migration 0025; no row reads as on). Both cascade on delete with the
+  period (docs/development/diensten.md).
 - `holiday_history` - which feestdag someone had in which year, from the
   setup wizard's old import step; read by nothing. The wizard step is gone:
   what counts is the number over the years, which the app keeps itself

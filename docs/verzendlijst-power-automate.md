@@ -547,3 +547,7 @@ De AIOS hebben een eigen Power Automate-stroom met een eigen Excel-lijst
 De verzendlijst van de AIOS ziet er precies zo uit als die van de
 achterwacht. De persoonlijke links erin gaan naar het eigen scherm van de
 AIOS. Zolang het adres voor de AIOS leeg is, gaat er geen mail naar de AIOS.
+
+Vanaf versie 0.73.0 krijgen de AIOS ook vanzelf een herinnering, een week en
+een dag voor de deadline, net als bij de achterwacht. Die verzendlijst heeft
+`"automatisch": true`. De stroom hoeft daarvoor niets anders te doen.

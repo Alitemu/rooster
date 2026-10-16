@@ -382,6 +382,16 @@ een AIOS-periode, bij *Mail naar de AIOS*. Zolang dat leeg is, gaat er geen
 mail naar de AIOS. Zie `docs/verzendlijst-power-automate.md`. Het maken van
 het rooster voor de AIOS komt in een volgende versie, met een eigen solver.
 
+**Vanaf versie 0.73.0** krijgen de AIOS vanzelf een herinnering, een week en
+een dag voor de deadline, net als bij de achterwacht. Je pauzeert ze per
+periode bij *Automatische herinneringen* op de pagina van de AIOS-periode.
+Onder *Status voorkeuren* download je twee Excel-bestanden: *Voorkeuren per
+dienst* en *Verzoeken per AIOS*, met de blokken van vier, inwerken,
+onderbreking, parttimedagen, afwezigheid en de tellers. Blokkeert een AIOS
+meer dan de helft van een soort, dan staat er een waarschuwing dat het
+rooster het deel boven de helft alsnog kan inplannen. Wat een feestdag
+betekent, staat in een eigen kader.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

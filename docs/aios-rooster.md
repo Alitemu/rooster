@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: stap 1 (versie 0.70.0) en stap 2 (versie 0.72.0) zijn gebouwd, de rest is ontwerp. Afgesproken met de planner in oktober 2026,
+Status: stap 1 (versie 0.70.0) en stap 2 (versie 0.72.0, aangevuld in 0.73.0) zijn gebouwd, de rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -292,13 +292,22 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   achterwacht. De solver van de achterwacht blijft ongewijzigd. Eén beslissing
   per blok in plaats van per dag.
 - Het voorkeurenscherm toont per dag de diensten die er die dag zijn, met de
-  blokken als één vak. Leesbaar op 375 pixels breed.
+  blokken als één vak. Leesbaar op 375 pixels breed. Wat een feestdag
+  betekent (niet blokkeren, ook geen blok met een feestdag erin, afwezigheid
+  wordt liever niet) staat in een eigen kader, bij de diensten en bij de
+  afwezigheid (0.73.0).
+- De planner en de beheerder downloaden twee overzichten (0.73.0):
+  voorkeuren per dienst (een rij per dienst, een kolom per AIOS) en
+  verzoeken per AIOS (4 avonden, 4 nachten, twee dagdiensten, inwerken,
+  onderbreking, opmerking, parttimedagen, afwezigheid en de tellers).
 - Mail: één mailaccount voor beide roosters, hoogstens 100 tot 150 mails per dag
   als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de
   keuze van de planner in oktober 2026): de verzendlijst van de AIOS gaat naar
   een eigen stroomadres. Dat stelt de beheerder in op de pagina van een periode
   van de AIOS. Het komt later ook in het ruilscherm van de AIOS. De lijst met adressen van de AIOS staat bij de
-  roosteraar (N2). Geen kopie voor de opleider (N4).
+  roosteraar (N2). Geen kopie voor de opleider (N4). Herinneringen gaan ook
+  vanzelf, een week en een dag voor de deadline, net als bij de achterwacht
+  (0.73.0). De planner kan ze per periode pauzeren.
 - Het AIOS-rooster houdt geen rekening met de achterwacht en andersom (M1 tot en
   met M5). Fellows doen bij de AIOS alleen de ondersteuning op zaterdag en de
   nacht voor de voortgangstoets (M4).
