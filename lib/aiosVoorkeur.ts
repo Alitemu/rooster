@@ -124,3 +124,47 @@ export function telMarkeringen(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'diens
   }
   return telling;
 }
+
+/** One box of the screen: a single dienst, or every dienst of a block (one tap marks them all). */
+export interface VoorkeurVak {
+  diensten: ReadonlyArray<Pick<AiosVoorkeurDienst, 'level' | 'bron'>>;
+  /** A feestdag in it: no geblokkeerd there (the feestdagen are shared out fairly). */
+  feestdag: boolean;
+}
+
+type Stand = Niveau | null;
+
+/** The order a tap goes through, as on the achterwacht's calendar. */
+export const STAND_CYCLUS: readonly Stand[] = [null, 'VOORKEUR', 'LIEVER_NIET', 'ABSOLUUT'];
+
+// How much a mark keeps someone off a dienst (lib/aiosPreferences.ts STRENGTH).
+const STERKTE: Record<Niveau | 'LEEG', number> = { VOORKEUR: 0, LEEG: 1, LIEVER_NIET: 2, ABSOLUUT: 3 };
+const sterkte = (s: Stand) => STERKTE[s ?? 'LEEG'];
+const vastGezet = (d: Pick<AiosVoorkeurDienst, 'bron'>) => d.bron === 'ABSENCE' || d.bron === 'PARTTIME';
+
+/**
+ * What the AIOS may choose for a box, what the server takes
+ * (setAiosVoorkeur): nothing that says less than leave or a part-time day
+ * on any of its diensten, and no geblokkeerd with a feestdag in it.
+ */
+export function vakKeuzes(vak: VoorkeurVak): Stand[] {
+  const vast = Math.max(-1, ...vak.diensten.filter(vastGezet).map((d) => sterkte(d.level)));
+  return STAND_CYCLUS.filter((s) => sterkte(s) >= vast && !(s === 'ABSOLUUT' && vak.feestdag));
+}
+
+/** What a box shows: what leave or a part-time day holds there, otherwise the AIOS's own mark. */
+export function vakStand(vak: VoorkeurVak): Stand {
+  const vast = vak.diensten.filter(vastGezet);
+  return (vast.length > 0 ? vast : vak.diensten).reduce<Stand>(
+    (s, d) => (d.level && (s === null || sterkte(d.level) > sterkte(s)) ? d.level : s),
+    null
+  );
+}
+
+/** What a tap on the box sets: the next choice after the AIOS's own mark. */
+export function volgendeVakStand(vak: VoorkeurVak): Stand {
+  const keuzes = vakKeuzes(vak);
+  const eigen = vak.diensten.find((d) => d.bron === 'MANUAL')?.level ?? null;
+  // Leeg (null) is a choice too: no ?? on the result, or a tap never got back to it.
+  return keuzes.length > 0 ? keuzes[(keuzes.indexOf(eigen) + 1) % keuzes.length] : eigen;
+}

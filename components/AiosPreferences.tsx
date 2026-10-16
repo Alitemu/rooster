@@ -25,6 +25,10 @@ import {
   OPMERKING_MAX_LENGTH,
   telMarkeringen,
   TELLER_LABELS,
+  vakKeuzes,
+  vakStand,
+  volgendeVakStand,
+  type VoorkeurVak,
   type AiosVoorkeurDag,
   type AiosVoorkeurDienst,
   type AiosWens,
@@ -42,11 +46,6 @@ interface Scherm {
 }
 
 type Stand = Niveau | null;
-
-const CYCLUS: Stand[] = [null, 'VOORKEUR', 'LIEVER_NIET', 'ABSOLUUT'];
-// How much a mark keeps someone off a dienst (lib/aiosPreferences.ts STRENGTH).
-const STERKTE: Record<Niveau | 'LEEG', number> = { VOORKEUR: 0, LEEG: 1, LIEVER_NIET: 2, ABSOLUUT: 3 };
-const sterkte = (s: Stand) => STERKTE[s ?? 'LEEG'];
 
 const GLYPH: Record<Niveau | 'LEEG', string> = { LEEG: '✓', VOORKEUR: '+', LIEVER_NIET: '~', ABSOLUUT: '✕' };
 const STAND_LABEL: Record<Niveau | 'LEEG', string> = {
@@ -103,29 +102,8 @@ function useAiosScherm(personId: string, periodId: string) {
 }
 
 /** One box on the grid: a single dienst, or every dienst of a block. */
-interface Vak {
+interface Vak extends VoorkeurVak {
   diensten: AiosVoorkeurDienst[];
-  feestdag: boolean;
-}
-
-/** What the AIOS may choose for this box: nothing less than leave or a part-time day, no geblokkeerd on a feestdag. */
-function keuzes(vak: Vak): Stand[] {
-  const vast = Math.max(-1, ...vak.diensten.filter((d) => d.bron === 'ABSENCE' || d.bron === 'PARTTIME').map((d) => sterkte(d.level)));
-  return CYCLUS.filter((s) => sterkte(s) >= vast && !(s === 'ABSOLUUT' && vak.feestdag));
-}
-
-/** What the box shows: what leave or a part-time day holds there, otherwise the AIOS's own mark. */
-function stand(vak: Vak): Stand {
-  const vast = vak.diensten.filter((d) => d.bron === 'ABSENCE' || d.bron === 'PARTTIME');
-  return (vast.length > 0 ? vast : vak.diensten).reduce<Stand>(
-    (s, d) => (d.level && (s === null || sterkte(d.level) > sterkte(s)) ? d.level : s),
-    null
-  );
-}
-
-/** The AIOS's own mark in the box (not leave or a part-time day). */
-function eigenStand(vak: Vak): Stand {
-  return vak.diensten.find((d) => d.bron === 'MANUAL')?.level ?? null;
 }
 
 function bronLabel(vak: Vak): 'AF' | 'PT' | null {
@@ -149,11 +127,9 @@ function VakKnop({
   readOnly: boolean;
   onKies: (vak: Vak, s: Stand) => void;
 }) {
-  const nu = stand(vak);
-  const opties = keuzes(vak);
-  const eigen = eigenStand(vak);
-  const volgende = opties[(opties.indexOf(eigen) + 1) % opties.length] ?? eigen;
-  const vast = opties.length <= 1;
+  const nu = vakStand(vak);
+  const volgende = volgendeVakStand(vak);
+  const vast = vakKeuzes(vak).length <= 1;
   const bron = bronLabel(vak);
   const sleutel = nu ?? 'LEEG';
   const codes = vak.diensten.map((d) => d.code);

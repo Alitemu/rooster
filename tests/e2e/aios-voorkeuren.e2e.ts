@@ -84,7 +84,7 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await zelfde.click();
   await expect(zelfde).toHaveAttribute('aria-label', /: liever niet/);
   await zelfde.click();
-  await expect(zelfde).toHaveAttribute('aria-label', /: geblokkeerd/);
+  await expect(zelfde).toHaveAttribute('aria-label', /: geblokkeerd\. Tik voor geen voorkeur/);
   await expect(page.getByText(/^1 van de \d+ avondblokken geblokkeerd/).first()).toBeVisible();
 
   // A dagdienst on a feestdag: from liever niet straight back to none.

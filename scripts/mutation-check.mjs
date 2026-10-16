@@ -759,6 +759,27 @@ const MUTATIONS = [
     replace: '    const targets = computeMemberTargets(period.id);',
     tests: ['app/api/aiosOpen'],
   },
+  {
+    name: 'aios screen: a tap never gets back to leeg',
+    file: 'lib/aiosVoorkeur.ts',
+    find: '  return keuzes.length > 0 ? keuzes[(keuzes.indexOf(eigen) + 1) % keuzes.length] : eigen;',
+    replace: '  return keuzes[(keuzes.indexOf(eigen) + 1) % keuzes.length] ?? eigen;',
+    tests: ['lib/aiosVoorkeur'],
+  },
+  {
+    name: 'aios screen: geblokkeerd offered on a feestdag',
+    file: 'lib/aiosVoorkeur.ts',
+    find: "  return STAND_CYCLUS.filter((s) => sterkte(s) >= vast && !(s === 'ABSOLUUT' && vak.feestdag));",
+    replace: '  return STAND_CYCLUS.filter((s) => sterkte(s) >= vast);',
+    tests: ['lib/aiosVoorkeur'],
+  },
+  {
+    name: 'aios screen: a mark offered that says less than leave',
+    file: 'lib/aiosVoorkeur.ts',
+    find: '  const vast = Math.max(-1, ...vak.diensten.filter(vastGezet).map((d) => sterkte(d.level)));',
+    replace: '  const vast = -1;',
+    tests: ['lib/aiosVoorkeur'],
+  },
 ];
 
 const only = process.argv[2];
