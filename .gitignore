@@ -1,5 +1,7 @@
 # Dependencies
-node_modules/
+# Without the slash: a link named node_modules (a second worktree's) is
+# not a directory, and "node_modules/" let it into a commit once.
+node_modules
 .pnp
 .pnp.js
 
