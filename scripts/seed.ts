@@ -458,8 +458,19 @@ async function createTables() {
       period_id TEXT PRIMARY KEY NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
       uitgenodigd_op TEXT,
       basis_url TEXT,
-      auto_herinneren INTEGER NOT NULL DEFAULT 1
+      auto_herinneren INTEGER NOT NULL DEFAULT 1,
+      oudjaar_aantal INTEGER NOT NULL DEFAULT 2
     );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_blokkeuze (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      blok_id TEXT NOT NULL REFERENCES dienstrooster_shift_block(id) ON DELETE CASCADE,
+      opknippen INTEGER NOT NULL,
+      gekozen_op TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS aios_blokkeuze_uniq
+      ON dienstrooster_aios_blokkeuze(period_id, blok_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_fellow (
       id TEXT PRIMARY KEY NOT NULL,
@@ -572,6 +583,7 @@ const SEEDED_TABLES = [
   'dienstrooster_period_fellow',
   'dienstrooster_aios_wens',
   'dienstrooster_aios_periode',
+  'dienstrooster_aios_blokkeuze',
   'dienstrooster_mail_queue',
   // References a person (gewijzigd_door), so a reset clears it as well.
   'dienstrooster_app_setting',
@@ -638,6 +650,7 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   },
   dienstrooster_aios_periode: {
     auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
+    oudjaar_aantal: 'INTEGER NOT NULL DEFAULT 2',
   },
   dienstrooster_shift_type: {
     code: 'TEXT',

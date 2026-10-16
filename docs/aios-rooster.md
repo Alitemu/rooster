@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
+Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -64,7 +64,11 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   vraagt de melding bij het genereren (zie "Blokken rond feestdagen") of het er
   deze keer twee zijn; twee staat al ingevuld. Bij twee plant de solver ze
   allebei. De nacht blijft dan in het blok van de ene AIOS, de tweede doet een
-  losse nacht. Beide tellen voor 1 punt.
+  losse nacht. Beide tellen voor 1 punt. De tweede nacht ontstaat pas bij het
+  maken van het rooster en krijgt dan dezelfde markeringen als de nacht van
+  het blok (0.76.0). De AIOS markeren dus alleen het blok. Gaat de periode
+  terug naar open, dan verdwijnt de tweede nacht weer tot het volgende
+  rooster.
 - UD en AD overlappen: dan zijn er twee AIOS tegelijk (D1). Geen
   bereikbaarheidsdiensten (C6).
 - Een dienst zonder AIOS houdt het publiceren tegen: de planner vult het gat
@@ -108,6 +112,15 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
 - Een losse feestdag in een blok (zoals Koningsdag of Nieuwjaarsdag) blijft heel,
   maar de planner kan dat blok op dezelfde plek ook opknippen.
 - Daarna kan de planner een dienst nog met de hand aanpassen, zoals altijd.
+- In de app (0.76.0): de vragen staan op de pagina van de periode, bij
+  *Rooster*, boven *Rooster maken*. Dat kan pas als elk blok bij
+  aaneengesloten feestdagen een keuze heeft en de keuzes bewaard zijn. Een
+  zaterdag is al een losse dienst en komt er niet in. Een andere keuze geldt
+  bij de volgende keer dat het rooster gemaakt wordt. Een opgeknipt blok
+  staat in het rooster per dag.
+- Een opgeknipte nacht uit het blok zondag tot en met dinsdag is een losse
+  nacht met één compensatiedag. Die mag ook een fulltimer doen: harde regel
+  5 geldt voor het hele blok (een keuze bij het bouwen, oktober 2026).
 
 ## Verzoeken van de AIOS
 

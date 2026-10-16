@@ -11,8 +11,10 @@
  *
  * `erboven` comes from the same counters the AIOS's screen shows
  * (lib/aiosVoorkeur.ts blokkadeTellers), so the solver takes exactly what
- * the screen promised ("hoogstens N alsnog"). The saldo and the
- * feestdagen over the years come with step 4e; until then 0.
+ * the screen promised ("hoogstens N alsnog"). A block the planner cut
+ * up around feestdagen goes as vorm LOS (lib/aiosFeestdagBlokken.ts), and
+ * the second night of New Year's Eve is a dienst without a block. The
+ * saldo and the feestdagen over the years come with step 4e; until then 0.
  */
 
 import { db } from '@/db/client';
@@ -21,6 +23,7 @@ import { patroonDekt } from '@/lib/aiosSync';
 import { aiosFte } from '@/lib/aiosFte';
 import { blokkadeTellers, loadAiosVoorkeurDagen, loadAiosWens, type TellerGroep } from '@/lib/aiosPreferences';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { opgeknipteBlokken } from '@/lib/aiosFeestdagBlokken';
 
 export interface AiosSolverDienst {
   id: string;
@@ -69,9 +72,12 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
        ORDER BY sl.datum, st.start_tijd`
     )
     .all(period.id) as AiosSolverDienst[];
-  const blokken = db
-    .prepare('SELECT id, soort, vorm FROM dienstrooster_shift_block WHERE period_id = ? ORDER BY start_datum, soort')
-    .all(period.id) as AiosSolverInvoer['blokken'];
+  const opgeknipt = opgeknipteBlokken(period.id);
+  const blokken = (
+    db
+      .prepare('SELECT id, soort, vorm FROM dienstrooster_shift_block WHERE period_id = ? ORDER BY start_datum, soort')
+      .all(period.id) as AiosSolverInvoer['blokken']
+  ).map((b) => (opgeknipt.has(b.id) ? { ...b, vorm: 'LOS' as const } : b));
 
   const lidmaatschap = db.prepare(
     `SELECT geldig_vanaf, geldig_tot FROM dienstrooster_pool_membership

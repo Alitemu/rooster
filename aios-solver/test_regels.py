@@ -157,6 +157,18 @@ def test_regel_5_a_fulltimer_never_in_the_night_block_sunday_to_tuesday():
     assert set(t) == set(nacht)
 
 
+def test_regel_5_a_night_block_cut_up_is_single_nights_a_fulltimer_may_do():
+    # Around feestdagen in a row the planner may cut the block up
+    # (docs/aios-rooster.md, "Blokken rond feestdagen"): then each night is
+    # a single dienst with one compensation day, no longer the block.
+    inp = weken(1)
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    next(b for b in inp['blokken'] if b['id'] == f'NZO_DI-{dag(4).isoformat()}')['vorm'] = 'LOS'
+    _alleen(inp, aios(inp, 'x', fte=1.0), nacht[:1])
+    _, t = los_op(inp)
+    assert t == {nacht[0]: 'x'}
+
+
 # ---- rule 6 -----------------------------------------------------------------
 
 
@@ -219,6 +231,7 @@ def test_regel_7_the_evening_block_sunday_to_tuesday_keeps_its_wednesday():
         ('DAG', 'TWEE_DD', 'za', 'zo', None, ['vr', 'ma']),
         ('DAG', 'ENKEL', 'do', 'do', None, ['wo', 'vr']),  # a dagdienst on a feestdag in the week
         ('AVOND', 'LOS', 'ma', 'ma', None, ['di']),
+        ('NACHT', 'ENKEL', 'ma', 'ma', None, ['di']),  # the second AIOS on New Year's Eve
         ('UITLOOP', 'ENKEL', 'ma', 'ma', None, []),
     ],
 )
@@ -334,3 +347,21 @@ def test_the_block_of_four_only_for_who_asks_for_it():
     inp['aios'][0]['vier_avonden'] = True
     _, t = los_op(inp)
     assert set(t) == set(vier)
+
+
+def test_the_second_aios_on_new_years_eve():
+    # A second night on a weekday, without a block: another AIOS than the
+    # block's, and the day after is that one's compensation day.
+    inp = weken(2)
+    oudjaar = dag(5)  # a Monday, in the night block zo t/m di
+    inp['diensten'].append(
+        {'id': 'ND2-oudjaar', 'datum': oudjaar.isoformat(), 'code': 'ND', 'start_tijd': '22:30', 'eind_tijd': '08:30', 'punten': 1.0, 'blok_id': None}
+    )
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    x, y = aios(inp, 'x'), aios(inp, 'y')
+    _alleen(inp, x, nacht + ['ND2-oudjaar'])
+    _alleen(inp, y, ['ND2-oudjaar', dienst('UD', dag(6))])
+    uit, t = los_op(inp)
+    assert set(nacht) <= van(t, 'x'), 'the night stays in the block of one AIOS'
+    assert t.get('ND2-oudjaar') == 'y', 'the second night to another AIOS'
+    assert dienst('UD', dag(6)) not in t, 'the day after the loose night is its compensation day'

@@ -413,6 +413,19 @@ staat erbij met de reden. *Opnieuw maken* maakt het hele rooster opnieuw.
 over (zie 0.74.0). Met de hand aanpassen en publiceren komen in een
 volgende versie.
 
+**Vanaf versie 0.76.0** vraagt de app eerst wat er gebeurt met de blokken
+rond feestdagen. Bij *Rooster* staat dan het kader *Blokken rond
+feestdagen*. Bij feestdagen achter elkaar (Pasen, Pinksteren, kerst) kies je
+per avond- en nachtblok: heel laten (één AIOS doet het hele blok) of
+opknippen (elke dag een losse dienst). Daar staat nog niets ingevuld: het
+rooster kan pas gemaakt worden als elk blok een keuze heeft. Een blok met één
+feestdag erin blijft heel, maar je kunt het ook opknippen. Valt 31 december
+in de periode, dan kies je of er op oudjaarsnacht één of twee AIOS zijn. Twee
+staat al ingevuld. Klik op *Keuzes bewaren*. De keuzes blijven bij de periode
+en gelden bij elke volgende keer dat je het rooster maakt. In het rooster
+staat een opgeknipt blok per dag en de tweede AIOS op oudjaarsnacht in de rij
+*Nacht 2*.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

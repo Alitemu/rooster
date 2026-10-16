@@ -9,6 +9,7 @@ import { aiosQuarter } from '@/lib/aiosQuarter';
 import { syncAiosPeriode } from '@/lib/aiosSync';
 import { blokkadeTellers, loadAiosPeriode, loadAiosVoorkeurDagen, saveAiosWens, setAiosVoorkeur } from '@/lib/aiosPreferences';
 import { aiosGeneratieJob } from '@/lib/aiosGenereren';
+import { aiosFeestdagVragen, bewaarAiosFeestdagKeuzes } from '@/lib/aiosFeestdagBlokken';
 import { POST as genereren } from './periode/[id]/genereren/route';
 import { GET as status } from './periode/[id]/genereren/status/route';
 import { GET as rooster } from './periode/[id]/rooster/route';
@@ -136,6 +137,10 @@ beforeAll(async () => {
     .all(w.period) as Array<{ slot: string }>;
   for (const z of zaterdagNachten) expect(setAiosVoorkeur(w.x, w.period, z.slot, 'ABSOLUUT')).toEqual({ ok: true });
   db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN' WHERE id = ?`).run(w.period);
+  // Pasen and Pinksteren: every block whole (aiosFeestdagBlokken.test.ts asks and cuts them).
+  const vragen = aiosFeestdagVragen(p);
+  const heel = vragen.groepen.flatMap((g) => g.blokken).map((b) => ({ blok_id: b.blok_id, keuze: 'HEEL' }));
+  expect(bewaarAiosFeestdagKeuzes(p, heel, undefined)).toEqual({ ok: true });
   w.open = periode('OPEN', `AiosGen-open-${tag}`);
 
   server = http.createServer((rq, rs) => {

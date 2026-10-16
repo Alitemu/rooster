@@ -10,6 +10,7 @@ import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { writeAuditLog } from '@/lib/auditLog';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { haalTweedeNachtWeg } from '@/lib/aiosFeestdagBlokken';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 
 export type StatusUitkomst = { ok: true } | { ok: false; status: number; code: string; message: string };
@@ -58,6 +59,10 @@ export function heropenAiosPeriode(period: AiosUitnodigPeriode, actorId: string)
   if (period.status !== 'GESLOTEN') {
     return nee(409, 'INVALID_STATUS', `Periode kan niet terug naar open vanuit status "${periodStatusLabel(period.status)}"`);
   }
-  wissel(period, 'GESLOTEN', 'OPEN', 'terug naar open', actorId);
+  db.transaction(() => {
+    wissel(period, 'GESLOTEN', 'OPEN', 'terug naar open', actorId);
+    // The AIOS mark the block again; a generation makes the second night anew.
+    haalTweedeNachtWeg(period);
+  })();
   return { ok: true };
 }

@@ -10,7 +10,8 @@ already running (`npm run seed`, `uvicorn main:app --port 8000` from
 `ALLOW_SEED_PASSWORD=true SOLVER_URL=http://localhost:8000
 AIOS_SOLVER_URL=http://localhost:8001 npm start`) - none of them starts
 anything itself. tests/e2e/aios-rooster.e2e.ts makes an AIOS roster with
-the AIOS's solver and fails without it. ALLOW_SEED_PASSWORD
+the AIOS's solver and fails without it, once plain and once over kerst and
+oudjaar with the questions about the blocks around feestdagen. ALLOW_SEED_PASSWORD
 because they all log in with the seed password, which otherwise only
 opens a "choose a new password" session (see Authentication):
 - `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its

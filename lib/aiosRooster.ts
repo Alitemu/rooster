@@ -3,7 +3,10 @@
  * step 4): per day its diensten with who has them, and per AIOS what they
  * got, their points and dienstpercentage (G13: green under 25%, red above,
  * a warning and never a refusal, G6). Counted from the roster itself, so a
- * change by hand counts the same as what the solver made.
+ * change by hand counts the same as what the solver made. A block the
+ * planner cut up around feestdagen shows as vorm LOS, as the solver got it
+ * (lib/aiosFeestdagBlokken.ts); the second night of New Year's Eve is an ND
+ * without a block.
  */
 
 import { db } from '@/db/client';
@@ -61,16 +64,18 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
     .prepare(
       `SELECT sl.id AS slot_id, sl.datum, sl.iso_week, sl.weekend_id, sl.is_feestdag, sl.feestdag_naam,
               st.code, st.naam, st.start_tijd, st.eind_tijd, st.punten,
-              b.id AS blok_id, b.soort AS blok_soort, b.vorm AS blok_vorm,
+              b.id AS blok_id, b.soort AS blok_soort,
+              CASE WHEN bk.opknippen = 1 THEN 'LOS' ELSE b.vorm END AS blok_vorm,
               a.person_id, p.codenaam, av.blocking_level AS markering
        FROM dienstrooster_shift_slot sl
        JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
        LEFT JOIN dienstrooster_shift_block b ON b.id = sl.shift_block_id
+       LEFT JOIN dienstrooster_aios_blokkeuze bk ON bk.blok_id = b.id AND bk.period_id = sl.period_id
        LEFT JOIN dienstrooster_assignment a ON a.slot_id = sl.id AND a.schedule_version_id = sl.period_id
        LEFT JOIN dienstrooster_person p ON p.id = a.person_id
        LEFT JOIN dienstrooster_availability av ON av.slot_id = sl.id AND av.person_id = a.person_id
        WHERE sl.period_id = ? AND st.code IS NOT NULL
-       ORDER BY sl.datum, st.start_tijd, st.eind_tijd`
+       ORDER BY sl.datum, st.start_tijd, st.eind_tijd, sl.shift_block_id IS NULL`
     )
     .all(period.id) as Array<{
     slot_id: string;

@@ -90,8 +90,10 @@ def compensatiedagen(soort: str, vorm: str, eerste: date, laatste: date, feestda
         # A dagdienst on a feestdag in the week.
         voor = [eerste - dag]
         na = [laatste + dag]
-    elif vorm == 'LOS' and soort in ('AVOND', 'NACHT'):
-        na = [laatste + dag]  # a block cut up, or the second AIOS on New Year's Eve
+    elif vorm in ('LOS', 'ENKEL') and soort in ('AVOND', 'NACHT'):
+        # A day of a block cut up (LOS), or an evening or night without a
+        # block: the second AIOS on New Year's Eve.
+        na = [laatste + dag]
     # UITLOOP: none.
 
     uit: set[date] = set()

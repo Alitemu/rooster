@@ -29,7 +29,18 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   per AIOS period when the invitations went out, under which address and
   whether the AIOS's automatic reminders are on (`auto_herinneren`, 0.73.0,
   migration 0025; no row reads as on). Both cascade on delete with the
-  period (docs/development/diensten.md).
+  period (docs/development/diensten.md). `aios_periode.oudjaar_aantal`
+  (0.76.0, migration 0026): one or two AIOS on the night of 31 December,
+  2 unless the planner says 1; no row reads as 2.
+- `aios_blokkeuze` - per AIOS period and block with a feestdag in it the
+  planner's choice: whole or `opknippen` (0.76.0, migration 0026,
+  lib/aiosFeestdagBlokken.ts). Cascades with the period and the block. The
+  block itself keeps its vorm; only the solver gets a cut one as LOS.
+- The second night of New Year's Eve is an ND shift_slot without a block
+  on 31 December, made when a generation starts with two AIOS chosen
+  (its availability copied from the block's night), taken away with one
+  chosen or when the period is reopened. An ND without shift_block_id is
+  always that one.
 - `holiday_history` - which feestdag someone had in which year, from the
   setup wizard's old import step; read by nothing. The wizard step is gone:
   what counts is the number over the years, which the app keeps itself

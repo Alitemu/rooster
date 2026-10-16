@@ -3,7 +3,10 @@
  * AIOS quarter's roster with the AIOS's solver, in the background
  * (lib/aiosGenereren.ts); poll .../genereren/status. Only when the period
  * is gesloten, or gegenereerd to make it again (that replaces the whole
- * roster); one at a time per period (409).
+ * roster); one at a time per period (409); and only once every question
+ * about the blocks around feestdagen is answered (409,
+ * lib/aiosFeestdagBlokken.ts). The second night of New Year's Eve is made
+ * or taken away first, as the planner chose.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -14,6 +17,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { writeAuditLog } from '@/lib/auditLog';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { aiosFout, laadAiosPeriode } from '@/lib/aiosRoute';
+import { aiosFeestdagVragen, zorgVoorOudjaar } from '@/lib/aiosFeestdagBlokken';
 import { AIOS_GENERATIE_LOOPT, AIOS_TIJDSLIMIETEN, aiosGeneratieLoopt, startAiosGeneratie, type AiosTijdslimiet } from '@/lib/aiosGenereren';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -39,6 +43,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       );
     }
     if (aiosGeneratieLoopt(period.id)) return aiosFout(409, 'GENERATION_RUNNING', AIOS_GENERATIE_LOOPT);
+    const { open } = aiosFeestdagVragen(period);
+    if (open > 0) {
+      return aiosFout(
+        409,
+        'QUESTIONS_OPEN',
+        `Kies eerst wat er met de blokken rond de feestdagen gebeurt: nog ${open} ${open === 1 ? 'blok' : 'blokken'} zonder keuze.`
+      );
+    }
+    zorgVoorOudjaar(period);
 
     const { row_version } = db.prepare('SELECT row_version FROM dienstrooster_schedule_period WHERE id = ?').get(period.id) as {
       row_version: number;

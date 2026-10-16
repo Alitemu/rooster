@@ -6,11 +6,14 @@
  * polled while it runs, what stayed empty and why, the roster per week with
  * a block as one box, and per AIOS their points and dienstpercentage with a
  * bar: green under 25%, red above it (G13), and the words "boven 25%" so it
- * also reads in black and white.
+ * also reads in black and white. Above the button the questions about the
+ * blocks around feestdagen (components/AiosFeestdagBlokken.tsx): no roster
+ * before they are answered and saved.
  */
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { AiosFeestdagBlokken, type FeestdagStaat } from '@/components/AiosFeestdagBlokken';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst } from '@/lib/aiosRooster';
@@ -62,8 +65,11 @@ const RIJEN: Rij[] = [
   { label: 'Uitloop', vind: (d) => d.diensten.find((x) => x.code === 'UD') },
   { label: 'Dag', vind: (d) => d.diensten.find((x) => x.code === 'DD') },
   { label: 'Avond', vind: (d) => d.diensten.find((x) => x.code === 'AD' || x.code === 'ADW') },
-  { label: 'Nacht', vind: (d) => d.diensten.find((x) => x.code === 'ND') },
+  { label: 'Nacht', vind: (d) => d.diensten.find((x) => x.code === 'ND' && x.blok) },
 ];
+
+// The second AIOS on New Year's Eve: a night without a block, only in the week it falls in.
+const NACHT_2: Rij = { label: 'Nacht 2', vind: (d) => d.diensten.find((x) => x.code === 'ND' && !x.blok) };
 
 /** Who has it, with a sign when that is against their mark (not by colour alone). */
 function Wie({ dienst }: { dienst: AiosRoosterDienst }) {
@@ -101,7 +107,7 @@ function RoosterWeek({ dagen }: { dagen: AiosRoosterDag[] }) {
           </tr>
         </thead>
         <tbody>
-          {RIJEN.map((rij) => {
+          {[...RIJEN, ...(dagen.some((d) => NACHT_2.vind(d)) ? [NACHT_2] : [])].map((rij) => {
             const cellen: ReactNode[] = [];
             for (let i = 0; i < dagen.length; i++) {
               const dienst = rij.vind(dagen[i]);
@@ -124,10 +130,10 @@ function RoosterWeek({ dagen }: { dagen: AiosRoosterDag[] }) {
                 );
                 continue;
               }
-              // A block is one box over its days, with its AIOS once.
+              // A block is one box over its days, with its AIOS once (as long as one AIOS has them all).
               const blok = dienst.blok;
               let j = i;
-              while (j < dagen.length && rij.vind(dagen[j])?.blok?.id === blok.id) j++;
+              while (j < dagen.length && rij.vind(dagen[j])?.blok?.id === blok.id && rij.vind(dagen[j])?.aios?.id === dienst.aios?.id) j++;
               cellen.push(
                 <td key={i} colSpan={j - i} className="p-0.5">
                   <span
@@ -176,6 +182,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
   const [fout, setFout] = useState<string | null>(null);
   const [uitkomst, setUitkomst] = useState<AiosGeneratieUitkomst | null>(null);
   const [zeker, setZeker] = useState<'opnieuw' | 'verwijderen' | null>(null);
+  const [feestdag, setFeestdag] = useState<FeestdagStaat>({ open: 0, gewijzigd: false });
   const actief = useRef(true);
 
   const laad = useCallback(() => {
@@ -249,6 +256,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
     weken[weken.length - 1].push(dag);
   }
   const gemaakt = status === 'GEGENEREERD';
+  const nietKlaar = feestdag.open > 0 || feestdag.gewijzigd;
   const knop = 'px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
 
   return (
@@ -264,6 +272,14 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                 ? 'Het rooster is gemaakt. Je kunt het opnieuw laten maken. Dan wordt het hele rooster opnieuw gemaakt, ook wat je met de hand hebt veranderd.'
                 : 'De solver van de AIOS maakt het rooster: per blok één AIOS, binnen de harde regels en zo eerlijk mogelijk naar fte.'}
             </p>
+            <AiosFeestdagBlokken periodId={periodId} status={status} disabled={bezig || !!rooster?.loopt} onStaat={setFeestdag} />
+            {nietKlaar && (
+              <p className="text-sm font-medium text-neutral-900">
+                {feestdag.open > 0
+                  ? 'Kies eerst bij elk blok rond de feestdagen wat ermee gebeurt en bewaar je keuzes.'
+                  : 'Bewaar eerst je keuzes over de blokken rond de feestdagen.'}
+              </p>
+            )}
             <div className="flex flex-wrap items-end gap-3">
               <label className="text-sm text-neutral-800">
                 <span className="block text-xs font-medium text-neutral-600 mb-1">Hoe lang zoeken</span>
@@ -276,11 +292,11 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                 </select>
               </label>
               {gemaakt && zeker !== 'opnieuw' ? (
-                <button type="button" className={knop} disabled={bezig || rooster?.loopt} onClick={() => setZeker('opnieuw')}>
+                <button type="button" className={knop} disabled={bezig || rooster?.loopt || nietKlaar} onClick={() => setZeker('opnieuw')}>
                   Opnieuw maken
                 </button>
               ) : (
-                <button type="button" className="btn-primary" disabled={bezig || rooster?.loopt} onClick={maken}>
+                <button type="button" className="btn-primary" disabled={bezig || rooster?.loopt || nietKlaar} onClick={maken}>
                   {bezig ? 'Bezig met maken...' : gemaakt ? 'Ja, opnieuw maken' : 'Rooster maken'}
                 </button>
               )}
@@ -380,7 +396,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
           <div className="card card-padding space-y-4">
             <h2 className="text-lg font-semibold">Het rooster per week</h2>
             <p className="text-sm text-neutral-600">
-              Een blok met een dikke rand doet één AIOS. ~ is liever niet, ✕ is een geblokkeerde dienst uit het deel boven de helft en +
+              Een blok met een dikke rand doet één AIOS. Een opgeknipt blok rond feestdagen staat per dag. ~ is liever niet, ✕ is een geblokkeerde dienst uit het deel boven de helft en +
               is een voorkeur. {rooster.leeg > 0 ? `${rooster.leeg} ${rooster.leeg === 1 ? 'dienst is' : 'diensten zijn'} leeg.` : ''}
             </p>
             {weken.map((w) => (

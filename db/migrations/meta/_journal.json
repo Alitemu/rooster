@@ -183,6 +183,13 @@
       "when": 1788802000000,
       "tag": "0025_aios_auto_herinneren",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "5",
+      "when": 1788802100000,
+      "tag": "0026_aios_feestdagblokken",
+      "breakpoints": true
     }
   ]
 }

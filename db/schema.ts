@@ -658,7 +658,31 @@ export const aiosPeriode = sqliteTable('dienstrooster_aios_periode', {
   // The AIOS's own automatic reminders (lib/aiosAutoHerinneringen.ts); schedule_period's
   // auto_herinneren stays 0 for an AIOS period, so the achterwacht's skip it.
   auto_herinneren: integer('auto_herinneren', { mode: 'boolean' }).default(true).notNull(),
+  // How many AIOS on the night of New Year's Eve when 31 December is in the
+  // quarter (D7, J5): two unless the planner says one; with two a second ND
+  // slot without a block (lib/aiosFeestdagBlokken.ts).
+  oudjaar_aantal: integer('oudjaar_aantal').default(2).notNull(),
 });
+
+/**
+ * The planner's choice per block with a feestdag in it (docs/aios-rooster.md,
+ * "Blokken rond feestdagen"): opknippen = every day of it a single dienst
+ * for the solver; otherwise whole. Kept with the period, so the next
+ * generation has it filled in.
+ */
+export const aiosBlokkeuze = sqliteTable(
+  'dienstrooster_aios_blokkeuze',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    blok_id: text('blok_id').notNull().references(() => shiftBlock.id, { onDelete: 'cascade' }),
+    opknippen: integer('opknippen', { mode: 'boolean' }).notNull(),
+    gekozen_op: text('gekozen_op').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('aios_blokkeuze_uniq').on(table.period_id, table.blok_id),
+  })
+);
 
 export const periodFellow = sqliteTable(
   'dienstrooster_period_fellow',

@@ -16,7 +16,8 @@ Linux privileges, its own user, `AIOS_SOLVER_MEM_LIMIT`), its own tests in
 "Bouwen (test)" (job test-aios-solver). The web container reaches it as
 `AIOS_SOLVER_URL` (http://aios-solver:8000); outside Docker `python main.py`
 listens on 127.0.0.1:8001. Step 3 (0.74.0) is the solver alone; from 0.75.0
-(step 4a) the app calls it.
+(step 4a) the app calls it; 0.76.0 (step 4b) adds the blocks around
+feestdagen and New Year's Eve.
 
 ## The app's side (step 4a, 0.75.0)
 
@@ -44,6 +45,36 @@ listens on 127.0.0.1:8001. Step 3 (0.74.0) is the solver alone; from 0.75.0
   records the request (the contract), tests/e2e/aios-rooster.e2e.ts against
   the real one (AIOS_SOLVER_URL, 8001 in the browser checks).
 
+## Blocks around feestdagen and New Year's Eve (step 4b, 0.76.0)
+
+- lib/aiosFeestdagBlokken.ts asks the questions: per run of two or more
+  feestdagen in a row (reeksen) every zo t/m di or wo t/m vr block it falls
+  in, evening and night apart, with no default; every other such block with
+  a single feestdag, whole unless cut up; and with 31 December in the
+  period one or two AIOS on its night. A Saturday is one dienst already and
+  never asked. The route .../feestdagblokken (GET, PUT) shows and keeps
+  them, also before the period closes, not after publishing and not while
+  a generation runs.
+- .../genereren answers 409 QUESTIONS_OPEN while a required question has
+  no answer. Then zorgVoorOudjaar makes the second night (an ND slot
+  without a block, availability copied from the block's night that day,
+  again at every generation) or takes it away with one chosen; reopening
+  the period takes it away too, so the AIOS never see it on their screen.
+- lib/aiosSolverInvoer.ts sends a cut block as vorm LOS; the shift_block
+  row stays as made. The solver makes every dienst of a LOS block a single
+  option, and a dienst without a block too (ENKEL): the second night. Both
+  get the day after as compensation day (kalender.py, the table row "Losse
+  avond of nacht door de week"), and controle.py checks the same. Hard rule
+  5 is for the whole nachtblok zo t/m di: a fulltimer may do a single night
+  of a cut one (test_regels.py, the planner's design: "elke dag van het
+  blok is een losse dienst").
+- lib/aiosRooster.ts gives a cut block vorm LOS, so the page draws it per
+  day; a box spans only the days one AIOS has. The second night is its own
+  row, "Nacht 2", in the week it falls in.
+- Tests: app/api/aios/aiosFeestdagBlokken.test.ts (fake solver),
+  lib/aiosFeestdagBlokken.test.ts (reeksen, oudjaarIn), the second test of
+  tests/e2e/aios-rooster.e2e.ts (real solver).
+
 Files: kalender.py (compensation days, rest), model.py (options, the hard
 rules, the objective), controle.py (an independent check of a roster),
 main.py (the contract, /health and /solve), test_*.py (test_hulp.py builds
@@ -59,8 +90,9 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   at or before the start is the next morning), punten, blok_id}. The app's
   shift_slot rows.
 - `blokken`: {id, soort AVOND|NACHT, vorm ZO_DI|WO_VR|ZA|LOS}: shift_block.
-  A LOS block's diensten are single (a block the planner cut up, the second
-  AIOS on New Year's Eve).
+  A LOS block's diensten are single: a block the planner cut up. So is a
+  dienst with blok_id null: UD and DD, and an ND or AD without a block
+  (the second AIOS on New Year's Eve).
 - `aios`: {id, fte (0 < fte <= 1), beschikbaar [{van, tot}] (Geldig
   vanaf/tot), onderbreking, inwerken, parttime_dagen, vier_avonden,
   vier_nachten, twee_dagdiensten, markeringen [{dienst_id, niveau ABSOLUUT|
