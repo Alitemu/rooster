@@ -426,6 +426,16 @@ en gelden bij elke volgende keer dat je het rooster maakt. In het rooster
 staat een opgeknipt blok per dag en de tweede AIOS op oudjaarsnacht in de rij
 *Nacht 2*.
 
+**Vanaf versie 0.77.0** pas je het rooster van de AIOS met de hand aan. Tik
+in *Het rooster per week* op een blok of dienst. Je ziet per AIOS wat het zou
+kosten: een harde regel die erbij komt (zoals een compensatiedag of te weinig
+rust), wat die AIOS markeerde, of het blok niet meer heel is en het
+dienstpercentage daarna. Kies een AIOS. Met een waarschuwing vraagt de app
+eerst *Ja, toch indelen*. Een blok geef je heel of alleen één dag ervan.
+*Leeg laten* maakt de dienst leeg. *Ongedaan maken* zet je laatste wijziging
+terug. Onder het rooster staat welke harde regels het nog breekt. *Opnieuw
+maken* maakt het hele rooster opnieuw, ook wat je met de hand veranderde.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

@@ -17,7 +17,8 @@ Linux privileges, its own user, `AIOS_SOLVER_MEM_LIMIT`), its own tests in
 `AIOS_SOLVER_URL` (http://aios-solver:8000); outside Docker `python main.py`
 listens on 127.0.0.1:8001. Step 3 (0.74.0) is the solver alone; from 0.75.0
 (step 4a) the app calls it; 0.76.0 (step 4b) adds the blocks around
-feestdagen and New Year's Eve.
+feestdagen and New Year's Eve; 0.77.0 (step 4c) gives the app its own
+copy of the hard rules, for changing the roster by hand.
 
 ## The app's side (step 4a, 0.75.0)
 
@@ -74,6 +75,44 @@ feestdagen and New Year's Eve.
 - Tests: app/api/aios/aiosFeestdagBlokken.test.ts (fake solver),
   lib/aiosFeestdagBlokken.test.ts (reeksen, oudjaarIn), the second test of
   tests/e2e/aios-rooster.e2e.ts (real solver).
+
+## The app's copy of the hard rules (step 4c, 0.77.0)
+
+- Changing the roster by hand warns, the solver isn't asked: the user
+  chose (October 2026) a copy of the rules in the app over a /controle on
+  the solver, so it works without the solver running. lib/aiosRegels.ts
+  is controle.py line by line (its eenheden, compensation table, rule 8's
+  shift, the rest and seven nights, the weekend), on the request the app
+  sends (aiosSolverInvoer) and a roster; it returns controle.py's tuples.
+- So the rules are in three places: model.py, controle.py and
+  lib/aiosRegels.ts. tests/fixtures/aios-regels.json keeps the last two
+  equal: random quarters with random rosters (a block now and then split,
+  cut up, a second night without a block), two made for the rarer rules
+  (more than seven nights, a 4-block and two dagdiensten without the wish)
+  and three of the solver's own solutions, each with what controle.py found.
+  test_gedeeld.py runs controle.py over it, lib/aiosRegels.test.ts the app's
+  copy; both also check every rule occurs in it. A rule changed on purpose:
+  change controle.py and lib/aiosRegels.ts (and model.py), run
+  `python regelgevallen.py` in ./aios-solver (it writes the file, and is
+  left out of the image like the tests), then both tests must pass.
+- lib/aiosHandmatig.ts uses it: per AIOS before choosing (route
+  .../rooster/kandidaten) the violations the change adds to that AIOS's own
+  (only their own diensten are checked, so another's don't show), their
+  marks on it (geblokkeerd, afwezig, parttimedag, liever niet; the
+  solver's 1_GEBLOKKEERD and the part above half say the same and are left
+  out), a block no longer whole and their dienstpercentage after it above
+  25%. Someone not in the pool on the day is refused, as the achterwacht's
+  planner is. The change (.../rooster/wijzigen) is one dienst or diensten of
+  one block, each with `was`, who the planner saw (409 when it moved);
+  written as bron MANUAL with assignment_edit rows (HANDMATIG_VERWIJDEREN,
+  HANDMATIG_TOEWIJZEN) and one audit row, answered with its warnings and
+  `terug`, the change back ("Ongedaan maken" sends it). Only GEGENEREERD,
+  not while a generation runs.
+- lib/aiosRooster.ts lists what the whole roster breaks (overtredingen):
+  nothing as the solver made it, a change by hand may.
+- Tests: lib/aiosRegels.test.ts, aios-solver/test_gedeeld.py,
+  app/api/aios/aiosHandmatig.test.ts, the first test of
+  tests/e2e/aios-rooster.e2e.ts (a block by hand and back).
 
 Files: kalender.py (compensation days, rest), model.py (options, the hard
 rules, the objective), controle.py (an independent check of a roster),

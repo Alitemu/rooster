@@ -40,7 +40,9 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   on 31 December, made when a generation starts with two AIOS chosen
   (its availability copied from the block's night), taken away with one
   chosen or when the period is reopened. An ND without shift_block_id is
-  always that one.
+  always that one. Taken away, its assignment_edit rows go with it.
+- `assignment_edit` holds the AIOS's changes by hand too (0.77.0,
+  lib/aiosHandmatig.ts), with the same edit types as the achterwacht's.
 - `holiday_history` - which feestdag someone had in which year, from the
   setup wizard's old import step; read by nothing. The wizard step is gone:
   what counts is the number over the years, which the app keeps itself

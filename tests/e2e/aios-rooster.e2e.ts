@@ -12,6 +12,9 @@ import { getBaseUrl, loginAsBeheerder } from './setup';
  * from a Wednesday, so the solver is quick; the request it gets is the
  * app's own, so a contract the two disagree on fails here (422).
  *
+ * Step 4c: then a block to another AIOS by hand, with its warnings
+ * confirmed, and "Ongedaan maken" back to the roster as it was.
+ *
  * Step 4b: two weeks over kerst and oudjaar. No roster before the planner
  * says what happens with the blocks around kerst; a cut block and the
  * second night of New Year's Eve go to the real solver, which fills them.
@@ -75,7 +78,7 @@ test.afterAll(() => {
   }
 });
 
-test('the planner makes the AIOS roster, sees it per block and per AIOS, and removes it again', async ({ page }) => {
+test('the planner makes the AIOS roster, sees it per block and per AIOS, changes it by hand and removes it again', async ({ page }) => {
   test.setTimeout(240_000);
   await page.setViewportSize({ width: 375, height: 800 });
   await loginAsBeheerder(page);
@@ -97,6 +100,35 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, and rem
   expect(ingedeeld).toBeGreaterThan(0);
   expect((db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period) as { status: string }).status).toBe('GEGENEREERD');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+
+  // By hand: a night block to the AIOS the list offers first, then back.
+  const rooster = () =>
+    Object.fromEntries(
+      (db.prepare('SELECT slot_id, person_id FROM dienstrooster_assignment WHERE schedule_version_id = ?').all(ids.period) as Array<{
+        slot_id: string;
+        person_id: string;
+      }>).map((r) => [r.slot_id, r.person_id])
+    );
+  const voor = rooster();
+  await page.getByRole('button', { name: /^Nachtblok .*Wijzigen$/ }).first().click();
+  const wijzig = page.getByTestId('aios-wijzigen');
+  await expect(wijzig.getByRole('heading', { name: 'Wie doet dit?' })).toBeVisible();
+  await expect(wijzig.getByLabel('Het hele blok')).toBeChecked();
+  const kies = wijzig.getByRole('button', { name: /^Kies / }).first();
+  const codenaam = (await kies.getAttribute('aria-label'))!.replace(/^Kies /, '');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  await kies.click();
+  const klaar = page.getByTestId('aios-laatste-wijziging');
+  const toch = wijzig.getByRole('button', { name: 'Ja, toch indelen' });
+  await expect(klaar.or(toch)).toBeVisible();
+  if (await toch.isVisible()) await toch.click();
+  await expect(klaar).toContainText(`nu ${codenaam}.`);
+  await expect(page.getByRole('button', { name: new RegExp(`^Nachtblok .*: ${codenaam}`) }).first()).toBeVisible();
+  const na = rooster();
+  expect(Object.keys(na).filter((k) => na[k] !== voor[k]).length).toBeGreaterThanOrEqual(3);
+  await klaar.getByRole('button', { name: 'Ongedaan maken' }).click();
+  await expect(klaar).toHaveCount(0);
+  expect(rooster()).toEqual(voor);
 
   await paneel.getByRole('button', { name: 'Rooster verwijderen' }).click();
   await paneel.getByRole('button', { name: 'Ja, rooster verwijderen' }).click();

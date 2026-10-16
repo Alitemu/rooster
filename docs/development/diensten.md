@@ -120,7 +120,10 @@ Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
   aiosSolverInvoer.ts, aiosGenereren.ts and aiosRooster.ts (making and
   showing the roster with the AIOS's solver, 0.75.0,
   docs/development/aios-solver.md), aiosFeestdagBlokken.ts (the blocks
-  around feestdagen and the second night of New Year's Eve, 0.76.0).
+  around feestdagen and the second night of New Year's Eve, 0.76.0),
+  aiosRegels.ts and aiosHandmatig.ts (the hard rules in the app and
+  changing the roster by hand, 0.77.0: the AIOS's own, not the
+  achterwacht's manual-assign and reassign).
 - Tables of its own: aios_wens and aios_periode (when the AIOS were
   invited, under which address, and whether their automatic reminders
   are on). An AIOS period never gets

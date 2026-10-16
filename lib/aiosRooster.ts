@@ -6,7 +6,9 @@
  * change by hand counts the same as what the solver made. A block the
  * planner cut up around feestdagen shows as vorm LOS, as the solver got it
  * (lib/aiosFeestdagBlokken.ts); the second night of New Year's Eve is an ND
- * without a block.
+ * without a block. And what the roster breaks of the hard rules
+ * (lib/aiosRegels.ts): nothing as the solver made it, but a change by hand
+ * may (step 4c, F8).
  */
 
 import { db } from '@/db/client';
@@ -14,6 +16,7 @@ import { aiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 import { aiosWerkdagen, dienstpercentage } from '@/lib/aiosFte';
 import type { AiosCode, BlokSoort, BlokVorm, DagSoort } from '@/lib/aiosDiensten';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { controleerAiosRooster, regelZin, type Regel } from '@/lib/aiosRegels';
 
 export interface AiosRoosterDienst {
   slot_id: string;
@@ -53,10 +56,18 @@ export interface AiosRoosterPerAios {
   geblokkeerd: number;
 }
 
+export interface AiosRoosterOvertreding {
+  regel: Regel;
+  tekst: string;
+  wie: string[]; // codenamen; "leeg" for a dienst of a block without one
+  datums: string[];
+}
+
 export interface AiosRooster {
   dagen: AiosRoosterDag[];
   per_aios: AiosRoosterPerAios[];
   leeg: number;
+  overtredingen: AiosRoosterOvertreding[];
 }
 
 export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
@@ -150,5 +161,19 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
     };
   });
   per_aios.sort((x, y) => x.codenaam.localeCompare(y.codenaam, 'nl'));
-  return { dagen, per_aios, leeg: rows.filter((r) => !r.person_id).length };
+
+  const codenaam = new Map(per_aios.map((a) => [a.person_id, a.codenaam]));
+  const datum = new Map(rows.map((r) => [r.slot_id, r.datum]));
+  const rooster = new Map(rows.filter((r) => r.person_id).map((r) => [r.slot_id, r.person_id!]));
+  const overtredingen = controleerAiosRooster(invoer, rooster).map(
+    ([regel, wie, ids]): AiosRoosterOvertreding => ({
+      regel,
+      tekst: regelZin(regel),
+      // The block's: every one in it joined, "-" for its empty diensten.
+      wie: wie.split(',').map((id) => (id === '-' ? 'leeg' : codenaam.get(id) ?? id)),
+      // A dienst's day, or the day itself (a weekend's Saturday, a night); a counter has none.
+      datums: [...new Set(ids.map((id) => datum.get(id) ?? (/^\d{4}-\d{2}-\d{2}$/.test(id) ? id : null)).filter((d) => d !== null))].sort(),
+    })
+  );
+  return { dagen, per_aios, leeg: rows.filter((r) => !r.person_id).length, overtredingen };
 }

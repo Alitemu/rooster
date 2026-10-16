@@ -306,7 +306,18 @@ describe("New Year's Eve", () => {
 
   it('one AIOS: the second night goes at the next generation, with whoever had it', async () => {
     const tweede = nachten(w.q4, '2096-12-31')[1];
-    insert('dienstrooster_assignment', { schedule_version_id: w.q4, person_id: w.x, slot_id: tweede.id, bron: 'SOLVER', row_version: 1, aangemaakt_op: now });
+    const toewijzing = insert('dienstrooster_assignment', { schedule_version_id: w.q4, person_id: w.x, slot_id: tweede.id, bron: 'MANUAL', row_version: 1, aangemaakt_op: now });
+    // Given by hand (lib/aiosHandmatig.ts): that row goes with the night.
+    insert('dienstrooster_assignment_edit', {
+      toewijzing_id: toewijzing,
+      periode_id: w.q4,
+      person_id: w.x,
+      slot_id: tweede.id,
+      edit_type: 'HANDMATIG_TOEWIJZEN',
+      bewerkt_door_person_id: w.planner,
+      aangemaakt_op: now,
+      row_version: 1,
+    });
     expect((await zet(w.q4, { oudjaar_aantal: 1 })).status).toBe(200);
     expect((await haal(w.q4)).oudjaar.aantal).toBe(1);
     expect(nachten(w.q4, '2096-12-31')).toHaveLength(2);

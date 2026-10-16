@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagBlokken, type FeestdagStaat } from '@/components/AiosFeestdagBlokken';
+import { AiosRoosterWijzigen, type Gewijzigd, type Keuze } from '@/components/AiosRoosterWijzigen';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst } from '@/lib/aiosRooster';
@@ -83,8 +84,39 @@ function Wie({ dienst }: { dienst: AiosRoosterDienst }) {
   );
 }
 
-function RoosterWeek({ dagen }: { dagen: AiosRoosterDag[] }) {
+interface Wijzigen {
+  gekozen: Keuze | null;
+  kies: (k: Keuze) => void;
+  paneel: ReactNode;
+}
+
+/** A box: a button to change it when the roster can change by hand, marked when chosen (not by colour alone). */
+function Vak({ dienst, keuze, w, className, title }: { dienst: AiosRoosterDienst; keuze: Keuze; w: Wijzigen | null; className: string; title: string }) {
+  if (!w) {
+    return (
+      <span className={className} title={title}>
+        <Wie dienst={dienst} />
+      </span>
+    );
+  }
+  const gekozen = w.gekozen?.dagen.some((d) => keuze.dagen.some((k) => k.slot_id === d.slot_id)) ?? false;
+  return (
+    <button
+      type="button"
+      className={`${className} w-full hover:bg-neutral-100 ${gekozen ? 'outline outline-2 outline-offset-1 outline-neutral-900' : ''}`}
+      title={title}
+      aria-pressed={gekozen}
+      aria-label={`${title}: ${dienst.aios ? dienst.aios.codenaam : 'leeg'}. Wijzigen`}
+      onClick={() => w.kies(keuze)}
+    >
+      <Wie dienst={dienst} />
+    </button>
+  );
+}
+
+function RoosterWeek({ dagen, w }: { dagen: AiosRoosterDag[]; w: Wijzigen | null }) {
   const weken = [...new Set(dagen.map((d) => d.iso_week))];
+  const hierGekozen = !!w?.gekozen && dagen.some((d) => d.diensten.some((x) => x.slot_id === w.gekozen!.dagen[0].slot_id));
   return (
     <div className="space-y-1">
       <p className="text-sm font-medium text-neutral-800">
@@ -118,14 +150,16 @@ function RoosterWeek({ dagen }: { dagen: AiosRoosterDag[] }) {
               const leeg = !dienst.aios;
               const rand = leeg ? 'border-dashed border-red-600 text-red-800' : '';
               if (!dienst.blok || dienst.blok.vorm === 'LOS') {
+                const naam = dienst.blok ? (dienst.blok.soort === 'AVOND' ? 'Avonddienst' : 'Nachtdienst') : CODE_NAAM[dienst.code];
                 cellen.push(
                   <td key={i} className="p-0.5">
-                    <span
+                    <Vak
+                      dienst={dienst}
+                      keuze={{ naam, blok: false, dagen: [{ slot_id: dienst.slot_id, datum: dagen[i].datum }] }}
+                      w={w}
                       className={`block truncate rounded border border-neutral-400 py-0.5 text-center ${rand}`}
-                      title={`${CODE_NAAM[dienst.code]} ${datumKort(dagen[i].datum)}`}
-                    >
-                      <Wie dienst={dienst} />
-                    </span>
+                      title={`${naam} ${datumKort(dagen[i].datum)}`}
+                    />
                   </td>
                 );
                 continue;
@@ -134,14 +168,21 @@ function RoosterWeek({ dagen }: { dagen: AiosRoosterDag[] }) {
               const blok = dienst.blok;
               let j = i;
               while (j < dagen.length && rij.vind(dagen[j])?.blok?.id === blok.id && rij.vind(dagen[j])?.aios?.id === dienst.aios?.id) j++;
+              const naam = `${blok.soort === 'AVOND' ? 'Avondblok' : 'Nachtblok'} ${BLOK_VORM_LABELS[blok.vorm]}`;
+              // Every day of the block in this week, also those another AIOS has.
+              const blokDagen = dagen.flatMap((d) => {
+                const x = rij.vind(d);
+                return x?.blok?.id === blok.id ? [{ slot_id: x.slot_id, datum: d.datum }] : [];
+              });
               cellen.push(
                 <td key={i} colSpan={j - i} className="p-0.5">
-                  <span
+                  <Vak
+                    dienst={dienst}
+                    keuze={{ naam, blok: true, dagen: blokDagen }}
+                    w={w}
                     className={`block truncate rounded border-2 border-neutral-700 py-0.5 text-center ${rand}`}
-                    title={`${blok.soort === 'AVOND' ? 'Avondblok' : 'Nachtblok'} ${BLOK_VORM_LABELS[blok.vorm]}`}
-                  >
-                    <Wie dienst={dienst} />
-                  </span>
+                    title={naam}
+                  />
                 </td>
               );
               i = j - 1;
@@ -155,6 +196,7 @@ function RoosterWeek({ dagen }: { dagen: AiosRoosterDag[] }) {
           })}
         </tbody>
       </table>
+      {hierGekozen && w!.paneel}
     </div>
   );
 }
@@ -183,6 +225,9 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
   const [uitkomst, setUitkomst] = useState<AiosGeneratieUitkomst | null>(null);
   const [zeker, setZeker] = useState<'opnieuw' | 'verwijderen' | null>(null);
   const [feestdag, setFeestdag] = useState<FeestdagStaat>({ open: 0, gewijzigd: false });
+  const [gekozen, setGekozen] = useState<Keuze | null>(null);
+  const [laatste, setLaatste] = useState<Gewijzigd | null>(null);
+  const [terugFout, setTerugFout] = useState<string | null>(null);
   const actief = useRef(true);
 
   const laad = useCallback(() => {
@@ -204,6 +249,9 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
     setFout(null);
     setUitkomst(null);
     setZeker(null);
+    // A new roster: the change by hand before it is gone, and so its way back.
+    setLaatste(null);
+    setGekozen(null);
     try {
       const start = await antwoord(
         await fetch(withBasePath(`/api/aios/periode/${periodId}/genereren`), {
@@ -238,6 +286,8 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
     setBezig(true);
     setFout(null);
     setZeker(null);
+    setLaatste(null);
+    setGekozen(null);
     try {
       await antwoord(await fetch(withBasePath(`/api/aios/periode/${periodId}/rooster-verwijderen`), { method: 'POST' }), 'Verwijderen is mislukt');
       setUitkomst(null);
@@ -245,6 +295,28 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
       laad();
     } catch (err) {
       setFout(err instanceof Error ? err.message : 'Verwijderen is mislukt');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const terugzetten = async () => {
+    if (!laatste) return;
+    setBezig(true);
+    setTerugFout(null);
+    try {
+      await antwoord(
+        await fetch(withBasePath(`/api/aios/periode/${periodId}/rooster/wijzigen`), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ wijzigingen: laatste.terug }),
+        }),
+        'Ongedaan maken is mislukt'
+      );
+      setLaatste(null);
+      laad();
+    } catch (err) {
+      setTerugFout(err instanceof Error ? err.message : 'Ongedaan maken is mislukt');
     } finally {
       setBezig(false);
     }
@@ -395,12 +467,73 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
           </div>
           <div className="card card-padding space-y-4">
             <h2 className="text-lg font-semibold">Het rooster per week</h2>
+            {laatste && (
+              <div className="rounded border border-neutral-400 p-3 text-sm space-y-1" role="status" data-testid="aios-laatste-wijziging">
+                <p className="font-medium">Gewijzigd. {laatste.tekst}</p>
+                {laatste.waarschuwingen.length > 0 && (
+                  <ul className="list-disc pl-5 text-neutral-800">
+                    {laatste.waarschuwingen.map((x) => (
+                      <li key={x.tekst}>{x.tekst}</li>
+                    ))}
+                  </ul>
+                )}
+                <button
+                  type="button"
+                  className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50"
+                  disabled={bezig}
+                  onClick={terugzetten}
+                >
+                  Ongedaan maken
+                </button>
+                {terugFout && (
+                  <p role="alert" className="text-red-700">
+                    {terugFout}
+                  </p>
+                )}
+              </div>
+            )}
+            {rooster.overtredingen.length > 0 && (
+              <div className="rounded border-2 border-dashed border-neutral-800 p-3 text-sm space-y-1" data-testid="aios-overtredingen">
+                <p className="font-medium">⚠ Dit rooster breekt {rooster.overtredingen.length === 1 ? 'een harde regel' : `${rooster.overtredingen.length} keer een harde regel`}:</p>
+                <ul className="list-disc pl-5 text-neutral-800">
+                  {rooster.overtredingen.map((o, i) => (
+                    <li key={i}>
+                      {o.wie.join(' en ')}: {o.tekst} {o.datums.length > 0 && `(${o.datums.map(datumKort).join(', ')})`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="text-sm text-neutral-600">
-              Een blok met een dikke rand doet één AIOS. Een opgeknipt blok rond feestdagen staat per dag. ~ is liever niet, ✕ is een geblokkeerde dienst uit het deel boven de helft en +
+              Tik op een blok of dienst om te kiezen wie die doet. Een blok met een dikke rand doet één AIOS. Een opgeknipt blok rond feestdagen staat per dag. ~ is liever niet, ✕ is een geblokkeerde dienst uit het deel boven de helft en +
               is een voorkeur. {rooster.leeg > 0 ? `${rooster.leeg} ${rooster.leeg === 1 ? 'dienst is' : 'diensten zijn'} leeg.` : ''}
             </p>
-            {weken.map((w) => (
-              <RoosterWeek key={w[0].datum} dagen={w} />
+            {weken.map((week) => (
+              <RoosterWeek
+                key={week[0].datum}
+                dagen={week}
+                w={
+                  rooster.loopt || bezig
+                    ? null
+                    : {
+                        gekozen,
+                        kies: setGekozen,
+                        paneel: gekozen && (
+                          <AiosRoosterWijzigen
+                            key={gekozen.dagen.map((d) => d.slot_id).join()}
+                            periodId={periodId}
+                            keuze={gekozen}
+                            onGewijzigd={(g) => {
+                              setLaatste(g);
+                              setGekozen(null);
+                              laad();
+                            }}
+                            onSluit={() => setGekozen(null)}
+                          />
+                        ),
+                      }
+                }
+              />
             ))}
           </div>
         </>

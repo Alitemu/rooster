@@ -10,7 +10,7 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 - Automatic roster generation with diagnostics
 
 Two rosters with two planners: the achterwacht (in production) and the AIOS
-(designed in docs/aios-rooster.md, built in steps: steps 1 to 3, 4a and 4b are in), kept apart
+(designed in docs/aios-rooster.md, built in steps: steps 1 to 3 and 4a to 4c are in), kept apart
 in every route (docs/development/diensten.md).
 
 This file holds the rules. The background per area - why a rule exists, what
@@ -255,6 +255,13 @@ Traps that cost a day each time:
 - **Mail:** the app never stores e-mail addresses and never mails
   participants itself; everything goes as a verzendlijst to the
   operator's flow.
+- **The AIOS's hard rules live in three places:** aios-solver/model.py
+  (the solver), aios-solver/controle.py (its independent check) and
+  lib/aiosRegels.ts (the app's copy, the user's choice). A rule changed in
+  one is changed in all three, then tests/fixtures/aios-regels.json
+  written again (`python regelgevallen.py` in ./aios-solver):
+  test_gedeeld.py and lib/aiosRegels.test.ts both check it
+  (docs/development/aios-solver.md).
 
 ## Common Patterns & Pitfalls
 

@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
+Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0) en met de hand aanpassen (versie 0.77.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -201,6 +201,17 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
 
 De solver breekt deze nooit. Handmatig indelen kan wel, met een waarschuwing,
 zoals nu bij een geblokkeerde dag (F8).
+
+In de app (0.77.0): de planner tikt in het rooster op een blok of dienst en
+ziet per AIOS wat het zou kosten: welke harde regel erbij komt, wat die AIOS
+er markeerde (geblokkeerd, afwezig, parttimedag, liever niet), of het blok
+niet meer heel is en het dienstpercentage daarna boven 25%. Kiezen mag toch,
+na *Ja, toch indelen*. Wie op die dag niet in de pool zit, kan niet. Een
+blok gaat heel of één dag ervan. *Ongedaan maken* zet de laatste wijziging
+terug. Onder het rooster staat wat het nog breekt. De regels staan daarvoor
+ook in de app zelf, zodat dit werkt zonder de solver (de keuze van de
+planner in oktober 2026). Een test houdt die gelijk aan de controle van de
+solver.
 
 1. Geen dienst op een geblokkeerde dag, tijdens verlof, tijdens een
    onderbreking of buiten Geldig vanaf/tot. Een uitzondering: het deel boven

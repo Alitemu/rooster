@@ -168,6 +168,8 @@ export function tweedeNacht(periodId: string, datum: string): { id: string } | u
 }
 
 function verwijderSlot(slotId: string): void {
+  // A change by hand on it (lib/aiosHandmatig.ts) goes with it: the dienst is gone.
+  db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE slot_id = ?').run(slotId);
   db.prepare('DELETE FROM dienstrooster_assignment WHERE slot_id = ?').run(slotId);
   db.prepare('DELETE FROM dienstrooster_availability WHERE slot_id = ?').run(slotId);
   db.prepare('DELETE FROM dienstrooster_shift_slot WHERE id = ?').run(slotId);

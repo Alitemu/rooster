@@ -60,6 +60,9 @@ too (`runner: 'pytest'`, run in ./solver with SOLVER_PYTHON, a Python
 with solver/requirements.txt and pytest; audit 14). One of the AIOS's
 solver adds `cwd: 'aios-solver'` (docs/development/aios-solver.md); its
 tests, `python -m pytest -q` in ./aios-solver, take about 20 seconds.
+test_gedeeld.py there and lib/aiosRegels.test.ts here check the same
+rosters (tests/fixtures/aios-regels.json): the solver's check and the
+app's copy of the AIOS's hard rules must find the same.
 
 The solver the browser checks talk to should run the OR-Tools version
 of solver/requirements.txt (9.8, the image's): another version searches
