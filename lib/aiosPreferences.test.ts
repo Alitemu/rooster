@@ -156,44 +156,46 @@ describe('marking an AIOS dienst', () => {
     expect(marks(c, '2034-04-10')).toMatchObject({ ADW: 'LIEVER_NIET/ABSENCE' });
   });
 
-  it("blocks a part-time day's UD, makes its evening and night liever niet, and lets the AIOS block those", () => {
+  it("blocks a part-time day's UD and makes its evening and night liever niet, which the AIOS may change", () => {
     const d = person('d');
     insert('dienstrooster_parttime_pattern', { person_id: d, weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2030-01-01', geldig_tot: '2099-12-31', aangemaakt_door: d, aangemaakt_op: new Date().toISOString() });
     syncAiosPersoon(d);
     // The planner's choice in October 2026: the evening and night may be planned, rather not.
     expect(marks(d, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'LIEVER_NIET/PARTTIME', ND: 'LIEVER_NIET/PARTTIME' });
-    // Less than liever niet on the evening block over that Monday: refused, nothing written.
-    const nee = setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), 'VOORKEUR');
+    // The uitloopdienst stays blocked.
+    const nee = setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'UD'), 'LIEVER_NIET');
     expect(nee).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
-    expect((nee as { message: string }).message).toContain('liever niet');
-    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'UD'), 'LIEVER_NIET')).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
-    // Blocking it is theirs, the Monday too, and counts for the 50% rule.
+    expect((nee as { message: string }).message).toContain('geen uitloopdienst');
+    // A voorkeur for the evening block over that Monday is theirs, the Monday too; clearing it brings the liever niet back.
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), 'VOORKEUR')).toEqual({ ok: true });
+    expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'VOORKEUR/MANUAL' });
+    syncAiosPersoon(d);
+    expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'VOORKEUR/MANUAL' });
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), null)).toEqual({ ok: true });
+    expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'LIEVER_NIET/PARTTIME' });
+    // Blocking it is theirs too, and counts for the 50% rule.
     const voor = blokkadeTellers(loadAiosVoorkeurDagen(d, ids.period)).find((t) => t.groep === 'AVONDBLOKKEN')!.geblokkeerd;
     expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), 'ABSOLUUT')).toEqual({ ok: true });
     expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'ABSOLUUT/MANUAL' });
     expect(blokkadeTellers(loadAiosVoorkeurDagen(d, ids.period)).find((t) => t.groep === 'AVONDBLOKKEN')!.geblokkeerd).toBe(voor + 1);
-    // Another sync leaves it theirs; clearing it brings the liever niet back.
     syncAiosPersoon(d);
     expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'ABSOLUUT/MANUAL' });
-    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), null)).toEqual({ ok: true });
-    expect(marks(d, '2034-04-17')).toMatchObject({ AD: 'LIEVER_NIET/PARTTIME' });
     // The night the same way.
-    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'ND'), 'VOORKEUR')).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
-    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'ND'), 'ABSOLUUT')).toEqual({ ok: true });
-    expect(marks(d, '2034-04-18')).toMatchObject({ ND: 'ABSOLUUT/MANUAL' });
+    expect(setAiosVoorkeur(d, ids.period, slot('2034-04-17', 'ND'), 'VOORKEUR')).toEqual({ ok: true });
+    expect(marks(d, '2034-04-18')).toMatchObject({ ND: 'VOORKEUR/MANUAL' });
   });
 
-  it("puts a part-time evening blocked before 0.82.0 at liever niet, and takes a voorkeur over", () => {
+  it("puts a part-time evening blocked before 0.82.0 at liever niet, and leaves the AIOS's own marks", () => {
     const f = person('f');
-    // A voorkeur for the night block over that Monday, from before the part-time day.
+    // From before the part-time day: a voorkeur for the night block over that Monday and for its uitloopdienst.
     expect(setAiosVoorkeur(f, ids.period, slot('2034-04-16', 'ND'), 'VOORKEUR')).toEqual({ ok: true });
+    expect(setAiosVoorkeur(f, ids.period, slot('2034-04-17', 'UD'), 'VOORKEUR')).toEqual({ ok: true });
     insert('dienstrooster_parttime_pattern', { person_id: f, weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2030-01-01', geldig_tot: '2099-12-31', aangemaakt_door: f, aangemaakt_op: new Date().toISOString() });
     syncAiosPersoon(f);
-    db.prepare(`UPDATE dienstrooster_availability SET blocking_level = 'ABSOLUUT' WHERE person_id = ? AND source = 'PARTTIME'`).run(f);
+    db.prepare(`UPDATE dienstrooster_availability SET blocking_level = 'ABSOLUUT' WHERE person_id = ? AND source = 'PARTTIME' AND slot_id = ?`).run(f, slot('2034-04-17', 'AD'));
     syncAiosPersoon(f);
-    expect(marks(f, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'LIEVER_NIET/PARTTIME', ND: 'LIEVER_NIET/PARTTIME' });
-    // The part-time day's liever niet took the voorkeur over; the Sunday's night keeps it.
-    expect(marks(f, '2034-04-16')).toMatchObject({ ND: 'VOORKEUR/MANUAL' });
+    // The uitloopdienst's block takes the voorkeur over; the night keeps it; the old blocked evening is liever niet now.
+    expect(marks(f, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'LIEVER_NIET/PARTTIME', ND: 'VOORKEUR/MANUAL' });
   });
 });
 

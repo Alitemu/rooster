@@ -253,10 +253,11 @@ solver.
 4. Op de parttimedag geen uitloopdienst. De avond en de nacht van die dag mogen
    wel, maar staan voor die AIOS op liever niet: het avond- of nachtblok waar de
    dag in valt dus ook (de keuze van de planner in oktober 2026; tot 0.82.0 was
-   het avondblok verboden). Blokkeert de AIOS die avond of nacht zelf, dan is
-   dat een gewone blokkade: die telt mee voor de 50%-regel. Lager dan liever
-   niet kan de AIOS het daar niet zetten. Bij ruilen telt het ook zo: een
-   parttimer kan een avond of nacht op de parttimedag ruilen.
+   het avondblok verboden). De AIOS kan er zelf voorkeur of geblokkeerd van
+   maken (de keuze van de planner in oktober 2026). Een eigen blokkade daar
+   telt mee voor de 50%-regel. Wist de AIOS de eigen keuze, dan staat het
+   weer op liever niet. Bij ruilen telt het ook zo: een parttimer kan een
+   avond of nacht op de parttimedag ruilen.
 5. Fulltimers (1,0 fte) nooit in het nachtblok zondag tot en met dinsdag: dat
    is voor parttimers (F7).
 6. Inwerken: zie hierboven.

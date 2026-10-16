@@ -159,7 +159,8 @@ export function AiosDeeltijdEditor({
         <p className="text-sm text-neutral-600">
           Werk je een vaste dag (of om de week) niet? Geef dat hier op. Op die dag krijg je dan geen
           uitloopdienst. Je avond en nacht op die dag staan op liever niet: het rooster plant ze alleen als het
-          niet anders kan. Wil je ze echt niet, blokkeer ze dan zelf. Een weekenddienst kan nog wel.
+          niet anders kan. Wil je ze juist wel, kies dan voorkeur. Wil je ze echt niet, blokkeer ze dan. Een
+          weekenddienst kan nog wel.
         </p>
       </div>
 

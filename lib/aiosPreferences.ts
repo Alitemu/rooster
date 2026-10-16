@@ -23,6 +23,7 @@ import type { AiosCode, BlokSoort, BlokVorm } from '@/lib/aiosDiensten';
 import {
   LEGE_WENS,
   OPMERKING_MAX_LENGTH,
+  parttimeLieverNiet,
   type AiosVoorkeurDag,
   type AiosWens,
   type Bron,
@@ -200,9 +201,11 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
         : 'Op een feestdag kun je niet blokkeren. Kies liever niet als je die dag liever niet werkt.'
     );
   }
-  // What an absence or part-time day holds stays: a mark may not say less.
+  // What an absence or a part-time day's uitloopdienst holds stays: a mark
+  // may not say less. A part-time day's evening or night is liever niet
+  // until the AIOS says otherwise, voorkeur included (lib/aiosSync.ts).
   for (const t of targets) {
-    if (!t.level || t.bron === 'MANUAL' || strength(level) >= strength(t.level)) continue;
+    if (!t.level || t.bron === 'MANUAL' || parttimeLieverNiet(t) || strength(level) >= strength(t.level)) continue;
     return t.bron === 'ABSENCE'
       ? weiger(
           409,
@@ -214,18 +217,14 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
       : weiger(
           409,
           'IN_DEELTIJD',
-          t.level === 'ABSOLUUT'
-            ? 'Op je parttimedag krijg je geen uitloopdienst. Pas je parttimedagen aan als die niet kloppen.'
-            : 'Op je parttimedag staan je avond en nacht op liever niet. Blokkeren kan wel. Pas je parttimedagen aan als die niet kloppen.'
+          'Op je parttimedag krijg je geen uitloopdienst. Pas je parttimedagen aan als die niet kloppen.'
         );
   }
 
-  // Their own marks, and a part-time day's liever niet they make stronger:
-  // an evening or night they block there is theirs (lib/aiosSync.ts), and
-  // counts for the 50% rule. Clearing it brings the liever niet back.
-  const eigen = targets
-    .filter((t) => !t.level || t.bron === 'MANUAL' || (t.bron === 'PARTTIME' && level !== null && strength(level) > strength(t.level)))
-    .map((t) => t.id);
+  // Their own marks, and a part-time day's liever niet they change: an
+  // evening or night they mark there is theirs (lib/aiosSync.ts), blocked
+  // it counts for the 50% rule. Clearing it brings the liever niet back.
+  const eigen = targets.filter((t) => !t.level || t.bron === 'MANUAL' || (parttimeLieverNiet(t) && level !== null)).map((t) => t.id);
   db.transaction(() => {
     if (level === null) {
       const del = db.prepare(`DELETE FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ? AND source = 'MANUAL'`);

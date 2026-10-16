@@ -61,8 +61,12 @@ describe('tapping a box', () => {
     const feestdagVerlof = vak([dienst('LIEVER_NIET', 'ABSENCE')], true);
     expect(vakKeuzes(feestdagVerlof)).toEqual(['LIEVER_NIET']);
     expect(vakKeuzes(vak([dienst('ABSOLUUT', 'PARTTIME')]))).toEqual(['ABSOLUUT']);
-    // A part-time day's evening or night is liever niet: blocking it is the AIOS's own choice (0.82.0).
-    expect(vakKeuzes(vak([dienst(null), dienst('LIEVER_NIET', 'PARTTIME'), dienst(null)]))).toEqual(['LIEVER_NIET', 'ABSOLUUT']);
+    // A part-time day's evening or night is liever niet until the AIOS says
+    // otherwise (0.82.0): leeg brings it back, so liever niet is not offered twice.
+    const pt = vak([dienst(null), dienst('LIEVER_NIET', 'PARTTIME'), dienst(null)]);
+    expect(vakKeuzes(pt)).toEqual([null, 'VOORKEUR', 'ABSOLUUT']);
+    expect(vakStand(pt)).toBe('LIEVER_NIET');
+    expect(volgendeVakStand(pt)).toBe('VOORKEUR');
   });
 
   it('shows the own mark, or what leave holds over it', () => {

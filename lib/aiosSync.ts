@@ -16,11 +16,11 @@
  *   evening block it is in) and its night are liever niet: they may be
  *   planned, but rather not (the planner's choice in October 2026; until
  *   0.82.0 the evening was blocked too). The weekend diensten stay open;
- * - leave or a part-time day takes over a softer mark the AIOS made by hand
- *   (for leave liever niet, voorkeur or empty; for a part-time day's
- *   evening or night voorkeur or empty): left softer, the solver could put
- *   them on it more readily. A stronger one stays theirs, so an evening on
- *   a part-time day they blocked by hand is theirs and counts for the 50%
+ * - leave or a part-time day's uitloopdienst takes over a softer mark the
+ *   AIOS made by hand (liever niet, voorkeur, empty): left soft, the solver
+ *   could put them on it. A part-time day's evening or night is liever niet
+ *   only until the AIOS marks it: voorkeur or geblokkeerd stays theirs (the
+ *   planner's choice in October 2026), and blocked it counts for the 50%
  *   rule (lib/aiosVoorkeur.ts blokkadeTellers).
  * Only a period that takes input (OPEN, not in the prullenbak, before the
  * deadline) is written, as at the achterwacht.
@@ -222,8 +222,8 @@ function verzoenPatroon(p: Patroon, periodId: string): number {
     if (!er) {
       insert.run(crypto.randomUUID(), p.person_id, slotId, niveau, p.id, now);
       gezet++;
-    } else if (er.source === 'MANUAL' && sterkte(er.blocking_level) < sterkte(niveau)) {
-      // A voorkeur gives way too: the uitloopdienst cannot be worked, the evening and night rather not.
+    } else if (er.source === 'MANUAL' && niveau === 'ABSOLUUT' && sterkte(er.blocking_level) < sterkte(niveau)) {
+      // A voorkeur gives way too: the uitloopdienst cannot be worked. The evening and night are the AIOS's to mark.
       overnemen.run(niveau, p.id, p.person_id, slotId);
       gezet++;
     }
