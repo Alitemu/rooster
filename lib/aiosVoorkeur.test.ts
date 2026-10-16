@@ -80,6 +80,7 @@ describe('tapping a box', () => {
 describe('the part above half', () => {
   const dagdiensten = (totaal: number, geblokkeerd: number) => [
     {
+      dag_soort: 'WEEKEND' as const,
       diensten: Array.from({ length: totaal }, (_, i) => ({
         slot_id: `s${i}`,
         code: 'DD' as const,
@@ -119,10 +120,68 @@ describe('the part above half', () => {
 
   it('tells the AIOS and the planner how many may still be rostered, in words', () => {
     const t = dd(20, 12);
-    expect(bovenHelftUitleg(t)).toContain('hoogstens 2 van je geblokkeerde dagdiensten in het weekend en op feestdagen alsnog bij jou inplannen');
+    expect(bovenHelftUitleg(t)).toContain('hoogstens 2 van je geblokkeerde dagdiensten in het weekend alsnog bij jou inplannen');
     expect(bovenHelftPlanner(t)).toBe(
-      'Meer dan de helft van de dagdiensten in het weekend en op feestdagen geblokkeerd: 12 van de 20. ' +
+      'Meer dan de helft van de dagdiensten in het weekend geblokkeerd: 12 van de 20. ' +
         'Het rooster kan er hoogstens 2 van alsnog bij deze AIOS inplannen.'
     );
+  });
+});
+
+/**
+ * Only what can be blocked counts, also in the total (the planner's choice,
+ * October 2026): a feestdag can't be blocked, nor a block with a feestdag
+ * in it (vakKeuzes), so neither is in its counter's total. With them in,
+ * the half lay too high.
+ */
+describe('the counters leave out the feestdagen', () => {
+  type Dag = Parameters<typeof blokkadeTellers>[0][number];
+  const dag = (dag_soort: 'WERKDAG' | 'WEEKEND' | 'FEESTDAG', diensten: Dag['diensten']): Dag => ({ dag_soort, diensten });
+  const los = (code: 'UD' | 'DD', id: string, level: Niveau | null = null) => ({
+    slot_id: id,
+    code,
+    naam: code,
+    start_tijd: '08:00',
+    eind_tijd: '17:00',
+    blok: null,
+    ...dienst(level),
+  });
+  const blok = (id: string, slot: string, level: Niveau | null = null) => ({
+    slot_id: slot,
+    code: 'AD' as const,
+    naam: 'Avonddienst',
+    start_tijd: '17:00',
+    eind_tijd: '23:30',
+    blok: { id, soort: 'AVOND' as const, vorm: 'ZO_DI' as const, start_datum: '2097-04-25', eind_datum: '2097-04-27' },
+    ...dienst(level),
+  });
+  const tellers = (dagen: Dag[]) => Object.fromEntries(blokkadeTellers(dagen).map((t) => [t.groep, t]));
+
+  it('counts a dagdienst on a feestdag in neither the blocked nor the total', () => {
+    const t = tellers([
+      dag('WEEKEND', [los('DD', 'za', 'ABSOLUUT')]),
+      dag('WEEKEND', [los('DD', 'zo')]),
+      dag('FEESTDAG', [los('DD', 'pasen')]),
+      dag('FEESTDAG', [los('DD', 'koningsdag')]),
+    ]);
+    // 1 of 2, not 1 of 4: the two feestdagen are not the AIOS's to block.
+    expect(t.DAGDIENSTEN).toMatchObject({ geblokkeerd: 1, totaal: 2, boven_helft: false });
+    expect(tellers([dag('WEEKEND', [los('DD', 'za', 'ABSOLUUT')]), dag('FEESTDAG', [los('DD', 'pasen')])]).DAGDIENSTEN).toMatchObject({
+      totaal: 1,
+      boven_helft: true,
+      erboven: 1,
+    });
+  });
+
+  it('leaves a block with a feestdag in it out of the total', () => {
+    const t = tellers([
+      dag('WEEKEND', [blok('a', 'a1', 'ABSOLUUT')]),
+      dag('WERKDAG', [blok('a', 'a2', 'ABSOLUUT')]),
+      dag('WEEKEND', [blok('b', 'b1')]),
+      dag('FEESTDAG', [blok('b', 'b2')]),
+      dag('WEEKEND', [blok('c', 'c1')]),
+    ]);
+    // Blocks a and c count, b has a feestdag in it.
+    expect(t.AVONDBLOKKEN).toMatchObject({ geblokkeerd: 1, totaal: 2, boven_helft: false });
   });
 });

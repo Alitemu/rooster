@@ -753,10 +753,24 @@ const MUTATIONS = [
     tests: ['lib/aiosAutoHerinneringen'],
   },
   {
+    name: 'aios: a dagdienst on a feestdag counted in the total',
+    file: 'lib/aiosVoorkeur.ts',
+    find: "      if ((d.code === 'UD' || d.code === 'DD') && !feestdag) {",
+    replace: "      if (d.code === 'UD' || d.code === 'DD') {",
+    tests: ['lib/aiosVoorkeur'],
+  },
+  {
+    name: 'aios: a block with a feestdag in it counted in the total',
+    file: 'lib/aiosVoorkeur.ts',
+    find: '    const lijst = [...blokken.values()].filter((b) => !b.feestdag && filter(b));',
+    replace: '    const lijst = [...blokken.values()].filter(filter);',
+    tests: ['lib/aiosVoorkeur'],
+  },
+  {
     name: 'aios: the uitloopdiensten left out of the counters again',
     file: 'lib/aiosVoorkeur.ts',
-    find: "      if (d.code === 'UD' || d.code === 'DD') {",
-    replace: "      if (d.code === 'DD') {",
+    find: "      if ((d.code === 'UD' || d.code === 'DD') && !feestdag) {",
+    replace: "      if (d.code === 'DD' && !feestdag) {",
     tests: ['lib/aiosPreferences'],
   },
   {

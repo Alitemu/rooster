@@ -78,36 +78,43 @@ export interface BlokkadeTeller {
 
 export const TELLER_LABELS: Record<TellerGroep, string> = {
   UITLOOPDIENSTEN: 'uitloopdiensten',
-  DAGDIENSTEN: 'dagdiensten in het weekend en op feestdagen',
+  DAGDIENSTEN: 'dagdiensten in het weekend',
   ZATERDAG_AVOND: 'losse avonddiensten op zaterdag',
   ZATERDAG_NACHT: 'losse nachtdiensten op zaterdag',
   AVONDBLOKKEN: 'avondblokken',
   NACHTBLOKKEN: 'nachtblokken',
 };
 
-/** The 50% counters for the days of a quarter. */
-export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'diensten'>>): BlokkadeTeller[] {
+/**
+ * The 50% counters for the days of a quarter. Only what can be blocked
+ * counts, also in the total: nothing on a feestdag and no block with a
+ * feestdag in it (vakKeuzes; the planner's choice in October 2026, the
+ * totals counted them and so set the half too high).
+ */
+export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'diensten' | 'dag_soort'>>): BlokkadeTeller[] {
   const handmatig = (d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>) => d.level === 'ABSOLUUT' && d.bron === 'MANUAL';
   // Single diensten: the uitloopdiensten (a counter of their own since
   // October 2026; the old form left them out) and the dagdiensten.
   const los = { UD: { totaal: 0, geblokkeerd: 0 }, DD: { totaal: 0, geblokkeerd: 0 } };
-  // Per block: whether any of its diensten is blocked by hand.
-  const blokken = new Map<string, { soort: BlokSoort; vorm: BlokVorm; geblokkeerd: boolean }>();
+  // Per block: whether any of its diensten is blocked by hand, or on a feestdag.
+  const blokken = new Map<string, { soort: BlokSoort; vorm: BlokVorm; geblokkeerd: boolean; feestdag: boolean }>();
   for (const dag of dagen) {
+    const feestdag = dag.dag_soort === 'FEESTDAG';
     for (const d of dag.diensten) {
-      if (d.code === 'UD' || d.code === 'DD') {
+      if ((d.code === 'UD' || d.code === 'DD') && !feestdag) {
         los[d.code].totaal++;
         if (handmatig(d)) los[d.code].geblokkeerd++;
       }
       if (d.blok) {
-        const b = blokken.get(d.blok.id) ?? { soort: d.blok.soort, vorm: d.blok.vorm, geblokkeerd: false };
+        const b = blokken.get(d.blok.id) ?? { soort: d.blok.soort, vorm: d.blok.vorm, geblokkeerd: false, feestdag: false };
         b.geblokkeerd ||= handmatig(d);
+        b.feestdag ||= feestdag;
         blokken.set(d.blok.id, b);
       }
     }
   }
   const tel = (filter: (b: { soort: BlokSoort; vorm: BlokVorm }) => boolean) => {
-    const lijst = [...blokken.values()].filter(filter);
+    const lijst = [...blokken.values()].filter((b) => !b.feestdag && filter(b));
     return { totaal: lijst.length, geblokkeerd: lijst.filter((b) => b.geblokkeerd).length };
   };
   const groepen: Array<[TellerGroep, { totaal: number; geblokkeerd: number }]> = [

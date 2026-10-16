@@ -177,7 +177,8 @@ describe('Verzoeken per AIOS', () => {
          GROUP BY b.id ORDER BY MIN(s.datum)`
       )
       .all(w.period) as Array<{ id: string; slot: string }>;
-    const totaal = (db.prepare(`SELECT COUNT(*) AS n FROM dienstrooster_shift_block WHERE period_id = ? AND soort = 'NACHT' AND vorm IN ('ZO_DI', 'WO_VR')`).get(w.period) as { n: number }).n;
+    // A block with a feestdag in it can't be blocked, so it is not in the total either.
+    const totaal = blokken.length;
     const nodig = Math.floor(totaal / 2) + 2;
     for (const b of blokken.slice(0, nodig)) expect(setAiosVoorkeur(w.z, w.period, b.slot, 'ABSOLUUT')).toEqual({ ok: true });
     const [kop, , , z] = await blad(verzoeken, w.period);

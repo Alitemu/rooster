@@ -134,8 +134,8 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   alles blokkeert (de keuze van de planner in oktober 2026). Voor de solver:
   zulke blokkades zwaarder dan liever niet, maar geen harde regel, en per
   groep hoogstens `erboven` (lib/aiosVoorkeur.ts blokkadeTellers).
-  - Dagdiensten in het weekend en op feestdagen: dagen met geblokkeerd, gedeeld
-    door alle weekend- en feestdagen van het kwartaal.
+  - Dagdiensten in het weekend: dagen met geblokkeerd, gedeeld door alle
+    weekenddagen van het kwartaal zonder feestdag.
   - Losse avonddiensten op zaterdag: gedeeld door het aantal zaterdagen.
   - Losse nachtdiensten op zaterdag: op dezelfde manier. Het oude formulier
     telde avond en nacht samen; de helft geldt nu per dienst (de keuze van de
@@ -148,6 +148,9 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
     oktober 2026 (de keuze van de planner).
   - Verlof en niet dienstklaar tellen niet mee (het oude formulier telde
     alleen de a).
+  - Wat niet geblokkeerd kan worden, telt ook niet mee in het totaal: geen
+    dienst op een feestdag en geen blok met een feestdag erin (de keuze van
+    de planner in oktober 2026). Anders lag de helft te hoog.
 - Bovenaan het scherm: de parttimedagen (deeltijdpatronen, zoals bij de staf),
   "4 avonden", "4 nachten", "twee dagdiensten", "Inwerken", een onderbreking van
   de opleiding en algemene verzoeken (vrije tekst, hoogstens 120 tekens).

@@ -169,6 +169,17 @@ describe('marking an AIOS dienst', () => {
 });
 
 describe('the 50% counters', () => {
+  /** The blocks of this kind in the quarter without a feestdag in them: what can be blocked. */
+  const blokTotaal = (soort: string, vormen: string[]) =>
+    (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM dienstrooster_shift_block b
+           WHERE b.period_id = ? AND b.soort = ? AND b.vorm IN (${vormen.map(() => '?').join(',')})
+             AND NOT EXISTS (SELECT 1 FROM dienstrooster_shift_slot s WHERE s.shift_block_id = b.id AND s.is_feestdag = 1)`
+        )
+        .get(ids.period, soort, ...vormen) as { n: number }
+    ).n;
   it('count a block once, only what was blocked by hand, and warn above half', () => {
     const e = person('e');
     insert('dienstrooster_absence', { person_id: e, van_datum: '2034-05-01', tot_datum: '2034-05-31', soort: 'VAKANTIE', aangemaakt_door: e, aangemaakt_op: new Date().toISOString() });
@@ -182,10 +193,21 @@ describe('the 50% counters', () => {
     setAiosVoorkeur(e, ids.period, slot('2034-04-15', 'DD'), 'ABSOLUUT'); // a Saturday day shift
     setAiosVoorkeur(e, ids.period, slot('2034-04-18', 'UD'), 'ABSOLUUT'); // an uitloopdienst
     const t = Object.fromEntries(blokkadeTellers(loadAiosVoorkeurDagen(e, ids.period)).map((x) => [x.groep, x]));
-    expect(t.AVONDBLOKKEN).toMatchObject({ geblokkeerd: 1, totaal: 26, boven_helft: false });
+    expect(t.AVONDBLOKKEN).toMatchObject({ geblokkeerd: 1, totaal: blokTotaal('AVOND', ['ZO_DI', 'WO_VR']), boven_helft: false });
     // Half per dienst: the Saturday night and evening count apart.
-    expect(t.ZATERDAG_NACHT).toMatchObject({ geblokkeerd: 1, totaal: 13 });
-    expect(t.ZATERDAG_AVOND).toMatchObject({ geblokkeerd: 0, totaal: 13 });
+    expect(t.ZATERDAG_NACHT).toMatchObject({ geblokkeerd: 1, totaal: blokTotaal('NACHT', ['ZA']) });
+    expect(t.ZATERDAG_AVOND).toMatchObject({ geblokkeerd: 0, totaal: blokTotaal('AVOND', ['ZA']) });
+    // Weekend dagdiensten only: a feestdag can't be blocked, so it is not in the total.
+    expect(t.DAGDIENSTEN.totaal).toBe(
+      (
+        db
+          .prepare(
+            `SELECT COUNT(*) AS n FROM dienstrooster_shift_slot s JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+             WHERE s.period_id = ? AND st.code = 'DD' AND s.is_feestdag = 0`
+          )
+          .get(ids.period) as { n: number }
+      ).n
+    );
     expect(t.DAGDIENSTEN.geblokkeerd).toBe(1);
     // The uitloopdiensten have a counter of their own, over all of the quarter's.
     const ud = (
@@ -215,8 +237,9 @@ describe('the 50% counters', () => {
     );
     for (const d of zaterdagen) expect(setAiosVoorkeur(f, ids.period, d.slot_id, 'ABSOLUUT')).toEqual({ ok: true });
     const t = Object.fromEntries(blokkadeTellers(loadAiosVoorkeurDagen(f, ids.period)).map((x) => [x.groep, x]));
-    expect(t.ZATERDAG_NACHT).toMatchObject({ geblokkeerd: zaterdagen.length, totaal: 13, boven_helft: true });
-    expect(t.ZATERDAG_NACHT.erboven).toBe(zaterdagen.length - 6);
+    const totaal = blokTotaal('NACHT', ['ZA']);
+    expect(t.ZATERDAG_NACHT).toMatchObject({ geblokkeerd: zaterdagen.length, totaal, boven_helft: true });
+    expect(t.ZATERDAG_NACHT.erboven).toBe(zaterdagen.length - Math.floor(totaal / 2));
     expect(t.ZATERDAG_AVOND).toMatchObject({ geblokkeerd: 0, boven_helft: false, erboven: 0 });
   });
 });
