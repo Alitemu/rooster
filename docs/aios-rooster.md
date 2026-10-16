@@ -147,8 +147,9 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   en een einddatum in. Niets is vooraf ingevuld. De app controleert dat beide
   data binnen het kwartaal vallen.
 - Tijdens de inwerkperiode krijgt de AIOS alleen uitloopdiensten en de
-  dagdienst op zaterdag, want dan is er hulp aanwezig (B9). Na de einddatum kan
-  de AIOS voor alles worden ingepland.
+  dagdiensten op zaterdag en zondag, want dan is er hulp aanwezig (B9, H3; de
+  keuze van de planner in oktober 2026). Geen dagdienst op een feestdag door
+  de week. Na de einddatum kan de AIOS voor alles worden ingepland.
 - Bij het aanvinken staat in beeld wat dat betekent.
 - Dit is iets anders dan niet dienstklaar (n): dan heeft iemand helemaal geen
   diensten.
@@ -278,8 +279,11 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
 - Het voorkeurenscherm toont per dag de diensten die er die dag zijn, met de
   blokken als één vak. Leesbaar op 375 pixels breed.
 - Mail: één mailaccount voor beide roosters, hoogstens 100 tot 150 mails per dag
-  als beide tegelijk uitnodigen (N5). De lijst met adressen van de AIOS staat
-  bij de roosteraar (N2). Geen kopie voor de opleider (N4).
+  als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de
+  keuze van de planner in oktober 2026): de verzendlijst van de AIOS gaat naar
+  een eigen stroomadres in de mailinstellingen, en dat adres staat ook in het
+  ruilscherm van de AIOS. De lijst met adressen van de AIOS staat bij de
+  roosteraar (N2). Geen kopie voor de opleider (N4).
 - Het AIOS-rooster houdt geen rekening met de achterwacht en andersom (M1 tot en
   met M5). Fellows doen bij de AIOS alleen de ondersteuning op zaterdag en de
   nacht voor de voortgangstoets (M4).
@@ -307,14 +311,6 @@ accounts uit stap 5 eind oktober klaar zijn, zodat de AIOS hun voorkeuren voor
    zit niet in de AIOS-pool (B8). Komt de fellow als naam of codenaam in dat
    ene vak? En wat gebeurt er met de rest van het nachtblok waar die nacht in
    valt?
-2. Inwerken: de vragenlijst zegt "dagdiensten in het weekend" (B9, H3), eerder
-   was het alleen de dagdienst op zaterdag (de dag met een fellow erbij). Welke
-   van de twee?
-3. Mail (N1): de vragenlijst noemt een nieuwe stroom voor de AIOS, eerder was
-   de keuze één gedeelde stroom. Dan krijgt de AIOS een eigen stroomadres in de
-   mailinstellingen, bij hetzelfde mailaccount. Dat adres staat ook in het
-   ruilscherm, als het adres voor een ruil die de app niet zelf maakt: nu zou
-   een AIOS daar de mailbox van de achterwacht zien.
-4. Het opleidingsjaar (G1): de app weet niet wanneer iemands opleidingsjaar
+2. Het opleidingsjaar (G1): de app weet niet wanneer iemands opleidingsjaar
    begint. Voorstel: de waarschuwing boven 25% over het kwartaal en over de
    laatste vier kwartalen samen.

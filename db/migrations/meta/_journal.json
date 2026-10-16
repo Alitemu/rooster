@@ -169,6 +169,13 @@
       "when": 1788801800000,
       "tag": "0023_aios_diensten",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1788801900000,
+      "tag": "0024_aios_wens",
+      "breakpoints": true
     }
   ]
 }

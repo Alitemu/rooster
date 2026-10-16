@@ -164,7 +164,10 @@ describe('the achterwacht and the AIOS planner see nothing of each other', () =>
     }
   );
 
-  it.each(gets.map((r) => [`${r.method} ${r.path}`, r] as const))(
+  // The AIOS's own screens find nothing in an achterwacht period.
+  const ONLY_FOR_THE_AIOS = (path: string) => path.startsWith('person/[id]/aios/');
+
+  it.each(gets.filter((r) => !ONLY_FOR_THE_AIOS(r.path)).map((r) => [`${r.method} ${r.path}`, r] as const))(
     'the beheerder sees both, the achterwacht: %s',
     async (_, route) => {
       const { status, text } = await call(route, worlds.ACHTERWACHT, admin);

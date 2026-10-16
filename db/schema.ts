@@ -612,6 +612,34 @@ export const availability = sqliteTable(
  * weekend band (lib/fellows.ts, lib/rosterBands.ts). Per period only:
  * nothing carries over to the next one.
  */
+/**
+ * What an AIOS asks for the quarter besides the diensten they mark
+ * (docs/aios-rooster.md, "Verzoeken van de AIOS", "Inwerken",
+ * "Onderbreking"): the blocks of four, both weekend day shifts, the
+ * inwerkperiode and a training interruption (dates within the quarter) and
+ * a short general request. One row per AIOS per period.
+ */
+export const aiosWens = sqliteTable(
+  'dienstrooster_aios_wens',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id),
+    person_id: text('person_id').notNull().references(() => person.id),
+    vier_avonden: integer('vier_avonden', { mode: 'boolean' }).default(false).notNull(),
+    vier_nachten: integer('vier_nachten', { mode: 'boolean' }).default(false).notNull(),
+    twee_dagdiensten: integer('twee_dagdiensten', { mode: 'boolean' }).default(false).notNull(),
+    inwerken_van: text('inwerken_van'), // ISO date, both or neither
+    inwerken_tot: text('inwerken_tot'),
+    onderbreking_van: text('onderbreking_van'), // ISO date, both or neither
+    onderbreking_tot: text('onderbreking_tot'),
+    opmerking: text('opmerking'), // at most 120 characters
+    gewijzigd_op: text('gewijzigd_op').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('aios_wens_uniq').on(table.period_id, table.person_id),
+  })
+);
+
 export const periodFellow = sqliteTable(
   'dienstrooster_period_fellow',
   {

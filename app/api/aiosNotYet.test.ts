@@ -37,6 +37,14 @@ const CHANGING = ['POST', 'PUT', 'PATCH', 'DELETE'] as const;
 /** What an AIOS period may go through now: rename, prullenbak, back, purge. */
 const ALLOWED = new Set(['periods/[id] PATCH', 'periods/[id] DELETE', 'periods/[id]/restore POST', 'periods/[id]/purge POST']);
 
+/**
+ * Step 2 (lib/aiosPreferences.ts): the AIOS's own preference routes, and
+ * the absence and part-time routes, whose syncs follow the AIOS's rules in
+ * an AIOS period (lib/aiosPreferences.test.ts holds those).
+ */
+const AIOS_STEP_2 = (r: { path: string }) =>
+  r.path.startsWith('person/[id]/aios/') || r.path.startsWith('person/[id]/absences') || r.path.startsWith('person/[id]/parttime-patterns');
+
 interface Route {
   path: string;
   method: (typeof CHANGING)[number];
@@ -263,6 +271,7 @@ describe('no achterwacht step runs on an AIOS period yet', () => {
   const aboutAPeriod = routes.filter(
     (r) =>
       !ALLOWED.has(`${r.path} ${r.method}`) &&
+      !AIOS_STEP_2(r) &&
       (onAPeriodsPath(r.path) || r.path.startsWith('person/') || r.path === 'planner/periods')
   );
 

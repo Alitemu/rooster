@@ -80,6 +80,16 @@ export const LIVE_SWAP_REQUEST_SQL = `SELECT sr.* FROM dienstrooster_swap_reques
  * dienst and a period id of the other one, the fellow and slot routes wrote
  * into the other dienst's roster.
  */
+/**
+ * The same for the AIOS's own participant routes, which load the period
+ * with loadAiosPeriode (lib/aiosPreferences.ts): an AIOS period only. The
+ * achterwacht's routes ask periodUsableFor, which refuses an AIOS period.
+ */
+export function aiosPeriodUsableFor(auth: AuthContext, personId: string, period: PeriodScope): boolean {
+  if (requirePlannerAccess(auth)) return staffMayAccessPeriod(auth, period.id);
+  return isPeriodVisibleToPerson(personId, period);
+}
+
 export function periodUsableFor(auth: AuthContext, personId: string, period: PeriodScope): boolean {
   // The participant's screens are the achterwacht's: an AIOS period gets
   // its own in a later step, and until then nobody uses it through these,
