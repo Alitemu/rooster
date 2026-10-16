@@ -62,7 +62,7 @@ async function openStaff(page: Page) {
 test('adding someone twice says so under Toevoegen, in sight', async ({ page }) => {
   await openStaff(page);
   const form = page.locator('div', { has: page.getByText('Nieuw personeelslid toevoegen') }).last();
-  await form.getByPlaceholder('bijv. Persoon-32').fill(`Dubbel-${tag}`);
+  await form.getByPlaceholder('bijv. staf31').fill(`Dubbel-${tag}`);
   const dates = form.locator('input[type="date"]');
   await dates.nth(0).fill('2099-04-01');
   await dates.nth(1).fill('2099-05-01');

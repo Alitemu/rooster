@@ -11,6 +11,7 @@
 import { db } from '@/db/client';
 import { requirePlannerAccess, type AuthContext } from '@/lib/auth-context';
 import { staffMayAccessPeriod } from '@/lib/dienstAccess';
+import { isAiosPeriod } from '@/lib/aiosPeriod';
 
 export interface PeriodScope {
   id: string;
@@ -63,11 +64,13 @@ export function isPeriodVisibleToPerson(personId: string, period: PeriodScope): 
  * not at all once its period is in the prullenbak. Approving still moved
  * the shifts of a roster nobody could see any more, and rejecting or
  * withdrawing mailed colleagues about it (audit 13). It comes back with
- * the period.
+ * the period. Nor one of an AIOS period: swapping there (a block or one
+ * dienst of it) comes with the AIOS roster's own step (lib/aiosPeriod.ts).
  */
 export const LIVE_SWAP_REQUEST_SQL = `SELECT sr.* FROM dienstrooster_swap_request sr
   JOIN dienstrooster_schedule_period p ON p.id = sr.periode_id
-  WHERE sr.id = ? AND p.verwijderd_op IS NULL`;
+  JOIN dienstrooster_pool pl ON pl.id = p.pool_id
+  WHERE sr.id = ? AND p.verwijderd_op IS NULL AND pl.type <> 'AIOS'`;
 
 /**
  * Whether this request may use the period on the person's behalf: a
@@ -78,6 +81,10 @@ export const LIVE_SWAP_REQUEST_SQL = `SELECT sr.* FROM dienstrooster_swap_reques
  * into the other dienst's roster.
  */
 export function periodUsableFor(auth: AuthContext, personId: string, period: PeriodScope): boolean {
+  // The participant's screens are the achterwacht's: an AIOS period gets
+  // its own in a later step, and until then nobody uses it through these,
+  // the beheerder acting for an AIOS participant included (lib/aiosPeriod.ts).
+  if (isAiosPeriod(period.id)) return false;
   if (requirePlannerAccess(auth)) return staffMayAccessPeriod(auth, period.id);
   return isPeriodVisibleToPerson(personId, period);
 }

@@ -216,16 +216,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const now = new Date().toISOString();
 
     const { start_datum: startDatum, eind_datum: eindDatum } = body;
-    db.transaction(() => {
+    const aiosGemaakt = db.transaction(() => {
       insertStmt.run(periodId, naam, body.pool_id, startDatum, eindDatum, body.deadline, now);
-      if (aiosTypes) persistAiosSlots(periodId, aiosTypes, startDatum, eindDatum);
+      return aiosTypes ? persistAiosSlots(periodId, aiosTypes, startDatum, eindDatum) : null;
     })();
     writeAuditLog({
       actorId: auth!.userId,
       entiteit: 'period',
       entiteitId: periodId,
       actie: 'CREATE',
-      nieuw: { naam, pool_id: body.pool_id, start_datum: body.start_datum, eind_datum: body.eind_datum, deadline: body.deadline },
+      // An AIOS period's diensten and blocks come with it: logged here, as
+      // the achterwacht's slots are when the period opens.
+      nieuw: {
+        naam,
+        pool_id: body.pool_id,
+        start_datum: body.start_datum,
+        eind_datum: body.eind_datum,
+        deadline: body.deadline,
+        ...(aiosGemaakt ?? {}),
+      },
       now,
     });
 

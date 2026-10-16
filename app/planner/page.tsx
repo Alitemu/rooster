@@ -15,12 +15,12 @@ import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
-import { addDays, dateToISO } from '@/lib/holidays';
+import { dateToISO } from '@/lib/holidays';
 import {
-  aiosQuarterContaining,
+  aiosPreferenceDeadline,
   aiosQuarterName,
+  aiosQuartersToOffer,
   aiosQuarterWeeks,
-  nextAiosQuarter,
   type AiosQuarter,
 } from '@/lib/aiosQuarter';
 
@@ -32,6 +32,7 @@ interface Period {
   deadline: string;
   status: string;
   pool_id: string;
+  pool_type?: string;
   definitief_op?: string | null;
   // The period whose invitations went out last (lib/activePeriod.ts).
   actief?: boolean;
@@ -72,23 +73,23 @@ function statusLabel(p: { status: string; definitief_op?: string | null }): stri
 const datumLang = (datum: string) =>
   new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-/**
- * The quarters an AIOS period can be made for: the current one and the
- * five after it (lib/aiosQuarter.ts). An AIOS period is always exactly one.
- */
-function aiosKwartalen(): AiosQuarter[] {
-  const lijst = [aiosQuarterContaining(dateToISO(new Date()))];
-  while (lijst.length < 6) lijst.push(nextAiosQuarter(lijst[lijst.length - 1]));
-  return lijst;
+/** The quarters a new AIOS period can be made for (lib/aiosQuarter.ts). */
+const aiosKwartalen = () => aiosQuartersToOffer(dateToISO(new Date()));
+
+/** The new-period form on an AIOS quarter: its name, dates and deadline. */
+function aiosFormulier(poolId: string, q: AiosQuarter) {
+  return {
+    pool_id: poolId,
+    naam: `AIOS ${aiosQuarterName(q)}`,
+    start_datum: q.start_datum,
+    eind_datum: q.eind_datum,
+    deadline: aiosDeadline(q),
+  };
 }
 
-/**
- * The AIOS hand in their preferences 8 weeks before the quarter starts
- * (docs/aios-rooster.md, "Periode"), as datetime-local; empty when that
- * moment has passed.
- */
+/** The preferences deadline as datetime-local; empty when that moment has passed. */
 function aiosDeadline(q: AiosQuarter): string {
-  const datum = addDays(q.start_datum, -56);
+  const datum = aiosPreferenceDeadline(q);
   return new Date(`${datum}T17:00:00`) > new Date() ? `${datum}T17:00` : '';
 }
 
@@ -130,14 +131,7 @@ export default function PlannerHomePage() {
   const isAiosPool = (poolId: string) => pools.find((p) => p.id === poolId)?.type === 'AIOS';
   const aiosGekozen = isAiosPool(form.pool_id);
   const kwartalen = aiosKwartalen();
-  const kiesKwartaal = (q: AiosQuarter) =>
-    setForm((f) => ({
-      ...f,
-      naam: `AIOS ${aiosQuarterName(q)}`,
-      start_datum: q.start_datum,
-      eind_datum: q.eind_datum,
-      deadline: aiosDeadline(q),
-    }));
+  const kiesKwartaal = (q: AiosQuarter) => setForm((f) => aiosFormulier(f.pool_id, q));
   const gekozenKwartaal = kwartalen.find((q) => q.start_datum === form.start_datum && q.eind_datum === form.eind_datum);
 
   const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null);
@@ -204,7 +198,10 @@ export default function PlannerHomePage() {
       setPools(poolsData.data || []);
       setTrash(trashData.data || []);
       if (poolsData.data?.length && !form.pool_id) {
-        setForm((f) => ({ ...f, pool_id: poolsData.data[0].id }));
+        const eerste: Pool = poolsData.data[0];
+        // The AIOS planner's only pool is the AIOS's: start on its next
+        // quarter, as choosing it in the list does.
+        setForm((f) => (eerste.type === 'AIOS' ? aiosFormulier(eerste.id, aiosKwartalen()[0]) : { ...f, pool_id: eerste.id }));
       }
     } catch {
       setLoadError('Laden van periodes mislukt');
@@ -448,14 +445,7 @@ export default function PlannerHomePage() {
                 // An AIOS period is a quarter: picking the AIOS pool fills in
                 // the next one; leaving it clears what that filled in.
                 if (isAiosPool(poolId) && !aiosGekozen) {
-                  const q = kwartalen[1];
-                  setForm({
-                    pool_id: poolId,
-                    naam: `AIOS ${aiosQuarterName(q)}`,
-                    start_datum: q.start_datum,
-                    eind_datum: q.eind_datum,
-                    deadline: aiosDeadline(q),
-                  });
+                  setForm(aiosFormulier(poolId, kwartalen[0]));
                 } else if (!isAiosPool(poolId) && aiosGekozen) {
                   setForm({ naam: '', pool_id: poolId, start_datum: '', eind_datum: '', deadline: '' });
                 } else {
@@ -630,7 +620,7 @@ export default function PlannerHomePage() {
                   </td>
                   <td className="px-4 py-2 text-sm">
                     <div className="flex items-center gap-4">
-                      {isAiosPool(p.pool_id) ? (
+                      {p.pool_type === 'AIOS' ? (
                         // No setup wizard for the AIOS yet (lib/aiosPeriod.ts).
                         <Link href={`/planner/period/${p.id}`} className="text-blue-600 hover:text-blue-700 font-medium">
                           Bekijken →

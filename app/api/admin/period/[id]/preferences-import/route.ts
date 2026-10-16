@@ -9,12 +9,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requireAdminAccess } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody, unauthorizedResponse } from '@/lib/api-errors';
 import { importPreferences } from '@/lib/preferencesImport';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requireAdminAccess(auth)) return unauthorizedResponse();
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(id);
+    if (aiosNotYet) return aiosNotYet;
     const body = (await parseJsonBody(req)) as { bestand?: unknown; toepassen?: unknown };
     const result = importPreferences(auth!.userId, id, body?.bestand, body?.toepassen === true);
     if (!result.ok) {

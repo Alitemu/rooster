@@ -20,6 +20,7 @@ import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/roster
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { optionalText } from '@/lib/requestFields';
 import { getPendingUndo, clearPendingUndo } from '@/lib/pendingUndo';
@@ -37,6 +38,9 @@ export async function POST(
     }
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
     const actorId = auth!.userId;
     const periodId = params.id;
     // A generation's answer would land on top of this change (audit 10).

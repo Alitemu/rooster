@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getInvitationPeriod, issuePeriodLinks, formatDeadline, rememberBaseUrl } from '@/lib/periodInvitations';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { xlsxDownload } from '@/lib/xlsxWrite';
@@ -39,6 +40,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     }
     const otherDienst = periodDienstDenial(auth, params['period-id']);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params['period-id']);
+    if (aiosNotYet) return aiosNotYet;
 
     const periodId = params['period-id'];
 

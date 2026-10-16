@@ -24,6 +24,7 @@ import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults 
 interface Pool {
   id: string;
   naam: string;
+  type: string;
 }
 
 interface StaffMember {
@@ -45,6 +46,9 @@ export default function PoolStaffPage() {
   const poolId = params.id as string;
 
   const [pool, setPool] = useState<Pool | null>(null);
+  // An AIOS's fte follows from the part-time days they give themselves
+  // (docs/aios-rooster.md, "Eerlijkheid"): no participation factor there.
+  const aiosPool = pool?.type === 'AIOS';
   const [poolLoading, setPoolLoading] = useState(true);
   const [poolError, setPoolError] = useState<string | null>(null);
 
@@ -332,7 +336,7 @@ export default function PoolStaffPage() {
                   <th className="px-4 py-2 text-left text-sm font-medium">Actief</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig vanaf</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig tot</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium">Deelnamefactor</th>
+                  {!aiosPool && <th className="px-4 py-2 text-left text-sm font-medium">Deelnamefactor</th>}
                   <th className="px-4 py-2 text-left text-sm font-medium"></th>
                 </tr>
               </thead>
@@ -373,25 +377,27 @@ export default function PoolStaffPage() {
                             member.geldig_tot
                           )}
                         </td>
-                        <td className="px-4 py-2 text-sm">
-                          {isEditing ? (
-                            <input
-                              type="number"
-                              min="0.1"
-                              max="1"
-                              step="0.1"
-                              value={editDates.deelnamefactor}
-                              onChange={(e) =>
-                                setEditDates({ ...editDates, deelnamefactor: parseFloat(e.target.value) })
-                              }
-                              className="px-2 py-1 border rounded text-sm w-20"
-                            />
-                          ) : member.deelnamefactor < 1 ? (
-                            `${Math.round(member.deelnamefactor * 100)}%`
-                          ) : (
-                            'Voltijd'
-                          )}
-                        </td>
+                        {!aiosPool && (
+                          <td className="px-4 py-2 text-sm">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                min="0.1"
+                                max="1"
+                                step="0.1"
+                                value={editDates.deelnamefactor}
+                                onChange={(e) =>
+                                  setEditDates({ ...editDates, deelnamefactor: parseFloat(e.target.value) })
+                                }
+                                className="px-2 py-1 border rounded text-sm w-20"
+                              />
+                            ) : member.deelnamefactor < 1 ? (
+                              `${Math.round(member.deelnamefactor * 100)}%`
+                            ) : (
+                              'Voltijd'
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-2 text-sm whitespace-nowrap">
                           {isEditing ? (
                             <div className="flex gap-3">
@@ -456,14 +462,21 @@ export default function PoolStaffPage() {
 
         <div className="border-t border-neutral-200 pt-4 space-y-3">
           <p className="text-sm font-medium text-neutral-800">Nieuw personeelslid toevoegen</p>
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+          {aiosPool && (
+            <p className="text-xs text-neutral-600">
+              Bij de AIOS volgt de fte uit de parttimedagen die de AIOS zelf opgeeft. Een deelnamefactor is er daarom
+              niet.
+            </p>
+          )}
+          <div className={`grid grid-cols-1 gap-3 ${aiosPool ? 'sm:grid-cols-4' : 'sm:grid-cols-5'}`}>
             <div>
               <label className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
               <input
                 type="text"
                 value={newMember.codenaam}
                 onChange={(e) => setNewMember({ ...newMember, codenaam: e.target.value })}
-                placeholder="bijv. Persoon-32"
+                // The codenamen of the pool's dienst (lib/startParticipants.ts).
+                placeholder={pool?.type === 'AIOS' ? 'bijv. aios01' : 'bijv. staf31'}
                 className="w-full px-2 py-2 border rounded text-sm"
               />
             </div>
@@ -485,18 +498,20 @@ export default function PoolStaffPage() {
                 className="w-full px-2 py-2 border rounded text-sm"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Deelnamefactor</label>
-              <input
-                type="number"
-                min="0.1"
-                max="1"
-                step="0.1"
-                value={newMember.deelnamefactor}
-                onChange={(e) => setNewMember({ ...newMember, deelnamefactor: parseFloat(e.target.value) })}
-                className="w-full px-2 py-2 border rounded text-sm"
-              />
-            </div>
+            {!aiosPool && (
+              <div>
+                <label className="block text-xs font-medium text-neutral-600 mb-1">Deelnamefactor</label>
+                <input
+                  type="number"
+                  min="0.1"
+                  max="1"
+                  step="0.1"
+                  value={newMember.deelnamefactor}
+                  onChange={(e) => setNewMember({ ...newMember, deelnamefactor: parseFloat(e.target.value) })}
+                  className="w-full px-2 py-2 border rounded text-sm"
+                />
+              </div>
+            )}
             <div className="flex items-end">
               <button
                 onClick={handleAddMember}

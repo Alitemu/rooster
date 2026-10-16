@@ -17,6 +17,7 @@ import { db } from '@/db/client';
 import { parseISO, dateToISO, getISOWeek } from '@/lib/holidays';
 import { deadlinePassed } from '@/lib/periodInputGate';
 import { restoreFellowBlocks } from '@/lib/fellowBlocks';
+import { isAiosPool } from '@/lib/aiosPeriod';
 
 export type Weekdag = 'MA' | 'DI' | 'WO' | 'DO' | 'VR' | 'ZA' | 'ZO';
 export type Frequentie = 'ELKE_WEEK' | 'EVEN_WEKEN' | 'ONEVEN_WEKEN';
@@ -272,14 +273,19 @@ export function getOpenPeriodsForPerson(personId: string, now: Date = new Date()
 function openPeriodsForPerson(personId: string): Array<{ id: string; naam: string; deadline: string; start_datum: string; eind_datum: string }> {
   // A period in the trash is on its way to being purged - nothing should
   // still be written into it (verify-link stops resolving it for the same
-  // reason, see app/api/auth/verify-link/route.ts).
+  // reason, see app/api/auth/verify-link/route.ts). Nor an AIOS period:
+  // there an absence and a part-time day mean something else (on a
+  // feestdag leave is liever niet, a part-time day leaves the night block
+  // free; docs/aios-rooster.md), which its preferences step brings.
   return db
     .prepare(
       `SELECT DISTINCT sp.id, sp.naam, sp.deadline, sp.start_datum, sp.eind_datum
        FROM dienstrooster_schedule_period sp
        JOIN dienstrooster_pool_membership pm ON pm.pool_id = sp.pool_id
+       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
        WHERE pm.person_id = ?
          AND sp.status = 'OPEN'
+         AND pl.type <> 'AIOS'
          AND sp.verwijderd_op IS NULL
          AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum`
     )
@@ -444,7 +450,8 @@ export function syncAvailabilityForPeriod(periodId: string): { inserted: number;
     .prepare('SELECT pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
     .get(periodId) as { pool_id: string; status: string; start_datum: string; eind_datum: string } | undefined;
 
-  if (!period || period.status !== 'OPEN') {
+  // Not an AIOS period: see openPeriodsForPerson.
+  if (!period || period.status !== 'OPEN' || isAiosPool(period.pool_id)) {
     return { inserted: 0, patternsProcessed: 0 };
   }
 

@@ -10,6 +10,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse, errorReference, internalErrorMessage } from '@/lib/api-errors';
 import {
   loadPeriodMembers,
@@ -50,6 +51,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
     const actorId = auth!.userId;
 
     const periodId = params.id;

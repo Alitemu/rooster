@@ -15,6 +15,7 @@ import { checkMayBecomeActive, markInvited } from '@/lib/activePeriod';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import {
@@ -39,6 +40,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
     const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), params['period-id']);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params['period-id']);
+    if (aiosNotYet) return aiosNotYet;
 
     const period = getInvitationPeriod(params['period-id']);
     if (!period) return fail(404, 'NOT_FOUND', 'Periode niet gevonden');

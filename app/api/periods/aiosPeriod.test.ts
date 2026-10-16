@@ -138,6 +138,11 @@ describe('an AIOS period', () => {
     // The page knows it is one.
     const detail = await (await getPeriod(request(`/api/periods/${ids.q1}`, 'GET'), params(ids.q1))).json();
     expect(detail.data.pool_type).toBe('AIOS');
+    // The wijzigingsgeschiedenis says what came with it (AIOS audit).
+    const log = db
+      .prepare(`SELECT nieuw_json FROM dienstrooster_audit_log WHERE entiteit = 'period' AND entiteit_id = ? AND actie = 'CREATE'`)
+      .get(ids.q1) as { nieuw_json: string };
+    expect(JSON.parse(log.nieuw_json)).toMatchObject({ diensten: verwacht.slots.length, blokken: verwacht.blokken.length });
   });
 
   it('is refused for dates that are not exactly one quarter', async () => {

@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { requestRosterGenerationJobCancel } from '@/lib/rosterGenerationJobs';
 
@@ -28,6 +29,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
 
     const periodId = params.id;
     const body = await parseJsonBody<{ job_id?: string }>(request);

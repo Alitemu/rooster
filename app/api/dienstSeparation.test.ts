@@ -412,8 +412,19 @@ describe('the achterwacht and the AIOS planner see nothing of each other', () =>
   }
 
   const gets = withIds.filter((r) => r.method === 'GET' && !r.path.startsWith('admin/') && !OWN_MAY_BE_EMPTY.has(r.path));
+  // The participant's screens are the achterwacht's: they find nothing of
+  // an AIOS period until its own step (lib/periodAccess.ts periodUsableFor,
+  // app/api/aiosNotYet.test.ts). The other direction still holds them.
+  const NOT_YET_FOR_AN_AIOS_PERIOD = new Set([
+    'person/[id]/fellow',
+    'person/[id]/parttime-check',
+    'person/[id]/preferences/[periodId]',
+    'person/[id]/preferences/[periodId]/coverage',
+    'person/[id]/roster/[period-id]',
+    'person/[id]/roster/[period-id]/others',
+  ]);
 
-  it.each(gets.map((r) => [`${r.method} ${r.path}`, r] as const))(
+  it.each(gets.filter((r) => !NOT_YET_FOR_AN_AIOS_PERIOD.has(r.path)).map((r) => [`${r.method} ${r.path}`, r] as const))(
     "the ids are real: the AIOS planner finds the AIOS's own: %s",
     async (_, route) => {
       const { status, text } = await call(route, worlds.AIOS, worlds.AIOS.planner);
@@ -480,42 +491,45 @@ describe('the other dienst named in the body', () => {
     expect(db.prepare("SELECT 1 FROM dienstrooster_schedule_period WHERE naam = 'Binnendringer'").get()).toBeUndefined();
   });
 
+  // In the achterwacht's period: an AIOS period takes no achterwacht step
+  // at all yet (lib/aiosPeriod.ts), so the AIOS participant is the one
+  // named.
   it("a prior assignment, by hand or imported, never names the other dienst's participant", async () => {
     const aios = worlds.AIOS;
     const staf = worlds.ACHTERWACHT;
     const patch = await route('periods/[id]/prior-assignments', 'PATCH')(
-      new NextRequest(`http://localhost/api/periods/${aios.period}/prior-assignments`, {
+      new NextRequest(`http://localhost/api/periods/${staf.period}/prior-assignments`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Cookie: staffCookie(aios.planner) },
-        body: JSON.stringify({ datum: '2098-03-01', teller: 'AVOND', person_codenaam: staf.xCodenaam }),
+        headers: { 'Content-Type': 'application/json', Cookie: staffCookie(staf.planner) },
+        body: JSON.stringify({ datum: '2098-03-01', teller: 'AVOND', person_codenaam: aios.xCodenaam }),
       }),
-      { params: Promise.resolve({ id: aios.period }) }
+      { params: Promise.resolve({ id: staf.period }) }
     );
     expect(patch.status).toBe(404);
 
     const imported = await send(
       route('periods/[id]/prior-assignments/import-csv', 'POST'),
-      `periods/${aios.period}/prior-assignments/import-csv`,
-      { id: aios.period },
-      aios.planner,
-      { rows: [{ datum: '2098-03-02', teller: 'AVOND', codenaam: staf.xCodenaam }] }
+      `periods/${staf.period}/prior-assignments/import-csv`,
+      { id: staf.period },
+      staf.planner,
+      { rows: [{ datum: '2098-03-02', teller: 'AVOND', codenaam: aios.xCodenaam }] }
     );
     expect(imported.status).toBe(200);
     expect(JSON.stringify(await imported.json())).toContain('onbekende codenaam');
     expect(
-      db.prepare('SELECT 1 FROM dienstrooster_prior_assignment WHERE period_id = ? AND person_id = ?').get(aios.period, staf.x)
+      db.prepare('SELECT 1 FROM dienstrooster_prior_assignment WHERE period_id = ? AND person_id = ?').get(staf.period, aios.x)
     ).toBeUndefined();
   });
 
   it("the holiday import does not write the other dienst's participant", async () => {
     const res = await send(
       route('planner/period/[id]/import-holidays', 'POST'),
-      `planner/period/${worlds.AIOS.period}/import-holidays`,
-      { id: worlds.AIOS.period },
-      worlds.AIOS.planner,
-      { rows: [{ codenaam: worlds.ACHTERWACHT.xCodenaam, holiday_group: 'KERST', year: 2097 }] }
+      `planner/period/${worlds.ACHTERWACHT.period}/import-holidays`,
+      { id: worlds.ACHTERWACHT.period },
+      worlds.ACHTERWACHT.planner,
+      { rows: [{ codenaam: worlds.AIOS.xCodenaam, holiday_group: 'KERST', year: 2097 }] }
     );
     expect(JSON.stringify(await res.json())).toContain('Onbekende codenaam');
-    expect(db.prepare('SELECT 1 FROM dienstrooster_holiday_history WHERE person_id = ?').get(worlds.ACHTERWACHT.x)).toBeUndefined();
+    expect(db.prepare('SELECT 1 FROM dienstrooster_holiday_history WHERE person_id = ?').get(worlds.AIOS.x)).toBeUndefined();
   });
 });

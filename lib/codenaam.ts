@@ -34,7 +34,7 @@ export function validateCodenaam(raw: unknown): CodenaamValidation {
   if (result.value.includes('@')) {
     return {
       valid: false,
-      message: 'Een codenaam mag geen e-mailadres zijn. Gebruik een schuilnaam, bijvoorbeeld Persoon-32.',
+      message: 'Een codenaam mag geen e-mailadres zijn. Gebruik een schuilnaam, bijvoorbeeld staf31 of aios01.',
     };
   }
   return { valid: true, codenaam: result.value };

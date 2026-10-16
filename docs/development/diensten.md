@@ -51,8 +51,11 @@ is refused (DIENST_NIET_IN_PRODUCTIE) and the separation is ready for it.
   "Bouwvolgorde"). Step 1 (0.26.0): the AIOS pool exists at every start
   (lib/aiosPool.ts), an AIOS period is a quarter with its diensten and
   blocks (lib/aiosQuarter.ts, lib/aiosDiensten.ts, lib/aiosSlots.ts), and
-  its page shows them with the points; opening it is refused until the
-  next steps (lib/aiosPeriod.ts). The pool list sorts without regard to
+  its page shows them with the points; every achterwacht step on it is
+  refused until the next steps (lib/aiosPeriod.ts, swept by
+  app/api/aiosNotYet.test.ts). The staff page of the AIOS pool suggests
+  aios01 as a codenaam and has no deelnamefactor: an AIOS's fte follows
+  from their part-time days. The pool list sorts without regard to
   capitals, or "AIOS" came before "Achterwacht" in the beheerder's
   new-period form.
 - app/api/dienstSeparation.test.ts holds it: two complete worlds, every

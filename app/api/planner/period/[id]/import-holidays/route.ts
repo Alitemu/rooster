@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial, staffMayAccessPerson } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { objectRows, badRequest } from '@/lib/requestFields';
@@ -37,6 +38,9 @@ export async function POST(
     }
     const otherDienst = periodDienstDenial(auth, (await context.params).id);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial((await context.params).id);
+    if (aiosNotYet) return aiosNotYet;
 
     const body = await parseJsonBody<{ rows?: unknown }>(req);
     const rows = objectRows(body.rows) as HolidayRow[] | null;

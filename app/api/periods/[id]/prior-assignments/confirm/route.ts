@@ -13,6 +13,7 @@ import { findPreviousPublishedPeriod } from '@/lib/previousPeriod';
 import { resolvePriorAssignmentWeeks, calculatePriorAssignmentRange } from '@/lib/priorAssignmentDerive';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -26,6 +27,9 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
 
     const { id } = params;
 

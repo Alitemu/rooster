@@ -15,8 +15,21 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   achterwacht period's, whose slots wait for "Openen". So an AIOS draft
   does take its days: a second period on the quarter is refused, and one
   from the prullenbak comes back only onto a free quarter. Until the AIOS
-  preferences, solver and publishing exist, open, generate-slots and
-  capacity answer 409 AIOS_NOG_NIET (lib/aiosPeriod.ts); the period page
+  preferences, solver and publishing exist, it can be renamed, put in the
+  prullenbak and back, and nothing else: every planner route that changes
+  a period answers 409 AIOS_NOG_NIET (aiosNotYetDenial, lib/aiosPeriod.ts;
+  in 0.70.0 only open, generate-slots and capacity did, so the beheerder
+  could still publish, fill in or invite on one), and periodUsableFor
+  refuses it to every participant route, the beheerder acting for an
+  AIOS participant included. The absence and part-time syncs leave it
+  out (an absence or a part-time day means something else there), and
+  the swap routes read no swap of it (LIVE_SWAP_REQUEST_SQL).
+  app/api/aiosNotYet.test.ts sweeps all of it: the
+  source of every changing handler that asks periodDienstDenial, and every
+  changing route called with the AIOS period's ids, open and published,
+  leaving it as it was. The new-period form offers the quarters after the
+  one running (aiosQuartersToOffer): the running one has started, so its
+  deadline could never be set. The period page
   shows its diensten per week with the blocks and points instead
   (components/AiosPeriodOverview.tsx, GET
   /api/planner/period/[id]/aios-diensten), and the setup wizard sends it

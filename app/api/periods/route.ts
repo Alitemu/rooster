@@ -53,7 +53,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         sp.deadline,
         sp.status,
         sp.pool_id,
-        sp.definitief_op
+        sp.definitief_op,
+        -- The list links an AIOS period to its own page (lib/aiosPeriod.ts),
+        -- also when its pool is switched off and so missing from the pools.
+        pl.type AS pool_type
       FROM dienstrooster_schedule_period sp
       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
       WHERE sp.verwijderd_op IS NULL AND (? IS NULL OR pl.type = ?)
@@ -70,6 +73,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       status: string;
       pool_id: string;
       definitief_op: string | null;
+      pool_type: string;
     }>;
 
     // Each pool's active period (lib/activePeriod.ts) is marked on the list.

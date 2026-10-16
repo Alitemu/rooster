@@ -76,6 +76,25 @@ export function nextAiosQuarter(q: AiosQuarter): AiosQuarter {
   return q.kwartaal === 4 ? aiosQuarter(q.jaar + 1, 1) : aiosQuarter(q.jaar, (q.kwartaal + 1) as Kwartaal);
 }
 
+/**
+ * The quarters a new AIOS period can be made for on `vandaag`: the `n`
+ * after the one running. That one has started, and a period's deadline
+ * must lie before its start and after now, so it can never be made.
+ */
+export function aiosQuartersToOffer(vandaag: string, n = 6): AiosQuarter[] {
+  const lijst = [nextAiosQuarter(aiosQuarterContaining(vandaag))];
+  while (lijst.length < n) lijst.push(nextAiosQuarter(lijst[lijst.length - 1]));
+  return lijst;
+}
+
+/**
+ * The AIOS hand in their preferences 8 weeks before the quarter starts
+ * (docs/aios-rooster.md, "Periode"): the date, the form adds 17:00.
+ */
+export function aiosPreferenceDeadline(q: AiosQuarter): string {
+  return addDays(q.start_datum, -56);
+}
+
 /** "2027 Q1", as the old form named them. */
 export function aiosQuarterName(q: Pick<AiosQuarter, 'jaar' | 'kwartaal'>): string {
   return `${q.jaar} Q${q.kwartaal}`;

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import fc from 'fast-check';
 import { addDays, parseISO } from './holidays';
 import {
+  aiosPreferenceDeadline,
+  aiosQuartersToOffer,
   aiosQuarter,
   aiosQuarterContaining,
   aiosQuarterName,
@@ -72,6 +74,23 @@ describe('the AIOS quarter', () => {
     );
     // 1 January 2030 is still in Q4 2029.
     expect(aiosQuarterContaining('2030-01-01')).toMatchObject({ jaar: 2029, kwartaal: 4 });
+  });
+
+  // The quarter running has started: its deadline would lie in the past,
+  // so offering it only led to a refusal (AIOS audit).
+  it('offers the quarters that have not started yet, the next one first', () => {
+    fc.assert(
+      fc.property(fc.date({ min: new Date(2001, 0, 1), max: new Date(2099, 11, 31), noInvalidDate: true }), (d) => {
+        const vandaag = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const lijst = aiosQuartersToOffer(vandaag);
+        expect(lijst).toHaveLength(6);
+        expect(lijst[0].start_datum > vandaag).toBe(true);
+        expect(lijst[0]).toEqual(nextAiosQuarter(aiosQuarterContaining(vandaag)));
+      })
+    );
+    expect(aiosQuartersToOffer('2026-10-15').map(aiosQuarterName)).toEqual(['2027 Q1', '2027 Q2', '2027 Q3', '2027 Q4', '2028 Q1', '2028 Q2']);
+    // 8 weeks before 6 January 2027.
+    expect(aiosPreferenceDeadline(aiosQuarter(2027, 1))).toBe('2026-11-11');
   });
 
   it('knows a period that is exactly one quarter, and only that', () => {

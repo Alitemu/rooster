@@ -17,6 +17,7 @@
 
 import { db } from '@/db/client';
 import { getOpenPeriodsForPerson, releaseSourceAvailability } from '@/lib/parttimeSync';
+import { isAiosPool } from '@/lib/aiosPeriod';
 import { restoreFellowBlocks } from '@/lib/fellowBlocks';
 
 export interface AbsenceRow {
@@ -224,7 +225,8 @@ export function syncAvailabilityForPeriod(periodId: string): { inserted: number;
     .prepare('SELECT pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
     .get(periodId) as { pool_id: string; status: string; start_datum: string; eind_datum: string } | undefined;
 
-  if (!period || period.status !== 'OPEN') {
+  // Not an AIOS period (lib/parttimeSync.ts openPeriodsForPerson).
+  if (!period || period.status !== 'OPEN' || isAiosPool(period.pool_id)) {
     return { inserted: 0, absencesProcessed: 0 };
   }
 
