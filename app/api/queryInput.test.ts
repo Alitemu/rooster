@@ -77,7 +77,7 @@ function fill(routePath: string): { url: string; params: Record<string, string> 
   const params: Record<string, string> = {};
   const url = routePath.replace(/\[([^\]]+)\]/g, (_, name: string) => {
     let value: string = crypto.randomUUID();
-    if (name === 'id') value = routePath.startsWith('person/') ? ids.person : routePath.startsWith('planner/pool') ? ids.pool : ids.period;
+    if (name === 'id') value = (routePath.startsWith('person/') || routePath.startsWith('aios/deelnemer/')) ? ids.person : routePath.startsWith('planner/pool') ? ids.pool : ids.period;
     else if (name === 'period-id' || name === 'periodId') value = ids.period;
     else if (name === 'slotId') value = ids.slot;
     else if (name === 'assignment-id') value = ids.assignment;
@@ -127,7 +127,7 @@ describe('no GET answers 500 to an odd query string', () => {
 
   it.each(queryRoutes().map((r) => [r.path, r] as const))('%s', async (_name, route) => {
     const { url, params } = fill(route.path);
-    const who = route.path.startsWith('person/') ? cookie('person', ids.person) : cookie('staff', ids.admin);
+    const who = (route.path.startsWith('person/') || route.path.startsWith('aios/deelnemer/')) ? cookie('person', ids.person) : cookie('staff', ids.admin);
     const failures: string[] = [];
     for (const name of route.query) {
       for (const value of ODD) {

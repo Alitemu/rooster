@@ -1,5 +1,5 @@
 /**
- * POST /api/person/[id]/aios/[periodId]/indienen - an AIOS hands in their
+ * POST /api/aios/deelnemer/[id]/periode/[periodId]/indienen - an AIOS hands in their
  * preferences for the quarter, as "Bevestigen" does on the achterwacht's
  * screen. Changing them afterwards, before the deadline, stays possible.
  */
@@ -7,10 +7,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { aiosPeriodUsableFor } from '@/lib/periodAccess';
+import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
-import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
 import { aiosInvoerToegestaan, loadAiosPeriode } from '@/lib/aiosPreferences';
 
 const fail = (status: number, code: string, message: string) =>
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (denied) return denied;
 
     const period = loadAiosPeriode(periodId);
-    if (!period || !aiosPeriodUsableFor(auth!, id, period)) return fail(404, 'PERIOD_NOT_FOUND', 'Periode niet gevonden');
+    if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) return fail(404, 'PERIOD_NOT_FOUND', 'Periode niet gevonden');
     const invoer = aiosInvoerToegestaan(period);
     if (!invoer.ok) return fail(invoer.status, invoer.code, invoer.message);
 
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'ingediend door planner', periode_id: periodId });
     try {
-      writePreferencesBackup(id, periodId);
+      schrijfAiosVoorkeurBackup(id, periodId);
     } catch (backupError) {
       console.error('preferences-backup-write-failed', backupError);
     }

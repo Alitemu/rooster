@@ -439,8 +439,8 @@ async function createTables() {
 
     CREATE TABLE IF NOT EXISTS dienstrooster_aios_wens (
       id TEXT PRIMARY KEY NOT NULL,
-      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
-      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
       vier_avonden INTEGER NOT NULL DEFAULT 0,
       vier_nachten INTEGER NOT NULL DEFAULT 0,
       twee_dagdiensten INTEGER NOT NULL DEFAULT 0,
@@ -453,6 +453,12 @@ async function createTables() {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS aios_wens_uniq
       ON dienstrooster_aios_wens(period_id, person_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_periode (
+      period_id TEXT PRIMARY KEY NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      uitgenodigd_op TEXT,
+      basis_url TEXT
+    );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_period_fellow (
       id TEXT PRIMARY KEY NOT NULL,
@@ -564,6 +570,7 @@ const SEEDED_TABLES = [
   'dienstrooster_reminder_run',
   'dienstrooster_period_fellow',
   'dienstrooster_aios_wens',
+  'dienstrooster_aios_periode',
   'dienstrooster_mail_queue',
   // References a person (gewijzigd_door), so a reset clears it as well.
   'dienstrooster_app_setting',

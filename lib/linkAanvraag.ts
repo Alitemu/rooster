@@ -6,8 +6,7 @@
  * address it is. It hands the question to the Power Automate flow that
  * already owns the address list: one LINK_AANVRAAG verzendlijst with the
  * address and, in `kandidaten`, a ready bericht for everyone taking part in
- * a pool's active period (lib/activePeriod.ts), one verzendlijst per
- * dienst, each to that dienst's own flow. The flow finds the address in
+ * a pool's active period (lib/activePeriod.ts), of every pool. The flow finds the address in
  * its sheet, takes that codenaam's bericht and sends it to the address in
  * the sheet - so a link only ever goes to an address the planner
  * registered, whatever a visitor types. See lib/verzendlijst.ts for why
@@ -25,12 +24,10 @@
 
 import { db } from '@/db/client';
 import { getActivePeriods, type ActivePeriod } from '@/lib/activePeriod';
-import { dienstVanPeriode } from '@/lib/aiosPeriod';
 import { deadlinePassed } from '@/lib/periodInputGate';
 import { mailBaseUrl } from '@/lib/baseUrl';
 import { issuePersonLink } from '@/lib/periodInvitations';
 import { deadlineTekst, verzendlijstPersonen, type VerzendlijstBericht } from '@/lib/verzendlijst';
-import type { DienstType } from '@/lib/staffAccounts';
 
 /** What the link opens, in the period's current state. */
 export function periodeUitleg(period: ActivePeriod, now: Date = new Date()): string {
@@ -46,25 +43,17 @@ export function periodeUitleg(period: ActivePeriod, now: Date = new Date()): str
   );
 }
 
-/** The berichten for one dienst's flow, with the periods they are for. */
-export interface LinkAanvraagLijst {
-  dienst: DienstType;
-  periode: string;
-  kandidaten: VerzendlijstBericht[];
-}
-
 /**
  * A bericht per participant of each pool's active period, each with a
- * fresh link, grouped per dienst: the achterwacht and the AIOS each have
- * their own flow and address list (docs/aios-rooster.md, "Mail"), so each
- * dienst gets its own verzendlijst and no flow sees the other's names. A
- * pool contributes nothing when it has no active period, or no address for
- * links is known for it (no BASE_URL, no invitations sent yet): the
- * request's own Host header is never used, anyone can forge it. A dienst
- * with nobody to send a link to is left out.
+ * fresh link: the achterwacht's and the AIOS's alike, since the flow and
+ * its address list are shared. A pool contributes nothing when it has no
+ * active period, or no address for links is known for it (no BASE_URL, no
+ * invitations sent yet): the request's own Host header is never used,
+ * anyone can forge it.
  */
-export function linkAanvraagKandidaten(now: Date = new Date()): LinkAanvraagLijst[] {
-  const lijsten = new Map<DienstType, { namen: string[]; kandidaten: VerzendlijstBericht[] }>();
+export function linkAanvraagKandidaten(now: Date = new Date()): { periode: string | null; kandidaten: VerzendlijstBericht[] } {
+  const namen: string[] = [];
+  const kandidaten: VerzendlijstBericht[] = [];
   for (const period of getActivePeriods()) {
     const baseUrl = mailBaseUrl(period.id);
     if (!baseUrl) continue;
@@ -81,13 +70,10 @@ export function linkAanvraagKandidaten(now: Date = new Date()): LinkAanvraagLijs
       .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
     if (members.length === 0) continue;
 
-    const dienst = dienstVanPeriode(period.id);
-    const lijst = lijsten.get(dienst) ?? { namen: [], kandidaten: [] };
-    lijsten.set(dienst, lijst);
     const uitleg = periodeUitleg(period, now);
-    lijst.namen.push(period.naam);
+    namen.push(period.naam);
     for (const m of members) {
-      lijst.kandidaten.push({
+      kandidaten.push({
         soort: 'LINK_AANVRAAG' as const,
         codenaam: m.codenaam,
         personen: verzendlijstPersonen(m.codenaam),
@@ -101,5 +87,5 @@ export function linkAanvraagKandidaten(now: Date = new Date()): LinkAanvraagLijs
     }
   }
 
-  return [...lijsten].map(([dienst, l]) => ({ dienst, periode: l.namen.join(' en '), kandidaten: l.kandidaten }));
+  return { periode: namen.length > 0 ? namen.join(' en ') : null, kandidaten };
 }

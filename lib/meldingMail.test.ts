@@ -906,7 +906,7 @@ describe('ruilmails die niet meteen weg konden', () => {
     db.prepare(`UPDATE dienstrooster_app_setting SET waarde = ? WHERE sleutel = 'mail.wachtwoord'`).run(
       encryptSetting('app-wachtwoord')
     );
-    expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []), 'ACHTERWACHT')).ok).toBe(true);
+    expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(true);
     await waitForMails(sink, 3);
     // The mails reach the sink before the queue run removes their rows.
     await mailQueueSettled();

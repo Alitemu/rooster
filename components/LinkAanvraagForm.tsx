@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 
 /**
- * "Link kwijt?" on the start page (POST /api/link-aanvragen). The answer
- * after sending is the same whether the address is known or not: the app
- * can't tell, the Power Automate flow decides (lib/linkAanvraag.ts).
+ * "Link kwijt?" on the start page, shared by the achterwacht and the AIOS
+ * like the rest of the login page: POST /api/link-aanvragen (the
+ * achterwacht's flow, lib/linkAanvraag.ts) and /api/aios/link-aanvragen
+ * (the AIOS's flow). The answer after sending is the same whether the
+ * address is known or not: the app can't tell, the flows decide.
  */
 export function LinkAanvraagForm() {
   const [email, setEmail] = useState('');
@@ -17,21 +19,34 @@ export function LinkAanvraagForm() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setState({ kind: 'sending' });
-    try {
-      const res = await fetch(withBasePath('/api/link-aanvragen'), {
+    // The achterwacht and the AIOS each have their own flow and their own
+    // route for it (app/api/aios/link-aanvragen); whoever the address
+    // belongs to, one of them sends the link. Received by either is enough.
+    const vraag = (url: string) =>
+      fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
-      });
-      if (res.ok) {
-        setState({ kind: 'sent' });
-        return;
-      }
-      const data = await res.json().catch(() => null);
-      setState({ kind: 'error', message: data?.error?.message || 'Het aanvragen is niet gelukt. Probeer het later opnieuw.' });
-    } catch {
-      setState({ kind: 'error', message: 'Het aanvragen is niet gelukt. Controleer je verbinding en probeer het opnieuw.' });
+      }).catch(() => null);
+    const [achterwacht, aios] = await Promise.all([
+      vraag(withBasePath('/api/link-aanvragen')),
+      vraag(withBasePath('/api/aios/link-aanvragen')),
+    ]);
+    // The achterwacht's answer counts first, as before the AIOS had a
+    // route: a malformed address or too many requests is told as it was.
+    // Only when the achterwacht's flow could not take it does the AIOS's
+    // having taken it count as received.
+    const zegtNee = achterwacht && (achterwacht.status === 400 || achterwacht.status === 429);
+    if (achterwacht?.ok || (!zegtNee && aios?.ok)) {
+      setState({ kind: 'sent' });
+      return;
     }
+    if (!achterwacht && !aios) {
+      setState({ kind: 'error', message: 'Het aanvragen is niet gelukt. Controleer je verbinding en probeer het opnieuw.' });
+      return;
+    }
+    const data = await (achterwacht ?? aios)!.json().catch(() => null);
+    setState({ kind: 'error', message: data?.error?.message || 'Het aanvragen is niet gelukt. Probeer het later opnieuw.' });
   };
 
   if (state.kind === 'sent') {

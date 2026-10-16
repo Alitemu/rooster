@@ -7,8 +7,7 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosQuarter } from '@/lib/aiosQuarter';
-import { syncAbsencesForPerson } from '@/lib/absenceSync';
-import { syncPatternsForPerson } from '@/lib/parttimeSync';
+import { syncAiosPersoon } from '@/lib/aiosSync';
 import {
   blokkadeTellers,
   loadAiosPeriode,
@@ -17,8 +16,8 @@ import {
   saveAiosWens,
   setAiosVoorkeur,
 } from './aiosPreferences';
-import { GET } from '@/app/api/person/[id]/aios/[periodId]/route';
-import { PATCH } from '@/app/api/person/[id]/aios/[periodId]/slot/[slotId]/route';
+import { GET } from '@/app/api/aios/deelnemer/[id]/periode/[periodId]/route';
+import { PATCH } from '@/app/api/aios/deelnemer/[id]/periode/[periodId]/slot/[slotId]/route';
 
 /**
  * The rules (docs/aios-rooster.md, "Verzoeken van de AIOS"):
@@ -143,7 +142,7 @@ describe('marking an AIOS dienst', () => {
     const c = person('c');
     // Leave from Saturday 8 to Monday 10 April: Easter Sunday and Monday are feestdagen.
     insert('dienstrooster_absence', { person_id: c, van_datum: '2034-04-08', tot_datum: '2034-04-10', soort: 'VAKANTIE', aangemaakt_door: c, aangemaakt_op: new Date().toISOString() });
-    syncAbsencesForPerson(c);
+    syncAiosPersoon(c);
     expect(marks(c, '2034-04-08')).toEqual({ DD: 'ABSOLUUT/ABSENCE', ADW: 'ABSOLUUT/ABSENCE', ND: 'ABSOLUUT/ABSENCE' });
     expect(marks(c, '2034-04-09')).toEqual({ DD: 'LIEVER_NIET/ABSENCE', ADW: 'LIEVER_NIET/ABSENCE', ND: 'LIEVER_NIET/ABSENCE' });
     expect(marks(c, '2034-04-11')).toEqual({ UD: null, AD: null, ND: null });
@@ -160,7 +159,7 @@ describe('marking an AIOS dienst', () => {
   it("blocks a part-time day's UD and evening, not its night, and keeps it so", () => {
     const d = person('d');
     insert('dienstrooster_parttime_pattern', { person_id: d, weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2030-01-01', geldig_tot: '2099-12-31', aangemaakt_door: d, aangemaakt_op: new Date().toISOString() });
-    syncPatternsForPerson(d);
+    syncAiosPersoon(d);
     expect(marks(d, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'ABSOLUUT/PARTTIME', ND: null });
     expect(setAiosVoorkeur(d, ids.period, slot('2034-04-16', 'ADW'), 'VOORKEUR')).toMatchObject({ ok: false, code: 'IN_DEELTIJD' });
     // The night block over that Monday is free to mark.
@@ -173,7 +172,7 @@ describe('the 50% counters', () => {
   it('count a block once, only what was blocked by hand, and warn above half', () => {
     const e = person('e');
     insert('dienstrooster_absence', { person_id: e, van_datum: '2034-05-01', tot_datum: '2034-05-31', soort: 'VAKANTIE', aangemaakt_door: e, aangemaakt_op: new Date().toISOString() });
-    syncAbsencesForPerson(e);
+    syncAiosPersoon(e);
     const nul = blokkadeTellers(loadAiosVoorkeurDagen(e, ids.period));
     // A month of leave counts for nothing.
     expect(nul.every((t) => t.geblokkeerd === 0)).toBe(true);
@@ -240,7 +239,7 @@ describe('the routes', () => {
     const g = person('g');
     // A participant's session holds while they have a link that is not withdrawn.
     insert('dienstrooster_person_access_link', { person_id: g, token_hash: crypto.randomBytes(32).toString('hex'), aangemaakt_op: new Date().toISOString() });
-    const res = await GET(new NextRequest(`http://localhost/api/person/${g}/aios/${ids.period}`, { headers: { Cookie: cookie(g) } }), {
+    const res = await GET(new NextRequest(`http://localhost/api/aios/deelnemer/${g}/periode/${ids.period}`, { headers: { Cookie: cookie(g) } }), {
       params: Promise.resolve({ id: g, periodId: ids.period }),
     });
     expect(res.status).toBe(200);
@@ -251,7 +250,7 @@ describe('the routes', () => {
 
     const patch = (level: unknown) =>
       PATCH(
-        new NextRequest(`http://localhost/api/person/${g}/aios/${ids.period}/slot/x`, {
+        new NextRequest(`http://localhost/api/aios/deelnemer/${g}/periode/${ids.period}/slot/x`, {
           method: 'PATCH',
           headers: { Cookie: cookie(g), 'Content-Type': 'application/json' },
           body: JSON.stringify({ level }),
@@ -269,7 +268,7 @@ describe('the routes', () => {
     const staf = insert('dienstrooster_person', { codenaam: `staf-${crypto.randomUUID().slice(0, 6)}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: new Date().toISOString() });
     insert('dienstrooster_pool_membership', { person_id: staf, pool_id: stafPool, deelnamefactor: 1, geldig_vanaf: '2030-01-01', geldig_tot: '2099-12-31' });
     insert('dienstrooster_person_access_link', { person_id: staf, token_hash: crypto.randomBytes(32).toString('hex'), aangemaakt_op: new Date().toISOString() });
-    const stafRes = await GET(new NextRequest(`http://localhost/api/person/${staf}/aios/${stafPeriod}`, { headers: { Cookie: cookie(staf) } }), {
+    const stafRes = await GET(new NextRequest(`http://localhost/api/aios/deelnemer/${staf}/periode/${stafPeriod}`, { headers: { Cookie: cookie(staf) } }), {
       params: Promise.resolve({ id: staf, periodId: stafPeriod }),
     });
     expect(stafRes.status).toBe(404);

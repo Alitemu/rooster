@@ -35,6 +35,7 @@ const PUBLIC = new Set([
   'auth/logout',
   'auth/me',
   'link-aanvragen',
+  'aios/link-aanvragen',
 ]);
 
 /**
@@ -91,7 +92,7 @@ function cookie(kind: 'person' | 'staff', personId: string, wachtwoordWijzigen =
 function fill(path: string): { url: string; params: Record<string, string> } {
   const params: Record<string, string> = {};
   const url = path.replace(/\[([^\]]+)\]/g, (_, name: string) => {
-    const value = name === 'id' && path.startsWith('person/') ? ids.other : crypto.randomUUID();
+    const value = name === 'id' && (path.startsWith('person/') || path.startsWith('aios/deelnemer/')) ? ids.other : crypto.randomUUID();
     params[name] = value;
     return value;
   });
@@ -142,7 +143,7 @@ describe('every API route refuses who may not use it', () => {
     expect([401, 403]).toContain(await call(route, null));
   });
 
-  it.each(guarded.filter((r) => !r.path.startsWith('person/')).map((r) => [`${r.method} ${r.path}`, r] as const))(
+  it.each(guarded.filter((r) => !(r.path.startsWith('person/') || r.path.startsWith('aios/deelnemer/'))).map((r) => [`${r.method} ${r.path}`, r] as const))(
     'a participant, on staff routes: %s',
     async (_, route) => {
       const status = await call(route, cookie('person', ids.participant));
@@ -150,7 +151,7 @@ describe('every API route refuses who may not use it', () => {
     }
   );
 
-  it.each(guarded.filter((r) => r.path.startsWith('person/')).map((r) => [`${r.method} ${r.path}`, r] as const))(
+  it.each(guarded.filter((r) => (r.path.startsWith('person/') || r.path.startsWith('aios/deelnemer/'))).map((r) => [`${r.method} ${r.path}`, r] as const))(
     "a participant, on someone else's data: %s",
     async (_, route) => {
       expect([401, 403]).toContain(await call(route, cookie('person', ids.participant)));

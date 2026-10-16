@@ -623,8 +623,10 @@ export const aiosWens = sqliteTable(
   'dienstrooster_aios_wens',
   {
     id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
-    period_id: text('period_id').notNull().references(() => schedulePeriod.id),
-    person_id: text('person_id').notNull().references(() => person.id),
+    // Cascade: purging a period (lib/periodTrash.ts) takes these with it
+    // without the achterwacht's code knowing about them.
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
     vier_avonden: integer('vier_avonden', { mode: 'boolean' }).default(false).notNull(),
     vier_nachten: integer('vier_nachten', { mode: 'boolean' }).default(false).notNull(),
     twee_dagdiensten: integer('twee_dagdiensten', { mode: 'boolean' }).default(false).notNull(),
@@ -639,6 +641,21 @@ export const aiosWens = sqliteTable(
     uniq: uniqueIndex('aios_wens_uniq').on(table.period_id, table.person_id),
   })
 );
+
+/**
+ * The AIOS's own state of an AIOS period (lib/aiosUitnodigen.ts), kept
+ * apart from schedule_period's uitgenodigd_op and basis_url: those drive
+ * the achterwacht's active period, "Link kwijt?" and automatic reminders,
+ * which must never pick up an AIOS period. The AIOS code copies what it
+ * needs instead of changing the achterwacht's (docs/development/diensten.md).
+ */
+export const aiosPeriode = sqliteTable('dienstrooster_aios_periode', {
+  period_id: text('period_id')
+    .primaryKey()
+    .references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+  uitgenodigd_op: text('uitgenodigd_op'), // the AIOS's invitations went out (ISO timestamp)
+  basis_url: text('basis_url'), // the address the links were issued under, for later mails
+});
 
 export const periodFellow = sqliteTable(
   'dienstrooster_period_fellow',

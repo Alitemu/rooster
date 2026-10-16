@@ -172,8 +172,7 @@ describe('an AIOS period', () => {
     expect(count('SELECT COUNT(*) AS n FROM dienstrooster_schedule_period WHERE pool_id = ?', ids.emptyAiosPool)).toBe(0);
   });
 
-  // Opening by the AIOS's own rules: app/api/aiosOpen.test.ts.
-  it("is not opened by the achterwacht's rules, nor goes through the achterwacht slot and capacity steps", async () => {
+  it('cannot be opened, nor go through the achterwacht slot and capacity steps, yet', async () => {
     const open = await openPeriod(
       request(`/api/periods/${ids.q1}/open`, 'POST', {
         naam: 'Open',
@@ -184,14 +183,9 @@ describe('an AIOS period', () => {
       }),
       params(ids.q1)
     );
-    // The AIOS's opening: nobody takes part in this quarter, and the
-    // achterwacht's ruleset in the body is never frozen onto it.
-    expect(open.status).toBe(400);
-    expect((await open.json()).error.code).toBe('NO_ACTIVE_STAFF');
-    expect(db.prepare('SELECT status, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?').get(ids.q1)).toEqual({
-      status: 'CONCEPT',
-      bevroren_ruleset_json: null,
-    });
+    expect(open.status).toBe(409);
+    expect((await open.json()).error.code).toBe('AIOS_NOG_NIET');
+    expect((db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(ids.q1) as { status: string }).status).toBe('CONCEPT');
 
     expect((await generateSlots(request(`/api/periods/${ids.q1}/generate-slots`, 'POST', {}), params(ids.q1))).status).toBe(409);
     expect((await capacity(request(`/api/periods/${ids.q1}/capacity`, 'GET'), params(ids.q1))).status).toBe(409);

@@ -17,7 +17,7 @@
 
 import { db } from '@/db/client';
 import { getOpenPeriodsForPerson, releaseSourceAvailability } from '@/lib/parttimeSync';
-import { isAiosPeriod } from '@/lib/aiosPeriod';
+import { isAiosPool } from '@/lib/aiosPeriod';
 import { restoreFellowBlocks } from '@/lib/fellowBlocks';
 
 export interface AbsenceRow {
@@ -62,14 +62,8 @@ export function matchSlotsToAbsence(absence: Pick<AbsenceRow, 'van_datum' | 'tot
  */
 function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncResult {
   const slots = db
-    .prepare('SELECT id, datum, is_feestdag FROM dienstrooster_shift_slot WHERE period_id = ?')
-    .all(periodId) as Array<SlotForMatching & { is_feestdag: number }>;
-  // At the AIOS leave on a feestdag is "liever niet", not a block: the
-  // feestdagen are shared out fairly, leave or not (docs/aios-rooster.md,
-  // "Verzoeken van de AIOS").
-  const aios = isAiosPeriod(periodId);
-  const feestdag = new Set(slots.filter((s) => s.is_feestdag).map((s) => s.id));
-  const levelFor = (slotId: string) => (aios && feestdag.has(slotId) ? 'LIEVER_NIET' : 'ABSOLUUT');
+    .prepare('SELECT id, datum FROM dienstrooster_shift_slot WHERE period_id = ?')
+    .all(periodId) as SlotForMatching[];
 
   const targetSlotIds = new Set(matchSlotsToAbsence(absence, slots));
 
@@ -102,7 +96,7 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
     const insertStmt = db.prepare(
       `INSERT INTO dienstrooster_availability
        (id, person_id, slot_id, blocking_level, source, bron_absence_id, aangemaakt_op)
-       VALUES (?, ?, ?, ?, 'ABSENCE', ?, ?)`
+       VALUES (?, ?, ?, 'ABSOLUUT', 'ABSENCE', ?, ?)`
     );
     // A part-time pattern's block is a standing weekly rule with no date
     // of its own; a registered absence is the more specific, more
@@ -117,7 +111,7 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
     // edited, since the slot would look "stale" from the pattern's side).
     const takeOverStmt = db.prepare(
       `UPDATE dienstrooster_availability
-       SET blocking_level = ?, source = 'ABSENCE', bron_absence_id = ?, bron_pattern_id = NULL, fellow_blok = 0
+       SET blocking_level = 'ABSOLUUT', source = 'ABSENCE', bron_absence_id = ?, bron_pattern_id = NULL, fellow_blok = 0
        WHERE person_id = ? AND slot_id = ?`
     );
     const now = new Date().toISOString();
@@ -133,14 +127,14 @@ function reconcileAbsenceForPeriod(absence: AbsenceRow, periodId: string): SyncR
         // doc comment above).
         const softManual = existing.source === 'MANUAL' && existing.blocking_level !== 'ABSOLUUT';
         if (existing.source === 'PARTTIME' || existing.fellow_blok || softManual) {
-          takeOverStmt.run(levelFor(slotId), absence.id, absence.person_id, slotId);
+          takeOverStmt.run(absence.id, absence.person_id, slotId);
           inserted++;
         } else {
           skippedManualConflicts++;
         }
         continue;
       }
-      insertStmt.run(crypto.randomUUID(), absence.person_id, slotId, levelFor(slotId), absence.id, now);
+      insertStmt.run(crypto.randomUUID(), absence.person_id, slotId, absence.id, now);
       inserted++;
     }
   }
@@ -231,7 +225,8 @@ export function syncAvailabilityForPeriod(periodId: string): { inserted: number;
     .prepare('SELECT pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
     .get(periodId) as { pool_id: string; status: string; start_datum: string; eind_datum: string } | undefined;
 
-  if (!period || period.status !== 'OPEN') {
+  // Not an AIOS period (lib/parttimeSync.ts openPeriodsForPerson).
+  if (!period || period.status !== 'OPEN' || isAiosPool(period.pool_id)) {
     return { inserted: 0, absencesProcessed: 0 };
   }
 

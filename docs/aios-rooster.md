@@ -274,15 +274,21 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   (`shift_slot.shift_block_id`).
 - De periode van een AIOS-pool is een kwartaal van woensdag tot dinsdag, geen
   ISO-weken.
-- Een eigen model in de solver: één beslissing per blok in plaats van per dag.
-  Dat raakt het contract met de solver.
+- Eigen code (de keuze van de planner in oktober 2026): na de inlogpagina heeft
+  de AIOS eigen pagina's, routes en code. Wat de AIOS van de achterwacht nodig
+  heeft, wordt gekopieerd en niet aangepast, zodat code die bij de achterwacht
+  werkt niet ineens breekt. Gedeeld zijn alleen de inlog, de database en het
+  Gmail-account (docs/development/diensten.md, "Copied, not changed").
+- Een eigen solver voor de AIOS, in een eigen container, los van die van de
+  achterwacht. De solver van de achterwacht blijft ongewijzigd. Eén beslissing
+  per blok in plaats van per dag.
 - Het voorkeurenscherm toont per dag de diensten die er die dag zijn, met de
   blokken als één vak. Leesbaar op 375 pixels breed.
 - Mail: één mailaccount voor beide roosters, hoogstens 100 tot 150 mails per dag
   als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de
   keuze van de planner in oktober 2026): de verzendlijst van de AIOS gaat naar
-  een eigen stroomadres in de mailinstellingen, en dat adres staat ook in het
-  ruilscherm van de AIOS. De lijst met adressen van de AIOS staat bij de
+  een eigen stroomadres. Dat stelt de beheerder in op de pagina van een periode
+  van de AIOS. Het komt later ook in het ruilscherm van de AIOS. De lijst met adressen van de AIOS staat bij de
   roosteraar (N2). Geen kopie voor de opleider (N4).
 - Het AIOS-rooster houdt geen rekening met de achterwacht en andersom (M1 tot en
   met M5). Fellows doen bij de AIOS alleen de ondersteuning op zaterdag en de

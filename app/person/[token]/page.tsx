@@ -19,7 +19,6 @@ import { AbsenceManager, type Absence } from '@/components/AbsenceManager';
 import { PreferencesConfirmation } from '@/components/PreferencesConfirmation';
 import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
-import { AiosBevestigen, AiosVoorkeuren } from '@/components/AiosPreferences';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { withBasePath } from '@/lib/basePath';
 
@@ -37,8 +36,6 @@ interface Period {
   eind_datum: string;
   deadline: string;
   status: string;
-  /** The AIOS have their own screen for the preferences (components/AiosPreferences.tsx). */
-  dienst?: 'ACHTERWACHT' | 'AIOS';
 }
 
 interface RosterData {
@@ -180,11 +177,8 @@ function PersonalLinkPageContent() {
     absences.map((a) => `${a.id}:${a.van_datum}:${a.tot_datum}`).join(','),
   ].join('|');
   const periodId = period?.id;
-  const aios = period?.dienst === 'AIOS';
   useEffect(() => {
-    // The AIOS's screen has no part-time check step: the grid shows what
-    // leave and part-time days hold.
-    if (!personId || !periodId || aios) return;
+    if (!personId || !periodId) return;
     let cancelled = false;
     fetch(withBasePath(`/api/person/${personId}/parttime-check?period_id=${periodId}`))
       .then((res) => (res.ok ? res.json() : null))
@@ -195,7 +189,7 @@ function PersonalLinkPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [personId, periodId, deeltijdVingerafdruk, aios]);
+  }, [personId, periodId, deeltijdVingerafdruk]);
   const setParttimeConfirmed = useCallback(
     (confirmed: boolean) => {
       setParttimeConfirmedState(confirmed);
@@ -376,7 +370,7 @@ function PersonalLinkPageContent() {
   // the confirmation step is reached, so it reflects whatever was just set
   // in the calendar step.
   useEffect(() => {
-    if (currentStep !== 'confirmation' || !personId || !period || period.dienst === 'AIOS') return;
+    if (currentStep !== 'confirmation' || !personId || !period) return;
 
     const loadBlockedDays = async () => {
       try {
@@ -657,59 +651,7 @@ function PersonalLinkPageContent() {
           worden staat dan al vast voordat je de voorkeurenkalender ziet,
           in plaats van dat je halverwege moet terugspringen om dat nog te
           controleren. */}
-      {period.status !== 'GEPUBLICEERD' && currentStep === 'parttime' && aios && (
-        <div className="space-y-4">
-          <ParttimePatternEditor
-            personId={personId}
-            patterns={patterns}
-            defaultVanaf={period.start_datum}
-            defaultTot={period.eind_datum}
-            readOnly={deadlinePassed}
-            uitleg="Werk je een vaste dag (of om de week) niet? Geef dat hier op. Op die dag krijg je dan geen uitloopdienst en geen avondblok. Een nacht- of weekenddienst kan nog wel."
-            onPatternsChange={setPatterns}
-          />
-          <AbsenceManager
-            personId={personId}
-            periodId={period.id}
-            absences={absences}
-            defaultVanaf={period.start_datum}
-            defaultTot={period.eind_datum}
-            readOnly={deadlinePassed}
-            uitleg="Vakantie, ziekte of ander verlof: geef de periode hier op, dan krijg je op die dagen geen diensten. Op een feestdag wordt dat liever niet, want de feestdagen worden eerlijk verdeeld. Bij de volgende stap zie je per dienst wat er geblokkeerd is."
-            onAbsencesChange={setAbsences}
-          />
-          <button
-            onClick={() => setCurrentStep('calendar')}
-            className="w-full py-3 px-4 rounded font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 transition-colors"
-          >
-            Volgende: voorkeuren opgeven
-          </button>
-        </div>
-      )}
-
-      {period.status !== 'GEPUBLICEERD' && currentStep === 'calendar' && aios && (
-        <AiosVoorkeuren
-          personId={personId}
-          periodId={period.id}
-          readOnly={inputClosed}
-          onTerug={() => setCurrentStep('parttime')}
-          onVolgende={() => setCurrentStep('confirmation')}
-        />
-      )}
-
-      {period.status !== 'GEPUBLICEERD' && currentStep === 'confirmation' && aios && (
-        <div className="space-y-4">
-          <AiosBevestigen personId={personId} periodId={period.id} readOnly={inputClosed} onIngediend={handleSubmitSuccess} />
-          <button
-            onClick={() => setCurrentStep('calendar')}
-            className="w-full py-3 px-4 rounded font-semibold bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-          >
-            Terug
-          </button>
-        </div>
-      )}
-
-      {period.status !== 'GEPUBLICEERD' && currentStep === 'parttime' && !aios && (
+      {period.status !== 'GEPUBLICEERD' && currentStep === 'parttime' && (
         <div className="space-y-4">
           <ParttimePatternEditor
             personId={personId}
@@ -771,7 +713,7 @@ function PersonalLinkPageContent() {
         </div>
       )}
 
-      {period.status !== 'GEPUBLICEERD' && currentStep === 'calendar' && !aios && (
+      {period.status !== 'GEPUBLICEERD' && currentStep === 'calendar' && (
         <div className="space-y-4">
           <FellowToggle
             personId={personId}
@@ -806,7 +748,7 @@ function PersonalLinkPageContent() {
         </div>
       )}
 
-      {period.status !== 'GEPUBLICEERD' && currentStep === 'confirmation' && !aios && (
+      {period.status !== 'GEPUBLICEERD' && currentStep === 'confirmation' && (
         <div className="space-y-4">
           <PreferencesConfirmation
             personId={personId}

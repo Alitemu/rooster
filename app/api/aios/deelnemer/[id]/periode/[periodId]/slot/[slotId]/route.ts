@@ -1,15 +1,15 @@
 /**
- * PATCH /api/person/[id]/aios/[periodId]/slot/[slotId] - an AIOS marks a
+ * PATCH /api/aios/deelnemer/[id]/periode/[periodId]/slot/[slotId] - an AIOS marks a
  * dienst, and with it its whole block (lib/aiosPreferences.ts). Body:
  * { level: 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null }.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { aiosPeriodUsableFor } from '@/lib/periodAccess';
+import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
-import { writePreferencesBackup } from '@/lib/preferencesBackup';
+import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
 import { aiosInvoerToegestaan, loadAiosPeriode, setAiosVoorkeur } from '@/lib/aiosPreferences';
 
 const fail = (status: number, code: string, message: string) =>
@@ -32,7 +32,7 @@ export async function PATCH(
     }
 
     const period = loadAiosPeriode(periodId);
-    if (!period || !aiosPeriodUsableFor(auth!, id, period)) return fail(404, 'PERIOD_NOT_FOUND', 'Periode niet gevonden');
+    if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) return fail(404, 'PERIOD_NOT_FOUND', 'Periode niet gevonden');
     const invoer = aiosInvoerToegestaan(period);
     if (!invoer.ok) return fail(invoer.status, invoer.code, invoer.message);
 
@@ -46,7 +46,7 @@ export async function PATCH(
       level,
     });
     try {
-      writePreferencesBackup(id, periodId);
+      schrijfAiosVoorkeurBackup(id, periodId);
     } catch (backupError) {
       console.error('preferences-backup-write-failed', backupError);
     }

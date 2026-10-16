@@ -1,5 +1,5 @@
 /**
- * GET /api/planner/period/[id]/aios-voorkeuren - "Status voorkeuren" of an
+ * GET /api/aios/periode/[id]/voorkeuren - "Status voorkeuren" of an
  * AIOS period: per AIOS taking part, where their hand-in stands, what they
  * marked, what they asked besides and the 50% counters, which warn the
  * planner as they warn the AIOS (lib/aiosVoorkeur.ts). Only for an AIOS
@@ -23,17 +23,13 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
 
     const period = loadAiosPeriode(id);
     if (!period) {
-      // An achterwacht period has its own dashboard (as aios-diensten answers).
-      const bestaat = db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL').get(id);
-      return bestaat
-        ? NextResponse.json(
-            { success: false, error: { code: 'GEEN_AIOS_PERIODE', message: 'Dit overzicht is er alleen voor een periode van de AIOS' } },
-            { status: 409 }
-          )
-        : NextResponse.json({ success: false, error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' } }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' } },
+        { status: 404 }
+      );
     }
 
-    // Everyone the invitations go to (lib/periodInvitations.ts issuePeriodLinks).
+    // Everyone the invitations go to (lib/aiosUitnodigen.ts aiosDeelnemers).
     const leden = db
       .prepare(
         `SELECT DISTINCT p.id, p.codenaam, s.status, s.ingediend_op

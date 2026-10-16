@@ -14,7 +14,6 @@ import { renderNotificationTemplate, insertNotification } from '@/lib/notificati
 import { swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding, queuedMailCount, SWAP_REQUESTED_MAIL_TEMPLATE, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
 import { verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
-import { dienstVanPeriode } from '@/lib/aiosPeriod';
 import { getMailFailure } from '@/lib/appSettings';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { optionalFreeText } from '@/lib/freeText';
@@ -348,7 +347,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // below are started - they may join the queue themselves. The
     // requester is told, so they know the colleague may only see it in the
     // app for now (lib/meldingMail.ts sends it later).
-    const mailVertraagd = !verzendlijstMailConfigured(dienstVanPeriode(period_id as string)) || getMailFailure() !== null || queuedMailCount() > 0;
+    const mailVertraagd = !verzendlijstMailConfigured() || getMailFailure() !== null || queuedMailCount() > 0;
 
     // Also by mail, when the server is set up for it. Started after the
     // commit and not awaited: it must never hold up or undo the request.

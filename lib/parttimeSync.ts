@@ -17,7 +17,7 @@ import { db } from '@/db/client';
 import { parseISO, dateToISO, getISOWeek } from '@/lib/holidays';
 import { deadlinePassed } from '@/lib/periodInputGate';
 import { restoreFellowBlocks } from '@/lib/fellowBlocks';
-import { isAiosPeriod } from '@/lib/aiosPeriod';
+import { isAiosPool } from '@/lib/aiosPeriod';
 
 export type Weekdag = 'MA' | 'DI' | 'WO' | 'DO' | 'VR' | 'ZA' | 'ZO';
 export type Frequentie = 'ELKE_WEEK' | 'EVEN_WEKEN' | 'ONEVEN_WEKEN';
@@ -169,18 +169,8 @@ export function findBlockedElsewhereDays(
  * (never overwrites) any slot that already has a non-PARTTIME row.
  */
 function reconcilePatternForPeriod(pattern: ParttimePatternRow, periodId: string): SyncResult {
-  // The AIOS's part-time day is a hard rule (docs/aios-rooster.md, rule 4):
-  // no uitloopdienst and no evening (so no evening block) that day; the
-  // night is allowed. The achterwacht's whole day goes.
-  const aios = isAiosPeriod(periodId);
   const slots = db
-    .prepare(
-      aios
-        ? `SELECT s.id, s.datum, s.iso_week FROM dienstrooster_shift_slot s
-           JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-           WHERE s.period_id = ? AND st.code IN ('UD', 'AD', 'ADW')`
-        : 'SELECT id, datum, iso_week FROM dienstrooster_shift_slot WHERE period_id = ?'
-    )
+    .prepare('SELECT id, datum, iso_week FROM dienstrooster_shift_slot WHERE period_id = ?')
     .all(periodId) as SlotForMatching[];
 
   const targetSlotIds = new Set(matchSlotsToPattern(pattern, slots));
@@ -234,13 +224,10 @@ function reconcilePatternForPeriod(pattern: ParttimePatternRow, periodId: string
         | { source: string; blocking_level: string | null; fellow_blok: number }
         | undefined;
       if (existing) {
-        // At the AIOS a voorkeur gives way too: the day cannot be worked.
         const zachteMarkering =
           existing.source === 'MANUAL' &&
           !existing.fellow_blok &&
-          (existing.blocking_level === 'LIEVER_NIET' ||
-            existing.blocking_level === null ||
-            (aios && existing.blocking_level === 'VOORKEUR'));
+          (existing.blocking_level === 'LIEVER_NIET' || existing.blocking_level === null);
         if (zachteMarkering) {
           takeOverStmt.run(pattern.id, pattern.person_id, slotId);
           inserted++;
@@ -286,15 +273,19 @@ export function getOpenPeriodsForPerson(personId: string, now: Date = new Date()
 function openPeriodsForPerson(personId: string): Array<{ id: string; naam: string; deadline: string; start_datum: string; eind_datum: string }> {
   // A period in the trash is on its way to being purged - nothing should
   // still be written into it (verify-link stops resolving it for the same
-  // reason, see app/api/auth/verify-link/route.ts). An AIOS period is
-  // synced by its own rules (reconcilePatternForPeriod, lib/absenceSync.ts).
+  // reason, see app/api/auth/verify-link/route.ts). Nor an AIOS period:
+  // there an absence and a part-time day mean something else (on a
+  // feestdag leave is liever niet, a part-time day leaves the night block
+  // free; docs/aios-rooster.md), which its preferences step brings.
   return db
     .prepare(
       `SELECT DISTINCT sp.id, sp.naam, sp.deadline, sp.start_datum, sp.eind_datum
        FROM dienstrooster_schedule_period sp
        JOIN dienstrooster_pool_membership pm ON pm.pool_id = sp.pool_id
+       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
        WHERE pm.person_id = ?
          AND sp.status = 'OPEN'
+         AND pl.type <> 'AIOS'
          AND sp.verwijderd_op IS NULL
          AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum`
     )
@@ -459,7 +450,8 @@ export function syncAvailabilityForPeriod(periodId: string): { inserted: number;
     .prepare('SELECT pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
     .get(periodId) as { pool_id: string; status: string; start_datum: string; eind_datum: string } | undefined;
 
-  if (!period || period.status !== 'OPEN') {
+  // Not an AIOS period: see openPeriodsForPerson.
+  if (!period || period.status !== 'OPEN' || isAiosPool(period.pool_id)) {
     return { inserted: 0, patternsProcessed: 0 };
   }
 

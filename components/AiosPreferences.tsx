@@ -88,7 +88,7 @@ function useAiosScherm(personId: string, periodId: string) {
   const [laadFout, setLaadFout] = useState<string | null>(null);
   const laad = useCallback(async () => {
     try {
-      const res = await fetch(withBasePath(`/api/person/${personId}/aios/${periodId}`));
+      const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${periodId}`));
       setScherm(await json(res, 'Je voorkeuren konden niet geladen worden. Probeer de pagina te vernieuwen.'));
       setLaadFout(null);
     } catch (err) {
@@ -345,7 +345,7 @@ function Verzoeken({
     setFout(null);
     setMelding(null);
     try {
-      const res = await fetch(withBasePath(`/api/person/${personId}/aios/${scherm.period.id}/wens`), {
+      const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${scherm.period.id}/wens`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -512,7 +512,7 @@ export function AiosVoorkeuren({
     }));
     setScherm({ ...scherm, dagen, tellers: blokkadeTellers(dagen) });
     try {
-      const res = await fetch(withBasePath(`/api/person/${personId}/aios/${periodId}/slot/${eigen[0].slot_id}`), {
+      const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${periodId}/slot/${eigen[0].slot_id}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ level: nieuw }),
@@ -653,7 +653,7 @@ export function AiosBevestigen({
     setBezig(true);
     setFout(null);
     try {
-      const res = await fetch(withBasePath(`/api/person/${personId}/aios/${periodId}/indienen`), { method: 'POST' });
+      const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${periodId}/indienen`), { method: 'POST' });
       await json(res, 'Indienen is mislukt. Probeer het opnieuw.');
       onIngediend();
     } catch (err) {

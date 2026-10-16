@@ -142,34 +142,3 @@ Deze link is alleen voor jou. Stuur hem niet door. Ben je hem kwijt? Op ${startp
 Heb je vragen? Neem dan contact op met de roosteraar.`,
   };
 }
-
-/**
- * The AIOS's invitation (docs/aios-rooster.md, "Verzoeken van de AIOS"):
- * a screen per dienst and per block instead of the achterwacht's calendar,
- * and no indication of how many diensten to expect - the AIOS share the
- * quarter's points, not a streefaantal per counter.
- */
-export function aiosInvitationBericht(period: InvitationPeriod, codenaam: string, personalLink: string): VerzendlijstBericht {
-  return {
-    soort: 'UITNODIGING',
-    codenaam,
-    personen: verzendlijstPersonen(codenaam),
-    onderwerp: `Geef je voorkeuren door voor ${period.naam}`,
-    tekst: `Beste ${codenaam},
-
-Het rooster van de AIOS voor ${period.naam} wordt gemaakt. Geef via je persoonlijke link per dienst aan wat je graag doet en wat liever niet. Een avond- of nachtblok geef je in één keer op.
-
-Bovenaan het scherm geef je ook je verzoeken op. Doe je avonden of nachten graag in een blok van vier, van woensdag tot en met zaterdag? Doe je graag beide dagdiensten van een weekend? Word je dit kwartaal ingewerkt? Of is je opleiding een tijd onderbroken?
-
-Je persoonlijke link:
-${personalLink}
-
-Je voorkeuren moeten uiterlijk ${formatDeadline(period.deadline)} binnen zijn.
-
-Werk je in deeltijd? Of heb je vakantie of ander verlof? Geef dat op bij de eerste stap, Deeltijd. De app houdt daar dan rekening mee bij je diensten.
-
-Deze link is alleen voor jou. Stuur hem niet door. Ben je hem kwijt? Op ${startpagina(personalLink)} vraag je bij "Link kwijt?" een nieuwe aan met je werk-e-mailadres.
-
-Heb je vragen? Neem dan contact op met de roosteraar.`,
-  };
-}

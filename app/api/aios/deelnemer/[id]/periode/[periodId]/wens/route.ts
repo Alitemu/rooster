@@ -1,5 +1,5 @@
 /**
- * PUT /api/person/[id]/aios/[periodId]/wens - what an AIOS asks besides the
+ * PUT /api/aios/deelnemer/[id]/periode/[periodId]/wens - what an AIOS asks besides the
  * diensten they mark: "4 avonden", "4 nachten", "twee dagdiensten", the
  * inwerkperiode, a training interruption and a short general request
  * (lib/aiosPreferences.ts saveAiosWens).
@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { aiosPeriodUsableFor } from '@/lib/periodAccess';
+import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosInvoerToegestaan, loadAiosPeriode, loadAiosWens, saveAiosWens } from '@/lib/aiosPreferences';
@@ -24,7 +24,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
 
     const body = await parseJsonBody(req);
     const period = loadAiosPeriode(periodId);
-    if (!period || !aiosPeriodUsableFor(auth!, id, period)) return fail(404, 'PERIOD_NOT_FOUND', 'Periode niet gevonden');
+    if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) return fail(404, 'PERIOD_NOT_FOUND', 'Periode niet gevonden');
     const invoer = aiosInvoerToegestaan(period);
     if (!invoer.ok) return fail(invoer.status, invoer.code, invoer.message);
 

@@ -11,7 +11,7 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 - `person_access_link` - personal links for participants
 - `pool` - shift pool (name, type, settings reference)
 - `pool_membership` - who's in which pool when
-- `ruleset` - configuration and rules (frozen when period opens; an AIOS period freezes none yet, lib/aiosOpen.ts)
+- `ruleset` - configuration and rules (frozen when period opens)
 - `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
 - `shift_type` - shift definitions (evening, weekend, holiday). An AIOS
   pool's have `code` (UD, DD, AD, ADW, ND), `soort` (UITLOOP, DAG, AVOND,

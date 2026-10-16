@@ -4,11 +4,11 @@ import { v4 as uuid } from 'uuid';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { aiosQuarter } from '@/lib/aiosQuarter';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { getBaseUrl, getPersonalLinkUrl, loginAsBeheerder } from './setup';
+import { getBaseUrl, loginAsBeheerder } from './setup';
 
 /**
- * The AIOS's preferences, step 2 (docs/aios-rooster.md): on their personal
- * link, at 375 pixels, an AIOS passes Deeltijd, marks a whole evening block
+ * The AIOS's preferences, step 2 (docs/aios-rooster.md): on their own page
+ * (/aios/<token>), at 375 pixels, an AIOS passes Deeltijd, marks a whole evening block
  * with taps, finds geblokkeerd skipped on a feestdag, saves their requests
  * and hands in; the planner sees it under "Status voorkeuren".
  */
@@ -66,7 +66,8 @@ const datumLang = (datum: string) =>
 
 test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands in', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 800 });
-  await page.goto(getPersonalLinkUrl(ids.token));
+  // The AIOS's own page (app/aios/[token]), not the achterwacht's /person/.
+  await page.goto(`${getBaseUrl()}/aios/${ids.token}`);
 
   // Deeltijd first, with what a part-time day means for the AIOS.
   await expect(page.getByText(/geen uitloopdienst en geen avondblok/)).toBeVisible();
@@ -127,5 +128,6 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(rij).toContainText('Ingediend');
   await expect(rij).toContainText('1 geblokkeerd');
   await expect(rij).toContainText('4 nachten');
-  await expect(page.getByRole('button', { name: 'Uitnodigen en herinneren' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Links downloaden' })).toBeVisible();
+  await expect(page.getByText('Mail naar de AIOS')).toBeVisible();
 });

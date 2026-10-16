@@ -1,5 +1,5 @@
 /**
- * GET /api/person/[id]/aios/[periodId] - an AIOS's preferences screen for a
+ * GET /api/aios/deelnemer/[id]/periode/[periodId] - an AIOS's preferences screen for a
  * quarter (lib/aiosPreferences.ts): every dienst per day with their mark,
  * the blocks, what they ask besides, the 50% counters and where their
  * hand-in stands. The achterwacht's screen has its own routes, which refuse
@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
-import { aiosPeriodUsableFor } from '@/lib/periodAccess';
+import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
 import { internalErrorResponse } from '@/lib/api-errors';
 import {
   aiosInvoerToegestaan,
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (denied) return denied;
 
     const period = loadAiosPeriode(periodId);
-    if (!period || !aiosPeriodUsableFor(auth!, id, period)) {
+    if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) {
       return NextResponse.json(
         { success: false, error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' } },
         { status: 404 }

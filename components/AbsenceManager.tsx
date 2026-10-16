@@ -42,8 +42,6 @@ interface Props {
   defaultTot: string;
   readOnly?: boolean; // True once the period's deadline has passed - view only
   onAbsencesChange: (absences: Absence[]) => void;
-  /** What an absence does, when it differs from the achterwacht (the AIOS: liever niet on a feestdag). */
-  uitleg?: string;
 }
 
 const SOORT_LABEL: Record<string, string> = {
@@ -67,7 +65,6 @@ export function AbsenceManager({
   defaultTot,
   readOnly = false,
   onAbsencesChange,
-  uitleg,
 }: Props) {
   const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -156,8 +153,9 @@ export function AbsenceManager({
       <div>
         <h3 className="font-bold text-lg mb-1">Afwezigheid opgeven</h3>
         <p className="text-sm text-neutral-600">
-          {uitleg ??
-            'Vakantie, ziekte of ander verlof: geef de periode hier op, dan worden die dagen automatisch geblokkeerd. Het rooster haalt vakantie nergens anders vandaan. Controleer daarna in de kalender hieronder of de juiste dagen geblokkeerd zijn.'}
+          Vakantie, ziekte of ander verlof: geef de periode hier op, dan worden die dagen automatisch
+          geblokkeerd. Het rooster haalt vakantie nergens anders vandaan. Controleer daarna in de kalender
+          hieronder of de juiste dagen geblokkeerd zijn.
         </p>
       </div>
 

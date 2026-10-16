@@ -70,14 +70,12 @@ export function writePreferencesBackup(personId: string, periodId: string): stri
 
   const rows = db
     .prepare(
-      // An AIOS dienst by its code (UD, DD, AD, ADW, ND): its teller says
-      // nothing (lib/aiosDiensten.ts).
-      `SELECT s.datum, s.iso_week, COALESCE(st.code, st.teller) AS teller, a.blocking_level, a.source
+      `SELECT s.datum, s.iso_week, st.teller, a.blocking_level, a.source
        FROM dienstrooster_availability a
        JOIN dienstrooster_shift_slot s ON s.id = a.slot_id
        JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
        WHERE a.person_id = ? AND s.period_id = ? AND a.blocking_level IS NOT NULL
-       ORDER BY s.datum, teller`
+       ORDER BY s.datum, st.teller`
     )
     .all(personId, periodId) as PreferenceRow[];
 

@@ -9,15 +9,19 @@
  * change; the rules the solver needs are fixed when it comes (step 3).
  * What is left: the deadline, which the planner may still move here, and
  * the part-time patterns and absences entered before the period opened,
- * which now mark its diensten (lib/parttimeSync.ts, lib/absenceSync.ts,
- * by the AIOS's rules).
+ * which now mark its diensten (lib/aiosSync.ts, by the AIOS's rules).
+ *
+ * auto_herinneren goes off: the achterwacht's automatic reminders
+ * (lib/autoReminders.ts) run over every open period with it on and would
+ * mail the AIOS through the achterwacht's flow. That code is not changed
+ * for the AIOS (docs/development/diensten.md); this keeps it away instead,
+ * and app/api/aios/aiosApart.test.ts holds it.
  */
 
 import { db } from '@/db/client';
 import { parseISO } from './holidays';
 import { writeAuditLog } from './auditLog';
-import { syncAvailabilityForPeriod as syncParttime } from './parttimeSync';
-import { syncAvailabilityForPeriod as syncAbsence } from './absenceSync';
+import { syncAiosPeriode } from './aiosSync';
 import { periodStatusLabel } from './statusLabels';
 
 export type AiosOpenResult =
@@ -85,7 +89,7 @@ export function openAiosPeriod(periodId: string, actorId: string, gevraagdeDeadl
   db.transaction(() => {
     db.prepare(
       `UPDATE dienstrooster_schedule_period
-       SET deadline = ?, status = 'OPEN', row_version = row_version + 1
+       SET deadline = ?, status = 'OPEN', auto_herinneren = 0, row_version = row_version + 1
        WHERE id = ?`
     ).run(deadline, periodId);
     writeAuditLog({
@@ -96,8 +100,7 @@ export function openAiosPeriod(periodId: string, actorId: string, gevraagdeDeadl
       oud: { status: 'CONCEPT', deadline: period.deadline },
       nieuw: { wijziging: 'periode geopend', status: 'OPEN', deadline },
     });
-    syncParttime(periodId);
-    syncAbsence(periodId);
+    syncAiosPeriode(periodId);
   })();
   return { ok: true, deadline };
 }

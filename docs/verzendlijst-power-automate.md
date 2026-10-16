@@ -195,15 +195,11 @@ Open een periode en klik onder *Exporteren & communicatie* op
 
 - **Gmail-adres**: het account uit stap 1. De app werkt alleen met Gmail.
 - **App-wachtwoord**: de 16 letters uit stap 1, met of zonder spaties.
-- **Verzendlijst van de achterwacht sturen naar**: het adres waar de stroom
-  van de achterwacht in stap 4 op let.
-- **Verzendlijst van de AIOS sturen naar**: het adres waar de stroom van de
-  AIOS op let. De AIOS hebben een eigen stroom (zie stap 3). Zolang dit leeg
-  is, gaat er geen mail naar de AIOS. De rest werkt dan gewoon.
+- **Verzendlijst sturen naar**: het adres waar je stroom in stap 4 op let.
 
 Via de app kan alleen een gelijkwaardige ruil: één dienst tegen één dienst
 van dezelfde soort. Een andere ruil regelen collega's zelf. Daarna sturen
-ze zelf een mail naar het stroomadres van hun eigen dienst en naar het
+ze zelf een mail naar het adres bij *Verzendlijst sturen naar* en naar het
 roosterbureau. Het venster voor een ruilverzoek zegt dat, met dat adres.
 
 Bij **Opslaan** logt Dienstrooster meteen in bij Gmail. Lukt dat niet, dan
@@ -237,12 +233,8 @@ Maak in OneDrive of SharePoint een Excel-bestand, bijvoorbeeld
 | staf01     | iemand@ziekenhuis.nl    |
 | staf02     | iemand.anders@ziekenhuis.nl |
 
-De AIOS hebben een eigen stroom met een eigen lijst. Bouw die op dezelfde
-manier, met een eigen adres om op te letten (dat vul je in bij
-*Verzendlijst van de AIOS sturen naar*) en een eigen Excel-lijst met de
-codenamen aios01, aios02 enzovoort. In de lijst van de achterwacht staan
-alleen staf01, staf02 enzovoort. Zet in beide lijsten de twee rijen hieronder
-voor een goedgekeurde ruil.
+Deze lijst is voor de achterwacht: staf01, staf02 enzovoort. De AIOS hebben
+een eigen stroom met een eigen lijst, zie "De stroom voor de AIOS" onderaan.
 
 Had je een lijst met Persoon-01, Persoon-02 ...? Vanaf versie 0.25.0 heten
 die deelnemers staf01, staf02 ... in de app. Pas de codenamen in de lijst
@@ -539,3 +531,19 @@ gewoon werken.
   datamap wel. Bewaar back-ups van die map net zo zorgvuldig als het
   wachtwoord zelf. Denk je dat iemand anders het wachtwoord heeft? Trek het
   dan in bij Google en maak een nieuw aan.
+
+## De stroom voor de AIOS
+
+De AIOS hebben een eigen Power Automate-stroom met een eigen Excel-lijst
+(aios01, aios02 enzovoort). Bouw die op dezelfde manier als hierboven, met:
+
+- een eigen adres waar de stroom op let. Dat vult de beheerder in op de
+  pagina van een periode van de AIOS, bij *Mail naar de AIOS*. Het
+  Gmail-account is hetzelfde als dat van de achterwacht, uit
+  Mailinstellingen;
+- een eigen Excel-lijst met de codenamen van de AIOS en hun adres, plus de
+  rijen `Planner` en `Roosterbureau`.
+
+De verzendlijst van de AIOS ziet er precies zo uit als die van de
+achterwacht. De persoonlijke links erin gaan naar het eigen scherm van de
+AIOS. Zolang het adres voor de AIOS leeg is, gaat er geen mail naar de AIOS.

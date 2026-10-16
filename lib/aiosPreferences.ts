@@ -10,8 +10,7 @@
  *   a feestdag in it: the feestdagen are shared out fairly. "Liever niet"
  *   is.
  * - An absence (verlof) blocks its days, on a feestdag it is "liever niet";
- *   a part-time day blocks that day's UD and evening (lib/absenceSync.ts,
- *   lib/parttimeSync.ts). Those rows are the sync's: a mark by hand never
+ *   a part-time day blocks that day's UD and evening (lib/aiosSync.ts). Those rows are the sync's: a mark by hand never
  *   changes them, and one that would say less than they do is refused
  *   with the reason, as on the achterwacht's screen.
  * - The 50% counters warn, they never refuse. They count only what the
@@ -34,9 +33,7 @@ import {
 // without the database, so the browser can count with them too.
 export * from '@/lib/aiosVoorkeur';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
-import { markSubmissionStarted } from '@/lib/submissionStatus';
-import { syncAbsencesForPerson } from '@/lib/absenceSync';
-import { syncPatternsForPerson } from '@/lib/parttimeSync';
+import { syncAiosPersoon } from '@/lib/aiosSync';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { validateSingleLine } from '@/lib/vrijeTekst';
 
@@ -145,6 +142,25 @@ export function loadAiosWens(personId: string, periodId: string): AiosWens {
   return { ...row, vier_avonden: !!row.vier_avonden, vier_nachten: !!row.vier_nachten, twee_dagdiensten: !!row.twee_dagdiensten };
 }
 
+/**
+ * The AIOS started on their preferences: a submission row reading BEZIG,
+ * unless they handed in already (lib/submissionStatus.ts
+ * markSubmissionStarted, copied).
+ */
+function markeerBegonnen(personId: string, periodId: string): void {
+  const er = db
+    .prepare('SELECT id, status FROM dienstrooster_submission WHERE person_id = ? AND schedule_period_id = ?')
+    .get(personId, periodId) as { id: string; status: string } | undefined;
+  if (!er) {
+    db.prepare(
+      `INSERT INTO dienstrooster_submission (id, person_id, schedule_period_id, status, row_version, aangemaakt_op)
+       VALUES (?, ?, ?, 'BEZIG', 1, ?)`
+    ).run(crypto.randomUUID(), personId, periodId, new Date().toISOString());
+  } else if (er.status === 'NIET_BEGONNEN') {
+    db.prepare(`UPDATE dienstrooster_submission SET status = 'BEZIG', row_version = row_version + 1 WHERE id = ?`).run(er.id);
+  }
+}
+
 export type Uitkomst = { ok: true } | { ok: false; status: number; code: string; message: string };
 
 const weiger = (status: number, code: string, message: string): Uitkomst => ({ ok: false, status, code, message });
@@ -217,14 +233,11 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
       const now = new Date().toISOString();
       for (const id of eigen) upsert.run(crypto.randomUUID(), personId, id, level, now);
     }
-    markSubmissionStarted(personId, periodId);
+    markeerBegonnen(personId, periodId);
   })();
   // A cleared dienst may be one a part-time day or an absence covers but
   // skipped while the mark was there (as on the achterwacht's screen).
-  if (level === null) {
-    syncPatternsForPerson(personId);
-    syncAbsencesForPerson(personId);
-  }
+  if (level === null) syncAiosPersoon(personId);
   return { ok: true };
 }
 
@@ -283,7 +296,7 @@ export function saveAiosWens(personId: string, period: AiosPeriode, input: unkno
       opmerking,
       new Date().toISOString()
     );
-    markSubmissionStarted(personId, period.id);
+    markeerBegonnen(personId, period.id);
   })();
   return { ok: true };
 }

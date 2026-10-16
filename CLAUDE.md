@@ -21,6 +21,13 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
 ## Standing instructions from the user
 
 - Answer the user in Dutch, with the Dutch style rules below.
+- **Achterwacht and AIOS apart:** after the login page each goes its own
+  way. Code that works for the achterwacht is not changed for the AIOS:
+  what the AIOS needs is copied into its own files (lib/aios*.ts,
+  app/api/aios, app/aios, components/Aios*), docs/development/diensten.md
+  "Copied, not changed". Shared: the login, the database, the Gmail
+  account. The AIOS gets its own solver in its own container; the
+  achterwacht's solver is not changed.
 - The repository is public: no organisation names, domains, e-mail
   addresses, IP addresses, internal paths or real names of people anywhere
   in it (code, docs, tests, commit messages). Files the user shares
@@ -224,7 +231,7 @@ How to run them and what each one covers: docs/development/checks.md.
 | Tables, holidays, the seed | docs/development/data-model.md | db/schema.ts, lib/holidays.ts, scripts/seed.ts |
 | Periods, prullenbak, publishing, undo | docs/development/periods.md | lib/periodOverlap.ts, lib/periodTrash.ts, lib/publication.ts, lib/publicationCheck.ts |
 | Fellows, Geldig vanaf/tot, bands, carry-over, window, the solver's phases, absences and part-time, preferences import, capacity | docs/development/roster-rules.md | lib/rosterBands.ts, lib/carryOver.ts, lib/windowRule.ts, lib/fellows.ts, lib/absenceSync.ts, lib/parttimeSync.ts, solver/ |
-| Achterwacht and AIOS apart | docs/development/diensten.md | lib/dienstAccess.ts, lib/activePeriod.ts |
+| Achterwacht and AIOS apart, the AIOS's copies | docs/development/diensten.md | lib/dienstAccess.ts, lib/activePeriod.ts, lib/aios*.ts, app/api/aios |
 | The AIOS roster (design, steps) | docs/aios-rooster.md | lib/aiosQuarter.ts, lib/aiosDiensten.ts, lib/aiosSlots.ts, lib/aiosPool.ts, lib/aiosPeriod.ts |
 | Links, passwords, TOTP, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
 | Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |

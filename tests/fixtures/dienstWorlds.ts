@@ -183,7 +183,7 @@ export function fill(path: string, w: World): { url: string; params: Record<stri
   const value = (name: string): string => {
     switch (name) {
       case 'id':
-        if (path.startsWith('person/')) return w.x;
+        if (path.startsWith('person/') || path.startsWith('aios/deelnemer/')) return w.x;
         if (path.startsWith('planner/pool')) return w.pool;
         if (path.startsWith('admin/accounts')) return w.planner;
         return w.period;

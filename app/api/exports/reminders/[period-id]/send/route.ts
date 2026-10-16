@@ -19,7 +19,7 @@ import { z } from 'zod';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
-import { dienstVanPeriode } from '@/lib/aiosPeriod';
+import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { getInvitationPeriod } from '@/lib/periodInvitations';
 import { buildVerzendlijst, verzendlijstPersonen } from '@/lib/verzendlijst';
@@ -53,10 +53,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
     const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), params['period-id']);
     if (otherDienst) return otherDienst;
+    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
+    const aiosNotYet = aiosNotYetDenial(params['period-id']);
+    if (aiosNotYet) return aiosNotYet;
 
     const period = getInvitationPeriod(params['period-id']);
     if (!period) return fail(404, 'NOT_FOUND', 'Periode niet gevonden');
-    if (!verzendlijstMailConfigured(dienstVanPeriode(period.id))) {
+    if (!verzendlijstMailConfigured()) {
       return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.');
     }
 
@@ -114,8 +117,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
           groepen: reminderGroupCounts(period.id, personIds),
         },
         berichten.map((b) => ({ ...b, soort: 'HERINNERING' as const, personen: verzendlijstPersonen(b.codenaam) }))
-      ),
-      dienstVanPeriode(period.id)
+      )
     );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
     // So the automatic reminders leave these people alone for a day.

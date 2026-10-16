@@ -199,7 +199,7 @@ export default function PlannerPeriodPage() {
   }
 
   // The AIOS roster has its own page while it is being built (lib/aiosPeriod.ts).
-  if (period.pool_type === 'AIOS') return <AiosPeriodOverview period={period} onPeriodChanged={loadPeriod} />;
+  if (period.pool_type === 'AIOS') return <AiosPeriodOverview period={period} />;
 
   const statusColors: Record<string, { bg: string; text: string }> = {
     CONCEPT: { bg: 'bg-neutral-100', text: 'text-neutral-800' },

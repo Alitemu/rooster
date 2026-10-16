@@ -30,27 +30,6 @@ export function isAiosPeriod(periodId: string): boolean {
   return row?.type === 'AIOS';
 }
 
-/** The dienst of a period, for the flow its mail goes to (lib/verzendlijstMail.ts). */
-export function dienstVanPeriode(periodId: string): 'ACHTERWACHT' | 'AIOS' {
-  return isAiosPeriod(periodId) ? 'AIOS' : 'ACHTERWACHT';
-}
-
-/**
- * The dienst of a participant: that of the pools they are a member of
- * (the pools share nobody, lib/dienstAccess.ts), the achterwacht for
- * someone in no pool.
- */
-export function dienstVanPersoon(personId: string): 'ACHTERWACHT' | 'AIOS' {
-  const aios = db
-    .prepare(
-      `SELECT 1 FROM dienstrooster_pool_membership pm
-       JOIN dienstrooster_pool pl ON pl.id = pm.pool_id
-       WHERE pm.person_id = ? AND pl.type = 'AIOS' LIMIT 1`
-    )
-    .get(personId);
-  return aios ? 'AIOS' : 'ACHTERWACHT';
-}
-
 export const AIOS_NOG_NIET =
   'Dit kan nog niet bij een periode van de AIOS. Het voorkeurenscherm, het maken van het rooster en het publiceren voor de AIOS komen in een volgende versie.';
 

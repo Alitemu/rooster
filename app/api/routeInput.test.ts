@@ -150,7 +150,7 @@ function params(route: string): { url: string; params: Record<string, string> } 
   const url = route.replace(/\[([^\]]+)\]/g, (_, name: string) => {
     let value: string;
     if (name === 'id') {
-      value = route.startsWith('person/') ? f.personA : route.startsWith('planner/pool/') ? f.pool : route.startsWith('admin/accounts') ? f.admin : f.period;
+      value = (route.startsWith('person/') || route.startsWith('aios/deelnemer/')) ? f.personA : route.startsWith('planner/pool/') ? f.pool : route.startsWith('admin/accounts') ? f.admin : f.period;
     } else if (name === 'period-id' || name === 'periodId') value = f.period;
     else if (name === 'slotId') value = f.slot;
     else if (name === 'assignment-id') value = freshAssignment();
@@ -206,7 +206,7 @@ const routes = Object.entries(routeModules)
   })
   // Logging in and claiming a fresh install are covered by their own tests
   // and lock accounts or rate-limit on repeated tries.
-  .filter((r) => !/^auth\/(staff-login|first-run-setup|verify-link|logout|change-password|totp)/.test(r.route) && r.route !== 'link-aanvragen')
+  .filter((r) => !/^auth\/(staff-login|first-run-setup|verify-link|logout|change-password|totp)/.test(r.route) && r.route !== 'link-aanvragen' && r.route !== 'aios/link-aanvragen')
   .sort((a, b) => Number(LAST.test(`${a.method} ${a.route}`)) - Number(LAST.test(`${b.method} ${b.route}`)));
 
 // Audit 6 found eleven routes answering 500 to a field of the wrong type
@@ -236,7 +236,7 @@ describe('no route answers 500 to wrong input from a signed-in user', () => {
 
   const check = async (r: (typeof routes)[number]) => {
     const keys = bodyKeys(r.file);
-    const who = r.route.startsWith('person/') ? cookie('person', f.personA) : cookie('staff', f.admin);
+    const who = (r.route.startsWith('person/') || r.route.startsWith('aios/deelnemer/')) ? cookie('person', f.personA) : cookie('staff', f.admin);
     await fc.assert(
       fc.asyncProperty(fc.dictionary(fc.constantFrom(...(keys.length ? keys : ['x'])), value), async (body) => {
         const { url, params: p } = params(r.route);

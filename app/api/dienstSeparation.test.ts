@@ -41,7 +41,7 @@ const routes = routesFrom(import.meta.glob('./**/route.ts', { eager: true }) as 
 
 /** Open to anyone by design, or about one's own staff account only. */
 const NOT_ABOUT_A_DIENST = (path: string) =>
-  path.startsWith('auth/') || ['link-aanvragen'].includes(path);
+  path.startsWith('auth/') || ['link-aanvragen', 'aios/link-aanvragen', 'aios/mail-instellingen'].includes(path);
 
 /**
  * GETs that may answer 404 for the world's own planner with good ids: there
@@ -103,7 +103,7 @@ describe('the achterwacht and the AIOS planner see nothing of each other', () =>
       }
     );
 
-    it.each(withIds.filter((r) => r.path.startsWith('person/')).map((r) => [`${r.method} ${r.path}`, r] as const))(
+    it.each(withIds.filter((r) => (r.path.startsWith('person/') || r.path.startsWith('aios/deelnemer/'))).map((r) => [`${r.method} ${r.path}`, r] as const))(
       `the ${mine} planner, for their own participant in the ${theirs}'s period: %s`,
       async (_, route) => {
         const { status, text } = await callMixed(route, worlds[mine], worlds[theirs], worlds[mine].planner);
@@ -164,8 +164,9 @@ describe('the achterwacht and the AIOS planner see nothing of each other', () =>
     }
   );
 
-  // The AIOS's own screens find nothing in an achterwacht period.
-  const ONLY_FOR_THE_AIOS = (path: string) => path.startsWith('person/[id]/aios/');
+  // The AIOS's own routes (app/api/aios) find nothing in an achterwacht
+  // period: they only ever load an AIOS one.
+  const ONLY_FOR_THE_AIOS = (path: string) => path.startsWith('aios/');
 
   it.each(gets.filter((r) => !ONLY_FOR_THE_AIOS(r.path)).map((r) => [`${r.method} ${r.path}`, r] as const))(
     'the beheerder sees both, the achterwacht: %s',

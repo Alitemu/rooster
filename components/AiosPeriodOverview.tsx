@@ -20,8 +20,6 @@ import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten
 import type { AiosCode } from '@/lib/aiosDiensten';
 import type { AiosDag, AiosDienstenOverzicht, AiosDienstRegel } from '@/lib/aiosSlots';
 import { TELLER_LABELS, type AiosWens, type BlokkadeTeller, type MarkeringTelling } from '@/lib/aiosVoorkeur';
-import { ExportDialog } from './ExportDialog';
-import { AutoReminderPanel } from './AutoReminderPanel';
 
 interface Period {
   id: string;
@@ -142,39 +140,126 @@ async function antwoord(res: Response, fallback: string) {
   return data.data;
 }
 
-/** Open, invite, remind, close: the steps up to the preferences. */
-function Stappen({ period, onChanged }: { period: Period; onChanged: () => void }) {
-  const [deadline, setDeadline] = useState(alsInvoer(period.deadline));
+/** The AIOS's mail: whether it can go, and for the beheerder the AIOS's flow mailbox. */
+function MailPaneel({ beheerder, onChanged }: { beheerder: boolean; onChanged: () => void }) {
+  const [status, setStatus] = useState<{ ingesteld: boolean; account: boolean; uitgeschakeld: boolean; verzendlijst_aan: string | null; laatste_fout: { melding: string } | null } | null>(null);
+  const [adres, setAdres] = useState('');
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [zeker, setZeker] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
-  const [stroomIngesteld, setStroomIngesteld] = useState<boolean | null>(null);
 
+  const laad = useCallback(() => {
+    fetch(withBasePath('/api/aios/mail-instellingen'))
+      .then((res) => antwoord(res, 'Laden van de mailinstellingen is mislukt'))
+      .then((data) => {
+        setStatus(data);
+        setAdres(data.verzendlijst_aan ?? '');
+      })
+      .catch((err) => setFout(err instanceof Error ? err.message : 'Laden van de mailinstellingen is mislukt'));
+  }, []);
   useEffect(() => {
-    setDeadline(alsInvoer(period.deadline));
-  }, [period.deadline]);
+    laad();
+  }, [laad]);
 
-  useEffect(() => {
-    fetch(withBasePath(`/api/exports/verzendlijst-status?period_id=${encodeURIComponent(period.id)}`))
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setStroomIngesteld(data ? Boolean(data.data?.ingesteld) : null))
-      .catch(() => setStroomIngesteld(null));
-  }, [period.id, exportOpen]);
-
-  const doe = async (pad: string, body: unknown, fallback: string) => {
+  const opslaan = async () => {
     setBezig(true);
     setFout(null);
     try {
       await antwoord(
-        await fetch(pad, {
-          method: 'POST',
+        await fetch(withBasePath('/api/aios/mail-instellingen'), {
+          method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify({ verzendlijst_aan: adres }),
         }),
+        'Opslaan is mislukt'
+      );
+      laad();
+      onChanged();
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : 'Opslaan is mislukt');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  if (!status) return fout ? <p className="text-sm text-red-700">{fout}</p> : null;
+  return (
+    <div className="space-y-2 rounded border border-neutral-200 p-3 text-sm">
+      <p className="font-medium text-neutral-900">Mail naar de AIOS</p>
+      {status.uitgeschakeld && <p className="text-red-800">Versturen staat uit op deze installatie (MAIL_UITGESCHAKELD).</p>}
+      {!status.account && (
+        <p className="text-amber-900">
+          Het Gmail-account is nog niet ingesteld. Dat doet de beheerder bij Mailinstellingen op de pagina van een periode van
+          de achterwacht. Hetzelfde account verstuurt de mail van de AIOS.
+        </p>
+      )}
+      <p className="text-neutral-700">
+        De AIOS hebben een eigen Power Automate-stroom met een eigen adressenlijst. Hun verzendlijst gaat naar:{' '}
+        <strong>{status.verzendlijst_aan ?? 'nog niet ingesteld'}</strong>
+      </p>
+      {status.laatste_fout && <p className="text-red-800">Laatste keer mislukt: {status.laatste_fout.melding}</p>}
+      {beheerder && (
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <label htmlFor="aios-stroom" className="block text-xs font-medium text-neutral-600 mb-1">
+              Verzendlijst van de AIOS sturen naar
+            </label>
+            <input
+              id="aios-stroom"
+              type="email"
+              autoComplete="off"
+              value={adres}
+              onChange={(e) => setAdres(e.target.value)}
+              placeholder="het adres waar de stroom van de AIOS op let"
+              className="w-full px-2 py-1 border rounded text-sm"
+            />
+          </div>
+          <button type="button" onClick={opslaan} disabled={bezig} className="btn-primary">
+            {bezig ? 'Bezig...' : 'Opslaan'}
+          </button>
+        </div>
+      )}
+      {!beheerder && <p className="text-neutral-600">Alleen de beheerder kan dit adres wijzigen.</p>}
+      {fout && <p className="text-red-700">{fout}</p>}
+    </div>
+  );
+}
+
+interface AiosStand {
+  uitgenodigd_op: string | null;
+  mail_ingesteld: boolean;
+  aantal_deelnemers: number;
+}
+
+/** Open, invite, remind, close: the steps up to the preferences, on the AIOS's own routes. */
+function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStand | null; onChanged: () => void }) {
+  const [deadline, setDeadline] = useState(alsInvoer(period.deadline));
+  const [bezig, setBezig] = useState(false);
+  const [fout, setFout] = useState<string | null>(null);
+  const [melding, setMelding] = useState<string | null>(null);
+  const [zeker, setZeker] = useState(false);
+  const [beheerder, setBeheerder] = useState(false);
+
+  useEffect(() => {
+    setDeadline(alsInvoer(period.deadline));
+  }, [period.deadline]);
+  useEffect(() => {
+    fetch(withBasePath('/api/auth/me'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setBeheerder(data?.data?.role === 'ADMIN'))
+      .catch(() => setBeheerder(false));
+  }, []);
+
+  const doe = async (url: string, method: string, body: unknown, fallback: string, klaar?: (data: { aantal?: number; overgeslagen?: number }) => string) => {
+    setBezig(true);
+    setFout(null);
+    setMelding(null);
+    try {
+      const data = await antwoord(
+        await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
         fallback
       );
       setZeker(false);
+      if (klaar) setMelding(klaar(data));
       onChanged();
     } catch (err) {
       setFout(err instanceof Error ? err.message : fallback);
@@ -182,6 +267,29 @@ function Stappen({ period, onChanged }: { period: Period; onChanged: () => void 
       setBezig(false);
     }
   };
+
+  const linksDownloaden = async () => {
+    setBezig(true);
+    setFout(null);
+    try {
+      const res = await fetch(withBasePath(`/api/aios/periode/${period.id}/links`), { method: 'POST' });
+      if (!res.ok) await antwoord(res, 'Downloaden is mislukt');
+      const url = window.URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `links-aios-${period.naam}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : 'Downloaden is mislukt');
+    } finally {
+      setBezig(false);
+    }
+  };
+
+  const aantal = (n = 0, wat: string) => `${n} ${wat}`;
 
   return (
     <div className="card card-padding space-y-4">
@@ -208,7 +316,7 @@ function Stappen({ period, onChanged }: { period: Period; onChanged: () => void 
           </div>
           <button
             type="button"
-            onClick={() => doe(withBasePath(`/api/periods/${period.id}/open`), { deadline }, 'Openen van de periode is mislukt')}
+            onClick={() => doe(withBasePath(`/api/aios/periode/${period.id}/openen`), 'POST', { deadline }, 'Openen van de periode is mislukt')}
             disabled={bezig || !deadline}
             className="btn-primary"
           >
@@ -221,22 +329,69 @@ function Stappen({ period, onChanged }: { period: Period; onChanged: () => void 
         <div className="space-y-3">
           <p className="text-sm text-neutral-700">
             De periode staat open. De AIOS kunnen hun voorkeuren opgeven tot {deadlineTekst(period.deadline)}.
+            {stand?.uitgenodigd_op && ` De uitnodigingen zijn verstuurd op ${deadlineTekst(stand.uitgenodigd_op)}.`}
           </p>
-          {stroomIngesteld === false && (
-            <p className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">
-              Het adres van de stroom voor de AIOS is nog niet ingesteld. Tot dan gaat er geen mail naar de AIOS. Dat
-              stelt de beheerder in bij Mailinstellingen. Je kunt de links wel downloaden.
-            </p>
-          )}
+          <MailPaneel beheerder={beheerder} onChanged={onChanged} />
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={() => setExportOpen(true)} className="btn-primary">
-              Uitnodigen en herinneren
+            <button
+              type="button"
+              disabled={bezig || !stand?.mail_ingesteld}
+              onClick={() =>
+                doe(withBasePath(`/api/aios/periode/${period.id}/uitnodigingen`), 'POST', {}, 'Versturen is mislukt', (d) => `Verstuurd: ${aantal(d.aantal, 'uitnodigingen')}.`)
+              }
+              className="btn-primary"
+            >
+              {stand?.uitgenodigd_op ? 'Uitnodigingen opnieuw versturen' : 'Uitnodigingen versturen'}
             </button>
             <button
               type="button"
+              disabled={bezig || !stand?.mail_ingesteld}
               onClick={() =>
-                zeker ? doe(withBasePath(`/api/periods/${period.id}/close`), {}, 'Sluiten van de periode is mislukt') : setZeker(true)
+                doe(withBasePath(`/api/aios/periode/${period.id}/herinneringen`), 'POST', {}, 'Versturen is mislukt', (d) =>
+                  d.aantal
+                    ? `Verstuurd: ${aantal(d.aantal, 'herinneringen')}.`
+                    : 'Er ging geen herinnering uit. Wie nog niet heeft ingediend, kreeg er de afgelopen dag al een.'
+                )
               }
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50"
+            >
+              Herinnering versturen
+            </button>
+            <button
+              type="button"
+              disabled={bezig}
+              onClick={linksDownloaden}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50"
+            >
+              Links downloaden
+            </button>
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div>
+              <label htmlFor="aios-deadline-wijzigen" className="block text-xs font-medium text-neutral-600 mb-1">
+                Deadline verschuiven
+              </label>
+              <input
+                id="aios-deadline-wijzigen"
+                type="datetime-local"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                className="px-2 py-1 border rounded text-sm"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={bezig || !deadline || deadline === alsInvoer(period.deadline)}
+              onClick={() => doe(withBasePath(`/api/aios/periode/${period.id}/deadline`), 'PATCH', { deadline }, 'Aanpassen van de deadline is mislukt', () => 'De deadline is aangepast.')}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50"
+            >
+              Opslaan
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => (zeker ? doe(withBasePath(`/api/aios/periode/${period.id}/sluiten`), 'POST', {}, 'Sluiten van de periode is mislukt') : setZeker(true))}
               disabled={bezig}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
             >
@@ -253,7 +408,6 @@ function Stappen({ period, onChanged }: { period: Period; onChanged: () => void 
               Na het sluiten kunnen de AIOS hun voorkeuren niet meer wijzigen. Terug naar open kan daarna nog.
             </p>
           )}
-          <AutoReminderPanel periodId={period.id} refreshKey={`${period.deadline}|${period.status}|${exportOpen}`} />
         </div>
       )}
 
@@ -265,9 +419,7 @@ function Stappen({ period, onChanged }: { period: Period; onChanged: () => void 
           </p>
           <button
             type="button"
-            onClick={() =>
-              zeker ? doe(withBasePath(`/api/periods/${period.id}/reopen`), {}, 'Terug naar open is mislukt') : setZeker(true)
-            }
+            onClick={() => (zeker ? doe(withBasePath(`/api/aios/periode/${period.id}/heropenen`), 'POST', {}, 'Terug naar open is mislukt') : setZeker(true))}
             disabled={bezig}
             className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
           >
@@ -275,31 +427,18 @@ function Stappen({ period, onChanged }: { period: Period; onChanged: () => void 
           </button>
           {zeker && (
             <p className="text-sm text-neutral-700">
-              De AIOS kunnen hun voorkeuren weer wijzigen tot de deadline. Verschuif die zo nodig bij Uitnodigen en
-              herinneren.
+              De AIOS kunnen hun voorkeuren weer wijzigen tot de deadline. Verschuif die zo nodig daarna.
             </p>
           )}
         </div>
       )}
 
+      {melding && <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">{melding}</div>}
       {fout && (
         <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           {fout}
         </div>
       )}
-
-      <ExportDialog
-        periodId={period.id}
-        periodName={period.naam}
-        deadline={period.deadline}
-        periodStatus={period.status}
-        isOpen={exportOpen}
-        onClose={() => {
-          setExportOpen(false);
-          onChanged();
-        }}
-        onDeadlineChanged={onChanged}
-      />
     </div>
   );
 }
@@ -338,7 +477,7 @@ function StatusVoorkeuren({ periodId, refreshKey }: { periodId: string; refreshK
   const [fout, setFout] = useState<string | null>(null);
 
   const laad = useCallback(() => {
-    fetch(withBasePath(`/api/planner/period/${periodId}/aios-voorkeuren`))
+    fetch(withBasePath(`/api/aios/periode/${periodId}/voorkeuren`))
       .then((res) => antwoord(res, 'Laden van de voorkeuren is mislukt'))
       .then((data) => setDeelnemers(data.deelnemers))
       .catch((err) => setFout(err instanceof Error ? err.message : 'Laden van de voorkeuren is mislukt'));
@@ -397,9 +536,25 @@ function StatusVoorkeuren({ periodId, refreshKey }: { periodId: string; refreshK
   );
 }
 
-export function AiosPeriodOverview({ period, onPeriodChanged }: { period: Period; onPeriodChanged: () => void }) {
+export function AiosPeriodOverview({ period: begin }: { period: Period }) {
   const [overzicht, setOverzicht] = useState<AiosDienstenOverzicht | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The page reloads the period from the AIOS's own route after each step:
+  // the achterwacht's period page that renders this is not changed for it.
+  const [period, setPeriod] = useState<Period>(begin);
+  const [stand, setStand] = useState<AiosStand | null>(null);
+  const herlaad = useCallback(() => {
+    fetch(withBasePath(`/api/aios/periode/${begin.id}`))
+      .then((res) => antwoord(res, 'Laden van de periode is mislukt'))
+      .then((data) => {
+        setPeriod((p) => ({ ...p, ...data.period }));
+        setStand({ uitgenodigd_op: data.uitgenodigd_op, mail_ingesteld: data.mail_ingesteld, aantal_deelnemers: data.aantal_deelnemers });
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : 'Laden van de periode is mislukt'));
+  }, [begin.id]);
+  useEffect(() => {
+    herlaad();
+  }, [herlaad]);
 
   useEffect(() => {
     fetch(withBasePath(`/api/planner/period/${period.id}/aios-diensten`))
@@ -432,7 +587,7 @@ export function AiosPeriodOverview({ period, onPeriodChanged }: { period: Period
         <p className="text-sm text-neutral-600">Deadline voorkeuren: {deadlineTekst(period.deadline)}</p>
       </div>
 
-      <Stappen period={period} onChanged={onPeriodChanged} />
+      <Stappen period={period} stand={stand} onChanged={herlaad} />
       {period.status !== 'CONCEPT' && (
         <StatusVoorkeuren periodId={period.id} refreshKey={`${period.status}|${period.deadline}`} />
       )}

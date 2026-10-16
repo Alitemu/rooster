@@ -43,7 +43,7 @@ import {
 const routes = routesFrom(import.meta.glob('./**/route.ts', { eager: true }) as unknown as Record<string, Record<string, unknown>>);
 
 /** Open to anyone by design, or about one's own staff account only. */
-const NOT_ABOUT_A_DIENST = (path: string) => path.startsWith('auth/') || ['link-aanvragen'].includes(path);
+const NOT_ABOUT_A_DIENST = (path: string) => path.startsWith('auth/') || ['link-aanvragen', 'aios/link-aanvragen', 'aios/mail-instellingen'].includes(path);
 
 let rowidsBefore: Map<string, number>;
 const worlds: Record<'ACHTERWACHT' | 'AIOS', World> = {} as never;
@@ -88,7 +88,7 @@ describe('what a dienst gets back holds nothing of the other', () => {
       }
     );
 
-    it.each(gets.filter((r) => r.path.startsWith('person/')).map((r) => [`${r.method} ${r.path}`, r] as const))(
+    it.each(gets.filter((r) => (r.path.startsWith('person/') || r.path.startsWith('aios/deelnemer/'))).map((r) => [`${r.method} ${r.path}`, r] as const))(
       `the ${mine}'s participant with their own link: %s`,
       async (_, route) => {
         const { status, text } = await callForText(route, worlds[mine], personCookie(worlds[mine].x));
@@ -117,7 +117,7 @@ describe("a participant's own link reaches nothing of the other dienst", () => {
         const own = worlds[mine];
         const other = worlds[theirs];
         const { url, params } = fill(route.path, other);
-        if (route.path.startsWith('person/')) params.id = own.x;
+        if ((route.path.startsWith('person/') || route.path.startsWith('aios/deelnemer/'))) params.id = own.x;
         const ownUrl = url.replace(`/api/person/${other.x}`, `/api/person/${own.x}`);
         const query = `?period_id=${other.period}&periode_id=${other.period}&periodId=${other.period}`;
         const body = JSON.stringify({
@@ -258,16 +258,11 @@ describe('"Link kwijt?" pairs everyone with a period of their own dienst', () =>
         `UPDATE dienstrooster_schedule_period SET uitgenodigd_op = ?, basis_url = 'http://localhost' WHERE id = ?`
       ).run(new Date().toISOString(), w.period);
     }
-    const lijsten = linkAanvraagKandidaten();
-    // One verzendlijst per dienst, for its own flow: nothing of the other
-    // dienst in it, its period names included.
-    expect(lijsten.map((l) => l.dienst).sort()).toEqual(['ACHTERWACHT', 'AIOS']);
+    const { kandidaten } = linkAanvraagKandidaten();
     for (const [mine, theirs] of PAIRS) {
-      const lijst = lijsten.find((l) => l.dienst === worlds[mine].dienst);
-      expect(lijst, mine).toBeDefined();
-      const eigen = lijst!.kandidaten.filter((k) => k.codenaam === worlds[mine].xCodenaam || k.codenaam === worlds[mine].yCodenaam);
+      const eigen = kandidaten.filter((k) => k.codenaam === worlds[mine].xCodenaam || k.codenaam === worlds[mine].yCodenaam);
       expect(eigen.length, mine).toBeGreaterThan(0);
-      expect(leaks(JSON.stringify(lijst), worlds[theirs])).toEqual([]);
+      for (const k of eigen) expect(leaks(JSON.stringify(k), worlds[theirs])).toEqual([]);
     }
     // The links themselves: each for a period of the person's own pool.
     const links = db
