@@ -6,6 +6,11 @@
 # Started by hand: Actions tab > Vrijgeven (productie) > Run workflow,
 # with the version to release (e.g. 0.2.3). Going back to an earlier
 # version works the same way.
+#
+# It also makes the GitHub release v<version>, on the commit that set that
+# version in package.json, with the commits since the release before it,
+# and marks it as the latest: the latest release is what production runs.
+# Releasing a version again (going back) only moves that mark.
 
 name: Vrijgeven (productie)
 
@@ -18,7 +23,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 concurrency:
@@ -60,3 +65,42 @@ jobs:
             docker buildx imagetools create --tag "$image:stable" "$image:$VERSIE"
           done
           echo "Versie $VERSIE staat nu klaar voor productie (stable)." >> "$GITHUB_STEP_SUMMARY"
+
+      # The whole history, every branch: the version's commit may be on the
+      # branch it was built from.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+
+      - name: GitHub release
+        env:
+          VERSIE: ${{ inputs.versie }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="v$VERSIE"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release edit "$tag" --latest
+            echo "Release $tag bestond al en staat nu weer als laatste." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # The commit that set this version: the oldest that changed the
+          # number of times it appears in package.json.
+          sha=$(git log --all --reverse --format=%H -S"\"version\": \"$VERSIE\"" -- package.json | head -n 1)
+          if [ -z "$sha" ]; then
+            echo "::error::Geen commit gevonden die versie $VERSIE in package.json zet."
+            exit 1
+          fi
+          vorige=$(git describe --tags --abbrev=0 --match 'v*' "$sha^" 2>/dev/null || true)
+          {
+            echo "Vrijgegeven voor productie op $(date -u +%Y-%m-%d)."
+            echo
+            if [ -n "$vorige" ]; then
+              echo "Wijzigingen sinds $vorige:"
+              git log --no-merges --format='- %s' "$vorige..$sha" | head -n 60
+            else
+              echo "Wijzigingen:"
+              git log --no-merges --format='- %s' -n 60 "$sha"
+            fi
+          } > notes.md
+          gh release create "$tag" --target "$sha" --title "Dienstrooster $VERSIE" --notes-file notes.md --latest
+          echo "Release $tag gemaakt op $sha." >> "$GITHUB_STEP_SUMMARY"
