@@ -58,6 +58,19 @@ is refused (DIENST_NIET_IN_PRODUCTIE) and the separation is ready for it.
   from their part-time days. The pool list sorts without regard to
   capitals, or "AIOS" came before "Achterwacht" in the beheerder's
   new-period form.
+- app/api/dienstSeparationOwn.test.ts holds it from inside each dienst
+  (the achterwacht audit, 0.71.0): every answer to the own planner with
+  its own ids, downloads included (a workbook read for its strings), and
+  to the own participant's link holds nothing of the other dienst; a
+  participant's link with the other dienst's period, slot, swap and notice
+  changes nothing of it; the verzendlijst the achterwacht sends names only
+  its own, and a reminder to an AIOS codenaam is refused; a generation
+  sends the solver only its own pool; "Link kwijt?" pairs everyone with a
+  period of their own pool. Both separation tests build their two worlds
+  with tests/fixtures/dienstWorlds.ts.
+- The participant's swap dialog names the shared flow mailbox for a swap
+  the app cannot make (lib/appSettings.ts getSwapContacts): one for both
+  diensten, an open point of the AIOS design (docs/aios-rooster.md).
 - app/api/dienstSeparation.test.ts holds it: two complete worlds, every
   route file called by each world's planner with the other's ids (and
   for participant routes their own participant with the other's period,

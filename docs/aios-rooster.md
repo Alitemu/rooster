@@ -312,7 +312,9 @@ accounts uit stap 5 eind oktober klaar zijn, zodat de AIOS hun voorkeuren voor
    van de twee?
 3. Mail (N1): de vragenlijst noemt een nieuwe stroom voor de AIOS, eerder was
    de keuze één gedeelde stroom. Dan krijgt de AIOS een eigen stroomadres in de
-   mailinstellingen, bij hetzelfde mailaccount.
+   mailinstellingen, bij hetzelfde mailaccount. Dat adres staat ook in het
+   ruilscherm, als het adres voor een ruil die de app niet zelf maakt: nu zou
+   een AIOS daar de mailbox van de achterwacht zien.
 4. Het opleidingsjaar (G1): de app weet niet wanneer iemands opleidingsjaar
    begint. Voorstel: de waarschuwing boven 25% over het kwartaal en over de
    laatste vier kwartalen samen.
