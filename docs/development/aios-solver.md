@@ -15,8 +15,34 @@ its own compose service `aios-solver` (internal network only, `expose`, no
 Linux privileges, its own user, `AIOS_SOLVER_MEM_LIMIT`), its own tests in
 "Bouwen (test)" (job test-aios-solver). The web container reaches it as
 `AIOS_SOLVER_URL` (http://aios-solver:8000); outside Docker `python main.py`
-listens on 127.0.0.1:8001. Step 3 (0.74.0) is the solver alone: the app calls
-it from step 4 on (generating, the roster per block, publishing).
+listens on 127.0.0.1:8001. Step 3 (0.74.0) is the solver alone; from 0.75.0
+(step 4a) the app calls it.
+
+## The app's side (step 4a, 0.75.0)
+
+- lib/aiosSolverInvoer.ts builds the request from the database: the
+  period's slots and blocks, the feestdagen a week either side, and per AIOS
+  taking part (aiosDeelnemers) the fte (lib/aiosFte.ts: a part-time day every
+  week is 0,8, every other week 0,9, pro rata over the quarter), Geldig
+  vanaf/tot clipped to the quarter, the part-time days (patroonDekt), inwerken,
+  onderbreking and the wishes from aios_wens, the marks with their bron, and
+  `erboven` from blokkadeTellers. saldo_punten and feestdag_achterstand are 0
+  until step 4e.
+- lib/aiosGenereren.ts runs it in the background (its own job store on
+  globalThis, as the achterwacht's), only from GESLOTEN or GEGENEREERD, one
+  at a time per period (409 GENERATION_RUNNING), and writes in one
+  transaction that first checks the period's status and row_version did not
+  move. A new generation replaces the whole roster, a change by hand
+  included: the screen says so before. "Rooster verwijderen" empties it and
+  goes back to GESLOTEN (only from GEGENEREERD); heropenen stays GESLOTEN
+  only, so a made roster goes first.
+- lib/aiosRooster.ts reads the roster for the page: per day who has what,
+  per AIOS points, werkdagen, fte and dienstpercentage (lib/aiosFte.ts, the
+  solver's werkdagen), counted from the roster itself so a change by hand
+  counts too.
+- Tests: app/api/aios/aiosGenereren.test.ts against a fake solver that
+  records the request (the contract), tests/e2e/aios-rooster.e2e.ts against
+  the real one (AIOS_SOLVER_URL, 8001 in the browser checks).
 
 Files: kalender.py (compensation days, rest), model.py (options, the hard
 rules, the objective), controle.py (an independent check of a roster),

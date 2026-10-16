@@ -420,8 +420,7 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
       {period.status === 'GESLOTEN' && (
         <div className="space-y-3">
           <p className="text-sm text-neutral-700">
-            De periode is gesloten: de AIOS kunnen hun voorkeuren niet meer wijzigen. Het maken van het rooster komt in
-            een volgende versie.
+            De periode is gesloten: de AIOS kunnen hun voorkeuren niet meer wijzigen. Maak hieronder het rooster.
           </p>
           <button
             type="button"
@@ -437,6 +436,13 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
             </p>
           )}
         </div>
+      )}
+
+      {period.status === 'GEGENEREERD' && (
+        <p className="text-sm text-neutral-700">
+          De periode is gesloten en het rooster is gemaakt. Moet de periode terug naar open, verwijder dan eerst het rooster
+          hieronder.
+        </p>
       )}
 
       {melding && <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">{melding}</div>}

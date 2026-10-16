@@ -10,7 +10,7 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 - Automatic roster generation with diagnostics
 
 Two rosters with two planners: the achterwacht (in production) and the AIOS
-(designed in docs/aios-rooster.md, built in steps: steps 1 to 3 are in), kept apart
+(designed in docs/aios-rooster.md, built in steps: steps 1 to 3 and 4a are in), kept apart
 in every route (docs/development/diensten.md).
 
 This file holds the rules. The background per area - why a rule exists, what
@@ -216,8 +216,8 @@ The gate before a release, all green:
    nothing else meanwhile.
 4. After a schema change: `node scripts/schema-drift.mjs` and
    `node scripts/upgrade-drift.mjs`.
-5. Browser checks, with a seeded database, the solver and the app running
-   (ALLOW_SEED_PASSWORD=true): `node scripts/full-check.mjs` then
+5. Browser checks, with a seeded database, both solvers (the AIOS's on
+   AIOS_SOLVER_URL) and the app running (ALLOW_SEED_PASSWORD=true): `node scripts/full-check.mjs` then
    `node scripts/ui-check.mjs` on the same seed, `npx playwright test`,
    `node scripts/scenario-check.mjs` - at the root and in a sub-folder build
    (`NEXT_PUBLIC_BASE_PATH=/achterwacht` at build and start,

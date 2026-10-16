@@ -402,6 +402,17 @@ Daarna gaat bijwerken weer met `docker compose pull` en
 `docker compose up -d`. Het geheugen van de nieuwe container zet je met
 `AIOS_SOLVER_MEM_LIMIT` in `.env` (standaard 2g).
 
+**Vanaf versie 0.75.0** maak je het rooster voor de AIOS in de app. Sluit de
+periode van de AIOS, kies op de pagina van die periode bij *Rooster* hoe
+lang de solver mag zoeken en klik op *Rooster maken*. Je ziet daarna het
+rooster per week, met een blok als één vak, en per AIOS de punten en het
+dienstpercentage: groen tot 25%, rood daarboven. Een dienst die leeg bleef,
+staat erbij met de reden. *Opnieuw maken* maakt het hele rooster opnieuw.
+*Rooster verwijderen* maakt alles weer leeg. Dit heeft de container
+`aios-solver` nodig: neem bij deze versie het nieuwe `docker-compose.yml`
+over (zie 0.74.0). Met de hand aanpassen en publiceren komen in een
+volgende versie.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

@@ -103,7 +103,8 @@ Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
   participant (their screen, a mark, their requests, handing in, deeltijd,
   afwezigheid), periode/[id]/... for the planner (the period, openen,
   deadline, sluiten, heropenen, uitnodigingen, links, herinneringen,
-  auto-herinneringen, voorkeuren, download-voorkeuren, download-verzoeken),
+  auto-herinneringen, voorkeuren, download-voorkeuren, download-verzoeken,
+  genereren (+status), rooster, rooster-verwijderen),
   mail-instellingen (the AIOS's flow address, beheerder only)
   and link-aanvragen. Every one loads only an AIOS period
   (lib/aiosRoute.ts, loadAiosPeriode).
@@ -115,7 +116,10 @@ Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
   aiosOpen.ts and aiosStatus.ts (the steps), aiosPreferences.ts and
   aiosVoorkeur.ts (the screen's rules), aiosVoorkeurBackup.ts,
   aiosAutoHerinneringen.ts (a copy of lib/autoReminders.ts, 0.73.0) and
-  aiosDownloads.ts (the planner's two workbooks, 0.73.0).
+  aiosDownloads.ts (the planner's two workbooks, 0.73.0), aiosFte.ts,
+  aiosSolverInvoer.ts, aiosGenereren.ts and aiosRooster.ts (making and
+  showing the roster with the AIOS's solver, 0.75.0,
+  docs/development/aios-solver.md).
 - Tables of its own: aios_wens and aios_periode (when the AIOS were
   invited, under which address, and whether their automatic reminders
   are on). An AIOS period never gets

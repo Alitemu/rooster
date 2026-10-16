@@ -4,10 +4,13 @@ Moved out of CLAUDE.md to keep the context of every session small; the rules
 themselves stay there. Read this when working on what it covers. Code comments
 that say "CLAUDE.md, ..." point to a section that now lives in docs/development/.
 
-**Browser-level checks** need a seeded database, the solver and the app
+**Browser-level checks** need a seeded database, both solvers and the app
 already running (`npm run seed`, `uvicorn main:app --port 8000` from
-`./solver`, then `ALLOW_SEED_PASSWORD=true SOLVER_URL=http://localhost:8000
-npm start`) - none of them starts anything itself. ALLOW_SEED_PASSWORD
+`./solver`, `uvicorn main:app --port 8001` from `./aios-solver`, then
+`ALLOW_SEED_PASSWORD=true SOLVER_URL=http://localhost:8000
+AIOS_SOLVER_URL=http://localhost:8001 npm start`) - none of them starts
+anything itself. tests/e2e/aios-rooster.e2e.ts makes an AIOS roster with
+the AIOS's solver and fails without it. ALLOW_SEED_PASSWORD
 because they all log in with the seed password, which otherwise only
 opens a "choose a new password" session (see Authentication):
 - `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its
