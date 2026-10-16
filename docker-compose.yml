@@ -63,6 +63,8 @@ services:
       TZ: "${TZ:-Europe/Amsterdam}"
       DATABASE_URL: "file:/data/rooster.db"
       SOLVER_URL: "http://solver:8000"
+      # The AIOS's own solver, a container of its own (aios-solver below).
+      AIOS_SOLVER_URL: "http://aios-solver:8000"
       # true on a test installation: no mail ever goes out, whatever
       # Mailinstellingen says (see .env.example).
       MAIL_UITGESCHAKELD: "${MAIL_UITGESCHAKELD:-false}"
@@ -140,6 +142,7 @@ services:
       - no-new-privileges:true
     depends_on:
       - solver
+      - aios-solver
     # A tiny init as process 1, so a stop signal reaches the app and the
     # container stops cleanly instead of being killed after 10 seconds.
     init: true
@@ -167,6 +170,30 @@ services:
     # Generating a roster is the heaviest thing on the NAS; this keeps it
     # from taking all memory. Raise it in .env if a big period needs more.
     mem_limit: "${SOLVER_MEM_LIMIT:-2g}"
+    networks:
+      - internal
+    restart: unless-stopped
+    logging: *logging
+    security_opt:
+      - no-new-privileges:true
+
+  aios-solver:
+    # The AIOS's own solver (docs/aios-rooster.md, step 3), apart from the
+    # achterwacht's above, which stays as it is. Same release as web, and
+    # kept in the same way: `expose` on the internal network only, no Linux
+    # privileges, its own user, a memory limit.
+    image: "ghcr.io/alitemu/rooster-aios-solver:${ROOSTER_VERSION:-stable}"
+    build:
+      context: ./aios-solver
+      dockerfile: Dockerfile
+    environment:
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      TZ: "${TZ:-Europe/Amsterdam}"
+    expose:
+      - "8000"
+    cap_drop:
+      - ALL
+    mem_limit: "${AIOS_SOLVER_MEM_LIMIT:-2g}"
     networks:
       - internal
     restart: unless-stopped

@@ -13,12 +13,14 @@ lockfile. `npm audit` reports issues in build-time tools only (braces via
 Tailwind 3's chokidar, postcss-selector-parser): none ship in the image, no
 fixed version exists short of Tailwind 4, and they only ever read this
 repository's own source; `npm audit --omit=dev` must stay at 0. Built only by hand. "Bouwen (test)" (.github/workflows/images.yml)
-builds `ghcr.io/alitemu/rooster-web` and `rooster-solver` (amd64 only)
+builds `ghcr.io/alitemu/rooster-web`, `rooster-solver` and, from 0.74.0,
+`rooster-aios-solver` (amd64 only; docs/development/aios-solver.md)
 tagged with package.json's `version` and `test`, only after the app's and
-the solver's tests pass and only for a version not built before (bump
+both solvers' tests pass and only for a version not built before (bump
 package.json for every build); "Vrijgeven (productie)"
 (release.yml) points `stable` at an already built, tested version without
-rebuilding, and makes the GitHub release `v<version>` with the commits
+rebuilding (rooster-aios-solver only when that version has one: going back
+to a version before 0.74.0 leaves its `stable` where it is), and makes the GitHub release `v<version>` with the commits
 since the release before it, marked as the latest. Releasing a version
 again only moves that mark, so the latest release is always what
 production runs. The release goes on the tag `v<version>` that "Bouwen

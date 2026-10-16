@@ -68,7 +68,7 @@ jobs:
         env:
           VERSIE: ${{ steps.version.outputs.version }}
         run: |
-          for name in web solver; do
+          for name in web solver aios-solver; do
             if docker manifest inspect "ghcr.io/alitemu/rooster-$name:$VERSIE" > /dev/null 2>&1; then
               echo "::error::Versie $VERSIE bestaat al. Verhoog het versienummer in package.json en bouw opnieuw."
               exit 1
@@ -96,8 +96,20 @@ jobs:
       - run: pip install --no-cache-dir -r requirements-dev.txt
       - run: python -m pytest -q
 
+  # The AIOS's own solver (aios-solver/, docs/aios-rooster.md step 3).
+  test-aios-solver:
+    runs-on: ubuntu-latest
+    container: python:3.11
+    defaults:
+      run:
+        working-directory: aios-solver
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - run: pip install --no-cache-dir -r requirements-dev.txt
+      - run: python -m pytest -q
+
   build:
-    needs: [version, test-app, test-solver]
+    needs: [version, test-app, test-solver, test-aios-solver]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -107,6 +119,8 @@ jobs:
             context: .
           - name: solver
             context: ./solver
+          - name: aios-solver
+            context: ./aios-solver
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

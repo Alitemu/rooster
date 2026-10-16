@@ -64,6 +64,14 @@ jobs:
             image="ghcr.io/alitemu/rooster-$name"
             docker buildx imagetools create --tag "$image:stable" "$image:$VERSIE"
           done
+          # The AIOS's solver exists from 0.74.0 on. Going back to an older
+          # version leaves its stable where it is: that web never calls it.
+          image="ghcr.io/alitemu/rooster-aios-solver"
+          if docker buildx imagetools inspect "$image:$VERSIE" > /dev/null 2>&1; then
+            docker buildx imagetools create --tag "$image:stable" "$image:$VERSIE"
+          else
+            echo "rooster-aios-solver $VERSIE bestaat niet (ouder dan 0.74.0): stable blijft staan." >> "$GITHUB_STEP_SUMMARY"
+          fi
           echo "Versie $VERSIE staat nu klaar voor productie (stable)." >> "$GITHUB_STEP_SUMMARY"
 
       # The whole history, every branch: the version's commit may be on the

@@ -53,7 +53,9 @@ runs only the tests meant to guard it and expects them to fail; a
 mutation that survives is a rule without a test. The source is restored
 after each. Add a mutation when adding a guard. A solver guard gets one
 too (`runner: 'pytest'`, run in ./solver with SOLVER_PYTHON, a Python
-with solver/requirements.txt and pytest; audit 14).
+with solver/requirements.txt and pytest; audit 14). One of the AIOS's
+solver adds `cwd: 'aios-solver'` (docs/development/aios-solver.md); its
+tests, `python -m pytest -q` in ./aios-solver, take about 20 seconds.
 
 The solver the browser checks talk to should run the OR-Tools version
 of solver/requirements.txt (9.8, the image's): another version searches

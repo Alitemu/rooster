@@ -10,7 +10,7 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 - Automatic roster generation with diagnostics
 
 Two rosters with two planners: the achterwacht (in production) and the AIOS
-(designed in docs/aios-rooster.md, built in steps: steps 1 and 2 are in), kept apart
+(designed in docs/aios-rooster.md, built in steps: steps 1 to 3 are in), kept apart
 in every route (docs/development/diensten.md).
 
 This file holds the rules. The background per area - why a rule exists, what
@@ -54,7 +54,7 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |
 | ORM | Drizzle | 0.45+ |
 | Auth | Custom (tokens + TOTP) | bcrypt, speakeasy |
-| Solver | Python + FastAPI + OR-Tools | 3.11, 0.141, 9.8 |
+| Solver | Python + FastAPI + OR-Tools (./solver; the AIOS's own ./aios-solver) | 3.11, 0.141, 9.8 |
 | Testing | Vitest + fast-check + Playwright | 4.1+, 3.14+, 1.62+ |
 | Container | Docker Compose | - |
 
@@ -208,8 +208,9 @@ Every route keeps these, and a sweep test fails when one doesn't:
 The gate before a release, all green:
 1. `npx tsc --noEmit -p .`, `npx eslint .`, `npx vitest run`,
    `npm audit --omit=dev` (must stay 0).
-2. Solver: `python -m pytest -q` in ./solver, on OR-Tools 9.8
-   (solver/requirements.txt; another version searches differently).
+2. Solvers: `python -m pytest -q` in ./solver and in ./aios-solver, on
+   OR-Tools 9.8 (solver/requirements.txt; another version searches
+   differently).
 3. `node scripts/mutation-check.mjs` (SOLVER_PYTHON for the solver
    mutations): every mutation caught. It edits sources while it runs:
    nothing else meanwhile.
@@ -237,6 +238,7 @@ How to run them and what each one covers: docs/development/checks.md.
 | Fellows, Geldig vanaf/tot, bands, carry-over, window, the solver's phases, absences and part-time, preferences import, capacity | docs/development/roster-rules.md | lib/rosterBands.ts, lib/carryOver.ts, lib/windowRule.ts, lib/fellows.ts, lib/absenceSync.ts, lib/parttimeSync.ts, solver/ |
 | Achterwacht and AIOS apart, the AIOS's copies | docs/development/diensten.md | lib/dienstAccess.ts, lib/activePeriod.ts, lib/aios*.ts, app/api/aios |
 | The AIOS roster (design, steps) | docs/aios-rooster.md | lib/aiosQuarter.ts, lib/aiosDiensten.ts, lib/aiosSlots.ts, lib/aiosPool.ts, lib/aiosPeriod.ts |
+| The AIOS's solver (contract, model, tests) | docs/development/aios-solver.md | aios-solver/ |
 | Links, passwords, TOTP, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
 | Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |
 | Images, workflows, compose, sub-folder, backups, uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts |

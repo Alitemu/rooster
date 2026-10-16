@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: stap 1 (versie 0.70.0) en stap 2 (versie 0.72.0, aangevuld in 0.73.0) zijn gebouwd, de rest is ontwerp. Afgesproken met de planner in oktober 2026,
+Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd, de rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -87,7 +87,9 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   nachtblok (E8). Dat volgt al uit de compensatiedagen (harde regel 7).
 - Spreiding: zo veel mogelijk tijd tussen twee blokken van dezelfde AIOS. Eens
   per maand een nachtblok is beter dan elke week (E7, H7). Een zachte regel in
-  de solver, zoals het venster bij de achterwacht.
+  de solver, zoals het venster bij de achterwacht. De keuze van de planner in
+  oktober 2026: liefst één blok (avond, nacht of losse zaterdagdienst) per vier
+  weken; twee blokken binnen twee weken tellen extra zwaar.
 
 ## Blokken rond feestdagen
 
@@ -251,7 +253,9 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   alleen wat in dit ziekenhuis gedaan is (G11, O3). Boven 25% is een
   waarschuwing, geen weigering (G6). Ook een ruil mag erboven (L4).
 - Iedereen doet naar rato evenveel (G8, H3): het doel is voor iedereen hetzelfde
-  percentage. Een tekort of overschot schuift door naar de volgende periode,
+  percentage. Eerlijkheid gaat voor liever niet, zoals bij de achterwacht (de
+  keuze van de planner in oktober 2026): liever niet en voorkeur beslissen
+  waar de verdeling de keuze laat. Een tekort of overschot schuift door naar de volgende periode,
   zoals bij de achterwacht (H4, H5, G13). Het doel telt alleen de dagen waarop
   iemand diensten kan doen, zodat wie niet dienstklaar was dat later niet
   hoeft in te halen.

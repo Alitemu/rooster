@@ -1,0 +1,336 @@
+"""
+One test per hard rule of the AIOS roster (docs/aios-rooster.md, "Harde
+regels"), each built so that breaking the rule would be worth it to the
+solver: the AIOS it forbids is the only one who could fill the dienst, or
+gains points by it. Every solve also goes through the independent check
+(controle.py, in test_hulp.los_op). scripts/mutation-check.mjs breaks each
+rule in model.py and expects one of these to fail.
+"""
+
+from datetime import date
+
+import pytest
+
+import kalender
+import main
+import model
+from test_hulp import START, aios, blok, dag, dienst, los_op, markeer, van, weken
+
+
+def _datum(dienst_id: str) -> date:
+    return date.fromisoformat(dienst_id.split('-', 1)[1])
+
+
+def _alleen(inp: dict, a: dict, ids: list[str]) -> None:
+    """Away (leave, never to be taken) on everything but these diensten."""
+    markeer(a, [d['id'] for d in inp['diensten'] if d['id'] not in ids], 'ABSOLUUT', 'ABSENCE')
+
+
+def _model(inp: dict) -> model.Uitkomst:
+    slots, blok_vorm, mensen, feestdagen = main.naar_model(main.SolveInput(**inp))
+    return model.oplossen(slots, blok_vorm, mensen, START, date.fromisoformat(inp['periode']['tot']), feestdagen, tijdslimiet=20)
+
+
+# ---- rule 1 -----------------------------------------------------------------
+
+
+def test_regel_1_nothing_outside_geldig_vanaf_tot():
+    inp = weken(1)
+    aios(inp, 'x', beschikbaar=[{'van': dag(0).isoformat(), 'tot': dag(2).isoformat()}])
+    uit, t = los_op(inp)
+    assert van(t, 'x'), 'x should still get the days they are there'
+    assert all(_datum(d) <= dag(2) for d in van(t, 'x'))
+    assert any('BUITEN_LIDMAATSCHAP' in leeg.redenen for leeg in uit.leeg)
+
+
+def test_regel_1_nothing_during_an_onderbreking():
+    inp = weken(1)
+    aios(inp, 'x', onderbreking={'van': dag(3).isoformat(), 'tot': dag(6).isoformat()})
+    _, t = los_op(inp)
+    assert van(t, 'x')
+    assert all(not (dag(3) <= _datum(d) <= dag(6)) for d in van(t, 'x'))
+
+
+def test_regel_1_leave_is_never_taken_not_even_above_half():
+    inp = weken(1)
+    x = aios(inp, 'x', erboven={'NACHTBLOKKEN': 3})
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    markeer(x, nacht, 'ABSOLUUT', 'ABSENCE')
+    _alleen(inp, x, nacht)
+    uit, t = los_op(inp)
+    assert not van(t, 'x') & set(nacht)
+    assert uit.per_aios[0].boven_de_helft == 0
+
+
+def test_regel_1_a_block_by_hand_holds_when_not_above_half():
+    inp = weken(1)
+    x = aios(inp, 'x')
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    markeer(x, nacht, 'ABSOLUUT')
+    _alleen(inp, x, nacht)
+    uit, t = los_op(inp)
+    assert not van(t, 'x') & set(nacht)
+    assert uit.leeg and all(leeg.redenen == {'GEBLOKKEERD': 1} for leeg in uit.leeg if leeg.dienst_id in nacht)
+
+
+def test_regel_1_above_half_at_most_the_part_above_half_is_taken():
+    # Four blocked night blocks, the only thing x could do; one may go.
+    inp = weken(2)
+    x = aios(inp, 'x', fte=0.8, erboven={'NACHTBLOKKEN': 1})
+    nachten = [i for vorm, d in (('WO_VR', 0), ('ZO_DI', 4), ('WO_VR', 7), ('ZO_DI', 11)) for i in blok(inp, 'NACHT', vorm, dag(d))]
+    markeer(x, nachten, 'ABSOLUUT')
+    _alleen(inp, x, nachten)
+    uit, t = los_op(inp)
+    assert len(van(t, 'x')) == 3, 'one block of three nights, from the part above half'
+    assert uit.per_aios[0].boven_de_helft == 1
+
+
+# ---- rule 2 -----------------------------------------------------------------
+
+
+def test_regel_2_every_dienst_at_most_one_aios():
+    inp = weken(1)
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    for naam in ('x', 'y'):
+        _alleen(inp, aios(inp, naam), nacht)
+    u = _model(inp)
+    gekregen = [s.id for opties in u.opties.values() for o in opties for s in o.slots]
+    assert sorted(gekregen) == sorted(nacht), 'the block once, to one of them'
+
+
+def test_regel_2_a_block_stays_whole():
+    # x can't do the Monday, y can't do the Sunday: whole, neither can.
+    inp = weken(1)
+    avond = blok(inp, 'AVOND', 'ZO_DI', dag(4))
+    x, y = aios(inp, 'x'), aios(inp, 'y')
+    _alleen(inp, x, [i for i in avond if _datum(i) != dag(5)])
+    _alleen(inp, y, [i for i in avond if _datum(i) != dag(4)])
+    uit, t = los_op(inp)
+    assert not set(t) & set(avond)
+    assert {leeg.dienst_id for leeg in uit.leeg} >= set(avond)
+
+
+# ---- rule 3 -----------------------------------------------------------------
+
+
+def test_regel_3_one_dienst_a_day():
+    inp = weken(1)
+    aios(inp, 'x')
+    _, t = los_op(inp)
+    dagen = [_datum(d) for d in van(t, 'x')]
+    assert len(dagen) == len(set(dagen))
+
+
+# ---- rule 4 -----------------------------------------------------------------
+
+
+def test_regel_4_no_uitloopdienst_nor_evening_on_a_part_time_day():
+    inp = weken(1)
+    x = aios(inp, 'x', parttime_dagen=[dag(5).isoformat()])  # a Monday
+    avond = blok(inp, 'AVOND', 'ZO_DI', dag(4))
+    _alleen(inp, x, avond + [dienst('UD', dag(5))])
+    uit, t = los_op(inp)
+    assert not t, 'neither the Monday uitloopdienst nor the evening block over the Monday'
+    assert all(leeg.redenen == {'PARTTIMEDAG': 1} for leeg in uit.leeg if leeg.dienst_id in avond)
+
+
+def test_regel_4_the_night_block_over_a_part_time_day_may():
+    inp = weken(1)
+    x = aios(inp, 'x', parttime_dagen=[dag(5).isoformat()])
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    _alleen(inp, x, nacht)
+    _, t = los_op(inp)
+    assert van(t, 'x') == set(nacht)
+
+
+# ---- rule 5 -----------------------------------------------------------------
+
+
+def test_regel_5_a_fulltimer_never_in_the_night_block_sunday_to_tuesday():
+    inp = weken(1)
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    _alleen(inp, aios(inp, 'x', fte=1.0), nacht)
+    _, t = los_op(inp)
+    assert not t
+    inp['aios'][0]['fte'] = 0.8
+    _, t = los_op(inp)
+    assert set(t) == set(nacht)
+
+
+# ---- rule 6 -----------------------------------------------------------------
+
+
+def test_regel_6_inwerken_only_uitloopdiensten_and_weekend_dagdiensten():
+    feestdag = dag(1)  # a Thursday: its dagdienst is not for who inwerkt
+    inp = weken(1, {feestdag})
+    aios(inp, 'x', inwerken={'van': dag(0).isoformat(), 'tot': dag(6).isoformat()})
+    _, t = los_op(inp)
+    mijn = van(t, 'x')
+    assert mijn, 'x does get uitloop- and weekend dagdiensten'
+    for d in mijn:
+        code, datum = d.split('-', 1)[0], _datum(d)
+        assert code == 'UD' or (code == 'DD' and datum.weekday() >= 5), d
+    assert dienst('DD', feestdag) not in mijn
+
+
+def test_regel_6_inwerken_not_the_dagdienst_of_a_feestdag_in_the_week():
+    feestdag = dag(1)
+    inp = weken(1, {feestdag})
+    x = aios(inp, 'x', inwerken={'van': dag(0).isoformat(), 'tot': dag(6).isoformat()})
+    _alleen(inp, x, [dienst('DD', feestdag), dienst('DD', dag(3))])
+    _, t = los_op(inp)
+    assert van(t, 'x') == {dienst('DD', dag(3))}
+
+
+# ---- rules 7 and 8 ------------------------------------------------------------
+
+
+def test_regel_7_nothing_on_a_compensation_day():
+    inp = weken(2)
+    aios(inp, 'x')
+    los_op(inp)  # controle checks every compensation day
+
+
+def test_regel_7_the_evening_block_sunday_to_tuesday_keeps_its_wednesday():
+    # Only the compensation day stops x: the rest after 23:12 would allow 17:36.
+    inp = weken(2)
+    x = aios(inp, 'x')
+    avond = blok(inp, 'AVOND', 'ZO_DI', dag(4))
+    _alleen(inp, x, avond + [dienst('UD', dag(7))])
+    _, t = los_op(inp)
+    assert len(van(t, 'x') & (set(avond) | {dienst('UD', dag(7))})) == 3, 'the block, not the Wednesday next to it'
+
+
+@pytest.mark.parametrize(
+    'soort, vorm, eerste, laatste, feestdag, verwacht',
+    [
+        # The design's own examples (docs/aios-rooster.md, rule 8).
+        ('DAG', 'ENKEL', 'za', 'za', 'vr', ['do', 'ma']),  # Koningsdag on the Friday before
+        ('DAG', 'ENKEL', 'zo', 'zo', 'ma', ['vr', 'di']),  # Tweede Paasdag on the Monday after
+        ('NACHT', 'ZO_DI', 'zo', 'di', 'do+', ['wo+', 'vr+']),  # Hemelvaart on the Thursday after
+        ('NACHT', 'ZO_DI', 'zo', 'di', 'wo+', ['do+', 'vr+']),  # the block ends on a feestdag Wednesday
+        ('NACHT', 'ZO_DI', 'zo', 'di', None, ['wo+', 'do+']),
+        ('AVOND', 'ZO_DI', 'zo', 'di', None, ['wo+']),
+        ('AVOND', 'WO_VR', 'wo', 'vr', None, ['za', 'zo']),
+        ('AVOND', 'VIER', 'wo', 'za', None, ['zo']),
+        ('NACHT', 'VIER', 'wo', 'za', None, ['zo', 'ma']),
+        ('NACHT', 'ZA', 'za', 'za', None, ['vr', 'zo', 'ma']),
+        ('AVOND', 'ZA', 'za', 'za', None, ['vr', 'ma']),
+        ('DAG', 'TWEE_DD', 'za', 'zo', None, ['vr', 'ma']),
+        ('DAG', 'ENKEL', 'do', 'do', None, ['wo', 'vr']),  # a dagdienst on a feestdag in the week
+        ('AVOND', 'LOS', 'ma', 'ma', None, ['di']),
+        ('UITLOOP', 'ENKEL', 'ma', 'ma', None, []),
+    ],
+)
+def test_regel_7_en_8_compensation_days(soort, vorm, eerste, laatste, feestdag, verwacht):
+    # The days of the first week from Wednesday dag(0) to Tuesday dag(6); a + is the week after.
+    namen = {'wo': 0, 'do': 1, 'vr': 2, 'za': 3, 'zo': 4, 'ma': 5, 'di': 6}
+    d = lambda n: dag(namen[n.rstrip('+')] + (7 if n.endswith('+') else 0))  # noqa: E731
+    feestdagen = {d(feestdag)} if feestdag else set()
+    assert kalender.compensatiedagen(soort, vorm, d(eerste), d(laatste), feestdagen) == {d(n) for n in verwacht}
+
+
+def test_regel_8_a_compensation_day_moves_off_a_feestdag_in_the_model_too():
+    # The Thursday after the night block is a feestdag: the Friday is the compensation day.
+    feestdag = dag(8)
+    inp = weken(2, {feestdag})
+    x = aios(inp, 'x')
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    _alleen(inp, x, nacht + [dienst('UD', dag(9))])
+    _, t = los_op(inp)
+    assert len(van(t, 'x')) == 3 and set(nacht) <= van(t, 'x')
+
+
+# ---- rule 9 -----------------------------------------------------------------
+
+
+def test_regel_9_46_hours_after_a_night_block_also_when_rule_8_frees_the_day():
+    # The night block ends on a feestdag Wednesday: no compensation day, but no dagdienst that morning either.
+    feestdag = dag(7)
+    inp = weken(2, {feestdag})
+    x = aios(inp, 'x')
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    _alleen(inp, x, nacht + [dienst('DD', feestdag)])
+    _, t = los_op(inp)
+    assert len(van(t, 'x')) == 3 and set(nacht) <= van(t, 'x')
+
+
+def test_regel_9_46_hours_after_a_night_block_where_only_the_rest_holds_it():
+    # The Thursday after the night block is a feestdag, so rule 8 moves its
+    # compensation day to Friday; its dagdienst starts 24 hours after the
+    # last night: allowed by 14 hours, not by 46.
+    feestdag = dag(8)
+    inp = weken(2, {feestdag})
+    x = aios(inp, 'x')
+    nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    _alleen(inp, x, nacht + [dienst('DD', feestdag)])
+    _, t = los_op(inp)
+    assert van(t, 'x') == set(nacht)
+
+
+def _optie(soort, vorm, *diensten):
+    slots = []
+    for code, d, begin, eind in diensten:
+        b, e = kalender.begin_en_eind(d, begin, eind)
+        slots.append(model.Slot(id=f'{code}-{d}', datum=d, code=code, begin=b, eind=e, tienden=10, blok_id=None, feestdag=False))
+    return model.Optie(id=vorm, soort=soort, vorm=vorm, slots=slots)
+
+
+def test_regel_9_14_hours_between_two_diensten():
+    # With these times the compensation days (rule 7) already keep 14 hours
+    # almost everywhere ("volgt dat bijna altijd al uit regel 7"); the rule
+    # stands on its own all the same, for any times.
+    avond = _optie('AVOND', 'LOS', ('AD', dag(0), '17:36', '23:12'))
+    vroeg = _optie('DAG', 'ENKEL', ('DD', dag(1), '08:30', '18:12'))
+    laat = _optie('UITLOOP', 'ENKEL', ('UD', dag(1), '17:36', '20:00'))
+    assert model.regel_9_rust(avond, vroeg), '9 hours 18'
+    assert model.regel_9_rust(vroeg, avond), 'either way round'
+    assert not model.regel_9_rust(avond, laat), '18 hours 24'
+
+
+def test_regel_9_46_hours_after_three_nights_14_after_one():
+    drie = _optie('NACHT', 'ZO_DI', *[('ND', dag(k), '22:30', '08:30') for k in (4, 5, 6)])
+    een = _optie('NACHT', 'LOS', ('ND', dag(6), '22:30', '08:30'))
+    donderdag = _optie('DAG', 'ENKEL', ('DD', dag(8), '08:30', '18:12'))  # 24 hours after
+    assert model.regel_9_rust(drie, donderdag)
+    assert not model.regel_9_rust(een, donderdag)
+
+
+def test_regel_9_the_check_finds_more_than_seven_nights_in_a_row():
+    import controle
+
+    inp = weken(2)
+    inp['blokken'] = []
+    for d in inp['diensten']:
+        d['blok_id'] = None
+    aios(inp, 'x')
+    request = main.SolveInput(**inp)
+    slots, blok_vorm, mensen, feestdagen = main.naar_model(request)
+    acht = {f'ND-{dag(k).isoformat()}': 'x' for k in range(8)}
+    regels = {r for r, _, _ in controle.controleer(slots, blok_vorm, mensen, feestdagen, acht)}
+    assert '9_MEER_DAN_7_NACHTEN' in regels
+
+
+# ---- the weekend and the wishes ---------------------------------------------
+
+
+def test_one_loose_weekend_dienst_unless_two_dagdiensten_were_asked_for():
+    inp = weken(1)
+    weekend = [dienst('DD', dag(3)), dienst('DD', dag(4))]
+    _alleen(inp, aios(inp, 'x'), weekend)
+    _, t = los_op(inp)
+    assert len(t) == 1
+    inp['aios'][0]['twee_dagdiensten'] = True
+    _, t = los_op(inp)
+    assert set(t) == set(weekend)
+
+
+def test_the_block_of_four_only_for_who_asks_for_it():
+    inp = weken(1)
+    vier = blok(inp, 'AVOND', 'WO_VR', dag(0)) + blok(inp, 'AVOND', 'ZA', dag(3))
+    _alleen(inp, aios(inp, 'x'), vier)
+    _, t = los_op(inp)
+    assert len(t) == 3, 'without the wish: the block, not the Saturday after it'
+    inp['aios'][0]['vier_avonden'] = True
+    _, t = los_op(inp)
+    assert set(t) == set(vier)

@@ -76,10 +76,11 @@ Na `npm run seed`:
 ├── db/                      # Drizzle-schema & migraties
 ├── types/                   # TypeScript-types
 ├── scripts/                 # seed.ts, claim-password.ts, full-check.mjs, ui-check.mjs, schema-drift.mjs
-├── solver/                  # Python-solverservice (CP-SAT)
+├── solver/                  # Python-solverservice (CP-SAT) van de achterwacht
+├── aios-solver/             # De eigen solver van de AIOS (vanaf 0.74.0)
 ├── tests/                   # Testfixtures en de Playwright e2e-suite
 ├── CLAUDE.md                # Ontwerpregels & conventies (verplichte leesstof)
-└── docker-compose.yml       # Services: caddy, web, solver
+└── docker-compose.yml       # Services: caddy, web, solver, aios-solver
 ```
 
 ### Codeconventies
@@ -391,6 +392,15 @@ onderbreking, parttimedagen, afwezigheid en de tellers. Blokkeert een AIOS
 meer dan de helft van een soort, dan staat er een waarschuwing dat het
 rooster het deel boven de helft alsnog kan inplannen. Wat een feestdag
 betekent, staat in een eigen kader.
+
+**Vanaf versie 0.74.0** is er een eigen solver voor de AIOS, in een eigen
+container `aios-solver`, los van die van de achterwacht. De solver van de
+achterwacht is niet veranderd. De app gebruikt de nieuwe solver pas in een
+volgende versie, bij het maken van het rooster voor de AIOS. Neem dan ook
+het nieuwe `docker-compose.yml` over, met de dienst `aios-solver` erin.
+Daarna gaat bijwerken weer met `docker compose pull` en
+`docker compose up -d`. Het geheugen van de nieuwe container zet je met
+`AIOS_SOLVER_MEM_LIMIT` in `.env` (standaard 2g).
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet

@@ -89,8 +89,9 @@ what the AIOS needs is copied into files of its own, so the achterwacht
 can't break because of the AIOS. Shared are only the login (the login
 page, /api/auth/*, verify-link, sessions, accounts), the database (the
 same tables; an AIOS's rows are apart through the AIOS pool) and the
-Gmail account of Mailinstellingen. The AIOS's solver will be its own
-container (step 3); the achterwacht's solver stays as it is.
+Gmail account of Mailinstellingen. The AIOS's solver is its own container
+(aios-solver/, 0.74.0, docs/development/aios-solver.md); the achterwacht's
+solver stays as it is.
 
 Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
 
