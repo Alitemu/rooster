@@ -38,7 +38,7 @@ opens a "choose a new password" session (see Authentication):
 (13 generations of 120 seconds or more); the other browser checks take
 about 5 minutes per build together. `--kort` runs one method at one window
 (weighted, window 1) and the generation after "Rooster verwijderen" with
-the same, about 5 minutes. The user chose (October 2026):
+the same, about a minute. The user chose (October 2026):
 - the sub-folder build always gets `--kort`: it checks the paths under the
   base path, and the solver does nothing different there;
 - at the root the full run only when the solver or the achterwacht's code

@@ -25,7 +25,8 @@ production runs. The release goes on the tag `v<version>` that "Bouwen
 (test)" sets on the commit it built: the workflow's GITHUB_TOKEN may not
 create a tag on an older commit whose workflow files differ from the
 default branch ("Resource not accessible by integration"), and this
-session may not push tags. Versions before 0.72.0 have no such tag. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
+session may not push tags. Versions before 0.72.0 have no such tag, except
+0.71.0: the user made that release by hand on GitHub. Compose pulls `${ROOSTER_VERSION:-stable}` (a test
 installation sets `test`) and keeps `build` for building from source.
 Updating is `docker compose pull && docker compose up -d`. The schema of an
 existing database is brought up to date at every start either way:

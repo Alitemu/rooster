@@ -19,7 +19,7 @@
  * Builds its own pool, so the seeded period plays no part.
  *
  * `--kort`: one method at one window, and the generation after "Rooster
- * verwijderen" with the same. About 5 minutes instead of 35: enough for the
+ * verwijderen" with the same. About a minute instead of 35: enough for the
  * sub-folder build and for a release that leaves the solver and the
  * achterwacht's generation code alone (docs/development/checks.md).
  */
