@@ -124,7 +124,8 @@ describe('Mailinstellingen in de app', () => {
     expect(JSON.stringify(await (await GET(request('GET', planner))).json())).not.toContain(SMTP_SINK_GMAIL_PASSWORD);
 
     const sent = await sendVerzendlijst(
-      buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, [])
+      buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []),
+      'ACHTERWACHT'
     );
     expect(sent.ok).toBe(true);
     await waitForMails(sink, 1);
@@ -194,18 +195,18 @@ describe('Mailinstellingen in de app', () => {
     try {
       expect((await (await GET(request('GET', planner))).json()).data.ingesteld).toBe(false);
       const loginsBefore = sink.logins.length;
-      expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(false);
+      expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []), 'ACHTERWACHT')).ok).toBe(false);
       expect(sink.logins).toHaveLength(loginsBefore);
 
       await PUT(request('PUT', planner, goed));
-      await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []));
+      await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []), 'ACHTERWACHT');
       await waitForMails(sink, 1);
       expect(sink.received[0].to).toEqual(['flow@ziekenhuis.test']);
 
       const res = await DELETE(request('DELETE', planner));
       expect((await res.json()).data).toMatchObject({ ingesteld: false, gebruiker: null, verzendlijst_aan: null });
       expect(stored()).toHaveLength(0);
-      expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(false);
+      expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []), 'ACHTERWACHT')).ok).toBe(false);
       expect(sink.received).toHaveLength(1);
     } finally {
       delete process.env.SMTP_USER;
@@ -230,7 +231,7 @@ describe('Mailinstellingen in de app', () => {
       ingesteld: false,
       wachtwoord_onleesbaar: true,
     });
-    expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []))).ok).toBe(false);
+    expect((await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []), 'ACHTERWACHT')).ok).toBe(false);
   });
 
   it('sends nothing at all while MAIL_UITGESCHAKELD is set, even with working settings saved', async () => {
@@ -245,7 +246,8 @@ describe('Mailinstellingen in de app', () => {
         gebruiker: SMTP_SINK_GMAIL_USER,
       });
       const res = await sendVerzendlijst(
-        buildVerzendlijst({ soort: 'HERINNERING', automatisch: true, periode: 'P', deadline: null }, [])
+        buildVerzendlijst({ soort: 'HERINNERING', automatisch: true, periode: 'P', deadline: null }, []),
+        'ACHTERWACHT'
       );
       expect(res).toMatchObject({ ok: false, message: expect.stringContaining('MAIL_UITGESCHAKELD') });
       await new Promise((r) => setTimeout(r, 200));
@@ -299,11 +301,11 @@ describe('Mailinstellingen in de app', () => {
     const fout = async () => (await (await GET(request('GET', planner))).json()).data.laatste_fout;
 
     // Nothing set up: nothing to remember, the page says that itself.
-    expect((await sendVerzendlijst(lijst(true))).ok).toBe(false);
+    expect((await sendVerzendlijst(lijst(true), 'ACHTERWACHT')).ok).toBe(false);
     expect(await fout()).toBeNull();
 
     configureSmtp(sink, { wachtwoord: 'verkeerd' });
-    expect((await sendVerzendlijst(lijst(true))).ok).toBe(false);
+    expect((await sendVerzendlijst(lijst(true), 'ACHTERWACHT')).ok).toBe(false);
     expect(await fout()).toMatchObject({ soort: 'HERINNERING', automatisch: true });
     expect((await fout()).melding).toContain('weigerde de inlog');
 
@@ -313,14 +315,14 @@ describe('Mailinstellingen in de app', () => {
       encryptSetting('app-wachtwoord')
     );
     expect(await fout()).not.toBeNull();
-    expect((await sendVerzendlijst(lijst(false))).ok).toBe(true);
+    expect((await sendVerzendlijst(lijst(false), 'ACHTERWACHT')).ok).toBe(true);
     expect(await fout()).toBeNull();
   });
 
   it('forgets an earlier failure once new settings are saved', async () => {
     configureSmtp(sink, { wachtwoord: 'verkeerd' });
     const planner = person('ADMIN');
-    await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []));
+    await sendVerzendlijst(buildVerzendlijst({ soort: 'UITNODIGING', automatisch: false, periode: 'P', deadline: null }, []), 'ACHTERWACHT');
     expect((await (await GET(request('GET', planner))).json()).data.laatste_fout).not.toBeNull();
 
     expect((await PUT(request('PUT', planner, goed))).status).toBe(200);

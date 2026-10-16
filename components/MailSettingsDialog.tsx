@@ -7,8 +7,10 @@
  * so settings that don't work are never kept. The saved password is never
  * shown again; leaving the field empty keeps it.
  *
- * Only the beheerder changes them: they are shared by the achterwacht and
- * the AIOS. A planner sees what is set and who to ask.
+ * Only the beheerder changes them: the account is shared by the
+ * achterwacht and the AIOS, each with the mailbox of its own flow
+ * (docs/aios-rooster.md, "Mail"). A planner sees what is set for their
+ * dienst and who to ask.
  */
 
 import { useEffect, useState } from 'react';
@@ -21,6 +23,7 @@ interface Status {
   uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
+  verzendlijst_aan_aios: string | null;
   wachtwoord_onleesbaar: boolean;
 }
 
@@ -36,6 +39,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
   const [gebruiker, setGebruiker] = useState('');
   const [wachtwoord, setWachtwoord] = useState('');
   const [aan, setAan] = useState('');
+  const [aanAios, setAanAios] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [melding, setMelding] = useState<string | null>(null);
@@ -50,6 +54,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     setStatus(s);
     setGebruiker(s.gebruiker ?? '');
     setAan(s.verzendlijst_aan ?? '');
+    setAanAios(s.verzendlijst_aan_aios ?? '');
     setWachtwoord('');
   };
 
@@ -89,7 +94,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       const res = await fetch(withBasePath('/api/planner/mail-settings'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan }),
+        body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan, verzendlijst_aan_aios: aanAios }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
@@ -143,7 +148,8 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
         {beheerder === false ? (
           <div className="p-6 space-y-3 overflow-y-auto min-h-0 text-sm text-neutral-800">
             <p>
-              Alleen de beheerder kan de mailinstellingen wijzigen. Ze gelden voor de achterwacht en de AIOS samen.
+              Alleen de beheerder kan de mailinstellingen wijzigen. Het Gmail-account geldt voor de achterwacht en de
+              AIOS samen.
             </p>
             {status && (
               <dl className="space-y-1">
@@ -153,7 +159,10 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
                 </div>
                 <div>
                   <dt className="inline font-semibold">Verzendlijst naar: </dt>
-                  <dd className="inline">{status.verzendlijst_aan ?? 'nog niet ingesteld'}</dd>
+                  {/* Only the own dienst's mailbox comes back (the route). */}
+                  <dd className="inline">
+                    {status.verzendlijst_aan ?? status.verzendlijst_aan_aios ?? 'nog niet ingesteld'}
+                  </dd>
                 </div>
               </dl>
             )}
@@ -217,7 +226,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
 
           <div>
             <label htmlFor="mail-aan" className="block text-sm font-semibold text-neutral-900 mb-1">
-              Verzendlijst sturen naar
+              Verzendlijst van de achterwacht sturen naar
             </label>
             <input
               id="mail-aan"
@@ -229,8 +238,28 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
               className="w-full px-3 py-2 border rounded-lg text-sm"
             />
             <p className="text-xs text-neutral-500 mt-1">
-              De mailbox waar je Power Automate-stroom naar kijkt. Daar komt de mail met de verzendlijst binnen.
-              Deelnemers zien dit adres ook bij een ruilverzoek: daar geven ze een ruil door die niet via de app kan.
+              De mailbox waar de Power Automate-stroom van de achterwacht naar kijkt. Daar komt de mail met de
+              verzendlijst binnen. Deelnemers zien dit adres ook bij een ruilverzoek: daar geven ze een ruil door
+              die niet via de app kan.
+            </p>
+          </div>
+
+          <div>
+            <label htmlFor="mail-aan-aios" className="block text-sm font-semibold text-neutral-900 mb-1">
+              Verzendlijst van de AIOS sturen naar
+            </label>
+            <input
+              id="mail-aan-aios"
+              type="email"
+              autoComplete="off"
+              placeholder="het adres waar de stroom van de AIOS op let"
+              value={aanAios}
+              onChange={(e) => setAanAios(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              De AIOS hebben een eigen stroom met een eigen adressenlijst. Zolang dit leeg is, gaat er geen mail
+              naar de AIOS. De AIOS zien dit adres bij een ruilverzoek.
             </p>
           </div>
 

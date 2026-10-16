@@ -190,7 +190,7 @@ export function ExportDialog({
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
-    fetch(withBasePath('/api/exports/verzendlijst-status'))
+    fetch(withBasePath(`/api/exports/verzendlijst-status?period_id=${encodeURIComponent(periodId)}`))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!cancelled) setAutoSendAvailable(Boolean(data?.data?.ingesteld));
@@ -201,7 +201,7 @@ export function ExportDialog({
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, periodId]);
 
   // Switching between invitations and reminders starts a fresh send.
   useEffect(() => {

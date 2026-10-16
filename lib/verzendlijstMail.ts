@@ -16,6 +16,7 @@
 import nodemailer from 'nodemailer';
 import { db } from '@/db/client';
 import { clearMailFailure, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
+import type { DienstType } from './staffAccounts';
 import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
 interface MailConfig {
@@ -48,17 +49,24 @@ export function mailSwitchedOff(): boolean {
   return process.env.MAIL_UITGESCHAKELD === 'true';
 }
 
-/** The settings saved in the app ("Mailinstellingen", lib/appSettings.ts), or null. */
-function readConfig(): MailConfig | null {
+/**
+ * The settings saved in the app ("Mailinstellingen", lib/appSettings.ts),
+ * for one dienst's flow, or null. The AIOS have a flow of their own
+ * (docs/aios-rooster.md): their verzendlijst never goes to the
+ * achterwacht's mailbox, also not while theirs is not set.
+ */
+function readConfig(dienst: DienstType): MailConfig | null {
   if (mailSwitchedOff()) return null;
   const stored = getStoredMailSettings();
   if (!stored?.wachtwoord) return null;
+  const to = dienst === 'AIOS' ? stored.verzendlijstAanAios : stored.verzendlijstAan;
+  if (!to) return null;
   return {
     ...server(),
     user: stored.gebruiker,
     pass: stripSpaces(stored.wachtwoord),
     from: stored.gebruiker,
-    to: stored.verzendlijstAan,
+    to,
   };
 }
 
@@ -69,6 +77,7 @@ export function mailConfigStatus(): {
   uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
+  verzendlijst_aan_aios: string | null;
   /** Saved, but the password can no longer be read (new session secret). */
   wachtwoord_onleesbaar: boolean;
   /** The last failed send, until one succeeds again. */
@@ -85,14 +94,15 @@ export function mailConfigStatus(): {
     uitgeschakeld: mailSwitchedOff(),
     gebruiker: stored?.gebruiker ?? null,
     verzendlijst_aan: stored?.verzendlijstAan ?? null,
+    verzendlijst_aan_aios: stored?.verzendlijstAanAios ?? null,
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
     laatste_fout: getMailFailure(),
     wachtrij,
   };
 }
 
-export function verzendlijstMailConfigured(): boolean {
-  return readConfig() !== null;
+export function verzendlijstMailConfigured(dienst: DienstType = 'ACHTERWACHT'): boolean {
+  return readConfig(dienst) !== null;
 }
 
 export type VerzendlijstMailResult = { ok: true; aantal: number } | { ok: false; message: string };
@@ -155,19 +165,24 @@ export async function verifyMailLogin(user: string, pass: string): Promise<{ ok:
 }
 
 /** One mail to the flow's mailbox with a single JSON attachment. */
-async function sendJsonMail(mail: {
-  subject: string;
-  text: string;
-  filename: string;
-  json: string;
-}): Promise<{ ok: true } | { ok: false; message: string; notConfigured?: true }> {
-  const config = readConfig();
+async function sendJsonMail(
+  mail: {
+    subject: string;
+    text: string;
+    filename: string;
+    json: string;
+  },
+  dienst: DienstType
+): Promise<{ ok: true } | { ok: false; message: string; notConfigured?: true }> {
+  const config = readConfig(dienst);
   if (!config) {
     return {
       ok: false,
       message: mailSwitchedOff()
         ? 'Versturen staat uit op deze installatie (MAIL_UITGESCHAKELD).'
-        : 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.',
+        : dienst === 'AIOS' && verzendlijstMailConfigured('ACHTERWACHT')
+          ? 'Het adres van de stroom voor de AIOS is nog niet ingesteld. Dat doet de beheerder bij Mailinstellingen.'
+          : 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.',
       notConfigured: true,
     };
   }
@@ -191,7 +206,8 @@ async function sendJsonMail(mail: {
   }
 }
 
-export async function sendVerzendlijst(lijst: Verzendlijst): Promise<VerzendlijstMailResult> {
+/** To the flow of `dienst`: the dienst of the period the list is about (lib/aiosPeriod.ts dienstVanPeriode). */
+export async function sendVerzendlijst(lijst: Verzendlijst, dienst: DienstType): Promise<VerzendlijstMailResult> {
   const result = await sendJsonMail({
     subject: VERZENDLIJST_SUBJECT,
     text:
@@ -201,7 +217,7 @@ export async function sendVerzendlijst(lijst: Verzendlijst): Promise<Verzendlijs
       'Deze mail is automatisch verstuurd door Dienstrooster voor de Power Automate-stroom.',
     filename: verzendlijstFilename(lijst.periode),
     json: verzendlijstJson(lijst),
-  });
+  }, dienst);
   // Remembered for the warning on the period page (lib/appSettings.ts):
   // automatic reminders and swap mails fail where nobody is watching.
   // "Not set up" is not a failure to remember - the page says that itself.

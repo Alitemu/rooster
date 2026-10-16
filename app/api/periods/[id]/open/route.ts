@@ -5,6 +5,8 @@
  * on the period (so a later edit to the pool's default ruleset can't
  * retroactively change an already-open period), generates and persists
  * shift slots, and transitions status CONCEPT -> OPEN.
+ *
+ * An AIOS period: body { deadline? } only, see lib/aiosOpen.ts.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -16,7 +18,8 @@ import { applyCarryOverForPeriod } from '@/lib/carryOver';
 import { roundToMonday, roundToSunday, dateToISO, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
-import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { isAiosPeriod } from '@/lib/aiosPeriod';
+import { openAiosPeriod } from '@/lib/aiosOpen';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
@@ -80,9 +83,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
-    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
-    const aiosNotYet = aiosNotYetDenial(params.id);
-    if (aiosNotYet) return aiosNotYet;
+    // An AIOS period opens by its own, much shorter rules: no ruleset, no
+    // rounding, no carry-over (lib/aiosOpen.ts).
+    if (isAiosPeriod(params.id)) {
+      const aiosBody = await parseJsonBody<{ deadline: unknown }>(req);
+      const result = openAiosPeriod(params.id, auth!.userId, aiosBody.deadline);
+      if (!result.ok) {
+        const response: ApiErrorResponse = { success: false, error: { code: result.code, message: result.message } };
+        return NextResponse.json(response, { status: result.status });
+      }
+      return NextResponse.json({ success: true, data: { period_id: params.id, status: 'OPEN', deadline: result.deadline } });
+    }
 
     const { id } = params;
     const body = await parseJsonBody<OpenPeriodRequest>(req);

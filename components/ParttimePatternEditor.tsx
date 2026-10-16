@@ -30,6 +30,8 @@ interface Props {
   defaultTot: string;
   readOnly?: boolean; // True once the period's deadline has passed - view only
   onPatternsChange: (patterns: ParttimePattern[]) => void;
+  /** What a part-time day does, when it is not the achterwacht's whole day (the AIOS). */
+  uitleg?: string;
 }
 
 // Full map (incl. weekend) so any pre-existing pattern still displays
@@ -69,6 +71,7 @@ export function ParttimePatternEditor({
   defaultTot,
   readOnly = false,
   onPatternsChange,
+  uitleg,
 }: Props) {
   const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -161,8 +164,8 @@ export function ParttimePatternEditor({
       <div>
         <h3 className="font-bold text-lg mb-1">Deeltijdpatroon instellen</h3>
         <p className="text-sm text-neutral-600">
-          Werk je een vaste dag (of om de week) niet? Geef dat hier op. Die dagen worden dan
-          automatisch geblokkeerd. Je kunt hieronder controleren of dat klopt.
+          {uitleg ??
+            'Werk je een vaste dag (of om de week) niet? Geef dat hier op. Die dagen worden dan automatisch geblokkeerd. Je kunt hieronder controleren of dat klopt.'}
         </p>
       </div>
 

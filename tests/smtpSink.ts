@@ -95,7 +95,7 @@ export async function startSmtpSink(
  */
 export function configureSmtp(
   sink: SmtpSink,
-  overrides: { gebruiker?: string; wachtwoord?: string; aan?: string } = {}
+  overrides: { gebruiker?: string; wachtwoord?: string; aan?: string; aanAios?: string } = {}
 ) {
   configureSmtpServerOnly(sink);
   saveMailSettings(
@@ -104,6 +104,8 @@ export function configureSmtp(
       // Pasted the way Google shows an app password: in groups with spaces.
       wachtwoord: overrides.wachtwoord ?? 'app-wacht woord',
       verzendlijstAan: overrides.aan ?? 'stroom@example.test',
+      // The AIOS's own flow (docs/aios-rooster.md, "Mail"): none unless asked.
+      verzendlijstAanAios: overrides.aanAios ?? null,
     },
     null
   );

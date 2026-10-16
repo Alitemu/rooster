@@ -11,10 +11,11 @@ import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosQuarter } from '@/lib/aiosQuarter';
 
 /**
- * The rule (lib/aiosPeriod.ts): until the AIOS steps after step 1 exist,
- * no achterwacht step runs on an AIOS period. It can be made, looked at,
- * renamed, put in the prullenbak and back; nothing else changes it, not
- * even for the beheerder, who sees every dienst. The achterwacht's steps
+ * The rule (lib/aiosPeriod.ts): until the AIOS steps exist, no
+ * achterwacht step runs on an AIOS period. It can be made, looked at,
+ * renamed, put in the prullenbak and back, and taken through the steps up
+ * to the preferences (ALLOWED); nothing else changes it, not even for the
+ * beheerder, who sees every dienst. The achterwacht's steps
  * would invite the AIOS to a calendar of avond-, weekend- and
  * feestdagdiensten, publish or fill in their roster by the achterwacht's
  * rules.
@@ -34,8 +35,31 @@ type Handler = (req: NextRequest, ctx: { params: Promise<Record<string, string>>
 const routeModules = import.meta.glob('./**/route.ts', { eager: true }) as unknown as Record<string, Record<string, unknown>>;
 const CHANGING = ['POST', 'PUT', 'PATCH', 'DELETE'] as const;
 
-/** What an AIOS period may go through now: rename, prullenbak, back, purge. */
-const ALLOWED = new Set(['periods/[id] PATCH', 'periods/[id] DELETE', 'periods/[id]/restore POST', 'periods/[id]/purge POST']);
+/**
+ * What an AIOS period may go through now: rename, prullenbak, back, purge
+ * (step 1), and from step 2 the steps up to the preferences: opening (by
+ * its own rules, lib/aiosOpen.ts), the deadline, the invitations and
+ * reminders (to the AIOS's own flow, lib/verzendlijstMail.ts), a link for
+ * one person, closing and back to open. app/api/aiosOpen.test.ts holds
+ * those.
+ */
+const ALLOWED = new Set([
+  'periods/[id] PATCH',
+  'periods/[id] DELETE',
+  'periods/[id]/restore POST',
+  'periods/[id]/purge POST',
+  'periods/[id]/open POST',
+  'periods/[id]/deadline PATCH',
+  'periods/[id]/close POST',
+  'periods/[id]/reopen POST',
+  'planner/period/[id]/staff-links POST',
+  'planner/period/[id]/auto-reminders PATCH',
+  'planner/period/[id]/remind POST',
+  'exports/invitations/[period-id] POST',
+  'exports/invitations/[period-id]/send POST',
+  'exports/reminders/[period-id] POST',
+  'exports/reminders/[period-id]/send POST',
+]);
 
 /**
  * Step 2 (lib/aiosPreferences.ts): the AIOS's own preference routes, and

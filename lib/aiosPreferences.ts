@@ -20,18 +20,25 @@
  */
 
 import { db } from '@/db/client';
-import type { AiosCode, BlokSoort, BlokVorm, DagSoort } from '@/lib/aiosDiensten';
+import type { AiosCode, BlokSoort, BlokVorm } from '@/lib/aiosDiensten';
+import {
+  LEGE_WENS,
+  OPMERKING_MAX_LENGTH,
+  type AiosVoorkeurDag,
+  type AiosWens,
+  type Bron,
+  type Niveau,
+} from '@/lib/aiosVoorkeur';
+
+// The screen's types and the 50% counters live in lib/aiosVoorkeur.ts,
+// without the database, so the browser can count with them too.
+export * from '@/lib/aiosVoorkeur';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { validateSingleLine } from '@/lib/vrijeTekst';
-
-export type Niveau = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
-type Bron = 'MANUAL' | 'PARTTIME' | 'ABSENCE';
-
-export const OPMERKING_MAX_LENGTH = 120;
 
 export interface AiosPeriode {
   id: string;
@@ -43,100 +50,9 @@ export interface AiosPeriode {
   status: string;
 }
 
-export interface AiosVoorkeurDienst {
-  slot_id: string;
-  code: AiosCode;
-  naam: string;
-  start_tijd: string;
-  eind_tijd: string;
-  blok: { id: string; soort: BlokSoort; vorm: BlokVorm; start_datum: string; eind_datum: string } | null;
-  level: Niveau | null;
-  bron: Bron | null;
-}
-
-export interface AiosVoorkeurDag {
-  datum: string;
-  iso_week: number;
-  dag_soort: DagSoort;
-  feestdag_naam: string | null;
-  diensten: AiosVoorkeurDienst[];
-}
-
-export interface AiosWens {
-  vier_avonden: boolean;
-  vier_nachten: boolean;
-  twee_dagdiensten: boolean;
-  inwerken_van: string | null;
-  inwerken_tot: string | null;
-  onderbreking_van: string | null;
-  onderbreking_tot: string | null;
-  opmerking: string | null;
-}
-
-export const LEGE_WENS: AiosWens = {
-  vier_avonden: false,
-  vier_nachten: false,
-  twee_dagdiensten: false,
-  inwerken_van: null,
-  inwerken_tot: null,
-  onderbreking_van: null,
-  onderbreking_tot: null,
-  opmerking: null,
-};
-
-export type TellerGroep = 'DAGDIENSTEN' | 'ZATERDAG' | 'AVONDBLOKKEN' | 'NACHTBLOKKEN';
-
-export interface BlokkadeTeller {
-  groep: TellerGroep;
-  geblokkeerd: number;
-  totaal: number;
-  // More than half blocked: a warning, never a refusal.
-  boven_helft: boolean;
-}
-
-export const TELLER_LABELS: Record<TellerGroep, string> = {
-  DAGDIENSTEN: 'dagdiensten in het weekend en op feestdagen',
-  ZATERDAG: 'losse avond- en nachtdiensten op zaterdag',
-  AVONDBLOKKEN: 'avondblokken',
-  NACHTBLOKKEN: 'nachtblokken',
-};
-
 /** How much a level keeps someone off a dienst: a mark may not say less than an absence or part-time day. */
 const STRENGTH: Record<Niveau | 'LEEG', number> = { VOORKEUR: 0, LEEG: 1, LIEVER_NIET: 2, ABSOLUUT: 3 };
 const strength = (level: Niveau | null) => STRENGTH[level ?? 'LEEG'];
-
-/** The 50% counters for the days of a quarter (pure: the screen counts with it as the AIOS marks). */
-export function blokkadeTellers(dagen: ReadonlyArray<Pick<AiosVoorkeurDag, 'diensten'>>): BlokkadeTeller[] {
-  const handmatig = (d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>) => d.level === 'ABSOLUUT' && d.bron === 'MANUAL';
-  let dd = 0;
-  let ddGeblokkeerd = 0;
-  // Per block: whether any of its diensten is blocked by hand.
-  const blokken = new Map<string, { soort: BlokSoort; vorm: BlokVorm; geblokkeerd: boolean }>();
-  for (const dag of dagen) {
-    for (const d of dag.diensten) {
-      if (d.code === 'DD') {
-        dd++;
-        if (handmatig(d)) ddGeblokkeerd++;
-      }
-      if (d.blok) {
-        const b = blokken.get(d.blok.id) ?? { soort: d.blok.soort, vorm: d.blok.vorm, geblokkeerd: false };
-        b.geblokkeerd ||= handmatig(d);
-        blokken.set(d.blok.id, b);
-      }
-    }
-  }
-  const tel = (filter: (b: { soort: BlokSoort; vorm: BlokVorm }) => boolean) => {
-    const lijst = [...blokken.values()].filter(filter);
-    return { totaal: lijst.length, geblokkeerd: lijst.filter((b) => b.geblokkeerd).length };
-  };
-  const groepen: Array<[TellerGroep, { totaal: number; geblokkeerd: number }]> = [
-    ['DAGDIENSTEN', { totaal: dd, geblokkeerd: ddGeblokkeerd }],
-    ['ZATERDAG', tel((b) => b.vorm === 'ZA')],
-    ['AVONDBLOKKEN', tel((b) => b.soort === 'AVOND' && (b.vorm === 'ZO_DI' || b.vorm === 'WO_VR'))],
-    ['NACHTBLOKKEN', tel((b) => b.soort === 'NACHT' && (b.vorm === 'ZO_DI' || b.vorm === 'WO_VR'))],
-  ];
-  return groepen.map(([groep, t]) => ({ groep, ...t, boven_helft: t.geblokkeerd * 2 > t.totaal }));
-}
 
 export function loadAiosPeriode(periodId: string): AiosPeriode | undefined {
   return db

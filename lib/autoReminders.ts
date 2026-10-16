@@ -35,6 +35,8 @@ import { getActiveReminderMilestones } from './reminderSchedule';
 import { deadlinePassed } from './periodInputGate';
 import { issuePersonLink } from './periodInvitations';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
+import { dienstVanPeriode } from './aiosPeriod';
+import { DIENST_TYPES } from './staffAccounts';
 import {
   buildVerzendlijst,
   deadlineTekst,
@@ -232,8 +234,9 @@ export async function runAutoReminders(
   opts: { onlyPeriodIds?: string[] } = {}
 ): Promise<RunResult[]> {
   // Nothing can go out, so nothing is claimed either: once SMTP is set up,
-  // a moment still inside its catch-up window is sent after all.
-  if (!verzendlijstMailConfigured()) return [];
+  // a moment still inside its catch-up window is sent after all. The same
+  // per period for a dienst whose flow has no address yet.
+  if (!DIENST_TYPES.some((d) => verzendlijstMailConfigured(d))) return [];
 
   const periods = db
     .prepare(
@@ -247,6 +250,8 @@ export async function runAutoReminders(
   for (const period of periods) {
     if (opts.onlyPeriodIds && !opts.onlyPeriodIds.includes(period.id)) continue;
     if (deadlinePassed(period.deadline, now)) continue;
+    const dienst = dienstVanPeriode(period.id);
+    if (!verzendlijstMailConfigured(dienst)) continue;
     const deadline = new Date(period.deadline);
     const milestones = getActiveReminderMilestones(period.id);
     const laatsteDagen = Math.min(...milestones);
@@ -332,7 +337,8 @@ export async function runAutoReminders(
         },
         berichten,
         now
-      )
+      ),
+      dienst
     );
     if (!sent.ok) {
       db.prepare('DELETE FROM dienstrooster_reminder_run WHERE id = ?').run(claimId);
@@ -390,7 +396,7 @@ export function autoReminderStatus(periodId: string, now: Date = new Date()) {
 
   return {
     aan: period.auto_herinneren === 1,
-    mailIngesteld: verzendlijstMailConfigured(),
+    mailIngesteld: verzendlijstMailConfigured(dienstVanPeriode(periodId)),
     adresBekend: Boolean(baseUrlFor(period)),
     periodeOpen: period.status === 'OPEN' && !deadlinePassed(period.deadline, now),
     volgende: next

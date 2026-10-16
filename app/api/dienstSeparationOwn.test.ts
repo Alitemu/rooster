@@ -258,11 +258,16 @@ describe('"Link kwijt?" pairs everyone with a period of their own dienst', () =>
         `UPDATE dienstrooster_schedule_period SET uitgenodigd_op = ?, basis_url = 'http://localhost' WHERE id = ?`
       ).run(new Date().toISOString(), w.period);
     }
-    const { kandidaten } = linkAanvraagKandidaten();
+    const lijsten = linkAanvraagKandidaten();
+    // One verzendlijst per dienst, for its own flow: nothing of the other
+    // dienst in it, its period names included.
+    expect(lijsten.map((l) => l.dienst).sort()).toEqual(['ACHTERWACHT', 'AIOS']);
     for (const [mine, theirs] of PAIRS) {
-      const eigen = kandidaten.filter((k) => k.codenaam === worlds[mine].xCodenaam || k.codenaam === worlds[mine].yCodenaam);
+      const lijst = lijsten.find((l) => l.dienst === worlds[mine].dienst);
+      expect(lijst, mine).toBeDefined();
+      const eigen = lijst!.kandidaten.filter((k) => k.codenaam === worlds[mine].xCodenaam || k.codenaam === worlds[mine].yCodenaam);
       expect(eigen.length, mine).toBeGreaterThan(0);
-      for (const k of eigen) expect(leaks(JSON.stringify(k), worlds[theirs])).toEqual([]);
+      expect(leaks(JSON.stringify(lijst), worlds[theirs])).toEqual([]);
     }
     // The links themselves: each for a period of the person's own pool.
     const links = db

@@ -21,6 +21,7 @@ import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht, type
 import { issuePersonLink } from './periodInvitations';
 import { formatSwapDate } from './swapMailDetails';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
+import { dienstVanPeriode } from './aiosPeriod';
 
 export interface PublishedShift {
   person_id: string;
@@ -176,7 +177,7 @@ export async function sendRosterMail(
   baseUrl: string | null,
   voorlopig: PublishedShift[] = []
 ): Promise<RosterMailResult> {
-  if (!verzendlijstMailConfigured()) {
+  if (!verzendlijstMailConfigured(dienstVanPeriode(period.id))) {
     return {
       verstuurd: false,
       reden: 'NIET_INGESTELD',
@@ -197,7 +198,8 @@ export async function sendRosterMail(
   if (berichten.length === 0) return { verstuurd: true, aantal: 0 };
 
   const result = await sendVerzendlijst(
-    buildVerzendlijst({ soort, automatisch: false, periode: period.naam }, berichten)
+    buildVerzendlijst({ soort, automatisch: false, periode: period.naam }, berichten),
+    dienstVanPeriode(period.id)
   );
   if (!result.ok) return { verstuurd: false, reden: 'MISLUKT', melding: `De e-mail is niet verstuurd: ${result.message}` };
   return { verstuurd: true, aantal: result.aantal };

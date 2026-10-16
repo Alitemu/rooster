@@ -24,6 +24,8 @@ import { renderNotificationTemplate, renderTemplate } from './notifications';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstSoort } from './verzendlijst';
 import { DOORGEVEN_AAN, swapDoorgevenBericht, type SwapShift } from './swapMailDetails';
+import { dienstVanPeriode } from './aiosPeriod';
+import { DIENST_TYPES } from './staffAccounts';
 
 export interface MeldingMail {
   personId: string;
@@ -108,7 +110,8 @@ async function deliver(mail: Mail): Promise<Delivery> {
         // mail would show the asterisks.
         tekst: rendered.inhoud.replace(/\*\*(.+?)\*\*/g, '$1'),
       },
-    ])
+    ]),
+    dienstVanPeriode(melding.periodId)
   );
   if (!result.ok) {
     console.error(`[melding-mail] ${templateName(melding)} not sent: ${result.message}`);
@@ -161,7 +164,8 @@ async function deliverDoorgeven(mail: DoorgevenMail): Promise<Delivery> {
     buildVerzendlijst(
       { soort: 'RUIL_DOORGEVEN', automatisch: true, periode: swap.periode },
       DOORGEVEN_AAN.map((codenaam) => ({ soort: 'RUIL_DOORGEVEN' as const, codenaam, personen, onderwerp, tekst }))
-    )
+    ),
+    dienstVanPeriode(mail.periodId)
   );
   if (!result.ok) {
     console.error(`[melding-mail] RUIL_DOORGEVEN not sent: ${result.message}`);
@@ -228,7 +232,7 @@ async function sendOrQueue(melding: Mail): Promise<void> {
       await requestsInFlight.get(melding.swapId);
       if (dropQueuedRequest(melding.swapId)) return;
     }
-    if (!verzendlijstMailConfigured()) {
+    if (!verzendlijstMailConfigured(dienstVanPeriode(melding.periodId))) {
       enqueue(melding);
       return;
     }
@@ -298,10 +302,10 @@ async function runFlush(now: Date): Promise<{ verstuurd: number; vervallen: numb
   const result = { verstuurd: 0, vervallen: 0, over: 0 };
   try {
     result.vervallen = pruneMailQueue(now);
-    if (!verzendlijstMailConfigured()) return result;
+    if (!DIENST_TYPES.some((d) => verzendlijstMailConfigured(d))) return result;
     const rows = db
-      .prepare('SELECT id, melding_json FROM dienstrooster_mail_queue ORDER BY aangemaakt_op, rowid')
-      .all() as Array<{ id: string; melding_json: string }>;
+      .prepare('SELECT id, period_id, melding_json FROM dienstrooster_mail_queue ORDER BY aangemaakt_op, rowid')
+      .all() as Array<{ id: string; period_id: string; melding_json: string }>;
     const remove = db.prepare('DELETE FROM dienstrooster_mail_queue WHERE id = ?');
     for (const row of rows) {
       // Checked again per mail: an answer given while this run was sending
@@ -315,6 +319,9 @@ async function runFlush(now: Date): Promise<{ verstuurd: number; vervallen: numb
         result.vervallen++;
         continue;
       }
+      // Its dienst's flow has no address yet (the AIOS's can come later
+      // than the achterwacht's): it waits, the others go.
+      if (!verzendlijstMailConfigured(dienstVanPeriode(row.period_id))) continue;
       db.prepare(
         'UPDATE dienstrooster_mail_queue SET pogingen = pogingen + 1, laatste_poging_op = ? WHERE id = ?'
       ).run(now.toISOString(), row.id);

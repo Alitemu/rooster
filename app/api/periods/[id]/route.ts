@@ -36,12 +36,16 @@ interface PeriodDetail {
 
 /**
  * What a participant gets back: exactly the fields app/person/[token]
- * renders (period name, dates, deadline and status), and nothing else.
+ * renders (period name, dates, deadline and status, and the dienst for
+ * which screen), and nothing else.
  */
 type ParticipantPeriodView = Pick<
   PeriodDetail,
   'id' | 'naam' | 'start_datum' | 'eind_datum' | 'deadline' | 'status'
->;
+> & {
+  /** Which screen the page shows: the AIOS have their own (components/AiosPreferences.tsx). */
+  dienst: 'ACHTERWACHT' | 'AIOS';
+};
 
 
 /**
@@ -134,6 +138,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
           eind_datum: row.eind_datum,
           deadline: row.deadline,
           status: row.status,
+          dienst: row.pool_type === 'AIOS' ? 'AIOS' : 'ACHTERWACHT',
         },
       };
       return NextResponse.json(response);

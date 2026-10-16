@@ -9,16 +9,19 @@
  *
  * Sent, this period becomes the active one (lib/activePeriod.ts); while
  * another period is active and not yet published, this is refused.
+ *
+ * An AIOS period's go to the AIOS's own flow, with their own text.
  */
 
 import { checkMayBecomeActive, markInvited } from '@/lib/activePeriod';
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
-import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { dienstVanPeriode, isAiosPeriod } from '@/lib/aiosPeriod';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import {
+  aiosInvitationBericht,
   getInvitationPeriod,
   indicatieTekst,
   invitationBericht,
@@ -40,13 +43,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
     const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), params['period-id']);
     if (otherDienst) return otherDienst;
-    // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
-    const aiosNotYet = aiosNotYetDenial(params['period-id']);
-    if (aiosNotYet) return aiosNotYet;
 
     const period = getInvitationPeriod(params['period-id']);
     if (!period) return fail(404, 'NOT_FOUND', 'Periode niet gevonden');
-    if (!verzendlijstMailConfigured()) {
+    if (!verzendlijstMailConfigured(dienstVanPeriode(period.id))) {
       return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.');
     }
 
@@ -59,9 +59,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
 
     const baseUrl = resolveBaseUrl(req);
     rememberBaseUrl(period.id, baseUrl);
-    const targets = computeMemberTargets(period.id);
+    const aios = isAiosPeriod(period.id);
+    // The AIOS's own text, without the achterwacht's streefaantal (lib/periodInvitations.ts).
+    const targets = aios ? null : computeMemberTargets(period.id);
     const berichten = issuePeriodLinks(period, baseUrl).map((link) =>
-      invitationBericht(period, link.codenaam, link.personalLink, indicatieTekst(targets.get(link.personId)))
+      targets
+        ? invitationBericht(period, link.codenaam, link.personalLink, indicatieTekst(targets.get(link.personId)))
+        : aiosInvitationBericht(period, link.codenaam, link.personalLink)
     );
     if (berichten.length === 0) return fail(400, 'EMPTY', 'Er doet niemand mee in deze periode.');
 
@@ -69,7 +73,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       buildVerzendlijst(
         { soort: 'UITNODIGING', automatisch: false, periode: period.naam, deadline: period.deadline },
         berichten
-      )
+      ),
+      dienstVanPeriode(period.id)
     );
     if (!result.ok) return fail(502, 'MAIL_FAILED', result.message);
     markInvited(period.id);

@@ -16,6 +16,10 @@ import { decryptSetting, encryptSetting } from './settingsCrypto';
 const GEBRUIKER = 'mail.gebruiker';
 const WACHTWOORD = 'mail.wachtwoord';
 const AAN = 'mail.verzendlijst_aan';
+// The AIOS's own flow (docs/aios-rooster.md, "In de app", the planner's
+// choice): the same mail account, the AIOS's verzendlijst to its own
+// mailbox, which the AIOS's swap dialog names too.
+const AAN_AIOS = 'mail.verzendlijst_aan_aios';
 const LAATSTE_FOUT = 'mail.laatste_fout';
 
 /**
@@ -38,6 +42,8 @@ export interface StoredMailSettings {
   /** null when stored but unreadable (the session secret changed). */
   wachtwoord: string | null;
   verzendlijstAan: string;
+  /** The AIOS's flow mailbox; null until the beheerder sets it. */
+  verzendlijstAanAios: string | null;
 }
 
 function get(sleutel: string): string | undefined {
@@ -54,7 +60,7 @@ export function getStoredMailSettings(): StoredMailSettings | null {
   const wachtwoord = get(WACHTWOORD);
   const verzendlijstAan = get(AAN);
   if (!gebruiker || !wachtwoord || !verzendlijstAan) return null;
-  return { gebruiker, wachtwoord: decryptSetting(wachtwoord), verzendlijstAan };
+  return { gebruiker, wachtwoord: decryptSetting(wachtwoord), verzendlijstAan, verzendlijstAanAios: get(AAN_AIOS) ?? null };
 }
 
 export function recordMailFailure(failure: MailFailure): void {
@@ -80,7 +86,10 @@ export function getMailFailure(): MailFailure | null {
   }
 }
 
-export function saveMailSettings(settings: { gebruiker: string; wachtwoord: string; verzendlijstAan: string }, actorId: string | null): void {
+export function saveMailSettings(
+  settings: { gebruiker: string; wachtwoord: string; verzendlijstAan: string; verzendlijstAanAios?: string | null },
+  actorId: string | null
+): void {
   const now = new Date().toISOString();
   const upsert = db.prepare(
     `INSERT INTO dienstrooster_app_setting (sleutel, waarde, gewijzigd_op, gewijzigd_door)
@@ -92,6 +101,8 @@ export function saveMailSettings(settings: { gebruiker: string; wachtwoord: stri
     upsert.run(GEBRUIKER, settings.gebruiker, now, actorId);
     upsert.run(WACHTWOORD, encryptSetting(settings.wachtwoord), now, actorId);
     upsert.run(AAN, settings.verzendlijstAan, now, actorId);
+    if (settings.verzendlijstAanAios) upsert.run(AAN_AIOS, settings.verzendlijstAanAios, now, actorId);
+    else db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(AAN_AIOS);
     // New settings, so an earlier failure says nothing about them any more.
     clearMailFailure();
   })();
@@ -99,8 +110,8 @@ export function saveMailSettings(settings: { gebruiker: string; wachtwoord: stri
 
 export function deleteMailSettings(): boolean {
   const removed = db
-    .prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN (?, ?, ?)`)
-    .run(GEBRUIKER, WACHTWOORD, AAN);
+    .prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN (?, ?, ?, ?)`)
+    .run(GEBRUIKER, WACHTWOORD, AAN, AAN_AIOS);
   clearMailFailure();
   return removed.changes > 0;
 }
@@ -113,6 +124,6 @@ export function deleteMailSettings(): boolean {
  * office (named, no address). Kept in the app, never in code: it is the
  * ward's own address, and the repository is public.
  */
-export function getSwapContacts(): { planner: string | null } {
-  return { planner: get(AAN) ?? null };
+export function getSwapContacts(dienst: 'ACHTERWACHT' | 'AIOS'): { planner: string | null } {
+  return { planner: get(dienst === 'AIOS' ? AAN_AIOS : AAN) ?? null };
 }

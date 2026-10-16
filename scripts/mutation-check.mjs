@@ -635,7 +635,7 @@ const MUTATIONS = [
   },
   {
     name: 'aios: the 50% counter counts leave',
-    file: 'lib/aiosPreferences.ts',
+    file: 'lib/aiosVoorkeur.ts',
     find: "const handmatig = (d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>) => d.level === 'ABSOLUUT' && d.bron === 'MANUAL';",
     replace: "const handmatig = (d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>) => d.level === 'ABSOLUUT';",
     tests: ['lib/aiosPreferences'],
