@@ -167,7 +167,8 @@ export function tweedeNacht(periodId: string, datum: string): { id: string } | u
   return db.prepare(nachtOp(false)).get(periodId, datum) as { id: string } | undefined;
 }
 
-function verwijderSlot(slotId: string): void {
+/** A dienst out of the quarter, with what hangs on it (also lib/aiosVoortgangstoets.ts). */
+export function verwijderSlot(slotId: string): void {
   // A change by hand on it (lib/aiosHandmatig.ts) goes with it: the dienst is gone.
   db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE slot_id = ?').run(slotId);
   db.prepare('DELETE FROM dienstrooster_assignment WHERE slot_id = ?').run(slotId);

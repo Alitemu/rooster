@@ -133,6 +133,26 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   nacht met één compensatiedag. Die mag ook een fulltimer doen: harde regel
   5 geldt voor het hele blok (een keuze bij het bouwen, oktober 2026).
 
+## Voortgangstoets
+
+- Twee keer per jaar heeft geen AIOS de nacht voor de voortgangstoets dienst
+  (I6). De planner vult op de pagina van het kwartaal de datum van de toets
+  in. Een fellow doet die nacht. In het rooster en in de download staat dan
+  *Fellow*, zonder naam: wie het is, regelt de planner buiten de app (de
+  keuze van de planner in oktober 2026). Een fellow zit niet in de pool van
+  de AIOS (B8).
+- De andere nachten van dat blok blijven samen een blok voor één AIOS, ook
+  als de nacht van de fellow ertussen valt. De compensatiedagen zijn de twee
+  dagen na de laatste van die nachten: blijven zondag en maandag over, dan
+  zijn dat dinsdag en woensdag (de keuze van de planner in oktober 2026).
+- In de app (0.82.0): de nacht gaat uit het kwartaal zodra de datum
+  opgeslagen is. De solver, de harde regels, de punten, ruilen en de
+  downloads zien hem dus niet. Een andere datum of geen datum zet de nacht
+  terug in zijn blok, met wat de AIOS op dat blok markeerde en hun verlof
+  op die dag. Dat kan tot het rooster gepubliceerd is. De nacht moet in het
+  kwartaal vallen: een toets op de eerste woensdag hoort bij het vorige
+  kwartaal.
+
 ## Verzoeken van de AIOS
 
 | Oud formulier | In de app |
@@ -406,12 +426,6 @@ accounts uit stap 5 eind oktober klaar zijn, zodat de AIOS hun voorkeuren voor
 
 ## Nog open
 
-1. Voortgangstoets (I6): twee keer per jaar heeft geen AIOS de nacht ervoor
-   dienst. De planner vinkt bij het kwartaal aan dat er een voortgangstoets is,
-   met de datum. Die nacht vult de planner met de hand in met een fellow. Een fellow
-   zit niet in de AIOS-pool (B8). Komt de fellow als naam of codenaam in dat
-   ene vak? En wat gebeurt er met de rest van het nachtblok waar die nacht in
-   valt?
-2. Het opleidingsjaar (G1): de app weet niet wanneer iemands opleidingsjaar
+1. Het opleidingsjaar (G1): de app weet niet wanneer iemands opleidingsjaar
    begint. Voorstel: de waarschuwing boven 25% over het kwartaal en over de
    laatste vier kwartalen samen.

@@ -9,8 +9,9 @@ Run it again (`python regelgevallen.py` in ./aios-solver) only when a rule
 changes on purpose, and then change the other copy until both tests pass.
 Random quarters like test_willekeurig.py's, with rosters made at random (a
 block now and then split up, a block cut up, a second night without a
-block), a few on purpose for the rarer rules, and the solver's own
-solutions, which break nothing.
+block, a block without the night before a voortgangstoets), a few on
+purpose for the rarer rules, and the solver's own solutions, which break
+nothing.
 """
 
 from __future__ import annotations
@@ -36,6 +37,10 @@ def kwartaal(rnd: random.Random) -> dict:
     for b in inp['blokken']:
         if b['vorm'] != 'ZA' and rnd.random() < 0.1:
             b['vorm'] = 'LOS'
+    # Now and then the night before a voortgangstoets left out, as the app
+    # does (lib/aiosVoortgangstoets.ts): a block with a night less.
+    if rnd.random() < 0.3:
+        inp['diensten'].remove(rnd.choice([d for d in inp['diensten'] if d['code'] == 'ND' and d['blok_id']]))
     if rnd.random() < 0.5:
         d = dag(rnd.randrange(7 * n_weken)).isoformat()
         inp['diensten'].append(

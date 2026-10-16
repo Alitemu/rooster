@@ -19,6 +19,7 @@ import { AiosAutoHerinneringen } from '@/components/AiosAutoHerinneringen';
 import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
 import { AiosRuilenOverzicht } from '@/components/AiosRuilenOverzicht';
+import { AiosVoortgangstoets, FellowVak } from '@/components/AiosVoortgangstoets';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { AiosCode } from '@/lib/aiosDiensten';
@@ -85,7 +86,11 @@ function WeekTabel({ dagen }: { dagen: AiosDag[] }) {
             for (let i = 0; i < dagen.length; i++) {
               const dienst = rij.vind(dagen[i]);
               if (!dienst) {
-                cellen.push(<td key={i} className="p-0.5" />);
+                cellen.push(
+                  <td key={i} className="p-0.5">
+                    {rij.label === 'Nacht' && dagen[i].fellow_nacht && <FellowVak />}
+                  </td>
+                );
                 continue;
               }
               if (!dienst.blok) {
@@ -97,13 +102,12 @@ function WeekTabel({ dagen }: { dagen: AiosDag[] }) {
                 continue;
               }
               // A block is one box over its days (it never crosses the
-              // Wednesday a week starts on).
+              // Wednesday a week starts on), broken by the fellow's night.
               const blok = dienst.blok;
               const codes: AiosCode[] = [];
               let j = i;
-              while (j < dagen.length && dagen[j].datum <= blok.eind_datum) {
-                const d = rij.vind(dagen[j]);
-                if (d) codes.push(d.code);
+              while (j < dagen.length && dagen[j].datum <= blok.eind_datum && rij.vind(dagen[j])) {
+                codes.push(rij.vind(dagen[j])!.code);
                 j++;
               }
               cellen.push(
@@ -610,6 +614,8 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
   // the achterwacht's period page that renders this is not changed for it.
   const [period, setPeriod] = useState<Period>(begin);
   const [stand, setStand] = useState<AiosStand | null>(null);
+  // Raised when the voortgangstoets changed: its night left the diensten (or came back).
+  const [toetsVersie, setToetsVersie] = useState(0);
   const herlaad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${begin.id}`))
       .then((res) => antwoord(res, 'Laden van de periode is mislukt'))
@@ -631,7 +637,7 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
         setOverzicht(data.data);
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Laden van de diensten mislukt'));
-  }, [period.id]);
+  }, [period.id, toetsVersie]);
 
   const weken: AiosDag[][] = [];
   for (const dag of overzicht?.dagen ?? []) {
@@ -655,11 +661,12 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
       </div>
 
       <Stappen period={period} stand={stand} onChanged={herlaad} />
+      <AiosVoortgangstoets periodId={period.id} status={period.status} onChanged={() => setToetsVersie((v) => v + 1)} />
       {period.status !== 'CONCEPT' && (
         <StatusVoorkeuren periodId={period.id} periodNaam={period.naam} refreshKey={`${period.status}|${period.deadline}`} />
       )}
 
-      {period.status !== 'CONCEPT' && <AiosRoosterMaken periodId={period.id} status={period.status} onChanged={herlaad} />}
+      {period.status !== 'CONCEPT' && <AiosRoosterMaken key={toetsVersie} periodId={period.id} status={period.status} onChanged={herlaad} />}
 
       {period.status === 'GEPUBLICEERD' && <AiosRuilenOverzicht periodId={period.id} />}
 

@@ -6,7 +6,8 @@
  *
  * - Rooster per dag: a row per day (date, day, ISO week, feestdag), a
  *   column per dienst with who has it; the second night of New Year's Eve
- *   its own column when there is one.
+ *   its own column when there is one; "Fellow" on the night before the
+ *   voortgangstoets (lib/aiosVoortgangstoets.ts).
  * - Per AIOS: fte, werkdagen, points, dienstpercentage, the diensten per
  *   soort, and the compensation days their diensten give them (rule 7,
  *   shifted off a feestdag by rule 8; lib/aiosRegels.ts), which the
@@ -58,7 +59,7 @@ export function aiosRoosterPerDag(period: AiosUitnodigPeriode): XlsxSheet {
       wie(d, (c) => c === 'UD'),
       wie(d, (c) => c === 'DD'),
       wie(d, (c) => c === 'AD' || c === 'ADW'),
-      wie(d, (c, blok) => c === 'ND' && blok),
+      wie(d, (c, blok) => c === 'ND' && blok) ?? (d.fellow_nacht ? 'Fellow' : null),
       ...(tweede ? [wie(d, (c, blok) => c === 'ND' && !blok)] : []),
     ]),
     frozenColumns: 2,

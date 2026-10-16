@@ -16,6 +16,7 @@ import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagBlokken, type FeestdagStaat } from '@/components/AiosFeestdagBlokken';
 import { AiosRoosterWijzigen, type Gewijzigd, type Keuze } from '@/components/AiosRoosterWijzigen';
 import { AiosPubliceren } from '@/components/AiosPubliceren';
+import { FellowVak } from '@/components/AiosVoortgangstoets';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst } from '@/lib/aiosRooster';
@@ -145,7 +146,11 @@ function RoosterWeek({ dagen, w }: { dagen: AiosRoosterDag[]; w: Wijzigen | null
             for (let i = 0; i < dagen.length; i++) {
               const dienst = rij.vind(dagen[i]);
               if (!dienst) {
-                cellen.push(<td key={i} className="p-0.5" />);
+                cellen.push(
+                  <td key={i} className="p-0.5">
+                    {rij === RIJEN[3] && dagen[i].fellow_nacht && <FellowVak />}
+                  </td>
+                );
                 continue;
               }
               const leeg = !dienst.aios;

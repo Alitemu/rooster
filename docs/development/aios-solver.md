@@ -83,6 +83,24 @@ copy of the hard rules, for changing the roster by hand.
   lib/aiosFeestdagBlokken.test.ts (reeksen, oudjaarIn), the second test of
   tests/e2e/aios-rooster.e2e.ts (real solver).
 
+### The voortgangstoets (0.82.0)
+
+- The night before it is a fellow's (docs/aios-rooster.md,
+  "Voortgangstoets"). lib/aiosVoortgangstoets.ts deletes that ND as soon as
+  the planner saves the date, so the solver never gets it: the contract is
+  unchanged, a block simply comes with a night less (zo and ma, or zo and
+  di with the fellow's Monday between). It stays one option for one AIOS.
+  kalender.py, controle.py and lib/aiosRegels.ts all count a block's
+  compensation days from its last night, which is what the planner chose:
+  zo and ma give di and wo. With two nights the 46 hours of rule 9 do not
+  apply (three or four nights), the 14 hours do.
+- A 4-block still forms when the shortened wo t/m vr block ends on the
+  Friday (do and vr with the Saturday), as for a whole one.
+- test_regels.py has both shapes; regelgevallen.py leaves a block's night
+  out now and then, so tests/fixtures/aios-regels.json has rosters with
+  them for both copies of the rules. App side:
+  app/api/aios/aiosVoortgangstoets.test.ts, tests/e2e/aios-voortgangstoets.e2e.ts.
+
 ## The app's copy of the hard rules (step 4c, 0.77.0)
 
 - Changing the roster by hand warns, the solver isn't asked: the user

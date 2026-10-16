@@ -114,11 +114,15 @@ function isAiosPeriode(periodId: string): boolean {
 const bestaand = () =>
   db.prepare('SELECT source, blocking_level FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?');
 
-/** One absence against one AIOS period: stale rows out, missing ones in, softer marks taken over. */
-function verzoenAfwezigheid(a: Afwezigheid, periodId: string): number {
-  const slots = db
-    .prepare('SELECT id, datum, iso_week, is_feestdag FROM dienstrooster_shift_slot WHERE period_id = ?')
-    .all(periodId) as Slot[];
+/**
+ * One absence against one AIOS period: stale rows out, missing ones in,
+ * softer marks taken over. `alleen`: that one dienst and nothing else (a
+ * night put back, lib/aiosVoortgangstoets.ts).
+ */
+function verzoenAfwezigheid(a: Afwezigheid, periodId: string, alleen?: string): number {
+  const slots = (
+    db.prepare('SELECT id, datum, iso_week, is_feestdag FROM dienstrooster_shift_slot WHERE period_id = ?').all(periodId) as Slot[]
+  ).filter((s) => !alleen || s.id === alleen);
   const doel = new Map(slots.filter((s) => s.datum >= a.van_datum && s.datum <= a.tot_datum).map((s) => [s.id, s]));
   const nu = new Set(
     (
@@ -129,7 +133,9 @@ function verzoenAfwezigheid(a: Afwezigheid, periodId: string): number {
            WHERE av.bron_absence_id = ? AND s.period_id = ?`
         )
         .all(a.id, periodId) as Array<{ slot_id: string }>
-    ).map((r) => r.slot_id)
+    )
+      .map((r) => r.slot_id)
+      .filter((id) => !alleen || id === alleen)
   );
   const weg = db.prepare('DELETE FROM dienstrooster_availability WHERE bron_absence_id = ? AND slot_id = ?');
   for (const slotId of nu) if (!doel.has(slotId)) weg.run(a.id, slotId);
@@ -218,6 +224,24 @@ const patroonVan = (id: string) =>
   db
     .prepare('SELECT id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE id = ?')
     .get(id) as Patroon | undefined;
+
+/**
+ * The absences of the pool's AIOS on one dienst made again (a night put
+ * back after the voortgangstoets moved), whether or not the period still
+ * takes input: the dienst is new, the leave was there all along.
+ */
+export function zetAfwezighedenOpDienst(periodId: string, slotId: string): void {
+  const afwezigheden = db
+    .prepare(
+      `SELECT DISTINCT x.id, x.person_id, x.van_datum, x.tot_datum
+       FROM dienstrooster_absence x
+       JOIN dienstrooster_shift_slot s ON s.id = ? AND x.van_datum <= s.datum AND x.tot_datum >= s.datum
+       JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
+       JOIN dienstrooster_pool_membership pm ON pm.person_id = x.person_id AND pm.pool_id = sp.pool_id`
+    )
+    .all(slotId) as Afwezigheid[];
+  for (const a of afwezigheden) verzoenAfwezigheid(a, periodId, slotId);
+}
 
 /** One absence into every AIOS period of its person that takes input. */
 export function syncAiosAfwezigheid(absenceId: string): number {

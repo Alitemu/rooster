@@ -21,6 +21,7 @@ import {
   type BlokVorm,
   type DagSoort,
 } from '@/lib/aiosDiensten';
+import { fellowNacht } from '@/lib/aiosVoortgangstoets';
 
 interface PoolShiftType {
   id: string;
@@ -102,6 +103,8 @@ export interface AiosDag {
   iso_week: number;
   dag_soort: DagSoort;
   feestdag_naam: string | null;
+  // The night before the voortgangstoets: a fellow's, not in the AIOS's quarter.
+  fellow_nacht: boolean;
   diensten: AiosDienstRegel[];
 }
 
@@ -141,6 +144,7 @@ export function loadAiosDiensten(periodId: string, start: string, eind: string):
     blok_eind: string | null;
   }>;
 
+  const fellow = fellowNacht(periodId);
   const dagen: AiosDag[] = [];
   const punten = {} as Record<AiosCode, number>;
   const types = new Map<AiosCode, Omit<PoolShiftType, 'id'>>();
@@ -152,6 +156,7 @@ export function loadAiosDiensten(periodId: string, start: string, eind: string):
         iso_week: r.iso_week,
         dag_soort: r.is_feestdag ? 'FEESTDAG' : r.weekend_id ? 'WEEKEND' : 'WERKDAG',
         feestdag_naam: r.feestdag_naam,
+        fellow_nacht: r.datum === fellow,
         diensten: [],
       };
       dagen.push(dag);

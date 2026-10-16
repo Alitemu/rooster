@@ -365,3 +365,39 @@ def test_the_second_aios_on_new_years_eve():
     assert set(nacht) <= van(t, 'x'), 'the night stays in the block of one AIOS'
     assert t.get('ND2-oudjaar') == 'y', 'the second night to another AIOS'
     assert dienst('UD', dag(6)) not in t, 'the day after the loose night is its compensation day'
+
+
+# ---- the voortgangstoets ------------------------------------------------------
+
+
+def test_the_night_before_the_voortgangstoets_left_out_the_rest_one_block():
+    # The app leaves that night out of the quarter: a fellow does it
+    # (lib/aiosVoortgangstoets.ts). The other nights stay one block for one
+    # AIOS, with the compensation days on the two days after the last of
+    # them: zo and ma give di and wo, so the Thursday is free again.
+    inp = weken(2)
+    inp['diensten'] = [d for d in inp['diensten'] if d['id'] != dienst('ND', dag(6))]
+    rest = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    assert rest == [dienst('ND', dag(4)), dienst('ND', dag(5))]
+    _alleen(inp, aios(inp, 'x'), rest + [dienst('UD', dag(6)), dienst('UD', dag(8))])
+    _, t = los_op(inp)
+    assert set(rest) <= van(t, 'x')
+    assert dienst('UD', dag(6)) not in t, 'the Tuesday: the first compensation day'
+    assert t.get(dienst('UD', dag(8))) == 'x', 'the Thursday: no compensation day any more'
+
+
+def test_the_night_before_the_voortgangstoets_in_the_middle_of_a_block():
+    # Toets on a Tuesday: the fellow does the Monday night, zo and di stay
+    # one block for one AIOS (the planner's choice), then wo and do are free.
+    inp = weken(2)
+    inp['diensten'] = [d for d in inp['diensten'] if d['id'] != dienst('ND', dag(5))]
+    rest = blok(inp, 'NACHT', 'ZO_DI', dag(4))
+    x, y = aios(inp, 'x'), aios(inp, 'y')
+    _alleen(inp, x, rest + [dienst('UD', dag(8))])
+    _alleen(inp, y, rest)
+    _, t = los_op(inp)
+    houder = t[rest[0]]
+    assert t[rest[1]] == houder, 'one AIOS for both nights'
+    if houder == 'x':
+        assert dienst('UD', dag(8)) not in t, 'the Thursday: its second compensation day'
+    assert kalender.compensatiedagen('NACHT', 'ZO_DI', dag(4), dag(6), set()) == {dag(7), dag(8)}

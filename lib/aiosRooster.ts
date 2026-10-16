@@ -18,6 +18,7 @@ import type { AiosCode, BlokSoort, BlokVorm, DagSoort } from '@/lib/aiosDiensten
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { controleerAiosRooster, regelZin, type Regel } from '@/lib/aiosRegels';
 import { aiosSaldi, aiosSaldoWoorden, type SaldoBron } from '@/lib/aiosSaldo';
+import { fellowNacht } from '@/lib/aiosVoortgangstoets';
 
 export interface AiosRoosterDienst {
   slot_id: string;
@@ -36,6 +37,8 @@ export interface AiosRoosterDag {
   iso_week: number;
   dag_soort: DagSoort;
   feestdag_naam: string | null;
+  // The night before the voortgangstoets: a fellow does it (lib/aiosVoortgangstoets.ts).
+  fellow_nacht: boolean;
   diensten: AiosRoosterDienst[];
 }
 
@@ -114,6 +117,7 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
     markering: AiosRoosterDienst['markering'];
   }>;
 
+  const fellow = fellowNacht(period.id);
   const dagen: AiosRoosterDag[] = [];
   for (const r of rows) {
     let dag = dagen[dagen.length - 1];
@@ -123,6 +127,7 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
         iso_week: r.iso_week,
         dag_soort: r.is_feestdag ? 'FEESTDAG' : r.weekend_id ? 'WEEKEND' : 'WERKDAG',
         feestdag_naam: r.feestdag_naam,
+        fellow_nacht: r.datum === fellow,
         diensten: [],
       };
       dagen.push(dag);

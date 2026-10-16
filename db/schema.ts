@@ -662,6 +662,10 @@ export const aiosPeriode = sqliteTable('dienstrooster_aios_periode', {
   // quarter (D7, J5): two unless the planner says one; with two a second ND
   // slot without a block (lib/aiosFeestdagBlokken.ts).
   oudjaar_aantal: integer('oudjaar_aantal').default(2).notNull(),
+  // The day of the voortgangstoets in this quarter (I6), or null. No AIOS has
+  // the night before: a fellow does it, outside the app, and that night's ND
+  // is not in the AIOS's roster (lib/aiosVoortgangstoets.ts).
+  voortgangstoets: text('voortgangstoets'),
 });
 
 /**

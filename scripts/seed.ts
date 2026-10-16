@@ -459,7 +459,8 @@ async function createTables() {
       uitgenodigd_op TEXT,
       basis_url TEXT,
       auto_herinneren INTEGER NOT NULL DEFAULT 1,
-      oudjaar_aantal INTEGER NOT NULL DEFAULT 2
+      oudjaar_aantal INTEGER NOT NULL DEFAULT 2,
+      voortgangstoets TEXT
     );
 
     CREATE TABLE IF NOT EXISTS dienstrooster_aios_blokkeuze (
@@ -697,6 +698,7 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_aios_periode: {
     auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
     oudjaar_aantal: 'INTEGER NOT NULL DEFAULT 2',
+    voortgangstoets: 'TEXT',
   },
   dienstrooster_shift_type: {
     code: 'TEXT',
