@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
 import { getBaseUrl, loginAsBeheerder } from './setup';
+import { buildXlsx } from '../fixtures/buildXlsx';
 
 /**
  * Step 4d (docs/aios-rooster.md): the planner publishes an AIOS roster
@@ -12,7 +13,8 @@ import { getBaseUrl, loginAsBeheerder } from './setup';
  * definitief, and the roster comes as a workbook. Two weeks, every dienst
  * filled beforehand (a block whole to one AIOS, round the four), at 375
  * pixels. The AIOS's mail is not set up here: publishing says so and goes
- * on.
+ * on. Step 4e first: the history from before the app read in, checked with
+ * what it means per AIOS in words, then saved.
  */
 
 const START = '2094-08-04'; // a Wednesday
@@ -78,11 +80,29 @@ test.afterAll(() => {
   }
 });
 
-test('the planner publishes, the AIOS sees their diensten, then definitief and as Excel', async ({ page, browser }) => {
+test('the planner reads in the history, publishes, the AIOS sees their diensten, then definitief and as Excel', async ({ page, browser }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 375, height: 800 });
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
+
+  // The history from before the app: two of the four, one did twice as many nights.
+  const geschiedenis = page.getByTestId('aios-geschiedenis');
+  await geschiedenis.getByRole('button', { name: 'Tonen' }).click();
+  const kop = ['Codenaam', 'Nachten', 'Avonden door de week', 'Avonden in het weekend', 'Dagdiensten', 'Uitloopdiensten', 'Feestdagdiensten (ook bij de soort geteld)', 'Fte', 'Maanden'];
+  await geschiedenis.getByLabel('Excel-bestand met de geschiedenis').setInputFiles({
+    name: 'geschiedenis.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: buildXlsx([kop, [`ap0-${stamp % 100000}`, 20, 0, 0, 0, 0, 0, 1, 12], [`ap1-${stamp % 100000}`, 10, 0, 0, 0, 0, 0, 1, 12]]),
+  });
+  await geschiedenis.getByRole('button', { name: 'Controleren' }).click();
+  const voorbeeld = geschiedenis.getByTestId('aios-geschiedenis-voorbeeld');
+  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap0-${stamp % 100000} .*5 punten minder$`) })).toBeVisible();
+  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap1-${stamp % 100000} .*5 punten extra$`) })).toBeVisible();
+  await geschiedenis.getByRole('button', { name: 'Bewaren' }).click();
+  await expect(geschiedenis.getByText(/^Bewaard\./)).toBeVisible();
+  await expect(geschiedenis.getByText('Ingelezen voor 2 AIOS.')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
   const paneel = page.getByTestId('aios-publiceren');
   await expect(paneel.getByRole('heading', { name: 'Publiceren' })).toBeVisible();

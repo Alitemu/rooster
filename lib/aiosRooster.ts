@@ -17,6 +17,7 @@ import { aiosWerkdagen, dienstpercentage } from '@/lib/aiosFte';
 import type { AiosCode, BlokSoort, BlokVorm, DagSoort } from '@/lib/aiosDiensten';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { controleerAiosRooster, regelZin, type Regel } from '@/lib/aiosRegels';
+import { aiosSaldi, aiosSaldoWoorden, type SaldoBron } from '@/lib/aiosSaldo';
 
 export interface AiosRoosterDienst {
   slot_id: string;
@@ -54,6 +55,11 @@ export interface AiosRoosterPerAios {
   liever_niet: number;
   voorkeur: number;
   geblokkeerd: number;
+  // What they carried into this quarter, in words, and from where (lib/aiosSaldo.ts).
+  saldo: string;
+  saldo_bron: SaldoBron;
+  // The solver's fair share for them, once the roster is made.
+  doel_punten: number | null;
 }
 
 export interface AiosRoosterOvertreding {
@@ -136,6 +142,13 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
   // fte, Geldig vanaf/tot and onderbreking as the solver is told them.
   const invoer = aiosSolverInvoer(period, 60);
   const feestdagen = new Set(invoer.feestdagen);
+  const bron = aiosSaldi(period, invoer.aios.map((a) => a.id));
+  const doel = new Map(
+    (db.prepare('SELECT person_id, doel_punten FROM dienstrooster_aios_doel WHERE period_id = ?').all(period.id) as Array<{
+      person_id: string;
+      doel_punten: number;
+    }>).map((d) => [d.person_id, d.doel_punten])
+  );
   const per_aios = invoer.aios.map((a): AiosRoosterPerAios => {
     const mijn = rows.filter((r) => r.person_id === a.id);
     const tiende = Math.round(mijn.reduce((som, r) => som + r.punten, 0) * 10) / 10;
@@ -158,6 +171,9 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
       liever_niet: vakken('LIEVER_NIET'),
       voorkeur: vakken('VOORKEUR'),
       geblokkeerd: vakken('ABSOLUUT'),
+      saldo: aiosSaldoWoorden(a),
+      saldo_bron: bron.get(a.id)!.bron,
+      doel_punten: doel.get(a.id) ?? null,
     };
   });
   per_aios.sort((x, y) => x.codenaam.localeCompare(y.codenaam, 'nl'));

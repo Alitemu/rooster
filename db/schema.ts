@@ -684,6 +684,55 @@ export const aiosBlokkeuze = sqliteTable(
   })
 );
 
+/**
+ * The solver's fair share per AIOS of a quarter it made (aios-solver
+ * per_aios: doel_punten, doel_feestdagdiensten), the years before included
+ * (lib/aiosSaldo.ts): the next quarter's saldo is this minus what the AIOS
+ * did, as the roster is then. Written with the roster, gone with it.
+ */
+export const aiosDoel = sqliteTable(
+  'dienstrooster_aios_doel',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    doel_punten: real('doel_punten').notNull(),
+    doel_feestdagen: real('doel_feestdagen').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('aios_doel_uniq').on(table.period_id, table.person_id),
+  })
+);
+
+/**
+ * What an AIOS did before the app (docs/aios-rooster.md, "Eerlijkheid";
+ * G9, O3, O4), read in from the old Excel per pool: the diensten per soort,
+ * the feestdagdiensten among them, the fte and the months it covers. The
+ * saldo of an AIOS's first quarter in the app comes from it
+ * (lib/aiosSaldo.ts), measured against the average per fte x maanden of
+ * everyone read in.
+ */
+export const aiosBeginstand = sqliteTable(
+  'dienstrooster_aios_beginstand',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    pool_id: text('pool_id').notNull().references(() => pool.id, { onDelete: 'cascade' }),
+    person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    nachten: integer('nachten').notNull(),
+    avonden: integer('avonden').notNull(), // door de week, 0,6 punt
+    avonden_weekend: integer('avonden_weekend').notNull(), // 1 punt
+    dagdiensten: integer('dagdiensten').notNull(),
+    uitloopdiensten: integer('uitloopdiensten').notNull(),
+    feestdagdiensten: integer('feestdagdiensten').notNull(), // also counted in their soort
+    fte: real('fte').notNull(),
+    maanden: real('maanden').notNull(),
+    ingelezen_op: text('ingelezen_op').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('aios_beginstand_uniq').on(table.pool_id, table.person_id),
+  })
+);
+
 export const periodFellow = sqliteTable(
   'dienstrooster_period_fellow',
   {

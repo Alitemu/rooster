@@ -113,7 +113,8 @@ out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
   generate-roster/solverContract.test.ts runs it against a fake solver and
   checks every person's band and the windows against computeMemberTargets
   and resolveWindowWeeks.
-- **Carry-over per person** (lib/carryOver.ts): each member is measured
+- **Carry-over per person** (lib/carryOver.ts; the AIOS's own is
+  lib/aiosSaldo.ts, docs/development/aios-solver.md): each member is measured
   against their own scaled target, the one the solver got, not the flat
   band. Someone at factor 0.5 who did their half carries nothing over.
   Booked when a period opens and booked again at every generation

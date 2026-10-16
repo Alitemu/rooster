@@ -472,6 +472,33 @@ async function createTables() {
     CREATE UNIQUE INDEX IF NOT EXISTS aios_blokkeuze_uniq
       ON dienstrooster_aios_blokkeuze(period_id, blok_id);
 
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_doel (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
+      doel_punten REAL NOT NULL,
+      doel_feestdagen REAL NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS aios_doel_uniq
+      ON dienstrooster_aios_doel(period_id, person_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_beginstand (
+      id TEXT PRIMARY KEY NOT NULL,
+      pool_id TEXT NOT NULL REFERENCES dienstrooster_pool(id) ON DELETE CASCADE,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
+      nachten INTEGER NOT NULL,
+      avonden INTEGER NOT NULL,
+      avonden_weekend INTEGER NOT NULL,
+      dagdiensten INTEGER NOT NULL,
+      uitloopdiensten INTEGER NOT NULL,
+      feestdagdiensten INTEGER NOT NULL,
+      fte REAL NOT NULL,
+      maanden REAL NOT NULL,
+      ingelezen_op TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS aios_beginstand_uniq
+      ON dienstrooster_aios_beginstand(pool_id, person_id);
+
     CREATE TABLE IF NOT EXISTS dienstrooster_period_fellow (
       id TEXT PRIMARY KEY NOT NULL,
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
@@ -584,6 +611,8 @@ const SEEDED_TABLES = [
   'dienstrooster_aios_wens',
   'dienstrooster_aios_periode',
   'dienstrooster_aios_blokkeuze',
+  'dienstrooster_aios_doel',
+  'dienstrooster_aios_beginstand',
   'dienstrooster_mail_queue',
   // References a person (gewijzigd_door), so a reset clears it as well.
   'dienstrooster_app_setting',

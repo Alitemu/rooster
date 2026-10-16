@@ -190,6 +190,13 @@
       "when": 1788802100000,
       "tag": "0026_aios_feestdagblokken",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "5",
+      "when": 1788888500000,
+      "tag": "0027_aios_saldo",
+      "breakpoints": true
     }
   ]
 }

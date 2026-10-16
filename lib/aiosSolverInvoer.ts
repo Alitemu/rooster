@@ -14,7 +14,8 @@
  * the screen promised ("hoogstens N alsnog"). A block the planner cut
  * up around feestdagen goes as vorm LOS (lib/aiosFeestdagBlokken.ts), and
  * the second night of New Year's Eve is a dienst without a block. The
- * saldo and the feestdagen over the years come with step 4e; until then 0.
+ * saldo and the feestdagen over the years from the previous published
+ * quarter, or from before the app (lib/aiosSaldo.ts).
  */
 
 import { db } from '@/db/client';
@@ -24,6 +25,7 @@ import { aiosFte } from '@/lib/aiosFte';
 import { blokkadeTellers, loadAiosVoorkeurDagen, loadAiosWens, type TellerGroep } from '@/lib/aiosPreferences';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { opgeknipteBlokken } from '@/lib/aiosFeestdagBlokken';
+import { aiosSaldi } from '@/lib/aiosSaldo';
 
 export interface AiosSolverDienst {
   id: string;
@@ -95,7 +97,9 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
   const dagen: Array<{ datum: string; week: number }> = [];
   for (let d = van; d <= tot; d = addDays(d, 1)) dagen.push({ datum: d, week: getISOWeek(parseISO(d))[1] });
 
-  const aios = aiosDeelnemers(period).map((p): AiosSolverAios => {
+  const deelnemers = aiosDeelnemers(period);
+  const saldi = aiosSaldi(period, deelnemers.map((p) => p.id));
+  const aios = deelnemers.map((p): AiosSolverAios => {
     const wens = loadAiosWens(p.id, period.id);
     const eigenPatronen = patronen.all(p.id) as Array<{
       weekdag: 'MA' | 'DI' | 'WO' | 'DO' | 'VR';
@@ -121,8 +125,8 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
       twee_dagdiensten: wens.twee_dagdiensten,
       markeringen: markeringen.all(p.id, period.id) as AiosSolverAios['markeringen'],
       erboven,
-      saldo_punten: 0,
-      feestdag_achterstand: 0,
+      saldo_punten: saldi.get(p.id)!.saldo_punten,
+      feestdag_achterstand: saldi.get(p.id)!.feestdag_achterstand,
     };
   });
 

@@ -438,7 +438,8 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
             <h2 className="text-lg font-semibold">Per AIOS</h2>
             <p className="text-sm text-neutral-600">
               Dienstpercentage: punten gedeeld door werkdagen keer fte. Boven 25% is te veel volgens het opleidingsplan. Dat is een
-              waarschuwing, geen weigering.
+              waarschuwing, geen weigering. Het saldo is wat de AIOS meeneemt: wie vorig kwartaal minder deed dan het doel, krijgt
+              er nu meer.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -450,8 +451,11 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                     <th className="py-1 pr-2 font-medium text-right" title="nachten, avonden, dagdiensten, uitloopdiensten">
                       N/A/D/U
                     </th>
-                    <th className="py-1 font-medium text-right" title="ingedeeld op liever niet">
+                    <th className="py-1 pr-2 font-medium text-right" title="ingedeeld op liever niet">
                       Liever niet
+                    </th>
+                    <th className="py-1 font-medium" title="uit het vorige kwartaal of van vóór de app">
+                      Saldo
                     </th>
                   </tr>
                 </thead>
@@ -469,7 +473,12 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                       <td className="py-1 pr-2 text-right whitespace-nowrap">
                         {a.nachten}/{a.avonden}/{a.dagdiensten}/{a.uitloopdiensten}
                       </td>
-                      <td className="py-1 text-right">{a.liever_niet + a.geblokkeerd}</td>
+                      <td className="py-1 pr-2 text-right">{a.liever_niet + a.geblokkeerd}</td>
+                      <td className="py-1 text-xs">
+                        {a.saldo}
+                        {a.saldo_bron === 'BEGINSTAND' && <span className="block text-neutral-500">van vóór de app</span>}
+                        {a.saldo_bron === 'VORIG_KWARTAAL' && <span className="block text-neutral-500">uit het vorige kwartaal</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

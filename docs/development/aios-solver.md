@@ -28,8 +28,15 @@ copy of the hard rules, for changing the roster by hand.
   week is 0,8, every other week 0,9, pro rata over the quarter), Geldig
   vanaf/tot clipped to the quarter, the part-time days (patroonDekt), inwerken,
   onderbreking and the wishes from aios_wens, the marks with their bron, and
-  `erboven` from blokkadeTellers. saldo_punten and feestdag_achterstand are 0
-  until step 4e.
+  `erboven` from blokkadeTellers. saldo_punten and feestdag_achterstand from
+  lib/aiosSaldo.ts (0.79.0, step 4e): the solver's own share of the last
+  published quarter the AIOS had one in (aios_doel, kept from per_aios
+  doel_punten and doel_feestdagdiensten at every generation, gone with
+  "Rooster verwijderen") minus what they did there, as the roster is now;
+  before that the history read in (aios_beginstand, against the average per
+  fte x maanden of everyone read in); otherwise 0. Since the share the
+  solver adds the saldo to is kept, the chain carries on by itself: no
+  balance is stored, only the share it is measured against.
 - lib/aiosGenereren.ts runs it in the background (its own job store on
   globalThis, as the achterwacht's), only from GESLOTEN or GEGENEREERD, one
   at a time per period (409 GENERATION_RUNNING), and writes in one

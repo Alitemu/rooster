@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0) met de hand aanpassen (versie 0.77.0) en publiceren (versie 0.78.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
+Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0) met de hand aanpassen (versie 0.77.0), publiceren (versie 0.78.0) en het saldo met de geschiedenis van vóór de app (versie 0.79.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -311,6 +311,17 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
 - Geschiedenis van vóór de app: bij de eerste AIOS-periode een import per AIOS
   van het aantal diensten per soort en de feestdagen van de afgelopen jaren, uit
   Excel (G9, O3, O4), zoals de beginsaldi bij de achterwacht.
+- In de app (0.79.0): de planner downloadt een sjabloon met een rij per AIOS
+  en vult in: nachten, avonden door de week (0,6 punt), avonden in het weekend,
+  dagdiensten, uitloopdiensten, hoeveel daarvan op een feestdag, de
+  gemiddelde fte en over hoeveel maanden (de keuze van de planner in oktober
+  2026: aantallen per soort). De app vergelijkt dat met het gemiddelde naar
+  fte keer maanden van iedereen in het bestand: wie meer punten deed, krijgt in
+  het eerste kwartaal in de app minder, en net zo voor feestdagdiensten. Vóór
+  het bewaren staat per AIOS in woorden wat het betekent. Daarna rekent de app
+  elk kwartaal zelf door: het doel dat de solver gaf min wat de AIOS deed in
+  het vorige gepubliceerde kwartaal, zoals het rooster nu is. Per AIOS staat
+  bij het rooster wat die meeneemt.
 
 ## Ruilen
 

@@ -125,7 +125,10 @@ Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
   changing the roster by hand, 0.77.0: the AIOS's own, not the
   achterwacht's manual-assign and reassign), aiosPublicatie.ts and
   aiosRoosterDownloads.ts (publishing, the AIOS's own roster on their page
-  and the roster as workbooks, 0.78.0: a copy of lib/publication.ts).
+  and the roster as workbooks, 0.78.0: a copy of lib/publication.ts),
+  aiosSaldo.ts and aiosGeschiedenis.ts (the saldo into the next quarter and
+  the history from before the app, 0.79.0: the AIOS's own, not
+  lib/carryOver.ts or the ledger).
 - Tables of its own: aios_wens and aios_periode (when the AIOS were
   invited, under which address, and whether their automatic reminders
   are on). An AIOS period never gets

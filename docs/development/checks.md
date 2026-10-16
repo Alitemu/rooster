@@ -12,8 +12,9 @@ AIOS_SOLVER_URL=http://localhost:8001 npm start`) - none of them starts
 anything itself. tests/e2e/aios-rooster.e2e.ts makes an AIOS roster with
 the AIOS's solver and fails without it, once plain and once over kerst and
 oudjaar with the questions about the blocks around feestdagen;
-tests/e2e/aios-publiceren.e2e.ts publishes one, opens it as the AIOS on
-their link and makes it definitief. ALLOW_SEED_PASSWORD
+tests/e2e/aios-publiceren.e2e.ts reads in the history from before the
+app, publishes one, opens it as the AIOS on their link and makes it
+definitief. ALLOW_SEED_PASSWORD
 because they all log in with the seed password, which otherwise only
 opens a "choose a new password" session (see Authentication):
 - `npm run test:e2e` - the Playwright suite in `tests/e2e`. It builds its

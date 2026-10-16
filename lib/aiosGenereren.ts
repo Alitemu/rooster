@@ -11,7 +11,9 @@
  * (on globalThis, one per process, as there) and its own writing.
  *
  * A new generation replaces the whole roster, a change by hand included
- * (the dialog says so first). While one runs, the roster's own routes
+ * (the dialog says so first), and the solver's fair share per AIOS with it
+ * (aios_doel), which the next quarter's saldo is measured against
+ * (lib/aiosSaldo.ts). While one runs, the roster's own routes
  * answer 409: the answer, written when it comes, was made without them.
  */
 
@@ -83,6 +85,7 @@ const solverUrl = () => process.env.AIOS_SOLVER_URL || 'http://aios-solver:8000'
 interface SolverUit {
   status: string;
   toewijzingen: Array<{ dienst_id: string; aios_id: string }>;
+  per_aios: Array<{ aios_id: string; doel_punten: number; doel_feestdagdiensten: number }>;
   leeg: Array<{ dienst_id: string; redenen: Record<string, number> }>;
   tijd_seconden: number;
 }
@@ -131,6 +134,11 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
       );
       const op = new Date().toISOString();
       for (const t of uit.toewijzingen) insert.run(randomUUID(), period.id, t.aios_id, t.dienst_id, op);
+      db.prepare('DELETE FROM dienstrooster_aios_doel WHERE period_id = ?').run(period.id);
+      const doel = db.prepare(
+        'INSERT INTO dienstrooster_aios_doel (id, period_id, person_id, doel_punten, doel_feestdagen) VALUES (?, ?, ?, ?, ?)'
+      );
+      for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten);
       db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD', row_version = row_version + 1 WHERE id = ?`).run(
         period.id
       );
@@ -159,6 +167,7 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
 export function verwijderAiosRooster(periodId: string): number {
   return db.transaction(() => {
     const n = db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId).changes;
+    db.prepare('DELETE FROM dienstrooster_aios_doel WHERE period_id = ?').run(periodId);
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN', row_version = row_version + 1 WHERE id = ?`).run(periodId);
     return n;
   })();

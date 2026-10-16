@@ -448,6 +448,18 @@ veranderde. *Publicatie intrekken* zet het rooster terug, zonder mail. Voor
 het roosterbureau, de opleider en de afdeling download je *Rooster per dag*
 en *Per AIOS met compensatiedagen* als Excelbestand.
 
+**Vanaf versie 0.79.0** schuift een tekort of overschot van een AIOS door naar
+het volgende kwartaal, zoals bij de achterwacht: wie minder punten deed dan het
+doel, krijgt er het volgende kwartaal meer. Hetzelfde geldt voor
+feestdagdiensten over de jaren. Voor het eerste kwartaal in de app lees je de
+geschiedenis in bij *Geschiedenis van vóór de app* op de pagina van de periode.
+Download het sjabloon en vul per AIOS in: nachten, avonden door de week,
+avonden in het weekend, dagdiensten, uitloopdiensten, hoeveel daarvan op een
+feestdag, de gemiddelde fte en over hoeveel maanden. Klik op *Controleren*: je
+ziet per AIOS in woorden wat het betekent, zoals "5 punten minder". Klopt het,
+klik dan op *Bewaren*. In *Per AIOS* staat bij het rooster wat elke AIOS
+meeneemt.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
