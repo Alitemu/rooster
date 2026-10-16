@@ -1131,7 +1131,7 @@ const MUTATIONS = [
   {
     name: "aios hand: changed before the roster is made",
     file: "lib/aiosHandmatig.ts",
-    find: "  if (period.status !== 'GEGENEREERD') {",
+    find: "  if (period.status !== 'GEGENEREERD' && period.status !== 'GEPUBLICEERD') {",
     replace: "  if (false) {",
     tests: ["app/api/aios/aiosHandmatig"],
   },
@@ -1180,7 +1180,7 @@ const MUTATIONS = [
   {
     name: "aios hand: no record of who got it by hand",
     file: "lib/aiosHandmatig.ts",
-    find: "        edit.run(randomUUID(), id, period.id, w.aios_id, w.dienst_id, 'HANDMATIG_TOEWIJZEN', actorId, op);\n",
+    find: "        edit.run(randomUUID(), id, period.id, w.aios_id, w.dienst_id, 'HANDMATIG_TOEWIJZEN', reden, actorId, op);\n",
     replace: "",
     tests: ["app/api/aios/aiosHandmatig"],
   },
