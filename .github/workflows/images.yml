@@ -13,6 +13,9 @@
 #
 # amd64 only: the NAS this runs on is an Intel/AMD machine.
 #
+# Built, the commit gets the tag v<version>, where "Vrijgeven (productie)"
+# puts the GitHub release.
+#
 # Nothing is built before three checks pass: the version in package.json
 # must not exist yet (a second build under the same number would quietly
 # replace the one that was tested, and "Vrijgeven (productie)" would then
@@ -140,3 +143,26 @@ jobs:
           BASISPAD: ${{ inputs.basispad }}
         run: |
           echo "rooster-${{ matrix.name }} ${{ needs.version.outputs.version }} staat klaar als test (submap: ${BASISPAD:-geen})." >> "$GITHUB_STEP_SUMMARY"
+
+  # The tag v<version> on the commit that was built, for "Vrijgeven
+  # (productie)" to put the GitHub release on. Set here and not there: the
+  # built commit is the top of the branch now, and the workflow's token may
+  # only tag a commit whose workflow files match the default branch.
+  tag:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the built commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSIE: ${{ needs.version.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "repos/$REPO/git/ref/tags/v$VERSIE" > /dev/null 2>&1; then
+            echo "Tag v$VERSIE bestond al." >> "$GITHUB_STEP_SUMMARY"
+          else
+            gh api -X POST "repos/$REPO/git/refs" -f ref="refs/tags/v$VERSIE" -f sha="$GITHUB_SHA" > /dev/null
+            echo "Tag v$VERSIE gezet op $GITHUB_SHA." >> "$GITHUB_STEP_SUMMARY"
+          fi
