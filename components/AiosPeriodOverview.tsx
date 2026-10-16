@@ -445,6 +445,13 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
         </p>
       )}
 
+      {period.status === 'GEPUBLICEERD' && (
+        <p className="text-sm text-neutral-700">
+          Het rooster is gepubliceerd. De AIOS zien hun diensten op hun eigen pagina. Hieronder maak je het definitief of trek je de
+          publicatie in.
+        </p>
+      )}
+
       {melding && <div className="rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900">{melding}</div>}
       {fout && (
         <div role="alert" className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -652,9 +659,6 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
 
       {period.status !== 'CONCEPT' && <AiosRoosterMaken periodId={period.id} status={period.status} onChanged={herlaad} />}
 
-      <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">
-        Publiceren komt in een volgende versie.
-      </div>
 
       {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {!overzicht && !error && <div className="card p-8 text-center text-neutral-600">Diensten laden...</div>}

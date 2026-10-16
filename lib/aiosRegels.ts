@@ -204,16 +204,50 @@ function groepVan(e: Eenheid): string | null {
   );
 }
 
-export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<string, string>): Overtreding[] {
-  const fout: Overtreding[] = [];
-  const feestdagen = new Set(invoer.feestdagen);
-  const slots: Slot[] = invoer.diensten.map((d) => {
+function slotsVan(invoer: Invoer, feestdagen: Set<string>): Slot[] {
+  return invoer.diensten.map((d) => {
     const begin = dagNummer(d.datum) * 1440 + minuten(d.start_tijd);
     let eind = dagNummer(d.datum) * 1440 + minuten(d.eind_tijd);
     if (eind <= begin) eind += 1440;
     return { id: d.id, datum: d.datum, code: d.code, begin, eind, blok_id: d.blok_id, feestdag: feestdagen.has(d.datum) };
   });
+}
+
+/** Every AIOS's diensten, by start. */
+function perAiosVan(slots: Slot[], toewijzingen: ReadonlyMap<string, string>): Map<string, Slot[]> {
   const perId = new Map(slots.map((s) => [s.id, s]));
+  const uit = new Map<string, Slot[]>();
+  for (const [dienstId, aiosId] of toewijzingen) {
+    // Only the AIOS's diensten (aiosSolverInvoer's): controle.py never gets another.
+    const slot = perId.get(dienstId);
+    if (!slot) continue;
+    if (!uit.has(aiosId)) uit.set(aiosId, []);
+    uit.get(aiosId)!.push(slot);
+  }
+  for (const lijst of uit.values()) lijst.sort((a, b) => a.begin - b.begin);
+  return uit;
+}
+
+/**
+ * Per AIOS the days their diensten give them off (rule 7's table, moved off
+ * a feestdag by rule 8), by date: for the roosterbureau, which plans them
+ * (lib/aiosRoosterDownloads.ts).
+ */
+export function aiosCompensatiedagen(invoer: Invoer, toewijzingen: ReadonlyMap<string, string>): Map<string, string[]> {
+  const feestdagen = new Set(invoer.feestdagen);
+  const blokVorm = new Map(invoer.blokken.map((b) => [b.id, [b.soort, b.vorm] as [string, string]]));
+  const uit = new Map<string, string[]>();
+  for (const [aiosId, lijst] of perAiosVan(slotsVan(invoer, feestdagen), toewijzingen)) {
+    const dagen = new Set(eenheden(lijst, blokVorm).flatMap((e) => [...compensatie(e, feestdagen)]));
+    uit.set(aiosId, [...dagen].sort());
+  }
+  return uit;
+}
+
+export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<string, string>): Overtreding[] {
+  const fout: Overtreding[] = [];
+  const feestdagen = new Set(invoer.feestdagen);
+  const slots = slotsVan(invoer, feestdagen);
   const blokVorm = new Map(invoer.blokken.map((b) => [b.id, [b.soort, b.vorm] as [string, string]]));
   const wie = new Map(invoer.aios.map((a) => [a.id, a]));
 
@@ -232,14 +266,7 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
     }
   }
 
-  const perAios = new Map<string, Slot[]>();
-  for (const [dienstId, aiosId] of toewijzingen) {
-    if (!perAios.has(aiosId)) perAios.set(aiosId, []);
-    perAios.get(aiosId)!.push(perId.get(dienstId)!);
-  }
-  for (const lijst of perAios.values()) lijst.sort((a, b) => a.begin - b.begin);
-
-  for (const [aiosId, lijst] of perAios) {
+  for (const [aiosId, lijst] of perAiosVan(slots, toewijzingen)) {
     const a = wie.get(aiosId)!;
     const eigen = eenheden(lijst, blokVorm);
     const markering = new Map(a.markeringen.map((m) => [m.dienst_id, m]));

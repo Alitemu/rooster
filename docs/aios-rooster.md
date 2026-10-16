@@ -1,6 +1,6 @@
 # Ontwerp: het rooster voor de AIOS
 
-Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0) en met de hand aanpassen (versie 0.77.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
+Status: stap 1 (versie 0.70.0), stap 2 (versie 0.72.0, aangevuld in 0.73.0) en stap 3 (versie 0.74.0, de eigen solver, docs/development/aios-solver.md) zijn gebouwd. Van stap 4 is het rooster maken, bekijken en verwijderen er (versie 0.75.0), met de blokken rond feestdagen en oudjaarsnacht (versie 0.76.0) met de hand aanpassen (versie 0.77.0) en publiceren (versie 0.78.0); de rest is ontwerp. Afgesproken met de planner in oktober 2026,
 daarna aangevuld met de ingevulde vragenlijst (de nummers tussen haakjes, zoals
 F1, verwijzen ernaar). Getoetst aan oude roosters rond Koningsdag, Pasen,
 Pinksteren, kerst en oud en nieuw (2025-2026). De scheiding tussen de planner
@@ -40,6 +40,17 @@ Codenamen: aios01, aios02 enzovoort.
   achterwacht (K5). Het rooster gaat als Excel naar het roosterbureau (K6), dat
   ook het werkrooster overdag maakt, de compensatiedagen inplant en de uren
   bijhoudt (C7, K7).
+- In de app (0.78.0): een lege dienst houdt het publiceren tegen (D2). Een
+  harde regel die het rooster breekt (na een wijziging met de hand) en een
+  dienstpercentage boven 25% zijn waarschuwingen: publiceren kan dan na *Ja,
+  toch publiceren*. Bij voorlopig publiceren krijgt elke AIOS een mail met de
+  eigen diensten en het eigen dienstpercentage (G12), en ziet die op de eigen
+  pagina met de melding dat het voorlopig is. De planner corrigeert daarna met
+  de hand, met een reden, en maakt het rooster definitief: iedereen krijgt de
+  definitieve diensten met wat er voor hen veranderde. *Publicatie intrekken*
+  zet het rooster terug naar gemaakt, zonder mail. Twee Excelbestanden: het
+  rooster per dag, en per AIOS de punten, het dienstpercentage, de diensten
+  per soort en de compensatiedagen die het roosterbureau inplant.
 
 ## Diensten
 

@@ -1,6 +1,7 @@
 /**
  * The AIOS's personal link page (/aios/<token>): Deeltijd, Voorkeuren,
- * Bevestigen, Ingediend.
+ * Bevestigen, Ingediend; once the roster is published their own diensten
+ * on top (components/AiosMijnRooster.tsx, step 4d).
  *
  * The AIOS's own page, next to the achterwacht's app/person/[token], not a
  * change to it (docs/development/diensten.md, "Copied, not changed"). Shared
@@ -20,6 +21,7 @@ import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { AiosDeeltijdEditor } from '@/components/AiosDeeltijdEditor';
 import { AiosAfwezigheid, type Absence } from '@/components/AiosAfwezigheid';
 import { AiosBevestigen, AiosVoorkeuren } from '@/components/AiosPreferences';
+import { AiosMijnRooster } from '@/components/AiosMijnRooster';
 
 type Stap = 'deeltijd' | 'voorkeuren' | 'bevestigen' | 'ingediend';
 const STAPPEN: Stap[] = ['deeltijd', 'voorkeuren', 'bevestigen', 'ingediend'];
@@ -185,6 +187,8 @@ function AiosLinkPagina() {
           </button>
         </div>
       </div>
+
+      {periode.status === 'GEPUBLICEERD' && <AiosMijnRooster personId={personId} periodId={periode.id} />}
 
       {invoerDicht && (
         <div className="card p-4 bg-amber-50 border border-amber-200">

@@ -1,12 +1,13 @@
 /**
  * POST /api/aios/periode/[id]/rooster/wijzigen
- *   { wijzigingen: [{ dienst_id, aios_id: string | null, was: string | null }] }
+ *   { wijzigingen: [{ dienst_id, aios_id: string | null, was: string | null }], reden? }
  * - the AIOS's roster by hand: one dienst, or diensten of one block, to an
  * AIOS or empty (null), when each still has who the planner saw (`was`;
  * otherwise 409). Allowed against the hard rules: the answer gives the
  * warnings, and `terug`, the change that undoes it. Refused for someone not
- * in the pool on the day. Only gegenereerd and nothing being made
- * (lib/aiosHandmatig.ts); the audit row is written there, with the change.
+ * in the pool on the day. Gegenereerd, or gepubliceerd with a reden, and
+ * nothing being made (lib/aiosHandmatig.ts); the audit row is written
+ * there, with the change.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,8 +28,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (period instanceof NextResponse) return period;
     const nee = magAiosRoosterWijzigen(period);
     if (nee) return aiosFout(nee.status, nee.code, nee.message);
-    const body = await parseJsonBody<{ wijzigingen: unknown }>(req);
-    const uitkomst = wijzigAiosRooster(period, body.wijzigingen, auth!.userId);
+    const body = await parseJsonBody<{ wijzigingen: unknown; reden: unknown }>(req);
+    const uitkomst = wijzigAiosRooster(period, body.wijzigingen, body.reden, auth!.userId);
     if (!uitkomst.ok) return aiosFout(uitkomst.status, uitkomst.code, uitkomst.message);
     return NextResponse.json({ success: true, data: { waarschuwingen: uitkomst.waarschuwingen, terug: uitkomst.terug } });
   } catch (error) {

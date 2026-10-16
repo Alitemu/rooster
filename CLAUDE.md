@@ -10,7 +10,7 @@ Dienstrooster is a scheduling application for medical wards (20-40 staff members
 - Automatic roster generation with diagnostics
 
 Two rosters with two planners: the achterwacht (in production) and the AIOS
-(designed in docs/aios-rooster.md, built in steps: steps 1 to 3 and 4a to 4c are in), kept apart
+(designed in docs/aios-rooster.md, built in steps: steps 1 to 3 and 4a to 4d are in), kept apart
 in every route (docs/development/diensten.md).
 
 This file holds the rules. The background per area - why a rule exists, what

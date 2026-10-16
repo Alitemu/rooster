@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { controleerAiosRooster, REGEL_WOORDEN, type Regel } from '@/lib/aiosRegels';
+import { aiosCompensatiedagen, controleerAiosRooster, REGEL_WOORDEN, type Regel } from '@/lib/aiosRegels';
 import type { AiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 
 /**
@@ -49,4 +49,28 @@ describe('the hard rules, as the solver checks them', () => {
       }
     });
   }
+});
+
+describe('the compensation days per AIOS, for the roosterbureau', () => {
+  // A night block zo t/m di from Sunday 2097-05-26, and Hemelvaart on the Thursday after.
+  const nacht = (datum: string) => ({ id: `ND-${datum}`, datum, code: 'ND' as const, start_tijd: '22:30', eind_tijd: '08:30', punten: 1, blok_id: 'N1' });
+  const invoer = (feestdagen: string[]) => ({
+    feestdagen,
+    diensten: [nacht('2097-05-26'), nacht('2097-05-27'), nacht('2097-05-28')],
+    blokken: [{ id: 'N1', soort: 'NACHT' as const, vorm: 'ZO_DI' as const }],
+    aios: [],
+  });
+  const rooster = new Map([
+    ['ND-2097-05-26', 'a'],
+    ['ND-2097-05-27', 'a'],
+    ['ND-2097-05-28', 'a'],
+  ]);
+
+  it('Wednesday and Thursday after a night block zo t/m di', () => {
+    expect(aiosCompensatiedagen(invoer([]), rooster)).toEqual(new Map([['a', ['2097-05-29', '2097-05-30']]]));
+  });
+
+  it('off a feestdag on a werkdag: Thursday Hemelvaart, so Friday', () => {
+    expect(aiosCompensatiedagen(invoer(['2097-05-30']), rooster)).toEqual(new Map([['a', ['2097-05-29', '2097-05-31']]]));
+  });
 });

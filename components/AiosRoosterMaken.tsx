@@ -15,6 +15,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagBlokken, type FeestdagStaat } from '@/components/AiosFeestdagBlokken';
 import { AiosRoosterWijzigen, type Gewijzigd, type Keuze } from '@/components/AiosRoosterWijzigen';
+import { AiosPubliceren } from '@/components/AiosPubliceren';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst } from '@/lib/aiosRooster';
@@ -309,7 +310,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
         await fetch(withBasePath(`/api/aios/periode/${periodId}/rooster/wijzigen`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ wijzigingen: laatste.terug }),
+          body: JSON.stringify({ wijzigingen: laatste.terug, ...(gepubliceerd ? { reden: 'Vorige wijziging ongedaan gemaakt' } : {}) }),
         }),
         'Ongedaan maken is mislukt'
       );
@@ -328,6 +329,9 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
     weken[weken.length - 1].push(dag);
   }
   const gemaakt = status === 'GEGENEREERD';
+  // Published (step 4d): the roster stays in view and changes by hand with a reason, not made again.
+  const gepubliceerd = status === 'GEPUBLICEERD';
+  const zichtbaar = gemaakt || gepubliceerd;
   const nietKlaar = feestdag.open > 0 || feestdag.gewijzigd;
   const knop = 'px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
 
@@ -335,7 +339,12 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
     <div className="space-y-6">
       <div className="card card-padding space-y-3" data-testid="aios-rooster-maken">
         <h2 className="text-lg font-semibold">Rooster</h2>
-        {status !== 'GESLOTEN' && !gemaakt ? (
+        {gepubliceerd ? (
+          <p className="text-sm text-neutral-700">
+            Het rooster is gepubliceerd. Opnieuw maken kan dan niet meer. Trek daarvoor eerst de publicatie in. Met de hand aanpassen kan wel,
+            met een reden.
+          </p>
+        ) : status !== 'GESLOTEN' && !gemaakt ? (
           <p className="text-sm text-neutral-700">Sluit eerst de periode. Daarna kun je het rooster laten maken.</p>
         ) : (
           <>
@@ -421,7 +430,9 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
         )}
       </div>
 
-      {gemaakt && rooster && (
+      {zichtbaar && <AiosPubliceren periodId={periodId} status={status} onChanged={onChanged} />}
+
+      {zichtbaar && rooster && (
         <>
           <div className="card card-padding space-y-3">
             <h2 className="text-lg font-semibold">Per AIOS</h2>
@@ -523,6 +534,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                             key={gekozen.dagen.map((d) => d.slot_id).join()}
                             periodId={periodId}
                             keuze={gekozen}
+                            metReden={gepubliceerd}
                             onGewijzigd={(g) => {
                               setLaatste(g);
                               setGekozen(null);

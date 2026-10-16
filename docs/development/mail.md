@@ -15,6 +15,12 @@ dienstrooster_reminder_run, their own texts, /aios/ links and flow, and a
 switch per period in dienstrooster_aios_periode.auto_herinneren (the
 period's own auto_herinneren stays 0, so the achterwacht's never take an
 AIOS period). Asked for because the AIOS's only went by hand in 0.72.0.
+Publishing the AIOS's roster (lib/aiosPublicatie.ts, 0.78.0) sends the
+verzendlijst kinds ROOSTER_VOORLOPIG and ROOSTER_DEFINITIEF to that flow,
+with their own texts: per AIOS their diensten, their dienstpercentage
+and an /aios/ link, the definitieve one with what changed. Withdrawing a
+publication sends nothing: the verzendlijst has no kind for it, and
+adding one would change the contract with both flows.
 What follows is the achterwacht's, unchanged for the AIOS
 (docs/development/diensten.md, "Copied, not changed").
 

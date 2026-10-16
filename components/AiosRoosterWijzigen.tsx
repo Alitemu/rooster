@@ -25,6 +25,9 @@ export interface Gewijzigd {
   terug: Wijziging[];
 }
 
+/** On a published roster a change needs a reason (lib/aiosHandmatig.ts). */
+export const REDEN_MAX = 200;
+
 const datumKort = (datum: string) =>
   new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 const procent = (x: number | null) => (x === null ? 'geen werkdagen' : `${(x * 100).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`);
@@ -37,11 +40,13 @@ interface Antwoord {
 export function AiosRoosterWijzigen({
   periodId,
   keuze,
+  metReden,
   onGewijzigd,
   onSluit,
 }: {
   periodId: string;
   keuze: Keuze;
+  metReden: boolean;
   onGewijzigd: (g: Gewijzigd) => void;
   onSluit: () => void;
 }) {
@@ -53,6 +58,8 @@ export function AiosRoosterWijzigen({
   const [zeker, setZeker] = useState<Kandidaat | 'leeg' | null>(null);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
+  const [reden, setReden] = useState('');
+  const zonderReden = metReden && reden.trim() === '';
 
   useEffect(() => {
     let actief = true;
@@ -79,7 +86,10 @@ export function AiosRoosterWijzigen({
       const res = await fetch(withBasePath(`/api/aios/periode/${periodId}/rooster/wijzigen`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wijzigingen: antwoord.diensten.map((d) => ({ dienst_id: d.dienst_id, aios_id: aiosId, was: d.aios_id })) }),
+        body: JSON.stringify({
+          wijzigingen: antwoord.diensten.map((d) => ({ dienst_id: d.dienst_id, aios_id: aiosId, was: d.aios_id })),
+          ...(metReden ? { reden: reden.trim() } : {}),
+        }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Wijzigen is mislukt');
@@ -129,6 +139,19 @@ export function AiosRoosterWijzigen({
           </div>
         </fieldset>
       )}
+      {metReden && (
+        <label className="block text-sm">
+          <span className="block text-xs font-medium text-neutral-700 mb-1">Reden (verplicht: het rooster is gepubliceerd)</span>
+          <input
+            type="text"
+            value={reden}
+            maxLength={REDEN_MAX}
+            disabled={bezig}
+            onChange={(e) => setReden(e.target.value)}
+            className="w-full px-2 py-1 border rounded text-sm"
+          />
+        </label>
+      )}
       {fout && (
         <p role="alert" className="text-sm text-red-700">
           {fout}
@@ -153,7 +176,7 @@ export function AiosRoosterWijzigen({
             <button
               type="button"
               className="btn-primary"
-              disabled={bezig}
+              disabled={bezig || zonderReden}
               onClick={() => (zeker === 'leeg' ? zet(null, '') : zet(zeker.person_id, zeker.codenaam))}
             >
               {zeker === 'leeg' ? 'Ja, leeg laten' : 'Ja, toch indelen'}
@@ -186,7 +209,7 @@ export function AiosRoosterWijzigen({
                 <button
                   type="button"
                   className={knop}
-                  disabled={bezig || !k.kan}
+                  disabled={bezig || !k.kan || zonderReden}
                   aria-label={`Kies ${k.codenaam}`}
                   onClick={() => (k.waarschuwingen.length > 0 ? setZeker(k) : zet(k.person_id, k.codenaam))}
                 >
@@ -198,7 +221,7 @@ export function AiosRoosterWijzigen({
         </ul>
       )}
       {antwoord && !zeker && !leeg && (
-        <button type="button" className={knop} disabled={bezig} onClick={() => setZeker('leeg')}>
+        <button type="button" className={knop} disabled={bezig || zonderReden} onClick={() => setZeker('leeg')}>
           Leeg laten
         </button>
       )}

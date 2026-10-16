@@ -3,7 +3,7 @@
  * dienst, or (heel=1) every dienst of its block, who has it now and per
  * AIOS taking part whether they can have it, with the warnings and their
  * dienstpercentage after it (lib/aiosHandmatig.ts). Only while the roster
- * can change by hand: gegenereerd, and nothing being made.
+ * can change by hand: gegenereerd or gepubliceerd, and nothing being made.
  */
 
 import { NextRequest, NextResponse } from 'next/server';

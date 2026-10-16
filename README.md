@@ -436,6 +436,18 @@ eerst *Ja, toch indelen*. Een blok geef je heel of alleen één dag ervan.
 terug. Onder het rooster staat welke harde regels het nog breekt. *Opnieuw
 maken* maakt het hele rooster opnieuw, ook wat je met de hand veranderde.
 
+**Vanaf versie 0.78.0** publiceer je het rooster van de AIOS. Onder het
+rooster staat *Publiceren*. Een lege dienst vul je eerst met de hand.
+Waarschuwingen (een harde regel die het rooster breekt, of een
+dienstpercentage boven 25%) staan erbij: publiceren kan dan toch, na *Ja,
+toch publiceren*. Bij *Voorlopig publiceren* krijgt elke AIOS een mail met de
+eigen diensten om na te kijken, via de stroom van de AIOS, en ziet die op de
+eigen pagina. Pas daarna aan wat de AIOS melden: met de hand, met een reden.
+Met *Definitief maken* krijgt iedereen de definitieve diensten met wat er
+veranderde. *Publicatie intrekken* zet het rooster terug, zonder mail. Voor
+het roosterbureau, de opleider en de afdeling download je *Rooster per dag*
+en *Per AIOS met compensatiedagen* als Excelbestand.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

@@ -3,7 +3,9 @@
  * block, a single dienst or one day of a block to another AIOS, or empty.
  * Allowed against the hard rules, with a warning (F8), the way the
  * achterwacht's planner overrides a blocked day; refused only for someone
- * not in the pool on that day, as there.
+ * not in the pool on that day, as there. On a published roster (step 4d)
+ * too, with a reason, as there: what the AIOS already got is not changed
+ * without one.
  *
  * The warnings come from the app's copy of the hard rules
  * (lib/aiosRegels.ts): what the change adds to the violations of the AIOS
@@ -19,7 +21,7 @@
 
 import { randomUUID } from 'crypto';
 import { db } from '@/db/client';
-import { objectRows } from '@/lib/requestFields';
+import { objectRows, optionalText } from '@/lib/requestFields';
 import { aiosSolverInvoer, type AiosSolverAios, type AiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 import { aiosWerkdagen, dienstpercentage, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import { controleerAiosRooster, regelZin, type Overtreding, type Regel } from '@/lib/aiosRegels';
@@ -164,9 +166,9 @@ export function kiesDiensten(period: AiosUitnodigPeriode, dienstId: unknown, hee
   return { ok: true, diensten: ids };
 }
 
-/** Whether the roster can change by hand now: made, and not being made again. */
+/** Whether the roster can change by hand now: made or published, and not being made again. */
 export function magAiosRoosterWijzigen(period: AiosUitnodigPeriode): { status: number; code: string; message: string } | null {
-  if (period.status !== 'GEGENEREERD') {
+  if (period.status !== 'GEGENEREERD' && period.status !== 'GEPUBLICEERD') {
     return {
       status: 409,
       code: 'INVALID_STATUS',
@@ -237,7 +239,13 @@ const nee = (status: number, code: string, message: string): WijzigUitkomst => (
  * planner saw (`was`). One dienst, or diensten of one block. The caller
  * checked the period may change (gegenereerd, nothing being made).
  */
-export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, actorId: string): WijzigUitkomst {
+export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, redenIn: unknown, actorId: string): WijzigUitkomst {
+  const tekst = optionalText(redenIn);
+  if (!tekst.ok) return nee(400, 'VALIDATION_ERROR', 'De reden moet tekst zijn.');
+  const reden = tekst.value?.trim().slice(0, 200) || null;
+  if (period.status === 'GEPUBLICEERD' && !reden) {
+    return nee(400, 'VALIDATION_ERROR', 'Een reden is verplicht bij het wijzigen van een gepubliceerd rooster.');
+  }
   const rijen = objectRows(invoer);
   if (!rijen || rijen.length === 0) return nee(400, 'VALIDATION_ERROR', 'Geef aan welke diensten naar wie gaan.');
   const wijzigingen: Wijziging[] = [];
@@ -278,7 +286,7 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
     const edit = db.prepare(
       `INSERT INTO dienstrooster_assignment_edit
          (id, toewijzing_id, periode_id, person_id, slot_id, edit_type, reden, bewerkt_door_person_id, aangemaakt_op, row_version)
-       VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, 1)`
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`
     );
     for (const w of wijzigingen) {
       if (w.was === w.aios_id) continue;
@@ -286,7 +294,7 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
         | { id: string; person_id: string }
         | undefined;
       if (oud) {
-        edit.run(randomUUID(), oud.id, period.id, oud.person_id, w.dienst_id, 'HANDMATIG_VERWIJDEREN', actorId, op);
+        edit.run(randomUUID(), oud.id, period.id, oud.person_id, w.dienst_id, 'HANDMATIG_VERWIJDEREN', reden, actorId, op);
         db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(oud.id);
       }
       if (w.aios_id) {
@@ -295,7 +303,7 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
           `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
            VALUES (?, ?, ?, ?, 'MANUAL', 1, ?)`
         ).run(id, period.id, w.aios_id, w.dienst_id, op);
-        edit.run(randomUUID(), id, period.id, w.aios_id, w.dienst_id, 'HANDMATIG_TOEWIJZEN', actorId, op);
+        edit.run(randomUUID(), id, period.id, w.aios_id, w.dienst_id, 'HANDMATIG_TOEWIJZEN', reden, actorId, op);
       }
     }
     for (const id of ontvangers) {
@@ -315,6 +323,7 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
       JSON.stringify({ diensten: Object.fromEntries(wijzigingen.map((w) => [w.dienst_id, w.was])) }),
       JSON.stringify({
         wijziging: 'rooster AIOS met de hand',
+        reden,
         diensten: Object.fromEntries(wijzigingen.map((w) => [w.dienst_id, w.aios_id])),
         waarschuwingen: gevolgen.map((w) => w.code),
       }),

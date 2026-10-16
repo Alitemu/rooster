@@ -110,6 +110,12 @@ to the roster. A generation clears it, like "Rooster verwijderen" and
 
 **Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
 
+(The AIOS's has its own copy, lib/aiosPublicatie.ts, 0.78.0: the same
+columns and two steps, its own check (an empty dienst stops it; a hard
+rule of lib/aiosRegels.ts broken or above 25% needs `bevestigd`), its own
+mail, no mail on withdrawing. A change by hand on a published AIOS
+roster needs a reason, as here. What follows is the achterwacht's.)
+
 - Two steps (lib/publication.ts). `POST .../publish` makes the roster
   voorlopig: status GEPUBLICEERD, `definitief_op` NULL, everyone's shifts
   kept in `voorlopig_rooster_json`, and each participant mailed their own
