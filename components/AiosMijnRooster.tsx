@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import type { AiosEigenRooster } from '@/lib/aiosPublicatie';
+import { KWARTALEN_WOORD } from '@/lib/aiosFte';
 
 const datumLang = (d: string) =>
   new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -69,6 +70,9 @@ export function AiosMijnRooster({ personId, periodId }: { personId: string; peri
         {rooster.diensten.length === 1 ? '1 dienst' : `${rooster.diensten.length} diensten`}, {rooster.punten.toLocaleString('nl-NL')} punten.
         {rooster.dienstpercentage !== null &&
           ` Je dienstpercentage dit kwartaal: ${procent(rooster.dienstpercentage)}${rooster.dienstpercentage > 0.25 ? ', boven 25%' : ''}.`}
+        {rooster.jaar_kwartalen > 1 &&
+          rooster.jaar_percentage !== null &&
+          ` Over de laatste ${KWARTALEN_WOORD[rooster.jaar_kwartalen]} kwartalen samen: ${procent(rooster.jaar_percentage)}${rooster.jaar_percentage > 0.25 ? ', boven 25%' : ''}.`}
       </p>
     </div>
   );

@@ -29,7 +29,7 @@ import { verstuurAiosVerzendlijst, aiosMailIngesteld } from '@/lib/aiosMail';
 import { aiosDeelnemers, aiosMailBasisUrl, aiosPersoonlijkeLink, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { laadAiosRooster, type AiosRooster } from '@/lib/aiosRooster';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
-import { PERCENTAGE_GRENS } from '@/lib/aiosFte';
+import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import { writeAuditLog } from '@/lib/auditLog';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
@@ -95,6 +95,12 @@ export function aiosPublicatieControle(rooster: AiosRooster): AiosPublicatieCont
     ...rooster.per_aios
       .filter((a) => a.dienstpercentage !== null && a.dienstpercentage > PERCENTAGE_GRENS)
       .map((a) => `${a.codenaam}: dienstpercentage ${procent(a.dienstpercentage!)}, boven 25%.`),
+    // Over the last four quarters as well (G1; lib/aiosJaarPercentage.ts).
+    ...rooster.per_aios
+      .filter((a) => a.jaar_kwartalen > 1 && a.jaar_percentage !== null && a.jaar_percentage > PERCENTAGE_GRENS)
+      .map(
+        (a) => `${a.codenaam}: dienstpercentage over ${KWARTALEN_WOORD[a.jaar_kwartalen]} kwartalen samen ${procent(a.jaar_percentage!)}, boven 25%.`
+      ),
   ];
   return { problemen, waarschuwingen };
 }
@@ -354,6 +360,9 @@ export interface AiosEigenRooster {
   }>;
   punten: number;
   dienstpercentage: number | null;
+  // Over this quarter and the ones before it (lib/aiosJaarPercentage.ts); 1 is this one alone.
+  jaar_percentage: number | null;
+  jaar_kwartalen: number;
 }
 
 /** One AIOS's own diensten of a published quarter, with their points and dienstpercentage (G12). */
@@ -378,5 +387,7 @@ export function aiosEigenRooster(period: AiosUitnodigPeriode, personId: string):
     ),
     punten: mij?.punten ?? 0,
     dienstpercentage: mij?.dienstpercentage ?? null,
+    jaar_percentage: mij?.jaar_percentage ?? null,
+    jaar_kwartalen: mij?.jaar_kwartalen ?? 1,
   };
 }

@@ -18,7 +18,7 @@ import { AiosRoosterWijzigen, type Gewijzigd, type Keuze } from '@/components/Ai
 import { AiosPubliceren } from '@/components/AiosPubliceren';
 import { FellowVak } from '@/components/AiosVoortgangstoets';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
-import { PERCENTAGE_GRENS } from '@/lib/aiosFte';
+import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst } from '@/lib/aiosRooster';
 import type { AiosGeneratieUitkomst } from '@/lib/aiosGenereren';
 
@@ -219,6 +219,18 @@ function Percentage({ waarde }: { waarde: number | null }) {
         {procent(waarde)}
         {boven ? ' (boven 25%)' : ''}
       </span>
+    </span>
+  );
+}
+
+/** Over this quarter and the ones before it together: the opleidingsplan counts per opleidingsjaar (G1). */
+function JaarPercentage({ waarde, kwartalen }: { waarde: number | null; kwartalen: number }) {
+  if (kwartalen <= 1 || waarde === null) return <span className="block text-xs text-neutral-500">nog geen eerdere kwartalen</span>;
+  const boven = waarde > PERCENTAGE_GRENS;
+  return (
+    <span className={`block text-xs ${boven ? 'font-semibold text-red-800' : 'text-neutral-600'}`}>
+      {KWARTALEN_WOORD[kwartalen]} kwartalen samen: {procent(waarde)}
+      {boven ? ' (boven 25%)' : ''}
     </span>
   );
 }
@@ -443,8 +455,9 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
             <h2 className="text-lg font-semibold">Per AIOS</h2>
             <p className="text-sm text-neutral-600">
               Dienstpercentage: punten gedeeld door werkdagen keer fte. Boven 25% is te veel volgens het opleidingsplan. Dat is een
-              waarschuwing, geen weigering. Het saldo is wat de AIOS meeneemt: wie vorig kwartaal minder deed dan het doel, krijgt
-              er nu meer.
+              waarschuwing, geen weigering. Het opleidingsplan telt per opleidingsjaar. Daarom staat eronder ook het percentage over
+              dit kwartaal en de drie ervoor samen, met de geschiedenis van vóór de app. Het saldo is wat de AIOS meeneemt: wie vorig
+              kwartaal minder deed dan het doel, krijgt er nu meer.
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -473,6 +486,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                       </td>
                       <td className="py-1 pr-2">
                         <Percentage waarde={a.dienstpercentage} />
+                        <JaarPercentage waarde={a.jaar_percentage} kwartalen={a.jaar_kwartalen} />
                       </td>
                       <td className="py-1 pr-2 text-right">{a.punten.toLocaleString('nl-NL')}</td>
                       <td className="py-1 pr-2 text-right whitespace-nowrap">

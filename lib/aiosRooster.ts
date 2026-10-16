@@ -19,6 +19,7 @@ import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { controleerAiosRooster, regelZin, type Regel } from '@/lib/aiosRegels';
 import { aiosSaldi, aiosSaldoWoorden, type SaldoBron } from '@/lib/aiosSaldo';
 import { fellowNacht } from '@/lib/aiosVoortgangstoets';
+import { aiosJaarPercentages } from '@/lib/aiosJaarPercentage';
 
 export interface AiosRoosterDienst {
   slot_id: string;
@@ -63,6 +64,9 @@ export interface AiosRoosterPerAios {
   saldo_bron: SaldoBron;
   // The solver's fair share for them, once the roster is made.
   doel_punten: number | null;
+  // Over this quarter and the three before it, as far as known (lib/aiosJaarPercentage.ts).
+  jaar_percentage: number | null;
+  jaar_kwartalen: number;
 }
 
 export interface AiosRoosterOvertreding {
@@ -179,8 +183,16 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
       saldo: aiosSaldoWoorden(a),
       saldo_bron: bron.get(a.id)!.bron,
       doel_punten: doel.get(a.id) ?? null,
+      jaar_percentage: null,
+      jaar_kwartalen: 1,
     };
   });
+  const jaar = aiosJaarPercentages(period, per_aios);
+  for (const a of per_aios) {
+    const j = jaar.get(a.person_id)!;
+    a.jaar_percentage = j.percentage;
+    a.jaar_kwartalen = j.kwartalen;
+  }
   per_aios.sort((x, y) => x.codenaam.localeCompare(y.codenaam, 'nl'));
 
   const codenaam = new Map(per_aios.map((a) => [a.person_id, a.codenaam]));

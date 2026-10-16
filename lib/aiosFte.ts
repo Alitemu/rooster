@@ -25,6 +25,9 @@ const MINDER: Record<FtePatroon['frequentie'], number> = { ELKE_WEEK: 0.2, EVEN_
 /** The grens of the opleidingsplan: above 25% a warning, never a refusal (G6). */
 export const PERCENTAGE_GRENS = 0.25;
 
+/** "over vier kwartalen samen": the quarters lib/aiosJaarPercentage.ts counted, in words. */
+export const KWARTALEN_WOORD: Record<number, string> = { 2: 'twee', 3: 'drie', 4: 'vier' };
+
 function dagenTussen(van: string, tot: string): number {
   return Math.round((parseISO(tot).getTime() - parseISO(van).getTime()) / 86_400_000) + 1;
 }

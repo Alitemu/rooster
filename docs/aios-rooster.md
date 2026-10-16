@@ -307,6 +307,18 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   de totale opleiding, met een maximum van 25% per opleidingsjaar". De app telt
   alleen wat in dit ziekenhuis gedaan is (G11, O3). Boven 25% is een
   waarschuwing, geen weigering (G6). Ook een ruil mag erboven (L4).
+- De app weet niet wanneer iemands opleidingsjaar begint. Daarom geldt de
+  waarschuwing boven 25% over het kwartaal en ook over dit kwartaal en de
+  drie ervoor samen (de keuze van de planner in oktober 2026): alle punten
+  gedeeld door alle werkdagen keer fte. In de app (0.82.0): een eerder
+  kwartaal telt als het gepubliceerd is en de AIOS erin zat, met het rooster
+  zoals het nu is. Een kwartaal van vóór het eerste kwartaal in de app komt
+  uit de ingelezen geschiedenis: drie van de maanden, de nieuwste eerst,
+  zolang ze er zijn, tegen de werkdagen van dat kwartaal en de ingelezen
+  fte. De planner ziet het onder het percentage van het kwartaal, de
+  publicatie waarschuwt erover en de AIOS ziet het bij het eigen rooster
+  (lib/aiosJaarPercentage.ts). Bij een wijziging met de hand telt alleen het
+  kwartaal.
 - Iedereen doet naar rato evenveel (G8, H3): het doel is voor iedereen hetzelfde
   percentage. Eerlijkheid gaat voor liever niet, zoals bij de achterwacht (de
   keuze van de planner in oktober 2026): liever niet en voorkeur beslissen
@@ -426,6 +438,5 @@ accounts uit stap 5 eind oktober klaar zijn, zodat de AIOS hun voorkeuren voor
 
 ## Nog open
 
-1. Het opleidingsjaar (G1): de app weet niet wanneer iemands opleidingsjaar
-   begint. Voorstel: de waarschuwing boven 25% over het kwartaal en over de
-   laatste vier kwartalen samen.
+Niets: de voortgangstoets en het opleidingsjaar zijn in oktober 2026 beslist
+(zie "Voortgangstoets" en "Eerlijkheid").
