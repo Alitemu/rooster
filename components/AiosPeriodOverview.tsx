@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
 import { AiosAutoHerinneringen } from '@/components/AiosAutoHerinneringen';
+import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { AiosCode } from '@/lib/aiosDiensten';
@@ -643,8 +644,10 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
         <StatusVoorkeuren periodId={period.id} periodNaam={period.naam} refreshKey={`${period.status}|${period.deadline}`} />
       )}
 
+      {period.status !== 'CONCEPT' && <AiosRoosterMaken periodId={period.id} status={period.status} onChanged={herlaad} />}
+
       <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">
-        Het maken van het rooster voor de AIOS en het publiceren komen in een volgende versie.
+        Het rooster met de hand aanpassen en publiceren komen in een volgende versie.
       </div>
 
       {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
