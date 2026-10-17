@@ -140,9 +140,11 @@ services:
     logging: *logging
     security_opt:
       - no-new-privileges:true
+    # Not on aios-solver: the achterwacht starts whether or not the AIOS's
+    # solver does (docs/development/diensten.md). An AIOS generation asked
+    # before it is up gets the app's "solver niet bereikbaar".
     depends_on:
       - solver
-      - aios-solver
     # A tiny init as process 1, so a stop signal reaches the app and the
     # container stops cleanly instead of being killed after 10 seconds.
     init: true

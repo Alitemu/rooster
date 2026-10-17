@@ -7,13 +7,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { getSwapContacts } from '@/lib/appSettings';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
   try {
-    const denied = personAccessDenial(getAuthContextFromRequest(req), id);
+    const denied = personAccessDenial(getAuthContextFromRequest(req), id) ?? aiosPersonDenial(id);
     if (denied) return denied;
     return NextResponse.json({ success: true, data: getSwapContacts() });
   } catch (error) {

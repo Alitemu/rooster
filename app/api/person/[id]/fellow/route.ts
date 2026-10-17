@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { periodUsableFor } from '@/lib/periodAccess';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
@@ -50,7 +51,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const { id } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const period = loadPeriod(req.nextUrl.searchParams.get('period_id'));
@@ -80,7 +81,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
   const { id } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const parsed = putSchema.safeParse(await parseJsonBody(req));

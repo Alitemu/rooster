@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { verwijderPatroon, wijzigPatroon } from '@/lib/aiosDeeltijd';
@@ -18,7 +19,7 @@ export async function PATCH(req: NextRequest, props: Props): Promise<NextRespons
   const { id, patternId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const { status, body } = wijzigPatroon(id, patternId, await parseJsonBody(req));
     if (status < 300) {
@@ -34,7 +35,7 @@ export async function DELETE(req: NextRequest, props: Props): Promise<NextRespon
   const { id, patternId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const { status, body } = verwijderPatroon(id, patternId);
     if (status < 300) {

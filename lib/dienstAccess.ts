@@ -70,6 +70,31 @@ export function staffMayAccessPerson(auth: AuthContext, personId: string): boole
   return !other;
 }
 
+/**
+ * Whether someone has anything of another dienst than this one: a
+ * membership of one of its pools, or a link, a mark, a dienst or a hand-in
+ * in one of its periods. With every membership removed, the rest still says
+ * whose they were: the members route keeps them out of this dienst's pools.
+ */
+export function personHasOtherDienst(personId: string, dienst: string): boolean {
+  const inPeriod = (from: string, period: string) =>
+    `EXISTS (SELECT 1 FROM ${from}
+             JOIN dienstrooster_schedule_period sp ON sp.id = ${period}
+             JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
+             WHERE x.person_id = @person AND pl.type <> @dienst)`;
+  const row = db
+    .prepare(
+      `SELECT EXISTS (SELECT 1 FROM dienstrooster_pool_membership x JOIN dienstrooster_pool pl ON pl.id = x.pool_id
+                      WHERE x.person_id = @person AND pl.type <> @dienst)
+         OR ${inPeriod('dienstrooster_person_access_link x', 'x.geldt_voor_periode_id')}
+         OR ${inPeriod('dienstrooster_availability x JOIN dienstrooster_shift_slot s ON s.id = x.slot_id', 's.period_id')}
+         OR ${inPeriod('dienstrooster_assignment x', 'x.schedule_version_id')}
+         OR ${inPeriod('dienstrooster_submission x', 'x.schedule_period_id')} AS ja`
+    )
+    .get({ person: personId, dienst }) as { ja: number };
+  return row.ja === 1;
+}
+
 export function notThisDienstResponse(): NextResponse {
   return NextResponse.json({ success: false, error: { code: 'NOT_FOUND', message: 'Niet gevonden' } }, { status: 404 });
 }

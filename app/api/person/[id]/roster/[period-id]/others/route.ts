@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 
@@ -22,7 +23,7 @@ export async function GET(
     const periodId = params['period-id'];
 
     const auth = getAuthContextFromRequest(request);
-    const denied = personAccessDenial(auth, personId);
+    const denied = personAccessDenial(auth, personId) ?? aiosPersonDenial(personId);
     if (denied) return denied;
 
     const period = db

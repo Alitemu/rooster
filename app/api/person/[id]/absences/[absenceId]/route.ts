@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { removeAbsenceAvailability, syncAbsencesForPerson } from '@/lib/absenceSync';
@@ -37,7 +38,7 @@ export async function PATCH(
     const { id, absenceId } = params;
 
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const body = (await parseJsonBody(req)) as UpdateAbsenceRequest;
@@ -192,7 +193,7 @@ export async function DELETE(
     const { id, absenceId } = params;
 
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     // Verify person exists

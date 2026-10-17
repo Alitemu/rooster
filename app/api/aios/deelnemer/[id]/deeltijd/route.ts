@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { lijstPatronen, maakPatroon } from '@/lib/aiosDeeltijd';
@@ -16,7 +17,7 @@ import { lijstPatronen, maakPatroon } from '@/lib/aiosDeeltijd';
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
   try {
-    const denied = personAccessDenial(getAuthContextFromRequest(req), id);
+    const denied = personAccessDenial(getAuthContextFromRequest(req), id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const { status, body } = lijstPatronen(id);
     return NextResponse.json(body, { status });
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const { id } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const { status, body } = maakPatroon(id, await parseJsonBody(req));
     if (status < 300) {

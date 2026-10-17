@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import {
   syncAvailabilityForPattern,
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const { id } = params;
 
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     // Verify person exists
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const { id } = params;
 
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const body = (await parseJsonBody(req)) as CreatePatternRequest;

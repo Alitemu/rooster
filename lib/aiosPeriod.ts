@@ -14,6 +14,7 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/db/client';
+import { notThisDienstResponse } from '@/lib/dienstAccess';
 
 export function isAiosPool(poolId: string): boolean {
   const row = db.prepare('SELECT type FROM dienstrooster_pool WHERE id = ?').get(poolId) as { type: string } | undefined;
@@ -32,6 +33,28 @@ export function isAiosPeriod(periodId: string): boolean {
 
 export const AIOS_NOG_NIET =
   'Dit kan nog niet bij een periode van de AIOS. Het voorkeurenscherm, het maken van het rooster en het publiceren voor de AIOS komen in een volgende versie.';
+
+/** Someone of the AIOS: a member of an AIOS pool, at any time (a person belongs to one dienst). */
+export function isAiosPerson(personId: string): boolean {
+  return Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM dienstrooster_pool_membership pm JOIN dienstrooster_pool pl ON pl.id = pm.pool_id
+         WHERE pm.person_id = ? AND pl.type = 'AIOS' LIMIT 1`
+      )
+      .get(personId)
+  );
+}
+
+/**
+ * The 404 for an achterwacht participant route asked about an AIOS, or
+ * null, whoever asks: an AIOS's absences, part-time days and the rest go
+ * through the AIOS's own routes (app/api/aios/deelnemer) and sync. Here they
+ * got the achterwacht's sync only (docs/development/diensten.md).
+ */
+export function aiosPersonDenial(personId: string): NextResponse | null {
+  return isAiosPerson(personId) ? notThisDienstResponse() : null;
+}
 
 /** The 409 for an achterwacht step asked of an AIOS period, or null. */
 export function aiosNotYetDenial(periodId: string): NextResponse | null {

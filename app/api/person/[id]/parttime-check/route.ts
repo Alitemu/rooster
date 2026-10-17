@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
@@ -51,7 +52,7 @@ function findPeriod(req: NextRequest, personId: string, periodId: string): Perio
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
   try {
-    const denied = personAccessDenial(getAuthContextFromRequest(req), id);
+    const denied = personAccessDenial(getAuthContextFromRequest(req), id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const periodId = req.nextUrl.searchParams.get('period_id');
@@ -69,7 +70,7 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
   const { id } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const parsed = bodySchema.safeParse(await parseJsonBody(req));

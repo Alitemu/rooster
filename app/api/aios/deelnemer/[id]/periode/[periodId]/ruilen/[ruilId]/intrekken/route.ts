@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
-import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
+import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { loadAiosPeriode } from '@/lib/aiosPreferences';
 import { trekAiosRuilIn } from '@/lib/aiosRuilen';
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const { id, periodId, ruilId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const period = loadAiosPeriode(periodId);
     if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) {

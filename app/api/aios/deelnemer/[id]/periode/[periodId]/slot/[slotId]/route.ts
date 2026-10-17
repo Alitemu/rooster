@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
+import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
@@ -22,7 +22,7 @@ export async function PATCH(
   const { id, periodId, slotId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
 
     const body = (await parseJsonBody(req)) as { level?: unknown };

@@ -18,6 +18,7 @@ import { isValidIsoDate } from '@/lib/isoDate';
 import { setPendingUndo } from '@/lib/pendingUndo';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
+import { syncAiosPersoon } from '@/lib/aiosSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateMembershipRequest {
@@ -150,6 +151,8 @@ export async function PATCH(
     // open - same backfill as adding a member (see members/route.ts).
     syncAbsencesForPerson(membership.person_id);
     syncPatternsForPerson(membership.person_id);
+    // The AIOS's own sync for an AIOS pool (lib/aiosSync.ts): the two above leave its periods alone.
+    syncAiosPersoon(membership.person_id);
 
     const response: ApiSuccessResponse<{ id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }> = {
       success: true,

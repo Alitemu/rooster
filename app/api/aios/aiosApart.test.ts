@@ -11,6 +11,8 @@ import { purgePeriodNow, softDeletePeriod } from '@/lib/periodTrash';
 import { startSmtpSink, configureSmtp, clearSmtpConfig, verzendlijstPayload, waitForMails, type SmtpSink } from '@/tests/smtpSink';
 import { POST as achterwachtOpen } from '../periods/[id]/open/route';
 import { POST as achterwachtAfwezigheid } from '../person/[id]/absences/route';
+import { POST as lidToevoegen } from '../planner/pool/[id]/members/route';
+import { PATCH as lidWijzigen } from '../planner/pool/[id]/members/[membershipId]/route';
 import { GET as periode } from './periode/[id]/route';
 import { POST as openen } from './periode/[id]/openen/route';
 import { PATCH as deadline } from './periode/[id]/deadline/route';
@@ -207,21 +209,48 @@ describe('leave and part-time days of an AIOS', () => {
     expect(markeringen(aios.x, 'PARTTIME').length).toBeGreaterThan(0);
   });
 
-  it("are not written into the AIOS period by the achterwacht's absence route", async () => {
+  it("are refused by the achterwacht's absence route: it has only the achterwacht's sync", async () => {
     const voor = markeringen(aios.y, 'ABSENCE').length;
-    const res = await achterwachtAfwezigheid(
-      req(`person/${aios.y}/absences`, 'POST', personCookie(aios.y), { van_datum: '2097-06-03', tot_datum: '2097-06-03', soort: 'VAKANTIE' }),
-      ctx({ id: aios.y })
-    );
-    expect(res.status).toBe(201);
-    const rows = db
-      .prepare(
-        `SELECT 1 FROM dienstrooster_availability av JOIN dienstrooster_shift_slot s ON s.id = av.slot_id
-         WHERE av.person_id = ? AND s.period_id = ? AND s.datum = '2097-06-03' AND av.source = 'ABSENCE'`
-      )
-      .all(aios.y, aios.period);
-    expect(rows).toHaveLength(0);
+    for (const cookie of [personCookie(aios.y), staffCookie(aios.planner), staffCookie(aios.admin)]) {
+      const res = await achterwachtAfwezigheid(
+        req(`person/${aios.y}/absences`, 'POST', cookie, { van_datum: '2097-06-03', tot_datum: '2097-06-03', soort: 'VAKANTIE' }),
+        ctx({ id: aios.y })
+      );
+      expect(res.status).toBe(404);
+    }
+    expect(db.prepare("SELECT 1 FROM dienstrooster_absence WHERE person_id = ? AND van_datum = '2097-06-03'").get(aios.y)).toBeUndefined();
     expect(markeringen(aios.y, 'ABSENCE').length).toBe(voor);
+  });
+
+  it('reach the open AIOS period when the AIOS planner adds an AIOS to the pool or extends Geldig tot', async () => {
+    // Part-time days from before: z was in the pool earlier, w's Geldig tot ends before the quarter.
+    const nieuw = (naam: string) => {
+      const id = insert('dienstrooster_person', { codenaam: `aiosapart-${naam}-${tag}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+      insert('dienstrooster_parttime_pattern', { person_id: id, weekdag: 'WO', frequentie: 'ELKE_WEEK', geldig_vanaf: '2097-01-01', geldig_tot: '2097-12-31', aangemaakt_door: id, aangemaakt_op: now });
+      return id;
+    };
+    const z = nieuw('z');
+    const w = nieuw('w');
+    const lid = insert('dienstrooster_pool_membership', { person_id: w, pool_id: aios.pool, deelnamefactor: 1, geldig_vanaf: '2096-01-01', geldig_tot: '2097-01-31' });
+    expect(markeringen(z, 'PARTTIME')).toEqual([]);
+    const toegevoegd = await lidToevoegen(
+      req(`planner/pool/${aios.pool}/members`, 'POST', staffCookie(aios.planner), { codenaam: `aiosapart-z-${tag}`, geldig_vanaf: '2097-01-01', geldig_tot: '2097-12-31' }),
+      ctx({ id: aios.pool })
+    );
+    expect(toegevoegd.status, await toegevoegd.clone().text()).toBe(201);
+    expect(markeringen(z, 'PARTTIME').length).toBeGreaterThan(0);
+    expect(markeringen(w, 'PARTTIME')).toEqual([]);
+    const verlengd = await lidWijzigen(
+      req(`planner/pool/${aios.pool}/members/${lid}`, 'PATCH', staffCookie(aios.planner), { geldig_tot: '2097-12-31' }),
+      { params: Promise.resolve({ id: aios.pool, membershipId: lid }) }
+    );
+    expect(verlengd.status, await verlengd.clone().text()).toBe(200);
+    expect(markeringen(w, 'PARTTIME').length).toBeGreaterThan(0);
+    // Out of the pool again: the tests below count x and y.
+    for (const p of [z, w]) {
+      db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ?').run(p);
+      db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(p);
+    }
   });
 });
 

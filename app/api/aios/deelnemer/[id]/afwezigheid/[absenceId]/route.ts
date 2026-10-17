@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { verwijderAfwezigheid, wijzigAfwezigheid } from '@/lib/aiosDeeltijd';
@@ -17,7 +18,7 @@ export async function PATCH(req: NextRequest, props: Props): Promise<NextRespons
   const { id, absenceId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const { status, body } = wijzigAfwezigheid(id, absenceId, await parseJsonBody(req));
     if (status < 300) {
@@ -33,7 +34,7 @@ export async function DELETE(req: NextRequest, props: Props): Promise<NextRespon
   const { id, absenceId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const { status, body } = verwijderAfwezigheid(id, absenceId);
     if (status < 300) {

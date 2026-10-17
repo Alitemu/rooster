@@ -15,8 +15,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
+import { syncAiosPersoon } from '@/lib/aiosSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { poolDienstDenial } from '@/lib/dienstAccess';
+import { personHasOtherDienst, poolDienstDenial } from '@/lib/dienstAccess';
 import { localIsoDate } from '@/lib/localDate';
 import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
@@ -188,16 +189,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       }
       // The achterwacht's and the AIOS's pools share nobody (lib/dienstAccess.ts):
       // someone of the other dienst would bring their rosters and
-      // preferences into this one's sight.
-      if (
-        found &&
-        db
-          .prepare(
-            `SELECT 1 FROM dienstrooster_pool_membership pm JOIN dienstrooster_pool pl ON pl.id = pm.pool_id
-             WHERE pm.person_id = ? AND pl.type <> ? LIMIT 1`
-          )
-          .get(found.id, pool.type)
-      ) {
+      // preferences into this one's sight, also once removed from its pools.
+      if (found && personHasOtherDienst(found.id, pool.type)) {
         return { conflict: 'ANDERE_DIENST' as const };
       }
       if (found && found.codenaam !== codenaam) {
@@ -325,6 +318,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // not block anything in that period until they happened to edit it.
     syncAbsencesForPerson(result.personId);
     syncPatternsForPerson(result.personId);
+    // The AIOS's own sync for an AIOS pool (lib/aiosSync.ts): the two above leave its periods alone.
+    syncAiosPersoon(result.personId);
 
     const response: ApiSuccessResponse<{ id: string; person_id: string; codenaam: string }> = {
       success: true,

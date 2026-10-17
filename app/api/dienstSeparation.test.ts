@@ -9,11 +9,15 @@ import {
   deleteRowsAfter,
   fill,
   fingerprint,
+  insert,
   leaks,
+  now,
+  personCookie,
   routesFrom,
   rowidSnapshot,
   staff,
   staffCookie,
+  tag,
   type Handler,
   type World,
 } from '../../tests/fixtures/dienstWorlds';
@@ -143,19 +147,12 @@ describe('the achterwacht and the AIOS planner see nothing of each other', () =>
   }
 
   const gets = withIds.filter((r) => r.method === 'GET' && !r.path.startsWith('admin/') && !OWN_MAY_BE_EMPTY.has(r.path));
-  // The participant's screens are the achterwacht's: they find nothing of
-  // an AIOS period until its own step (lib/periodAccess.ts periodUsableFor,
-  // app/api/aiosNotYet.test.ts). The other direction still holds them.
-  const NOT_YET_FOR_AN_AIOS_PERIOD = new Set([
-    'person/[id]/fellow',
-    'person/[id]/parttime-check',
-    'person/[id]/preferences/[periodId]',
-    'person/[id]/preferences/[periodId]/coverage',
-    'person/[id]/roster/[period-id]',
-    'person/[id]/roster/[period-id]/others',
-  ]);
+  // The achterwacht's participant routes are not the AIOS's: an AIOS keeps
+  // to app/api/aios/deelnemer (lib/aiosPeriod.ts aiosPersonDenial, the
+  // describe below). The other direction still holds them.
+  const ONLY_FOR_THE_ACHTERWACHT = (path: string) => path.startsWith('person/');
 
-  it.each(gets.filter((r) => !NOT_YET_FOR_AN_AIOS_PERIOD.has(r.path)).map((r) => [`${r.method} ${r.path}`, r] as const))(
+  it.each(gets.filter((r) => !ONLY_FOR_THE_ACHTERWACHT(r.path)).map((r) => [`${r.method} ${r.path}`, r] as const))(
     "the ids are real: the AIOS planner finds the AIOS's own: %s",
     async (_, route) => {
       const { status, text } = await call(route, worlds.AIOS, worlds.AIOS.planner);
@@ -176,6 +173,85 @@ describe('the achterwacht and the AIOS planner see nothing of each other', () =>
       expect(status).toBeLessThan(500);
     }
   );
+});
+
+/**
+ * A participant's routes are their own dienst's: an absence, a part-time
+ * day or a notice of the achterwacht's participant written through the
+ * AIOS's routes got the AIOS's sync only (and removing their absence there
+ * left its marks in the achterwacht's open period), and the other way
+ * round. Every participant route of the other dienst answers 404 about
+ * them, whoever asks (they themselves, their planner, the beheerder) and
+ * with whichever world's period, slot or swap (lib/aiosPeriod.ts
+ * aiosPersonDenial, lib/aiosToegang.ts geenAiosDenial).
+ */
+describe("a participant's routes are those of their own dienst", () => {
+  const VAN_DE_ANDERE = { ACHTERWACHT: 'aios/deelnemer/', AIOS: 'person/' } as const;
+  const body = (w: World) =>
+    JSON.stringify({
+      weekdag: 'DI',
+      frequentie: 'ELKE_WEEK',
+      geldig_vanaf: '2096-01-01',
+      geldig_tot: '2096-12-31',
+      van_datum: '2096-03-02',
+      tot_datum: '2096-03-04',
+      soort: 'VAKANTIE',
+      gecontroleerd: true,
+      period_id: w.period,
+      periode_id: w.period,
+      slot_id: w.slot,
+      blocking_level: 'ABSOLUUT',
+      level: 'ABSOLUUT',
+      fellow: true,
+    });
+
+  for (const mine of ['ACHTERWACHT', 'AIOS'] as const) {
+    it(`refuses the ${mine} participant on every participant route of the other dienst`, async () => {
+      const own = worlds[mine];
+      const other = worlds[mine === 'AIOS' ? 'ACHTERWACHT' : 'AIOS'];
+      const theirs = routes.filter((r) => r.path.startsWith(VAN_DE_ANDERE[mine]));
+      expect(theirs.length).toBeGreaterThan(10);
+      const before = fingerprint(own) + fingerprint(other);
+      const open: string[] = [];
+      for (const route of theirs) {
+        for (const ids of [own, other]) {
+          for (const [who, cookie] of [
+            ['themselves', personCookie(own.x)],
+            ['their planner', staffCookie(own.planner)],
+            ['the beheerder', staffCookie(admin)],
+          ] as const) {
+            const { url, params } = fill(route.path, ids);
+            params.id = own.x;
+            const res = await route.handler(
+              new NextRequest(`${url.replace(`/${ids.x}`, `/${own.x}`)}?period_id=${ids.period}`, {
+                method: route.method,
+                headers: { 'Content-Type': 'application/json', Cookie: cookie },
+                body: route.method === 'GET' ? undefined : body(ids),
+              }),
+              { params: Promise.resolve(params) }
+            );
+            if (res.status !== 404) open.push(`${route.method} ${route.path}, ${who}, ${ids.dienst}'s ids: ${res.status}`);
+          }
+        }
+      }
+      expect(open).toEqual([]);
+      expect(fingerprint(own) + fingerprint(other)).toBe(before);
+    });
+  }
+
+  it("the AIOS planner, for someone in no pool, still gets nothing of the achterwacht's period", async () => {
+    // Of neither dienst, so both checks above let them through: the period decides (lib/periodAccess.ts).
+    const niemand = insert('dienstrooster_person', { codenaam: `niemand-${tag}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    const staf = worlds.ACHTERWACHT;
+    const rooster = routes.find((r) => r.path === 'person/[id]/roster/[period-id]' && r.method === 'GET')!;
+    const res = await rooster.handler(
+      new NextRequest(`http://localhost/api/person/${niemand}/roster/${staf.period}`, { headers: { Cookie: staffCookie(worlds.AIOS.planner) } }),
+      { params: Promise.resolve({ id: niemand, 'period-id': staf.period }) }
+    );
+    const text = await res.text();
+    expect([403, 404]).toContain(res.status);
+    expect(leaks(text, staf, [staf.period])).toEqual([]);
+  });
 });
 
 /**
@@ -212,6 +288,35 @@ describe('the other dienst named in the body', () => {
       expect((await res.json()).error.code).toBe('ANDERE_DIENST');
     }
     expect(db.prepare('SELECT 1 FROM dienstrooster_pool_membership WHERE pool_id = ? AND person_id = ?').get(aios.pool, staf.x)).toBeUndefined();
+  });
+
+  it("an AIOS stays out of the achterwacht's pools, also once removed from every pool: their link, mark, dienst or hand-in says whose they were", async () => {
+    const aios = worlds.AIOS;
+    const staf = worlds.ACHTERWACHT;
+    const vrijeDienst = db
+      .prepare('SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? AND id NOT IN (SELECT slot_id FROM dienstrooster_assignment) LIMIT 1')
+      .get(aios.period) as { id: string };
+    const sporen: Record<string, (personId: string) => void> = {
+      lid: (p) => insert('dienstrooster_pool_membership', { person_id: p, pool_id: aios.pool, deelnamefactor: 1, geldig_vanaf: '2090-01-01', geldig_tot: '2090-12-31' }),
+      link: (p) => insert('dienstrooster_person_access_link', { person_id: p, token_hash: `weg-${p}`, geldt_voor_periode_id: aios.period, aangemaakt_op: now }),
+      markering: (p) => insert('dienstrooster_availability', { person_id: p, slot_id: aios.slot, blocking_level: 'ABSOLUUT', source: 'MANUAL', aangemaakt_op: now }),
+      dienst: (p) => insert('dienstrooster_assignment', { schedule_version_id: aios.period, person_id: p, slot_id: vrijeDienst.id, bron: 'MANUAL', aangemaakt_op: now }),
+      ingediend: (p) => insert('dienstrooster_submission', { person_id: p, schedule_period_id: aios.period, status: 'BEVESTIGD', aangemaakt_op: now }),
+    };
+    for (const [spoor, leg] of Object.entries(sporen)) {
+      const codenaam = `weg-${spoor}-${tag}`;
+      const p = insert('dienstrooster_person', { codenaam, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+      leg(p);
+      const lid = (pool: string, who: string) =>
+        send(route('planner/pool/[id]/members', 'POST'), `planner/pool/${pool}/members`, { id: pool }, who, { codenaam, geldig_vanaf: '2098-01-01', geldig_tot: '2098-12-31' });
+      for (const who of [staf.planner, admin]) {
+        const res = await lid(staf.pool, who);
+        expect(res.status, spoor).toBe(409);
+        expect((await res.json()).error.code).toBe('ANDERE_DIENST');
+      }
+      // Back to their own dienst they may.
+      expect((await lid(aios.pool, aios.planner)).status, spoor).toBe(201);
+    }
   });
 
   it("a period is not made in the other dienst's pool", async () => {

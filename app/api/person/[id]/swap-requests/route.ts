@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { swapMailDetails } from '@/lib/swapMailDetails';
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    const denied = personAccessDenial(auth, personId);
+    const denied = personAccessDenial(auth, personId) ?? aiosPersonDenial(personId);
     if (denied) return denied;
 
     // Same guard the sibling person routes (notifications, absences,
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    const denied = personAccessDenial(auth, personId);
+    const denied = personAccessDenial(auth, personId) ?? aiosPersonDenial(personId);
     if (denied) return denied;
 
     const body = await parseJsonBody(request);

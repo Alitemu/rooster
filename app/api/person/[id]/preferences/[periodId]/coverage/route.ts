@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -38,7 +39,7 @@ export async function GET(
     const { id, periodId } = params;
 
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const personStmt = db.prepare(`SELECT id FROM dienstrooster_person WHERE id = ?`);

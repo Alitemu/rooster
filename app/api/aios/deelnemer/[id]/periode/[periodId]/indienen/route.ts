@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
-import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
+import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const { id, periodId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
 
     const period = loadAiosPeriode(periodId);

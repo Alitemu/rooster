@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse } from '@/lib/api-errors';
 
 export async function POST(
@@ -18,7 +19,7 @@ export async function POST(
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    const denied = personAccessDenial(auth, personId);
+    const denied = personAccessDenial(auth, personId) ?? aiosPersonDenial(personId);
     if (denied) return denied;
 
     const notifId = params['notif-id'];

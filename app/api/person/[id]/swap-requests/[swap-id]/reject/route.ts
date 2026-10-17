@@ -9,6 +9,7 @@ import { db } from '@/db/client';
 import { LIVE_SWAP_REQUEST_SQL } from '@/lib/periodAccess';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { optionalFreeText } from '@/lib/freeText';
@@ -33,7 +34,7 @@ export async function POST(
     const personId = params.id;
 
     const auth = getAuthContextFromRequest(request);
-    const denied = personAccessDenial(auth, personId);
+    const denied = personAccessDenial(auth, personId) ?? aiosPersonDenial(personId);
     if (denied) return denied;
 
     const swapId = params['swap-id'];

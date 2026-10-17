@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { isYearBoundaryWeek, previewPatternDates, findBlockedElsewhereDays, type PatternRule } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const { id } = params;
 
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? aiosPersonDenial(id);
     if (denied) return denied;
 
     const periodId = req.nextUrl.searchParams.get('period_id');

@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
-import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
+import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { loadAiosPeriode } from '@/lib/aiosPreferences';
 import { aiosRuilOverzicht, vraagAiosRuilAan } from '@/lib/aiosRuilen';
@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   const { id, periodId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const period = loadAiosPeriode(periodId);
     if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) {
@@ -38,7 +38,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
   const { id, periodId } = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
-    const denied = personAccessDenial(auth, id);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
     const period = loadAiosPeriode(periodId);
     if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) {
