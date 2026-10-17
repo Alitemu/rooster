@@ -104,7 +104,7 @@ function fill(routePath: string, person: string): { url: string; params: Record<
       case 'membershipId':
         return ids.membership;
       case 'swap-id':
-        return ids.swap;
+        return person === ids.staf ? ids.stafSwap : ids.swap;
       case 'absenceId':
         return ids.absence;
       case 'patternId':
@@ -230,6 +230,23 @@ beforeAll(() => {
   });
   ids.notice = insert('dienstrooster_notification', { person_id: ids.x, type: 'RUILVERZOEK', onderwerp: 'Ruilverzoek', inhoud: 'Ruilverzoek', aangemaakt_op: now });
   insert('dienstrooster_submission', { person_id: ids.x, schedule_period_id: ids.period, status: 'BEVESTIGD', aangemaakt_op: now });
+
+  // An achterwacht participant, for whom the beheerder may act on the
+  // achterwacht's participant routes: those must not take the AIOS period
+  // either (lib/periodAccess.ts periodUsableFor, LIVE_SWAP_REQUEST_SQL).
+  // With a swap request of theirs in it, as only a bug could leave one.
+  const stafPool = insert('dienstrooster_pool', { naam: `AiosNog-staf-${tag}`, ruleset_id: ruleset, aangemaakt_op: now });
+  ids.staf = participant('staf');
+  insert('dienstrooster_pool_membership', { person_id: ids.staf, pool_id: stafPool, deelnamefactor: 1, geldig_vanaf: '2096-01-01', geldig_tot: '2098-12-31' });
+  ids.stafSwap = insert('dienstrooster_swap_request', {
+    periode_id: ids.period,
+    aanvrager_person_id: ids.staf,
+    aangeboden_slot_id: ids.slot,
+    gevraagde_slot_id: ids.otherSlot,
+    respondent_person_id: ids.y,
+    status: 'PENDING',
+    aangemaakt_op: now,
+  });
 });
 
 afterAll(() => {
@@ -278,11 +295,13 @@ describe('no achterwacht step runs on an AIOS period yet', () => {
       'leaves the AIOS period as it was: %s',
       async (_name, route) => {
         // A participant route as x and as y: who asked for the swap and
-        // who is asked can do different things with it.
-        for (const person of route.path.startsWith('person/') ? [ids.x, ids.y] : [ids.x]) {
+        // who is asked can do different things with it. And as an
+        // achterwacht participant, who passes the AIOS check on a person.
+        for (const person of route.path.startsWith('person/') ? [ids.x, ids.y, ids.staf] : [ids.x]) {
           const before = fingerprint();
           await call(route, person);
-          expect(fingerprint(), `${route.method} ${route.path} as ${person === ids.x ? 'x' : 'y'} changed the AIOS period`).toBe(before);
+          const wie = person === ids.x ? 'x' : person === ids.y ? 'y' : 'an achterwacht participant';
+          expect(fingerprint(), `${route.method} ${route.path} as ${wie} changed the AIOS period`).toBe(before);
         }
       }
     );

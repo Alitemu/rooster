@@ -452,8 +452,8 @@ const MUTATIONS = [
   {
     name: "diensten: a participant route takes the other dienst's period for a planner",
     file: 'lib/periodAccess.ts',
-    find: 'if (requirePlannerAccess(auth)) return staffMayAccessPeriod(auth, period.id);',
-    replace: 'if (requirePlannerAccess(auth)) return true;',
+    find: 'if (requirePlannerAccess(auth)) return staffMayAccessPeriod(auth, period.id) && !inPrullenbak(period.id);',
+    replace: 'if (requirePlannerAccess(auth)) return !inPrullenbak(period.id);',
     tests: ['app/api/dienstSeparation'],
   },
   {
