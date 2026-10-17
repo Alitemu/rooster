@@ -136,6 +136,20 @@ describe('before choosing', () => {
     expect(nacht.kandidaten.find((c: any) => c.person_id === w.y).waarschuwingen.map((x: any) => x.code)).toContain('GEBLOKKEERD');
   });
 
+  it("a part-time day's evening: liever niet, said as the part-time day's", async () => {
+    // As lib/aiosSync.ts marks it since 0.82.0: x's part-time Monday evening liever niet.
+    const avond = slot('AD', '2094-07-19');
+    insert('dienstrooster_availability', { person_id: w.x, slot_id: avond.id, blocking_level: 'LIEVER_NIET', source: 'PARTTIME', aangemaakt_op: now });
+    try {
+      const data = (await (await vraag(avond.id, false)).json()).data;
+      const x = data.kandidaten.find((c: any) => c.person_id === w.x);
+      expect(x.kan).toBe(true);
+      expect(x.waarschuwingen).toEqual(expect.arrayContaining([{ code: 'LIEVER_NIET', tekst: 'Parttimedag op ma 19 jul: liever niet.' }]));
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?').run(w.x, avond.id);
+    }
+  });
+
   it('a compensation day, a block no longer whole, and above 25%', async () => {
     // y has the Saturday dagdienst of 10 juli: the Friday before is a compensation day.
     const vr = (await (await vraag(slot('AD', '2094-07-09').id, true)).json()).data;

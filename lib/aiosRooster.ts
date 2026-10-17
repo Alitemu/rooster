@@ -18,7 +18,7 @@ import type { AiosCode, BlokSoort, BlokVorm, DagSoort } from '@/lib/aiosDiensten
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { controleerAiosRooster, regelZin, type Regel } from '@/lib/aiosRegels';
 import { aiosSaldi, aiosSaldoWoorden, type SaldoBron } from '@/lib/aiosSaldo';
-import { fellowNacht } from '@/lib/aiosVoortgangstoets';
+import { fellowNacht } from '@/lib/aiosToetsNacht';
 import { aiosJaarPercentages } from '@/lib/aiosJaarPercentage';
 
 export interface AiosRoosterDienst {

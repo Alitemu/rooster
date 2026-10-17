@@ -21,7 +21,7 @@ import {
   type BlokVorm,
   type DagSoort,
 } from '@/lib/aiosDiensten';
-import { fellowNacht } from '@/lib/aiosVoortgangstoets';
+import { fellowNacht } from '@/lib/aiosToetsNacht';
 
 interface PoolShiftType {
   id: string;

@@ -802,14 +802,14 @@ const MUTATIONS = [
   {
     name: 'aios screen: geblokkeerd offered on a feestdag',
     file: 'lib/aiosVoorkeur.ts',
-    find: "  return STAND_CYCLUS.filter((s) => sterkte(s) >= vast && !(s === 'ABSOLUUT' && vak.feestdag));",
-    replace: '  return STAND_CYCLUS.filter((s) => sterkte(s) >= vast);',
+    find: "  return STAND_CYCLUS.filter((s) => sterkte(s) >= vast && !(s === 'ABSOLUUT' && vak.feestdag) && !(s === 'LIEVER_NIET' && ptLieverNiet));",
+    replace: "  return STAND_CYCLUS.filter((s) => sterkte(s) >= vast && !(s === 'LIEVER_NIET' && ptLieverNiet));",
     tests: ['lib/aiosVoorkeur'],
   },
   {
     name: 'aios screen: a mark offered that says less than leave',
     file: 'lib/aiosVoorkeur.ts',
-    find: '  const vast = Math.max(-1, ...vak.diensten.filter(vastGezet).map((d) => sterkte(d.level)));',
+    find: '  const vast = Math.max(-1, ...vak.diensten.filter(vloer).map((d) => sterkte(d.level)));',
     replace: '  const vast = -1;',
     tests: ['lib/aiosVoorkeur'],
   },
@@ -1331,7 +1331,14 @@ const MUTATIONS = [
   {
     name: "aios hand: liever niet not said",
     file: "lib/aiosHandmatig.ts",
-    find: "  if (op('LIEVER_NIET').length) uit.push(",
+    find: "  if (op('LIEVER_NIET', 'MANUAL').length || op('LIEVER_NIET', 'ABSENCE').length) {",
+    replace: "  if (false) {",
+    tests: ["app/api/aios/aiosHandmatig"],
+  },
+  {
+    name: "aios hand: a part-time day's liever niet not said",
+    file: "lib/aiosHandmatig.ts",
+    find: "  if (op('LIEVER_NIET', 'PARTTIME').length) uit.push(",
     replace: "  if (false) uit.push(",
     tests: ["app/api/aios/aiosHandmatig"],
   },

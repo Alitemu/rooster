@@ -26,29 +26,13 @@ import { aiosRooster } from '@/lib/aiosDiensten';
 import { verwijderSlot } from '@/lib/aiosFeestdagBlokken';
 import { zetAfwezighedenOpDienst } from '@/lib/aiosSync';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { aiosVoortgangstoets } from '@/lib/aiosToetsNacht';
+
+export { aiosVoortgangstoets, fellowNacht, type AiosVoortgangstoets } from '@/lib/aiosToetsNacht';
 
 type Periode = Pick<AiosUitnodigPeriode, 'id' | 'pool_id' | 'start_datum' | 'eind_datum'>;
 
-export interface AiosVoortgangstoets {
-  datum: string | null;
-  // The night the fellow does: the day before.
-  nacht: string | null;
-}
-
 export type ToetsUitkomst = { ok: true } | { ok: false; status: number; code: string; message: string };
-
-export function aiosVoortgangstoets(periodId: string): AiosVoortgangstoets {
-  const rij = db.prepare('SELECT voortgangstoets FROM dienstrooster_aios_periode WHERE period_id = ?').get(periodId) as
-    | { voortgangstoets: string | null }
-    | undefined;
-  const datum = rij?.voortgangstoets ?? null;
-  return { datum, nacht: datum ? addDays(datum, -1) : null };
-}
-
-/** The date of the fellow's night, for the screens that show "Fellow" there. */
-export function fellowNacht(periodId: string): string | null {
-  return aiosVoortgangstoets(periodId).nacht;
-}
 
 const nachtenOp = (periodId: string, datum: string) =>
   db
