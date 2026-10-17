@@ -484,6 +484,9 @@ eerst op de testinstallatie. Zo begin je:
    AIOS in (zie 0.72.0).
 5. Kies de deadline, open de periode en verstuur de uitnodigingen.
 
+Een heel kwartaal stap voor stap doorlopen op de testinstallatie, met per stap
+wat je moet zien: `docs/aios-testdraaiboek.md`.
+
 **Vanaf versie 0.82.0** vul je op de pagina van een AIOS-periode bij
 *Voortgangstoets* de datum van de toets in. In de nacht ervoor heeft geen
 AIOS dienst: een fellow doet die nacht. In het rooster en in de download
