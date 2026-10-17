@@ -17,7 +17,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 2. **Mail staat uit op test** (`MAIL_UITGESCHAKELD=true`, zie de README). Er
    gaat dus geen enkele mail. Links voor de AIOS haal je in stap 9 met
    *Links downloaden*.
-3. Houd twee browsers bij de hand, of een gewoon en een privévenster. Een AIOS
+3. Houd twee browsers bij de hand of een gewoon en een privévenster. Een AIOS
    en de planner kunnen niet tegelijk in hetzelfde venster ingelogd zijn, en
    voor het ruilen heb je twee AIOS tegelijk nodig.
 
@@ -47,7 +47,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
    voorkeur Q1 2027, daar vallen Pasen en Tweede Paasdag in) en klik op
    *Aanmaken en instellen*.
    - Je ziet: de diensten per week, een avond- of nachtblok als één vak met
-     een dikke rand, en *Punten in dit kwartaal* met het aantal fte dat de
+     een dikke rand en *Punten in dit kwartaal* met het aantal fte dat de
      AIOS samen nodig hebben om onder 25% te blijven.
 8. **Voortgangstoets.** Vink bij *Voortgangstoets* aan dat er een toets is,
    kies een woensdag in het kwartaal en klik op *Opslaan*.
@@ -111,7 +111,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
     - Je ziet: "Voorlopig gepubliceerd." en een melding dat er geen mail
       ging.
     - Open de link van aios01. Je ziet het eigen rooster met de punten en het
-      dienstpercentage, en *Ruilen*.
+      dienstpercentage. Daaronder staat *Ruilen*.
 19. **Ruilen.** Kies bij aios01 een dienst of blok en klik op *Ruilen*. Kies
     een collega bij *Vraag aan* en geef een toelichting.
     - Je ziet: "Je ruilverzoek is verstuurd." en het verzoek als *in
