@@ -503,8 +503,11 @@ zelf voorkeur of geblokkeerd van maken. Een eigen blokkade telt mee voor de
 50%-regel. Bij ruilen kan een parttimer ook een avond of nacht op de
 parttimedag krijgen.
 
-**Vanaf versie 0.82.1** ziet een AIOS op het eigen voorkeurenscherm wanneer
-de voortgangstoets is, en dat de nacht ervoor daarom niet in het blok staat.
+**Vanaf versie 0.83.0** staat alleen de avond van een parttimedag op
+*liever niet*. De nacht van die dag heeft weer geen markering: voor het
+rooster is het een gewone nacht. Een AIOS ziet op het eigen voorkeurenscherm
+wanneer de voortgangstoets is, en dat de nacht ervoor daarom niet in het blok
+staat.
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet

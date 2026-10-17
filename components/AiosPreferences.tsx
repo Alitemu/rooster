@@ -290,8 +290,8 @@ function Tellers({ tellers }: { tellers: BlokkadeTeller[] }) {
       <h3 className="font-semibold text-neutral-900">Hoeveel je hebt geblokkeerd</h3>
       <p className="text-sm text-neutral-600">
         Per soort mag je hoogstens de helft blokkeren. Blokkeer je meer, dan kan het rooster het deel boven de
-        helft alsnog bij jou inplannen. Je verlof en de uitloopdienst op je parttimedag tellen niet mee. Een avond of
-        nacht op je parttimedag die je zelf blokkeert, telt wel mee. De feestdagen en de blokken
+        helft alsnog bij jou inplannen. Je verlof en de uitloopdienst op je parttimedag tellen niet mee. Een avond op je
+        parttimedag die je zelf blokkeert, telt wel mee. De feestdagen en de blokken
         met een feestdag erin ook niet, want die kun je niet blokkeren.
       </p>
       <ul className="space-y-1 text-sm">

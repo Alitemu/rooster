@@ -72,7 +72,7 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await page.goto(`${getBaseUrl()}/aios/${ids.token}`);
 
   // Deeltijd first, with what a part-time day means for the AIOS.
-  await expect(page.getByText(/Je avond en nacht op die dag staan op liever niet/)).toBeVisible();
+  await expect(page.getByText(/Je avond op die dag staat op liever niet/)).toBeVisible();
   await page.getByRole('button', { name: 'Volgende: voorkeuren opgeven' }).click();
 
   await expect(page.getByRole('heading', { name: 'Je voorkeuren per dienst' })).toBeVisible();

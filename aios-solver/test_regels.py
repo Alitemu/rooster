@@ -134,9 +134,9 @@ def test_regel_4_no_uitloopdienst_on_a_part_time_day():
 
 
 def test_regel_4_the_evening_block_over_a_part_time_day_may_as_liever_niet():
-    # Since 0.82.0 (the planner's choice): the app marks the evening and the
-    # night of a part-time day liever niet. The solver may take them, as a
-    # last resort: another AIOS first.
+    # Since 0.82.0 (the planner's choice): the app marks the evening of a
+    # part-time day liever niet. The solver may take it, as a last resort:
+    # another AIOS first.
     inp = weken(1)
     avond = blok(inp, 'AVOND', 'ZO_DI', dag(4))
     x = aios(inp, 'x', parttime_dagen=[dag(5).isoformat()])

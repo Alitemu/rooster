@@ -240,9 +240,10 @@ def boven_helft(a: Aios, o: Optie) -> bool:
 
 def regel_4_parttime(a: Aios, o: Optie) -> Optional[str]:
     """
-    Hard rule 4: on a part-time day no uitloopdienst. Its evening and night
-    may be planned: the app marks them liever niet (lib/aiosSync.ts; the
-    planner's choice in October 2026, until 0.82.0 the evening was a hard rule).
+    Hard rule 4: on a part-time day no uitloopdienst. Its evening may be
+    planned: the app marks it liever niet (lib/aiosSync.ts; the planner's
+    choice in October 2026, until 0.82.0 it was a hard rule). Its night is
+    any night (since 0.83.0).
     """
     if o.soort == 'UITLOOP' and o.data & a.parttime_dagen:
         return 'PARTTIMEDAG'

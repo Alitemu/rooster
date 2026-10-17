@@ -174,15 +174,14 @@ describe('the voortgangstoets', () => {
     expect(await haal()).toMatchObject({ datum: null, nacht: null });
   });
 
-  it("puts a night back with a part-time day's liever niet on it", async () => {
-    // x is part-time on Fridays: the Friday night is liever niet for x (lib/aiosSync.ts).
+  it('puts a night back open on a part-time day', async () => {
+    // x is part-time on Fridays: the Friday night stays open for x (lib/aiosSync.ts).
     const vrijdag = dag(9);
-    const ptx = { person_id: w.x, blocking_level: 'LIEVER_NIET', source: 'PARTTIME' };
-    expect(markeringen(vrijdag)).toEqual([ptx]);
+    expect(markeringen(vrijdag)).toEqual([]);
     await zet({ datum: dag(10) });
     expect(nacht(vrijdag)).toBeUndefined();
     await zet({ datum: null });
-    expect(markeringen(vrijdag)).toEqual([ptx]);
+    expect(markeringen(vrijdag)).toEqual([]);
   });
 
   it('refuses a night outside the quarter, no date and no datum at all', async () => {

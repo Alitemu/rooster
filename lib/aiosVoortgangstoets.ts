@@ -17,15 +17,15 @@
  * (lib/aiosFeestdagBlokken.ts zorgVoorOudjaar needs the block's night).
  *
  * Another date or none puts the night back in its block, with the block's
- * marks (an AIOS marks a block as a whole) and the leave and part-time days
- * that fall on it.
+ * marks (an AIOS marks a block as a whole) and the leave that falls on it
+ * (a part-time day leaves a night open, lib/aiosSync.ts).
  */
 
 import { db } from '@/db/client';
 import { addDays } from '@/lib/holidays';
 import { aiosRooster } from '@/lib/aiosDiensten';
 import { verwijderSlot } from '@/lib/aiosFeestdagBlokken';
-import { zetBronnenOpDienst } from '@/lib/aiosSync';
+import { zetAfwezigheidOpDienst } from '@/lib/aiosSync';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { aiosVoortgangstoets } from '@/lib/aiosToetsNacht';
 
@@ -85,7 +85,7 @@ function zetNachtTerug(period: Periode, datum: string): void {
        GROUP BY person_id`
     ).run(id, blok.id, id);
   }
-  zetBronnenOpDienst(period.id, id);
+  zetAfwezigheidOpDienst(period.id, id);
 }
 
 /**

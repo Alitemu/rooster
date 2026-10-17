@@ -305,8 +305,8 @@ describe('the planner', () => {
 
 describe('a parttimer', () => {
   it("is offered for an evening on their part-time day, never for its uitloopdienst", () => {
-    // Since 0.82.0 a part-time day's evening and night are liever niet, not
-    // a hard rule (the planner's choice): a swap may put the parttimer there.
+    // Since 0.82.0 a part-time day's evening is liever niet, not a hard rule
+    // (the planner's choice): a swap may put the parttimer there.
     const p = insert('dienstrooster_person', { codenaam: cn('p'), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
     const q = insert('dienstrooster_person', { codenaam: cn('q'), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
     for (const id of [p, q]) {

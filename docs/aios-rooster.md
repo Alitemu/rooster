@@ -149,9 +149,9 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   opgeslagen is. De solver, de harde regels, de punten, ruilen en de
   downloads zien hem dus niet. Een andere datum of geen datum zet de nacht
   terug in zijn blok, met wat de AIOS op dat blok markeerde en hun verlof
-  en parttimedag op die dag (0.82.1). Dat kan tot het rooster gepubliceerd
-  is. De AIOS ziet op het eigen voorkeurenscherm wanneer de toets is en dat
-  de nacht ervoor daarom niet in het blok staat (0.82.1). De nacht moet in het
+  op die dag (0.83.0). Dat kan tot het rooster gepubliceerd is. De AIOS ziet
+  op het eigen voorkeurenscherm wanneer de toets is en dat de nacht ervoor
+  daarom niet in het blok staat (0.83.0). De nacht moet in het
   kwartaal vallen: een toets op de eerste woensdag hoort bij het vorige
   kwartaal.
 
@@ -252,14 +252,16 @@ solver.
    de helft bij de 50%-regel (zie "Verzoeken van de AIOS").
 2. Blokken altijd heel. Elke dienst precies één AIOS.
 3. Nooit twee diensten op één dag voor dezelfde AIOS.
-4. Op de parttimedag geen uitloopdienst. De avond en de nacht van die dag mogen
-   wel, maar staan voor die AIOS op liever niet: het avond- of nachtblok waar de
-   dag in valt dus ook (de keuze van de planner in oktober 2026; tot 0.82.0 was
-   het avondblok verboden). De AIOS kan er zelf voorkeur of geblokkeerd van
-   maken (de keuze van de planner in oktober 2026). Een eigen blokkade daar
-   telt mee voor de 50%-regel. Wist de AIOS de eigen keuze, dan staat het
-   weer op liever niet. Bij ruilen telt het ook zo: een parttimer kan een
-   avond of nacht op de parttimedag ruilen.
+4. Op de parttimedag geen uitloopdienst. De avond van die dag mag wel, maar
+   staat voor die AIOS op liever niet: het avondblok waar de dag in valt dus
+   ook (de keuze van de planner in oktober 2026; tot 0.82.0 was het avondblok
+   verboden). De AIOS kan er zelf voorkeur of geblokkeerd van maken (de keuze
+   van de planner in oktober 2026). Een eigen blokkade daar telt mee voor de
+   50%-regel. Wist de AIOS de eigen keuze, dan staat het weer op liever niet.
+   De nacht van die dag is een gewone nacht, zonder markering (de keuze van
+   de planner in oktober 2026; in 0.82.0 stond hij ook op liever niet). Bij
+   ruilen telt het ook zo: een parttimer kan een avond of nacht op de
+   parttimedag ruilen.
 5. Fulltimers (1,0 fte) nooit in het nachtblok zondag tot en met dinsdag: dat
    is voor parttimers (F7).
 6. Inwerken: zie hierboven.

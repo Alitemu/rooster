@@ -35,7 +35,7 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   `aios_periode.voortgangstoets` (0.82.0, migration 0029): the date of the
   quarter's voortgangstoets or null. The ND of the night before is deleted
   while it is set and made again (in its block, with the block's marks and
-  the leave and part-time days on it, lib/aiosSync.ts zetBronnenOpDienst)
+  the leave on it, lib/aiosSync.ts zetAfwezigheidOpDienst)
   when it moves or goes (lib/aiosVoortgangstoets.ts; reading it,
   lib/aiosToetsNacht.ts, imports the database only, as lib/aiosSlots.ts
   is loaded by the browser tests outside Next.js).

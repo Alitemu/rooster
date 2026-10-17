@@ -837,16 +837,23 @@ const MUTATIONS = [
   {
     name: "aios: a part-time day's evening blocked again",
     file: "lib/aiosSync.ts",
-    find: "const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'LIEVER_NIET', ADW: 'LIEVER_NIET', ND: 'LIEVER_NIET' } as const;",
-    replace: "const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'ABSOLUUT', ADW: 'ABSOLUUT', ND: 'LIEVER_NIET' } as const;",
+    find: "const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'LIEVER_NIET', ADW: 'LIEVER_NIET' } as const;",
+    replace: "const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'ABSOLUUT', ADW: 'ABSOLUUT' } as const;",
     tests: ["lib/aiosPreferences", "app/api/aios/aiosApart"],
   },
   {
-    name: "aios: a part-time day leaves its night open",
+    name: "aios: a part-time day marks its night liever niet again",
     file: "lib/aiosSync.ts",
-    find: "       WHERE s.period_id = ? AND st.code IN ('UD', 'AD', 'ADW', 'ND')`",
-    replace: "       WHERE s.period_id = ? AND st.code IN ('UD', 'AD', 'ADW')`",
-    tests: ["lib/aiosPreferences", "app/api/aios/aiosApart"],
+    find: "const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'LIEVER_NIET', ADW: 'LIEVER_NIET' } as const;",
+    replace: "const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'LIEVER_NIET', ADW: 'LIEVER_NIET', ND: 'LIEVER_NIET' } as const;",
+    tests: ["lib/aiosPreferences", "app/api/aios/aiosApart", "app/api/aios/aiosVoortgangstoets"],
+  },
+  {
+    name: "aios: a night marked in 0.82.0 stays liever niet",
+    file: "lib/aiosSync.ts",
+    find: "    if (!doel.has(slotId)) weg.run(p.id, slotId);",
+    replace: "    if (!doel.has(slotId)) void slotId;",
+    tests: ["lib/aiosPreferences"],
   },
   {
     name: "aios: an evening blocked before 0.82.0 stays blocked",
@@ -1071,7 +1078,7 @@ const MUTATIONS = [
   {
     name: "aios voortgangstoets: a night put back without the leave on it",
     file: "lib/aiosVoortgangstoets.ts",
-    find: "  zetBronnenOpDienst(period.id, id);",
+    find: "  zetAfwezigheidOpDienst(period.id, id);",
     replace: "  void id;",
     tests: ["app/api/aios/aiosVoortgangstoets"],
   },
@@ -1138,13 +1145,6 @@ const MUTATIONS = [
     find: "\tFOREIGN KEY (`period_id`) REFERENCES `dienstrooster_schedule_period`(`id`) ON UPDATE no action ON DELETE cascade,",
     replace: "\tFOREIGN KEY (`period_id`) REFERENCES `dienstrooster_schedule_period`(`id`) ON UPDATE no action ON DELETE no action,",
     tests: ["app/api/aios/aiosApart"],
-  },
-  {
-    name: "aios voortgangstoets: a night put back without the part-time day on it",
-    file: "lib/aiosSync.ts",
-    find: "  for (const p of patronen) verzoenPatroon(p, periodId, slotId);",
-    replace: "  void patronen;",
-    tests: ["app/api/aios/aiosVoortgangstoets"],
   },
   {
     name: "aios voortgangstoets: the download without Fellow",

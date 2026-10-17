@@ -10,7 +10,7 @@
  *   a feestdag in it: the feestdagen are shared out fairly. "Liever niet"
  *   is.
  * - An absence (verlof) blocks its days, on a feestdag it is "liever niet";
- *   a part-time day blocks that day's UD and evening (lib/aiosSync.ts). Those rows are the sync's: a mark by hand never
+ *   a part-time day blocks that day's UD and makes its evening liever niet (lib/aiosSync.ts). Those rows are the sync's: a mark by hand never
  *   changes them, and one that would say less than they do is refused
  *   with the reason, as on the achterwacht's screen.
  * - The 50% counters warn, they never refuse. They count only what the
@@ -202,7 +202,7 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
     );
   }
   // What an absence or a part-time day's uitloopdienst holds stays: a mark
-  // may not say less. A part-time day's evening or night is liever niet
+  // may not say less. A part-time day's evening is liever niet
   // until the AIOS says otherwise, voorkeur included (lib/aiosSync.ts).
   for (const t of targets) {
     if (!t.level || t.bron === 'MANUAL' || parttimeLieverNiet(t) || strength(level) >= strength(t.level)) continue;

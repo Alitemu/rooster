@@ -192,14 +192,14 @@ const sterkte = (s: Stand) => STERKTE[s ?? 'LEEG'];
 const vastGezet = (d: Pick<AiosVoorkeurDienst, 'bron'>) => d.bron === 'ABSENCE' || d.bron === 'PARTTIME';
 // What the AIOS cannot go below: leave, and the uitloopdienst of a part-time day.
 const vloer = (d: Pick<AiosVoorkeurDienst, 'bron' | 'level'>) => d.bron === 'ABSENCE' || (d.bron === 'PARTTIME' && d.level === 'ABSOLUUT');
-// A part-time day's evening or night: liever niet until the AIOS says otherwise (lib/aiosSync.ts).
+// A part-time day's evening: liever niet until the AIOS says otherwise (lib/aiosSync.ts).
 export const parttimeLieverNiet = (d: Pick<AiosVoorkeurDienst, 'bron' | 'level'>) => d.bron === 'PARTTIME' && d.level === 'LIEVER_NIET';
 
 /**
  * What the AIOS may choose for a box, what the server takes
  * (setAiosVoorkeur): nothing that says less than leave or a part-time
  * day's uitloopdienst on any of its diensten, and no geblokkeerd with a
- * feestdag in it. A part-time day's evening or night is liever niet as it
+ * feestdag in it. A part-time day's evening is liever niet as it
  * is, which leeg brings back: voorkeur and geblokkeerd are the AIOS's own
  * (the planner's choice in October 2026), liever niet is not offered twice.
  */

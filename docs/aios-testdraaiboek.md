@@ -11,7 +11,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 
 1. **Testinstallatie bijwerken.** In de map van de testinstallatie:
    `docker compose pull` en daarna `docker compose up -d`.
-   - Je ziet: rechts van de titel staat versie 0.82.1 of hoger.
+   - Je ziet: rechts van de titel staat versie 0.83.0 of hoger.
    - Controleer met `docker compose ps` dat ook de container `aios-solver`
      draait. Zonder die container kan het rooster niet gemaakt worden.
 2. **Mail staat uit op test** (`MAIL_UITGESCHAKELD=true`, zie de README). Er
@@ -65,8 +65,9 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 10. **aios01** (open de link in het tweede venster). Vul bij *Deeltijd* een
     parttimedag in: maandag, elke week.
     - Je ziet bij de voorkeuren op elke maandag: de uitloopdienst vast op
-      *PT*. De avond en de nacht van die maandag staan op liever niet (*PT*),
-      dus ook het avondblok zondag tot en met dinsdag.
+      *PT*. De avond van die maandag staat op liever niet (*PT*), dus ook het
+      avondblok zondag tot en met dinsdag. De nacht van die maandag heeft
+      geen markering.
     - Tik op zo'n avondblok. Je kunt kiezen uit voorkeur, geblokkeerd en
       terug naar liever niet. Kies geblokkeerd.
     - Je ziet bij *Hoeveel je hebt geblokkeerd*: dat avondblok telt mee.
