@@ -191,6 +191,9 @@ function Section({
   );
 }
 
+/** Why a button that sends is off (0.87.0). */
+const GEEN_MAIL = 'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.';
+
 type SectionKey = 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'voorstellen' | 'rooster';
 
 interface Props {
@@ -317,6 +320,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   const [mailSettingsKey, setMailSettingsKey] = useState(0);
   // Only the beheerder sets up the mail (0.87.0): a planner sees how it stands.
   const [beheerder, setBeheerder] = useState(false);
+  // Whether mail can go out (null: not known yet). Without it the buttons
+  // that send are off and say why, as on the AIOS's page (0.87.0): they
+  // used to answer with an error only after the click.
+  const [mailIngesteld, setMailIngesteld] = useState<boolean | null>(null);
   const [undoError, setUndoError] = useState<string | null>(null);
   // null = not known yet (still loading, or load failed) - the "Voorstellen
   // voor herverdeling" section stays visible in that case, so a load error
@@ -396,6 +403,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     setSuggestionCount(null);
     loadData();
   }, [periodId]);
+
+  useEffect(() => {
+    fetch(withBasePath('/api/planner/mail-settings'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setMailIngesteld(data?.success ? Boolean(data.data.ingesteld) : null))
+      .catch(() => setMailIngesteld(null));
+  }, [mailSettingsKey]);
 
   useEffect(() => {
     fetch(withBasePath('/api/auth/me'))
@@ -1020,11 +1034,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                         <>
                           <button
                             onClick={() => handleRemindOne(person)}
-                            disabled={ingediend || submittingFor === person.person_id}
+                            disabled={ingediend || submittingFor === person.person_id || mailIngesteld === false}
                             title={
                               ingediend
                                 ? 'Deze persoon heeft de voorkeuren al ingediend.'
-                                : 'Stuurt een herinnering met een persoonlijke link.'
+                                : mailIngesteld === false
+                                  ? GEEN_MAIL
+                                  : 'Stuurt een herinnering met een persoonlijke link.'
                             }
                             className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 disabled:text-neutral-600 transition-colors whitespace-nowrap"
                           >
@@ -1101,7 +1117,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               ) : (
                 <button
                   onClick={() => setRemindAll({ stage: 'confirm' })}
-                  disabled={open.length === 0 || remindAll.stage === 'sending'}
+                  disabled={open.length === 0 || remindAll.stage === 'sending' || mailIngesteld === false}
                   className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300 disabled:text-neutral-600 transition-colors"
                 >
                   {remindAll.stage === 'sending'
@@ -1114,6 +1130,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               {remindAll.stage === 'done' && (
                 <p className={`mt-2 text-sm ${remindAll.ok ? 'text-green-700' : 'text-red-700'}`} role="status">
                   {remindAll.message}
+                </p>
+              )}
+              {mailIngesteld === false && open.length > 0 && (
+                <p className="mt-2 text-sm text-amber-900" data-testid="mail-nog-niet">
+                  {GEEN_MAIL}
                 </p>
               )}
             </div>
@@ -1195,7 +1216,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setExportInitialType('reminders');
                 setExportDialogOpen(true);
               }}
-              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+              disabled={mailIngesteld === false}
+              title={mailIngesteld === false ? GEEN_MAIL : undefined}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               📧 Deadlineherinnering versturen
             </button>

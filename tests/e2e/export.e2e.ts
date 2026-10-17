@@ -37,19 +37,35 @@ test.describe('Exporteren & communicatie', () => {
     await expect(kopjes.nth(3)).toHaveText(/Wijzigingsgeschiedenis downloaden/);
   });
 
-  test('zonder mailinstelling: melding in plaats van versturen, geen andere uitweg', async ({ page }) => {
+  test('zonder mailinstelling: versturen staat uit en zegt waarom, geen andere uitweg', async ({ page }) => {
+    // Off and saying why, as on the AIOS's page (0.87.0); the downloads still work.
     const dialog = await openDialog(page);
-    await dialog.getByRole('button', { name: /Herinneringen versturen/ }).click();
-    await expect(dialog.getByText('Versturen is nog niet ingesteld')).toBeVisible();
+    for (const naam of [/Herinneringen versturen/, /Uitnodigingen versturen/]) {
+      const keuze = dialog.getByRole('button', { name: naam });
+      await expect(keuze).toBeDisabled();
+      await expect(keuze).toContainText('Kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.');
+    }
+    await expect(dialog.getByRole('button', { name: /Uitnodigingen downloaden/ })).toBeEnabled();
     // Generating would issue links nothing can send.
     await expect(dialog.getByRole('button', { name: 'Herinneringen genereren' })).toHaveCount(0);
-
-    await dialog.getByRole('button', { name: 'Terug' }).click();
-    await dialog.getByRole('button', { name: /Uitnodigingen versturen/ }).click();
-    await expect(dialog.getByText('Versturen is nog niet ingesteld')).toBeVisible();
-
     await expect(dialog.locator('a[href^="mailto:"]')).toHaveCount(0);
     await expect(dialog.getByText(/JSON/)).toHaveCount(0);
+  });
+
+  test('zonder mailinstelling: de herinnerknoppen op de pagina staan uit en zeggen waarom', async ({ page }) => {
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
+    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    await expect(page.getByRole('button', { name: /Deadlineherinnering versturen/ })).toBeDisabled();
+    await page.locator('[role="button"]:has-text("Status voorkeuren")').first().click();
+    await expect(page.getByRole('button', { name: /Herinnering sturen aan iedereen/ })).toBeDisabled();
+    await expect(page.getByTestId('mail-nog-niet')).toHaveText(
+      'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.'
+    );
+    const perPersoon = await page.getByRole('button', { name: 'Herinnering sturen', exact: true }).all();
+    expect(perPersoon.length).toBeGreaterThan(0);
+    for (const knop of perPersoon) await expect(knop).toBeDisabled();
   });
 
   test('automatische herinneringen: zonder mailinstelling staat er dat ze uit staan', async ({ page }) => {

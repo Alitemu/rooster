@@ -542,10 +542,13 @@ het met de punaise vastzet.
 **Vanaf versie 0.87.0** stelt alleen de beheerder de mail in, bij de
 achterwacht net als bij de AIOS. Een planner ziet onder *Exporteren &
 communicatie* geen knop *Mailinstellingen* meer, maar wel hoe de mail
-ervoor staat. Bij de AIOS staan *Uitnodigingen versturen* en *Herinnering
-versturen* zichtbaar uit zolang de mail niet is ingesteld, met de reden
-erbij. Zolang kun je de persoonlijke links zelf rondsturen met *Links
-downloaden*.
+ervoor staat. Zolang de mail niet is ingesteld, staan alle knoppen die iets
+versturen zichtbaar uit, met de reden erbij. Bij de AIOS zijn dat
+*Uitnodigingen versturen* en *Herinnering versturen*. Bij de achterwacht
+zijn dat *Herinnering sturen* per persoon en aan iedereen,
+*Deadlineherinnering versturen* en de keuzes om uitnodigingen of
+herinneringen te versturen. Downloaden kan wel. Bij de AIOS kun je de
+persoonlijke links dan zelf rondsturen met *Links downloaden*.
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet

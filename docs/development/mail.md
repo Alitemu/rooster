@@ -45,7 +45,12 @@ removed by the beheerder only, shared by both diensten. Since 0.87.0 only
 the beheerder gets the button at all, as on the AIOS's page: a planner
 sees how the mail stands (components/MailStatus.tsx), the warning at the
 top tells them to ask the beheerder, and the texts that pointed a planner
-to Mailinstellingen say the beheerder does it - Gmail
+to Mailinstellingen say the beheerder does it. Without the mail every
+button that sends is off and says why (GEEN_MAIL in PlannerDashboard and
+ExportDialog): "Herinnering sturen" per person and to everyone,
+"Deadlineherinnering versturen" and the two send choices of the export
+dialog; they answered with an error only after the click. The downloads
+stay on (tests/e2e/export.e2e.ts) - Gmail
 only, a 16-letter app password, the login is tried before saving, the
 password is stored AES-GCM encrypted with a key derived from the session
 secret, lib/settingsCrypto.ts, and never returned). .env is not read for

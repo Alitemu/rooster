@@ -411,20 +411,25 @@ export function ExportDialog({
           <>
             <h2 className="text-2xl font-bold mb-4">Exporteren en communicatie</h2>
             <div className="space-y-3 mb-6">
+              {/* Off without the mail, and saying why (0.87.0): the downloads below still work. */}
               <button
                 onClick={() => setExportType('invitations-send')}
-                className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                disabled={autoSendAvailable === false}
+                className={VERSTUUR_KEUZE}
               >
                 <p className="font-semibold text-neutral-900">✉️ Uitnodigingen versturen</p>
                 <p className="text-sm text-neutral-600">Iedereen de eigen persoonlijke link mailen via Power Automate</p>
+                {autoSendAvailable === false && <p className="text-sm text-amber-900 mt-1">{GEEN_MAIL}</p>}
               </button>
 
               <button
                 onClick={() => setExportType('reminders')}
-                className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
+                disabled={autoSendAvailable === false}
+                className={VERSTUUR_KEUZE}
               >
                 <p className="font-semibold text-neutral-900">📧 Herinneringen versturen</p>
                 <p className="text-sm text-neutral-600">Deadline-herinneringen via Power Automate, aan iedereen of per persoon</p>
+                {autoSendAvailable === false && <p className="text-sm text-amber-900 mt-1">{GEEN_MAIL}</p>}
               </button>
 
               <button
@@ -796,6 +801,11 @@ function SendButton({
     </div>
   );
 }
+
+const VERSTUUR_KEUZE =
+  'w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-neutral-200 disabled:hover:bg-transparent';
+
+const GEEN_MAIL = 'Kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.';
 
 function NotConfiguredNotice() {
   return (
