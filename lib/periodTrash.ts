@@ -18,11 +18,29 @@
  * different, live period.
  */
 
+import { NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { overlapMessage, overlappingPeriod } from './periodOverlap';
 import { isAiosPool } from './aiosPeriod';
 
 export const RETENTION_DAYS = 30;
+
+export const PERIOD_TRASHED_MESSAGE = 'Deze periode staat in de prullenbak. Zet hem eerst terug.';
+
+/**
+ * The 409 for a change to an achterwacht period in the prullenbak, or null.
+ * Its page still opens from a bookmark or a tab left open, and from there it
+ * could be opened, generated and published: the verzendlijst then told
+ * everyone about a roster none of them could open (the full audit, 0.86.0).
+ * Only coming back, purging and renaming go on; reading it too, so the page
+ * can say where it is. The AIOS's routes find no period there at all
+ * (lib/aiosUitnodigen.ts aiosUitnodigPeriode).
+ */
+export function trashedPeriodDenial(periodId: string): NextResponse | null {
+  const trashed = db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NOT NULL').get(periodId);
+  if (!trashed) return null;
+  return NextResponse.json({ success: false, error: { code: 'PERIOD_TRASHED', message: PERIOD_TRASHED_MESSAGE } }, { status: 409 });
+}
 
 export class PeriodTrashError extends Error {
   constructor(

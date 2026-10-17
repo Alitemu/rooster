@@ -524,6 +524,17 @@ opgeven: twee patronen op dezelfde dag telden voor de fte dubbel. Bij de
 geschiedenis van vóór de app weigert de import een rij met meer
 feestdagdiensten dan diensten.
 
+**Vanaf versie 0.86.0** verandert er niets meer aan een achterwachtperiode
+in de prullenbak. Open je hem via een bladwijzer of een tabblad dat nog
+openstond, dan staat bovenaan dat hij in de prullenbak staat. Openen,
+genereren of publiceren geeft dan de melding *Deze periode staat in de
+prullenbak. Zet hem eerst terug.* Haal je bij de AIOS de voortgangstoets
+weg of verschuif je hem nadat het rooster gemaakt is, dan gaat de nacht die
+terugkomt naar de AIOS die de rest van dat blok heeft. Kan dat niet, dan
+zegt de app waarom en vul je die nacht met de hand in. En *Ongedaan maken*
+na *Wisselen* zet een dienst van de achterwacht weer helemaal terug: een
+nieuwe generatie mag hem daarna weer verplaatsen.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

@@ -20,6 +20,10 @@ export interface PeriodScope {
   eind_datum: string;
 }
 
+function inPrullenbak(periodId: string): boolean {
+  return Boolean(db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NOT NULL').get(periodId));
+}
+
 /**
  * True when this participant belongs to the period: either they hold an
  * access link issued for it, or they are a member of its pool for dates
@@ -35,10 +39,7 @@ export function isPeriodVisibleToPerson(personId: string, period: PeriodScope): 
   // A period in the trash is on its way to being purged: verify-link
   // already stops resolving it, and a session opened before it was
   // trashed must not keep reading it or writing preferences into it.
-  const trashed = db
-    .prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NOT NULL')
-    .get(period.id);
-  if (trashed) return false;
+  if (inPrullenbak(period.id)) return false;
 
   const viaLink = db
     .prepare(
@@ -85,6 +86,8 @@ export function periodUsableFor(auth: AuthContext, personId: string, period: Per
   // its own in a later step, and until then nobody uses it through these,
   // the beheerder acting for an AIOS participant included (lib/aiosPeriod.ts).
   if (isAiosPeriod(period.id)) return false;
-  if (requirePlannerAccess(auth)) return staffMayAccessPeriod(auth, period.id);
+  // Not in the prullenbak for the planner acting for them either: nothing
+  // changes there (lib/periodTrash.ts trashedPeriodDenial, the full audit).
+  if (requirePlannerAccess(auth)) return staffMayAccessPeriod(auth, period.id) && !inPrullenbak(period.id);
   return isPeriodVisibleToPerson(personId, period);
 }

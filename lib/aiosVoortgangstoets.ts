@@ -18,7 +18,12 @@
  *
  * Another date or none puts the night back in its block, with the block's
  * marks (an AIOS marks a block as a whole) and the leave that falls on it
- * (a part-time day leaves a night open, lib/aiosSync.ts).
+ * (a part-time day leaves a night open, lib/aiosSync.ts). In a roster
+ * already made it goes to the AIOS who has the rest of the block, so the
+ * block is whole again; it stayed open, and publishing waited for the
+ * planner to fill it in (the full audit, 0.86.0, the planner's choice). Not
+ * when the rest of the block is not with one AIOS, or that AIOS has the
+ * night blocked or is away then: open as before, and the planner is told.
  */
 
 import { db } from '@/db/client';
@@ -31,9 +36,18 @@ import { aiosVoortgangstoets } from '@/lib/aiosToetsNacht';
 
 export { aiosVoortgangstoets, fellowNacht, type AiosVoortgangstoets } from '@/lib/aiosToetsNacht';
 
-type Periode = Pick<AiosUitnodigPeriode, 'id' | 'pool_id' | 'start_datum' | 'eind_datum'>;
+type Periode = Pick<AiosUitnodigPeriode, 'id' | 'pool_id' | 'start_datum' | 'eind_datum' | 'status'>;
 
-export type ToetsUitkomst = { ok: true } | { ok: false; status: number; code: string; message: string };
+/** The night that came back in a roster already made: to whom, or why to nobody. */
+export interface TeruggezetteNacht {
+  nacht: string;
+  aios_id: string | null;
+  reden: 'GEBLOKKEERD' | 'NIET_EEN_AIOS' | null;
+}
+
+export type ToetsUitkomst =
+  | { ok: true; teruggezet: TeruggezetteNacht | null }
+  | { ok: false; status: number; code: string; message: string };
 
 const nachtenOp = (periodId: string, datum: string) =>
   db
@@ -43,12 +57,12 @@ const nachtenOp = (periodId: string, datum: string) =>
     )
     .all(periodId, datum) as Array<{ id: string }>;
 
-/** The night of `datum` back in the quarter, in its block, as the period made it (lib/aiosSlots.ts). */
-function zetNachtTerug(period: Periode, datum: string): void {
-  if (nachtenOp(period.id, datum).length > 0) return;
+/** The night of `datum` back in the quarter, in its block, as the period made it (lib/aiosSlots.ts): its id. */
+function zetNachtTerug(period: Periode, datum: string): string | null {
+  if (nachtenOp(period.id, datum).length > 0) return null;
   const rooster = aiosRooster(period.start_datum, period.eind_datum);
   const s = rooster.slots.find((x) => x.code === 'ND' && x.datum === datum);
-  if (!s) return;
+  if (!s) return null;
   const b = s.blok === null ? null : rooster.blokken[s.blok];
   const blok = b
     ? (db
@@ -86,6 +100,31 @@ function zetNachtTerug(period: Periode, datum: string): void {
     ).run(id, blok.id, id);
   }
   zetAfwezigheidOpDienst(period.id, id);
+  return id;
+}
+
+/** In a roster already made: the night that came back to the AIOS of the rest of its block, if they can. */
+function geefAanBlok(periodId: string, slotId: string, nacht: string): TeruggezetteNacht {
+  const rest = db
+    .prepare(
+      `SELECT a.person_id FROM dienstrooster_shift_slot sl
+       JOIN dienstrooster_shift_slot terug ON terug.id = ? AND terug.shift_block_id = sl.shift_block_id
+       LEFT JOIN dienstrooster_assignment a ON a.slot_id = sl.id AND a.schedule_version_id = sl.period_id
+       WHERE sl.id <> terug.id`
+    )
+    .all(slotId) as Array<{ person_id: string | null }>;
+  const wie = [...new Set(rest.map((r) => r.person_id))];
+  if (wie.length !== 1 || wie[0] === null) return { nacht, aios_id: null, reden: 'NIET_EEN_AIOS' };
+  // Blocked, or away (on a feestdag only liever niet, still away).
+  const kanNiet = db
+    .prepare(`SELECT 1 FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ? AND (blocking_level = 'ABSOLUUT' OR source = 'ABSENCE')`)
+    .get(wie[0], slotId);
+  if (kanNiet) return { nacht, aios_id: null, reden: 'GEBLOKKEERD' };
+  db.prepare(
+    `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+     VALUES (?, ?, ?, ?, 'SOLVER', 1, ?)`
+  ).run(crypto.randomUUID(), periodId, wie[0], slotId, new Date().toISOString());
+  return { nacht, aios_id: wie[0], reden: null };
 }
 
 /**
@@ -106,14 +145,16 @@ export function bewaarAiosVoortgangstoets(period: Periode, invoer: unknown): Toe
     };
   }
   const oud = aiosVoortgangstoets(period.id);
-  if (oud.datum === datum) return { ok: true };
-  db.transaction(() => {
+  if (oud.datum === datum) return { ok: true, teruggezet: null };
+  const teruggezet = db.transaction((): TeruggezetteNacht | null => {
     db.prepare(
       `INSERT INTO dienstrooster_aios_periode (period_id, voortgangstoets) VALUES (?, ?)
        ON CONFLICT(period_id) DO UPDATE SET voortgangstoets = excluded.voortgangstoets`
     ).run(period.id, datum);
-    if (oud.nacht) zetNachtTerug(period, oud.nacht);
+    const terug = oud.nacht ? zetNachtTerug(period, oud.nacht) : null;
+    const gegeven = terug && period.status === 'GEGENEREERD' ? geefAanBlok(period.id, terug, oud.nacht!) : null;
     if (datum) for (const n of nachtenOp(period.id, addDays(datum, -1))) verwijderSlot(n.id);
+    return gegeven;
   })();
-  return { ok: true };
+  return { ok: true, teruggezet };
 }

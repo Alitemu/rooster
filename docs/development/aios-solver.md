@@ -100,6 +100,14 @@ copy of the hard rules, for changing the roster by hand.
   out now and then, so tests/fixtures/aios-regels.json has rosters with
   them for both copies of the rules. App side:
   app/api/aios/aiosVoortgangstoets.test.ts, tests/e2e/aios-voortgangstoets.e2e.ts.
+- A night that comes back (another date, or none) in a roster already
+  made goes to the AIOS who has the rest of its block, row source SOLVER,
+  unless that rest is not with one AIOS or they have it ABSOLUUT or an
+  ABSENCE mark on it (0.86.0, geefAanBlok; the PUT answers `teruggezet`
+  with the night and to whom or why not). It stayed open, the block was
+  no longer whole and publishing waited until the planner filled it in:
+  app/api/aios/aiosLevensloop.test.ts found it, its first example is that
+  sequence.
 
 ## The app's copy of the hard rules (step 4c, 0.77.0)
 

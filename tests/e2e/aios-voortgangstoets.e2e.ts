@@ -109,7 +109,10 @@ test('the planner gives the date, and the night before says Fellow', async ({ pa
 
   await kaart.getByLabel('Er is een voortgangstoets in dit kwartaal').uncheck();
   await kaart.getByRole('button', { name: 'Opslaan' }).click();
-  await expect(kaart.getByText(/^Opgeslagen\./)).toBeVisible();
+  // The night back with the AIOS of the rest of its block (the full audit, 0.86.0).
+  await expect(
+    kaart.getByText('Opgeslagen. De nacht van dinsdag 19 oktober 2094 staat weer in het rooster, bij de AIOS die de rest van dat blok heeft.')
+  ).toBeVisible();
   await expect(fellow).toHaveCount(0);
-  expect(nacht('2094-10-19')).toEqual({ person_id: null });
+  expect(nacht('2094-10-19')).toEqual({ person_id: houder });
 });

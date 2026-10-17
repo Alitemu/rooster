@@ -11,6 +11,7 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { optionalText } from '@/lib/requestFields';
 import { setPendingUndo, assignmentSlotLabel } from '@/lib/pendingUndo';
@@ -31,6 +32,9 @@ export async function DELETE(
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(params.id);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(params.id);
+    if (inTrash) return inTrash;
     const actorId = auth!.userId;
 
     const periodId = params.id;

@@ -28,6 +28,7 @@ import { getISOWeek, parseISO } from '@/lib/holidays';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial, staffMayAccessPerson } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { objectRows, rowText, badRequest } from '@/lib/requestFields';
@@ -71,6 +72,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(params.id);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(params.id);
+    if (inTrash) return inTrash;
     const actorId = auth!.userId;
 
     const { id } = params;

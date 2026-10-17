@@ -233,4 +233,54 @@ describe('the voortgangstoets', () => {
     expect((await res.json()).error.message).toContain('ligt vast');
     expect(nacht(dag(DI))).toBeUndefined();
   });
+  describe('the night that comes back, in a roster already made', () => {
+    const blokAan = (wie: string[]) => {
+      [ZO, MA, DI].forEach((n, i) =>
+        insert('dienstrooster_assignment', { schedule_version_id: w.period, person_id: wie[i], slot_id: nacht(dag(n))!.id, bron: 'SOLVER', row_version: 1, aangemaakt_op: now })
+      );
+      zetStatus('GEGENEREERD');
+    };
+    const houder = (datum: string) =>
+      (db.prepare('SELECT person_id FROM dienstrooster_assignment WHERE slot_id = ?').get(nacht(datum)!.id) as { person_id: string } | undefined)?.person_id ?? null;
+    const terug = async (datum: string | null) => (await (await zet({ datum })).json()).data.teruggezet;
+
+    it('goes to the AIOS of the rest of its block, so the block is whole again', async () => {
+      blokAan([w.x, w.x, w.x]);
+      expect(await terug(dag(WO))).toBeNull();
+      expect(nacht(dag(DI))).toBeUndefined();
+      // x marked the block liever niet: that is no reason to leave it open.
+      expect(await terug(null)).toEqual({ nacht: dag(DI), aios_id: w.x, reden: null });
+      expect([houder(dag(ZO)), houder(dag(MA)), houder(dag(DI))]).toEqual([w.x, w.x, w.x]);
+      expect(laadAiosRooster(periode()).dagen.find((d) => d.datum === dag(DI))!.fellow_nacht).toBe(false);
+    });
+
+    it('also when the toets moves to another night of the same block', async () => {
+      blokAan([w.x, w.x, w.x]);
+      await zet({ datum: dag(WO) });
+      expect(await terug(dag(DI))).toEqual({ nacht: dag(DI), aios_id: w.x, reden: null });
+      expect(nacht(dag(MA))).toBeUndefined();
+      expect([houder(dag(ZO)), houder(dag(DI))]).toEqual([w.x, w.x]);
+    });
+
+    it('stays open when that AIOS is away that night, and says why', async () => {
+      // y is away on the Monday and Tuesday; the planner gave y the block anyway.
+      blokAan([w.y, w.y, w.y]);
+      await zet({ datum: dag(WO) });
+      expect(await terug(null)).toEqual({ nacht: dag(DI), aios_id: null, reden: 'GEBLOKKEERD' });
+      expect(houder(dag(DI))).toBeNull();
+    });
+
+    it('stays open when the rest of the block is not with one AIOS', async () => {
+      blokAan([w.x, w.y, w.x]);
+      await zet({ datum: dag(WO) });
+      expect(await terug(null)).toEqual({ nacht: dag(DI), aios_id: null, reden: 'NIET_EEN_AIOS' });
+      expect(houder(dag(DI))).toBeNull();
+    });
+
+    it('is nobody\'s before the roster is made', async () => {
+      await zet({ datum: dag(WO) });
+      expect(await terug(null)).toBeNull();
+      expect(houder(dag(DI))).toBeNull();
+    });
+  });
 });

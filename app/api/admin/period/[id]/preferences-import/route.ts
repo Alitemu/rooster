@@ -10,6 +10,7 @@ import { getAuthContextFromRequest, requireAdminAccess } from '@/lib/auth-contex
 import { internalErrorResponse, parseJsonBody, unauthorizedResponse } from '@/lib/api-errors';
 import { importPreferences } from '@/lib/preferencesImport';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
@@ -19,6 +20,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(id);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(id);
+    if (inTrash) return inTrash;
     const body = (await parseJsonBody(req)) as { bestand?: unknown; toepassen?: unknown };
     const result = importPreferences(auth!.userId, id, body?.bestand, body?.toepassen === true);
     if (!result.ok) {

@@ -81,6 +81,21 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   (audit 13). Restoring refuses days another period took meanwhile (409
   PERIOD_OVERLAP, lib/periodOverlap.ts); a draft comes back whatever its
   dates.
+- **Nothing changes in the prullenbak** (lib/periodTrash.ts
+  trashedPeriodDenial, the full audit, 0.86.0): every changing
+  achterwacht route under a period's path answers 409 PERIOD_TRASHED
+  ("Deze periode staat in de prullenbak. Zet hem eerst terug."), except
+  coming back, purging, renaming and cancelling a generation that runs.
+  The period page still opened from a bookmark or a tab left open, and
+  from there it was opened, generated and published: the verzendlijst
+  told everyone about a roster none of them could open. Only "Terug naar
+  open" and "Rooster verwijderen" asked. Reading still works, and the
+  page says where the period is (`data-testid="in-prullenbak"`). A
+  planner acting for a participant loses it too (lib/periodAccess.ts
+  periodUsableFor). app/api/periodTrashGuard.test.ts sweeps both halves:
+  the source of every changing handler, and every one of them called on
+  a published period in the prullenbak. The AIOS's routes find no
+  quarter there at all (aiosUitnodigPeriode).
 - **While a generation runs** manual-assign, reassign, delete and undo
   answer 409 (GENERATION_RUNNING_MESSAGE, lib/rosterGenerationJobs.ts), as
   reset-roster does: the solver's answer, written when it comes, was built
@@ -107,6 +122,15 @@ route falls back to ROOSTER). PlannerDashboard shows the button inside that
 section, so it folds away with it; a hidden herverdeling section hands it
 to the roster. A generation clears it, like "Rooster verwijderen" and
 "Terug naar open": it belonged to the roster that was replaced (audit 10).
+Undoing gives back the roster from before the change, the source of the
+row included: "Wisselen" writes a MANUAL row, and its undo put the person
+back but left that MANUAL, so a solver's dienst stayed fixed through the
+next generation and "Rooster verwijderen" (the full audit, 0.86.0). The
+payload keeps `previous_bron`. The model test
+app/api/planner/period/[id]/assignments/handmatigModel.test.ts runs random
+toewijzen, wisselen, verwijderen and ongedaan maken against it;
+app/api/periods/periodLevensloop.test.ts does the same for the period's
+steps from concept on, with a stand-in solver.
 
 **Publishing (GEGENEREERD → GEPUBLICEERD) and its way back:**
 

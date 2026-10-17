@@ -12,6 +12,23 @@ import { withBasePath } from '@/lib/basePath';
 const lang = (d: string) =>
   new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
+/** The night that came back in a roster already made (lib/aiosVoortgangstoets.ts). */
+interface Teruggezet {
+  nacht: string;
+  aios_id: string | null;
+  reden: 'GEBLOKKEERD' | 'NIET_EEN_AIOS' | null;
+}
+
+function opgeslagen(status: string, terug: Teruggezet | null): string {
+  if (status !== 'GEGENEREERD') return 'Opgeslagen.';
+  if (!terug) return 'Opgeslagen. Het rooster was al gemaakt. Maak het opnieuw of pas die nachten met de hand aan.';
+  const nacht = `Opgeslagen. De nacht van ${lang(terug.nacht)} staat weer in het rooster`;
+  if (terug.aios_id) return `${nacht}, bij de AIOS die de rest van dat blok heeft.`;
+  const waarom =
+    terug.reden === 'GEBLOKKEERD' ? 'De AIOS van dat blok heeft die nacht geblokkeerd of is dan afwezig.' : 'De rest van dat blok ligt niet bij één AIOS.';
+  return `${nacht}, maar nog zonder AIOS. ${waarom} Vul hem met de hand in.`;
+}
+
 /** The night before the voortgangstoets: no AIOS, a fellow. */
 export function FellowVak() {
   return (
@@ -65,11 +82,9 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ datum: aan ? datum : null }),
       });
-      neem(await json(res, 'Opslaan is mislukt.'));
-      setMelding({
-        fout: false,
-        tekst: status === 'GEGENEREERD' ? 'Opgeslagen. Het rooster was al gemaakt. Maak het opnieuw of pas die nachten met de hand aan.' : 'Opgeslagen.',
-      });
+      const nieuw = (await json(res, 'Opslaan is mislukt.')) as Toets & { teruggezet: Teruggezet | null };
+      neem(nieuw);
+      setMelding({ fout: false, tekst: opgeslagen(status, nieuw.teruggezet) });
       onChanged();
     } catch (err) {
       setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Opslaan is mislukt.' });

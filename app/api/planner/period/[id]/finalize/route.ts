@@ -20,6 +20,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { runPublicationCheck } from '@/lib/publicationCheck';
 import { insertNotification } from '@/lib/notifications';
@@ -41,6 +42,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(periodId);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(periodId);
+    if (inTrash) return inTrash;
     const actorId = auth!.userId;
     const body = await parseJsonBody<{ confirmOverrides?: boolean }>(request);
 

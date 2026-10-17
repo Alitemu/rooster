@@ -5,7 +5,9 @@
  * PUT /api/aios/periode/[id]/voortgangstoets { datum: 'YYYY-MM-DD' | null }
  *     - save it: that night out of the AIOS's quarter, the old one back.
  *     Until the roster is published; not while a generation runs (409),
- *     which plans with the nights as they were.
+ *     which plans with the nights as they were. In a roster already made
+ *     the old night goes to the AIOS of the rest of its block, or stays
+ *     open; `teruggezet` says which.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -63,10 +65,10 @@ export async function PUT(req: NextRequest, props: { params: Promise<{ id: strin
         entiteitId: period.id,
         actie: 'UPDATE',
         oud: { voortgangstoets: oud.datum },
-        nieuw: { wijziging: 'voortgangstoets AIOS', voortgangstoets: nieuw.datum },
+        nieuw: { wijziging: 'voortgangstoets AIOS', voortgangstoets: nieuw.datum, teruggezet: uitkomst.teruggezet },
       });
     }
-    return NextResponse.json({ success: true, data: { ...nieuw, mag_wijzigen: true } });
+    return NextResponse.json({ success: true, data: { ...nieuw, mag_wijzigen: true, teruggezet: uitkomst.teruggezet } });
   } catch (error) {
     return internalErrorResponse('aios-voortgangstoets-bewaren', error);
   }

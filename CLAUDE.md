@@ -186,6 +186,9 @@ Every route keeps these, and a sweep test fails when one doesn't:
 - **Dienst boundary:** AIOS code imports only the shared parts, the
   achterwacht's code the AIOS's only where listed (app/dienstImports.test.ts).
   The AIOS needs something of the achterwacht's: copy it.
+- **Prullenbak:** an achterwacht route that changes a period asks
+  `trashedPeriodDenial` (lib/periodTrash.ts) after the access checks
+  (app/api/periodTrashGuard.test.ts).
 - **Audit log:** every planner route that changes data writes
   `writeAuditLog` or says why not (app/api/auditCoverage.test.ts).
 - **Input:** bodies through `parseJsonBody` and lib/requestFields.ts, query

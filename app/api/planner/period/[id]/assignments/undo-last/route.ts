@@ -21,6 +21,7 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { optionalText } from '@/lib/requestFields';
 import { getPendingUndo, clearPendingUndo } from '@/lib/pendingUndo';
@@ -41,6 +42,9 @@ export async function POST(
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(params.id);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(params.id);
+    if (inTrash) return inTrash;
     const actorId = auth!.userId;
     const periodId = params.id;
     // A generation's answer would land on top of this change (audit 10).
@@ -125,8 +129,12 @@ export async function POST(
           | undefined;
         if (!current || current.person_id !== payload.current_person_id) return false;
 
-        db.prepare('UPDATE dienstrooster_assignment SET person_id = ?, row_version = row_version + 1 WHERE id = ?').run(
+        // The source too: a reassigned solver's dienst back as the solver's,
+        // not as filled in by hand (the full audit, 0.86.0). An undo saved
+        // before then has none and keeps the row's.
+        db.prepare('UPDATE dienstrooster_assignment SET person_id = ?, bron = COALESCE(?, bron), row_version = row_version + 1 WHERE id = ?').run(
           payload.previous_person_id,
+          payload.previous_bron ?? null,
           payload.assignment_id
         );
         db.prepare(

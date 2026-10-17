@@ -18,6 +18,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { clearSolverAssignments } from '@/lib/rosterGaps';
@@ -36,6 +37,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(id);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(id);
+    if (inTrash) return inTrash;
 
     const period = db
       .prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')

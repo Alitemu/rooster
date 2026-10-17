@@ -154,6 +154,12 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   daarom niet in het blok staat (0.83.0). De nacht moet in het
   kwartaal vallen: een toets op de eerste woensdag hoort bij het vorige
   kwartaal.
+- Is het rooster al gemaakt, dan gaat een nacht die terugkomt naar de AIOS
+  die de rest van dat blok heeft. Het blok is dan weer heel (0.86.0, de
+  keuze van de planner). Ligt de rest van het blok niet bij één AIOS, of
+  heeft die AIOS die nacht geblokkeerd of is hij dan afwezig, dan blijft de
+  nacht open. De planner ziet dat bij het opslaan en vult hem met de hand
+  in. Voor 0.86.0 bleef de nacht altijd open.
 
 ## Verzoeken van de AIOS
 

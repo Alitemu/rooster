@@ -11,7 +11,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 
 1. **Testinstallatie bijwerken.** In de map van de testinstallatie:
    `docker compose pull` en daarna `docker compose up -d`.
-   - Je ziet: rechts van de titel staat versie 0.85.0 of hoger.
+   - Je ziet: rechts van de titel staat versie 0.86.0 of hoger.
    - Controleer met `docker compose ps` dat ook de container `aios-solver`
      draait. Zonder die container kan het rooster niet gemaakt worden.
 2. **Mail staat uit op test** (`MAIL_UITGESCHAKELD=true`, zie de README). Er
@@ -100,6 +100,9 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
       op een maandag, dan staat er ~ (liever niet) of ✕ (het geblokkeerde
       blok, uit het deel boven de helft) bij.
     - Op de nacht voor de voortgangstoets staat *Fellow*.
+    - Verschuif de toets een week en klik op *Opslaan*. De melding zegt dat
+      de nacht weer in het rooster staat, bij de AIOS die de rest van dat
+      blok heeft. Zet de toets daarna terug op de eerste datum.
 17. **Met de hand wijzigen.** Tik op een blok en kies een andere AIOS.
     - Je ziet per AIOS wat het zou kosten (een harde regel, een markering,
       boven 25%). Kiezen kan na *Ja, toch indelen*.

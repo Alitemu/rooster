@@ -11,6 +11,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { autoReminderStatus } from '@/lib/autoReminders';
@@ -43,6 +44,9 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(id);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(id);
+    if (inTrash) return inTrash;
     const body = await parseJsonBody<{ aan: boolean }>(req);
     if (typeof body.aan !== 'boolean') {
       return NextResponse.json(

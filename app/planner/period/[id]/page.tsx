@@ -26,6 +26,7 @@ interface Period {
   definitief_op?: string | null;
   bevroren_ruleset_json?: string | null;
   pool_type?: string;
+  verwijderd_op?: string | null;
 }
 
 export default function PlannerPeriodPage() {
@@ -213,6 +214,21 @@ export default function PlannerPeriodPage() {
 
   return (
     <div className="container-main py-8 space-y-6">
+      {/* Opened from a bookmark or a tab left open: every change is refused
+          there (lib/periodTrash.ts trashedPeriodDenial). */}
+      {period.verwijderd_op && (
+        <div className="card p-4 bg-red-50 border border-red-200" data-testid="in-prullenbak">
+          <p className="text-sm text-red-900">
+            Deze periode staat in de prullenbak. Je kunt hem bekijken, maar niet wijzigen. Zet hem terug via
+            de{' '}
+            <a href={withBasePath('/planner')} className="font-medium underline">
+              Prullenbak op het overzicht
+            </a>
+            .
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
         {/* Stacked on a phone, side by side from sm up: next to each other the

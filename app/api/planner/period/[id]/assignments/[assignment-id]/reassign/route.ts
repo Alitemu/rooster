@@ -21,6 +21,7 @@ import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
+import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { optionalText } from '@/lib/requestFields';
 import { resolveRulesetConfig, resolveWindowWeeks } from '@/lib/rosterBands';
@@ -51,6 +52,9 @@ export async function POST(
     // The achterwacht's step; the AIOS's comes later (lib/aiosPeriod.ts).
     const aiosNotYet = aiosNotYetDenial(params.id);
     if (aiosNotYet) return aiosNotYet;
+    // Nothing changes in the prullenbak (lib/periodTrash.ts).
+    const inTrash = trashedPeriodDenial(params.id);
+    if (inTrash) return inTrash;
     const actorId = auth!.userId;
 
     const periodId = params.id;
@@ -272,6 +276,9 @@ export async function POST(
           slot_id: assignment.slot_id,
           current_person_id: newPersonId,
           previous_person_id: assignment.person_id,
+          // The new row is MANUAL; undo gives the old one's source back, or
+          // a solver's dienst stayed fixed through the next generation.
+          previous_bron: assignment.bron,
         },
         label: `${oldPerson?.codenaam ?? 'iemand'} → ${newPerson.codenaam} gewisseld op ${assignmentSlotLabel(slot.datum, slot.teller)}`,
         actorId,
