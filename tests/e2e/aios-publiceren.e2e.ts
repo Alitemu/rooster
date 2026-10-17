@@ -89,6 +89,10 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   // The history from before the app: two of the four, one did twice as many nights.
   const geschiedenis = page.getByTestId('aios-geschiedenis');
   await geschiedenis.getByRole('button', { name: 'Tonen' }).click();
+  // The template button below the text, not over its last line (seen on a phone).
+  const uitleg = await geschiedenis.getByText(/Inlezen vervangt wat er al stond\./).boundingBox();
+  const sjabloon = await geschiedenis.getByRole('link', { name: 'Sjabloon downloaden' }).boundingBox();
+  expect(sjabloon!.y).toBeGreaterThanOrEqual(uitleg!.y + uitleg!.height);
   const kop = ['Codenaam', 'Nachten', 'Avonden door de week', 'Avonden in het weekend', 'Dagdiensten', 'Uitloopdiensten', 'Feestdagdiensten (ook bij de soort geteld)', 'Fte', 'Maanden'];
   await geschiedenis.getByLabel('Excel-bestand met de geschiedenis').setInputFiles({
     name: 'geschiedenis.xlsx',

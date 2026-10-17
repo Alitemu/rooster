@@ -660,7 +660,12 @@ describe('a swap request that is withdrawn or lapses', () => {
     await waitForMails(sink, 4);
 
     expect((await approveAs(f.collega, eerste)).status).toBe(200);
-    await waitForMails(sink, 6);
+    // The outcome to the requester, the confirmation for the planner and the
+    // notice to the colleague: seven in all. Waiting for six, the notice
+    // could still be on its way on a busy machine.
+    await waitForMails(sink, 7);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(sink.received).toHaveLength(7);
 
     expect(statusOf(tweede)).toBe('INGETROKKEN');
     const notice = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;

@@ -134,7 +134,8 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
             maanden. De app vergelijkt dat met het gemiddelde naar fte en maanden. Wie meer deed, krijgt in het eerste kwartaal in de app minder
             punten. Wie minder deed, krijgt er meer. Daarna schuift het verschil elk kwartaal vanzelf door. Inlezen vervangt wat er al stond.
           </p>
-          <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/geschiedenis-sjabloon`)}>
+          {/* inline-block: an inline link's padding lay over the line above it on a phone. */}
+          <a className={`${knop} inline-block`} href={withBasePath(`/api/aios/periode/${periodId}/geschiedenis-sjabloon`)}>
             Sjabloon downloaden
           </a>
           <label className="block text-sm">
