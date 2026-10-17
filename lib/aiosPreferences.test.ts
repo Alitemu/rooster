@@ -18,6 +18,7 @@ import {
 } from './aiosPreferences';
 import { GET } from '@/app/api/aios/deelnemer/[id]/periode/[periodId]/route';
 import { PATCH } from '@/app/api/aios/deelnemer/[id]/periode/[periodId]/slot/[slotId]/route';
+import { staff, staffCookie } from '@/tests/fixtures/dienstWorlds';
 
 /**
  * The rules (docs/aios-rooster.md, "Verzoeken van de AIOS"):
@@ -354,7 +355,8 @@ describe('the routes', () => {
     expect((await patch('LIEVER_NIET')).status).toBe(200);
     expect(marks(g, '2034-04-21')).toMatchObject({ ND: 'LIEVER_NIET/MANUAL' });
 
-    // An achterwacht period is no AIOS period, for its own participant too.
+    // An achterwacht period is no AIOS period, for its own participant too
+    // (who is refused on the AIOS's routes anyway, lib/aiosToegang.ts geenAiosDenial).
     const ruleset = insert('dienstrooster_ruleset', { naam: 'Staf', config_json: '{}', aangemaakt_op: new Date().toISOString() });
     const stafPool = insert('dienstrooster_pool', { naam: `Staf-${crypto.randomUUID().slice(0, 6)}`, type: 'ACHTERWACHT', ruleset_id: ruleset, aangemaakt_op: new Date().toISOString() });
     const stafPeriod = insert('dienstrooster_schedule_period', { pool_id: stafPool, naam: 'Staf', start_datum: '2034-04-03', eind_datum: '2034-06-25', deadline: '2034-02-01T17:00', status: 'OPEN', aangemaakt_op: new Date().toISOString() });
@@ -365,6 +367,12 @@ describe('the routes', () => {
       params: Promise.resolve({ id: staf, periodId: stafPeriod }),
     });
     expect(stafRes.status).toBe(404);
+    // Nor for an AIOS, even through the beheerder, who sees every dienst: the AIOS's screen loads only an AIOS period.
+    const viaBeheerder = await GET(
+      new NextRequest(`http://localhost/api/aios/deelnemer/${g}/periode/${stafPeriod}`, { headers: { Cookie: staffCookie(staff('ADMIN', 'ACHTERWACHT')) } }),
+      { params: Promise.resolve({ id: g, periodId: stafPeriod }) }
+    );
+    expect(viaBeheerder.status).toBe(404);
 
     db.prepare(`UPDATE dienstrooster_schedule_period SET deadline = '2020-01-01T17:00' WHERE id = ?`).run(ids.period);
     try {
