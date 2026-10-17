@@ -11,11 +11,13 @@ import { db } from '@/db/client';
 import { isUniqueViolation } from '@/lib/api-errors';
 import { optionalFreeText } from '@/lib/freeText';
 import { isValidIsoDate } from '@/lib/isoDate';
+import { addDays, getISOWeek, parseISO } from '@/lib/holidays';
 import { buildDeadlinePassedWarning } from '@/lib/aiosInvoer';
 import {
   aiosPeriodesNaDeadline,
   aiosPeriodesVoorInvoer,
   laatAiosBronLos,
+  patroonDekt,
   syncAiosAfwezigheid,
   syncAiosPatroon,
   syncAiosPersoon,
@@ -93,12 +95,44 @@ function patroonFout(weekdag?: string, frequentie?: string, van?: string, tot?: 
 
 const DUBBEL_PATROON = fout(409, 'PATTERN_ALREADY_EXISTS', 'Je hebt al een deeltijdpatroon voor deze dag in dezelfde periode');
 
+const DAGNAAM: Record<string, string> = { MA: 'maandag', DI: 'dinsdag', WO: 'woensdag', DO: 'donderdag', VR: 'vrijdag' };
+type PatroonVelden = { weekdag: string; frequentie: string; geldig_vanaf: string; geldig_tot: string };
+
+/**
+ * Another pattern of theirs with a day in common (every Monday and every
+ * other Monday, from overlapping dates): the fte counts each pattern
+ * (lib/aiosFte.ts), so that day would count twice and the AIOS get fewer
+ * diensten for a day they are off once. Even and odd weeks of one weekday
+ * share none. `behalve`: the pattern being changed.
+ */
+function deeltDag(personId: string, p: PatroonVelden, behalve: string | null): Antwoord | null {
+  const anderen = db
+    .prepare(
+      `SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern
+       WHERE person_id = ? AND weekdag = ? AND id IS NOT ?`
+    )
+    .all(personId, p.weekdag, behalve) as PatroonVelden[];
+  for (const q of anderen) {
+    const van = p.geldig_vanaf > q.geldig_vanaf ? p.geldig_vanaf : q.geldig_vanaf;
+    const tot = p.geldig_tot < q.geldig_tot ? p.geldig_tot : q.geldig_tot;
+    for (let d = van; d <= tot; d = addDays(d, 1)) {
+      const week = getISOWeek(parseISO(d))[1];
+      if (patroonDekt(p as Parameters<typeof patroonDekt>[0], d, week) && patroonDekt(q as Parameters<typeof patroonDekt>[0], d, week)) {
+        return fout(409, 'PATTERN_OVERLAPS', `Je hebt al een parttimedag op ${DAGNAAM[p.weekdag]} in deze periode. Pas dat patroon aan of verwijder het eerst.`);
+      }
+    }
+  }
+  return null;
+}
+
 export function maakPatroon(personId: string, body: Record<string, unknown>): Antwoord {
   const [weekdag, frequentie, van, tot] = [body.weekdag, body.frequentie, body.geldig_vanaf, body.geldig_tot].map(tekst);
   if (!weekdag || !frequentie || !van || !tot) return fout(400, 'INVALID_INPUT', 'Verplichte velden ontbreken');
   const ongeldig = patroonFout(weekdag, frequentie, van, tot);
   if (ongeldig) return ongeldig;
   if (!bestaatPersoon(personId)) return geenPersoon(personId);
+  const overlap = deeltDag(personId, { weekdag, frequentie, geldig_vanaf: van, geldig_tot: tot }, null);
+  if (overlap) return overlap;
   const id = crypto.randomUUID();
   try {
     db.transaction(() => {
@@ -121,8 +155,8 @@ export function maakPatroon(personId: string, body: Record<string, unknown>): An
 export function wijzigPatroon(personId: string, patternId: string, body: Record<string, unknown>): Antwoord {
   if (!bestaatPersoon(personId)) return geenPersoon(personId);
   const patroon = db
-    .prepare('SELECT geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE id = ? AND person_id = ?')
-    .get(patternId, personId) as { geldig_vanaf: string; geldig_tot: string } | undefined;
+    .prepare('SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern WHERE id = ? AND person_id = ?')
+    .get(patternId, personId) as PatroonVelden | undefined;
   if (!patroon) return fout(404, 'PATTERN_NOT_FOUND', 'Patroon niet gevonden');
   const nieuw: Record<string, string> = {};
   for (const k of ['weekdag', 'frequentie', 'geldig_vanaf', 'geldig_tot']) {
@@ -134,6 +168,8 @@ export function wijzigPatroon(personId: string, patternId: string, body: Record<
   const tot = nieuw.geldig_tot ?? patroon.geldig_tot;
   const ongeldig = patroonFout(nieuw.weekdag, nieuw.frequentie, van, tot);
   if (ongeldig) return ongeldig;
+  const overlap = deeltDag(personId, { ...patroon, ...nieuw, geldig_vanaf: van, geldig_tot: tot }, patternId);
+  if (overlap) return overlap;
   try {
     db.transaction(() => {
       db.prepare(

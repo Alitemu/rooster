@@ -153,7 +153,8 @@ function VakKnop({
         ${blok ? 'border-2 border-neutral-800' : ''} disabled:cursor-not-allowed disabled:opacity-80 active:scale-95`}
     >
       <span>{code}</span>
-      <span aria-hidden="true">{bron ?? GLYPH[sleutel]}</span>
+      {/* With its mark: a part-time day's uitloopdienst PT✕ and its evening PT~ (or leave on a feestdag AF~), also without colour. */}
+      <span aria-hidden="true">{bron ? `${bron}${GLYPH[sleutel]}` : GLYPH[sleutel]}</span>
     </button>
   );
 }
@@ -266,7 +267,7 @@ function Week({
 function Legenda() {
   const item = (cls: string, glyph: string, tekst: string) => (
     <span className="flex items-center gap-1.5">
-      <i className={`${cls} inline-flex items-center justify-center w-6 h-5 rounded text-[10px] font-bold not-italic`}>{glyph}</i>
+      <i className={`${cls} inline-flex items-center justify-center min-w-6 px-0.5 h-5 rounded text-[10px] font-bold not-italic`}>{glyph}</i>
       {tekst}
     </span>
   );
@@ -276,8 +277,10 @@ function Legenda() {
       {item('calendar-cell-voorkeur', '+', 'Voorkeur')}
       {item('calendar-cell-prefer-not', '~', 'Liever niet')}
       {item('calendar-cell-blocked', '✕', 'Geblokkeerd')}
-      {item('calendar-cell-parttime', 'PT', 'Parttimedag')}
-      {item('calendar-cell-absence', 'AF', 'Afwezigheid')}
+      {item('calendar-cell-parttime', 'PT✕', 'Parttimedag: geen uitloopdienst')}
+      {item('calendar-cell-parttime', 'PT~', 'Parttimedag: liever niet, je kunt het aanpassen')}
+      {item('calendar-cell-absence', 'AF✕', 'Afwezig')}
+      {item('calendar-cell-absence', 'AF~', 'Afwezig op een feestdag: liever niet')}
       {item('border-2 border-neutral-800 bg-white', 'AD', 'Blok: één AIOS doet het hele blok')}
       <span>★ Feestdag</span>
     </div>

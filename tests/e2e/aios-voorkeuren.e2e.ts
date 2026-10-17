@@ -5,6 +5,7 @@ import { v4 as uuid } from 'uuid';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { aiosQuarter } from '@/lib/aiosQuarter';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
+import { syncAiosPersoon } from '@/lib/aiosSync';
 import { readFirstSheet } from '@/lib/xlsx';
 import { getBaseUrl, loginAsBeheerder } from './setup';
 
@@ -150,4 +151,47 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   const [dienstKop, ...diensten] = readFirstSheet(fs.readFileSync((await perDienst.path())!));
   const kolom = dienstKop.indexOf(ids.codenaam);
   expect(diensten.filter((r) => r[5]?.startsWith('avondblok zo t/m di') && r[kolom] === 'geblokkeerd').length).toBe(3);
+});
+
+test('a part-time day: its uitloopdienst PT✕, its evening PT~ and still theirs to change, also without colour', async ({ page }) => {
+  const persoon = uuid();
+  db.prepare(`INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`).run(persoon, `aios-e2e-pt-${stamp}`);
+  const pool = (db.prepare('SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period) as { pool_id: string }).pool_id;
+  db.prepare(
+    `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot) VALUES (?, ?, ?, 1, '2095-01-01', '2095-12-31')`
+  ).run(uuid(), persoon, pool);
+  const token = generateAccessToken();
+  db.prepare(
+    `INSERT INTO dienstrooster_person_access_link (id, person_id, geldt_voor_periode_id, token_hash, aangemaakt_op) VALUES (?, ?, ?, ?, datetime('now'))`
+  ).run(uuid(), persoon, ids.period, hashToken(token));
+  // Part-time on Mondays: the uitloopdienst blocked, the evening (block) liever niet (lib/aiosSync.ts).
+  db.prepare(
+    `INSERT INTO dienstrooster_parttime_pattern (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+     VALUES (?, ?, 'MA', 'ELKE_WEEK', '2095-01-01', '2095-12-31', ?, datetime('now'))`
+  ).run(uuid(), persoon, persoon);
+  syncAiosPersoon(persoon);
+  const maandag = (
+    db
+      .prepare(
+        `SELECT sl.datum FROM dienstrooster_shift_slot sl JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+         WHERE sl.period_id = ? AND st.code = 'UD' AND strftime('%w', sl.datum) = '1' AND sl.is_feestdag = 0 ORDER BY sl.datum LIMIT 1`
+      )
+      .get(ids.period) as { datum: string }
+  ).datum;
+
+  await page.setViewportSize({ width: 375, height: 800 });
+  await page.goto(`${getBaseUrl()}/aios/${token}`);
+  await page.getByRole('button', { name: 'Volgende: voorkeuren opgeven' }).click();
+  await expect(page.getByText('Parttimedag: geen uitloopdienst')).toBeVisible();
+  const uitloop = page.getByRole('button', { name: new RegExp(`^Uitloopdienst ${datumLang(maandag)}: geblokkeerd, door je parttimedag`) });
+  await expect(uitloop).toContainText('PT✕');
+  await expect(uitloop).toBeDisabled();
+  const avond = page.getByRole('button', { name: /^Avonddienst \(blok zo .*: liever niet, door je parttimedag/ }).first();
+  await expect(avond).toContainText('PT~');
+  const label = (await avond.getAttribute('aria-label'))!.split(':')[0];
+  await avond.click();
+  const zelfde = page.getByRole('button', { name: new RegExp(`^${label.replace(/[()]/g, '\\$&')}:`) });
+  await expect(zelfde).toHaveAttribute('aria-label', /: voorkeur/);
+  await expect(zelfde).not.toContainText('PT');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 });

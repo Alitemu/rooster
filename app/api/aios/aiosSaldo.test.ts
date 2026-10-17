@@ -8,6 +8,7 @@ import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosGeneratieJob } from '@/lib/aiosGenereren';
 import { laadAiosRooster } from '@/lib/aiosRooster';
 import { aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { aiosSaldi } from '@/lib/aiosSaldo';
 import { readFirstSheet } from '@/lib/xlsx';
 import { buildXlsx } from '../../../tests/fixtures/buildXlsx';
 import { POST as genereren } from './periode/[id]/genereren/route';
@@ -215,6 +216,11 @@ describe('the history from before the app', () => {
       [cn('z'), 5, 0, 0, 0, 0, 0, 1, 0],
       [cn('z'), 5, 0, 0, 0, 0, 0, 1, 12],
     ]);
+    // A feestdagdienst is also counted at its soort: never more of them than diensten.
+    const teVeel = bestand([KOP, [cn('x'), 2, 1, 0, 0, 0, 4, 1, 12], [cn('y'), 2, 1, 0, 0, 0, 3, 1, 12]]);
+    const feest = (await (await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: teVeel, toepassen: false }), ctx(w.b))).json()).data.plan;
+    expect(feest.problemen).toEqual(['Rij 2, Feestdagdiensten: hoogstens zoveel als de diensten samen, want een feestdagdienst is ook bij zijn soort geteld.']);
+    expect(feest.rijen.map((r: { codenaam: string }) => r.codenaam)).toEqual([cn('y')]);
     const check = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: fout, toepassen: false }), ctx(w.b));
     expect(check.status).toBe(200);
     const problemen = (await check.json()).data.plan.problemen as string[];
@@ -279,5 +285,40 @@ describe('the history from before the app', () => {
     expect((await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: leeg, toepassen: true }, stafCookie), ctx(w.b))).status).toBe(404);
     expect((await geschiedenis(req(`${staf.period}/geschiedenis`), ctx(staf.period))).status).toBe(404);
     expect(db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_beginstand WHERE pool_id = ?').get(w.pool)).toEqual({ n: 1 });
+  });
+});
+
+describe('over more quarters', () => {
+  it('counts each quarter once: who did their share in B carries nothing into C, whatever A left them', async () => {
+    // x came into B with a point to make up from A (their share 4, they did 3);
+    // the solver puts that in B's share: 5, y 2.
+    perAios = (invoer) => invoer.aios.map((a: { id: string }) => ({ aios_id: a.id, doel_punten: a.id === w.x ? 5 : 2, doel_feestdagdiensten: 0 }));
+    expect((await maakB()).get(w.x)).toEqual({ saldo_punten: 1, feestdag_achterstand: 0.6 });
+    const n = nachten(w.b);
+    n.slice(0, 5).forEach((x) => insert('dienstrooster_assignment', { schedule_version_id: w.b, person_id: w.x, slot_id: x.id, bron: 'MANUAL', row_version: 1, aangemaakt_op: now }));
+    n.slice(5, 7).forEach((x) => insert('dienstrooster_assignment', { schedule_version_id: w.b, person_id: w.y, slot_id: x.id, bron: 'MANUAL', row_version: 1, aangemaakt_op: now }));
+    zetStatus(w.b, 'GEPUBLICEERD');
+    const c = insert('dienstrooster_schedule_period', {
+      pool_id: w.pool,
+      naam: `AiosSaldo-C-${tag}`,
+      start_datum: '2094-08-04',
+      eind_datum: '2094-08-17',
+      deadline: '2094-05-01T17:00',
+      status: 'GESLOTEN',
+      auto_herinneren: 0,
+      aangemaakt_op: now,
+    });
+    try {
+      const s = aiosSaldi({ id: c, pool_id: w.pool, start_datum: '2094-08-04' }, [w.x, w.y]);
+      // B's share already held what A left: counted again, x would get a point extra in C.
+      expect(s.get(w.x)).toEqual({ saldo_punten: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
+      expect(s.get(w.y)).toEqual({ saldo_punten: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
+      // One night less in B for x: one point to make up in C, not two.
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ? AND slot_id = ?').run(w.b, n[0].id);
+      expect(aiosSaldi({ id: c, pool_id: w.pool, start_datum: '2094-08-04' }, [w.x]).get(w.x)!.saldo_punten).toBe(1);
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(w.b);
+      zetStatus(w.b, 'GESLOTEN');
+    }
   });
 });

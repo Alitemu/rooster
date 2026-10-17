@@ -191,3 +191,50 @@ describe('the counters leave out the feestdagen', () => {
     expect(t.AVONDBLOKKEN).toMatchObject({ geblokkeerd: 1, totaal: 2, boven_helft: false });
   });
 });
+
+describe('the 50% counters, for any marks', () => {
+  // Days of UD and DD and of two-day blocks, each dienst left empty or
+  // marked by hand, by leave or by a part-time day, some days feestdagen.
+  const dagen = fc
+    .array(
+      fc.record({
+        feestdag: fc.boolean(),
+        ud: fc.constantFrom<[Niveau | null, Bron | null]>([null, null], ['ABSOLUUT', 'MANUAL'], ['LIEVER_NIET', 'MANUAL'], ['ABSOLUUT', 'ABSENCE'], ['ABSOLUUT', 'PARTTIME']),
+        nacht: fc.constantFrom<[Niveau | null, Bron | null]>([null, null], ['ABSOLUUT', 'MANUAL'], ['VOORKEUR', 'MANUAL'], ['ABSOLUUT', 'ABSENCE']),
+      }),
+      { minLength: 1, maxLength: 40 }
+    )
+    .map((rij) =>
+      rij.map((r, i) => ({
+        dag_soort: (r.feestdag ? 'FEESTDAG' : 'WERKDAG') as 'FEESTDAG' | 'WERKDAG',
+        diensten: [
+          { code: 'UD' as const, level: r.ud[0], bron: r.ud[1], blok: null },
+          { code: 'ND' as const, level: r.nacht[0], bron: r.nacht[1], blok: { id: `b${Math.floor(i / 2)}`, soort: 'NACHT' as const, vorm: 'WO_VR' as const } },
+        ],
+      }))
+    );
+
+  it('count only what was blocked by hand, outside the feestdagen, a block once; above half has an erboven and the rest fits in half', () => {
+    fc.assert(
+      fc.property(dagen, (d) => {
+        const t = Object.fromEntries(blokkadeTellers(d as never).map((x) => [x.groep, x]));
+        const uitloop = d.filter((x) => x.dag_soort !== 'FEESTDAG').map((x) => x.diensten[0]);
+        expect(t.UITLOOPDIENSTEN.totaal).toBe(uitloop.length);
+        expect(t.UITLOOPDIENSTEN.geblokkeerd).toBe(uitloop.filter((x) => x.level === 'ABSOLUUT' && x.bron === 'MANUAL').length);
+        // A block with a feestdag in it cannot be blocked: not in the total.
+        const blokken = new Map<string, boolean>();
+        for (const x of d) {
+          const id = x.diensten[1].blok!.id;
+          blokken.set(id, (blokken.get(id) ?? false) || x.dag_soort === 'FEESTDAG');
+        }
+        expect(t.NACHTBLOKKEN.totaal).toBe([...blokken.values()].filter((f) => !f).length);
+        for (const x of Object.values(t)) {
+          expect(x.geblokkeerd).toBeLessThanOrEqual(x.totaal);
+          expect(x.erboven > 0).toBe(x.boven_helft);
+          expect((x.geblokkeerd - x.erboven) * 2).toBeLessThanOrEqual(x.totaal);
+        }
+      }),
+      { numRuns: 200 }
+    );
+  });
+});

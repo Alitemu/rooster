@@ -200,7 +200,8 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
     dienst op een feestdag en geen blok met een feestdag erin (de keuze van
     de planner in oktober 2026). Anders lag de helft te hoog.
 - Bovenaan het scherm: de parttimedagen (deeltijdpatronen, zoals bij de staf; zie
-  harde regel 4 voor wat ze betekenen),
+  harde regel 4 voor wat ze betekenen; per weekdag één tegelijk, want twee
+  patronen die een dag delen telden voor de fte dubbel, 0.85.0),
   "4 avonden", "4 nachten", "twee dagdiensten", "Inwerken", een onderbreking van
   de opleiding en algemene verzoeken (vrije tekst, hoogstens 120 tekens).
 - Geen reden per dag: die werd niet gebruikt bij het maken van het rooster.
@@ -364,7 +365,10 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   het bewaren staat per AIOS in woorden wat het betekent. Daarna rekent de app
   elk kwartaal zelf door: het doel dat de solver gaf min wat de AIOS deed in
   het vorige gepubliceerde kwartaal, zoals het rooster nu is. Per AIOS staat
-  bij het rooster wat die meeneemt.
+  bij het rooster wat die meeneemt. Dat doel bevat al wat de AIOS uit het
+  kwartaal ervoor meenam: niets telt twee keer. Een rij met meer
+  feestdagdiensten dan diensten samen weigert de import, want een
+  feestdagdienst is ook bij zijn soort geteld (0.85.0).
 
 ## Ruilen
 
@@ -379,6 +383,10 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   weekend ruil je per stuk. Een losse dienst ruil je tegen een gelijkwaardige:
   een dagdienst en een avonddienst in het weekend zijn gelijkwaardig aan
   elkaar, verder nacht tegen nacht en uitloopdienst tegen uitloopdienst.
+  Een nachtblok met een nacht minder (door de voortgangstoets of de tweede
+  oudejaarsnacht) ruil je tegen elk nachtblok van dezelfde vorm, ook al krijgt
+  een van de twee AIOS er dan een nacht bij (de keuze van de planner in de
+  audit van 0.85.0).
 - In de app (0.80.0): op de eigen pagina kiest de AIOS een eigen dienst of
   blok dat nog komt en ziet alleen de gelijkwaardige diensten van collega's
   waarmee de ruil voor allebei binnen de harde regels blijft. Eigen
@@ -410,7 +418,10 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   achterwacht. De solver van de achterwacht blijft ongewijzigd. Eén beslissing
   per blok in plaats van per dag.
 - Het voorkeurenscherm toont per dag de diensten die er die dag zijn, met de
-  blokken als één vak. Leesbaar op 375 pixels breed. Wat een feestdag
+  blokken als één vak. Leesbaar op 375 pixels breed. Een vak van een
+  parttimedag of afwezigheid toont ook de stand, zodat het zonder kleur te
+  lezen is: PT✕ (de uitloopdienst, vast), PT~ (de avond, liever niet en aan
+  te passen), AF✕ en AF~ (afwezig op een feestdag) (0.85.0). Wat een feestdag
   betekent (niet blokkeren, ook geen blok met een feestdag erin, afwezigheid
   wordt liever niet) staat in een eigen kader, bij de diensten en bij de
   afwezigheid (0.73.0).

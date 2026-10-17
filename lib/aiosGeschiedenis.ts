@@ -124,6 +124,12 @@ function plan(poolId: string, rows: string[][]): { plan: GeschiedenisPlan; rijen
         problemen.push(`Rij ${regel}, Maanden: vul het aantal maanden in waar de aantallen over gaan, hoogstens 240.`);
       } else waarde.maanden = n;
     }
+    const diensten = AANTALLEN.filter((k) => k !== 'feestdagdiensten').reduce((som, k) => som + (waarde[k] ?? 0), 0);
+    if (waarde.feestdagdiensten !== undefined && waarde.feestdagdiensten > diensten) {
+      // Each is also counted at its soort: more than all of them together is a typing error.
+      problemen.push(`Rij ${regel}, Feestdagdiensten: hoogstens zoveel als de diensten samen, want een feestdagdienst is ook bij zijn soort geteld.`);
+      return;
+    }
     if (Object.keys(waarde).length === KOLOMMEN.length - 1) {
       rijen.push({ person_id: lid.id, ...(waarde as Record<Veld, number>) });
       codenaam.set(lid.id, lid.codenaam);

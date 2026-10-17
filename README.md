@@ -516,6 +516,14 @@ toevoegt terwijl een kwartaal open staat, krijgt de eigen parttimedagen en
 afwezigheid meteen in dat kwartaal. En de app start ook als de solver van
 de AIOS niet start.
 
+**Vanaf versie 0.85.0** toont het voorkeurenscherm van de AIOS bij een
+parttimedag of afwezigheid ook de stand: *PT✕* bij de uitloopdienst (vast)
+en *PT~* bij de avond (liever niet, aan te passen). Zo is het ook zonder kleur
+en op papier duidelijk. Een AIOS kan per weekdag één parttimedag tegelijk
+opgeven: twee patronen op dezelfde dag telden voor de fte dubbel. Bij de
+geschiedenis van vóór de app weigert de import een rij met meer
+feestdagdiensten dan diensten.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

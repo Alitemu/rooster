@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import fc from 'fast-check';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
@@ -300,5 +301,32 @@ describe('when', () => {
     const dd = slot('DD', '2094-07-10').id;
     expect((await zet([{ dienst_id: dd, aios_id: w.x, was: w.y }], staffCookie(staf.planner))).status).toBe(404);
     expect(wieHeeft(dd)).toBe(w.y);
+  });
+});
+
+describe('the way back', () => {
+  it('any changes, undone from the last to the first, give back the roster as it was', async () => {
+    const rooster = () =>
+      JSON.stringify(db.prepare('SELECT slot_id, person_id FROM dienstrooster_assignment WHERE schedule_version_id = ? ORDER BY slot_id').all(w.period));
+    // Single diensten of the second week, and the first night block whole.
+    const los = ['UD', 'DD', 'AD'].flatMap((code) => ['2094-07-15', '2094-07-16', '2094-07-17'].map((d) => slot(code, d)).filter((x) => x && !x.blok)).map((x) => [x.id]);
+    const keuzes = [...los, blokDiensten(slot('ND', '2094-07-11').blok!)];
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(fc.record({ welke: fc.nat(keuzes.length - 1), aan: fc.constantFrom(w.x, w.y, null) }), { minLength: 1, maxLength: 5 }),
+        async (stappen) => {
+          const voor = rooster();
+          const terug: unknown[] = [];
+          for (const { welke, aan } of stappen) {
+            const res = await zet(keuzes[welke].map((id) => ({ dienst_id: id, aios_id: aan, was: wieHeeft(id) })));
+            expect(res.status).toBe(200);
+            terug.push((await res.json()).data.terug);
+          }
+          for (const t of terug.reverse()) expect((await zet(t)).status).toBe(200);
+          expect(rooster()).toBe(voor);
+        }
+      ),
+      { numRuns: 15 }
+    );
   });
 });
