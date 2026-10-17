@@ -43,6 +43,7 @@ interface Scherm {
   dagen: AiosVoorkeurDag[];
   wens: AiosWens;
   tellers: BlokkadeTeller[];
+  voortgangstoets: { datum: string | null; nacht: string | null };
   indiening: { status: string; ingediend_op: string | null } | null;
   invoer: { open: true } | { open: false; reden: string };
 }
@@ -557,6 +558,13 @@ export function AiosVoorkeuren({
           </p>
         </div>
         {feestdagen.length > 0 && <AiosFeestdagUitleg />}
+        {scherm.voortgangstoets.datum && scherm.voortgangstoets.nacht && (
+          <p className="text-sm text-neutral-800 rounded border border-neutral-300 p-3" data-testid="aios-voortgangstoets-melding">
+            Op {datumLang(scherm.voortgangstoets.datum)} is de voortgangstoets. In de nacht ervoor (
+            {datumLang(scherm.voortgangstoets.nacht)}) heeft geen AIOS dienst: een fellow doet die nacht. Daarom staat die
+            nacht hieronder niet in het blok.
+          </p>
+        )}
         <Legenda />
         {fout && (
           <div role="alert" className="p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">

@@ -176,15 +176,20 @@ const OP_PARTTIMEDAG = { UD: 'ABSOLUUT', AD: 'LIEVER_NIET', ADW: 'LIEVER_NIET', 
 // How much a mark keeps someone off a dienst (lib/aiosVoorkeur.ts STERKTE); no level is between voorkeur and liever niet.
 const sterkte = (niveau: string | null) => ({ VOORKEUR: 0, LIEVER_NIET: 2, ABSOLUUT: 3 })[niveau ?? ''] ?? 1;
 
-/** One pattern against one AIOS period: its uitloopdiensten, evenings and nights. */
-function verzoenPatroon(p: Patroon, periodId: string): number {
-  const slots = db
-    .prepare(
-      `SELECT s.id, s.datum, s.iso_week, s.is_feestdag, st.code FROM dienstrooster_shift_slot s
-       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-       WHERE s.period_id = ? AND st.code IN ('UD', 'AD', 'ADW', 'ND')`
-    )
-    .all(periodId) as Array<Slot & { code: keyof typeof OP_PARTTIMEDAG }>;
+/**
+ * One pattern against one AIOS period: its uitloopdiensten, evenings and
+ * nights. `alleen`: that one dienst and nothing else, as for an absence.
+ */
+function verzoenPatroon(p: Patroon, periodId: string, alleen?: string): number {
+  const slots = (
+    db
+      .prepare(
+        `SELECT s.id, s.datum, s.iso_week, s.is_feestdag, st.code FROM dienstrooster_shift_slot s
+         JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+         WHERE s.period_id = ? AND st.code IN ('UD', 'AD', 'ADW', 'ND')`
+      )
+      .all(periodId) as Array<Slot & { code: keyof typeof OP_PARTTIMEDAG }>
+  ).filter((s) => !alleen || s.id === alleen);
   const doel = new Map(slots.filter((s) => patroonDekt(p, s.datum, s.iso_week)).map((s) => [s.id, OP_PARTTIMEDAG[s.code]]));
   const nu = new Map(
     (
@@ -195,7 +200,9 @@ function verzoenPatroon(p: Patroon, periodId: string): number {
            WHERE av.bron_pattern_id = ? AND s.period_id = ?`
         )
         .all(p.id, periodId) as Array<{ slot_id: string; blocking_level: string }>
-    ).map((r) => [r.slot_id, r.blocking_level])
+    )
+      .filter((r) => !alleen || r.slot_id === alleen)
+      .map((r) => [r.slot_id, r.blocking_level])
   );
   const weg = db.prepare('DELETE FROM dienstrooster_availability WHERE bron_pattern_id = ? AND slot_id = ?');
   // A row from before 0.82.0, when the evening was blocked, to what it is now.
@@ -241,11 +248,12 @@ const patroonVan = (id: string) =>
     .get(id) as Patroon | undefined;
 
 /**
- * The absences of the pool's AIOS on one dienst made again (a night put
- * back after the voortgangstoets moved), whether or not the period still
- * takes input: the dienst is new, the leave was there all along.
+ * The absences and part-time days of the pool's AIOS on one dienst made
+ * again (a night put back after the voortgangstoets moved), whether or not
+ * the period still takes input: the dienst is new, the leave and the
+ * part-time day were there all along.
  */
-export function zetAfwezighedenOpDienst(periodId: string, slotId: string): void {
+export function zetBronnenOpDienst(periodId: string, slotId: string): void {
   const afwezigheden = db
     .prepare(
       `SELECT DISTINCT x.id, x.person_id, x.van_datum, x.tot_datum
@@ -256,6 +264,16 @@ export function zetAfwezighedenOpDienst(periodId: string, slotId: string): void 
     )
     .all(slotId) as Afwezigheid[];
   for (const a of afwezigheden) verzoenAfwezigheid(a, periodId, slotId);
+  const patronen = db
+    .prepare(
+      `SELECT DISTINCT x.id, x.person_id, x.weekdag, x.frequentie, x.geldig_vanaf, x.geldig_tot
+       FROM dienstrooster_parttime_pattern x
+       JOIN dienstrooster_shift_slot s ON s.id = ? AND x.geldig_vanaf <= s.datum AND x.geldig_tot >= s.datum
+       JOIN dienstrooster_schedule_period sp ON sp.id = s.period_id
+       JOIN dienstrooster_pool_membership pm ON pm.person_id = x.person_id AND pm.pool_id = sp.pool_id`
+    )
+    .all(slotId) as Patroon[];
+  for (const p of patronen) verzoenPatroon(p, periodId, slotId);
 }
 
 /** One absence into every AIOS period of its person that takes input. */

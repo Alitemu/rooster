@@ -13,7 +13,9 @@ import { laadAiosRooster } from '@/lib/aiosRooster';
 import { aiosRoosterPerDag } from '@/lib/aiosRoosterDownloads';
 import { aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { GET, PUT } from './periode/[id]/voortgangstoets/route';
-import { deleteRowsAfter, insert, now, rowidSnapshot, staff, staffCookie, tag } from '../../../tests/fixtures/dienstWorlds';
+import { GET as deelnemerPagina } from './deelnemer/[id]/periode/[periodId]/route';
+import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
+import { deleteRowsAfter, insert, now, personCookie, rowidSnapshot, staff, staffCookie, tag } from '../../../tests/fixtures/dienstWorlds';
 
 /**
  * The voortgangstoets (lib/aiosVoortgangstoets.ts, docs/aios-rooster.md
@@ -172,6 +174,17 @@ describe('the voortgangstoets', () => {
     expect(await haal()).toMatchObject({ datum: null, nacht: null });
   });
 
+  it("puts a night back with a part-time day's liever niet on it", async () => {
+    // x is part-time on Fridays: the Friday night is liever niet for x (lib/aiosSync.ts).
+    const vrijdag = dag(9);
+    const ptx = { person_id: w.x, blocking_level: 'LIEVER_NIET', source: 'PARTTIME' };
+    expect(markeringen(vrijdag)).toEqual([ptx]);
+    await zet({ datum: dag(10) });
+    expect(nacht(vrijdag)).toBeUndefined();
+    await zet({ datum: null });
+    expect(markeringen(vrijdag)).toEqual([ptx]);
+  });
+
   it('refuses a night outside the quarter, no date and no datum at all', async () => {
     for (const datum of [w.start, addDays(w.eind, 2), '2097-09-31', 'morgen', 7]) {
       const res = await zet({ datum });
@@ -183,6 +196,23 @@ describe('the voortgangstoets', () => {
     // The last night of the quarter is in it: the toets on the Wednesday after.
     expect((await zet({ datum: addDays(w.eind, 1) })).status).toBe(200);
     expect(nacht(w.eind)).toBeUndefined();
+  });
+
+  it("tells the AIOS on their own page, where the night is not in the block", async () => {
+    aiosPersoonlijkeLink(w.x, w.period, 'http://localhost:3000');
+    const pagina = async () =>
+      (
+        await (
+          await deelnemerPagina(new NextRequest(`http://localhost/api/aios/deelnemer/${w.x}/periode/${w.period}`, { headers: { cookie: personCookie(w.x) } }), {
+            params: Promise.resolve({ id: w.x, periodId: w.period }),
+          })
+        ).json()
+      ).data;
+    expect((await pagina()).voortgangstoets).toEqual({ datum: null, nacht: null });
+    await zet({ datum: dag(WO) });
+    const data = await pagina();
+    expect(data.voortgangstoets).toEqual({ datum: dag(WO), nacht: dag(DI) });
+    expect(data.dagen.find((d: { datum: string }) => d.datum === dag(DI)).diensten.map((x: { code: string }) => x.code)).not.toContain('ND');
   });
 
   it('takes the night out of a roster already made, and fixes the date once it is published', async () => {

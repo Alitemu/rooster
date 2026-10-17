@@ -11,6 +11,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
 import { internalErrorResponse } from '@/lib/api-errors';
+import { aiosVoortgangstoets } from '@/lib/aiosToetsNacht';
 import {
   aiosInvoerToegestaan,
   blokkadeTellers,
@@ -54,6 +55,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         dagen,
         wens: loadAiosWens(id, periodId),
         tellers: blokkadeTellers(dagen),
+        // The night before it is a fellow's: not in the AIOS's quarter (lib/aiosVoortgangstoets.ts).
+        voortgangstoets: aiosVoortgangstoets(periodId),
         indiening: submission ?? null,
         invoer: invoer.ok ? { open: true } : { open: false, reden: invoer.message },
       },

@@ -1071,7 +1071,7 @@ const MUTATIONS = [
   {
     name: "aios voortgangstoets: a night put back without the leave on it",
     file: "lib/aiosVoortgangstoets.ts",
-    find: "  zetAfwezighedenOpDienst(period.id, id);",
+    find: "  zetBronnenOpDienst(period.id, id);",
     replace: "  void id;",
     tests: ["app/api/aios/aiosVoortgangstoets"],
   },
@@ -1122,6 +1122,28 @@ const MUTATIONS = [
     file: "lib/aiosRooster.ts",
     find: "        fellow_nacht: r.datum === fellow,",
     replace: "        fellow_nacht: false,",
+    tests: ["app/api/aios/aiosVoortgangstoets"],
+  },
+  {
+    name: "aios voortgangstoets: the AIOS's page without it",
+    file: "app/api/aios/deelnemer/[id]/periode/[periodId]/route.ts",
+    find: "        voortgangstoets: aiosVoortgangstoets(periodId),",
+    replace: "        voortgangstoets: { datum: null, nacht: null },",
+    tests: ["app/api/aios/aiosVoortgangstoets"],
+  },
+  {
+    // The test database is built from the migrations (tests/globalSetup.ts).
+    name: "aios: a purged period leaves its swap requests",
+    file: "db/migrations/0028_aios_ruil.sql",
+    find: "\tFOREIGN KEY (`period_id`) REFERENCES `dienstrooster_schedule_period`(`id`) ON UPDATE no action ON DELETE cascade,",
+    replace: "\tFOREIGN KEY (`period_id`) REFERENCES `dienstrooster_schedule_period`(`id`) ON UPDATE no action ON DELETE no action,",
+    tests: ["app/api/aios/aiosApart"],
+  },
+  {
+    name: "aios voortgangstoets: a night put back without the part-time day on it",
+    file: "lib/aiosSync.ts",
+    find: "  for (const p of patronen) verzoenPatroon(p, periodId, slotId);",
+    replace: "  void patronen;",
     tests: ["app/api/aios/aiosVoortgangstoets"],
   },
   {

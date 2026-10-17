@@ -339,10 +339,41 @@ describe('"Status voorkeuren" and the steps after opening', () => {
 
   it("goes with its AIOS rows when the achterwacht's prullenbak purges it", () => {
     insert('dienstrooster_aios_wens', { period_id: aios.period, person_id: aios.x, gewijzigd_op: now });
+    // What the later steps keep with a period: a block choice, a roster with a change by hand,
+    // the solver's share, a swap request and the voortgangstoets (0.76.0 to 0.82.0).
+    const blok = (db.prepare('SELECT id FROM dienstrooster_shift_block WHERE period_id = ? LIMIT 1').get(aios.period) as { id: string }).id;
+    const slot = (db.prepare('SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? LIMIT 1').get(aios.period) as { id: string }).id;
+    insert('dienstrooster_aios_blokkeuze', { period_id: aios.period, blok_id: blok, opknippen: 1, gekozen_op: now });
+    const toewijzing = insert('dienstrooster_assignment', { schedule_version_id: aios.period, person_id: aios.x, slot_id: slot, bron: 'MANUAL', row_version: 1, aangemaakt_op: now });
+    insert('dienstrooster_assignment_edit', {
+      toewijzing_id: toewijzing,
+      periode_id: aios.period,
+      person_id: aios.x,
+      slot_id: slot,
+      edit_type: 'RUIL',
+      reden: 'ruil tussen AIOS',
+      bewerkt_door_person_id: aios.x,
+      aangemaakt_op: now,
+      row_version: 1,
+    });
+    insert('dienstrooster_aios_doel', { period_id: aios.period, person_id: aios.x, doel_punten: 10, doel_feestdagen: 1 });
+    insert('dienstrooster_aios_ruil', {
+      period_id: aios.period,
+      aanvrager_id: aios.x,
+      respondent_id: aios.y,
+      aangeboden_json: JSON.stringify([slot]),
+      gevraagd_json: '[]',
+      status: 'IN_BEHANDELING',
+      aangemaakt_op: now,
+    });
+    db.prepare('UPDATE dienstrooster_aios_periode SET voortgangstoets = ? WHERE period_id = ?').run('2097-02-25', aios.period);
     softDeletePeriod(aios.period, aios.admin);
     purgePeriodNow(aios.period, aios.admin);
     expect(db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(aios.period)).toBeUndefined();
-    expect(db.prepare('SELECT 1 FROM dienstrooster_aios_wens WHERE period_id = ?').get(aios.period)).toBeUndefined();
-    expect(db.prepare('SELECT 1 FROM dienstrooster_aios_periode WHERE period_id = ?').get(aios.period)).toBeUndefined();
+    for (const tabel of ['dienstrooster_aios_wens', 'dienstrooster_aios_periode', 'dienstrooster_aios_blokkeuze', 'dienstrooster_aios_doel', 'dienstrooster_aios_ruil']) {
+      expect(db.prepare(`SELECT 1 FROM ${tabel} WHERE period_id = ?`).get(aios.period), tabel).toBeUndefined();
+    }
+    expect(db.prepare('SELECT 1 FROM dienstrooster_assignment_edit WHERE periode_id = ?').get(aios.period)).toBeUndefined();
+    expect(db.prepare('SELECT 1 FROM dienstrooster_shift_block WHERE period_id = ?').get(aios.period)).toBeUndefined();
   });
 });
