@@ -263,3 +263,32 @@ describe('handing in', () => {
     expect(rijen(w.x, daar)).toEqual([]);
   });
 });
+
+describe('around ISO week 53', () => {
+  it('odd weeks: week 53 and week 1 both, two Mondays in a row; even weeks: the week between', async () => {
+    // 2032 Q4 runs to Tuesday 4 January 2033: Monday 27 December is week 53, Monday 3 January week 1.
+    const q = aiosQuarter(2032, 4);
+    const kwartaal = insert('dienstrooster_schedule_period', {
+      pool_id: w.pool,
+      naam: `AiosDt53-${tag}`,
+      start_datum: q.start_datum,
+      eind_datum: q.eind_datum,
+      deadline: '2032-08-02T17:00',
+      status: 'OPEN',
+      auto_herinneren: 0,
+      aangemaakt_op: now,
+    });
+    db.transaction(() => persistAiosSlots(kwartaal, aiosShiftTypes(w.pool)!, q.start_datum, q.eind_datum))();
+    for (const p of [w.x, w.y]) {
+      insert('dienstrooster_pool_membership', { person_id: p, pool_id: w.pool, deelnamefactor: 1, geldig_vanaf: '2032-01-01', geldig_tot: '2033-12-31' });
+    }
+    const uitloop = (persoon: string) =>
+      markeringen(persoon, kwartaal, 'PARTTIME').filter((d) => d.endsWith(' UD') && d >= '2032-12-20').map((d) => d.slice(0, 10));
+    const oneven = (await maakPatroon(w.x, { weekdag: 'MA', frequentie: 'ONEVEN_WEKEN', geldig_vanaf: '2032-01-01', geldig_tot: '2033-12-31' })).status;
+    const even = (await maakPatroon(w.y, { weekdag: 'MA', frequentie: 'EVEN_WEKEN', geldig_vanaf: '2032-01-01', geldig_tot: '2033-12-31' })).status;
+    expect([oneven, even]).toEqual([201, 201]);
+    // As the achterwacht's (lib/parttimeSync.ts): the ISO week number decides.
+    expect(uitloop(w.x)).toEqual(['2032-12-27', '2033-01-03']);
+    expect(uitloop(w.y)).toEqual(['2032-12-20']);
+  });
+});
