@@ -534,6 +534,10 @@ terugkomt naar de AIOS die de rest van dat blok heeft. Kan dat niet, dan
 zegt de app waarom en vul je die nacht met de hand in. En *Ongedaan maken*
 na *Wisselen* zet een dienst van de achterwacht weer helemaal terug: een
 nieuwe generatie mag hem daarna weer verplaatsen.
+De pagina van een AIOS-periode klapt nu in en uit zoals die van de
+achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
+te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
+het met de punaise vastzet.
 
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet

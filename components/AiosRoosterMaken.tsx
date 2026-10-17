@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { AiosSectie } from '@/components/AiosSectie';
 import { AiosFeestdagBlokken, type FeestdagStaat } from '@/components/AiosFeestdagBlokken';
 import { AiosRoosterWijzigen, type Gewijzigd, type Keuze } from '@/components/AiosRoosterWijzigen';
 import { AiosPubliceren } from '@/components/AiosPubliceren';
@@ -352,10 +353,12 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
   const nietKlaar = feestdag.open > 0 || feestdag.gewijzigd;
   const knop = 'px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
 
+  const hint = rooster?.loopt || bezig ? 'Wordt gemaakt' : gepubliceerd ? 'Gepubliceerd' : gemaakt ? 'Gemaakt' : 'Nog niet gemaakt';
+
   return (
-    <div className="space-y-6">
-      <div className="card card-padding space-y-3" data-testid="aios-rooster-maken">
-        <h2 className="text-lg font-semibold">Rooster</h2>
+    <>
+      {/* Kept loaded while closed: the choices about the feestdag blocks are not lost. */}
+      <AiosSectie sleutel="rooster" titel="Rooster" testId="aios-rooster-maken" hint={hint} blijfGeladen>
         {gepubliceerd ? (
           <p className="text-sm text-neutral-700">
             Het rooster is gepubliceerd. Opnieuw maken kan dan niet meer. Trek daarvoor eerst de publicatie in. Met de hand aanpassen kan wel,
@@ -445,14 +448,13 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
             {uitkomst.leeg.length > 0 && <p className="text-neutral-700">Een lege dienst vul je straks met de hand, voordat je publiceert.</p>}
           </div>
         )}
-      </div>
+      </AiosSectie>
 
       {zichtbaar && <AiosPubliceren periodId={periodId} status={status} onChanged={onChanged} />}
 
       {zichtbaar && rooster && (
         <>
-          <div className="card card-padding space-y-3">
-            <h2 className="text-lg font-semibold">Per AIOS</h2>
+          <AiosSectie sleutel="per-aios" titel="Per AIOS" hint="punten, dienstpercentage en saldo">
             <p className="text-sm text-neutral-600">
               Dienstpercentage: punten gedeeld door werkdagen keer fte. Boven 25% is te veel volgens het opleidingsplan. Dat is een
               waarschuwing, geen weigering. Het opleidingsplan telt per opleidingsjaar. Daarom staat eronder ook het percentage over
@@ -503,9 +505,8 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                 </tbody>
               </table>
             </div>
-          </div>
-          <div className="card card-padding space-y-4">
-            <h2 className="text-lg font-semibold">Het rooster per week</h2>
+          </AiosSectie>
+          <AiosSectie sleutel="rooster-week" titel="Het rooster per week" hint="kies een dienst of blok om het te wijzigen">
             {laatste && (
               <div className="rounded border border-neutral-400 p-3 text-sm space-y-1" role="status" data-testid="aios-laatste-wijziging">
                 <p className="font-medium">Gewijzigd. {laatste.tekst}</p>
@@ -575,9 +576,9 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                 }
               />
             ))}
-          </div>
+          </AiosSectie>
         </>
       )}
-    </div>
+    </>
   );
 }

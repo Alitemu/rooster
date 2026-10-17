@@ -8,6 +8,9 @@
 
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { AiosSectie } from '@/components/AiosSectie';
+
+const kort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 
 const lang = (d: string) =>
   new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -93,13 +96,13 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
     }
   };
 
-  if (!toets) return melding ? <div className="card p-4 text-sm text-red-700">{melding.tekst}</div> : null;
-  const veranderd = aan !== (toets.datum !== null) || (aan && datum !== (toets.datum ?? ''));
+  const veranderd = toets !== null && (aan !== (toets.datum !== null) || (aan && datum !== (toets.datum ?? '')));
+  const hint = toets && (toets.datum ? `Op ${kort(toets.datum)}` : 'Geen toets ingevuld');
 
   return (
-    <div className="card p-4 space-y-3" data-testid="aios-voortgangstoets">
-      <h2 className="text-lg font-semibold">Voortgangstoets</h2>
-      {toets.datum && toets.nacht ? (
+    // Kept loaded while closed: the hint says when the toets is.
+    <AiosSectie sleutel="toets" titel="Voortgangstoets" testId="aios-voortgangstoets" hint={hint || undefined} blijfGeladen>
+      {toets && (toets.datum && toets.nacht ? (
         <p className="text-sm text-neutral-800">
           De voortgangstoets is op <strong>{lang(toets.datum)}</strong>. In de nacht ervoor ({lang(toets.nacht)}) heeft geen AIOS
           dienst. Een fellow doet die nacht. Wie dat is, regel je buiten de app. De andere nachten van dat blok doet één AIOS. De
@@ -110,8 +113,8 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
           Is er in dit kwartaal een voortgangstoets? Vul dan de datum in. In de nacht ervoor heeft geen AIOS dienst. Een fellow doet
           die nacht. In het rooster staat dan Fellow.
         </p>
-      )}
-      {toets.mag_wijzigen ? (
+      ))}
+      {toets && (toets.mag_wijzigen ? (
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={aan} onChange={(e) => setAan(e.target.checked)} disabled={bezig} />
@@ -129,12 +132,12 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
         </div>
       ) : (
         <p className="text-sm text-neutral-600">Het rooster is gepubliceerd. De voortgangstoets ligt nu vast.</p>
-      )}
+      ))}
       {melding && (
         <p role={melding.fout ? 'alert' : 'status'} className={`text-sm ${melding.fout ? 'text-red-700' : 'text-neutral-800'}`}>
           {melding.tekst}
         </p>
       )}
-    </div>
+    </AiosSectie>
   );
 }

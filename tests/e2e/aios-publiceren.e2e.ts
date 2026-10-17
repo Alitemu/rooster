@@ -3,7 +3,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
-import { getBaseUrl, loginAsBeheerder } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
 import { buildXlsx } from '../fixtures/buildXlsx';
 
 /**
@@ -88,7 +88,7 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
 
   // The history from before the app: two of the four, one did twice as many nights.
   const geschiedenis = page.getByTestId('aios-geschiedenis');
-  await geschiedenis.getByRole('button', { name: 'Tonen' }).click();
+  await openAiosSectie(page, 'Geschiedenis van vóór de app');
   // The template button below the text, not over its last line (seen on a phone).
   const uitleg = await geschiedenis.getByText(/Inlezen vervangt wat er al stond\./).boundingBox();
   const sjabloon = await geschiedenis.getByRole('link', { name: 'Sjabloon downloaden' }).boundingBox();
@@ -110,6 +110,7 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
 
   const paneel = page.getByTestId('aios-publiceren');
   await expect(paneel.getByRole('heading', { name: 'Publiceren' })).toBeVisible();
+  await openAiosSectie(page, 'Publiceren');
   await paneel.getByRole('button', { name: 'Voorlopig publiceren' }).click();
   await paneel.getByRole('button', { name: /^Ja, (toch )?publiceren$/ }).click();
   await expect(paneel.getByText(/^Voorlopig gepubliceerd\. Er is geen e-mail verstuurd/)).toBeVisible();

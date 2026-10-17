@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { AiosSectie } from '@/components/AiosSectie';
 import type { EenheidUit, RuilStatus, RuilUit } from '@/lib/aiosRuilen';
 
 const kort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -35,9 +36,17 @@ export function AiosRuilenOverzicht({ periodId }: { periodId: string }) {
       .catch((err) => setFout(err instanceof Error ? err.message : 'Laden is mislukt'));
   }, [periodId]);
 
+  const open = ruilen?.filter((r) => r.status === 'IN_BEHANDELING').length ?? 0;
+
   return (
-    <div className="card card-padding space-y-3" data-testid="aios-ruilen-overzicht">
-      <h2 className="text-lg font-semibold">Ruilen</h2>
+    // Kept loaded while closed: the hint says how many wait for an answer.
+    <AiosSectie
+      sleutel="ruilen"
+      titel="Ruilen"
+      testId="aios-ruilen-overzicht"
+      hint={ruilen ? (open ? `${open} in behandeling` : `${ruilen.length} ${ruilen.length === 1 ? 'verzoek' : 'verzoeken'}`) : undefined}
+      blijfGeladen
+    >
       <p className="text-sm text-neutral-700">
         De AIOS ruilen onderling, zonder jou. Gaat een ruil door, dan krijgen jij en het roosterbureau een bericht via de stroom van de AIOS.
       </p>
@@ -57,6 +66,6 @@ export function AiosRuilenOverzicht({ periodId }: { periodId: string }) {
           ))}
         </ul>
       )}
-    </div>
+    </AiosSectie>
   );
 }

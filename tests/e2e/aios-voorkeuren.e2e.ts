@@ -7,7 +7,7 @@ import { aiosQuarter } from '@/lib/aiosQuarter';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { syncAiosPersoon } from '@/lib/aiosSync';
 import { readFirstSheet } from '@/lib/xlsx';
-import { getBaseUrl, loginAsBeheerder } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
 
 /**
  * The AIOS's preferences, step 2 (docs/aios-rooster.md): on their own page
@@ -129,17 +129,19 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   // The planner sees it.
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
-  await expect(page.getByRole('heading', { name: 'Status voorkeuren' })).toBeVisible();
+  await openAiosSectie(page, 'Status voorkeuren');
   const rij = page.locator('li', { hasText: ids.codenaam });
   await expect(rij).toContainText('Ingediend');
   await expect(rij).toContainText('1 geblokkeerd');
   await expect(rij).toContainText('4 nachten');
+  await openAiosSectie(page, 'Voorkeuren van de AIOS');
   await expect(page.getByRole('button', { name: 'Links downloaden' })).toBeVisible();
   await expect(page.getByText('Mail naar de AIOS', { exact: true })).toBeVisible();
   // The AIOS's own automatic reminders, off while their mail is not set up.
   await expect(page.getByTestId('aios-auto-herinneringen')).toContainText('de mail voor de AIOS is nog niet ingesteld');
 
   // The requests as a workbook, with this AIOS's 4 nachten in it.
+  await openAiosSectie(page, 'Status voorkeuren');
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '⬇ Verzoeken per AIOS' }).click()]);
   expect(download.suggestedFilename()).toMatch(/^verzoeken-aios-.*\.xlsx$/);
   const [kop, ...rijen] = readFirstSheet(fs.readFileSync((await download.path())!));

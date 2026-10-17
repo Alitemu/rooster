@@ -46,9 +46,13 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 7. **Kwartaal maken.** Klik op *+ Nieuwe periode*, kies het kwartaal (bij
    voorkeur Q1 2027, daar vallen Pasen en Tweede Paasdag in) en klik op
    *Aanmaken en instellen*.
-   - Je ziet: de diensten per week, een avond- of nachtblok als één vak met
-     een dikke rand en *Punten in dit kwartaal* met het aantal fte dat de
-     AIOS samen nodig hebben om onder 25% te blijven.
+   - Je ziet: de onderdelen van het kwartaal als titels, allemaal dicht. Een
+     onderdeel open je door op de titel te klikken. Open je een ander, dan
+     klapt het vorige dicht, tenzij je het met de punaise vastzet. Zo werkt
+     het in de rest van dit draaiboek steeds.
+   - Open *Per week*: de diensten per week, een avond- of nachtblok als één
+     vak met een dikke rand. Open *Punten in dit kwartaal*: het aantal fte dat
+     de AIOS samen nodig hebben om onder 25% te blijven.
 8. **Voortgangstoets.** Vink bij *Voortgangstoets* aan dat er een toets is,
    kies een woensdag in het kwartaal en klik op *Opslaan*.
    - Je ziet: de tekst noemt de toets en de nacht ervoor. In het weekoverzicht

@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { AiosSectie } from '@/components/AiosSectie';
 import type { GeschiedenisPlan, GeschiedenisRij } from '@/lib/aiosGeschiedenis';
 
 function toBase64(buffer: ArrayBuffer): string {
@@ -54,7 +55,6 @@ function Tabel({ rijen }: { rijen: GeschiedenisRij[] }) {
 
 export function AiosGeschiedenis({ periodId }: { periodId: string }) {
   const [stand, setStand] = useState<{ rijen: GeschiedenisRij[]; ingelezen_op: string | null } | null>(null);
-  const [open, setOpen] = useState(false);
   const [bestand, setBestand] = useState<{ naam: string; data: string } | null>(null);
   const [plan, setPlan] = useState<GeschiedenisPlan | null>(null);
   const [bezig, setBezig] = useState(false);
@@ -115,69 +115,68 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
   const knop = 'px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
 
   return (
-    <div className="card card-padding space-y-3" data-testid="aios-geschiedenis">
-      <div className="flex items-start justify-between gap-2">
-        <h2 className="text-lg font-semibold">Geschiedenis van vóór de app</h2>
-        <button type="button" className={knop} onClick={() => setOpen(!open)} aria-expanded={open}>
-          {open ? 'Verbergen' : 'Tonen'}
-        </button>
-      </div>
+    // Its own Tonen and Verbergen went: the section folds now (components/AiosSectie.tsx).
+    <AiosSectie
+      sleutel="geschiedenis"
+      titel="Geschiedenis van vóór de app"
+      testId="aios-geschiedenis"
+      hint={stand ? (stand.rijen.length > 0 ? `Ingelezen voor ${stand.rijen.length} AIOS` : 'Nog niets ingelezen') : undefined}
+      blijfGeladen
+    >
       <p className="text-sm text-neutral-700">
         {stand && stand.rijen.length > 0
           ? `Ingelezen voor ${stand.rijen.length} AIOS.`
           : 'Nog niets ingelezen. Dan begint iedereen in het eerste kwartaal in de app gelijk.'}
       </p>
-      {open && (
-        <div className="space-y-3">
-          <p className="text-sm text-neutral-700">
-            Vul per AIOS in wat die vóór de app deed: de diensten per soort, hoeveel daarvan op een feestdag, de gemiddelde fte en over hoeveel
-            maanden. De app vergelijkt dat met het gemiddelde naar fte en maanden. Wie meer deed, krijgt in het eerste kwartaal in de app minder
-            punten. Wie minder deed, krijgt er meer. Daarna schuift het verschil elk kwartaal vanzelf door. Inlezen vervangt wat er al stond.
-          </p>
-          {/* inline-block: an inline link's padding lay over the line above it on a phone. */}
-          <a className={`${knop} inline-block`} href={withBasePath(`/api/aios/periode/${periodId}/geschiedenis-sjabloon`)}>
-            Sjabloon downloaden
-          </a>
-          <label className="block text-sm">
-            <span className="block text-xs font-medium text-neutral-700 mb-1">Ingevuld bestand</span>
-            <input type="file" accept=".xlsx" aria-label="Excel-bestand met de geschiedenis" disabled={bezig} onChange={(e) => kies(e.target.files?.[0])} />
-          </label>
-          {bestand && (
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={knop} disabled={bezig} onClick={() => stuur(false)}>
-                Controleren
+      <div className="space-y-3">
+        <p className="text-sm text-neutral-700">
+          Vul per AIOS in wat die vóór de app deed: de diensten per soort, hoeveel daarvan op een feestdag, de gemiddelde fte en over hoeveel
+          maanden. De app vergelijkt dat met het gemiddelde naar fte en maanden. Wie meer deed, krijgt in het eerste kwartaal in de app minder
+          punten. Wie minder deed, krijgt er meer. Daarna schuift het verschil elk kwartaal vanzelf door. Inlezen vervangt wat er al stond.
+        </p>
+        {/* inline-block: an inline link's padding lay over the line above it on a phone. */}
+        <a className={`${knop} inline-block`} href={withBasePath(`/api/aios/periode/${periodId}/geschiedenis-sjabloon`)}>
+          Sjabloon downloaden
+        </a>
+        <label className="block text-sm">
+          <span className="block text-xs font-medium text-neutral-700 mb-1">Ingevuld bestand</span>
+          <input type="file" accept=".xlsx" aria-label="Excel-bestand met de geschiedenis" disabled={bezig} onChange={(e) => kies(e.target.files?.[0])} />
+        </label>
+        {bestand && (
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={knop} disabled={bezig} onClick={() => stuur(false)}>
+              Controleren
+            </button>
+            {plan && plan.problemen.length === 0 && (
+              <button type="button" className="btn-primary" disabled={bezig} onClick={() => stuur(true)}>
+                Bewaren
               </button>
-              {plan && plan.problemen.length === 0 && (
-                <button type="button" className="btn-primary" disabled={bezig} onClick={() => stuur(true)}>
-                  Bewaren
-                </button>
-              )}
-            </div>
-          )}
-          {plan && plan.problemen.length > 0 && (
-            <div className="rounded border-2 border-neutral-900 p-3 text-sm" role="alert">
-              <p className="font-medium">Los dit eerst op in het bestand:</p>
-              <ul className="list-disc pl-5">
-                {plan.problemen.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {plan && plan.problemen.length === 0 && (
-            <div className="space-y-1" data-testid="aios-geschiedenis-voorbeeld">
-              <p className="text-sm font-medium">Zo telt het bestand mee. Klopt het, klik dan op Bewaren.</p>
-              <Tabel rijen={plan.rijen} />
-            </div>
-          )}
-          {!plan && stand && stand.rijen.length > 0 && <Tabel rijen={stand.rijen} />}
-        </div>
-      )}
+            )}
+          </div>
+        )}
+        {plan && plan.problemen.length > 0 && (
+          <div className="rounded border-2 border-neutral-900 p-3 text-sm" role="alert">
+            <p className="font-medium">Los dit eerst op in het bestand:</p>
+            <ul className="list-disc pl-5">
+              {plan.problemen.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {plan && plan.problemen.length === 0 && (
+          <div className="space-y-1" data-testid="aios-geschiedenis-voorbeeld">
+            <p className="text-sm font-medium">Zo telt het bestand mee. Klopt het, klik dan op Bewaren.</p>
+            <Tabel rijen={plan.rijen} />
+          </div>
+        )}
+        {!plan && stand && stand.rijen.length > 0 && <Tabel rijen={stand.rijen} />}
+      </div>
       {melding && (
         <p role={melding.fout ? 'alert' : 'status'} className={`text-sm ${melding.fout ? 'text-red-700' : 'text-neutral-800'}`}>
           {melding.tekst}
         </p>
       )}
-    </div>
+    </AiosSectie>
   );
 }

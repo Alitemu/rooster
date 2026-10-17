@@ -132,6 +132,14 @@ in lib/aiosToegang.ts. The AIOS's:
   components/Aios*.tsx. The achterwacht's period page renders
   AiosPeriodOverview for an AIOS period, a line that was there in 0.71.0;
   the overview loads and reloads its period from the AIOS's own route.
+  Its parts fold like the achterwacht's (0.86.0, the planner's wish):
+  components/AiosSectie.tsx is a copy of PlannerDashboard's Section and its
+  accordion state (all closed at first, opening one closes the others that
+  are not pinned), with the title as a heading holding the button. A part
+  whose state must survive closing, or whose hint needs its data, stays
+  loaded while closed (`blijfGeladen`: the roster with its feestdag
+  choices, the toets, Status voorkeuren, ruilen, the history). The e2e
+  tests open a part with openAiosSectie (tests/e2e/setup.ts).
 - Routes: app/api/aios/ only. deelnemer/[id]/... for the AIOS
   participant (their screen, a mark, their requests, handing in, deeltijd,
   afwezigheid), periode/[id]/... for the planner (the period, openen,

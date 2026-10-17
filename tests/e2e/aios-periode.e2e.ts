@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
-import { getBaseUrl, loginAsBeheerder, loginAsPlanner } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, loginAsPlanner } from './setup';
 
 /**
  * The AIOS roster, step 1 (docs/aios-rooster.md): the beheerder picks the
@@ -46,13 +46,28 @@ test('the beheerder makes an AIOS quarter and sees its diensten, blocks and poin
   await page.waitForURL(/\/planner\/period\//);
   made.push(page.url().split('/planner/period/')[1]);
   await expect(page.getByRole('heading', { name: `AIOS ${opties[opties.length - 1]}` })).toBeVisible();
-  await expect(page.getByText('Punten in dit kwartaal')).toBeVisible();
+
+  // Every part folds, as on the achterwacht's page (0.86.0): all closed at first.
+  const knop = (titel: string) => page.getByRole('heading', { name: titel, exact: true }).getByRole('button');
+  for (const titel of ['Voorkeuren van de AIOS', 'Voortgangstoets', 'Geschiedenis van vóór de app', 'Punten in dit kwartaal', 'Diensten', 'Per week']) {
+    await expect(knop(titel)).toHaveAttribute('aria-expanded', 'false');
+  }
+  await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeHidden();
+  await openAiosSectie(page, 'Punten in dit kwartaal');
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeVisible();
+  // Opening another closes it, unless it is pinned.
+  await openAiosSectie(page, 'Diensten');
+  await expect(knop('Punten in dit kwartaal')).toHaveAttribute('aria-expanded', 'false');
+  await page.getByRole('button', { name: /^Vastzetten/ }).click();
+  await openAiosSectie(page, 'Voorkeuren van de AIOS');
+  await expect(knop('Diensten')).toHaveAttribute('aria-expanded', 'true');
+
   // Opening asks for an AIOS taking part; the demo's AIOS pool is empty.
   await expect(page.getByLabel('Deadline voor de voorkeuren')).toBeVisible();
   await page.getByRole('button', { name: 'Periode openen' }).click();
   await expect(page.getByText(/Er doet nog geen AIOS mee in dit kwartaal/)).toBeVisible();
   // Thirteen or fourteen weeks, each with its evening and night blocks.
+  await openAiosSectie(page, 'Per week');
   const weken = await page.getByText(/^Week \d+ en \d+ · /).count();
   expect([13, 14]).toContain(weken);
   await expect(page.locator('[title^="Blok zo t/m di"]').first()).toBeVisible();

@@ -20,7 +20,9 @@ import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
 import { AiosRuilenOverzicht } from '@/components/AiosRuilenOverzicht';
 import { AiosVoortgangstoets, FellowVak } from '@/components/AiosVoortgangstoets';
+import { AiosHarmonica, AiosSectie } from '@/components/AiosSectie';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
+import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { AiosCode } from '@/lib/aiosDiensten';
 import type { AiosDag, AiosDienstenOverzicht, AiosDienstRegel } from '@/lib/aiosSlots';
@@ -299,10 +301,11 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
 
   const aantal = (n = 0, wat: string) => `${n} ${wat}`;
 
-  return (
-    <div className="card card-padding space-y-4">
-      <h2 className="text-lg font-semibold">Voorkeuren van de AIOS</h2>
+  const hint =
+    period.status === 'OPEN' ? `Open tot ${deadlineTekst(period.deadline)}` : `Status: ${periodStatusLabel(period.status)}`;
 
+  return (
+    <AiosSectie sleutel="voorkeuren" titel="Voorkeuren van de AIOS" hint={hint}>
       {period.status === 'CONCEPT' && (
         <div className="space-y-3">
           <p className="text-sm text-neutral-700">
@@ -464,7 +467,7 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
           {fout}
         </div>
       )}
-    </div>
+    </AiosSectie>
   );
 }
 
@@ -556,21 +559,42 @@ function StatusVoorkeuren({ periodId, periodNaam, refreshKey }: { periodId: stri
     laad();
   }, [laad, refreshKey]);
 
-  if (fout) return <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{fout}</div>;
-  if (!deelnemers) return null;
-  const ingediend = deelnemers.filter((d) => d.status === 'INGEDIEND').length;
+  const ingediend = (deelnemers ?? []).filter((d) => d.status === 'INGEDIEND').length;
 
   return (
-    <div className="card card-padding space-y-3">
+    // Kept loaded while closed: the hint says how many handed in.
+    <AiosSectie sleutel="status" titel="Status voorkeuren" hint={deelnemers ? `${ingediend} van de ${deelnemers.length} ingediend` : undefined} blijfGeladen>
+      {fout && <p className="text-sm text-red-700">{fout}</p>}
+      {deelnemers && (
+        <StatusLijst deelnemers={deelnemers} ingediend={ingediend} periodId={periodId} periodNaam={periodNaam} laad={laad} />
+      )}
+    </AiosSectie>
+  );
+}
+
+function StatusLijst({
+  deelnemers,
+  ingediend,
+  periodId,
+  periodNaam,
+  laad,
+}: {
+  deelnemers: Deelnemer[];
+  ingediend: number;
+  periodId: string;
+  periodNaam: string;
+  laad: () => void;
+}) {
+  return (
+    <>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-lg font-semibold">Status voorkeuren</h2>
+        <p className="text-sm text-neutral-700">
+          {ingediend} van de {deelnemers.length} AIOS {ingediend === 1 ? 'heeft' : 'hebben'} ingediend.
+        </p>
         <button type="button" onClick={laad} className="text-sm text-blue-600 hover:text-blue-700">
           Vernieuwen
         </button>
       </div>
-      <p className="text-sm text-neutral-700">
-        {ingediend} van de {deelnemers.length} AIOS {ingediend === 1 ? 'heeft' : 'hebben'} ingediend.
-      </p>
       <Downloads periodId={periodId} periodNaam={periodNaam} />
       {deelnemers.length === 0 && (
         <p className="text-sm text-neutral-600">Er doet nog geen AIOS mee in dit kwartaal. Voeg ze toe bij Personeel.</p>
@@ -603,11 +627,20 @@ function StatusVoorkeuren({ periodId, periodNaam, refreshKey }: { periodId: stri
           );
         })}
       </ul>
-    </div>
+    </>
   );
 }
 
-export function AiosPeriodOverview({ period: begin }: { period: Period }) {
+// Every part folds, as on the achterwacht's period page (components/AiosSectie.tsx).
+export function AiosPeriodOverview({ period }: { period: Period }) {
+  return (
+    <AiosHarmonica>
+      <Pagina period={period} />
+    </AiosHarmonica>
+  );
+}
+
+function Pagina({ period: begin }: { period: Period }) {
   const [overzicht, setOverzicht] = useState<AiosDienstenOverzicht | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The page reloads the period from the AIOS's own route after each step:
@@ -678,8 +711,7 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
 
       {overzicht && (
         <>
-          <div className="card card-padding space-y-3">
-            <h2 className="text-lg font-semibold">Punten in dit kwartaal</h2>
+          <AiosSectie sleutel="punten" titel="Punten in dit kwartaal" hint={`${getal(overzicht.punten.totaal_punten)} punten`}>
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-neutral-600">
@@ -711,10 +743,9 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
               <strong>{getal(benodigdeFte(overzicht.punten, 0.25))} fte</strong> nodig. Voor gemiddeld 20% is dat{' '}
               {getal(benodigdeFte(overzicht.punten, 0.2))} fte.
             </p>
-          </div>
+          </AiosSectie>
 
-          <div className="card card-padding space-y-3">
-            <h2 className="text-lg font-semibold">Diensten</h2>
+          <AiosSectie sleutel="diensten" titel="Diensten" hint="codes, tijden en punten">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-neutral-600">
@@ -742,10 +773,9 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
               zaterdag is een losse dienst. Een blok staat hieronder als één vak met een dikke rand: één AIOS doet
               het hele blok. Een feestdag (★) heeft de diensten van een weekenddag.
             </p>
-          </div>
+          </AiosSectie>
 
-          <div className="card card-padding space-y-5">
-            <h2 className="text-lg font-semibold">Per week</h2>
+          <AiosSectie sleutel="per-week" titel="Per week" hint={`${weken.length} weken`}>
             {weken.map((week) => (
               <WeekTabel key={week[0].datum} dagen={week} />
             ))}
@@ -761,7 +791,7 @@ export function AiosPeriodOverview({ period: begin }: { period: Period }) {
                 </ul>
               </div>
             )}
-          </div>
+          </AiosSectie>
         </>
       )}
     </div>

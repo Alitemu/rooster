@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { getBaseUrl, loginAsBeheerder } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
 
 /**
  * Step 4a (docs/aios-rooster.md): the planner makes an AIOS roster with the
@@ -86,15 +86,18 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
 
   const paneel = page.getByTestId('aios-rooster-maken');
   await expect(paneel.getByRole('heading', { name: 'Rooster' })).toBeVisible();
+  await openAiosSectie(page, 'Rooster');
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
 
   await expect(page.getByRole('heading', { name: 'Per AIOS' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Het rooster per week' })).toBeVisible();
   // Every AIOS a row with a percentage; the roster names them.
+  await openAiosSectie(page, 'Per AIOS');
   const tabel = page.locator('table', { hasText: 'Percentage' });
   await expect(tabel.locator('tbody tr')).toHaveCount(8);
   await expect(tabel.getByText(/\d+(,\d)?%/).first()).toBeVisible();
+  await openAiosSectie(page, 'Het rooster per week');
   await expect(page.locator('td span', { hasText: new RegExp(`^ar0\\d-${stamp % 100000}`) }).first()).toBeVisible();
   const ingedeeld = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(ids.period) as { n: number }).n;
   expect(ingedeeld).toBeGreaterThan(0);
@@ -130,6 +133,7 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(klaar).toHaveCount(0);
   expect(rooster()).toEqual(voor);
 
+  await openAiosSectie(page, 'Rooster');
   await paneel.getByRole('button', { name: 'Rooster verwijderen' }).click();
   await paneel.getByRole('button', { name: 'Ja, rooster verwijderen' }).click();
   await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeVisible();
@@ -144,6 +148,7 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
   await page.goto(`${getBaseUrl()}/planner/period/${ids.kerst}`);
 
   const paneel = page.getByTestId('aios-rooster-maken');
+  await openAiosSectie(page, 'Rooster');
   const vragen = paneel.getByTestId('aios-feestdagblokken');
   await expect(vragen.getByRole('heading', { name: '★ Blokken rond feestdagen' })).toBeVisible();
   await expect(vragen.getByText(/Eerste Kerstdag en Tweede Kerstdag/)).toBeVisible();
@@ -161,6 +166,7 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
 
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
+  await openAiosSectie(page, 'Het rooster per week');
   await expect(page.getByRole('cell', { name: 'Nacht 2', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 

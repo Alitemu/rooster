@@ -6,7 +6,7 @@
 
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
 import { generateAccessToken, hashToken, hashPassword } from '@/lib/auth';
 
 interface TestUser {
@@ -198,6 +198,16 @@ async function loginAsStaff(page: Page, codenaam: string): Promise<void> {
       `E2E staff login failed (${res.status()}): run npm run seed, or set E2E_PLANNER_CODENAAM/E2E_PLANNER_PASSWORD`
     );
   }
+}
+
+/**
+ * Opens one part of the AIOS period page: they all start closed, and
+ * opening one closes the others that are not pinned (components/AiosSectie.tsx).
+ */
+export async function openAiosSectie(page: Page, titel: string): Promise<void> {
+  const knop = page.getByRole('heading', { name: titel, exact: true }).getByRole('button');
+  if ((await knop.getAttribute('aria-expanded')) !== 'true') await knop.click();
+  await expect(knop).toHaveAttribute('aria-expanded', 'true');
 }
 
 /**
