@@ -35,7 +35,10 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   `aios_periode.voortgangstoets` (0.82.0, migration 0029): the date of the
   quarter's voortgangstoets or null. The ND of the night before is deleted
   while it is set and made again (in its block, with the block's marks and
-  the leave on it) when it moves or goes (lib/aiosVoortgangstoets.ts).
+  the leave and part-time days on it, lib/aiosSync.ts zetBronnenOpDienst)
+  when it moves or goes (lib/aiosVoortgangstoets.ts; reading it,
+  lib/aiosToetsNacht.ts, imports the database only, as lib/aiosSlots.ts
+  is loaded by the browser tests outside Next.js).
 - `aios_blokkeuze` - per AIOS period and block with a feestdag in it the
   planner's choice: whole or `opknippen` (0.76.0, migration 0026,
   lib/aiosFeestdagBlokken.ts). Cascades with the period and the block. The

@@ -149,7 +149,9 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   opgeslagen is. De solver, de harde regels, de punten, ruilen en de
   downloads zien hem dus niet. Een andere datum of geen datum zet de nacht
   terug in zijn blok, met wat de AIOS op dat blok markeerde en hun verlof
-  op die dag. Dat kan tot het rooster gepubliceerd is. De nacht moet in het
+  en parttimedag op die dag (0.82.1). Dat kan tot het rooster gepubliceerd
+  is. De AIOS ziet op het eigen voorkeurenscherm wanneer de toets is en dat
+  de nacht ervoor daarom niet in het blok staat (0.82.1). De nacht moet in het
   kwartaal vallen: een toets op de eerste woensdag hoort bij het vorige
   kwartaal.
 
@@ -418,7 +420,7 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de
   keuze van de planner in oktober 2026): de verzendlijst van de AIOS gaat naar
   een eigen stroomadres. Dat stelt de beheerder in op de pagina van een periode
-  van de AIOS. Het komt later ook in het ruilscherm van de AIOS. De lijst met adressen van de AIOS staat bij de
+  van de AIOS. Ook de mails over ruilen gaan via die stroom (0.80.0). De lijst met adressen van de AIOS staat bij de
   roosteraar (N2). Geen kopie voor de opleider (N4). Herinneringen gaan ook
   vanzelf, een week en een dag voor de deadline, net als bij de achterwacht
   (0.73.0). De planner kan ze per periode pauzeren.
