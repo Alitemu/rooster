@@ -33,7 +33,7 @@ import {
 // The screen's types and the 50% counters live in lib/aiosVoorkeur.ts,
 // without the database, so the browser can count with them too.
 export * from '@/lib/aiosVoorkeur';
-import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
+import { checkPeriodAcceptsInput } from '@/lib/aiosInvoer';
 import { syncAiosPersoon } from '@/lib/aiosSync';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { validateSingleLine } from '@/lib/vrijeTekst';

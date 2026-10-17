@@ -22,7 +22,7 @@ import { db } from '@/db/client';
 import { parseISO } from './holidays';
 import { writeAuditLog } from './auditLog';
 import { syncAiosPeriode } from './aiosSync';
-import { periodStatusLabel } from './statusLabels';
+import { periodStatusLabel } from './aiosTeksten';
 
 export type AiosOpenResult =
   | { ok: true; deadline: string }

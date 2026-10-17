@@ -541,6 +541,20 @@ const MUTATIONS = [
     tests: ['app/api/dienstSeparation'],
   },
   {
+    name: "diensten: the AIOS borrows the achterwacht's deadline rules again",
+    file: 'lib/aiosSync.ts',
+    find: "import { deadlinePassed } from '@/lib/aiosInvoer';",
+    replace: "import { deadlinePassed } from '@/lib/periodInputGate';",
+    tests: ['app/dienstImports'],
+  },
+  {
+    name: "diensten: the achterwacht's planner page takes more of the AIOS",
+    file: 'app/planner/page.tsx',
+    find: "} from '@/lib/aiosQuarter';",
+    replace: "} from '@/lib/aiosQuarter';\nimport '@/lib/aiosOpen';",
+    tests: ['app/dienstImports'],
+  },
+  {
     name: 'aios: a new AIOS in the pool without their part-time days',
     file: 'app/api/planner/pool/[id]/members/route.ts',
     find: '    syncAiosPersoon(result.personId);',

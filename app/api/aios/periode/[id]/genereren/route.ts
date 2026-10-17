@@ -15,7 +15,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
-import { periodStatusLabel } from '@/lib/statusLabels';
+import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { aiosFout, laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosFeestdagVragen, zorgVoorOudjaar } from '@/lib/aiosFeestdagBlokken';
 import { AIOS_GENERATIE_LOOPT, AIOS_TIJDSLIMIETEN, aiosGeneratieLoopt, startAiosGeneratie, type AiosTijdslimiet } from '@/lib/aiosGenereren';

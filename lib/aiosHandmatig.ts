@@ -27,7 +27,7 @@ import { aiosWerkdagen, dienstpercentage, PERCENTAGE_GRENS } from '@/lib/aiosFte
 import { controleerAiosRooster, regelZin, type Overtreding, type Regel } from '@/lib/aiosRegels';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
-import { periodStatusLabel } from '@/lib/statusLabels';
+import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { sluitVervallenAiosRuilen } from '@/lib/aiosRuilen';
 
 // What the marks say instead: a planner overriding a mark is told it as the mark.

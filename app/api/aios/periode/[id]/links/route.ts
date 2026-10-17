@@ -11,7 +11,7 @@ import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { resolveBaseUrl } from '@/lib/baseUrl';
 import { writeAuditLog } from '@/lib/auditLog';
-import { deadlineTekst } from '@/lib/verzendlijst';
+import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { xlsxDownload } from '@/lib/xlsxWrite';
 import { laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosDeelnemers, aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';

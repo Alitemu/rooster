@@ -6,10 +6,12 @@
  * it (docs/development/diensten.md, "Copied, not changed"). Asked for in
  * October 2026: "waarom is dit niet hetzelfde als bij de achterwacht?".
  *
- * The same moments as the achterwacht's: per milestone of the period's
- * reminder schedule (7 and 1 days by default, lib/reminderSchedule.ts), the
- * last 09:00 at least that many days before the deadline (reminderMoment),
- * sent at the first hourly check after it (instrumentation-node.ts). The
+ * The same moments as the achterwacht's, in a copy of its own (the
+ * achterwacht's lib/autoReminders.ts and lib/reminderSchedule.ts may change
+ * without changing these): per milestone of the period's reminder schedule
+ * (7 and 1 days by default), the last 09:00 at least that many days before
+ * the deadline (reminderMoment), sent at the first hourly check after it
+ * (instrumentation-node.ts). The
  * same groups (nothing entered, started but not handed in), nobody who
  * handed in and nobody reminded in the last day.
  *
@@ -25,10 +27,8 @@
  */
 
 import { db } from '@/db/client';
-import { CATCH_UP_MS, reminderMoment } from '@/lib/autoReminders';
-import { getActiveReminderMilestones } from '@/lib/reminderSchedule';
-import { deadlinePassed } from '@/lib/periodInputGate';
-import { buildVerzendlijst } from '@/lib/verzendlijst';
+import { deadlinePassed } from '@/lib/aiosInvoer';
+import { buildVerzendlijst } from '@/lib/aiosVerzendlijst';
 import { aiosMailIngesteld, verstuurAiosVerzendlijst } from '@/lib/aiosMail';
 import {
   aiosHerinnering,
@@ -40,6 +40,35 @@ import {
   logAiosHerinneringen,
   type AiosUitnodigPeriode,
 } from '@/lib/aiosUitnodigen';
+
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+/** The hour of day (server-local) a reminder goes out. */
+const REMINDER_HOUR = 9;
+/** A moment this late (the server was down) is skipped, not sent late. */
+export const CATCH_UP_MS = 12 * HOUR_MS;
+const DEFAULT_MILESTONES = [7, 1];
+
+/** The last 09:00 (server-local time) at least `dagen` whole days before the deadline. */
+export function reminderMoment(deadline: Date, dagen: number): Date {
+  const latest = new Date(deadline.getTime() - dagen * DAY_MS);
+  const moment = new Date(latest);
+  moment.setHours(REMINDER_HOUR, 0, 0, 0);
+  if (moment > latest) moment.setDate(moment.getDate() - 1);
+  return moment;
+}
+
+/** A period's active milestones (days before the deadline), furthest out first. */
+function getActiveReminderMilestones(periodId: string): number[] {
+  const rows = db
+    .prepare(
+      `SELECT dagen_voor_deadline FROM dienstrooster_reminder_schedule
+       WHERE period_id = ? AND actief = 1
+       ORDER BY dagen_voor_deadline DESC`
+    )
+    .all(periodId) as Array<{ dagen_voor_deadline: number }>;
+  return rows.length > 0 ? rows.map((r) => r.dagen_voor_deadline) : DEFAULT_MILESTONES;
+}
 
 export type AiosHerinnerUitkomst =
   | { periodId: string; dagen: number; uitkomst: 'VERSTUURD'; aantal: number }

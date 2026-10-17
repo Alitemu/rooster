@@ -9,7 +9,7 @@
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { writeAuditLog } from '@/lib/auditLog';
-import { periodStatusLabel } from '@/lib/statusLabels';
+import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { haalTweedeNachtWeg } from '@/lib/aiosFeestdagBlokken';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 

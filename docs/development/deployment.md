@@ -20,7 +20,9 @@ both solvers' tests pass and only for a version not built before (bump
 package.json for every build); "Vrijgeven (productie)"
 (release.yml) points `stable` at an already built, tested version without
 rebuilding (rooster-aios-solver only when that version has one: going back
-to a version before 0.74.0 leaves its `stable` where it is), and makes the GitHub release `v<version>` with the commits
+to a version before 0.74.0 leaves its `stable` where it is; in
+docker-compose.yml web waits for the achterwacht's solver only, since
+0.84.0, so the achterwacht starts whether or not the AIOS's does), and makes the GitHub release `v<version>` with the commits
 since the release before it, marked as the latest. Releasing a version
 again only moves that mark, so the latest release is always what
 production runs. The release goes on the tag `v<version>` that "Bouwen

@@ -20,7 +20,7 @@ import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
 import { AiosRuilenOverzicht } from '@/components/AiosRuilenOverzicht';
 import { AiosVoortgangstoets, FellowVak } from '@/components/AiosVoortgangstoets';
-import { deadlineTekst } from '@/lib/verzendlijst';
+import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { AiosCode } from '@/lib/aiosDiensten';
 import type { AiosDag, AiosDienstenOverzicht, AiosDienstRegel } from '@/lib/aiosSlots';

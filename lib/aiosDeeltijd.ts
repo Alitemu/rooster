@@ -11,7 +11,7 @@ import { db } from '@/db/client';
 import { isUniqueViolation } from '@/lib/api-errors';
 import { optionalFreeText } from '@/lib/freeText';
 import { isValidIsoDate } from '@/lib/isoDate';
-import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
+import { buildDeadlinePassedWarning } from '@/lib/aiosInvoer';
 import {
   aiosPeriodesNaDeadline,
   aiosPeriodesVoorInvoer,

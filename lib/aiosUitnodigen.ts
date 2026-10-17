@@ -13,8 +13,8 @@
 
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
-import { deadlinePassed } from '@/lib/periodInputGate';
-import { deadlineTekst, verzendlijstPersonen, type VerzendlijstBericht, type VerzendlijstSoort } from '@/lib/verzendlijst';
+import { deadlinePassed } from '@/lib/aiosInvoer';
+import { deadlineTekst, verzendlijstPersonen, type VerzendlijstBericht, type VerzendlijstSoort } from '@/lib/aiosVerzendlijst';
 
 export interface AiosUitnodigPeriode {
   id: string;

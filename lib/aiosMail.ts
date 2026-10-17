@@ -16,7 +16,7 @@
 import nodemailer from 'nodemailer';
 import { db } from '@/db/client';
 import { getStoredMailSettings } from './appSettings';
-import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
+import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './aiosVerzendlijst';
 
 const AAN = 'aios.mail.verzendlijst_aan';
 const LAATSTE_FOUT = 'aios.mail.laatste_fout';

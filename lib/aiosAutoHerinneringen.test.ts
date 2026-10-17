@@ -12,8 +12,7 @@ import {
   verzendlijstPayload,
   type SmtpSink,
 } from '@/tests/smtpSink';
-import { reminderMoment } from './autoReminders';
-import { aiosAutoHerinnerStatus, runAiosAutoHerinneringen, zetAiosAutoHerinneren } from './aiosAutoHerinneringen';
+import { aiosAutoHerinnerStatus, reminderMoment, runAiosAutoHerinneringen, zetAiosAutoHerinneren } from './aiosAutoHerinneringen';
 import { logAiosHerinneringen } from './aiosUitnodigen';
 import { GET as statusRoute, PATCH as zetRoute } from '@/app/api/aios/periode/[id]/auto-herinneringen/route';
 import { staffCookie } from '@/tests/fixtures/dienstWorlds';

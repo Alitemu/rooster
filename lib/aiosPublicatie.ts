@@ -23,15 +23,14 @@
  */
 
 import { db } from '@/db/client';
-import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht } from '@/lib/verzendlijst';
-import { formatSwapDate } from '@/lib/swapMailDetails';
+import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht } from '@/lib/aiosVerzendlijst';
 import { verstuurAiosVerzendlijst, aiosMailIngesteld } from '@/lib/aiosMail';
 import { aiosDeelnemers, aiosMailBasisUrl, aiosPersoonlijkeLink, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { laadAiosRooster, type AiosRooster } from '@/lib/aiosRooster';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import { writeAuditLog } from '@/lib/auditLog';
-import { periodStatusLabel } from '@/lib/statusLabels';
+import { formatSwapDate, periodStatusLabel } from '@/lib/aiosTeksten';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { vervalOpenAiosRuilen } from '@/lib/aiosRuilen';
 

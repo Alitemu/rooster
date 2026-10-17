@@ -509,6 +509,13 @@ rooster is het een gewone nacht. Een AIOS ziet op het eigen voorkeurenscherm
 wanneer de voortgangstoets is, en dat de nacht ervoor daarom niet in het blok
 staat.
 
+**Vanaf versie 0.84.0** werken de achterwacht en de AIOS ook achter de
+schermen helemaal los van elkaar. Wie bij de ene dienst hoort, kan niets
+opslaan via de onderdelen van de andere. Een AIOS die je aan de pool
+toevoegt terwijl een kwartaal open staat, krijgt de eigen parttimedagen en
+afwezigheid meteen in dat kwartaal. En de app start ook als de solver van
+de AIOS niet start.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

@@ -34,7 +34,19 @@ temporary password to the AIOS pool).
 - A participant belongs to one dienst: adding someone who is in a pool of
   another type is refused (409 ANDERE_DIENST, the beheerder too), and the
   imports that look a codenaam up (prior assignments, holidays) treat
-  someone of the other dienst as unknown.
+  someone of the other dienst as unknown. Also once removed from every pool
+  (the audit of the separation, 0.84.0): a link, a mark, a dienst or a
+  hand-in in a period of the other dienst still says whose they were
+  (lib/dienstAccess.ts personHasOtherDienst). Before, the other planner
+  could take the codenaam over, and their history with it.
+- A participant's routes are their own dienst's (0.84.0): every route
+  under app/api/person/ answers 404 about an AIOS (lib/aiosPeriod.ts
+  aiosPersonDenial), every route under app/api/aios/deelnemer/ about
+  someone who is not one (lib/aiosToegang.ts geenAiosDenial), whoever asks,
+  the beheerder too. Before, an absence or part-time day written through
+  the other dienst's route got that dienst's sync only: removed through the
+  AIOS's route, an achterwacht absence left its marks in the achterwacht's
+  open period. No screen did it, a hand-made request could.
 - The active period is per pool (lib/activePeriod.ts getActivePeriod(poolId),
   getActivePeriods): one for the app kept the AIOS planner from inviting
   while the achterwacht's period was open, and the refusal named it.
@@ -81,7 +93,10 @@ temporary password to the AIOS pool).
   slot and swap in path, query and body), expecting 401/403/404, nothing
   of the other world in any answer, and the other world's rows unchanged;
   the same GETs by the own planner and the beheerder must find their ids.
-  A route added later is covered without anyone remembering to.
+  Every participant route of the other dienst is called about each
+  world's own participant, by them, their planner and the beheerder, with
+  either world's ids: 404 and nothing changed. A route added later is
+  covered without anyone remembering to.
 
 ## Copied, not changed
 
@@ -95,7 +110,23 @@ Gmail account of Mailinstellingen. The AIOS's solver is its own container
 (aios-solver/, 0.74.0, docs/development/aios-solver.md); the achterwacht's
 solver stays as it is.
 
-Since 0.71.0 the achterwacht's code is unchanged. The AIOS's:
+Since 0.71.0 the achterwacht's code is unchanged but for what refuses
+the AIOS and a few lines where both meet, each named in
+app/dienstImports.test.ts: the guards (lib/aiosPeriod.ts, any file), the
+new-period form and route (an AIOS quarter), the period page (the AIOS's
+overview), the members routes (after the achterwacht's syncs the AIOS's,
+lib/aiosSync.ts syncAiosPersoon, 0.84.0: an AIOS added to the pool or
+given a longer Geldig tot while a quarter was open did not get their
+part-time days and leave in it), the hourly check and the start. The
+test reads every import: one outside that list fails, and so does AIOS
+code that imports the achterwacht's beyond the shared parts (login and
+sessions, the database, the mail account, the dienst checks, input checks,
+dates, file formats, the HTTP call to a solver). Where the AIOS needed
+the achterwacht's behaviour it has a copy (0.84.0): lib/aiosInvoer.ts
+(the deadline rules), lib/aiosVerzendlijst.ts (the verzendlijst, the same
+format for the AIOS's flow), lib/aiosTeksten.ts (status words, dates), the
+reminder moments in lib/aiosAutoHerinneringen.ts and who may use a quarter
+in lib/aiosToegang.ts. The AIOS's:
 
 - Pages: app/aios/[token] (the AIOS's personal link, /aios/<token>) and
   components/Aios*.tsx. The achterwacht's period page renders

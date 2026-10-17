@@ -29,7 +29,7 @@
 
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
-import { deadlinePassed } from '@/lib/periodInputGate';
+import { deadlinePassed } from '@/lib/aiosInvoer';
 
 type Weekdag = 'MA' | 'DI' | 'WO' | 'DO' | 'VR' | 'ZA' | 'ZO';
 type Frequentie = 'ELKE_WEEK' | 'EVEN_WEKEN' | 'ONEVEN_WEKEN';

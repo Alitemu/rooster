@@ -19,7 +19,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
-import { deadlineTekst } from '@/lib/verzendlijst';
+import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
 import {
   blokkadeTellers,

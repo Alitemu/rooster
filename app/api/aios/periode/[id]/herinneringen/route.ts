@@ -11,7 +11,7 @@ import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { resolveBaseUrl } from '@/lib/baseUrl';
-import { buildVerzendlijst } from '@/lib/verzendlijst';
+import { buildVerzendlijst } from '@/lib/aiosVerzendlijst';
 import { aiosFout, laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosMailIngesteld, verstuurAiosVerzendlijst } from '@/lib/aiosMail';
 import {

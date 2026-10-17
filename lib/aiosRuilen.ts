@@ -27,8 +27,8 @@
 
 import { randomUUID } from 'crypto';
 import { db } from '@/db/client';
-import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht, type VerzendlijstSoort } from '@/lib/verzendlijst';
-import { formatSwapDate } from '@/lib/swapMailDetails';
+import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht, type VerzendlijstSoort } from '@/lib/aiosVerzendlijst';
+import { formatSwapDate } from '@/lib/aiosTeksten';
 import { aiosMailIngesteld, verstuurAiosVerzendlijst } from '@/lib/aiosMail';
 import { aiosMailBasisUrl, aiosPersoonlijkeLink, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { aiosSolverInvoer, type AiosSolverInvoer } from '@/lib/aiosSolverInvoer';

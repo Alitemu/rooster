@@ -178,8 +178,14 @@ Every route keeps these, and a sweep test fails when one doesn't:
   `personAccessDenial` first; then, for a period or pool id,
   `periodDienstDenial` / `poolDienstDenial` (lib/dienstAccess.ts), and a
   participant route that takes a period asks `periodUsableFor`
-  (lib/periodAccess.ts). Lists filter on `visibleDienst`
-  (app/api/routeAccess.test.ts, app/api/dienstSeparation.test.ts).
+  (lib/periodAccess.ts). A participant route takes only its own dienst's
+  people: `personAccessDenial(...) ?? aiosPersonDenial(...)` under
+  app/api/person, `?? geenAiosDenial(...)` under app/api/aios/deelnemer.
+  Lists filter on `visibleDienst` (app/api/routeAccess.test.ts,
+  app/api/dienstSeparation.test.ts).
+- **Dienst boundary:** AIOS code imports only the shared parts, the
+  achterwacht's code the AIOS's only where listed (app/dienstImports.test.ts).
+  The AIOS needs something of the achterwacht's: copy it.
 - **Audit log:** every planner route that changes data writes
   `writeAuditLog` or says why not (app/api/auditCoverage.test.ts).
 - **Input:** bodies through `parseJsonBody` and lib/requestFields.ts, query
