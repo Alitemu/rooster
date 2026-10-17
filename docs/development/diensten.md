@@ -140,6 +140,11 @@ in lib/aiosToegang.ts. The AIOS's:
   loaded while closed (`blijfGeladen`: the roster with its feestdag
   choices, the toets, Status voorkeuren, ruilen, the history). The e2e
   tests open a part with openAiosSectie (tests/e2e/setup.ts).
+  A primary button of the AIOS's dims when off (`disabled:opacity-50`;
+  globals.css's btn-primary has no disabled look, and the achterwacht's is
+  left as it is): "Uitnodigingen versturen" without the mail was off but
+  looked on, so clicking it did nothing visible (0.87.0). A line under it
+  says why (`data-testid="aios-mail-nog-niet"`).
 - Routes: app/api/aios/ only. deelnemer/[id]/... for the AIOS
   participant (their screen, a mark, their requests, handing in, deeltijd,
   afwezigheid), periode/[id]/... for the planner (the period, openen,

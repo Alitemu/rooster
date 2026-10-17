@@ -32,6 +32,7 @@ import { periodStatusLabel } from '@/lib/statusLabels';
 import { FellowBadge } from './FellowBadge';
 import { MailSettingsDialog } from './MailSettingsDialog';
 import { MailWarning } from './MailWarning';
+import { MailStatus } from './MailStatus';
 import { PreferencesImportButton } from './PreferencesImportDialog';
 import { withBasePath } from '@/lib/basePath';
 import { herinnerdOpTekst, isRecentHerinnerd } from '@/lib/herinnerdOp';
@@ -314,6 +315,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   // Bumped when the mail settings change, so the automatic-reminder panel
   // re-reads whether sending is set up.
   const [mailSettingsKey, setMailSettingsKey] = useState(0);
+  // Only the beheerder sets up the mail (0.87.0): a planner sees how it stands.
+  const [beheerder, setBeheerder] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
   // null = not known yet (still loading, or load failed) - the "Voorstellen
   // voor herverdeling" section stays visible in that case, so a load error
@@ -393,6 +396,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     setSuggestionCount(null);
     loadData();
   }, [periodId]);
+
+  useEffect(() => {
+    fetch(withBasePath('/api/auth/me'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setBeheerder(data?.data?.role === 'ADMIN'))
+      .catch(() => setBeheerder(false));
+  }, []);
 
   // Closing the period happens in the page header, outside this component.
   useEffect(() => {
@@ -697,7 +707,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           closed), just phrased slightly differently. */}
 
       {/* Mail not going out: period-wide, so above every heading. */}
-      <MailWarning refreshKey={`${mailSettingsKey}|${exportDialogOpen}`} onOpenSettings={() => setMailSettingsOpen(true)} />
+      <MailWarning
+        refreshKey={`${mailSettingsKey}|${exportDialogOpen}`}
+        onOpenSettings={beheerder ? () => setMailSettingsOpen(true) : undefined}
+      />
 
       {/* Large Imbalances - an actionable warning, not a summary stat, so
           unlike the rest of this reorganization it stays directly visible
@@ -1157,7 +1170,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
       <Section
         title="Exporteren & communicatie"
-        hint="uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, mailinstellingen"
+        hint={`uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, ${beheerder ? 'mailinstellingen' : 'mail'}`}
         isOpen={openSections.has('export')}
         pinned={pinnedSections.has('export')}
         onToggleOpen={() => toggleSectionOpen('export')}
@@ -1187,12 +1200,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               📧 Deadlineherinnering versturen
             </button>
           )}
-          <button
-            onClick={() => setMailSettingsOpen(true)}
-            className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-          >
-            ⚙️ Mailinstellingen
-          </button>
+          {beheerder && (
+            <button
+              onClick={() => setMailSettingsOpen(true)}
+              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+            >
+              ⚙️ Mailinstellingen
+            </button>
+          )}
           <a
             href={withBasePath(`/api/exports/status-report/${periodId}`)}
             className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
@@ -1220,6 +1235,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
             </a>
           )}
         </div>
+        {!beheerder && (
+          <div className="mt-4">
+            <MailStatus refreshKey={`${mailSettingsKey}|${exportDialogOpen}`} />
+          </div>
+        )}
         <div className="mt-4">
           {/* Reloaded after a new deadline, a submission or closing the
               export dialog (a reminder sent by hand moves people out of
@@ -1397,7 +1417,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
       {/* Export Dialog */}
       <MailSettingsDialog
-        isOpen={mailSettingsOpen}
+        isOpen={beheerder && mailSettingsOpen}
         onClose={() => setMailSettingsOpen(false)}
         onChanged={() => setMailSettingsKey((k) => k + 1)}
       />

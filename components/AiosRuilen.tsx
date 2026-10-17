@@ -124,7 +124,7 @@ export function AiosRuilen({ personId, periodId, onGeruild }: { personId: string
                 />
               </label>
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="btn-primary" disabled={bezig} onClick={() => doe(`/${r.id}/goedkeuren`, {}, 'Goedgekeurd. Je rooster is aangepast.', true)}>
+                <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => doe(`/${r.id}/goedkeuren`, {}, 'Goedgekeurd. Je rooster is aangepast.', true)}>
                   Goedkeuren
                 </button>
                 <button type="button" className={knop} disabled={bezig} onClick={() => doe(`/${r.id}/afwijzen`, { reden: reden[r.id] ?? '' }, 'Afgewezen.')}>

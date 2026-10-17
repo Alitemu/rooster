@@ -148,7 +148,7 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
               Controleren
             </button>
             {plan && plan.problemen.length === 0 && (
-              <button type="button" className="btn-primary" disabled={bezig} onClick={() => stuur(true)}>
+              <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => stuur(true)}>
                 Bewaren
               </button>
             )}

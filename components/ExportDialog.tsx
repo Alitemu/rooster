@@ -802,8 +802,8 @@ function NotConfiguredNotice() {
     <div className="bg-amber-50 border border-amber-200 rounded p-4 mb-6">
       <p className="text-sm font-semibold text-amber-900">Versturen is nog niet ingesteld</p>
       <p className="text-sm text-amber-900 mt-1">
-        Er kan nog geen mail naar de Power Automate-stroom. Stel het Gmail-account in via de knop
-        Mailinstellingen onder Exporteren &amp; communicatie. De stappen staan in
+        Er kan nog geen mail naar de Power Automate-stroom. De beheerder stelt het Gmail-account in via
+        de knop Mailinstellingen onder Exporteren &amp; communicatie. De stappen staan in
         docs/verzendlijst-power-automate.md.
       </p>
     </div>

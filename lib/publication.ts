@@ -180,7 +180,7 @@ export async function sendRosterMail(
     return {
       verstuurd: false,
       reden: 'NIET_INGESTELD',
-      melding: 'Er is geen e-mail verstuurd, omdat automatisch versturen nog niet is ingesteld. Dat doe je bij Mailinstellingen.',
+      melding: 'Er is geen e-mail verstuurd, omdat automatisch versturen nog niet is ingesteld. Dat doet de beheerder bij Mailinstellingen.',
     };
   }
   const rooster = rosterSnapshot(period.id);

@@ -397,7 +397,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
                   Opnieuw maken
                 </button>
               ) : (
-                <button type="button" className="btn-primary" disabled={bezig || rooster?.loopt || nietKlaar} onClick={maken}>
+                <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig || rooster?.loopt || nietKlaar} onClick={maken}>
                   {bezig ? 'Bezig met maken...' : gemaakt ? 'Ja, opnieuw maken' : 'Rooster maken'}
                 </button>
               )}

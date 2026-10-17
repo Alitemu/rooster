@@ -128,7 +128,7 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
             {zeker !== 'intrekken' && metWaarschuwing && ' Het rooster heeft waarschuwingen.'}
           </p>
           <div className="flex flex-wrap gap-2">
-            <button type="button" className="btn-primary" disabled={bezig} onClick={() => doe(zeker, metWaarschuwing)}>
+            <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => doe(zeker, metWaarschuwing)}>
               {zeker === 'publiceren' ? (metWaarschuwing ? 'Ja, toch publiceren' : 'Ja, publiceren') : zeker === 'definitief' ? 'Ja, definitief maken' : 'Ja, intrekken'}
             </button>
             <button type="button" className={knop} disabled={bezig} onClick={() => setZeker(null)}>
@@ -140,12 +140,12 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
       {!zeker && (
         <div className="flex flex-wrap gap-2">
           {!gepubliceerd && (
-            <button type="button" className="btn-primary" disabled={bezig || !kan} onClick={() => setZeker('publiceren')}>
+            <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig || !kan} onClick={() => setZeker('publiceren')}>
               Voorlopig publiceren
             </button>
           )}
           {gepubliceerd && !stand.definitief_op && (
-            <button type="button" className="btn-primary" disabled={bezig || !kan} onClick={() => setZeker('definitief')}>
+            <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig || !kan} onClick={() => setZeker('definitief')}>
               Definitief maken
             </button>
           )}

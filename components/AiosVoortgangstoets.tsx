@@ -126,7 +126,7 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
               <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} disabled={bezig} className="px-2 py-1 border rounded text-sm" />
             </label>
           )}
-          <button type="button" className="btn-primary" disabled={bezig || !veranderd || (aan && !datum)} onClick={bewaar}>
+          <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig || !veranderd || (aan && !datum)} onClick={bewaar}>
             Opslaan
           </button>
         </div>

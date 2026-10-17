@@ -175,7 +175,7 @@ export function AiosRoosterWijzigen({
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className="btn-primary"
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={bezig || zonderReden}
               onClick={() => (zeker === 'leeg' ? zet(null, '') : zet(zeker.person_id, zeker.codenaam))}
             >

@@ -186,7 +186,7 @@ export function AiosFeestdagBlokken({
         </fieldset>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        <button type="button" className="btn-primary" disabled={uit || !gewijzigd} onClick={bewaren}>
+        <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={uit || !gewijzigd} onClick={bewaren}>
           {bezig ? 'Bezig met bewaren...' : 'Keuzes bewaren'}
         </button>
         {status === 'GEGENEREERD' && <span className="text-xs text-neutral-600">Een andere keuze geldt als je het rooster opnieuw maakt.</span>}

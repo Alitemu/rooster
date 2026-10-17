@@ -167,7 +167,7 @@ async function sendJsonMail(mail: {
       ok: false,
       message: mailSwitchedOff()
         ? 'Versturen staat uit op deze installatie (MAIL_UITGESCHAKELD).'
-        : 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.',
+        : 'Automatisch versturen is nog niet ingesteld. Dat doet de beheerder bij Mailinstellingen.',
       notConfigured: true,
     };
   }

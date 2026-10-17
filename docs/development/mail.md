@@ -41,7 +41,11 @@ side, which looks each codenaam up in its own Excel list and sends the
 mail. The server sends that mail itself (lib/verzendlijstMail.ts) once an
 account is set up, in the app only ("Mailinstellingen" under Exporteren &
 communicatie, `/api/planner/mail-settings`, lib/appSettings.ts; saved and
-removed by the beheerder only, shared by both diensten - Gmail
+removed by the beheerder only, shared by both diensten. Since 0.87.0 only
+the beheerder gets the button at all, as on the AIOS's page: a planner
+sees how the mail stands (components/MailStatus.tsx), the warning at the
+top tells them to ask the beheerder, and the texts that pointed a planner
+to Mailinstellingen say the beheerder does it - Gmail
 only, a 16-letter app password, the login is tried before saving, the
 password is stored AES-GCM encrypted with a key derived from the session
 secret, lib/settingsCrypto.ts, and never returned). .env is not read for

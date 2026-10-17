@@ -136,6 +136,11 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(rij).toContainText('4 nachten');
   await openAiosSectie(page, 'Voorkeuren van de AIOS');
   await expect(page.getByRole('button', { name: 'Links downloaden' })).toBeVisible();
+  // Without the mail the buttons are off, look it and say why (0.87.0): clicking one did nothing visible.
+  const uitnodigen = page.getByRole('button', { name: 'Uitnodigingen versturen' });
+  await expect(uitnodigen).toBeDisabled();
+  await expect(uitnodigen).toHaveCSS('opacity', '0.5');
+  await expect(page.getByTestId('aios-mail-nog-niet')).toContainText('kan pas als de mail voor de AIOS is ingesteld');
   await expect(page.getByText('Mail naar de AIOS', { exact: true })).toBeVisible();
   // The AIOS's own automatic reminders, off while their mail is not set up.
   await expect(page.getByTestId('aios-auto-herinneringen')).toContainText('de mail voor de AIOS is nog niet ingesteld');

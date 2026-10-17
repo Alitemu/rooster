@@ -539,6 +539,14 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.87.0** stelt alleen de beheerder de mail in, bij de
+achterwacht net als bij de AIOS. Een planner ziet onder *Exporteren &
+communicatie* geen knop *Mailinstellingen* meer, maar wel hoe de mail
+ervoor staat. Bij de AIOS staan *Uitnodigingen versturen* en *Herinnering
+versturen* zichtbaar uit zolang de mail niet is ingesteld, met de reden
+erbij. Zolang kun je de persoonlijke links zelf rondsturen met *Links
+downloaden*.
+
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.

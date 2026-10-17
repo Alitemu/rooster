@@ -41,8 +41,12 @@ function wanneer(iso: string): string {
   return `${dag} om ${tijd}`;
 }
 
-/** refreshKey: changes after the settings changed or the export dialog closed (something may have been sent). */
-export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string; onOpenSettings: () => void }) {
+/**
+ * refreshKey: changes after the settings changed or the export dialog closed
+ * (something may have been sent). onOpenSettings: only for the beheerder,
+ * who sets the mail up (0.87.0); a planner is told to ask.
+ */
+export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string; onOpenSettings?: () => void }) {
   const [status, setStatus] = useState<Status | null>(null);
 
   useEffect(() => {
@@ -69,8 +73,8 @@ export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string
   } else if (!status.ingesteld) {
     titel = 'Er wordt geen mail verstuurd';
     tekst = status.wachtwoord_onleesbaar
-      ? 'Het opgeslagen app-wachtwoord kan niet meer gelezen worden. Uitnodigingen, herinneringen en ruilmails staan stil tot je het opnieuw invult.'
-      : 'Uitnodigingen, herinneringen en ruilmails staan stil. Stel het Gmail-account in bij Mailinstellingen.';
+      ? 'Het opgeslagen app-wachtwoord kan niet meer gelezen worden. Uitnodigingen, herinneringen en ruilmails staan stil tot de beheerder het opnieuw invult.'
+      : 'Uitnodigingen, herinneringen en ruilmails staan stil. De beheerder stelt het Gmail-account in bij Mailinstellingen.';
   } else if (status.laatste_fout) {
     const fout = status.laatste_fout;
     const wat = fout.soort.includes('HERINNERING') && fout.automatisch ? 'een automatische herinnering' : WAT[fout.soort] ?? 'een mail';
@@ -89,12 +93,16 @@ export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string
         <p className="font-bold text-red-900">⚠️ {titel}</p>
         <p className="text-sm text-red-900 mt-1">{tekst}</p>
       </div>
-      <button
-        onClick={onOpenSettings}
-        className="shrink-0 px-4 py-2 rounded font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
-      >
-        Mailinstellingen openen
-      </button>
+      {onOpenSettings ? (
+        <button
+          onClick={onOpenSettings}
+          className="shrink-0 px-4 py-2 rounded font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+        >
+          Mailinstellingen openen
+        </button>
+      ) : (
+        <p className="text-sm text-red-900">Vraag de beheerder om dit op te lossen.</p>
+      )}
     </div>
   );
 }

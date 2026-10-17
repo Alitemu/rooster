@@ -64,7 +64,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const period = getInvitationPeriod(params['period-id']);
     if (!period) return fail(404, 'NOT_FOUND', 'Periode niet gevonden');
     if (!verzendlijstMailConfigured()) {
-      return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.');
+      return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is nog niet ingesteld. Dat doet de beheerder bij Mailinstellingen.');
     }
 
     const parsed = bodySchema.safeParse(await parseJsonBody(req));

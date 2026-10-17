@@ -474,7 +474,7 @@ function Verzoeken({
       )}
       {melding && <div className="p-3 rounded bg-green-50 border border-green-200 text-sm text-green-900">{melding}</div>}
       {!readOnly && (
-        <button type="button" onClick={opslaan} disabled={bezig || !gewijzigd} className="btn-primary w-full sm:w-auto">
+        <button type="button" onClick={opslaan} disabled={bezig || !gewijzigd} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto">
           {bezig ? 'Opslaan...' : gewijzigd ? 'Verzoeken opslaan' : 'Opgeslagen'}
         </button>
       )}
@@ -703,7 +703,7 @@ export function AiosBevestigen({
           <p className="text-sm text-neutral-600">
             Tot de deadline ({deadlineTekst(scherm.period.deadline)}) kun je alles nog aanpassen.
           </p>
-          <button type="button" onClick={indienen} disabled={bezig} className="btn-primary w-full">
+          <button type="button" onClick={indienen} disabled={bezig} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed w-full">
             {bezig ? 'Indienen...' : ingediend ? 'Opnieuw indienen' : 'Bevestigen en indienen'}
           </button>
         </>

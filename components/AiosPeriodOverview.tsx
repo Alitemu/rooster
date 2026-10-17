@@ -223,7 +223,7 @@ function MailPaneel({ beheerder, onChanged }: { beheerder: boolean; onChanged: (
               className="w-full px-2 py-1 border rounded text-sm"
             />
           </div>
-          <button type="button" onClick={opslaan} disabled={bezig} className="btn-primary">
+          <button type="button" onClick={opslaan} disabled={bezig} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed">
             {bezig ? 'Bezig...' : 'Opslaan'}
           </button>
         </div>
@@ -329,7 +329,7 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
             type="button"
             onClick={() => doe(withBasePath(`/api/aios/periode/${period.id}/openen`), 'POST', { deadline }, 'Openen van de periode is mislukt')}
             disabled={bezig || !deadline}
-            className="btn-primary"
+            className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {bezig ? 'Bezig...' : 'Periode openen'}
           </button>
@@ -350,7 +350,7 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
               onClick={() =>
                 doe(withBasePath(`/api/aios/periode/${period.id}/uitnodigingen`), 'POST', {}, 'Versturen is mislukt', (d) => `Verstuurd: ${aantal(d.aantal, 'uitnodigingen')}.`)
               }
-              className="btn-primary"
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {stand?.uitgenodigd_op ? 'Uitnodigingen opnieuw versturen' : 'Uitnodigingen versturen'}
             </button>
@@ -377,6 +377,13 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
               Links downloaden
             </button>
           </div>
+          {stand && !stand.mail_ingesteld && (
+            // The buttons stay off until then: clicking one did nothing visible (0.87.0).
+            <p className="text-sm text-amber-900" data-testid="aios-mail-nog-niet">
+              Uitnodigingen en herinneringen versturen kan pas als de mail voor de AIOS is ingesteld. Dat doet de beheerder. Tot
+              die tijd kun je met Links downloaden de persoonlijke links zelf rondsturen.
+            </p>
+          )}
           <AiosAutoHerinneringen
             periodId={period.id}
             refreshKey={`${period.deadline}|${stand?.uitgenodigd_op}|${stand?.mail_ingesteld}`}

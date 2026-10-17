@@ -8,7 +8,8 @@ import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, ge
  * - "Ongedaan maken" sits under the heading the change was made in and
  *   folds away with it (lib/pendingUndo.ts `onderdeel`);
  * - "Mailinstellingen" under Exporteren & communicatie, Gmail only, and
- *   for the beheerder to change (shared by the achterwacht and the AIOS);
+ *   only for the beheerder (shared by the achterwacht and the AIOS; a
+ *   planner sees how the mail stands, 0.87.0);
  * - the version number next to the title;
  * - a warning at the top while no mail can go out.
  */
@@ -78,30 +79,33 @@ test.describe('Periodepagina', () => {
     await expect(dialog.getByRole('alert')).toContainText('alleen via Gmail');
   });
 
-  test('a planner sees the mail settings but only the beheerder changes them', async ({ page }) => {
+  test('a planner sees how the mail stands, without the button: only the beheerder sets it up', async ({ page }) => {
+    // The planner's choice in 0.87.0, as on the AIOS's page.
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
     const exportSection = section(page, 'Exporteren & communicatie');
-    const button = exportSection.getByRole('button', { name: /Mailinstellingen/ });
-    if (!(await button.isVisible())) await exportSection.locator('[role="button"]').first().click();
-    await button.click();
-
-    const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
-    await expect(dialog.getByText('Alleen de beheerder kan de mailinstellingen wijzigen.')).toBeVisible();
-    await expect(dialog.getByLabel('Gmail-adres')).toHaveCount(0);
-    await expect(dialog.getByRole('button', { name: 'Opslaan' })).toHaveCount(0);
+    const status = exportSection.getByTestId('mail-status');
+    if (!(await status.isVisible())) await exportSection.locator('[role="button"]').first().click();
+    await expect(status).toContainText('Alleen de beheerder stelt de mail in.');
+    await expect(exportSection.getByRole('button', { name: /Mailinstellingen/ })).toHaveCount(0);
   });
 
-  test('warns at the top of the page that no mail goes out, and opens Mailinstellingen from there', async ({ page }) => {
+  test('warns at the top of the page that no mail goes out: the beheerder opens Mailinstellingen from there', async ({ page }) => {
     // This test server has no mail settings.
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-
     const warning = page.getByRole('alert').filter({ hasText: 'Er wordt geen mail verstuurd' });
     await expect(warning).toBeVisible();
     await expect(warning).toContainText('Uitnodigingen, herinneringen en ruilmails staan stil');
+    // A planner is told to ask.
+    await expect(warning).toContainText('Vraag de beheerder om dit op te lossen.');
+    await expect(warning.getByRole('button', { name: 'Mailinstellingen openen' })).toHaveCount(0);
+
+    await loginAsBeheerder(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
     await warning.getByRole('button', { name: 'Mailinstellingen openen' }).click();
     await expect(page.getByRole('dialog', { name: 'Mailinstellingen' })).toBeVisible();
   });

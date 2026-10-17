@@ -65,7 +65,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const gate = checkRemindersAllowed(period);
     if (!gate.allowed) return fail(409, gate.code, gate.message);
     if (!verzendlijstMailConfigured()) {
-      return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is nog niet ingesteld. Dat doe je bij Mailinstellingen.');
+      return fail(409, 'NOT_CONFIGURED', 'Automatisch versturen is nog niet ingesteld. Dat doet de beheerder bij Mailinstellingen.');
     }
 
     // Everyone taking part, with where they are.
