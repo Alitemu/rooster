@@ -34,7 +34,8 @@ def test_everyone_the_same_percentage_to_their_fte():
     # 1.0 and 0.5 fte: twice the points, give or take one dienst.
     assert abs(x.punten - z.punten) <= 1.0
     assert abs(x.punten - 2 * y.punten) <= 2.0
-    assert abs(x.dienstpercentage - y.dienstpercentage) <= 0.1
+    # 0.1 itself counts: 0.35 - 0.25 comes out as 0.10000000000000003.
+    assert abs(x.dienstpercentage - y.dienstpercentage) <= 0.1 + 1e-9
 
 
 def test_an_onderbreking_lowers_the_share():
