@@ -20,6 +20,7 @@
 import { randomUUID } from 'crypto';
 import { db } from '@/db/client';
 import { postJson } from '@/lib/solverClient';
+import { errorReference, internalErrorMessage } from '@/lib/api-errors';
 import { aiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 
@@ -78,6 +79,42 @@ export function aiosGeneratieLoopt(periodId: string): boolean {
 export function aiosGeneratieJob(jobId: string, periodId: string): Job | undefined {
   const j = jobs.get(jobId);
   return j && j.periodId === periodId ? j : undefined;
+}
+
+const NIET_BEREIKBAAR = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH'];
+const AFGEBROKEN = ['ECONNRESET', 'EPIPE'];
+
+/** The code of a network error; Node wraps several refused addresses in an AggregateError. */
+function netwerkCode(error: unknown): string {
+  const e = error as { code?: string; errors?: Array<{ code?: string }> };
+  return e?.code ?? e?.errors?.[0]?.code ?? '';
+}
+
+/**
+ * What the planner is told when making the roster fails by an exception, by
+ * what failed (the full audit's follow-up, 0.87.1). Everything used to be
+ * "De solver van de AIOS is niet bereikbaar", also a fault in the app
+ * itself, which sent whoever saw it looking at a container that was fine.
+ * - not reachable: nothing answers at AIOS_SOLVER_URL (the container is not
+ *   running, or not in the compose file);
+ * - cut off: it answered, then the connection went (the container stopped
+ *   or was killed while solving, or the request timed out);
+ * - anything else is the app's own: a foutcode, printed with the error in
+ *   the server log, as everywhere else.
+ */
+export function aiosGeneratieFoutTekst(error: unknown): string {
+  const code = netwerkCode(error);
+  if (NIET_BEREIKBAAR.includes(code)) {
+    console.error(`[aios-genereren] solver niet bereikbaar op ${solverUrl()} (${code})`, error);
+    return 'De solver van de AIOS is niet bereikbaar. Probeer het later opnieuw of neem contact op met de beheerder.';
+  }
+  if (AFGEBROKEN.includes(code) || (error instanceof Error && error.message.includes('time-out'))) {
+    console.error(`[aios-genereren] verbinding met de solver op ${solverUrl()} verbroken (${code || 'time-out'})`, error);
+    return 'De solver van de AIOS stopte tijdens het maken van het rooster. Probeer het opnieuw. Gebeurt dat steeds, neem dan contact op met de beheerder.';
+  }
+  const foutcode = errorReference();
+  console.error(`[aios-genereren] foutcode ${foutcode}`, error);
+  return internalErrorMessage(foutcode);
 }
 
 const solverUrl = () => process.env.AIOS_SOLVER_URL || 'http://aios-solver:8000';
@@ -157,9 +194,8 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
     };
     job.status = 'KLAAR';
   } catch (error) {
-    console.error('[aios-genereren] failed', error);
     job.status = 'FOUT';
-    job.fout = 'De solver van de AIOS is niet bereikbaar. Probeer het later opnieuw of neem contact op met de beheerder.';
+    job.fout = aiosGeneratieFoutTekst(error);
   }
 }
 

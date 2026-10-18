@@ -45,6 +45,18 @@ copy of the hard rules, for changing the roster by hand.
   included: the screen says so before. "Rooster verwijderen" empties it and
   goes back to GESLOTEN (only from GEGENEREERD); heropenen stays GESLOTEN
   only, so a made roster goes first.
+- When making it fails by an exception, the planner is told what failed
+  (aiosGeneratieFoutTekst, 0.87.1), not "niet bereikbaar" for everything:
+  nothing answers at AIOS_SOLVER_URL (ECONNREFUSED, ENOTFOUND, EAI_AGAIN,
+  EHOSTUNREACH or ENETUNREACH: the container is not running, or not in the
+  compose file); the connection broke or timed out (ECONNRESET, EPIPE: the
+  container stopped or was killed while solving, e.g. out of memory); or
+  the app's own fault (an answer it cannot read, the database), which
+  gets a foutcode printed in the web log beside the real error. A solver
+  that answers with an error status stays "kon geen rooster maken". The
+  full quarter with the image's own dependencies (only requirements.txt)
+  solves 4 AIOS in 2 seconds and 25 AIOS in 60 seconds (HAALBAAR) at 330 MB
+  at most, so memory is no reason at the 2g limit.
 - lib/aiosRooster.ts reads the roster for the page: per day who has what,
   per AIOS points, werkdagen, fte and dienstpercentage (lib/aiosFte.ts, the
   solver's werkdagen), counted from the roster itself so a change by hand

@@ -539,6 +539,20 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.87.1** zegt de app bij het maken van het rooster van de
+AIOS wat er misging. *De solver van de AIOS is niet bereikbaar* betekent
+dat er niets antwoordt op het adres van de solver: de container
+`aios-solver` draait niet, of staat niet in je `docker-compose.yml`.
+Controleer met `docker compose ps` dat hij draait. Neem anders het
+nieuwe `docker-compose.yml` over en draai `docker compose pull` en
+`docker compose up -d`. *De solver van de AIOS stopte tijdens het maken*
+betekent dat de verbinding wegviel terwijl hij rekende, bijvoorbeeld omdat
+de container geen geheugen meer had. Kijk met
+`docker compose logs aios-solver --tail 50` en zet zo nodig meer geheugen
+bij `AIOS_SOLVER_MEM_LIMIT` in `.env`. Staat er een *foutcode*, dan zit de
+fout in de app zelf. Zoek die code op met
+`docker compose logs web | grep <foutcode>`.
+
 **Vanaf versie 0.87.0** stelt alleen de beheerder de mail in, bij de
 achterwacht net als bij de AIOS. Een planner ziet onder *Exporteren &
 communicatie* geen knop *Mailinstellingen* meer, maar wel hoe de mail

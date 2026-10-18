@@ -97,6 +97,9 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
     laten* en een *opknippen* en klik op *Keuzes bewaren*.
 16. **Rooster maken.** Kies bij *Hoe lang zoeken* de kortste tijd en klik op
     *Rooster maken*.
+    - Staat er *De solver van de AIOS is niet bereikbaar*? Dan draait de
+      container `aios-solver` niet. Controleer dat met `docker compose ps`
+      (zie stap 1) en zie de README bij versie 0.87.1.
     - Je ziet na een paar minuten het rooster per week en de tabel *Per AIOS*
       met punten en dienstpercentage. Daaronder staat "nog geen eerdere
       kwartalen", want dit is het eerste kwartaal.

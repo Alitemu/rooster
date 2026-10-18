@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import http from 'http';
 import type { AddressInfo } from 'net';
@@ -277,6 +277,55 @@ describe('making the AIOS roster', () => {
     expect(job.status).toBe('FOUT');
     expect(job.fout).toMatch(/intussen gewijzigd/);
     expect(toewijzingen()).toEqual(voor);
+  });
+
+  it('says what failed: no solver there, a connection that broke, or the app itself (0.87.1)', async () => {
+    const voor = toewijzingen();
+    const rv = periodeStatus().row_version;
+    const url = process.env.AIOS_SOLVER_URL;
+    const stil = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      // Nothing listens: the container is not running (or not in the compose file).
+      const dicht = http.createServer();
+      await new Promise<void>((r) => dicht.listen(0, '127.0.0.1', () => r()));
+      const poort = (dicht.address() as AddressInfo).port;
+      await new Promise((r) => dicht.close(r));
+      process.env.AIOS_SOLVER_URL = `http://127.0.0.1:${poort}`;
+      let job = await klaar(await maak());
+      expect(job.fout).toBe('De solver van de AIOS is niet bereikbaar. Probeer het later opnieuw of neem contact op met de beheerder.');
+
+      // It answers, then the connection goes: the container stopped or was killed while solving.
+      const afbreker = http.createServer((rq) => {
+        rq.on('data', () => {});
+        rq.on('end', () => rq.socket.destroy());
+      });
+      await new Promise<void>((r) => afbreker.listen(0, '127.0.0.1', () => r()));
+      process.env.AIOS_SOLVER_URL = `http://127.0.0.1:${(afbreker.address() as AddressInfo).port}`;
+      job = await klaar(await maak());
+      expect(job.fout).toBe(
+        'De solver van de AIOS stopte tijdens het maken van het rooster. Probeer het opnieuw. Gebeurt dat steeds, neem dan contact op met de beheerder.'
+      );
+      await new Promise((r) => afbreker.close(r));
+
+      // An answer the app cannot read is the app's own: a foutcode, and the solver is not blamed.
+      const rommel = http.createServer((rq, rs) => {
+        rq.on('data', () => {});
+        rq.on('end', () => rs.writeHead(200, { 'content-type': 'application/json' }).end('geen json'));
+      });
+      await new Promise<void>((r) => rommel.listen(0, '127.0.0.1', () => r()));
+      process.env.AIOS_SOLVER_URL = `http://127.0.0.1:${(rommel.address() as AddressInfo).port}`;
+      job = await klaar(await maak());
+      expect(job.fout).toMatch(/^Er ging iets mis op de server \(foutcode [0-9A-F]{6}\)\./);
+      expect(job.fout).not.toMatch(/niet bereikbaar/);
+      // The code is in the log beside the real error.
+      expect(stil.mock.calls.some((c) => String(c[0]).includes(`foutcode ${/foutcode ([0-9A-F]{6})/.exec(job.fout!)![1]}`))).toBe(true);
+      await new Promise((r) => rommel.close(r));
+    } finally {
+      process.env.AIOS_SOLVER_URL = url;
+      stil.mockRestore();
+    }
+    expect(toewijzingen()).toEqual(voor);
+    expect(periodeStatus().row_version).toBe(rv);
   });
 
   it('"Rooster verwijderen" empties it and takes the period back to gesloten, once', async () => {

@@ -541,6 +541,27 @@ const MUTATIONS = [
     tests: ['app/api/dienstSeparation'],
   },
   {
+    name: 'aios genereren: nothing answering at the solver is not called unreachable',
+    file: 'lib/aiosGenereren.ts',
+    find: "const NIET_BEREIKBAAR = ['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH'];",
+    replace: "const NIET_BEREIKBAAR = ['ENOTFOUND'];",
+    tests: ['app/api/aios/aiosGenereren'],
+  },
+  {
+    name: 'aios genereren: a broken connection is called unreachable',
+    file: 'lib/aiosGenereren.ts',
+    find: "const AFGEBROKEN = ['ECONNRESET', 'EPIPE'];",
+    replace: "const AFGEBROKEN: string[] = [];\nNIET_BEREIKBAAR.push('ECONNRESET', 'EPIPE');",
+    tests: ['app/api/aios/aiosGenereren'],
+  },
+  {
+    name: "aios genereren: the app's own fault blamed on the solver",
+    file: 'lib/aiosGenereren.ts',
+    find: '  const foutcode = errorReference();',
+    replace: "  return 'De solver van de AIOS is niet bereikbaar. Probeer het later opnieuw of neem contact op met de beheerder.';\n  const foutcode = errorReference();",
+    tests: ['app/api/aios/aiosGenereren'],
+  },
+  {
     name: 'prullenbak: one changing period route without the trash check',
     file: 'app/api/planner/period/[id]/publish/route.ts',
     find: '    if (inTrash) return inTrash;\n',
