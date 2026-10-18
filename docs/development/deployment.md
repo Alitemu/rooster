@@ -43,8 +43,16 @@ templates, no data; skipped for a migration-built database).
 a NAS that uses 443 itself; .env.example and the IT instructions use 443),
 on any host name, with an on-demand certificate per name, so a renamed
 server needs no config change. `http://:80` in the Caddyfile redirects to
-https on APP_PORT; port 80 is only published through a
-docker-compose.override.yml the operator adds (README "Op poort 443").
+https on APP_PORT; port 80 is published on every interface only with
+HTTP_PORT=80 in .env (otherwise on the loopback, so a NAS that has it
+taken is not disturbed).
+**Certificate:** TLS_MODUS in .env picks the snippet the Caddyfile imports.
+`intern` (the default) is Caddy's own CA, on demand per name. `bestand` is
+the organisation's own certificate: ./certs/rooster.pem and rooster.key,
+mounted read-only at /certs. Caddy does not renew it; replacing the files
+needs `docker compose restart caddy`. deployConfig.test.ts keeps the
+Caddyfile, the compose file and .env.example in step (README "Certificaat",
+Optie 3, is the instruction for the IT department).
 With BASE_URL empty the app takes its address from the Host header
 (resolveBaseUrl) and remembers it per period (basis_url) for mails.
 

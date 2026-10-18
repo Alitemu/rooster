@@ -39,11 +39,29 @@ http://127.0.0.1:9053 {
 	respond /ask 200
 }
 
+# How the site below gets its certificate, chosen with TLS_MODUS in .env:
+# - intern (the default): Caddy's own CA, a certificate on demand for
+#   whatever name the server is reached by. Browsers warn until the CA is
+#   trusted on every device (README, "Certificaat").
+# - bestand: the organisation's own certificate, put in ./certs as
+#   rooster.pem (the certificate with its intermediates) and rooster.key.
+#   Valid for the server's name, so no device needs anything installed.
+#   Caddy does not renew it: whoever replaces the files restarts caddy
+#   (`docker compose restart caddy`).
+(tls_intern) {
+	tls internal {
+		on_demand
+	}
+}
+(tls_bestand) {
+	tls /certs/rooster.pem /certs/rooster.key
+}
+
 # Someone typing the name without https:// lands on port 80. Sent on to
 # https on the app's own port, same host and path. Only reachable when port
-# 80 is published, which docker-compose.yml deliberately doesn't do (on a
-# NAS that port is usually taken): a server that wants it adds
-# docker-compose.override.yml (README, "Op poort 443"). With APP_PORT=443
+# 80 is published: HTTP_PORT=80 in .env (docker-compose.yml publishes it on
+# the loopback only otherwise, since on a NAS port 80 is usually taken).
+# With APP_PORT=443
 # the browser drops the ":443" from the address itself.
 http://:80 {
 	redir https://{host}:{$APP_PORT:8010}{uri} 308
@@ -57,9 +75,7 @@ http://:80 {
 # change here. The app takes its own address from the same Host header
 # (lib/baseUrl.ts) as long as BASE_URL is left empty.
 https://:{$APP_PORT:8010} {
-	tls internal {
-		on_demand
-	}
+	import tls_{$TLS_MODUS:intern}
 	# header_up (without +) replaces rather than appends, so this always
 	# overwrites any X-Real-IP a client sent with Caddy's own view of the
 	# connecting peer - the app's rate limiter (lib/rateLimit.ts) trusts

@@ -569,6 +569,20 @@ const MUTATIONS = [
     tests: ['instrumentation-node'],
   },
   {
+    name: 'deployment: the certificate of the organisation is never chosen',
+    file: 'Caddyfile',
+    find: 'import tls_{$TLS_MODUS:intern}',
+    replace: 'import tls_intern',
+    tests: ['deployConfig'],
+  },
+  {
+    name: 'deployment: port 80 published to the world by default',
+    file: 'docker-compose.yml',
+    find: '"${HTTP_PORT:+0.0.0.0:}${HTTP_PORT:-127.0.0.1:}:80"',
+    replace: '"80:80"',
+    tests: ['deployConfig'],
+  },
+  {
     name: 'prullenbak: one changing period route without the trash check',
     file: 'app/api/planner/period/[id]/publish/route.ts',
     find: '    if (inTrash) return inTrash;\n',

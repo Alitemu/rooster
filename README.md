@@ -586,19 +586,15 @@ via die naam iets verstuurt (uitnodigingen, een herinnering). Links in mails
 die al verstuurd zijn, bevatten de oude naam. Laat die oude naam daarom nog
 een tijd naar de server wijzen.
 
-Wil je dat `http://rooster.voorbeeld.nl` ook werkt, maak dan naast
-`docker-compose.yml` het bestand `docker-compose.override.yml`:
+Wil je dat `http://rooster.voorbeeld.nl` ook werkt, zet dan in `.env`:
 
-```yaml
-services:
-  caddy:
-    ports:
-      - "80:80"
+```bash
+HTTP_PORT=80
 ```
 
-Caddy stuurt alles op poort 80 dan door naar https. `docker compose` leest
-dat bestand vanzelf mee. Het staat niet standaard in `docker-compose.yml`,
-omdat poort 80 op een NAS meestal al bezet is.
+Caddy stuurt alles op poort 80 dan door naar https. Zonder `HTTP_PORT` is
+poort 80 van buiten de server niet bereikbaar, omdat die op een NAS meestal
+al bezet is. Een `docker-compose.override.yml` is hiervoor niet meer nodig.
 
 Staat er een andere reverse proxy van de organisatie voor, dan moet die de
 oorspronkelijke naam (de `Host`-header) ongewijzigd doorgeven. Anders kent
@@ -725,6 +721,36 @@ regel `https://:{$APP_PORT:8010}` door `https://jouw-domein.voorbeeld.nl`
 en verwijder het blok `tls internal { on_demand }`; Caddy vraagt dan zelf
 automatisch een Let's Encrypt-certificaat aan en vernieuwt dat ook zelf.
 Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
+
+**Optie 3 (een server met een eigen naam binnen het netwerk van de
+organisatie): het certificaat van de organisatie.** Let's Encrypt werkt
+niet als de server niet vanaf internet bereikbaar is. Geeft de IT-afdeling
+zelf certificaten uit, dan gebruikt Caddy dat certificaat. Apparaten van de
+organisatie vertrouwen het al, dus er verschijnt geen waarschuwing en er
+hoeft niets op de apparaten te gebeuren.
+
+Voor de IT-afdeling, een nieuwe server met poort 80 en 443 vrij:
+
+1. Zet naast elkaar op de server: `docker-compose.yml`, `Caddyfile` en een
+   `.env` (voorbeeld: `.env.example`). Meer is niet nodig, de rest komt als
+   images van GitHub.
+2. Vraag een certificaat aan voor de naam van de server, bijvoorbeeld
+   `rooster.voorbeeld.nl`. Zet het certificaat samen met de tussenliggende
+   certificaten in één bestand `certs/rooster.pem` en de sleutel in
+   `certs/rooster.key` (maak de map `certs` naast `docker-compose.yml`).
+3. Zet in `.env`:
+   ```bash
+   APP_PORT=443
+   HTTP_PORT=80
+   TLS_MODUS=bestand
+   ```
+4. Start met `docker compose pull` en `docker compose up -d`.
+
+Caddy vernieuwt dit certificaat niet zelf. Verloopt het, dan vervangt de
+IT-afdeling de twee bestanden en voert `docker compose restart caddy` uit.
+Zet de einddatum in een agenda, want met een verlopen certificaat geeft
+iedere browser een waarschuwing. Staat `TLS_MODUS` er niet, of staat het op
+`intern`, dan gebruikt Caddy zijn eigen CA zoals bij optie 1.
 
 #### Productie
 
