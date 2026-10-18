@@ -162,18 +162,21 @@ def test_regel_4_the_night_block_over_a_part_time_day_may():
 # ---- rule 5 -----------------------------------------------------------------
 
 
-def test_regel_5_a_fulltimer_never_in_the_night_block_sunday_to_tuesday():
+def test_regel_5_from_0_9_fte_never_in_the_night_block_sunday_to_tuesday():
     inp = weken(1)
     nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
     _alleen(inp, aios(inp, 'x', fte=1.0), nacht)
-    _, t = los_op(inp)
-    assert not t
-    inp['aios'][0]['fte'] = 0.8
-    _, t = los_op(inp)
-    assert set(t) == set(nacht)
+    for fte in (1.0, 0.9):
+        inp['aios'][0]['fte'] = fte
+        _, t = los_op(inp)
+        assert not t, fte
+    for fte in (0.89, 0.8):
+        inp['aios'][0]['fte'] = fte
+        _, t = los_op(inp)
+        assert set(t) == set(nacht), fte
 
 
-def test_regel_5_a_night_block_cut_up_is_single_nights_a_fulltimer_may_do():
+def test_regel_5_a_night_block_cut_up_is_single_nights_0_9_fte_may_do():
     # Around feestdagen in a row the planner may cut the block up
     # (docs/aios-rooster.md, "Blokken rond feestdagen"): then each night is
     # a single dienst with one compensation day, no longer the block.

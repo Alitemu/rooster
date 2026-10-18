@@ -130,7 +130,7 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   bij de volgende keer dat het rooster gemaakt wordt. Een opgeknipt blok
   staat in het rooster per dag.
 - Een opgeknipte nacht uit het blok zondag tot en met dinsdag is een losse
-  nacht met één compensatiedag. Die mag ook een fulltimer doen: harde regel
+  nacht met één compensatiedag. Die mag ook wie 0,9 fte of meer heeft doen: harde regel
   5 geldt voor het hele blok (een keuze bij het bouwen, oktober 2026).
 
 ## Voortgangstoets
@@ -269,8 +269,10 @@ solver.
    de planner in oktober 2026; in 0.82.0 stond hij ook op liever niet). Bij
    ruilen telt het ook zo: een parttimer kan een avond of nacht op de
    parttimedag ruilen.
-5. Fulltimers (1,0 fte) nooit in het nachtblok zondag tot en met dinsdag: dat
-   is voor parttimers (F7).
+5. Wie 0,9 fte of meer heeft (een dag om de week vrij, of niets) nooit in het
+   nachtblok zondag tot en met dinsdag: dat is voor wie meer dagen vrij heeft
+   (F7; tot 0.88.1 gold dit alleen voor 1,0 fte, de keuze van de planner in
+   oktober 2026). De codenaam van de regel blijft `5_FULLTIME_NACHTBLOK`.
 6. Inwerken: zie hierboven.
 7. Geen dienst op een compensatiedag (C8, F6, F7). De compensatie zelf regelt
    het roosterbureau na de publicatie. De app blokkeert die dagen automatisch

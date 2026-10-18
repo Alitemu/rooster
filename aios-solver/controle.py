@@ -14,6 +14,8 @@ from __future__ import annotations
 from datetime import date, timedelta
 
 MAANDAG, VRIJDAG, ZATERDAG, ZONDAG = 0, 4, 5, 6
+# Rule 5: from this fte on no nachtblok zo t/m di (its own copy, apart from kalender.py).
+GEEN_NACHTBLOK_VANAF_FTE = 0.9
 
 
 def _dag(d: date, n: int) -> date:
@@ -180,7 +182,7 @@ def controleer(slots, blok_vorm, aios, feestdagen: set[date], toewijzingen: dict
                 else:
                     boven[groep] = boven.get(groep, 0) + 1
             # Rule 5.
-            if a.fte >= 1 and e['soort'] == 'NACHT' and e['naam'] == 'zo-di':
+            if a.fte >= GEEN_NACHTBLOK_VANAF_FTE and e['soort'] == 'NACHT' and e['naam'] == 'zo-di':
                 fout.append(('5_FULLTIME_NACHTBLOK', aios_id, ids))
         for groep, n in boven.items():
             if n > a.erboven.get(groep, 0):

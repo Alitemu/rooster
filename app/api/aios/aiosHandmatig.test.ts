@@ -113,10 +113,10 @@ describe('before choosing', () => {
     const k = new Map(data.kandidaten.map((c: any) => [c.person_id, c]));
     // Who has it now changes nothing: no warnings.
     expect(k.get(w.x)).toMatchObject({ nu: true, kan: true, waarschuwingen: [] });
-    // y is fulltime: the nachtblok zo t/m di is for part-timers (rule 5); and
+    // y is fulltime: the nachtblok zo t/m di is not for 0,9 fte or more (rule 5); and
     // y has the Saturday dagdienst of 10 juli, whose Monday after is a compensation day.
     expect((k.get(w.y) as any).waarschuwingen.map((x: any) => x.tekst)).toEqual([
-      'Een fulltimer in het nachtblok zo t/m di.',
+      'Iemand met 0,9 fte of meer in het nachtblok zo t/m di.',
       'Een dienst op een compensatiedag.',
     ]);
     // z is in the pool till 13 juli: the block fits, but not the second week.

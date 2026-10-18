@@ -30,7 +30,7 @@ const REDEN: Record<string, string> = {
   AFWEZIG: 'afwezig',
   PARTTIMEDAG: 'parttimedag',
   GEBLOKKEERD: 'geblokkeerd',
-  FULLTIME_NACHTBLOK: 'fulltime, dus geen nachtblok zo t/m di',
+  FULLTIME_NACHTBLOK: 'fte 0,9 of meer, dus geen nachtblok zo t/m di',
   INWERKEN: 'inwerken',
   BEZET: 'al een dienst of compensatiedag in de buurt',
 };

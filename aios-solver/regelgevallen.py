@@ -119,6 +119,19 @@ def vier_en_twee_dd(inp: dict, wie: str) -> list[list[str]]:
     return [[i, wie] for i in nacht] + [[dienst('DD', dag(10)), wie], [dienst('DD', dag(11)), wie]]
 
 
+def zo_di_nachten(inp: dict, nr: int) -> list[str]:
+    """The nights of the nr-th nachtblok zo t/m di of the quarter."""
+    blokken = sorted(b['id'] for b in inp['blokken'] if b['soort'] == 'NACHT' and b['vorm'] == 'ZO_DI')
+    return [d['id'] for d in inp['diensten'] if d['blok_id'] == blokken[nr]]
+
+
+def grens_nachtblok(inp: dict) -> list[list[str]]:
+    """Rule 5 at its edge: 0,9 fte and 1,0 get a nachtblok zo t/m di (broken), 0,89 does not."""
+    for a, fte in zip(inp['aios'], (0.9, 0.89, 1.0)):
+        a['fte'] = fte
+    return [[i, a['id']] for a, nr in zip(inp['aios'], range(3)) for i in zo_di_nachten(inp, nr)]
+
+
 def main_() -> None:
     rnd = random.Random(2026)
     gevallen = []
@@ -131,6 +144,8 @@ def main_() -> None:
             for a in inp['aios'][:2]:
                 a.update(vier_avonden=False, vier_nachten=False, twee_dagdiensten=False)
             roosters.append(vier_en_twee_dd(inp, inp['aios'][0]['id']))
+        if n == 3:
+            roosters.append(grens_nachtblok(inp))
         if n < 3:
             # The solver's own: nothing broken.
             inp['tijdslimiet_seconden'] = 5

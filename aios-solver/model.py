@@ -17,7 +17,7 @@ a test and a mutation can hold each one:
   2. blocks whole, every dienst one AIOS;
   3. one dienst a day;
   4. on a part-time day no uitloopdienst and no avondblok with that day in it;
-  5. a fulltimer never in the nachtblok zo t/m di;
+  5. from 0,9 fte on never in the nachtblok zo t/m di (kalender.py);
   6. inwerken: only uitloopdiensten and the weekend's dagdiensten;
   7. no dienst on a compensation day (kalender.py), 8. moved off a feestdag;
   9. rest: 14 hours, 46 after a night block of three or four nights, at most
@@ -251,8 +251,8 @@ def regel_4_parttime(a: Aios, o: Optie) -> Optional[str]:
 
 
 def regel_5_fulltime(a: Aios, o: Optie) -> Optional[str]:
-    """Hard rule 5: the nachtblok zo t/m di is for part-timers (F7)."""
-    if a.fte >= 1 and o.soort == 'NACHT' and o.vorm == 'ZO_DI':
+    """Hard rule 5: the nachtblok zo t/m di is for who has less than 0,9 fte (F7)."""
+    if a.fte >= kalender.GEEN_NACHTBLOK_VANAF_FTE and o.soort == 'NACHT' and o.vorm == 'ZO_DI':
         return 'FULLTIME_NACHTBLOK'
     return None
 

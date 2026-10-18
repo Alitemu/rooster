@@ -89,7 +89,7 @@ copy of the hard rules, for changing the roster by hand.
   option, and a dienst without a block too (ENKEL): the second night. Both
   get the day after as compensation day (kalender.py, the table row "Losse
   avond of nacht door de week"), and controle.py checks the same. Hard rule
-  5 is for the whole nachtblok zo t/m di: a fulltimer may do a single night
+  5 (from 0,9 fte on, GEEN_NACHTBLOK_VANAF_FTE in kalender.py, controle.py and lib/aiosRegels.ts) is for the whole nachtblok zo t/m di: such an AIOS may do a single night
   of a cut one (test_regels.py, the planner's design: "elke dag van het
   blok is een losse dienst").
 - lib/aiosRooster.ts gives a cut block vorm LOS, so the page draws it per

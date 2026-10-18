@@ -49,7 +49,7 @@ export const REGEL_WOORDEN: Record<Regel, string> = {
   '1_GEBLOKKEERD': 'een geblokkeerde dienst',
   '1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT': 'meer geblokkeerde diensten dan het deel boven de helft',
   '4_PARTTIMEDAG': 'een uitloopdienst op de parttimedag',
-  '5_FULLTIME_NACHTBLOK': 'een fulltimer in het nachtblok zo t/m di',
+  '5_FULLTIME_NACHTBLOK': 'iemand met 0,9 fte of meer in het nachtblok zo t/m di',
   '6_INWERKEN': 'tijdens het inwerken: dan alleen uitloopdiensten en dagdiensten in het weekend',
   '3_TWEE_OP_EEN_DAG': 'twee diensten op één dag',
   '7_COMPENSATIEDAG': 'een dienst op een compensatiedag',
@@ -85,6 +85,8 @@ interface Eenheid {
 // Python's weekday(): Monday 0 to Sunday 6.
 const weekdag = (d: string) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
 const VRIJDAG = 4;
+/** Rule 5: from this fte on no nachtblok zo t/m di (its own copy, as aios-solver/controle.py has). */
+const GEEN_NACHTBLOK_VANAF_FTE = 0.9;
 const ZATERDAG = 5;
 const dagNummer = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86_400_000;
 const minuten = (hhmm: string) => {
@@ -300,7 +302,7 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
         else boven.set(groep, (boven.get(groep) ?? 0) + 1);
       }
       // Rule 5.
-      if (a.fte >= 1 && e.soort === 'NACHT' && e.naam === 'zo-di') fout.push(['5_FULLTIME_NACHTBLOK', aiosId, ids]);
+      if (a.fte >= GEEN_NACHTBLOK_VANAF_FTE && e.soort === 'NACHT' && e.naam === 'zo-di') fout.push(['5_FULLTIME_NACHTBLOK', aiosId, ids]);
     }
     for (const [groep, n] of boven) {
       if (n > ((a.erboven as Record<string, number>)[groep] ?? 0)) fout.push(['1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT', aiosId, [groep]]);
