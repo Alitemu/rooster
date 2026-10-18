@@ -562,6 +562,13 @@ const MUTATIONS = [
     tests: ['app/api/aios/aiosGenereren'],
   },
   {
+    name: 'opstarten: a missing aios-solver name is not warned about',
+    file: 'instrumentation-node.ts',
+    find: "!== 'ENOTFOUND') return;",
+    replace: "=== 'ENOTFOUND') return;",
+    tests: ['instrumentation-node'],
+  },
+  {
     name: 'prullenbak: one changing period route without the trash check',
     file: 'app/api/planner/period/[id]/publish/route.ts',
     find: '    if (inTrash) return inTrash;\n',

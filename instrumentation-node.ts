@@ -129,6 +129,40 @@ async function warnAboutSeededPassword(): Promise<void> {
   }
 }
 
+/**
+ * Say so, in the log, when the name in AIOS_SOLVER_URL does not exist on the
+ * network at all, which is what an old docker-compose.yml without the
+ * aios-solver service looks like after an update. The planner only sees
+ * "niet bereikbaar" when making the roster, so this is what points the
+ * beheerder at the compose file on the first start instead.
+ *
+ * A name lookup only, no connection: a solver that is still starting or has
+ * stopped has a name and is not what this is about. Never refuses to start
+ * and never waits for the answer (see instrumentation.ts), because a lookup
+ * that hangs must not hold up the first request.
+ */
+export async function warnAboutMissingAiosSolver(
+  lookup: (host: string) => Promise<unknown> = async (host) => (await import('dns')).promises.lookup(host)
+): Promise<void> {
+  try {
+    const url = process.env.AIOS_SOLVER_URL || 'http://aios-solver:8000';
+    const host = new URL(url).hostname;
+    try {
+      await lookup(host);
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'ENOTFOUND') return;
+      console.warn(
+        `\n[dienstrooster] LET OP: de naam "${host}" (AIOS_SOLVER_URL) bestaat niet in het netwerk.\n` +
+          '            Het rooster voor de AIOS kan zo niet gemaakt worden. Waarschijnlijk\n' +
+          '            mist de dienst "aios-solver" in docker-compose.yml. Neem het nieuwe\n' +
+          '            docker-compose.yml over en start opnieuw met "docker compose up -d".\n'
+      );
+    }
+  } catch {
+    // An AIOS_SOLVER_URL that is not a URL is the solver's own error later on.
+  }
+}
+
 const AUTO_REMINDER_INTERVAL_MS = 60 * 60 * 1000;
 
 /**

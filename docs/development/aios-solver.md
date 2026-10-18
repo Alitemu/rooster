@@ -53,7 +53,11 @@ copy of the hard rules, for changing the roster by hand.
   container stopped or was killed while solving, e.g. out of memory); or
   the app's own fault (an answer it cannot read, the database), which
   gets a foutcode printed in the web log beside the real error. A solver
-  that answers with an error status stays "kon geen rooster maken". The
+  that answers with an error status stays "kon geen rooster maken".
+  At every start the web container also looks up the host name in
+  AIOS_SOLVER_URL and logs a warning when it does not exist (ENOTFOUND, an
+  old docker-compose.yml without the service): warnAboutMissingAiosSolver
+  in instrumentation-node.ts, a name lookup only, never awaited. The
   full quarter with the image's own dependencies (only requirements.txt)
   solves 4 AIOS in 2 seconds and 25 AIOS in 60 seconds (HAALBAAR) at 330 MB
   at most, so memory is no reason at the 2g limit.
