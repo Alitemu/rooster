@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, mkdtempSync, writeFileSync, existsSync } from 'fs';
+import { spawnSync } from 'child_process';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 /**
  * The hard rule: a server with the organisation's own certificate needs
@@ -41,5 +44,82 @@ describe('port 80 (HTTP_PORT)', () => {
 
   it('.env.example documents HTTP_PORT', () => {
     expect(envExample).toMatch(/^HTTP_PORT=80$/m);
+  });
+});
+
+/**
+ * The caddy service starts through a small shell check that names, in Dutch,
+ * a wrong TLS_MODUS or missing certificate files, and then hands over to
+ * Caddy. Run here as the compose file has it: `$$` unescaped, and the final
+ * `exec caddy` swapped for a marker, so a green test also proves the
+ * check never keeps Caddy from starting.
+ */
+function startCheck(): string {
+  const block = compose.match(/command:\n\s+- sh\n\s+- -c\n\s+- \|\n((?:        .*\n|\n)+)/);
+  if (!block) throw new Error('geen start-check in docker-compose.yml');
+  return block[1]
+    .split('\n')
+    .map((line) => line.slice(8))
+    .join('\n')
+    .replace(/\$\$/g, '$')
+    .replace(/exec caddy run .*/, 'echo CADDY-GESTART');
+}
+
+function runCheck(env: Record<string, string>): { stdout: string; stderr: string } {
+  const result = spawnSync('sh', ['-c', startCheck()], { env: { PATH: process.env.PATH ?? '', ...env } as NodeJS.ProcessEnv, encoding: 'utf8' });
+  return { stdout: result.stdout, stderr: result.stderr };
+}
+
+describe('start check of caddy', () => {
+  const map = mkdtempSync(join(tmpdir(), 'certs-'));
+  writeFileSync(join(map, 'rooster.pem'), 'x');
+  writeFileSync(join(map, 'rooster.key'), 'x');
+  const legeMap = mkdtempSync(join(tmpdir(), 'certs-leeg-'));
+
+  it('says nothing and starts Caddy with the own CA', () => {
+    const r = runCheck({ TLS_MODUS: 'intern', CERTS_DIR: legeMap });
+    expect(r.stderr).toBe('');
+    expect(r.stdout).toContain('CADDY-GESTART');
+  });
+
+  it('says nothing when both certificate files are there', () => {
+    const r = runCheck({ TLS_MODUS: 'bestand', CERTS_DIR: map });
+    expect(r.stderr).toBe('');
+    expect(r.stdout).toContain('CADDY-GESTART');
+  });
+
+  it('names the missing certificate file, and still hands over to Caddy', () => {
+    const r = runCheck({ TLS_MODUS: 'bestand', CERTS_DIR: legeMap });
+    expect(r.stderr).toContain('certs/rooster.pem ontbreekt');
+    expect(r.stderr).toContain('certs/rooster.key ontbreekt');
+    expect(r.stdout).toContain('CADDY-GESTART');
+  });
+
+  it.each(['Bestand', 'file', 'intren'])('names a TLS_MODUS that does not exist (%s)', (waarde) => {
+    const r = runCheck({ TLS_MODUS: waarde, CERTS_DIR: map });
+    expect(r.stderr).toContain(`TLS_MODUS="${waarde}" bestaat niet`);
+    expect(r.stderr).toContain('bestand of intern');
+    expect(r.stdout).toContain('CADDY-GESTART');
+  });
+});
+
+describe('the installation files in the image', () => {
+  it('the Dockerfile puts compose file, Caddyfile and the IT guide in /app/installatie', () => {
+    const dockerfile = readFileSync('Dockerfile', 'utf8');
+    expect(dockerfile).toContain('COPY docker-compose.yml Caddyfile docs/installatie-it.md /app/installatie/');
+  });
+
+  it('those files exist and the build context does not leave them out', () => {
+    const dockerignore = readFileSync('.dockerignore', 'utf8').split('\n').map((l) => l.trim());
+    for (const file of ['docker-compose.yml', 'Caddyfile', 'docs/installatie-it.md']) {
+      expect(existsSync(file)).toBe(true);
+      expect(dockerignore).not.toContain(file);
+      expect(dockerignore).not.toContain(file.split('/')[0]);
+    }
+  });
+
+  it('the guide tells how to take them out of the image', () => {
+    const gids = readFileSync('docs/installatie-it.md', 'utf8');
+    expect(gids).toContain('--entrypoint tar $IMAGE -cf - -C /app/installatie .');
   });
 });

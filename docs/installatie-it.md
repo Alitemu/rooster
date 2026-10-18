@@ -2,7 +2,8 @@
 
 Dit document is genoeg om Dienstrooster op een eigen server te zetten met het
 certificaat van de organisatie. Er hoeft niets gebouwd te worden en er is geen
-code nodig: alles komt als kant-en-klare images van GitHub.
+code nodig: alles komt als kant-en-klare images van GitHub. Dit document zit
+ook in de image van de app, naast de twee bestanden die je nodig hebt.
 
 ## Wat er draait
 
@@ -28,17 +29,20 @@ Alleen `caddy` is van buiten bereikbaar.
 
 ## Installeren
 
-**1. Maak een map**, bijvoorbeeld `/opt/dienstrooster`. Zet daar drie dingen in.
-
-Haal `docker-compose.yml` en `Caddyfile` op bij de versie die je installeert
-(vervang `0.88.0` door de versie van de laatste release op GitHub):
+**1. Maak een map**, bijvoorbeeld `/opt/dienstrooster`. Haal daarin de twee
+bestanden op die bij de versie horen. Ze zitten in de image zelf, dus er is
+verder niets van GitHub nodig:
 
 ```bash
 cd /opt/dienstrooster
-V=0.88.0
-curl -fsSLO https://raw.githubusercontent.com/alitemu/rooster/v$V/docker-compose.yml
-curl -fsSLO https://raw.githubusercontent.com/alitemu/rooster/v$V/Caddyfile
+IMAGE=ghcr.io/alitemu/rooster-web:stable
+docker pull $IMAGE
+docker run --rm --entrypoint tar $IMAGE -cf - -C /app/installatie . | tar -xf -
 ```
+
+Daarna staan hier `docker-compose.yml`, `Caddyfile` en deze handleiding
+(`installatie-it.md`). Wil je een vaste versie in plaats van de vrijgegeven
+versie, vervang dan `stable` door het versienummer, bijvoorbeeld `0.88.1`.
 
 **2. Zet het certificaat klaar** in een map `certs` naast `docker-compose.yml`:
 
@@ -104,16 +108,17 @@ De app zelf hoeft niet te stoppen en er gaan geen gegevens verloren.
 ## Bijwerken naar een nieuwe versie
 
 `docker compose pull` haalt alleen de images op, niet `docker-compose.yml` en
-`Caddyfile`. Die twee bestanden kunnen met een versie meeveranderen (een
-nieuwe container, een nieuwe instelling). Doe daarom bij elke nieuwe versie:
+`Caddyfile`. Die twee kunnen met een versie meeveranderen (een nieuwe
+container, een nieuwe instelling). Haal ze daarom bij elke nieuwe versie uit
+de nieuwe image:
 
 ```bash
 cd /opt/dienstrooster
-V=0.89.0                       # de nieuwe versie
+IMAGE=ghcr.io/alitemu/rooster-web:stable
+docker pull $IMAGE
 cp docker-compose.yml docker-compose.yml.oud
 cp Caddyfile Caddyfile.oud
-curl -fsSL https://raw.githubusercontent.com/alitemu/rooster/v$V/docker-compose.yml -o docker-compose.yml
-curl -fsSL https://raw.githubusercontent.com/alitemu/rooster/v$V/Caddyfile -o Caddyfile
+docker run --rm --entrypoint tar $IMAGE -cf - -C /app/installatie . | tar -xf -
 diff docker-compose.yml.oud docker-compose.yml
 diff Caddyfile.oud Caddyfile
 docker compose pull
@@ -128,7 +133,7 @@ overschreven.
 Welke versie draait, staat in de koptekst van de app, rechts van de titel. Zonder
 `ROOSTER_VERSION` in `.env` volgt de server de versie die voor productie is
 vrijgegeven (`stable`). Wil je een versie vastzetten, zet dan
-`ROOSTER_VERSION=0.88.0` in `.env`.
+`ROOSTER_VERSION=0.88.1` in `.env`.
 
 ## Als er iets misgaat
 
@@ -136,8 +141,8 @@ vrijgegeven (`stable`). Wil je een versie vastzetten, zet dan
 |---|---|
 | `docker compose up` meldt dat poort 443 of 80 bezet is | Een andere dienst gebruikt de poort. Controleer met `ss -tlnp \| grep ':443 '`. |
 | De browser geeft een certificaatwaarschuwing | `TLS_MODUS=bestand` ontbreekt in `.env` (dan gebruikt Caddy zijn eigen CA). Of het certificaat bevat de DNS-naam niet of is verlopen. Zie `docker compose logs caddy --tail 50`. |
-| `caddy` start niet en `docker compose logs caddy` zegt `loading certificates: open /certs/rooster.pem: no such file or directory` | Met `TLS_MODUS=bestand` moeten `certs/rooster.pem` en `certs/rooster.key` bestaan en leesbaar zijn. De sleutel mag geen wachtwoord hebben. Zolang `caddy` niet start, is de hele site onbereikbaar. |
-| `caddy` start niet en het log zegt `File to import not found: tls_...` | De waarde van `TLS_MODUS` in `.env` is fout gespeld. Alleen `bestand` en `intern` bestaan, in kleine letters (`Bestand` of `file` werkt niet). Verbeter `.env` en voer `docker compose up -d` uit. |
+| `caddy` start niet en `docker compose logs caddy` begint met `[dienstrooster] FOUT: certs/rooster.pem ontbreekt of is niet leesbaar` (daarna Caddy's eigen melding `loading certificates`) | Met `TLS_MODUS=bestand` moeten `certs/rooster.pem` en `certs/rooster.key` bestaan en leesbaar zijn. De sleutel mag geen wachtwoord hebben. Zolang `caddy` niet start, is de hele site onbereikbaar. |
+| `caddy` start niet en het log begint met `[dienstrooster] FOUT: TLS_MODUS=... bestaat niet` (daarna Caddy's eigen melding `File to import not found: tls_...`) | De waarde van `TLS_MODUS` in `.env` is fout gespeld. Alleen `bestand` en `intern` bestaan, in kleine letters (`Bestand` of `file` werkt niet). Verbeter `.env` en voer `docker compose up -d` uit. |
 | De pagina laadt niet | Kijk of `web` op `healthy` staat: `docker compose logs web --tail 50`. |
 | *De solver van de AIOS is niet bereikbaar* bij het maken van een rooster | De dienst `aios-solver` ontbreekt in `docker-compose.yml` (een oud bestand) of draait niet. De app waarschuwt hier ook voor in `docker compose logs web` bij het opstarten. Haal het nieuwste `docker-compose.yml` op en start opnieuw. |
 | Iets met geheugen of een solver die stopt tijdens het rekenen | Zet meer geheugen vrij: `SOLVER_MEM_LIMIT` en `AIOS_SOLVER_MEM_LIMIT` in `.env`, daarna `docker compose up -d`. |

@@ -50,7 +50,15 @@ taken is not disturbed).
 `intern` (the default) is Caddy's own CA, on demand per name. `bestand` is
 the organisation's own certificate: ./certs/rooster.pem and rooster.key,
 mounted read-only at /certs. Caddy does not renew it; replacing the files
-needs `docker compose restart caddy`. deployConfig.test.ts keeps the
+needs `docker compose restart caddy`. The caddy service starts through a
+small `sh -c` in docker-compose.yml that says in Dutch what is wrong with
+TLS_MODUS or the files, and then execs Caddy (which fails on them anyway,
+the whole site then being down: a wrong certificate is not hidden by a
+fallback on purpose). The web image carries docker-compose.yml, Caddyfile and
+docs/installatie-it.md in /app/installatie (Dockerfile), the very ones of
+that version: the IT department extracts them with `docker run ... tar`
+(the doc says how), so installing needs nothing from GitHub but the image.
+deployConfig.test.ts keeps the
 Caddyfile, the compose file and .env.example in step (README "Certificaat",
 Optie 3, is the instruction for the IT department).
 With BASE_URL empty the app takes its address from the Host header

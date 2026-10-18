@@ -583,6 +583,27 @@ const MUTATIONS = [
     tests: ['deployConfig'],
   },
   {
+    name: 'deployment: a wrong TLS_MODUS is not named',
+    file: 'docker-compose.yml',
+    find: '          *) echo "[dienstrooster] FOUT: TLS_MODUS=',
+    replace: '          *) true "[dienstrooster] FOUT: TLS_MODUS=',
+    tests: ['deployConfig'],
+  },
+  {
+    name: 'deployment: a missing certificate file is not named',
+    file: 'docker-compose.yml',
+    find: '[ -r "$$d/$$f" ] ||',
+    replace: '[ -r "$$d/$$f" ] || [ -n "$$d" ] ||',
+    tests: ['deployConfig'],
+  },
+  {
+    name: 'deployment: the IT guide is left out of the image',
+    file: 'Dockerfile',
+    find: 'COPY docker-compose.yml Caddyfile docs/installatie-it.md /app/installatie/',
+    replace: 'COPY docker-compose.yml Caddyfile /app/installatie/',
+    tests: ['deployConfig'],
+  },
+  {
     name: 'prullenbak: one changing period route without the trash check',
     file: 'app/api/planner/period/[id]/publish/route.ts',
     find: '    if (inTrash) return inTrash;\n',

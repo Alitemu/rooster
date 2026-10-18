@@ -59,6 +59,10 @@ ENV NEXT_PUBLIC_BASE_PATH=$BASE_PATH
 # code. Only two places are writable: /data (the bind mount, fixed at
 # runtime by the entrypoint) and Next.js's own cache.
 COPY --from=build /app /app
+# What the IT department needs to install without GitHub: the compose file,
+# the Caddyfile and docs/installatie-it.md, the very ones of this version
+# (extract: docs/installatie-it.md).
+COPY docker-compose.yml Caddyfile docs/installatie-it.md /app/installatie/
 RUN mkdir -p /data /app/.next/cache && chown node:node /app/.next/cache
 
 EXPOSE 3000

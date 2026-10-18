@@ -723,40 +723,9 @@ automatisch een Let's Encrypt-certificaat aan en vernieuwt dat ook zelf.
 Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.
 
 **Optie 3 (een server met een eigen naam binnen het netwerk van de
-organisatie): het certificaat van de organisatie.** Let's Encrypt werkt
-niet als de server niet vanaf internet bereikbaar is. Geeft de IT-afdeling
-zelf certificaten uit, dan gebruikt Caddy dat certificaat. Apparaten van de
-organisatie vertrouwen het al, dus er verschijnt geen waarschuwing en er
-hoeft niets op de apparaten te gebeuren.
-
-Voor de IT-afdeling, een nieuwe server met poort 80 en 443 vrij (een
-uitgebreidere, losse handleiding staat in `docs/installatie-it.md`):
-
-1. Zet naast elkaar op de server: `docker-compose.yml`, `Caddyfile` en een
-   `.env` (voorbeeld: `.env.example`). Meer is niet nodig, de rest komt als
-   images van GitHub.
-2. Vraag een certificaat aan voor de naam van de server, bijvoorbeeld
-   `rooster.voorbeeld.nl`. Zet het certificaat samen met de tussenliggende
-   certificaten in één bestand `certs/rooster.pem` en de sleutel in
-   `certs/rooster.key` (maak de map `certs` naast `docker-compose.yml`).
-3. Zet in `.env`:
-   ```bash
-   APP_PORT=443
-   HTTP_PORT=80
-   TLS_MODUS=bestand
-   ```
-4. Start met `docker compose pull` en `docker compose up -d`.
-
-Caddy vernieuwt dit certificaat niet zelf. Verloopt het, dan vervangt de
-IT-afdeling de twee bestanden en voert `docker compose restart caddy` uit.
-Zet de einddatum in een agenda, want met een verlopen certificaat geeft
-iedere browser een waarschuwing. Staat `TLS_MODUS` er niet, of staat het op
-`intern`, dan gebruikt Caddy zijn eigen CA zoals bij optie 1.
-
-Let op bij `TLS_MODUS=bestand`: ontbreekt `certs/rooster.pem` of
-`certs/rooster.key`, of staat er een andere waarde dan `bestand` of `intern`
-(`Bestand` en `file` werken niet), dan start `caddy` niet en is de hele site
-onbereikbaar. De oorzaak staat in `docker compose logs caddy`.
+organisatie): het certificaat van de organisatie.** Zie
+`docs/installatie-it.md`. Die handleiding voor de IT-afdeling zit ook in de
+image, zodat een installatie niets van GitHub nodig heeft behalve de image.
 
 #### Productie
 
