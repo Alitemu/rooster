@@ -729,7 +729,8 @@ zelf certificaten uit, dan gebruikt Caddy dat certificaat. Apparaten van de
 organisatie vertrouwen het al, dus er verschijnt geen waarschuwing en er
 hoeft niets op de apparaten te gebeuren.
 
-Voor de IT-afdeling, een nieuwe server met poort 80 en 443 vrij:
+Voor de IT-afdeling, een nieuwe server met poort 80 en 443 vrij (een
+uitgebreidere, losse handleiding staat in `docs/installatie-it.md`):
 
 1. Zet naast elkaar op de server: `docker-compose.yml`, `Caddyfile` en een
    `.env` (voorbeeld: `.env.example`). Meer is niet nodig, de rest komt als
