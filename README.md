@@ -753,6 +753,11 @@ Zet de einddatum in een agenda, want met een verlopen certificaat geeft
 iedere browser een waarschuwing. Staat `TLS_MODUS` er niet, of staat het op
 `intern`, dan gebruikt Caddy zijn eigen CA zoals bij optie 1.
 
+Let op bij `TLS_MODUS=bestand`: ontbreekt `certs/rooster.pem` of
+`certs/rooster.key`, of staat er een andere waarde dan `bestand` of `intern`
+(`Bestand` en `file` werken niet), dan start `caddy` niet en is de hele site
+onbereikbaar. De oorzaak staat in `docker compose logs caddy`.
+
 #### Productie
 
 1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist).

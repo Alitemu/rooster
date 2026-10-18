@@ -136,7 +136,8 @@ vrijgegeven (`stable`). Wil je een versie vastzetten, zet dan
 |---|---|
 | `docker compose up` meldt dat poort 443 of 80 bezet is | Een andere dienst gebruikt de poort. Controleer met `ss -tlnp \| grep ':443 '`. |
 | De browser geeft een certificaatwaarschuwing | `TLS_MODUS=bestand` ontbreekt in `.env` (dan gebruikt Caddy zijn eigen CA). Of het certificaat bevat de DNS-naam niet of is verlopen. Zie `docker compose logs caddy --tail 50`. |
-| `caddy` start niet na het neerzetten van het certificaat | `certs/rooster.pem` of `rooster.key` ontbreekt of is niet leesbaar. De sleutel mag geen wachtwoord hebben. |
+| `caddy` start niet en `docker compose logs caddy` zegt `loading certificates: open /certs/rooster.pem: no such file or directory` | Met `TLS_MODUS=bestand` moeten `certs/rooster.pem` en `certs/rooster.key` bestaan en leesbaar zijn. De sleutel mag geen wachtwoord hebben. Zolang `caddy` niet start, is de hele site onbereikbaar. |
+| `caddy` start niet en het log zegt `File to import not found: tls_...` | De waarde van `TLS_MODUS` in `.env` is fout gespeld. Alleen `bestand` en `intern` bestaan, in kleine letters (`Bestand` of `file` werkt niet). Verbeter `.env` en voer `docker compose up -d` uit. |
 | De pagina laadt niet | Kijk of `web` op `healthy` staat: `docker compose logs web --tail 50`. |
 | *De solver van de AIOS is niet bereikbaar* bij het maken van een rooster | De dienst `aios-solver` ontbreekt in `docker-compose.yml` (een oud bestand) of draait niet. De app waarschuwt hier ook voor in `docker compose logs web` bij het opstarten. Haal het nieuwste `docker-compose.yml` op en start opnieuw. |
 | Iets met geheugen of een solver die stopt tijdens het rekenen | Zet meer geheugen vrij: `SOLVER_MEM_LIMIT` en `AIOS_SOLVER_MEM_LIMIT` in `.env`, daarna `docker compose up -d`. |
