@@ -66,7 +66,7 @@ function startCheck(): string {
 }
 
 function runCheck(env: Record<string, string>): { stdout: string; stderr: string } {
-  const result = spawnSync('sh', ['-c', startCheck()], { env: { PATH: process.env.PATH ?? '', ...env } as NodeJS.ProcessEnv, encoding: 'utf8' });
+  const result = spawnSync('sh', ['-c', startCheck()], { env: { ...process.env, ...env }, encoding: 'utf8' });
   return { stdout: result.stdout, stderr: result.stderr };
 }
 
