@@ -109,9 +109,9 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
 
   // A line between the days, a double one where a weekend begins and ends.
   const week = page.locator('table').first();
-  const kop = (dag: string) => week.locator('thead th[scope="col"]').filter({ hasText: new RegExp(`^${dag}\\d`) }).first();
+  const dagKop = (dag: string) => week.locator('thead th[scope="col"]').filter({ hasText: new RegExp(`^${dag}\\d`) }).first();
   for (const [dag, stijl] of [['wo', 'solid'], ['vr', 'solid'], ['za', 'double'], ['zo', 'solid'], ['ma', 'double'], ['di', 'solid']]) {
-    await expect(kop(dag)).toHaveCSS('border-left-style', stijl);
+    await expect(dagKop(dag)).toHaveCSS('border-left-style', stijl);
   }
 
   // The requests at the top.
