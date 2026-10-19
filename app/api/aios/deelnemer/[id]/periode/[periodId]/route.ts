@@ -28,15 +28,6 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
 
-    // In the prullenbak: the page tells the AIOS where to ask a new link (components/PeriodeVerwijderd.tsx).
-    const verwijderd = db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NOT NULL').get(periodId);
-    if (verwijderd) {
-      return NextResponse.json(
-        { success: false, error: { code: 'PERIOD_DELETED', message: 'Deze periode is verwijderd' } },
-        { status: 410 }
-      );
-    }
-
     const period = loadAiosPeriode(periodId);
     if (!period || !aiosPeriodeBruikbaarVoor(auth!, id, period)) {
       return NextResponse.json(

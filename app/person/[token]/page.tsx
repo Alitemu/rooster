@@ -37,7 +37,6 @@ interface Period {
   eind_datum: string;
   deadline: string;
   status: string;
-  verwijderd_op?: string | null;
 }
 
 interface RosterData {
@@ -250,6 +249,12 @@ function PersonalLinkPageContent() {
       try {
         // Validate token format and fetch person info
         const res = await fetch(withBasePath(`/api/auth/verify-link?token=${encodeURIComponent(token)}`));
+        // In the prullenbak: nothing of it is shown, only where to ask a new link.
+        if (res.status === 410) {
+          setVerwijderd(true);
+          setLoading(false);
+          return;
+        }
         if (!res.ok) {
           throw new Error('Ongeldige of verlopen toegangslink');
         }
@@ -266,12 +271,6 @@ function PersonalLinkPageContent() {
 
         const periodData = await periodRes.json();
         const periodInfo = periodData.data;
-        // In the prullenbak: nothing of it is shown, only where to ask a new link.
-        if (periodInfo.verwijderd_op) {
-          setVerwijderd(true);
-          setLoading(false);
-          return;
-        }
         setPeriod(periodInfo);
 
         // If period is published, load roster; otherwise load patterns

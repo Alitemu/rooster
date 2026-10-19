@@ -112,14 +112,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // fill in preferences for it would mean their work disappears with it.
     // The link is not retired for that - restoring the period brings it
     // back - so this only has to stop resolving while it sits in the trash.
+    // A link of its own period in the trash answers 410 PERIOD_DELETED, so the
+    // page can say the period is deleted and where to ask a new link
+    // (components/PeriodeVerwijderd.tsx), for the achterwacht and the AIOS.
     let period: any;
     if (link.geldt_voor_periode_id) {
       period = db
         .prepare(
-          `SELECT id, pool_id FROM dienstrooster_schedule_period
-           WHERE id = ? AND verwijderd_op IS NULL`
+          `SELECT id, pool_id, verwijderd_op FROM dienstrooster_schedule_period
+           WHERE id = ?`
         )
         .get(link.geldt_voor_periode_id);
+      if (period?.verwijderd_op) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'PERIOD_DELETED', message: 'Deze periode is verwijderd' },
+        };
+        return NextResponse.json(response, { status: 410 });
+      }
     } else {
       // A general link with no period of its own only auto-detects within
       // the pools this person actually belongs to - otherwise, as soon as a

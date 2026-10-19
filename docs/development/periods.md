@@ -94,7 +94,8 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   `data-testid="periode-verwijderd"`): a planner is told to bring it back
   through the Prullenbak, a participant with their link is told to ask a
   new one on the startpagina ("Link kwijt?"). The same for the AIOS: its
-  participant route answers 410 PERIOD_DELETED. A
+  verify-link answers 410 PERIOD_DELETED for a link of its own period in the
+  prullenbak, and both participant pages show that page. A
   planner acting for a participant loses it too (lib/periodAccess.ts
   periodUsableFor). app/api/periodTrashGuard.test.ts sweeps both halves:
   the source of every changing handler, and every one of them called on

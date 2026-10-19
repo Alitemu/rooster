@@ -94,6 +94,10 @@ function AiosLinkPagina() {
     const start = async () => {
       try {
         const res = await fetch(withBasePath(`/api/auth/verify-link?token=${encodeURIComponent(token)}`));
+        if (res.status === 410) {
+          setVerwijderd(true);
+          return;
+        }
         if (!res.ok) {
           setFout({ tekst: 'Ongeldige of verlopen toegangslink', link: true });
           return;
@@ -101,10 +105,6 @@ function AiosLinkPagina() {
         const { person_id, period_id } = (await res.json()).data as { person_id: string; period_id: string };
         setPersonId(person_id);
         const scherm = await fetch(withBasePath(`/api/aios/deelnemer/${person_id}/periode/${period_id}`));
-        if (scherm.status === 410) {
-          setVerwijderd(true);
-          return;
-        }
         if (!scherm.ok) {
           setFout({ tekst: 'Deze link hoort niet bij het rooster van de AIOS.', link: true });
           return;
