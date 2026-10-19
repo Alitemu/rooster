@@ -211,6 +211,17 @@ export async function openAiosSectie(page: Page, titel: string): Promise<void> {
 }
 
 /**
+ * Opens the section "Dienstrooster (...)" of an AIOS period: the brackets say how the roster stands
+ * (nog niet gegenereerd, automatisch ingevuld, handmatig aangepast, gepubliceerd), which a test
+ * should not have to know to open it.
+ */
+export async function openDienstrooster(page: Page): Promise<void> {
+  const knop = page.getByRole('heading', { name: /^Dienstrooster( \(|$)/ }).getByRole('button');
+  if ((await knop.getAttribute('aria-expanded')) !== 'true') await knop.click();
+  await expect(knop).toHaveAttribute('aria-expanded', 'true');
+}
+
+/**
  * Get personal link URL for a user
  */
 export function getPersonalLinkUrl(token: string): string {

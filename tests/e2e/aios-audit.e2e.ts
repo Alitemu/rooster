@@ -7,7 +7,7 @@ import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { syncAiosPersoon } from '@/lib/aiosSync';
 import { readFirstSheet } from '@/lib/xlsx';
 import { buildXlsx } from '@/tests/fixtures/buildXlsx';
-import { getBaseUrl, loginAsBeheerder, loginAsPlanner, openAiosSectie } from './setup';
+import { getBaseUrl, loginAsBeheerder, loginAsPlanner, openAiosSectie, openDienstrooster } from './setup';
 
 /**
  * The audit of 0.90.0 to 0.93.0 in the browser (points 1 to 8 of the
@@ -342,7 +342,7 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
   });
 
   await test.step('by hand: the reason of the AIOS is on one block only, and filling an empty block lowers what is still empty', async () => {
-    await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
+    await openDienstrooster(page);
     // The reason of A (the imported text) shows on the candidate in the block with A's marked days.
     const avond = page.getByRole('button', { name: /^Avondblok .*Wijzigen$/ });
     const aantal = await avond.count();

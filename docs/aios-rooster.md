@@ -122,7 +122,7 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   bewaard en staat bij een volgende generatie al ingevuld.
 - Een losse feestdag in een blok (zoals Koningsdag of Nieuwjaarsdag) blijft heel,
   maar de planner kan dat blok op dezelfde plek ook opknippen.
-- Daarna kan de planner een dienst nog met de hand aanpassen, zoals altijd.
+- Daarna kan de planner een dienst nog met de hand aanpassen, zoals altijd (sinds 0.101.0 in de sectie Dienstrooster, in de lijst en in de kalender).
 - In de app (0.76.0): de vragen staan op de pagina van de periode, bij
   *Rooster*, boven *Rooster maken*. Dat kan pas als elk blok bij
   aaneengesloten feestdagen een keuze heeft en de keuzes bewaard zijn. Een

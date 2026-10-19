@@ -51,8 +51,9 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
      onderdeel open je door op de titel te klikken. Open je een ander, dan
      klapt het vorige dicht, tenzij je het met de punaise vastzet. Zo werkt
      het in de rest van dit draaiboek steeds.
-   - Open *Per week*: de diensten per week, een avond- of nachtblok als één
-     vak met een dikke rand. Open *Punten in dit kwartaal*: het aantal fte dat
+   - Open *Dienstrooster (nog niet gegenereerd)*: onderin staan de diensten per
+     week in de kalender, een avond- of nachtblok als één vak met een dikke
+     rand, met bovenaan de tabel *Diensten (toelichting)* als legenda. Open *Punten in dit kwartaal*: het aantal fte dat
      de AIOS samen nodig hebben om onder 25% te blijven.
 8. **Voortgangstoets.** Vink bij *Voortgangstoets* aan dat er een toets is,
    kies een woensdag in het kwartaal en klik op *Opslaan*.
@@ -106,7 +107,8 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
     - Staat er *De solver van de AIOS is niet bereikbaar*? Dan draait de
       container `aios-solver` niet. Controleer dat met `docker compose ps`
       (zie stap 1) en zie de README bij versie 0.87.1.
-    - Je ziet na een paar minuten het rooster per week en de tabel *Per AIOS*
+    - Je ziet na een paar minuten het rooster in *Dienstrooster (automatisch
+      ingevuld)* en de tabel *Dienstpercentage en saldo*
       met punten en dienstpercentage. Daaronder staat "nog geen eerdere
       kwartalen", want dit is het eerste kwartaal.
     - aios01 heeft geen uitloopdienst op een maandag. Krijgt aios01 een avond
@@ -131,7 +133,8 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
       roosterbureau staat bij *Publiceren* nog niet klaar: die komt pas bij
       een definitief rooster.
     - Open de link van aios01. Je ziet het eigen rooster met de punten en het
-      dienstpercentage. Daaronder staat *Ruilen*.
+      dienstpercentage. Daaronder staat *Ruilen*. (Bij de planner staan de
+      ruilverzoeken onder het tabblad *Ruilverzoeken* van *Dienstrooster*.)
 19. **Ruilen.** Kies bij aios01 een dienst of blok en klik op *Ruilen*. Kies
     een collega bij *Vraag aan* en geef een toelichting.
     - Je ziet: "Je ruilverzoek is verstuurd." en het verzoek als *in
@@ -139,7 +142,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
     - Open in het andere venster de link van die collega. Bij *Verzoeken aan
       jou* staat het verzoek met de toelichting. Klik op *Goedkeuren*.
     - Je ziet bij beide AIOS het aangepaste rooster. Bij de planner staat de
-      ruil onder *Ruilen* als goedgekeurd.
+      ruil onder het tabblad *Ruilverzoeken* als goedgekeurd.
 20. **Definitief maken.** Klik bij de planner op *Definitief maken* en daarna
     op *Ja, definitief maken*.
     - Download *Rooster per dag* (met *Fellow* op de nacht voor de toets) en
@@ -154,5 +157,5 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
     voortgangstoets gaan mee.
 22. Wil je het saldo naar het volgende kwartaal testen, lees dan vóór stap 16
     bij *Geschiedenis van vóór de app* een ingevuld sjabloon in. Maak na stap
-    20 het volgende kwartaal: bij *Per AIOS* staat dan het saldo uit het
+    20 het volgende kwartaal: bij *Dienstpercentage en saldo* staat dan het saldo uit het
     vorige kwartaal en het percentage over twee kwartalen samen.

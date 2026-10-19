@@ -427,7 +427,7 @@ staat een opgeknipt blok per dag en de tweede AIOS op oudjaarsnacht in de rij
 *Nacht 2*.
 
 **Vanaf versie 0.77.0** pas je het rooster van de AIOS met de hand aan. Tik
-in *Handmatige correctie gegenereerde rooster* op een blok of dienst. Je ziet per AIOS wat het zou
+in *Dienstrooster* op een blok of dienst. Je ziet per AIOS wat het zou
 kosten: een harde regel die erbij komt (zoals een compensatiedag of te weinig
 rust), wat die AIOS markeerde, of het blok niet meer heel is en het
 dienstpercentage daarna. Kies een AIOS. Met een waarschuwing vraagt de app
@@ -457,7 +457,7 @@ Download het sjabloon en vul per AIOS in: nachten, avonden door de week,
 avonden in het weekend, dagdiensten, uitloopdiensten, hoeveel daarvan op een
 feestdag, de gemiddelde fte en over hoeveel maanden. Klik op *Controleren*: je
 ziet per AIOS in woorden wat het betekent, zoals "5 punten minder". Klopt het,
-klik dan op *Bewaren*. In *Per AIOS* staat bij het rooster wat elke AIOS
+klik dan op *Bewaren*. In *Dienstpercentage en saldo* staat bij het rooster wat elke AIOS
 meeneemt.
 
 **Vanaf versie 0.80.0** ruilen de AIOS onderling, zonder de planner. Op hun
@@ -538,6 +538,22 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 0.101.0:**
+- *Dienstrooster:* de secties *Per week*, *Handmatige correctie gegenereerde
+  rooster*, *Diensten (toelichting)* en *Ruilen* van de AIOS-pagina zijn één
+  sectie geworden, onderaan de pagina, net als bij de achterwacht. De naam zegt
+  tussen haakjes hoe het rooster staat: *nog niet gegenereerd*, *automatisch
+  ingevuld*, *handmatig aangepast* (zodra je na het maken een dienst met de hand
+  hebt gegeven of leeggemaakt) of *gepubliceerd*. Bovenin staat de tabel van de
+  diensten als legenda. Daaronder vier tabbladen: *Lijst* (alle diensten met wie
+  ze doet), *Kalender* (de weken, met het ingevulde rooster zodra dat er is),
+  *Dienstdoende* (per AIOS het aantal nachten, avonden, dagdiensten en
+  uitloopdiensten met een balkje) en *Ruilverzoeken* (leeg tot het rooster
+  gepubliceerd is). Wijzigen met de hand kan in de lijst en in de kalender.
+- *Dienstpercentage en saldo:* de tabel *Per AIOS* heet nu zo.
+- *Volgorde:* *Geschiedenis van vóór de app* is de eerste sectie van de
+  periodepagina. *Dienstrooster* is de laatste.
 
 **Vanaf versie 0.100.0:**
 - *Twee diensten op één dag bij het met de hand aanpassen:* kies je voor een dienst

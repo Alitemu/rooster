@@ -137,6 +137,28 @@ const MUTATIONS = [
     replace: 'for (const id of ids) {',
     tests: ['app/api/aios/aiosHandmatig'],
   },
+  // 0.101.0: the status of the AIOS's Dienstrooster section.
+  {
+    name: 'dienstrooster status: a changed roster still reads automatisch ingevuld',
+    file: 'lib/aiosTeksten.ts',
+    find: "return handmatig ? 'handmatig aangepast' : 'automatisch ingevuld';",
+    replace: "return 'automatisch ingevuld';",
+    tests: ['lib/aiosTeksten'],
+  },
+  {
+    name: 'dienstrooster status: a published roster reads as generated',
+    file: 'lib/aiosTeksten.ts',
+    find: "if (status === 'GEPUBLICEERD') return 'gepubliceerd';",
+    replace: '',
+    tests: ['lib/aiosTeksten'],
+  },
+  {
+    name: 'dienstrooster status: edits from before the last generation still count as handmatig',
+    file: 'lib/aiosRooster.ts',
+    find: "AND ae.aangemaakt_op >= COALESCE(",
+    replace: "AND ae.aangemaakt_op >= '' OR 0 AND COALESCE(",
+    tests: ['app/api/aios/aiosHandmatig'],
+  },
   {
     name: 'rate limit: an attempt past the limit still goes through',
     file: 'lib/rateLimit.ts',

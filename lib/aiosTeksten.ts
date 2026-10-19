@@ -38,6 +38,16 @@ export function periodStatusLabel(status: string): string {
   return PERIOD_STATUS_LABELS[status] ?? status.toLowerCase();
 }
 
+/**
+ * What the heading of the roster section says in brackets, "Dienstrooster (...)": not made yet, made by
+ * the solver, changed by hand since, or published.
+ */
+export function aiosDienstroosterStatus(status: string, handmatig: boolean): string {
+  if (status === 'GEPUBLICEERD') return 'gepubliceerd';
+  if (status === 'GEGENEREERD') return handmatig ? 'handmatig aangepast' : 'automatisch ingevuld';
+  return 'nog niet gegenereerd';
+}
+
 /** "maandag 1 maart 2027". The date is a calendar day, so no timezone may shift it. */
 export function formatSwapDate(datum: string): string {
   return new Intl.DateTimeFormat('nl-NL', {

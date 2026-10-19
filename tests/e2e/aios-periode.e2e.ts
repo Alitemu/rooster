@@ -49,25 +49,31 @@ test('the beheerder makes an AIOS quarter and sees its diensten, blocks and poin
 
   // Every part folds, as on the achterwacht's page (0.86.0): all closed at first.
   const knop = (titel: string) => page.getByRole('heading', { name: titel, exact: true }).getByRole('button');
-  for (const titel of ['Voorkeuren van de AIOS', 'Voortgangstoets', 'Geschiedenis van vóór de app', 'Punten in dit kwartaal', 'Diensten (toelichting)', 'Per week']) {
+  for (const titel of ['Voorkeuren van de AIOS', 'Voortgangstoets', 'Geschiedenis van vóór de app', 'Punten in dit kwartaal', 'Dienstrooster (nog niet gegenereerd)']) {
     await expect(knop(titel)).toHaveAttribute('aria-expanded', 'false');
   }
+  // The history from before the app is the first section, the roster the last (the planner's wish, as on the achterwacht's page).
+  const volgorde = await page.getByRole('heading').filter({ has: page.getByRole('button') }).allTextContents();
+  expect(volgorde[0]).toContain('Geschiedenis van vóór de app');
+  expect(volgorde[volgorde.length - 1]).toContain('Dienstrooster (nog niet gegenereerd)');
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeHidden();
   await openAiosSectie(page, 'Punten in dit kwartaal');
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeVisible();
   // Opening another closes it, unless it is pinned.
-  await openAiosSectie(page, 'Diensten (toelichting)');
+  await openAiosSectie(page, 'Dienstrooster (nog niet gegenereerd)');
+  // The table of the diensten is the legend of that section.
+  await expect(page.getByTestId('aios-dienstrooster-legenda').getByRole('heading', { name: 'Diensten (toelichting)' })).toBeVisible();
   await expect(knop('Punten in dit kwartaal')).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: /^Vastzetten/ }).click();
   await openAiosSectie(page, 'Voorkeuren van de AIOS');
-  await expect(knop('Diensten (toelichting)')).toHaveAttribute('aria-expanded', 'true');
+  await expect(knop('Dienstrooster (nog niet gegenereerd)')).toHaveAttribute('aria-expanded', 'true');
 
   // Opening asks for an AIOS taking part; the demo's AIOS pool is empty.
   await expect(page.getByLabel('Deadline voor de voorkeuren')).toBeVisible();
   await page.getByRole('button', { name: 'Periode openen' }).click();
   await expect(page.getByText(/Er doet nog geen AIOS mee in dit kwartaal/)).toBeVisible();
   // Thirteen or fourteen weeks, each with its evening and night blocks.
-  await openAiosSectie(page, 'Per week');
+  await openAiosSectie(page, 'Dienstrooster (nog niet gegenereerd)');
   const weken = await page.getByText(/^Week \d+ en \d+ · /).count();
   expect([13, 14]).toContain(weken);
   await expect(page.locator('[title^="Blok zo t/m di"]').first()).toBeVisible();

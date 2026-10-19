@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, openDienstrooster } from './setup';
 
 /**
  * The voortgangstoets (docs/aios-rooster.md, "Voortgangstoets"): on a roster
@@ -101,12 +101,10 @@ test('the planner gives the date, and the night before says Fellow', async ({ pa
   await expect(kaart).toContainText('De voortgangstoets is op woensdag 20 oktober 2094');
   await expect(kaart).toContainText('In de nacht ervoor (dinsdag 19 oktober 2094) heeft geen AIOS dienst.');
 
-  // In the week table and in the roster: the one pinned open, so both show.
-  await openAiosSectie(page, 'Per week');
-  await page.getByRole('button', { name: /^Vastzetten/ }).click();
-  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
+  // In the calendar of the roster section.
+  await openDienstrooster(page);
   const fellow = page.getByTitle('Nacht voor de voortgangstoets: een fellow');
-  await expect(fellow).toHaveCount(2);
+  await expect(fellow).toHaveCount(1);
   expect(nacht('2094-10-19')).toBeUndefined();
   expect([nacht('2094-10-17')!.person_id, nacht('2094-10-18')!.person_id]).toEqual([houder, houder]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
@@ -118,7 +116,7 @@ test('the planner gives the date, and the night before says Fellow', async ({ pa
   await expect(
     kaart.getByText('Opgeslagen. De nacht van dinsdag 19 oktober 2094 staat weer in het rooster, bij de AIOS die de rest van dat blok heeft.')
   ).toBeVisible();
-  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
+  await openDienstrooster(page);
   await expect(fellow).toHaveCount(0);
   expect(nacht('2094-10-19')).toEqual({ person_id: houder });
 });

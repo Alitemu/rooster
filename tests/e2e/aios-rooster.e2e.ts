@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, openDienstrooster } from './setup';
 
 /**
  * Step 4a (docs/aios-rooster.md): the planner makes an AIOS roster with the
@@ -90,14 +90,14 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
 
-  await expect(page.getByRole('heading', { name: 'Per AIOS' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Handmatige correctie gegenereerde rooster' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dienstpercentage en saldo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dienstrooster (automatisch ingevuld)', exact: true })).toBeVisible();
   // Every AIOS a row with a percentage; the roster names them.
-  await openAiosSectie(page, 'Per AIOS');
+  await openAiosSectie(page, 'Dienstpercentage en saldo');
   const tabel = page.locator('table', { hasText: 'Percentage' });
   await expect(tabel.locator('tbody tr')).toHaveCount(8);
   await expect(tabel.getByText(/\d+(,\d)?%/).first()).toBeVisible();
-  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
+  await openDienstrooster(page);
   await expect(page.locator('td span', { hasText: new RegExp(`^ar0\\d-${stamp % 100000}`) }).first()).toBeVisible();
   const ingedeeld = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(ids.period) as { n: number }).n;
   expect(ingedeeld).toBeGreaterThan(0);
@@ -126,6 +126,8 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(klaar.or(toch)).toBeVisible();
   if (await toch.isVisible()) await toch.click();
   await expect(klaar).toContainText(`nu ${codenaam}.`);
+  // Changed by hand: the heading says so.
+  await expect(page.getByRole('heading', { name: 'Dienstrooster (handmatig aangepast)', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: new RegExp(`^Nachtblok .*: ${codenaam}`) }).first()).toBeVisible();
   const na = rooster();
   expect(Object.keys(na).filter((k) => na[k] !== voor[k]).length).toBeGreaterThanOrEqual(3);
@@ -133,11 +135,33 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(klaar).toHaveCount(0);
   expect(rooster()).toEqual(voor);
 
+  // The other views of the same section: the list of every dienst, the dienstdoende with their numbers, the swaps (empty before publishing).
+  const sectie = page.getByTestId('aios-dienstrooster');
+  await sectie.getByRole('tab', { name: /Lijst/ }).click();
+  const lijst = sectie.getByTestId('aios-dienstrooster-lijst');
+  const aantalDiensten = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_shift_slot WHERE period_id = ?').get(ids.period) as { n: number }).n;
+  await expect(lijst.locator('tbody tr')).toHaveCount(aantalDiensten);
+  await lijst.getByRole('button', { name: /Wijzig in de lijst$/ }).first().click();
+  await expect(sectie.getByTestId('aios-wijzigen').getByRole('heading', { name: 'Wie doet dit?' })).toBeVisible();
+  await sectie.getByTestId('aios-wijzigen').getByRole('button', { name: 'Sluiten' }).click();
+  await sectie.getByRole('tab', { name: /Dienstdoende/ }).click();
+  const dienstdoende = sectie.getByTestId('aios-dienstdoende');
+  await expect(dienstdoende.locator('tbody tr')).toHaveCount(8);
+  await expect(dienstdoende.getByRole('row', { name: /^Samen/ })).toBeVisible();
+  await sectie.getByRole('tab', { name: /Ruilverzoeken/ }).click();
+  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Nog geen ruilverzoeken.');
+  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster gepubliceerd is.');
+  await sectie.getByRole('tab', { name: /Kalender/ }).click();
+
   await openAiosSectie(page, 'Rooster');
   await paneel.getByRole('button', { name: 'Rooster verwijderen' }).click();
   await paneel.getByRole('button', { name: 'Ja, rooster verwijderen' }).click();
   await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Per AIOS' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Dienstpercentage en saldo' })).toHaveCount(0);
+  // Not made: the heading says so, and the calendar shows the diensten themselves.
+  await expect(page.getByRole('heading', { name: 'Dienstrooster (nog niet gegenereerd)', exact: true })).toBeVisible();
+  await openDienstrooster(page);
+  await expect(page.getByTestId('aios-dienstrooster-nog-niet')).toBeVisible();
   expect((db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(ids.period) as { n: number }).n).toBe(0);
 });
 
@@ -166,7 +190,7 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
 
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
-  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
+  await openDienstrooster(page);
   await expect(page.getByRole('cell', { name: 'Nacht 2', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 

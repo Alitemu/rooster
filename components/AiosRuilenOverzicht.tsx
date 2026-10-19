@@ -4,12 +4,13 @@
  * The swaps of an AIOS period for the planner (lib/aiosRuilen.ts): who
  * asked whom, what for what, and how it stands. The AIOS swap without the
  * planner (L1, L2); the planner and the roosterbureau are mailed when one
- * goes through.
+ * goes through. The tab Ruilverzoeken of the section Dienstrooster
+ * (components/AiosDienstrooster.tsx); before the roster is published it is
+ * there and empty.
  */
 
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
-import { AiosSectie } from '@/components/AiosSectie';
 import type { EenheidUit, RuilStatus, RuilUit } from '@/lib/aiosRuilen';
 
 const kort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -22,7 +23,7 @@ const STATUS: Record<RuilStatus, string> = {
   VERVALLEN: 'vervallen',
 };
 
-export function AiosRuilenOverzicht({ periodId }: { periodId: string }) {
+export function AiosRuilenOverzicht({ periodId, gepubliceerd }: { periodId: string; gepubliceerd: boolean }) {
   const [ruilen, setRuilen] = useState<RuilUit[] | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
@@ -36,20 +37,12 @@ export function AiosRuilenOverzicht({ periodId }: { periodId: string }) {
       .catch((err) => setFout(err instanceof Error ? err.message : 'Laden is mislukt'));
   }, [periodId]);
 
-  const open = ruilen?.filter((r) => r.status === 'IN_BEHANDELING').length ?? 0;
-
   return (
-    // Kept loaded while closed: the hint says how many wait for an answer.
-    <AiosSectie
-      sleutel="ruilen"
-      titel="Ruilen"
-      testId="aios-ruilen-overzicht"
-      hint={ruilen ? (open ? `${open} in behandeling` : `${ruilen.length} ${ruilen.length === 1 ? 'verzoek' : 'verzoeken'}`) : undefined}
-      blijfGeladen
-    >
+    <div className="space-y-2" data-testid="aios-ruilen-overzicht">
       <p className="text-sm text-neutral-700">
         De AIOS ruilen onderling, zonder jou. Gaat een ruil door, dan krijg jij een bericht via de stroom van de AIOS. Het roosterbureau krijgt alleen een bericht over ruilen in een definitief rooster.
       </p>
+      {!gepubliceerd && <p className="text-sm text-neutral-600">Ruilen kan pas als het rooster gepubliceerd is.</p>}
       {fout && (
         <p role="alert" className="text-sm text-red-700">
           {fout}
@@ -66,6 +59,6 @@ export function AiosRuilenOverzicht({ periodId }: { periodId: string }) {
           ))}
         </ul>
       )}
-    </AiosSectie>
+    </div>
   );
 }

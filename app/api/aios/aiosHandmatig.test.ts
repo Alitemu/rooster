@@ -385,3 +385,33 @@ describe('two diensten on one day, at the end: it leaves edit rows behind', () =
     expect(wieHeeft(avond.id)).toBeNull();
   });
 });
+
+describe('the heading of the roster section: changed by hand since the roster was made', () => {
+  it('true after a change by hand, false again once the roster is made anew, true after the next change', async () => {
+    const periode = aiosUitnodigPeriode(w.period)!;
+    // Earlier tests changed it by hand.
+    expect(laadAiosRooster(periode).handmatig).toBe(true);
+    // Made anew: the edits from before it do not count (they stay in the history).
+    db.prepare(
+      'INSERT OR REPLACE INTO dienstrooster_aios_generatie (period_id, gemaakt_op, solver_status, gevuld, tijd_seconden, leeg_json) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(w.period, new Date().toISOString(), 'OPTIMAAL', 0, 1, '[]');
+    expect(laadAiosRooster(periode).handmatig).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    const avond = slot('UD', '2094-07-21');
+    expect((await zet([{ dienst_id: avond.id, aios_id: w.y, was: wieHeeft(avond.id) }])).status).toBe(200);
+    expect(laadAiosRooster(periode).handmatig).toBe(true);
+    // Emptying a dienst by hand counts as well.
+    db.prepare('INSERT OR REPLACE INTO dienstrooster_aios_generatie (period_id, gemaakt_op, solver_status, gevuld, tijd_seconden, leeg_json) VALUES (?, ?, ?, ?, ?, ?)').run(
+      w.period,
+      new Date().toISOString(),
+      'OPTIMAAL',
+      0,
+      1,
+      '[]'
+    );
+    expect(laadAiosRooster(periode).handmatig).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await zet([{ dienst_id: avond.id, aios_id: null, was: w.y }])).status).toBe(200);
+    expect(laadAiosRooster(periode).handmatig).toBe(true);
+  });
+});

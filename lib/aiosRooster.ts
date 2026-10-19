@@ -81,6 +81,8 @@ export interface AiosRooster {
   per_aios: AiosRoosterPerAios[];
   leeg: number;
   overtredingen: AiosRoosterOvertreding[];
+  // A dienst was given or emptied by hand since the roster was last made: the heading says so (lib/aiosTeksten.ts aiosDienstroosterStatus).
+  handmatig: boolean;
 }
 
 export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
@@ -208,5 +210,16 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
       datums: [...new Set(ids.map((id) => datum.get(id) ?? (/^\d{4}-\d{2}-\d{2}$/.test(id) ? id : null)).filter((d) => d !== null))].sort(),
     })
   );
-  return { dagen, per_aios, leeg: rows.filter((r) => !r.person_id).length, overtredingen };
+  // The edits stay when the roster is made again, so only those since the last generation count.
+  const handmatig = Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM dienstrooster_assignment_edit ae
+         WHERE ae.periode_id = ? AND ae.edit_type LIKE 'HANDMATIG%'
+           AND ae.aangemaakt_op >= COALESCE((SELECT gemaakt_op FROM dienstrooster_aios_generatie WHERE period_id = ?), '')
+         LIMIT 1`
+      )
+      .get(period.id, period.id)
+  );
+  return { dagen, per_aios, leeg: rows.filter((r) => !r.person_id).length, overtredingen, handmatig };
 }

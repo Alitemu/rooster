@@ -1,9 +1,11 @@
 /**
- * An AIOS period's page (docs/aios-rooster.md): its steps up to the
- * preferences (open, invite, remind, deadline, close), "Status voorkeuren"
- * per AIOS with the 50% warnings, and the quarter's diensten per week with
- * the blocks as one box, and the points it holds, so the planner sees how
- * many fte the AIOS need together to stay under 25% on average.
+ * An AIOS period's page (docs/aios-rooster.md), in this order: the history
+ * from before the app, the steps up to the preferences (open, invite,
+ * remind, deadline, close), the voortgangstoets, "Status voorkeuren" per
+ * AIOS with the 50% warnings, communication, making the roster and
+ * publishing it, the dienstpercentage and saldo, the points the quarter holds
+ * (how many fte the AIOS need together to stay under 25% on average) and,
+ * last, the Dienstrooster with its list, calendar, dienstdoende and swaps.
  *
  * Generating, the roster per block and publishing come in the next steps;
  * until then the achterwacht's steps after closing refuse an AIOS period
@@ -12,21 +14,20 @@
 
 'use client';
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
 import { AiosExporteren } from '@/components/AiosExporteren';
 import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
-import { AiosRuilenOverzicht } from '@/components/AiosRuilenOverzicht';
-import { AiosVoortgangstoets, FellowVak } from '@/components/AiosVoortgangstoets';
+import { AiosDienstrooster } from '@/components/AiosDienstrooster';
+import { AiosVoortgangstoets } from '@/components/AiosVoortgangstoets';
 import { AiosPeriodeStatus } from '@/components/AiosPeriodeStatus';
 import { AiosHarmonica, AiosSectie } from '@/components/AiosSectie';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
-import { benodigdeFte, SOORT_LABELS, BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
-import type { AiosCode } from '@/lib/aiosDiensten';
-import type { AiosDag, AiosDienstenOverzicht, AiosDienstRegel } from '@/lib/aiosSlots';
+import { benodigdeFte, SOORT_LABELS } from '@/lib/aiosDiensten';
+import type { AiosDienstenOverzicht } from '@/lib/aiosSlots';
 import { bovenHelftPlanner, type AiosWens, type BlokkadeTeller, type MarkeringTelling } from '@/lib/aiosVoorkeur';
 
 interface Period {
@@ -45,100 +46,6 @@ const datumLang = (datum: string) =>
 
 const datumKort = (datum: string) =>
   new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
-
-const DAG_KOP = ['wo', 'do', 'vr', 'za', 'zo', 'ma', 'di'];
-
-/** A row of the week: the dienst of one soort on each of its seven days. */
-type Rij = { label: string; vind: (d: AiosDag) => AiosDienstRegel | undefined };
-
-const RIJEN: Rij[] = [
-  { label: 'Uitloop', vind: (d) => d.diensten.find((x) => x.code === 'UD') },
-  { label: 'Dag', vind: (d) => d.diensten.find((x) => x.code === 'DD') },
-  { label: 'Avond', vind: (d) => d.diensten.find((x) => x.code === 'AD' || x.code === 'ADW') },
-  { label: 'Nacht', vind: (d) => d.diensten.find((x) => x.code === 'ND') },
-];
-
-function WeekTabel({ dagen }: { dagen: AiosDag[] }) {
-  const weken = [...new Set(dagen.map((d) => d.iso_week))];
-  const eerste = dagen[0];
-  const laatste = dagen[dagen.length - 1];
-  return (
-    <div className="space-y-1">
-      <p className="text-sm font-medium text-neutral-800">
-        Week {weken.join(' en ')} · {datumKort(eerste.datum)} t/m {datumKort(laatste.datum)}
-      </p>
-      <table className="w-full table-fixed border-collapse text-xs">
-        <thead>
-          <tr>
-            <th className="w-14 p-1 text-left font-medium text-neutral-600">Dienst</th>
-            {dagen.map((d, i) => (
-              <th
-                key={d.datum}
-                className={`p-1 text-center font-medium ${d.dag_soort === 'WERKDAG' ? 'text-neutral-600' : 'bg-neutral-100 text-neutral-900'}`}
-                title={d.feestdag_naam ?? undefined}
-              >
-                {DAG_KOP[i]} {Number(d.datum.slice(8))}
-                {d.feestdag_naam ? ' ★' : ''}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {RIJEN.map((rij) => {
-            const cellen: ReactNode[] = [];
-            for (let i = 0; i < dagen.length; i++) {
-              const dienst = rij.vind(dagen[i]);
-              if (!dienst) {
-                cellen.push(
-                  <td key={i} className="p-0.5">
-                    {rij.label === 'Nacht' && dagen[i].fellow_nacht && <FellowVak />}
-                  </td>
-                );
-                continue;
-              }
-              if (!dienst.blok) {
-                cellen.push(
-                  <td key={i} className="p-0.5">
-                    <span className="block rounded border border-neutral-400 py-0.5 text-center">{dienst.code}</span>
-                  </td>
-                );
-                continue;
-              }
-              // A block is one box over its days (it never crosses the
-              // Wednesday a week starts on), broken by the fellow's night.
-              const blok = dienst.blok;
-              const codes: AiosCode[] = [];
-              let j = i;
-              while (j < dagen.length && dagen[j].datum <= blok.eind_datum && rij.vind(dagen[j])) {
-                codes.push(rij.vind(dagen[j])!.code);
-                j++;
-              }
-              cellen.push(
-                <td key={i} colSpan={j - i} className="p-0.5">
-                  <span
-                    className="flex justify-around rounded border-2 border-neutral-700 py-0.5"
-                    title={`Blok ${BLOK_VORM_LABELS[blok.vorm]}: één AIOS doet het hele blok`}
-                  >
-                    {codes.map((c, k) => (
-                      <span key={k}>{c}</span>
-                    ))}
-                  </span>
-                </td>
-              );
-              i = j - 1;
-            }
-            return (
-              <tr key={rij.label}>
-                <td className="p-1 text-neutral-600">{rij.label}</td>
-                {cellen}
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 /** A datetime-local value for the input, from a stored deadline. */
 function alsInvoer(deadline: string): string {
@@ -405,6 +312,9 @@ function Pagina({ period: begin }: { period: Period }) {
   const [stand, setStand] = useState<AiosStand | null>(null);
   // Raised when the voortgangstoets changed: its night left the diensten (or came back).
   const [toetsVersie, setToetsVersie] = useState(0);
+  // Raised when the roster was made, removed or published (the section Dienstrooster reads it again), and when it was changed by hand (the numbers of Rooster read it again).
+  const [roosterVersie, setRoosterVersie] = useState(0);
+  const [handmatigVersie, setHandmatigVersie] = useState(0);
   const herlaad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${begin.id}`))
       .then((res) => antwoord(res, 'Laden van de periode is mislukt'))
@@ -428,13 +338,6 @@ function Pagina({ period: begin }: { period: Period }) {
       .catch((err) => setError(err instanceof Error ? err.message : 'Laden van de diensten mislukt'));
   }, [period.id, toetsVersie]);
 
-  const weken: AiosDag[][] = [];
-  for (const dag of overzicht?.dagen ?? []) {
-    if (weken.length === 0 || weken[weken.length - 1].length === 7) weken.push([]);
-    weken[weken.length - 1].push(dag);
-  }
-  const feestdagen = (overzicht?.dagen ?? []).filter((d) => d.feestdag_naam);
-
   return (
     <div className="container-main py-8 space-y-6">
       <div className="card p-6">
@@ -447,7 +350,7 @@ function Pagina({ period: begin }: { period: Period }) {
             <h1 className="text-3xl font-bold text-neutral-900 break-words">{period.naam}</h1>
             <p className="text-neutral-600">
               AIOS · {datumLang(period.start_datum)} t/m {datumLang(period.eind_datum)}
-              {weken.length > 0 && ` · ${weken.length} weken`}
+              {overzicht && overzicht.dagen.length > 0 && ` · ${Math.ceil(overzicht.dagen.length / 7)} weken`}
             </p>
             <p className="text-sm text-neutral-600">Deadline voorkeuren: {deadlineTekst(period.deadline)}</p>
           </div>
@@ -455,6 +358,8 @@ function Pagina({ period: begin }: { period: Period }) {
         </div>
       </div>
 
+      {/* The history from before the app is the first section (the planner's wish): the quarter starts from it. */}
+      <AiosGeschiedenis periodId={period.id} />
       <Stappen period={period} stand={stand} onChanged={herlaad} />
       <AiosVoortgangstoets periodId={period.id} status={period.status} onChanged={() => setToetsVersie((v) => v + 1)} />
       {period.status !== 'CONCEPT' && (
@@ -462,12 +367,18 @@ function Pagina({ period: begin }: { period: Period }) {
       )}
       {period.status !== 'CONCEPT' && <AiosExporteren period={period} stand={stand} onChanged={herlaad} />}
 
-      {period.status !== 'CONCEPT' && <AiosRoosterMaken key={toetsVersie} periodId={period.id} status={period.status} onChanged={herlaad} />}
-
-      {period.status === 'GEPUBLICEERD' && <AiosRuilenOverzicht periodId={period.id} />}
-
-      <AiosGeschiedenis periodId={period.id} />
-
+      {period.status !== 'CONCEPT' && (
+        <AiosRoosterMaken
+          key={toetsVersie}
+          periodId={period.id}
+          status={period.status}
+          versie={handmatigVersie}
+          onChanged={() => {
+            herlaad();
+            setRoosterVersie((v) => v + 1);
+          }}
+        />
+      )}
 
       {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {!overzicht && !error && <div className="card p-8 text-center text-neutral-600">Diensten laden...</div>}
@@ -508,53 +419,16 @@ function Pagina({ period: begin }: { period: Period }) {
             </p>
           </AiosSectie>
 
-          <AiosSectie sleutel="diensten" titel="Diensten (toelichting)" hint="codes, tijden en punten">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-neutral-600">
-                  <th className="py-1 font-medium">Code</th>
-                  <th className="py-1 font-medium">Dienst</th>
-                  <th className="py-1 font-medium">Tijd</th>
-                  <th className="py-1 font-medium text-right">Punten</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {overzicht.dienst_types.map((t) => (
-                  <tr key={t.code}>
-                    <td className="py-1 font-medium">{t.code}</td>
-                    <td className="py-1">{t.naam}</td>
-                    <td className="py-1 whitespace-nowrap">
-                      {t.start_tijd}-{t.eind_tijd}
-                    </td>
-                    <td className="py-1 text-right">{getal(t.punten)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="text-sm text-neutral-700">
-              Avonden en nachten gaan in blokken van zondag tot en met dinsdag en van woensdag tot en met vrijdag. De
-              zaterdag is een losse dienst. Een blok staat hieronder als één vak met een dikke rand: één AIOS doet
-              het hele blok. Een feestdag (★) heeft de diensten van een weekenddag.
-            </p>
-          </AiosSectie>
-
-          <AiosSectie sleutel="per-week" titel="Per week" hint={`${weken.length} weken`}>
-            {weken.map((week) => (
-              <WeekTabel key={week[0].datum} dagen={week} />
-            ))}
-            {feestdagen.length > 0 && (
-              <div className="text-sm text-neutral-700">
-                <p className="font-medium">Feestdagen in dit kwartaal</p>
-                <ul className="list-disc pl-5">
-                  {feestdagen.map((d) => (
-                    <li key={d.datum}>
-                      {d.feestdag_naam} ({datumKort(d.datum)})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </AiosSectie>
+          <AiosDienstrooster
+            periodId={period.id}
+            status={period.status}
+            overzicht={overzicht}
+            versie={roosterVersie + toetsVersie}
+            onHandmatig={() => {
+              setHandmatigVersie((v) => v + 1);
+              herlaad();
+            }}
+          />
         </>
       )}
     </div>
