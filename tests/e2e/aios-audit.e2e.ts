@@ -351,6 +351,8 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
       await avond.nth(i).click();
       const dialoog = page.getByTestId('aios-wijzigen');
       await expect(dialoog.getByRole('heading', { name: 'Wie doet dit?' })).toBeVisible();
+      // The candidates load after the heading is there: wait for the list before looking for a text in it.
+      await expect(dialoog.getByRole('button', { name: /^Kies / }).first()).toBeVisible();
       const toelichting = dialoog.getByTestId('aios-toelichting');
       if (await toelichting.count()) {
         gezien++;
