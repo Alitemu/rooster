@@ -179,8 +179,15 @@ describe('before publishing', () => {
   it('no workbook before there is a roster', async () => {
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN' WHERE id = ?`).run(w.period);
     try {
-      expect((await downloadRooster(req(`${w.period}/download-rooster`), ctx(w.period))).status).toBe(409);
-      expect((await downloadPerAios(req(`${w.period}/download-per-aios`), ctx(w.period))).status).toBe(409);
+      for (const [route, pad] of [
+        [downloadRooster, 'download-rooster'],
+        [downloadPerAios, 'download-per-aios'],
+      ] as const) {
+        const res = await route(req(`${w.period}/${pad}`), ctx(w.period));
+        expect(res.status).toBe(409);
+        // Not "nog niet definitief": there is no roster to be definitief.
+        expect((await res.json()).error.code).toBe('INVALID_STATUS');
+      }
       const r = await doe(publiceren, 'publiceren', { bevestigd: true });
       expect(r.status).toBe(409);
       expect(r.json.error.message).toMatch(/^Publiceren kan als het rooster gemaakt is/);

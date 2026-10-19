@@ -1336,7 +1336,7 @@ const MUTATIONS = [
   {
     name: "aios roster: the solver told everyone is fulltime",
     file: "lib/aiosSolverInvoer.ts",
-    find: "      fte: aiosFte(eigenPatronen, van, tot),",
+    find: "      fte: vast.get(p.id) ?? aiosFte(eigenPatronen, van, tot),",
     replace: "      fte: 1,",
     tests: ["app/api/aios/aiosGenereren"],
   },
@@ -2512,8 +2512,8 @@ const MUTATIONS = [
   {
     name: "deelnamefactor: the solver takes the stored column",
     file: "lib/rosterBands.ts",
-    find: "      deelnamefactor: afgeleideDeelnamefactor(\n        patronen.get(r.id) ?? [],",
-    replace: "      deelnamefactor: r.deelnamefactor + 0 * afgeleideDeelnamefactor(\n        patronen.get(r.id) ?? [],",
+    find: "deelnamefactor: vast.get(r.id) ?? afgeleideDeelnamefactor(",
+    replace: "deelnamefactor: r.deelnamefactor + 0 * afgeleideDeelnamefactor(",
     tests: ["lib/deelnamefactor", "lib/publicationCheck"],
   },
   {
