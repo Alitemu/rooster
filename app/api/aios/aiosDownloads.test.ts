@@ -122,9 +122,20 @@ describe('Voorkeuren per dienst', () => {
     expect(kop.slice(0, 7)).toEqual(['Datum', 'Dag', 'Week', 'Dienst', 'Tijd', 'Blok', 'Feestdag']);
     expect(kop.slice(7)).toEqual([codenaam('x'), codenaam('y'), codenaam('z')]);
     const aantal = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_shift_slot WHERE period_id = ?').get(w.period) as { n: number }).n;
-    expect(diensten).toHaveLength(aantal);
+    // The five requests come first (the file is the back-up), then the diensten.
+    expect(diensten.slice(0, 5).map((r) => r[3])).toEqual([
+      'Verzoek: 4 avonden (wo t/m za)',
+      'Verzoek: 4 nachten (wo t/m za)',
+      'Verzoek: twee dagdiensten (za en zo)',
+      'Verzoek: inwerken',
+      'Verzoek: onderbreking van de opleiding',
+    ]);
+    const x = kop.indexOf(codenaam('x'));
+    expect(diensten[1][x]).toBe('ja');
+    expect(diensten[3][x]).toMatch(/^\d{2}-\d{2}-2097 t\/m 30-04-2097$/);
+    expect(diensten.slice(5)).toHaveLength(aantal);
     // The date is a real date, in order from the quarter's first day.
-    expect(excelSerialToDate(Number(diensten[0][0]))).toBe(aiosQuarter(2097, 2).start_datum);
+    expect(excelSerialToDate(Number(diensten[5][0]))).toBe(aiosQuarter(2097, 2).start_datum);
   });
 
   it("puts a block's mark on each of its diensten, and says why when leave set it", async () => {

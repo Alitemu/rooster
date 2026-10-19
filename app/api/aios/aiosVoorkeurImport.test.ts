@@ -5,7 +5,7 @@ import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosQuarter } from '@/lib/aiosQuarter';
 import { syncAiosPeriode } from '@/lib/aiosSync';
-import { setAiosVoorkeur, loadAiosPeriode } from '@/lib/aiosPreferences';
+import { setAiosVoorkeur, loadAiosPeriode, loadAiosWens, saveAiosWens } from '@/lib/aiosPreferences';
 import { saveAiosReden, loadAiosRedenen } from '@/lib/aiosReden';
 import { readFirstSheet } from '@/lib/xlsx';
 import { excelSerialToDate } from '@/lib/isoDate';
@@ -363,3 +363,80 @@ describe('what the import used to pass over in silence', () => {
   });
 });
 
+
+describe('the requests of the AIOS at the top of the overview', () => {
+  const nl = (iso: string) => `${iso.slice(8)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
+  // A cell past the end of a row is not in it (the reader leaves out the empty ones at the end): filled before it is set.
+  const verzoekRij = (rows: string[][], label: string) => {
+    const rij = rows.find((r) => r[3] === label)!;
+    for (let i = 0; i < rows[0].length; i++) rij[i] ??= '';
+    return rij;
+  };
+
+  it('are in the file, one row each, and such a file reads back unchanged', async () => {
+    const periode = loadAiosPeriode(w.period)!;
+    expect(saveAiosWens(w.x, periode, { vier_nachten: true, inwerken_van: q.start_datum, inwerken_tot: '2097-04-30' })).toEqual({ ok: true });
+    const rows = await gelezen();
+    expect(rows.slice(1, 6).map((r) => r[3])).toEqual([
+      'Verzoek: 4 avonden (wo t/m za)',
+      'Verzoek: 4 nachten (wo t/m za)',
+      'Verzoek: twee dagdiensten (za en zo)',
+      'Verzoek: inwerken',
+      'Verzoek: onderbreking van de opleiding',
+    ]);
+    expect(verzoekRij(rows, 'Verzoek: 4 nachten (wo t/m za)')[kolom(rows, 'x')]).toBe('ja');
+    expect(verzoekRij(rows, 'Verzoek: 4 avonden (wo t/m za)')[kolom(rows, 'x')]).toBe('');
+    expect(verzoekRij(rows, 'Verzoek: inwerken')[kolom(rows, 'x')]).toBe(`${nl(q.start_datum)} t/m 30-04-2097`);
+    const echt = await importeer(rows, true);
+    expect(echt.json.data).toMatchObject({ wijzigingen: [], problemen: [], toegepast: true });
+  });
+
+  it('a changed cell sets the request, an emptied one takes it away; checking says what applying does', async () => {
+    const rows = kopieer(await gelezen());
+    verzoekRij(rows, 'Verzoek: 4 avonden (wo t/m za)')[kolom(rows, 'y')] = 'Ja';
+    verzoekRij(rows, 'Verzoek: 4 nachten (wo t/m za)')[kolom(rows, 'x')] = '';
+    verzoekRij(rows, 'Verzoek: inwerken')[kolom(rows, 'x')] = `${nl(q.start_datum)} t/m 15-04-2097`;
+    verzoekRij(rows, 'Verzoek: onderbreking van de opleiding')[kolom(rows, 'z')] = '10-05-2097 t/m 20-05-2097';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen).toEqual([]);
+    expect(loadAiosWens(w.y, w.period).vier_avonden).toBe(false);
+    const echt = await importeer(rows, true);
+    expect(echt.json.data.wijzigingen).toEqual(check.json.data.wijzigingen);
+    expect(echt.json.data.wijzigingen).toEqual(
+      expect.arrayContaining([
+        { codenaam: cn('y'), datum: '', dienst: 'verzoek: 4 avonden (wo t/m za)', van: 'leeg', naar: 'ja' },
+        { codenaam: cn('x'), datum: '', dienst: 'verzoek: 4 nachten (wo t/m za)', van: 'ja', naar: 'leeg' },
+        { codenaam: cn('x'), datum: '', dienst: 'verzoek: inwerken', van: `${nl(q.start_datum)} t/m 30-04-2097`, naar: `${nl(q.start_datum)} t/m 15-04-2097` },
+        { codenaam: cn('z'), datum: '', dienst: 'verzoek: onderbreking van de opleiding', van: 'leeg', naar: '10-05-2097 t/m 20-05-2097' },
+      ])
+    );
+    expect(loadAiosWens(w.y, w.period).vier_avonden).toBe(true);
+    expect(loadAiosWens(w.x, w.period)).toMatchObject({ vier_nachten: false, inwerken_van: q.start_datum, inwerken_tot: '2097-04-15' });
+    expect(loadAiosWens(w.z, w.period)).toMatchObject({ onderbreking_van: '2097-05-10', onderbreking_tot: '2097-05-20' });
+  });
+
+  it('a file without those rows (from before) touches no request', async () => {
+    const voor = [w.x, w.y, w.z].map((id) => loadAiosWens(id, w.period));
+    const rows = kopieer(await gelezen()).filter((r) => !String(r[3]).startsWith('Verzoek:'));
+    const echt = await importeer(rows, true);
+    expect(echt.json.data).toMatchObject({ wijzigingen: [], problemen: [] });
+    expect([w.x, w.y, w.z].map((id) => loadAiosWens(id, w.period))).toEqual(voor);
+  });
+
+  it('a cell that is not ja, a period that cannot be read, one outside the quarter or an unknown request is a problem', async () => {
+    const rows = kopieer(await gelezen());
+    verzoekRij(rows, 'Verzoek: 4 nachten (wo t/m za)')[kolom(rows, 'y')] = 'misschien';
+    verzoekRij(rows, 'Verzoek: inwerken')[kolom(rows, 'z')] = 'in mei';
+    verzoekRij(rows, 'Verzoek: onderbreking van de opleiding')[kolom(rows, 'y')] = `01-01-2097 t/m 30-04-2097`;
+    const onbekend = [...verzoekRij(rows, 'Verzoek: inwerken')];
+    onbekend[3] = 'Verzoek: iets anders';
+    rows.splice(2, 0, onbekend);
+    const check = await importeer(rows, false);
+    const problemen: string[] = check.json.data.problemen;
+    expect(problemen.some((p) => p.includes('"misschien" is geen ja'))).toBe(true);
+    expect(problemen.some((p) => p.includes('"in mei" is geen periode'))).toBe(true);
+    expect(problemen.some((p) => p.includes('binnen het kwartaal'))).toBe(true);
+    expect(problemen.some((p) => p.includes('"Verzoek: iets anders" is geen verzoek dat bekend is'))).toBe(true);
+    expect((await importeer(rows, true)).status).toBe(400);
+  });
+});

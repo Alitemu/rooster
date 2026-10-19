@@ -64,6 +64,35 @@ const MUTATIONS = [
     replace: 'if (false) {',
     tests: ['app/api/auth/verifyLinkVerwijderd'],
   },
+  // 0.98.0: the AIOS's requests in the voorkeurenoverzicht, read back by the import.
+  {
+    name: 'voorkeurenoverzicht: the requests are left out of the rows at the top',
+    file: 'lib/aiosDownloads.ts',
+    find: "return w[rij.veld] ? 'ja' : null;",
+    replace: 'return null;',
+    tests: ['app/api/aios/aiosDownloads'],
+  },
+  {
+    name: 'import: a cell of a request that is not ja is taken for ja',
+    file: 'lib/aiosVoorkeurImport.ts',
+    find: "if (ruw !== '' && ruw.toLowerCase() !== 'ja') {",
+    replace: 'if (false) {',
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
+  {
+    name: 'import: an empty cell of a request leaves the request on',
+    file: 'lib/aiosVoorkeurImport.ts',
+    find: "verzoeken.push({ personId: id, codenaam, regel, veld: rijInfo.veld, waarde: ruw !== '' });",
+    replace: 'verzoeken.push({ personId: id, codenaam, regel, veld: rijInfo.veld, waarde: true });',
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
+  {
+    name: 'import: the day and the month of a period swapped',
+    file: 'lib/aiosVoorkeurImport.ts',
+    find: "van: `${periode[3]}-${periode[2]}-${periode[1]}`",
+    replace: "van: `${periode[3]}-${periode[1]}-${periode[2]}`",
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
   {
     name: 'rate limit: an attempt past the limit still goes through',
     file: 'lib/rateLimit.ts',

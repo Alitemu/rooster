@@ -447,8 +447,10 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   wordt liever niet) staat in een eigen kader, bij de diensten en bij de
   afwezigheid (0.73.0).
 - De planner en de beheerder downloaden twee overzichten (0.73.0):
-  voorkeuren per dienst (een rij per dienst, een kolom per AIOS) en
-  verzoeken per AIOS (4 avonden, 4 nachten, twee dagdiensten, inwerken,
+  voorkeuren per dienst (een rij per dienst, een kolom per AIOS, sinds 0.98.0
+  met bovenaan vijf regels "Verzoek: ..." met 4 avonden, 4 nachten, twee
+  dagdiensten, inwerken en onderbreking, want het bestand is ook de back-up en
+  de import leest ze terug) en verzoeken per AIOS (4 avonden, 4 nachten, twee dagdiensten, inwerken,
   onderbreking, parttimedagen, afwezigheid en de tellers).
 - Mail: één mailaccount voor beide roosters, hoogstens 100 tot 150 mails per dag
   als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de

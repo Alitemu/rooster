@@ -539,6 +539,13 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.98.0:**
+- *Voorkeurenoverzicht:* bovenaan het Excel-bestand staan vijf regels met wat de AIOS
+  verder vraagt: *4 avonden*, *4 nachten*, *twee dagdiensten*, *inwerken* en
+  *onderbreking van de opleiding*. Het bestand is ook de back-up, dus die
+  gegevens horen erin. De import van de beheerder leest die regels weer in. Een
+  bestand zonder die regels (van voor deze versie) laat de verzoeken zoals ze zijn.
+
 **Vanaf versie 0.97.0:**
 - *Verzoeken van de AIOS:* het tekstvak *Algemene verzoeken* is weg, want de
   solver deed er niets mee. De keuzes bovenaan (4 avonden, 4 nachten, twee

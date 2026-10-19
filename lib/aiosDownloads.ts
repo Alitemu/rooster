@@ -2,7 +2,8 @@
  * The AIOS planner's two downloads of a quarter's preferences, asked for in
  * October 2026 ("inclusief de voorkeuren wat betreft een blok van 4 dagen"):
  *
- * - Voorkeuren per dienst: one row per dienst (date, day, ISO week, the
+ * - Voorkeuren per dienst: first the requests (4 avonden, 4 nachten, twee
+ *   dagdiensten, inwerken, onderbreking: VERZOEK_RIJEN), then one row per dienst (date, day, ISO week, the
  *   dienst, its block, the feestdag), one column per AIOS with what they
  *   marked there in words, and why when it is not their own (parttime,
  *   afwezig). A block's mark stands on each of its diensten. A mark the
@@ -70,7 +71,24 @@ function blokTekst(d: AiosVoorkeurDienst): string | null {
 }
 
 /**
- * Voorkeuren per dienst: a row per dienst, a column per AIOS.
+ * What the AIOS asks besides their marks, as rows at the top of
+ * "Voorkeuren per dienst": the file is also the back-up, and the import
+ * (lib/aiosVoorkeurImport.ts) reads these rows back. "ja" or empty for a
+ * request, "dd-mm-jjjj t/m dd-mm-jjjj" for a period.
+ */
+export const VERZOEK_RIJEN = [
+  { label: 'Verzoek: 4 avonden (wo t/m za)', veld: 'vier_avonden', soort: 'ja' },
+  { label: 'Verzoek: 4 nachten (wo t/m za)', veld: 'vier_nachten', soort: 'ja' },
+  { label: 'Verzoek: twee dagdiensten (za en zo)', veld: 'twee_dagdiensten', soort: 'ja' },
+  { label: 'Verzoek: inwerken', veld: 'inwerken', soort: 'periode' },
+  { label: 'Verzoek: onderbreking van de opleiding', veld: 'onderbreking', soort: 'periode' },
+] as const;
+
+const nlDatum = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
+export const verzoekPeriode = (van: string | null, tot: string | null) => (van && tot ? `${nlDatum(van)} t/m ${nlDatum(tot)}` : null);
+
+/**
+ * Voorkeuren per dienst: the AIOS's requests, then a row per dienst, a column per AIOS.
  *
  * `metToelichting`: the beheerder's file, the back-up, which holds every
  * toelichting (after each mark of its day) and which the import reads back.
@@ -89,7 +107,21 @@ export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode, opties: { m
   });
   // The diensten themselves, read once with nobody's marks.
   const dagen = loadAiosVoorkeurDagen('', period.id);
-  const rows: XlsxCell[][] = [];
+  const wensen = deelnemers.map((p) => loadAiosWens(p.id, period.id));
+  const rows: XlsxCell[][] = VERZOEK_RIJEN.map((rij) => [
+    null,
+    null,
+    null,
+    rij.label,
+    null,
+    null,
+    null,
+    ...wensen.map((w) => {
+      if (rij.veld === 'inwerken') return verzoekPeriode(w.inwerken_van, w.inwerken_tot);
+      if (rij.veld === 'onderbreking') return verzoekPeriode(w.onderbreking_van, w.onderbreking_tot);
+      return w[rij.veld] ? 'ja' : null;
+    }),
+  ]);
   for (const dag of dagen) {
     for (const d of dag.diensten) {
       rows.push([

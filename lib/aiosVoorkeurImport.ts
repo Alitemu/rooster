@@ -13,6 +13,11 @@
  *   away. A cell the export wrote with a reason, "(parttime)" or
  *   "(afwezig)", comes from a part-time day or an absence, which keep it in
  *   step themselves: it is skipped, and an empty cell never clears one.
+ * - The rows at the top that start with "Verzoek:" are what the AIOS asks
+ *   besides their marks (lib/aiosDownloads.ts VERZOEK_RIJEN): "ja" or empty,
+ *   or a period "dd-mm-jjjj t/m dd-mm-jjjj". A row that is not in the file
+ *   leaves that request as it is; a file without any such row (one from
+ *   before 0.98.0) touches no request.
  * - After a geblokkeerd or liever niet comes the AIOS's own toelichting of
  *   that day, as the export writes it: "geblokkeerd: ziek kind"
  *   (lib/aiosReden.ts). A day has one: a different text on two diensten of
@@ -30,7 +35,8 @@ import { readFirstSheet, XlsxError } from '@/lib/xlsx';
 import { parseSheetDate } from '@/lib/isoDate';
 import { withoutFormulaGuard } from '@/lib/csv';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
-import { loadAiosPeriode, setAiosVoorkeur, type Niveau } from '@/lib/aiosPreferences';
+import { loadAiosPeriode, loadAiosWens, saveAiosWens, setAiosVoorkeur, type Niveau } from '@/lib/aiosPreferences';
+import { VERZOEK_RIJEN, verzoekPeriode } from '@/lib/aiosDownloads';
 import { loadAiosRedenen, saveAiosReden } from '@/lib/aiosReden';
 import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
@@ -81,7 +87,17 @@ interface Cel {
   tekst: string | null;
 }
 
+interface Verzoek {
+  personId: string;
+  codenaam: string;
+  regel: number;
+  veld: (typeof VERZOEK_RIJEN)[number]['veld'];
+  /** true/false for a request, the period (or none) for inwerken and onderbreking. */
+  waarde: boolean | { van: string; tot: string } | null;
+}
+
 interface Gelezen {
+  verzoeken: Verzoek[];
   cellen: Cel[];
   problemen: string[];
   overgeslagen: number;
@@ -102,6 +118,7 @@ function huidigeMarkeringen(periodId: string): Map<string, { level: Niveau | nul
 function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   const problemen: string[] = [];
   const cellen: Cel[] = [];
+  const verzoeken: Verzoek[] = [];
   let overgeslagen = 0;
 
   const kop = rows[0] ?? [];
@@ -110,6 +127,7 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   const dienstKol = klein.indexOf('dienst');
   if (datumKol === -1 || dienstKol === -1) {
     return {
+      verzoeken,
       cellen,
       problemen: ['De kolommen Datum en Dienst ontbreken. Gebruik het bestand van "Voorkeurenoverzicht downloaden".'],
       overgeslagen,
@@ -165,8 +183,43 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   for (let r = 1; r < rows.length; r++) {
     const rij = rows[r];
     const regel = r + 1;
-    const datum = parseSheetDate(rij[datumKol] ?? '');
     const dienstWoord = rij[dienstKol] ?? '';
+    if (dienstWoord.trim().toLowerCase().startsWith('verzoek:')) {
+      const rijInfo = VERZOEK_RIJEN.find((v) => v.label.toLowerCase() === dienstWoord.trim().toLowerCase());
+      if (!rijInfo) {
+        problemen.push(`Regel ${regel}: "${dienstWoord}" is geen verzoek dat bekend is.`);
+        continue;
+      }
+      for (const { kol, id, codenaam } of kolommen) {
+        const ruw = (rij[kol] ?? '').trim();
+        if (rijInfo.soort === 'ja') {
+          if (ruw !== '' && ruw.toLowerCase() !== 'ja') {
+            problemen.push(`Regel ${regel}, ${codenaam}: "${ruw}" is geen ja. Laat de cel leeg als de AIOS dit niet vraagt.`);
+            continue;
+          }
+          verzoeken.push({ personId: id, codenaam, regel, veld: rijInfo.veld, waarde: ruw !== '' });
+          continue;
+        }
+        if (ruw === '') {
+          verzoeken.push({ personId: id, codenaam, regel, veld: rijInfo.veld, waarde: null });
+          continue;
+        }
+        const periode = /^(\d{2})-(\d{2})-(\d{4}) t\/m (\d{2})-(\d{2})-(\d{4})$/.exec(ruw);
+        if (!periode) {
+          problemen.push(`Regel ${regel}, ${codenaam}: "${ruw}" is geen periode. Schrijf dd-mm-jjjj t/m dd-mm-jjjj.`);
+          continue;
+        }
+        verzoeken.push({
+          personId: id,
+          codenaam,
+          regel,
+          veld: rijInfo.veld,
+          waarde: { van: `${periode[3]}-${periode[2]}-${periode[1]}`, tot: `${periode[6]}-${periode[5]}-${periode[4]}` },
+        });
+      }
+      continue;
+    }
+    const datum = parseSheetDate(rij[datumKol] ?? '');
     const code = dienstWoord.split(' ')[0]?.toUpperCase() ?? '';
     if (!datum || !code) {
       problemen.push(`Regel ${regel}: datum "${rij[datumKol] ?? ''}" of dienst "${dienstWoord}" is niet te lezen.`);
@@ -221,7 +274,7 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
       cellen.push({ personId: id, codenaam, slotId, datum, dienst: dienstWoord, regel, doel: niveau, tekst: tekst || null });
     }
   }
-  return { cellen, problemen, overgeslagen };
+  return { verzoeken, cellen, problemen, overgeslagen };
 }
 
 /** Thrown to roll a transaction back after it was run to see what it does. */
@@ -340,6 +393,45 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
       }
       aangeraakt.add(cel.personId);
       wijzigingen.push({ codenaam: cel.codenaam, datum: cel.datum, dienst: 'toelichting', van: eerder ?? 'leeg', naar: nieuw ?? 'leeg' });
+    }
+
+    // Last the requests, per AIOS all at once as the AIOS's own screen saves them.
+    const perPersoon = new Map<string, Verzoek[]>();
+    for (const v of gelezen.verzoeken) perPersoon.set(v.personId, [...(perPersoon.get(v.personId) ?? []), v]);
+    for (const [personId, lijst] of perPersoon) {
+      const nu = loadAiosWens(personId, period.id);
+      const wordt = { ...nu };
+      for (const v of lijst) {
+        if (v.veld === 'inwerken' || v.veld === 'onderbreking') {
+          const periode = v.waarde && typeof v.waarde === 'object' ? v.waarde : null;
+          wordt[`${v.veld}_van`] = periode?.van ?? null;
+          wordt[`${v.veld}_tot`] = periode?.tot ?? null;
+        } else {
+          wordt[v.veld] = v.waarde === true;
+        }
+      }
+      const verschillen = VERZOEK_RIJEN.filter((rij) => {
+        if (rij.veld === 'inwerken' || rij.veld === 'onderbreking') {
+          return nu[`${rij.veld}_van`] !== wordt[`${rij.veld}_van`] || nu[`${rij.veld}_tot`] !== wordt[`${rij.veld}_tot`];
+        }
+        return nu[rij.veld] !== wordt[rij.veld];
+      });
+      if (verschillen.length === 0) continue;
+      const uitkomst = saveAiosWens(personId, aiosPeriode, wordt);
+      if (!uitkomst.ok) {
+        problemen.push(`Regel ${lijst[0].regel}, ${lijst[0].codenaam}: ${uitkomst.message}`);
+        continue;
+      }
+      aangeraakt.add(personId);
+      for (const rij of verschillen) {
+        const tekst = (w: typeof nu) =>
+          rij.veld === 'inwerken' || rij.veld === 'onderbreking'
+            ? (verzoekPeriode(w[`${rij.veld}_van`], w[`${rij.veld}_tot`]) ?? 'leeg')
+            : w[rij.veld]
+              ? 'ja'
+              : 'leeg';
+        wijzigingen.push({ codenaam: lijst[0].codenaam, datum: '', dienst: rij.label.toLowerCase(), van: tekst(nu), naar: tekst(wordt) });
+      }
     }
     if (terug) throw new TerugDraaien();
   };
