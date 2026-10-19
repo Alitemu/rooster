@@ -159,6 +159,21 @@ const MUTATIONS = [
     replace: "AND ae.aangemaakt_op >= '' OR 0 AND COALESCE(",
     tests: ['app/api/aios/aiosHandmatig'],
   },
+  // 0.101.0: a roster changed by hand is the current roster in every mail and download.
+  {
+    name: 'aios mail: the mail leaves out what was given by hand',
+    file: 'lib/aiosPublicatie.ts',
+    find: "       WHERE a.schedule_version_id = ?\n       ORDER BY s.datum, st.start_tijd, a.person_id`",
+    replace: "       WHERE a.schedule_version_id = ? AND a.bron = 'SOLVER'\n       ORDER BY s.datum, st.start_tijd, a.person_id`",
+    tests: ['app/api/aios/aiosHandmatigRooster'],
+  },
+  {
+    name: 'aios mail: the definitief mail lists the voorlopig roster, not the current one',
+    file: 'lib/aiosPublicatie.ts',
+    find: '  const rooster = aiosMomentopname(period.id);\n  const percentage',
+    replace: '  const rooster = (soort === \'ROOSTER_DEFINITIEF\' && leesMomentopname(stand(period.id).voorlopig_rooster_json)) || aiosMomentopname(period.id);\n  const percentage',
+    tests: ['app/api/aios/aiosHandmatigRooster'],
+  },
   {
     name: 'rate limit: an attempt past the limit still goes through',
     file: 'lib/rateLimit.ts',
