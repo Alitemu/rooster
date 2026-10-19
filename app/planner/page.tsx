@@ -13,6 +13,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
+import { MailSettingsDialog } from '@/components/MailSettingsDialog';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { dateToISO } from '@/lib/holidays';
@@ -150,6 +151,7 @@ export default function PlannerHomePage() {
   const [showTotpSettings, setShowTotpSettings] = useState(false);
   // Only an ADMIN sees "Accounts beheren" (the API checks it too).
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showMailSettings, setShowMailSettings] = useState(false);
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
@@ -385,6 +387,12 @@ export default function PlannerHomePage() {
             <Link href="/planner/accounts" className="btn-secondary">
               Accounts beheren
             </Link>
+          )}
+          {/* The Gmail account is the app's, not a period's: the beheerder reaches it here too (the planner's choice, 0.87.0 kept it on the period pages only). */}
+          {isAdmin && (
+            <button onClick={() => setShowMailSettings(true)} className="btn-secondary">
+              Mailinstellingen
+            </button>
           )}
           <button onClick={handleLogout} className="btn-secondary">
             Uitloggen
@@ -801,6 +809,7 @@ export default function PlannerHomePage() {
         isOpen={showTotpSettings}
         onClose={() => setShowTotpSettings(false)}
       />
+      <MailSettingsDialog isOpen={isAdmin && showMailSettings} onClose={() => setShowMailSettings(false)} />
     </div>
   );
 }

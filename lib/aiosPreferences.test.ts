@@ -300,7 +300,6 @@ describe('what an AIOS asks besides', () => {
       ok: false,
       message: expect.stringMatching(/binnen het kwartaal/),
     });
-    expect(saveAiosWens(f, period, { opmerking: 'x'.repeat(121) })).toMatchObject({ ok: false });
     expect(saveAiosWens(f, period, { vier_avonden: 'ja' })).toMatchObject({ ok: false });
 
     expect(
@@ -309,7 +308,6 @@ describe('what an AIOS asks besides', () => {
         twee_dagdiensten: true,
         inwerken_van: '2034-04-05',
         inwerken_tot: '2034-05-04',
-        opmerking: '  Liever geen nachten in juni  ',
       })
     ).toEqual({ ok: true });
     expect(loadAiosWens(f, ids.period)).toEqual({
@@ -320,8 +318,10 @@ describe('what an AIOS asks besides', () => {
       inwerken_tot: '2034-05-04',
       onderbreking_van: null,
       onderbreking_tot: null,
-      opmerking: 'Liever geen nachten in juni',
     });
+    // The free text for general requests is gone (0.97.0): an old client that still sends it changes nothing.
+    expect(saveAiosWens(f, period, { vier_avonden: true, opmerking: 'Liever geen nachten in juni' })).toEqual({ ok: true });
+    expect(loadAiosWens(f, ids.period)).not.toHaveProperty('opmerking');
   });
 });
 

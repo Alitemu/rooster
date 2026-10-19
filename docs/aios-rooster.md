@@ -209,7 +209,9 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   harde regel 4 voor wat ze betekenen; per weekdag één tegelijk, want twee
   patronen die een dag delen telden voor de fte dubbel, 0.85.0),
   "4 avonden", "4 nachten", "twee dagdiensten", "Inwerken", een onderbreking van
-  de opleiding en algemene verzoeken (vrije tekst, hoogstens 120 tekens).
+  de opleiding. Wat de AIOS hier kiest, wordt meteen opgeslagen. Een tekstvak
+  voor algemene verzoeken is er sinds 0.97.0 niet meer: de solver deed er niets
+  mee en het gaf de indruk dat het gelezen werd.
 - De reden bij een dag (0.91.0, de keuze van de planner in oktober 2026): bij
   elke dag die een AIOS zelf op geblokkeerd of liever niet zet, kan de AIOS
   een toelichting geven, niet verplicht en hoogstens 120 tekens. Dat staat
@@ -447,7 +449,7 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
 - De planner en de beheerder downloaden twee overzichten (0.73.0):
   voorkeuren per dienst (een rij per dienst, een kolom per AIOS) en
   verzoeken per AIOS (4 avonden, 4 nachten, twee dagdiensten, inwerken,
-  onderbreking, opmerking, parttimedagen, afwezigheid en de tellers).
+  onderbreking, parttimedagen, afwezigheid en de tellers).
 - Mail: één mailaccount voor beide roosters, hoogstens 100 tot 150 mails per dag
   als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de
   keuze van de planner in oktober 2026): de verzendlijst van de AIOS gaat naar

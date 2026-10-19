@@ -539,6 +539,20 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.97.0:**
+- *Verzoeken van de AIOS:* het tekstvak *Algemene verzoeken* is weg, want de
+  solver deed er niets mee. De keuzes bovenaan (4 avonden, 4 nachten, twee
+  dagdiensten, inwerken en een onderbreking van de opleiding) worden nu
+  meteen opgeslagen, net als de voorkeuren in de kalender. De knop *Verzoeken
+  opslaan* bestaat niet meer. De kolom *Opmerking* is ook uit het Excel-bestand
+  *Verzoeken per AIOS*. Wat AIOS eerder in dat veld schreven, wordt nergens
+  meer getoond.
+- *Kalender van de AIOS:* tussen de dagen staat een verticale lijn en rond
+  een weekend een dubbele lijn.
+- *Mailinstellingen:* de beheerder opent ze ook op het overzicht van de
+  periodes, naast *Accounts beheren*. Daar hoef je geen periode voor te
+  openen.
+
 **Vanaf versie 0.96.0:**
 - *Verwijderde periode:* een persoonlijke link naar een periode in de prullenbak
   toont de melding dat de periode is verwijderd, met een verwijzing naar de

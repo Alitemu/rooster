@@ -30,7 +30,7 @@ import {
  *   else; a block's mark on each of its diensten, in words, with why when
  *   leave set it; the block and the feestdag named; the date a real date.
  * - Verzoeken per AIOS: a row per AIOS with what they asked (4 nachten,
- *   inwerken, the opmerking), their absences in words, the counters and,
+ *   inwerken), their absences in words, the counters and,
  *   above half, how many may still be rostered.
  * - Only the AIOS's planner and the beheerder: the achterwacht's planner
  *   and a participant get nothing, and an achterwacht period answers 404.
@@ -107,7 +107,6 @@ beforeAll(() => {
       vier_nachten: true,
       inwerken_van: q.start_datum,
       inwerken_tot: '2097-04-30',
-      opmerking: 'Graag niet twee blokken achter elkaar',
     })
   ).toEqual({ ok: true });
 });
@@ -160,7 +159,7 @@ describe('Verzoeken per AIOS', () => {
     expect(cel(x, '4 nachten (wo t/m za)')).toBe('ja');
     expect(cel(x, '4 avonden (wo t/m za)')).toBe('');
     expect(cel(x, 'Inwerken')).toMatch(/^\d+ \w+\.? 2097 t\/m 30 apr\.? 2097$/);
-    expect(cel(x, 'Opmerking')).toBe('Graag niet twee blokken achter elkaar');
+    expect(kop).not.toContain('Opmerking');
     expect(cel(x, 'Geblokkeerd (vakken)')).toBe('1');
     expect(cel(x, 'Geblokkeerd: nachtblokken')).toMatch(/^1 van de \d+$/);
     expect(cel(x, 'Boven de helft: nachtblokken')).toBe('');

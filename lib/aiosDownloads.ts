@@ -11,7 +11,7 @@
  *   alone (lib/aiosReden.ts).
  * - Verzoeken per AIOS: one row per AIOS, with where their hand-in stands,
  *   what they asked besides (4 avonden, 4 nachten, twee dagdiensten,
- *   inwerken, onderbreking, opmerking), their part-time days and absences
+ *   inwerken, onderbreking), their part-time days and absences
  *   in the quarter, how much they marked and the 50% counters with the part
  *   above half (lib/aiosVoorkeur.ts).
  *
@@ -166,7 +166,6 @@ export function aiosVerzoekenPerAios(period: AiosUitnodigPeriode): XlsxSheet {
       ja(wens.twee_dagdiensten),
       periode(wens.inwerken_van, wens.inwerken_tot),
       periode(wens.onderbreking_van, wens.onderbreking_tot),
-      wens.opmerking,
       patronen.map((pt) => `${WEEKDAG[pt.weekdag] ?? pt.weekdag} (${FREQUENTIE[pt.frequentie] ?? pt.frequentie})`).join(', ') || null,
       afwezigheid.map((a) => `${AFWEZIG[a.soort] ?? a.soort} ${kort(a.van_datum)} t/m ${kort(a.tot_datum)}`).join(', ') || null,
       marks.ABSOLUUT,
@@ -191,7 +190,6 @@ export function aiosVerzoekenPerAios(period: AiosUitnodigPeriode): XlsxSheet {
       { header: 'Twee dagdiensten (za en zo)' },
       { header: 'Inwerken' },
       { header: 'Onderbreking van de opleiding' },
-      { header: 'Opmerking' },
       { header: 'Parttimedagen' },
       { header: 'Afwezigheid' },
       { header: 'Geblokkeerd (vakken)' },

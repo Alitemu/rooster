@@ -17,14 +17,13 @@
  * so it reads without colour and in print.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
 import {
   blokkadeTellers,
   bovenHelftUitleg,
-  OPMERKING_MAX_LENGTH,
   REDEN_MAX_LENGTH,
   telMarkeringen,
   TELLER_LABELS,
@@ -162,6 +161,21 @@ function VakKnop({
   );
 }
 
+const isWeekend = (datum: string) => {
+  const dag = new Date(`${datum}T00:00:00Z`).getUTCDay();
+  return dag === 0 || dag === 6;
+};
+
+/**
+ * The line left of the day on place i: one line between days, a double line
+ * where a weekend begins and ends, so the weekend stands apart from the
+ * workdays also in black and white.
+ */
+function lijnLinks(dagen: AiosVoorkeurDag[], i: number): string {
+  const rand = i > 0 && isWeekend(dagen[i].datum) !== isWeekend(dagen[i - 1].datum);
+  return rand ? 'border-l-[3px] border-double border-neutral-500' : 'border-l border-neutral-300';
+}
+
 function Week({
   dagen,
   bezig,
@@ -190,7 +204,7 @@ function Week({
                 key={d.datum}
                 scope="col"
                 title={d.feestdag_naam ?? undefined}
-                className={`p-0.5 text-center text-[11px] font-medium leading-tight ${
+                className={`p-0.5 text-center text-[11px] font-medium leading-tight ${lijnLinks(dagen, i)} ${
                   d.dag_soort === 'WERKDAG' ? 'text-neutral-600' : 'bg-neutral-100 text-neutral-900'
                 }`}
               >
@@ -208,12 +222,12 @@ function Week({
             for (let i = 0; i < dagen.length; i++) {
               const dienst = rij.vind(dagen[i]);
               if (!dienst) {
-                cellen.push(<td key={i} className="p-0.5" />);
+                cellen.push(<td key={i} className={`p-0.5 ${lijnLinks(dagen, i)}`} />);
                 continue;
               }
               if (!dienst.blok || dienst.blok.vorm === 'ZA' || dienst.blok.vorm === 'LOS') {
                 cellen.push(
-                  <td key={i} className="p-0.5">
+                  <td key={i} className={`p-0.5 ${lijnLinks(dagen, i)}`}>
                     <VakKnop
                       vak={{ diensten: [dienst], feestdag: dagen[i].dag_soort === 'FEESTDAG' }}
                       blok={null}
@@ -239,7 +253,7 @@ function Week({
                 j++;
               }
               cellen.push(
-                <td key={i} colSpan={j - i} className="p-0.5">
+                <td key={i} colSpan={j - i} className={`p-0.5 ${lijnLinks(dagen, i)}`}>
                   <VakKnop
                     vak={{ diensten: leden, feestdag }}
                     blok={`blok ${datumKort(blok.start_datum)} t/m ${datumKort(blok.eind_datum)}`}
@@ -381,63 +395,70 @@ function Tellers({ tellers }: { tellers: BlokkadeTeller[] }) {
   );
 }
 
+/** Runs what it is given one after the other, so of two quick choices the last one is what stays saved. */
+function useNaElkaar(): (taak: () => Promise<void>) => void {
+  const keten = useRef<Promise<void>>(Promise.resolve());
+  return useCallback((taak) => {
+    keten.current = keten.current.then(taak);
+  }, []);
+}
+
 function Verzoeken({
   personId,
   scherm,
   readOnly,
   onOpgeslagen,
-  onGewijzigd,
 }: {
   personId: string;
   scherm: Scherm;
   readOnly: boolean;
   onOpgeslagen: () => void;
-  onGewijzigd: (gewijzigd: boolean) => void;
 }) {
   const [wens, setWens] = useState<AiosWens>(scherm.wens);
   const [inwerken, setInwerken] = useState(Boolean(scherm.wens.inwerken_van));
   const [onderbreking, setOnderbreking] = useState(Boolean(scherm.wens.onderbreking_van));
-  const [bezig, setBezig] = useState(false);
+  const [lopend, setLopend] = useState(0);
+  const [opgeslagen, setOpgeslagen] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [melding, setMelding] = useState<string | null>(null);
-  const [gewijzigd, setGewijzigdState] = useState(false);
+  const naElkaar = useNaElkaar();
   const { start_datum: min, eind_datum: max } = scherm.period;
 
-  const setGewijzigd = (g: boolean) => {
-    setGewijzigdState(g);
-    onGewijzigd(g);
-  };
-  const wijzig = (deel: Partial<AiosWens>) => {
-    setWens((w) => ({ ...w, ...deel }));
-    setMelding(null);
-    setGewijzigd(true);
-  };
+  const bereik = (aan: boolean, van: string | null, tot: string | null) => (aan && van && tot ? { van, tot } : { van: null, tot: null });
 
-  const opslaan = async () => {
-    setBezig(true);
+  // Saved at once with every change, like the marks in the calendar: a request nobody saved never reaches the roster.
+  const wijzig = (deel: Partial<AiosWens>, inw = inwerken, onder = onderbreking) => {
+    const volgende = { ...wens, ...deel };
+    setWens(volgende);
+    setOpgeslagen(false);
     setFout(null);
-    setMelding(null);
-    try {
-      const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${scherm.period.id}/wens`), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...wens,
-          inwerken_van: inwerken ? wens.inwerken_van : null,
-          inwerken_tot: inwerken ? wens.inwerken_tot : null,
-          onderbreking_van: onderbreking ? wens.onderbreking_van : null,
-          onderbreking_tot: onderbreking ? wens.onderbreking_tot : null,
-        }),
-      });
-      await json(res, 'Opslaan van je verzoeken is mislukt.');
-      setGewijzigd(false);
-      setMelding('Je verzoeken zijn opgeslagen.');
-      onOpgeslagen();
-    } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Opslaan van je verzoeken is mislukt.');
-    } finally {
-      setBezig(false);
-    }
+    const i = bereik(inw, volgende.inwerken_van, volgende.inwerken_tot);
+    const o = bereik(onder, volgende.onderbreking_van, volgende.onderbreking_tot);
+    const body = JSON.stringify({
+      vier_avonden: volgende.vier_avonden,
+      vier_nachten: volgende.vier_nachten,
+      twee_dagdiensten: volgende.twee_dagdiensten,
+      inwerken_van: i.van,
+      inwerken_tot: i.tot,
+      onderbreking_van: o.van,
+      onderbreking_tot: o.tot,
+    });
+    setLopend((n) => n + 1);
+    naElkaar(async () => {
+      try {
+        const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${scherm.period.id}/wens`), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body,
+        });
+        await json(res, 'Opslaan van je verzoeken is mislukt.');
+        setOpgeslagen(true);
+        onOpgeslagen();
+      } catch (err) {
+        setFout(`Niet opgeslagen. ${err instanceof Error ? err.message : 'Opslaan van je verzoeken is mislukt.'}`);
+      } finally {
+        setLopend((n) => n - 1);
+      }
+    });
   };
 
   const vinkje = (id: string, checked: boolean, onChange: (v: boolean) => void, titel: string, uitleg: string) => (
@@ -458,27 +479,32 @@ function Verzoeken({
   );
 
   const data = (soort: 'inwerken' | 'onderbreking') => (
-    <div className="ml-8 grid grid-cols-2 gap-3">
-      {(['van', 'tot'] as const).map((deel) => {
-        const key = `${soort}_${deel}` as const;
-        return (
-          <div key={deel}>
-            <label htmlFor={`aios-${key}`} className="block text-xs font-medium text-neutral-600 mb-1">
-              {deel === 'van' ? 'Vanaf' : 'Tot en met'}
-            </label>
-            <input
-              id={`aios-${key}`}
-              type="date"
-              min={min}
-              max={max}
-              disabled={readOnly}
-              value={wens[key] ?? ''}
-              onChange={(e) => wijzig({ [key]: e.target.value || null })}
-              className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
-            />
-          </div>
-        );
-      })}
+    <div className="ml-8 space-y-1">
+      <div className="grid grid-cols-2 gap-3">
+        {(['van', 'tot'] as const).map((deel) => {
+          const key = `${soort}_${deel}` as const;
+          return (
+            <div key={deel}>
+              <label htmlFor={`aios-${key}`} className="block text-xs font-medium text-neutral-600 mb-1">
+                {deel === 'van' ? 'Vanaf' : 'Tot en met'}
+              </label>
+              <input
+                id={`aios-${key}`}
+                type="date"
+                min={min}
+                max={max}
+                disabled={readOnly}
+                value={wens[key] ?? ''}
+                onChange={(e) => wijzig({ [key]: e.target.value || null })}
+                className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
+              />
+            </div>
+          );
+        })}
+      </div>
+      {!readOnly && !(wens[`${soort}_van`] && wens[`${soort}_tot`]) && (
+        <p className="text-xs text-neutral-600">Kies een begin- en een einddatum. Daarna wordt het opgeslagen.</p>
+      )}
     </div>
   );
 
@@ -486,7 +512,7 @@ function Verzoeken({
     <div className="card p-4 sm:p-6 space-y-4">
       <div>
         <h2 className="font-bold text-lg">Je verzoeken voor dit kwartaal</h2>
-        <p className="text-sm text-neutral-600">Vink aan wat voor jou geldt. Vergeet niet op te slaan.</p>
+        <p className="text-sm text-neutral-600">Vink aan wat voor jou geldt. Wat je kiest, wordt meteen opgeslagen.</p>
       </div>
       {vinkje('aios-vier-avonden', wens.vier_avonden, (v) => wijzig({ vier_avonden: v }), '4 avonden', 'Ik doe graag een avondblok van woensdag tot en met zaterdag.')}
       {vinkje('aios-vier-nachten', wens.vier_nachten, (v) => wijzig({ vier_nachten: v }), '4 nachten', 'Ik doe graag een nachtblok van woensdag tot en met zaterdag.')}
@@ -502,7 +528,7 @@ function Verzoeken({
         inwerken,
         (v) => {
           setInwerken(v);
-          wijzig(v ? {} : { inwerken_van: null, inwerken_tot: null });
+          wijzig(v ? {} : { inwerken_van: null, inwerken_tot: null }, v);
         },
         'Inwerken',
         'Word je dit kwartaal ingewerkt? Dan krijg je in die tijd alleen uitloopdiensten en de dagdiensten op zaterdag en zondag, want dan is er hulp. Geen dagdienst op een feestdag door de week. Na de einddatum kun je voor alles worden ingepland.'
@@ -513,40 +539,21 @@ function Verzoeken({
         onderbreking,
         (v) => {
           setOnderbreking(v);
-          wijzig(v ? {} : { onderbreking_van: null, onderbreking_tot: null });
+          wijzig(v ? {} : { onderbreking_van: null, onderbreking_tot: null }, inwerken, v);
         },
         'Onderbreking van de opleiding',
         'Een wetenschappelijke periode of zwangerschapsverlof. In die tijd krijg je geen diensten en die dagen tellen niet mee voor je dienstpercentage.'
       )}
       {onderbreking && data('onderbreking')}
-      <div>
-        <label htmlFor="aios-opmerking" className="block text-sm font-medium text-neutral-900 mb-1">
-          Algemene verzoeken
-        </label>
-        <input
-          id="aios-opmerking"
-          type="text"
-          maxLength={OPMERKING_MAX_LENGTH}
-          disabled={readOnly}
-          value={wens.opmerking ?? ''}
-          onChange={(e) => wijzig({ opmerking: e.target.value })}
-          placeholder="Bijvoorbeeld: liever geen nachten in maart"
-          className="w-full px-3 py-2 border border-neutral-300 rounded text-sm"
-        />
-        <p className="text-xs text-neutral-500 mt-1">
-          {(wens.opmerking ?? '').length} van de {OPMERKING_MAX_LENGTH} tekens
-        </p>
-      </div>
       {fout && (
         <div role="alert" className="p-3 rounded bg-red-50 border border-red-200 text-sm text-red-800">
           {fout}
         </div>
       )}
-      {melding && <div className="p-3 rounded bg-green-50 border border-green-200 text-sm text-green-900">{melding}</div>}
-      {!readOnly && (
-        <button type="button" onClick={opslaan} disabled={bezig || !gewijzigd} className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto">
-          {bezig ? 'Opslaan...' : gewijzigd ? 'Verzoeken opslaan' : 'Opgeslagen'}
-        </button>
+      {!readOnly && !fout && (
+        <p className="text-sm text-neutral-600" aria-live="polite" data-testid="aios-verzoeken-status">
+          {lopend > 0 ? 'Opslaan...' : opgeslagen ? 'Je verzoeken zijn opgeslagen.' : ''}
+        </p>
       )}
     </div>
   );
@@ -568,8 +575,6 @@ export function AiosVoorkeuren({
   const { scherm, setScherm, laadFout, laad } = useAiosScherm(personId, periodId);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [verzoekenGewijzigd, setVerzoekenGewijzigd] = useState(false);
-  const [waarschuwing, setWaarschuwing] = useState<string | null>(null);
 
   const kies = async (vak: Vak, nieuw: Stand) => {
     if (!scherm) return;
@@ -632,10 +637,6 @@ export function AiosVoorkeuren({
         scherm={scherm}
         readOnly={readOnly}
         onOpgeslagen={() => void laad()}
-        onGewijzigd={(g) => {
-          setVerzoekenGewijzigd(g);
-          if (!g) setWaarschuwing(null);
-        }}
       />
 
       <div className="card p-3 sm:p-6 space-y-4">
@@ -684,11 +685,6 @@ export function AiosVoorkeuren({
         <Tellers tellers={scherm.tellers} />
       </div>
 
-      {waarschuwing && (
-        <div role="alert" className="p-3 rounded bg-amber-50 border border-amber-300 text-sm text-amber-950">
-          {waarschuwing}
-        </div>
-      )}
       <div className="flex gap-3">
         <button
           type="button"
@@ -699,11 +695,7 @@ export function AiosVoorkeuren({
         </button>
         <button
           type="button"
-          onClick={() =>
-            verzoekenGewijzigd && !readOnly
-              ? setWaarschuwing('Je verzoeken bovenaan zijn nog niet opgeslagen. Sla ze eerst op.')
-              : onVolgende()
-          }
+          onClick={onVolgende}
           className="flex-1 py-3 px-4 rounded font-semibold bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 transition-colors"
         >
           Volgende: bevestigen
@@ -768,7 +760,6 @@ export function AiosBevestigen({
         <li>{aantal(telling.LIEVER_NIET, 'dienst of blok liever niet', 'diensten of blokken liever niet')}</li>
         <li>{aantal(telling.ABSOLUUT, 'dienst of blok geblokkeerd', 'diensten of blokken geblokkeerd')}</li>
         <li>{verzoeken.length > 0 ? `Verzoeken: ${verzoeken.join(', ')}.` : 'Geen verzoeken aangevinkt.'}</li>
-        {w.opmerking && <li>Algemene verzoeken: {w.opmerking}</li>}
       </ul>
       <Tellers tellers={scherm.tellers} />
       {ingediend && scherm.indiening?.ingediend_op && (

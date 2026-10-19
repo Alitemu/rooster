@@ -33,7 +33,7 @@ export function schrijfAiosVoorkeurBackup(personId: string, periodId: string): s
     .all(personId, periodId) as Array<{ datum: string; code: string | null; blocking_level: string; source: string | null }>;
   const wens = db
     .prepare(
-      `SELECT vier_avonden, vier_nachten, twee_dagdiensten, inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot, opmerking
+      `SELECT vier_avonden, vier_nachten, twee_dagdiensten, inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot
        FROM dienstrooster_aios_wens WHERE period_id = ? AND person_id = ?`
     )
     .get(periodId, personId) as Record<string, string | number | null> | undefined;

@@ -10,7 +10,6 @@ import type { AiosCode, BlokSoort, BlokVorm, DagSoort } from '@/lib/aiosDiensten
 export type Niveau = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 export type Bron = 'MANUAL' | 'PARTTIME' | 'ABSENCE';
 
-export const OPMERKING_MAX_LENGTH = 120;
 /** The optional reason (toelichting) for a day marked geblokkeerd or liever niet. */
 export const REDEN_MAX_LENGTH = 120;
 
@@ -47,7 +46,6 @@ export interface AiosWens {
   inwerken_tot: string | null;
   onderbreking_van: string | null;
   onderbreking_tot: string | null;
-  opmerking: string | null;
 }
 
 export const LEGE_WENS: AiosWens = {
@@ -58,7 +56,6 @@ export const LEGE_WENS: AiosWens = {
   inwerken_tot: null,
   onderbreking_van: null,
   onderbreking_tot: null,
-  opmerking: null,
 };
 
 export type TellerGroep =

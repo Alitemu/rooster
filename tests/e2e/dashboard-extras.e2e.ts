@@ -79,6 +79,19 @@ test.describe('Periodepagina', () => {
     await expect(dialog.getByRole('alert')).toContainText('alleen via Gmail');
   });
 
+  test('the beheerder reaches Mailinstellingen from the overview too, a planner does not', async ({ page }) => {
+    await loginAsBeheerder(page);
+    await page.goto(`${getBaseUrl()}/planner`);
+    await page.getByRole('button', { name: 'Mailinstellingen' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
+    await expect(dialog.getByText('De app werkt alleen met Gmail.')).toBeVisible();
+
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner`);
+    await expect(page.getByRole('button', { name: 'Accounts beheren' }).or(page.getByRole('link', { name: 'Accounts beheren' }))).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Mailinstellingen' })).toHaveCount(0);
+  });
+
   test('a planner sees how the mail stands, without the button: only the beheerder sets it up', async ({ page }) => {
     // The planner's choice in 0.87.0, as on the AIOS's page.
     await loginAsPlanner(page);

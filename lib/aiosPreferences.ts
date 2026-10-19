@@ -22,7 +22,6 @@ import { db } from '@/db/client';
 import type { AiosCode, BlokSoort, BlokVorm } from '@/lib/aiosDiensten';
 import {
   LEGE_WENS,
-  OPMERKING_MAX_LENGTH,
   parttimeLieverNiet,
   type AiosVoorkeurDag,
   type AiosWens,
@@ -37,7 +36,6 @@ import { checkPeriodAcceptsInput } from '@/lib/aiosInvoer';
 import { syncAiosPersoon } from '@/lib/aiosSync';
 import { ruimAiosRedenenOp } from '@/lib/aiosReden';
 import { isValidIsoDate } from '@/lib/isoDate';
-import { validateSingleLine } from '@/lib/vrijeTekst';
 
 export interface AiosPeriode {
   id: string;
@@ -132,7 +130,7 @@ export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosV
 export function loadAiosWens(personId: string, periodId: string): AiosWens {
   const row = db
     .prepare(
-      `SELECT vier_avonden, vier_nachten, twee_dagdiensten, inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot, opmerking
+      `SELECT vier_avonden, vier_nachten, twee_dagdiensten, inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot
        FROM dienstrooster_aios_wens WHERE period_id = ? AND person_id = ?`
     )
     .get(periodId, personId) as (Omit<AiosWens, 'vier_avonden' | 'vier_nachten' | 'twee_dagdiensten'> & {
@@ -276,23 +274,17 @@ export function saveAiosWens(personId: string, period: AiosPeriode, input: unkno
   if (!('van' in inwerken)) return inwerken;
   const onderbreking = bereik(body.onderbreking_van, body.onderbreking_tot, 'de onderbreking');
   if (!('van' in onderbreking)) return onderbreking;
-  let opmerking: string | null = null;
-  if (body.opmerking !== undefined && body.opmerking !== null && !(typeof body.opmerking === 'string' && body.opmerking.trim() === '')) {
-    const check = validateSingleLine(body.opmerking, 'Algemene verzoeken', OPMERKING_MAX_LENGTH);
-    if (!check.valid) return weiger(400, 'INVALID_INPUT', check.message);
-    opmerking = check.value || null;
-  }
   db.transaction(() => {
     db.prepare(
       `INSERT INTO dienstrooster_aios_wens
          (id, period_id, person_id, vier_avonden, vier_nachten, twee_dagdiensten,
-          inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot, opmerking, gewijzigd_op)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          inwerken_van, inwerken_tot, onderbreking_van, onderbreking_tot, gewijzigd_op)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(period_id, person_id) DO UPDATE SET
          vier_avonden = excluded.vier_avonden, vier_nachten = excluded.vier_nachten,
          twee_dagdiensten = excluded.twee_dagdiensten, inwerken_van = excluded.inwerken_van,
          inwerken_tot = excluded.inwerken_tot, onderbreking_van = excluded.onderbreking_van,
-         onderbreking_tot = excluded.onderbreking_tot, opmerking = excluded.opmerking,
+         onderbreking_tot = excluded.onderbreking_tot,
          gewijzigd_op = excluded.gewijzigd_op`
     ).run(
       crypto.randomUUID(),
@@ -305,7 +297,6 @@ export function saveAiosWens(personId: string, period: AiosPeriode, input: unkno
       inwerken.tot,
       onderbreking.van,
       onderbreking.tot,
-      opmerking,
       new Date().toISOString()
     );
     markeerBegonnen(personId, period.id);

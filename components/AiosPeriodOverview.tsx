@@ -374,7 +374,6 @@ function StatusLijst({ deelnemers, ingediend, laad }: { deelnemers: Deelnemer[];
                 voorkeur
                 {wens.length > 0 && ` · ${wens.join(', ')}`}
               </p>
-              {d.wens.opmerking && <p className="text-neutral-700">&ldquo;{d.wens.opmerking}&rdquo;</p>}
               {teVeel.map((t) => (
                 <p key={t.groep} className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-amber-950">
                   ⚠ {bovenHelftPlanner(t)}

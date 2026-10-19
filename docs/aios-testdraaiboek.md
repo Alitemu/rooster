@@ -84,7 +84,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
     - Je ziet: de vakantiedagen staan op *AF* en tellen niet mee bij de
       blokkades. Bij de nachtblokken staat een waarschuwing dat het rooster
       het deel boven de helft alsnog bij jou kan inplannen.
-12. **aios03.** Vink *4 nachten* aan en klik op *Verzoeken opslaan*.
+12. **aios03.** Vink *4 nachten* aan. Het wordt meteen opgeslagen.
     **aios04** laat je leeg.
 13. Klik per AIOS op *Bevestigen en indienen*.
     - Je ziet bij de planner onder *Status voorkeuren*: wie heeft ingediend en
