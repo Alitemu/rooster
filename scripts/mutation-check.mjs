@@ -606,8 +606,8 @@ const MUTATIONS = [
   {
     name: 'aios genereren: a dienst filled by hand still told as empty',
     file: 'lib/aiosGenereren.ts',
-    find: '    nog_leeg: leeg.filter((l) => !bezet.has(l.dienst_id)),',
-    replace: '    nog_leeg: leeg,',
+    find: '         AND NOT EXISTS (SELECT 1 FROM dienstrooster_assignment a WHERE a.slot_id = sl.id AND a.schedule_version_id = sl.period_id)\n',
+    replace: '',
     tests: ['app/api/aios/aiosGenereren'],
   },
   {
@@ -662,7 +662,7 @@ const MUTATIONS = [
   {
     name: 'aios reden: the voorkeurenoverzicht without the toelichting',
     file: 'lib/aiosDownloads.ts',
-    find: '  return toelichting ? `${keuze}: ${toelichting}` : keuze;',
+    find: "  return toelichting && d.level !== 'VOORKEUR' ? `${keuze}: ${toelichting}` : keuze;",
     replace: '  return keuze;',
     tests: ['app/api/aios/aiosReden'],
   },
@@ -2586,13 +2586,6 @@ const MUTATIONS = [
     find: "        r.geldig_vanaf > period.start_datum ? r.geldig_vanaf : period.start_datum,",
     replace: "        period.start_datum,",
     tests: ["lib/deelnamefactor"],
-  },
-  {
-    name: "parttime: patterns of different weekdays count as overlapping",
-    file: "lib/parttimeSync.ts",
-    find: "  if (a.weekdag !== b.weekdag) return false;\n",
-    replace: "",
-    tests: ["app/api/person/[id]/availabilityModel"],
   },
   {
     name: "parttime: a second pattern over a day is accepted",

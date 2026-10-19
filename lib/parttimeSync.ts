@@ -130,7 +130,7 @@ export function previewPatternDates(pattern: PatternRule, rangeStart: string, ra
  * did from the start: lib/aiosDeeltijd.ts).
  */
 export function patternsOverlap(a: PatternRule, b: PatternRule): boolean {
-  if (a.weekdag !== b.weekdag) return false;
+  // Another weekday never matches: dateMatchesPattern checks the weekday of each day.
   const from = a.geldig_vanaf > b.geldig_vanaf ? a.geldig_vanaf : b.geldig_vanaf;
   const to = a.geldig_tot < b.geldig_tot ? a.geldig_tot : b.geldig_tot;
   return previewPatternDates(a, from, to).some((dag) => dateMatchesPattern(b, dag.datum, dag.iso_week));

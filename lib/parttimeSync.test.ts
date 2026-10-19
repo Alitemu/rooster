@@ -492,6 +492,15 @@ describe('parttimeSync', () => {
       );
     });
 
+    it('leaves an AIOS period out: there an absence and a part-time day mean something else', () => {
+      const fixture = trackFixture(createFixture('2027-02-01', '2027-02-07'));
+      expect(getOpenPeriodsForPerson(fixture.personId)).toContain(fixture.periodId);
+      db.prepare(`UPDATE dienstrooster_pool SET type = 'AIOS' WHERE id = (SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?)`).run(
+        fixture.periodId
+      );
+      expect(getOpenPeriodsForPerson(fixture.personId)).not.toContain(fixture.periodId);
+    });
+
     it('leaves a period in the trash out altogether', () => {
       const fixture = trackFixture(createFixture('2027-02-01', '2027-02-07'));
       db.prepare(`UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?`).run(
