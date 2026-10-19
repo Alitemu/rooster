@@ -134,27 +134,30 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(rij).toContainText('Ingediend');
   await expect(rij).toContainText('1 geblokkeerd');
   await expect(rij).toContainText('4 nachten');
-  await openAiosSectie(page, 'Voorkeuren van de AIOS');
-  await expect(page.getByRole('button', { name: 'Links downloaden' })).toBeVisible();
-  // Without the mail the buttons are off, look it and say why (0.87.0): clicking one did nothing visible.
-  const uitnodigen = page.getByRole('button', { name: 'Uitnodigingen versturen' });
-  await expect(uitnodigen).toBeDisabled();
-  await expect(uitnodigen).toHaveCSS('opacity', '0.5');
+  // Exporteren & communicatie, as the achterwacht's page has it. Without the mail the sending is off and says why (0.87.0).
+  await openAiosSectie(page, 'Exporteren & communicatie');
+  await expect(page.getByRole('button', { name: /Deadlineherinnering versturen/ })).toBeDisabled();
   await expect(page.getByTestId('aios-mail-nog-niet')).toContainText('kan pas als de mail voor de AIOS is ingesteld');
+  await page.getByRole('button', { name: /Uitnodigingen en herinneringen/ }).click();
+  const uitnodigen = page.getByRole('button', { name: /Uitnodigingen versturen/ });
+  await expect(uitnodigen).toBeDisabled();
+  await expect(uitnodigen).toHaveCSS('opacity', '0.6');
+  await expect(page.getByRole('button', { name: /Uitnodigingen downloaden/ })).toBeEnabled();
+  await page.getByRole('button', { name: 'Sluiten' }).click();
+  await page.getByRole('button', { name: /Mailinstellingen/ }).click();
   await expect(page.getByText('Mail naar de AIOS', { exact: true })).toBeVisible();
   // The AIOS's own automatic reminders, off while their mail is not set up.
   await expect(page.getByTestId('aios-auto-herinneringen')).toContainText('de mail voor de AIOS is nog niet ingesteld');
 
   // The requests as a workbook, with this AIOS's 4 nachten in it.
-  await openAiosSectie(page, 'Status voorkeuren');
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '⬇ Verzoeken per AIOS' }).click()]);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Statusrapport downloaden/ }).click()]);
   expect(download.suggestedFilename()).toMatch(/^verzoeken-aios-.*\.xlsx$/);
   const [kop, ...rijen] = readFirstSheet(fs.readFileSync((await download.path())!));
   const mijn = rijen.find((r) => r[0] === ids.codenaam)!;
   expect(mijn[kop.indexOf('Status')]).toBe('Ingediend');
   expect(mijn[kop.indexOf('4 nachten (wo t/m za)')]).toBe('ja');
   expect(mijn[kop.indexOf('Opmerking')]).toBe('Liever geen nachten in mei');
-  const [perDienst] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '⬇ Voorkeuren per dienst' }).click()]);
+  const [perDienst] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Voorkeurenoverzicht downloaden/ }).click()]);
   const [dienstKop, ...diensten] = readFirstSheet(fs.readFileSync((await perDienst.path())!));
   const kolom = dienstKop.indexOf(ids.codenaam);
   expect(diensten.filter((r) => r[5]?.startsWith('avondblok zo t/m di') && r[kolom] === 'geblokkeerd').length).toBe(3);

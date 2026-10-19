@@ -1,0 +1,282 @@
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { NextRequest } from 'next/server';
+import { db } from '@/db/client';
+import { ensureAiosShiftTypes } from '@/lib/aiosPool';
+import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
+import { aiosQuarter } from '@/lib/aiosQuarter';
+import { syncAiosPeriode } from '@/lib/aiosSync';
+import { setAiosVoorkeur, loadAiosPeriode } from '@/lib/aiosPreferences';
+import { saveAiosReden, loadAiosRedenen } from '@/lib/aiosReden';
+import { readFirstSheet } from '@/lib/xlsx';
+import { excelSerialToDate } from '@/lib/isoDate';
+import { buildXlsx } from '@/tests/fixtures/buildXlsx';
+import { GET as voorkeuren } from './periode/[id]/download-voorkeuren/route';
+import { POST as importeren } from './periode/[id]/voorkeuren-import/route';
+import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, staff, staffCookie, tag, type World } from '../../../tests/fixtures/dienstWorlds';
+
+/**
+ * The AIOS's voorkeurenoverzicht read back in (lib/aiosVoorkeurImport.ts):
+ * - only the beheerder, only an AIOS period, only before the roster is made;
+ * - the overview read back unchanged changes nothing, toelichting included;
+ * - a changed cell sets the mark as the AIOS's screen would (a block whole),
+ *   an emptied one takes a hand mark away, "(parttime)" and "(afwezig)"
+ *   cells are never touched;
+ * - the toelichting follows the text after the colon, one a day;
+ * - checking says exactly what applying does, and a file with problems is
+ *   refused whole.
+ */
+
+let snapshot: Map<string, number>;
+let staf: World;
+const w = {} as { pool: string; period: string; planner: string; admin: string; x: string; y: string; z: string };
+const q = aiosQuarter(2097, 2);
+const cn = (n: string) => `aiosimp-${n}-${tag}`;
+const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
+
+const gelezen = async (): Promise<string[][]> => {
+  const res = await voorkeuren(
+    new NextRequest(`http://localhost/api/aios/periode/${w.period}/download-voorkeuren`, { headers: { cookie: staffCookie(w.admin) } }),
+    ctx(w.period)
+  );
+  return readFirstSheet(Buffer.from(await res.arrayBuffer()));
+};
+const importeer = async (rows: string[][], toepassen: boolean, als = w.admin, periode = w.period) => {
+  const res = await importeren(
+    new NextRequest(`http://localhost/api/aios/periode/${periode}/voorkeuren-import`, {
+      method: 'POST',
+      headers: { cookie: staffCookie(als), 'content-type': 'application/json' },
+      body: JSON.stringify({ bestand: buildXlsx(rows).toString('base64'), toepassen }),
+    }),
+    ctx(periode)
+  );
+  return { status: res.status, json: await res.json() };
+};
+const kopieer = (rows: string[][]) => rows.map((r) => [...r]);
+const kolom = (rows: string[][], n: string) => rows[0].indexOf(cn(n));
+const rijen = (rows: string[][], datum: string, code: string) =>
+  rows.filter((r, i) => i > 0 && excelSerialToDate(Number(r[0])) === datum && r[3].startsWith(`${code} `));
+const niveau = (wie: string, datum: string, code: string) =>
+  (
+    db
+      .prepare(
+        `SELECT av.blocking_level AS l, av.source AS s FROM dienstrooster_availability av
+         JOIN dienstrooster_shift_slot sl ON sl.id = av.slot_id JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+         WHERE av.person_id = ? AND sl.period_id = ? AND sl.datum = ? AND st.code = ?`
+      )
+      .get(wie, w.period, datum, code) as { l: string; s: string } | undefined
+  )?.l ?? null;
+const slotId = (datum: string, code: string) =>
+  (
+    db
+      .prepare(
+        `SELECT sl.id FROM dienstrooster_shift_slot sl JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+         WHERE sl.period_id = ? AND sl.datum = ? AND st.code = ?`
+      )
+      .get(w.period, datum, code) as { id: string }
+  ).id;
+
+const UD_DAG = '2097-05-14';
+const ANDERE_UD = '2097-05-16';
+const WEEKEND_DD = '2097-05-18'; // a Saturday: its dagdienst
+
+/** The three days of one night block wo t/m vr, from the quarter's slots. */
+function nachtDagen(): string[] {
+  const r = db
+    .prepare(
+      `SELECT s.datum FROM dienstrooster_shift_slot s JOIN dienstrooster_shift_block b ON b.id = s.shift_block_id
+       WHERE s.period_id = ? AND b.soort = 'NACHT' AND b.vorm = 'WO_VR' AND s.is_feestdag = 0 ORDER BY s.datum`
+    )
+    .all(w.period) as Array<{ datum: string }>;
+  return r.slice(0, 3).map((x) => x.datum);
+}
+
+beforeAll(() => {
+  snapshot = rowidSnapshot();
+  staf = buildWorld('ACHTERWACHT');
+  w.planner = staff('PLANNER', 'AIOS');
+  w.admin = staff('ADMIN', 'ACHTERWACHT');
+  const ruleset = insert('dienstrooster_ruleset', { naam: `AiosImp-${tag}`, config_json: '{}', aangemaakt_op: now });
+  w.pool = insert('dienstrooster_pool', { naam: `AiosImp-${tag}`, type: 'AIOS', ruleset_id: ruleset, aangemaakt_op: now });
+  ensureAiosShiftTypes(db, w.pool);
+  w.period = insert('dienstrooster_schedule_period', {
+    pool_id: w.pool,
+    naam: `AiosImp-${tag}`,
+    start_datum: q.start_datum,
+    eind_datum: q.eind_datum,
+    deadline: '2097-02-10T17:00',
+    status: 'OPEN',
+    auto_herinneren: 0,
+    aangemaakt_op: now,
+  });
+  db.transaction(() => persistAiosSlots(w.period, aiosShiftTypes(w.pool)!, q.start_datum, q.eind_datum))();
+  const deelnemer = (n: string) => {
+    const id = insert('dienstrooster_person', { codenaam: cn(n), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    insert('dienstrooster_pool_membership', { person_id: id, pool_id: w.pool, deelnamefactor: 1, geldig_vanaf: '2090-01-01', geldig_tot: '2099-12-31' });
+    return id;
+  };
+  w.x = deelnemer('x');
+  w.y = deelnemer('y');
+  w.z = deelnemer('z');
+  // y on leave on Friday 26 April and Koningsdag, Saturday 27 April 2097.
+  insert('dienstrooster_absence', { person_id: w.y, van_datum: '2097-04-26', tot_datum: '2097-04-27', soort: 'VAKANTIE', aangemaakt_door: w.y, aangemaakt_op: now });
+  syncAiosPeriode(w.period);
+  // x: the first night block wo t/m vr geblokkeerd, a uitloopdienst liever niet with a toelichting.
+  expect(setAiosVoorkeur(w.x, w.period, slotId(nachtDagen()[0], 'ND'), 'ABSOLUUT')).toEqual({ ok: true });
+  expect(setAiosVoorkeur(w.x, w.period, slotId(UD_DAG, 'UD'), 'LIEVER_NIET')).toEqual({ ok: true });
+  expect(saveAiosReden(w.x, loadAiosPeriode(w.period)!, UD_DAG, 'cursus in Utrecht')).toEqual({ ok: true });
+});
+
+afterAll(() => deleteRowsAfter(snapshot));
+
+describe('who may, and when', () => {
+  it('only the beheerder: the AIOS planner and the achterwacht planner may not', async () => {
+    const rows = await gelezen();
+    expect([401, 403]).toContain((await importeer(rows, false, w.planner)).status);
+    expect([401, 403]).toContain((await importeer(rows, false, staf.planner)).status);
+    expect((await importeer(rows, false)).status).toBe(200);
+  });
+
+  it('not an achterwacht period (404), no file, no Excel, not after the roster is made', async () => {
+    const rows = await gelezen();
+    expect((await importeer(rows, false, w.admin, staf.period)).status).toBe(404);
+    const geen = await importeren(
+      new NextRequest(`http://localhost/api/aios/periode/${w.period}/voorkeuren-import`, {
+        method: 'POST',
+        headers: { cookie: staffCookie(w.admin), 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      }),
+      ctx(w.period)
+    );
+    expect(geen.status).toBe(400);
+    const geenExcel = await importeren(
+      new NextRequest(`http://localhost/api/aios/periode/${w.period}/voorkeuren-import`, {
+        method: 'POST',
+        headers: { cookie: staffCookie(w.admin), 'content-type': 'application/json' },
+        body: JSON.stringify({ bestand: Buffer.from('geen excel').toString('base64') }),
+      }),
+      ctx(w.period)
+    );
+    expect(geenExcel.status).toBe(400);
+    for (const status of ['GEGENEREERD', 'GEPUBLICEERD']) {
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = ? WHERE id = ?`).run(status, w.period);
+      try {
+        expect((await importeer(rows, false)).status).toBe(409);
+      } finally {
+        db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'OPEN' WHERE id = ?`).run(w.period);
+      }
+    }
+  });
+});
+
+describe('the overview read back', () => {
+  it('unchanged: nothing changes, the toelichting included', async () => {
+    const rows = await gelezen();
+    // The toelichting is in the file, after the mark.
+    expect(rijen(rows, UD_DAG, 'UD')[0][kolom(rows, 'x')]).toBe('liever niet: cursus in Utrecht');
+    const gecontroleerd = await importeer(rows, false);
+    expect(gecontroleerd.json.data).toMatchObject({ wijzigingen: [], problemen: [], toegepast: false });
+    // The absence cells of y were skipped, not read as marks.
+    expect(gecontroleerd.json.data.overgeslagen).toBeGreaterThan(0);
+    const toegepast = await importeer(rows, true);
+    expect(toegepast.json.data).toMatchObject({ wijzigingen: [], problemen: [], toegepast: true });
+    expect(loadAiosRedenen(w.x, w.period)).toEqual([{ datum: UD_DAG, tekst: 'cursus in Utrecht' }]);
+  });
+
+  it('a changed cell is set, an emptied one cleared, a toelichting follows the text; checking says what applying does', async () => {
+    const rows = kopieer(await gelezen());
+    const dagen = nachtDagen();
+    // y: liever niet on a uitloopdienst, with a toelichting.
+    rijen(rows, ANDERE_UD, 'UD')[0][kolom(rows, 'y')] = 'Liever niet: kind naar de dokter';
+    // x: the night block emptied (all three), the other toelichting changed.
+    for (const d of dagen) rijen(rows, d, 'ND')[0][kolom(rows, 'x')] = '';
+    rijen(rows, UD_DAG, 'UD')[0][kolom(rows, 'x')] = 'liever niet: nieuwe cursus';
+    // z: a voorkeur.
+    rijen(rows, WEEKEND_DD, 'DD')[0][kolom(rows, 'z')] = 'voorkeur';
+
+    const check = await importeer(rows, false);
+    expect(check.status).toBe(200);
+    expect(check.json.data.problemen).toEqual([]);
+    expect(niveau(w.y, ANDERE_UD, 'UD')).toBeNull();
+    expect(niveau(w.x, dagen[0], 'ND')).toBe('ABSOLUUT');
+
+    const echt = await importeer(rows, true);
+    expect(echt.json.data.wijzigingen).toEqual(check.json.data.wijzigingen);
+    expect(echt.json.data.toegepast).toBe(true);
+    expect(niveau(w.y, ANDERE_UD, 'UD')).toBe('LIEVER_NIET');
+    expect(loadAiosRedenen(w.y, w.period)).toEqual([{ datum: ANDERE_UD, tekst: 'kind naar de dokter' }]);
+    for (const d of dagen) expect(niveau(w.x, d, 'ND')).toBeNull();
+    expect(loadAiosRedenen(w.x, w.period)).toEqual([{ datum: UD_DAG, tekst: 'nieuwe cursus' }]);
+    expect(niveau(w.z, WEEKEND_DD, 'DD')).toBe('VOORKEUR');
+    // And it counts for the AIOS's hand-in: begun.
+    expect(db.prepare('SELECT status FROM dienstrooster_submission WHERE person_id = ?').get(w.y)).toMatchObject({ status: 'BEZIG' });
+  });
+
+  it('no text after the colon takes the toelichting away', async () => {
+    const rows = kopieer(await gelezen());
+    rijen(rows, ANDERE_UD, 'UD')[0][kolom(rows, 'y')] = 'liever niet';
+    const echt = await importeer(rows, true);
+    expect(echt.json.data.wijzigingen).toEqual([{ codenaam: cn('y'), datum: ANDERE_UD, dienst: 'toelichting', van: 'kind naar de dokter', naar: 'leeg' }]);
+    expect(loadAiosRedenen(w.y, w.period)).toEqual([]);
+    expect(niveau(w.y, ANDERE_UD, 'UD')).toBe('LIEVER_NIET');
+  });
+
+  it("never touches leave: (afwezig) cells are skipped and an empty cell does not clear them", async () => {
+    const rows = kopieer(await gelezen());
+    const afwezig = rijen(rows, '2097-04-26', 'UD')[0];
+    expect(afwezig[kolom(rows, 'y')]).toBe('geblokkeerd (afwezig)');
+    afwezig[kolom(rows, 'y')] = '';
+    const echt = await importeer(rows, true);
+    expect(echt.json.data.problemen).toEqual([]);
+    expect(niveau(w.y, '2097-04-26', 'UD')).toBe('ABSOLUUT');
+  });
+});
+
+describe('a file with problems is refused whole', () => {
+  it('says each, changes nothing, and applying is refused', async () => {
+    const rows = kopieer(await gelezen());
+    const voor = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_availability').get() as { n: number };
+    rows[0].push('onbekend-persoon');
+    rows[0].push(cn('x')); // a column twice
+    rijen(rows, ANDERE_UD, 'UD')[0][kolom(rows, 'z')] = 'misschien';
+    rijen(rows, WEEKEND_DD, 'DD')[0][kolom(rows, 'z')] = 'voorkeur: omdat het kan';
+    const check = await importeer(rows, false);
+    const problemen: string[] = check.json.data.problemen;
+    expect(problemen.some((p) => p.includes('onbekend-persoon') && p.includes('geen deelnemer'))).toBe(true);
+    expect(problemen.some((p) => p.includes(cn('x')) && p.includes('twee keer'))).toBe(true);
+    expect(problemen.some((p) => p.includes('"misschien"') && p.includes('geen geblokkeerd, liever niet of voorkeur'))).toBe(true);
+    expect(problemen.some((p) => p.includes('een toelichting kan alleen bij geblokkeerd of liever niet'))).toBe(true);
+    const echt = await importeer(rows, true);
+    expect(echt.status).toBe(400);
+    expect(echt.json.error.code).toBe('IMPORT_PROBLEMS');
+    expect((db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_availability').get() as { n: number }).n).toBe(voor.n);
+  });
+
+  it('a block is one choice: one dienst of it different from the rest is a problem', async () => {
+    const rows = kopieer(await gelezen());
+    const dagen = nachtDagen();
+    // x has no night block marked any more (the test above emptied it): mark two of its three, not the third.
+    rijen(rows, dagen[0], 'ND')[0][kolom(rows, 'x')] = 'geblokkeerd';
+    rijen(rows, dagen[1], 'ND')[0][kolom(rows, 'x')] = 'geblokkeerd';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen.some((p: string) => p.includes('past niet bij de rest van het blok'))).toBe(true);
+    expect((await importeer(rows, true)).status).toBe(400);
+    expect(niveau(w.x, dagen[0], 'ND')).toBeNull();
+  });
+
+  it('two different toelichtingen on one day are a problem', async () => {
+    const rows = kopieer(await gelezen());
+    const dagen = nachtDagen();
+    for (const d of dagen) rijen(rows, d, 'ND')[0][kolom(rows, 'x')] = 'geblokkeerd: eerste';
+    rijen(rows, dagen[0], 'UD')[0][kolom(rows, 'x')] = 'geblokkeerd: tweede';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen.some((p: string) => p.includes('twee verschillende toelichtingen'))).toBe(true);
+  });
+
+  it('a block with a feestdag in it cannot be blocked, as on the AIOS screen', async () => {
+    const rows = kopieer(await gelezen());
+    const koningsdag = '2097-04-27';
+    rijen(rows, koningsdag, 'DD')[0][kolom(rows, 'z')] = 'geblokkeerd';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen.some((p: string) => p.includes('feestdag'))).toBe(true);
+  });
+});

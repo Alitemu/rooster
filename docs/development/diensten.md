@@ -100,6 +100,15 @@ temporary password to the AIOS pool).
 
 ## Copied, not changed
 
+(0.92.0: "Exporteren & communicatie" of an AIOS period is a copy of the
+achterwacht's section: components/AiosExporteren.tsx, its dialog
+components/AiosExportDialog.tsx (invitations, reminders, links,
+wijzigingsgeschiedenis: lib/aiosWijzigingen.ts, download-wijzigingen), the
+beheerder's import components/AiosVoorkeurenImport.tsx with
+lib/aiosVoorkeurImport.ts (voorkeuren-import; checking is applying in a
+transaction that is rolled back), and the dialog hooks lib/aiosDialoog.ts, a
+copy of useBodyScrollLock and useDialogDismiss.)
+
 The planner's rule (October 2026): after the login page, the AIOS goes its
 own way. Code that works for the achterwacht is not changed for the AIOS;
 what the AIOS needs is copied into files of its own, so the achterwacht

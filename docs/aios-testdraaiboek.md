@@ -15,8 +15,9 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
    - Controleer met `docker compose ps` dat ook de container `aios-solver`
      draait. Zonder die container kan het rooster niet gemaakt worden.
 2. **Mail staat uit op test** (`MAIL_UITGESCHAKELD=true`, zie de README). Er
-   gaat dus geen enkele mail. Links voor de AIOS haal je in stap 9 met
-   *Links downloaden*.
+   gaat dus geen enkele mail. Links voor de AIOS haal je in stap 9 bij
+   *Exporteren & communicatie*, met *Uitnodigingen en herinneringen* en dan
+   *Uitnodigingen downloaden*.
 3. Houd twee browsers bij de hand of een gewoon en een privévenster. Een AIOS
    en de planner kunnen niet tegelijk in hetzelfde venster ingelogd zijn, en
    voor het ruilen heb je twee AIOS tegelijk nodig.
@@ -58,11 +59,12 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
    - Je ziet: de tekst noemt de toets en de nacht ervoor. In het weekoverzicht
      staat op die dinsdagnacht *Fellow*. De zondag- en maandagnacht staan
      nog in hun blok.
-9. **Openen.** Laat de deadline staan en klik op *Periode openen*. Klik
-   daarna op *Links downloaden*.
+9. **Openen.** Laat de deadline staan en klik op *Periode openen*. Open daarna
+   de sectie *Exporteren & communicatie*, klik op *Uitnodigingen en
+   herinneringen* en kies *Uitnodigingen downloaden*.
    - Je ziet: een bestand met per AIOS een persoonlijke link.
-   - *Uitnodigingen versturen* staat uit, omdat de mail voor de AIOS niet is
-     ingesteld. Dat klopt op test.
+   - *Uitnodigingen versturen* en *Herinneringen versturen* staan uit, omdat de
+     mail voor de AIOS niet is ingesteld. Dat klopt op test.
 
 ## Deel 3: de AIOS geven hun voorkeuren op
 
@@ -87,7 +89,8 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 13. Klik per AIOS op *Bevestigen en indienen*.
     - Je ziet bij de planner onder *Status voorkeuren*: wie heeft ingediend en
       wie meer dan de helft heeft geblokkeerd.
-    - Probeer *Voorkeuren per dienst* en *Verzoeken per AIOS* te downloaden.
+    - Probeer bij *Exporteren & communicatie* het *Voorkeurenoverzicht
+      downloaden (Excel)* en het *Statusrapport downloaden*.
 
 ## Deel 4: het rooster maken
 

@@ -386,8 +386,8 @@ het rooster voor de AIOS komt in een volgende versie, met een eigen solver.
 **Vanaf versie 0.73.0** krijgen de AIOS vanzelf een herinnering, een week en
 een dag voor de deadline, net als bij de achterwacht. Je pauzeert ze per
 periode bij *Automatische herinneringen* op de pagina van de AIOS-periode.
-Onder *Status voorkeuren* download je twee Excel-bestanden: *Voorkeuren per
-dienst* en *Verzoeken per AIOS*, met de blokken van vier, inwerken,
+Bij *Exporteren & communicatie* download je twee Excel-bestanden: het
+*Voorkeurenoverzicht* (per dienst) en het *Statusrapport* (per AIOS), met de blokken van vier, inwerken,
 onderbreking, parttimedagen, afwezigheid en de tellers. Blokkeert een AIOS
 meer dan de helft van een soort, dan staat er een waarschuwing dat het
 rooster het deel boven de helft alsnog kan inplannen. Wat een feestdag
@@ -538,6 +538,20 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 0.92.0** heeft de pagina van een AIOS-periode een sectie
+*Exporteren & communicatie*, op dezelfde plek en met dezelfde knoppen als bij
+de achterwacht: *Uitnodigingen en herinneringen* (een venster met
+uitnodigingen versturen, herinneringen versturen aan iedereen of per AIOS,
+de persoonlijke links als Excel en de wijzigingsgeschiedenis als Excel),
+*Deadlineherinnering versturen*, *Mailinstellingen* (alleen de beheerder),
+*Statusrapport downloaden*, *Voorkeurenoverzicht downloaden (Excel)* en het
+rooster als Excel. De knoppen voor uitnodigingen, herinneringen, links en de
+mail staan dus niet meer bij *Voorkeuren van de AIOS*. Alleen de beheerder
+heeft er ook *Voorkeuren importeren (test)*: het ingevulde voorkeurenoverzicht
+wordt teruggelezen, met de toelichting per dag. *Controleren* verandert niets
+en laat zien wat er zou veranderen. Dat kan zolang het rooster nog niet
+gemaakt is.
 
 **Vanaf versie 0.91.0** kan een AIOS bij een dag die ze op geblokkeerd of
 liever niet zetten een toelichting geven. Die is niet verplicht en hoogstens
