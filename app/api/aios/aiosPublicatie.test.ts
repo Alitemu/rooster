@@ -234,6 +234,17 @@ describe('voorlopig', () => {
     expect(ander.status).toBe(403);
   });
 
+  it('the Excel for the roosterbureau is refused: a voorlopig roster goes nowhere outside the planner\'s page', async () => {
+    for (const [route, pad] of [
+      [downloadRooster, 'download-rooster'],
+      [downloadPerAios, 'download-per-aios'],
+    ] as const) {
+      const res = await route(req(`${w.period}/${pad}`), ctx(w.period));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.code).toBe('NOT_DEFINITIEF');
+    }
+  });
+
   it('a change by hand needs a reason now, and no new roster', async () => {
     const ud = slot('UD', '2094-07-12');
     const zonder = await wijzigen(req(`${w.period}/rooster/wijzigen`, 'POST', { wijzigingen: [{ dienst_id: ud.id, aios_id: w.y, was: w.x }] }), ctx(w.period));

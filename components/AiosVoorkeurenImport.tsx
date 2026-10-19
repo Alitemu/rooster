@@ -136,7 +136,7 @@ export function AiosVoorkeurenImportButton({ periodId, periodStatus, onImported 
             <ul className="text-sm text-neutral-700 mb-4 list-disc pl-5 space-y-1">
               <li>Geblokkeerd, liever niet en voorkeur worden gezet alsof de AIOS ze zelf kiest, een blok als geheel. Een lege cel haalt zo&apos;n keuze weg.</li>
               <li>Cellen met (parttime) of (afwezig) worden overgeslagen. Die komen uit de parttimedagen of het verlof van de AIOS.</li>
-              <li>Achter geblokkeerd of liever niet mag de toelichting van die dag staan, zoals het overzicht die toont: <em>geblokkeerd: ziek kind</em>. Een dag heeft één toelichting. Zonder tekst gaat de toelichting weg.</li>
+              <li>Achter elke keuze van een dag mag de toelichting van die dag staan, zoals het overzicht van de beheerder die toont: <em>geblokkeerd: ziek kind</em>. Een dag heeft één toelichting. Zonder tekst gaat de toelichting weg.</li>
               <li>Controleren verandert nog niets. Je ziet eerst wat er zou veranderen.</li>
             </ul>
 

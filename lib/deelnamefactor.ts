@@ -19,6 +19,10 @@
  *   guess. The solver does not wait for that: it takes what the Deeltijd
  *   step holds (1,0 without part-time days), as the AIOS's solver does.
  *
+ * Held per period once its roster is made (dienstrooster_period_factor, bevrorenFactoren):
+ * what the roster, its publication check and the carry-over count with is what
+ * they counted with when it was made, however the part-time days change after.
+ *
  * The column deelnamefactor of pool_membership is no longer read or written
  * (0.93.0): it stays in the table, always 1,0.
  */
@@ -172,4 +176,35 @@ export function deelnamefactorVoorLijst(
   const afgeleid = laadAfgeleideDeelnamefactoren([...ingediend], periode);
   for (const id of ingediend) factoren.set(id, afgeleid.get(id) ?? 1);
   return { factoren, periode };
+}
+
+/**
+ * The factors as they were when the roster of this period was made, per
+ * person. Only while there is a roster (gegenereerd or gepubliceerd): before
+ * it and after it is removed the factor follows the part-time days as they
+ * are, and a generation that failed before any roster leaves nothing behind
+ * that counts.
+ */
+export function bevrorenFactoren(periodId: string): Map<string, number> {
+  const rijen = db
+    .prepare(
+      `SELECT f.person_id, f.factor FROM dienstrooster_period_factor f
+       JOIN dienstrooster_schedule_period p ON p.id = f.period_id
+       WHERE f.period_id = ? AND p.status IN ('GEGENEREERD', 'GEPUBLICEERD')`
+    )
+    .all(periodId) as Array<{ person_id: string; factor: number }>;
+  return new Map(rijen.map((r) => [r.person_id, r.factor]));
+}
+
+/** Holds these factors for the period: what a roster made now counts with, until a new one is made or it is removed. */
+export function legFactorenVast(periodId: string, leden: ReadonlyArray<{ id: string; deelnamefactor: number }>): void {
+  db.transaction(() => {
+    db.prepare('DELETE FROM dienstrooster_period_factor WHERE period_id = ?').run(periodId);
+    const voeg = db.prepare('INSERT INTO dienstrooster_period_factor (id, period_id, person_id, factor) VALUES (?, ?, ?, ?)');
+    for (const l of leden) voeg.run(crypto.randomUUID(), periodId, l.id, l.deelnamefactor);
+  })();
+}
+
+export function wisBevrorenFactoren(periodId: string): void {
+  db.prepare('DELETE FROM dienstrooster_period_factor WHERE period_id = ?').run(periodId);
 }

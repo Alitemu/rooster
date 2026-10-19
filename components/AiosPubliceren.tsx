@@ -162,15 +162,24 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
         </p>
       )}
       <div className="border-t pt-3 space-y-2">
-        <p className="text-sm text-neutral-700">Het rooster als Excel, voor het roosterbureau, de opleider en de afdeling:</p>
-        <div className="flex flex-wrap gap-2">
-          <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-rooster`)}>
-            Rooster per dag
-          </a>
-          <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-per-aios`)}>
-            Per AIOS met compensatiedagen
-          </a>
-        </div>
+        {gepubliceerd && stand.definitief_op ? (
+          <>
+            <p className="text-sm text-neutral-700">Het rooster als Excel, voor het roosterbureau, de opleider en de afdeling:</p>
+            <div className="flex flex-wrap gap-2">
+              <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-rooster`)}>
+                Rooster per dag
+              </a>
+              <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-per-aios`)}>
+                Per AIOS met compensatiedagen
+              </a>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-neutral-700" data-testid="aios-excel-pas-definitief">
+            De Excel voor het roosterbureau, de opleider en de afdeling komt beschikbaar als het rooster definitief is. Een voorlopig rooster gaat nergens
+            heen.
+          </p>
+        )}
       </div>
     </AiosSectie>
   );

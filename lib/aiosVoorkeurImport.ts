@@ -124,9 +124,17 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   const bekend = new Set(alle.map((p) => p.codenaam.toLowerCase()));
 
   const kolommen: Array<{ kol: number; id: string; codenaam: string }> = [];
-  for (let kol = eerstePersoonKol; kol < kop.length; kol++) {
+  // The header row can be shorter than the rows under it: a column without a name has no cell there.
+  const breedte = rows.reduce((m, rij) => Math.max(m, rij.length), kop.length);
+  for (let kol = eerstePersoonKol; kol < breedte; kol++) {
     const naam = kop[kol];
-    if (!naam) continue;
+    if (!naam) {
+      // Without a name it cannot be read; with data in it that is not nothing to say.
+      if (rows.slice(1).some((rij) => (rij[kol] ?? '').trim() !== '')) {
+        problemen.push(`Kolom ${kol + 1} heeft geen kop maar wel gegevens. Zet er de codenaam van een AIOS boven of haal de kolom weg.`);
+      }
+      continue;
+    }
     const zonderGuard = withoutFormulaGuard(naam);
     const persoon = exact.get(naam) ?? hoofdletterloos.get(naam.toLowerCase()) ?? exact.get(zonderGuard) ?? hoofdletterloos.get(zonderGuard.toLowerCase());
     if (!persoon) {
@@ -199,12 +207,14 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
       const niveau = NIVEAU_VAN_WOORD[gevonden[1]];
       // The text as typed, not lowercased: the part after the colon of the cell itself.
       const tekst = gevonden[2] ? ruw.slice(ruw.indexOf(':') + 1).trim() : null;
-      if (tekst && niveau === 'VOORKEUR') {
-        problemen.push(`Regel ${regel}, ${codenaam}: een toelichting kan alleen bij geblokkeerd of liever niet.`);
-        continue;
-      }
       if (automatisch) {
-        // A mark of a part-time day or an absence stays as it is.
+        // A mark of a part-time day or an absence stays as it is, and has no toelichting of the AIOS's to take.
+        if (tekst) {
+          problemen.push(
+            `Regel ${regel}, ${codenaam}: een toelichting kan niet bij een parttimedag of afwezigheid. Haal de tekst weg of zet hem bij een keuze die de AIOS zelf deed.`
+          );
+          continue;
+        }
         overgeslagen++;
         continue;
       }
@@ -271,10 +281,45 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
       });
     }
 
-    // Then the toelichting per day: one text a day, from the cells that are geblokkeerd or liever niet.
+    // A block is set as a whole: the diensten of it that the file does not name change with it. Said too, or
+    // "controleren" would show fewer changes than applying makes.
+    const inBestand = new Set(gelezen.cellen.map((c) => `${c.personId}|${c.slotId}`));
+    const codenaamVan = new Map(gelezen.cellen.map((c) => [c.personId, c.codenaam]));
+    const slotTekst = new Map(
+      (
+        db
+          .prepare(
+            `SELECT sl.id, sl.datum, st.code, st.naam FROM dienstrooster_shift_slot sl
+             JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id WHERE sl.period_id = ?`
+          )
+          .all(period.id) as Array<{ id: string; datum: string; code: string; naam: string }>
+      ).map((s) => [s.id, s])
+    );
+    for (const sleutel of new Set([...voor.keys(), ...na.keys()])) {
+      if (inBestand.has(sleutel)) continue;
+      const [persoon, slot] = sleutel.split('|');
+      const codenaam = codenaamVan.get(persoon);
+      const info = slotTekst.get(slot);
+      if (!codenaam || !info) continue;
+      const was = voor.get(sleutel)?.level ?? null;
+      const wordt = na.get(sleutel)?.level ?? null;
+      if (was === wordt) continue;
+      aangeraakt.add(persoon);
+      wijzigingen.push({
+        codenaam,
+        datum: info.datum,
+        dienst: `${info.code} ${info.naam.toLowerCase()} (rest van het blok)`,
+        van: was ? WOORD_VAN_NIVEAU[was] : 'leeg',
+        naar: wordt ? WOORD_VAN_NIVEAU[wordt] : 'leeg',
+      });
+    }
+
+    // Then the toelichting per day: one text a day, from the cells of that day that carry one (the back-up
+    // puts it after every mark of the day, a voorkeur included). A day needs a geblokkeerd or liever niet
+    // for it to stand: saveAiosReden says so when it does not.
     const perDag = new Map<string, { cel: Cel; teksten: Set<string> }>();
     for (const cel of gelezen.cellen) {
-      if (cel.doel !== 'ABSOLUUT' && cel.doel !== 'LIEVER_NIET') continue;
+      if (cel.doel === null) continue;
       const sleutel = `${cel.personId}|${cel.datum}`;
       const groep = perDag.get(sleutel) ?? { cel, teksten: new Set<string>() };
       if (cel.tekst) groep.teksten.add(cel.tekst);

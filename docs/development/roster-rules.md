@@ -117,12 +117,16 @@ Audit 0.94.0 on top of that:
   days of each membership within the period and combinedMembership weighs
   them by those days, so a pattern that follows a partial membership is not
   diluted by the days outside it.
-- **Not frozen.** The factor is read from the patterns as they are, for a
-  generated or published period as well, as the typed column always was. A
-  participant who changes a pattern afterwards moves the targets of a
-  period already made (publication check, carry-over of the next one). A
-  snapshot per period would hold it (a table or the frozen ruleset); left
-  to the user's decision.
+- **Held per period (0.95.0).** The part-time days change from one period to
+  the next, so the factor of a made roster is held when it is made
+  (dienstrooster_period_factor, `legFactorenVast`, `bevrorenFactoren`): the
+  publication check, the carry-over, the feestdag history and the AIOS's
+  dienstpercentage (also over four quarters, each quarter with its own fte)
+  count with it afterwards. Only while the period is gegenereerd or
+  gepubliceerd; before a roster, and after it is removed, the factor follows
+  the part-time days as they are. `loadPeriodMembers` takes `{ vers: true }`
+  for the generation itself, which makes a new one. Someone who joined after
+  it was made is counted by their part-time days.
 
 - **The solver** gets the derived value: `loadPeriodMembers`
   (lib/rosterBands.ts) overrides the stored column with

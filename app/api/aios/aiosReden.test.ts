@@ -29,7 +29,7 @@ import { buildWorld, deleteRowsAfter, insert, now, personCookie, rowidSnapshot, 
 
 let snapshot: Map<string, number>;
 let staf: World;
-const w = {} as { pool: string; period: string; planner: string; x: string; y: string };
+const w = {} as { pool: string; period: string; planner: string; admin: string; x: string; y: string };
 const q = aiosQuarter(2097, 2);
 const cn = (n: string) => `aiosrd-${n}-${tag}`;
 
@@ -67,6 +67,7 @@ beforeAll(() => {
   snapshot = rowidSnapshot();
   staf = buildWorld('ACHTERWACHT');
   w.planner = staff('PLANNER', 'AIOS');
+  w.admin = staff('ADMIN', 'ACHTERWACHT');
   const ruleset = insert('dienstrooster_ruleset', { naam: `AiosRd-${tag}`, config_json: '{}', aangemaakt_op: now });
   w.pool = insert('dienstrooster_pool', { naam: `AiosRd-${tag}`, type: 'AIOS', ruleset_id: ruleset, aangemaakt_op: now });
   ensureAiosShiftTypes(db, w.pool);
@@ -155,19 +156,35 @@ describe('who sees it', () => {
     expect((await eigenScherm(w.y)).redenen).toEqual([]);
   });
 
-  it('the planner, in the voorkeurenoverzicht after the mark, on each dienst of the day', async () => {
-    expect((await put(w.x, w.x, { datum: DAG, tekst: 'cursus in Utrecht' })).status).toBe(200);
-    const res = await voorkeuren(
-      new NextRequest(`http://localhost/api/aios/periode/${w.period}/download-voorkeuren`, { headers: { cookie: staffCookie(w.planner) } }),
-      { params: Promise.resolve({ id: w.period }) }
+  const download = async (wie: string) =>
+    readFirstSheet(
+      Buffer.from(
+        await (
+          await voorkeuren(
+            new NextRequest(`http://localhost/api/aios/periode/${w.period}/download-voorkeuren`, { headers: { cookie: staffCookie(wie) } }),
+            { params: Promise.resolve({ id: w.period }) }
+          )
+        ).arrayBuffer()
+      )
     );
-    const rows = readFirstSheet(Buffer.from(await res.arrayBuffer()));
+
+  it("the planner's own file has no toelichting at all: the planner sees one only correcting the roster by hand", async () => {
+    expect((await put(w.x, w.x, { datum: DAG, tekst: 'cursus in Utrecht' })).status).toBe(200);
+    const rows = await download(w.planner);
+    expect(rows.flat().some((cel) => String(cel).includes('cursus'))).toBe(false);
+    // The marks themselves are there.
+    expect(rows.slice(1).some((r) => r[rows[0].indexOf(cn('x'))] === 'liever niet')).toBe(true);
+  });
+
+  it("the beheerder's file, the back-up, after each mark of the day", async () => {
+    const rows = await download(w.admin);
     const kolom = rows[0].indexOf(cn('x'));
     const opDag = rows.slice(1).filter((r) => excelSerialToDate(Number(r[0])) === DAG);
     const udRij = opDag.find((r) => r[3].startsWith('UD'))!;
     expect(udRij[kolom]).toBe('liever niet: cursus in Utrecht');
-    // A dienst of that day without a mark of its own stays empty: the toelichting is of the day, shown where the mark is.
-    expect(opDag.filter((r) => r[kolom]).every((r) => r[kolom].startsWith('liever niet: '))).toBe(true);
+    // A dienst of that day without a mark of its own stays empty: the toelichting is of the day, shown where the mark is,
+    // after every mark of the day (a voorkeur too, lib/aiosVoorkeurImport.ts reads it back).
+    expect(opDag.filter((r) => r[kolom]).every((r) => r[kolom].includes(': cursus in Utrecht'))).toBe(true);
     // Nobody else's column, no other day.
     expect(rows.slice(1).filter((r) => r[rows[0].indexOf(cn('y'))]).length).toBe(0);
     expect(rows.slice(1).filter((r) => String(r[kolom] ?? '').includes('cursus')).length).toBe(opDag.filter((r) => r[kolom]).length);

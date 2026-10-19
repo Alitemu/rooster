@@ -539,6 +539,27 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.95.0:**
+- *Factoren per periode:* de deelnamefactor (bij de AIOS de fte) wordt vastgelegd
+  zodra het rooster van een periode gemaakt wordt. De publicatiecontrole, de
+  overloop en het dienstpercentage tellen daarna met die waarde, ook als de
+  parttimedagen later veranderen. Het ene kwartaal kan 1,0 zijn en het volgende
+  0,8: het dienstpercentage over meerdere kwartalen telt elk kwartaal met zijn
+  eigen fte. Maak je het rooster opnieuw, dan geldt de factor van dat moment.
+  Verwijder je het rooster, dan volgt de factor weer de parttimedagen.
+- *Toelichting:* alleen de beheerder krijgt de toelichtingen in het
+  voorkeurenoverzicht (de back-up), bij elke keuze van die dag. Het overzicht
+  van de AIOS-planner heeft ze niet. De planner ziet de toelichting alleen bij
+  het met de hand aanpassen of aanvullen van het rooster, en de AIOS leest dat
+  ook zo. De import leest de toelichting ook achter een voorkeur.
+  Importeer geen bestand zonder toelichtingen (zoals dat van de planner): zonder
+  tekst achter een keuze gaat de toelichting van die dag weg.
+- *Voorlopig en definitief:* de statusbalk van de AIOS zegt *Voorlopig
+  gepubliceerd* of *Definitief*. De Excel voor het roosterbureau (*Rooster per
+  dag* en *Per AIOS*) bestaat pas bij een definitief rooster, en het
+  roosterbureau krijgt alleen een bericht over een ruil in een definitief
+  rooster. Bij een voorlopig rooster krijgt alleen de planner dat bericht.
+
 **Vanaf versie 0.94.0** is alles van 0.90.0 tot en met 0.93.0 nagelopen en
 bijgewerkt waar dat nodig bleek.
 - *Parttimedagen:* een tweede parttimedag op dezelfde dag en week wordt

@@ -127,6 +127,9 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
     (met waarschuwingen eerst *Ja, toch publiceren*).
     - Je ziet: "Voorlopig gepubliceerd." en een melding dat er geen mail
       ging.
+    - De statusbalk bovenaan zegt *Voorlopig gepubliceerd*. De Excel voor het
+      roosterbureau staat bij *Publiceren* nog niet klaar: die komt pas bij
+      een definitief rooster.
     - Open de link van aios01. Je ziet het eigen rooster met de punten en het
       dienstpercentage. Daaronder staat *Ruilen*.
 19. **Ruilen.** Kies bij aios01 een dienst of blok en klik op *Ruilen*. Kies

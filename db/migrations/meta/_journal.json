@@ -225,6 +225,13 @@
       "when": 1789234200000,
       "tag": "0031_aios_reden",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1789320600000,
+      "tag": "0032_period_factor",
+      "breakpoints": true
     }
   ]
 }

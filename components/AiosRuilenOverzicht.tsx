@@ -48,7 +48,7 @@ export function AiosRuilenOverzicht({ periodId }: { periodId: string }) {
       blijfGeladen
     >
       <p className="text-sm text-neutral-700">
-        De AIOS ruilen onderling, zonder jou. Gaat een ruil door, dan krijgen jij en het roosterbureau een bericht via de stroom van de AIOS.
+        De AIOS ruilen onderling, zonder jou. Gaat een ruil door, dan krijg jij een bericht via de stroom van de AIOS. Het roosterbureau krijgt alleen een bericht over ruilen in een definitief rooster.
       </p>
       {fout && (
         <p role="alert" className="text-sm text-red-700">

@@ -22,6 +22,7 @@ import { db } from '@/db/client';
 import { addDays, getHolidaysInRange, getISOWeek, parseISO } from '@/lib/holidays';
 import { patroonDekt } from '@/lib/aiosSync';
 import { aiosFte } from '@/lib/aiosFte';
+import { bevrorenAiosFte } from '@/lib/aiosFteVast';
 import { blokkadeTellers, loadAiosVoorkeurDagen, loadAiosWens, type TellerGroep } from '@/lib/aiosPreferences';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { opgeknipteBlokken } from '@/lib/aiosFeestdagBlokken';
@@ -64,7 +65,11 @@ export interface AiosSolverInvoer {
 
 const periodeVan = (van: string | null, tot: string | null) => (van && tot ? { van, tot } : null);
 
-export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: number): AiosSolverInvoer {
+/**
+ * `vers`: the generation itself, which makes a new roster and so takes the fte of the part-time days as
+ * they are. Every other reading of a made roster takes the fte it was made with (lib/aiosFteVast.ts).
+ */
+export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: number, opties: { vers?: boolean } = {}): AiosSolverInvoer {
   const { start_datum: van, eind_datum: tot } = period;
   const diensten = db
     .prepare(
@@ -99,6 +104,7 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
 
   const deelnemers = aiosDeelnemers(period);
   const saldi = aiosSaldi(period, deelnemers.map((p) => p.id));
+  const vast = opties.vers ? new Map<string, number>() : bevrorenAiosFte(period.id);
   const aios = deelnemers.map((p): AiosSolverAios => {
     const wens = loadAiosWens(p.id, period.id);
     const eigenPatronen = patronen.all(p.id) as Array<{
@@ -113,7 +119,7 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
     }
     return {
       id: p.id,
-      fte: aiosFte(eigenPatronen, van, tot),
+      fte: vast.get(p.id) ?? aiosFte(eigenPatronen, van, tot),
       beschikbaar: (lidmaatschap.all(p.id, period.pool_id, tot, van) as Array<{ geldig_vanaf: string; geldig_tot: string }>).map(
         (m) => ({ van: m.geldig_vanaf > van ? m.geldig_vanaf : van, tot: m.geldig_tot < tot ? m.geldig_tot : tot })
       ),

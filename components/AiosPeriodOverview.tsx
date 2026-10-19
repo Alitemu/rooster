@@ -155,6 +155,7 @@ interface AiosStand {
   uitgenodigd_op: string | null;
   mail_ingesteld: boolean;
   aantal_deelnemers: number;
+  definitief: boolean;
 }
 
 /** Open, invite, remind, close: the steps up to the preferences, on the AIOS's own routes. */
@@ -410,7 +411,7 @@ function Pagina({ period: begin }: { period: Period }) {
       .then((res) => antwoord(res, 'Laden van de periode is mislukt'))
       .then((data) => {
         setPeriod((p) => ({ ...p, ...data.period }));
-        setStand({ uitgenodigd_op: data.uitgenodigd_op, mail_ingesteld: data.mail_ingesteld, aantal_deelnemers: data.aantal_deelnemers });
+        setStand({ uitgenodigd_op: data.uitgenodigd_op, mail_ingesteld: data.mail_ingesteld, aantal_deelnemers: data.aantal_deelnemers, definitief: data.definitief === true });
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Laden van de periode is mislukt'));
   }, [begin.id]);
@@ -451,7 +452,7 @@ function Pagina({ period: begin }: { period: Period }) {
             </p>
             <p className="text-sm text-neutral-600">Deadline voorkeuren: {deadlineTekst(period.deadline)}</p>
           </div>
-          <AiosPeriodeStatus period={period} onChanged={herlaad} />
+          <AiosPeriodeStatus period={period} definitief={stand?.definitief === true} onChanged={herlaad} />
         </div>
       </div>
 

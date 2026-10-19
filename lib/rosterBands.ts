@@ -14,7 +14,7 @@
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { combinedMembership } from '@/lib/coverageFactor';
-import { afgeleideDeelnamefactor, laadParttimePatronen } from '@/lib/deelnamefactor';
+import { afgeleideDeelnamefactor, bevrorenFactoren, laadParttimePatronen } from '@/lib/deelnamefactor';
 import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
@@ -187,11 +187,16 @@ export function combineMemberships<R extends MembershipRow>(
  * fellow summary and the capacity check, so none of them can count a
  * person differently.
  */
-export function loadPeriodMembers(period: {
-  pool_id: string;
-  start_datum: string;
-  eind_datum: string;
-}): Array<PeriodMember & { codenaam: string }> {
+export function loadPeriodMembers(
+  period: {
+    /** With it, the factors held when the roster was made count (lib/deelnamefactor.ts); without, those of now. */
+    id?: string;
+    pool_id: string;
+    start_datum: string;
+    eind_datum: string;
+  },
+  opties: { vers?: boolean } = {}
+): Array<PeriodMember & { codenaam: string }> {
   const rows = db
     .prepare(
       `SELECT p.id, p.codenaam, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
@@ -206,10 +211,12 @@ export function loadPeriodMembers(period: {
   // by those days and a part-time pattern that follows a partial membership
   // is not diluted by the days outside it.
   const patronen = laadParttimePatronen([...new Set(rows.map((r) => r.id))], period.start_datum, period.eind_datum);
+  // Once the roster is made, the factor of that moment; `vers` is the generation itself, which makes a new one.
+  const vast = period.id && !opties.vers ? bevrorenFactoren(period.id) : new Map<string, number>();
   return combineMemberships(
     rows.map((r) => ({
       ...r,
-      deelnamefactor: afgeleideDeelnamefactor(
+      deelnamefactor: vast.get(r.id) ?? afgeleideDeelnamefactor(
         patronen.get(r.id) ?? [],
         r.geldig_vanaf > period.start_datum ? r.geldig_vanaf : period.start_datum,
         r.geldig_tot < period.eind_datum ? r.geldig_tot : period.eind_datum

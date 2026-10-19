@@ -5,7 +5,7 @@ import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
 import { aiosPersoonlijkeLink, aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
-import { aiosEenheden, aiosRuilKandidaten, losseSleutel } from '@/lib/aiosRuilen';
+import { aiosEenheden, aiosRuilKandidaten, doorgevenAan, losseSleutel } from '@/lib/aiosRuilen';
 import { trekAiosPublicatieIn } from '@/lib/aiosPublicatie';
 import { loadAiosPeriode, setAiosVoorkeur } from '@/lib/aiosPreferences';
 import { saveAiosReden } from '@/lib/aiosReden';
@@ -206,7 +206,7 @@ describe('a request', () => {
 });
 
 describe('the answer', () => {
-  it('approved: the diensten change hands, the planner and the roosterbureau are told', async () => {
+  it('approved on a voorlopig roster: the diensten change hands, only the planner is told, the roosterbureau is not', async () => {
     const y = (await (await overzicht(preq(w.y, ''), pctx(w.y))).json()).data;
     const id = y.in[0].id;
     // Only the colleague asked can approve it.
@@ -225,7 +225,7 @@ describe('the answer', () => {
     const uitkomst = lijsten.find((l) => l.soort === 'RUIL_UITKOMST')!.berichten[0];
     expect(uitkomst.tekst).toContain(`${cn('y')} heeft je ruil goedgekeurd`);
     const door = lijsten.find((l) => l.soort === 'RUIL_DOORGEVEN')!.berichten;
-    expect(door.map((b) => b.codenaam)).toEqual(['Planner', 'Roosterbureau']);
+    expect(door.map((b) => b.codenaam)).toEqual(['Planner']);
     expect(door[0].personen.sort()).toEqual([cn('x'), cn('y')].sort());
     expect((await goedkeuren(preq(w.y, `/${id}/goedkeuren`, 'POST', {}), rctx(w.y, id))).status).toBe(409);
   });
@@ -358,5 +358,20 @@ describe("the AIOS's toelichting bij een dag (lib/aiosReden.ts)", () => {
       )
     );
     for (const tekst of gezien) expect(tekst).not.toContain(GEHEIM);
+  });
+});
+
+describe('who is told when a swap went through', () => {
+  it('the roosterbureau only once the roster is definitief; before, the planner alone', () => {
+    expect(doorgevenAan(w.period)).toEqual(['Planner']);
+    db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = ? WHERE id = ?`).run(now, w.period);
+    try {
+      expect(doorgevenAan(w.period)).toEqual(['Planner', 'Roosterbureau']);
+      // Not definitief when it is not even published.
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(w.period);
+      expect(doorgevenAan(w.period)).toEqual(['Planner']);
+    } finally {
+      db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = NULL, status = 'GEPUBLICEERD' WHERE id = ?`).run(w.period);
+    }
   });
 });

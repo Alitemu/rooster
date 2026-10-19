@@ -62,6 +62,12 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   reason of the solver's, a dienst that no longer exists is not), so the
   planner sees it again after a refresh. What the solver filled and left is
   history. Cascades with the period.
+- `period_factor` (0.95.0, migration 0032) - per period and person the
+  deelnamefactor (the AIOS's fte) the roster was made with. Written when the
+  roster is made (achterwacht: generate-roster before the solver, lib/
+  deelnamefactor.ts; AIOS: in the generation's transaction, lib/aiosFteVast.ts),
+  replaced by a new one, removed with the roster. Counts only while the
+  period is gegenereerd or gepubliceerd. Cascades with the period and the person.
 - `aios_reden` (0.91.0, migration 0031) - the optional toelichting an AIOS
   gives for a day they marked geblokkeerd or liever niet by hand (tekst, at
   most REDEN_MAX_LENGTH characters), per period, person and day. Private to

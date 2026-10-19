@@ -143,8 +143,9 @@ test('toelichting: the AIOS types it, the planner reads it, a colleague never se
     const groep = page.getByTestId('aios-redenen');
     await expect(groep).toContainText('Toelichting bij je dagen in deze week (niet verplicht)');
     await expect(groep).toContainText('Alleen de planner van de AIOS ziet dit');
-    // Where the planner sees it: by hand correcting the roster and in the voorkeurenoverzicht, nowhere else.
-    await expect(groep).toContainText('bij het met de hand aanpassen van het rooster en in het voorkeurenoverzicht (Excel)');
+    // Where the planner sees it: only while correcting or filling in the roster by hand, nowhere else.
+    await expect(groep).toContainText('alleen bij het met de hand aanpassen of aanvullen van het rooster');
+    await expect(groep).not.toContainText('Excel');
     await expect(groep).toContainText('Andere AIOS zien het nooit, ook niet bij een ruilverzoek');
     // The block is three days: three fields, each marked optional.
     await expect(groep.getByLabel(/^Toelichting voor .*\(niet verplicht\)/)).toHaveCount(3);
@@ -444,6 +445,12 @@ test('the planner of the AIOS: Exporteren & communicatie without the beheerder\'
   const sectie = p.getByTestId('aios-exporteren');
   await expect(sectie.getByRole('link', { name: /Voorkeurenoverzicht downloaden/ })).toBeVisible();
   await expect(sectie.getByRole('link', { name: /Statusrapport downloaden/ })).toBeVisible();
+  // The planner's own voorkeurenoverzicht has no toelichting: only the beheerder's file, the back-up, has them.
+  const bestand = await p.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-voorkeuren`);
+  expect(bestand.status()).toBe(200);
+  const plannerRijen = readFirstSheet(Buffer.from(await bestand.body()));
+  expect(plannerRijen.flat().some((cel) => String(cel).includes(TEKST_A_NIEUW) || String(cel).includes(TEKST_B))).toBe(false);
+  expect(plannerRijen.flat().some((cel) => String(cel).startsWith('geblokkeerd'))).toBe(true);
   // The beheerder's: the mail settings and the import.
   await expect(p.getByRole('button', { name: /Mailinstellingen/ })).toHaveCount(0);
   await expect(p.getByRole('button', { name: /Voorkeuren importeren/ })).toHaveCount(0);

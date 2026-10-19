@@ -244,7 +244,8 @@ describe('a file with problems is refused whole', () => {
     expect(problemen.some((p) => p.includes('onbekend-persoon') && p.includes('geen deelnemer'))).toBe(true);
     expect(problemen.some((p) => p.includes(cn('x')) && p.includes('twee keer'))).toBe(true);
     expect(problemen.some((p) => p.includes('"misschien"') && p.includes('geen geblokkeerd, liever niet of voorkeur'))).toBe(true);
-    expect(problemen.some((p) => p.includes('een toelichting kan alleen bij geblokkeerd of liever niet'))).toBe(true);
+    // A text after a voorkeur is read, but a day with only a voorkeur has no blokkade for it to stand with.
+    expect(problemen.some((p) => p.includes(cn('z')) && p.includes(WEEKEND_DD) && p.includes('Kies eerst voor die dag geblokkeerd of liever niet'))).toBe(true);
     const echt = await importeer(rows, true);
     expect(echt.status).toBe(400);
     expect(echt.json.error.code).toBe('IMPORT_PROBLEMS');
@@ -281,8 +282,8 @@ describe('a file with problems is refused whole', () => {
   });
 });
 
-describe('the toelichting stays with the blokkade', () => {
-  it('a voorkeur of the day of a toelichting has no text, and such an overview reads back unchanged', async () => {
+describe('the toelichting of a day on every mark of that day', () => {
+  it('a voorkeur of the day of a toelichting carries it too, and such an overview reads back unchanged', async () => {
     const v = insert('dienstrooster_person', { codenaam: cn('v'), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
     insert('dienstrooster_pool_membership', { person_id: v, pool_id: w.pool, deelnamefactor: 1, geldig_vanaf: '2090-01-01', geldig_tot: '2099-12-31' });
     const dag = '2097-06-11';
@@ -290,9 +291,9 @@ describe('the toelichting stays with the blokkade', () => {
     expect(setAiosVoorkeur(v, w.period, slotId(dag, 'AD'), 'VOORKEUR')).toEqual({ ok: true });
     expect(saveAiosReden(v, loadAiosPeriode(w.period)!, dag, 'kind ziek')).toEqual({ ok: true });
     const rows = await gelezen();
-    // The text belongs to the liever niet: the voorkeur of the same day says voorkeur and no more.
+    // The back-up holds every toelichting, after each mark of its day, a voorkeur included.
     expect(rijen(rows, dag, 'UD')[0][kolom(rows, 'v')]).toBe('liever niet: kind ziek');
-    expect(rijen(rows, dag, 'AD')[0][kolom(rows, 'v')]).toBe('voorkeur');
+    expect(rijen(rows, dag, 'AD')[0][kolom(rows, 'v')]).toBe('voorkeur: kind ziek');
     // The file as it was downloaded is accepted as it is: nothing changes, nothing is refused.
     const gecontroleerd = await importeer(rows, false);
     expect(gecontroleerd.status).toBe(200);
@@ -317,3 +318,48 @@ describe('the toelichting stays with the blokkade', () => {
     expect((await importeer(rows, false)).status).toBe(200);
   });
 });
+
+describe('what the import used to pass over in silence', () => {
+  it('a column without a name but with data is a problem, one without data is not', async () => {
+    const rows = kopieer(await gelezen());
+    const n = rows[0].length;
+    rows[0][n] = '';
+    rijen(rows, UD_DAG, 'UD')[0][n] = 'iets';
+    const check = await importeer(rows, false);
+    expect((check.json.data.problemen as string[]).some((p) => p.includes(`Kolom ${n + 1} heeft geen kop maar wel gegevens`))).toBe(true);
+    const leeg = kopieer(await gelezen());
+    leeg[0][n] = '';
+    expect((await importeer(leeg, false)).json.data.problemen).toEqual([]);
+  });
+
+  it('a toelichting on a part-time day or an absence is a problem, not thrown away', async () => {
+    const rows = kopieer(await gelezen());
+    const cel = rijen(rows, '2097-04-26', 'UD')[0];
+    expect(cel[kolom(rows, 'y')]).toContain('(afwezig)');
+    cel[kolom(rows, 'y')] = 'liever niet: toch niet weg';
+    const check = await importeer(rows, false);
+    expect((check.json.data.problemen as string[]).some((p) => p.includes(cn('y')) && p.includes('een toelichting kan niet bij een parttimedag of afwezigheid'))).toBe(true);
+  });
+
+  it('a block set from one dienst also changes the others of it: the check says so, as applying does', async () => {
+    const s = insert('dienstrooster_person', { codenaam: cn('s'), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    insert('dienstrooster_pool_membership', { person_id: s, pool_id: w.pool, deelnamefactor: 1, geldig_vanaf: '2090-01-01', geldig_tot: '2099-12-31' });
+    const dagen = nachtDagen().slice(0, 3);
+    expect(setAiosVoorkeur(s, w.period, slotId(dagen[0], 'ND'), 'ABSOLUUT')).toEqual({ ok: true });
+    const rows = kopieer(await gelezen());
+    const k = kolom(rows, 's');
+    // The file names the first night only; the other two rows are gone from it.
+    const weg = new Set([dagen[1], dagen[2]].map((d) => rijen(rows, d, 'ND')[0]));
+    const kleiner = rows.filter((r) => !weg.has(r));
+    rijen(kleiner, dagen[0], 'ND')[0][k] = 'liever niet';
+    const check = await importeer(kleiner, false);
+    expect(check.json.data.problemen).toEqual([]);
+    const van = (check.json.data.wijzigingen as Array<{ codenaam: string; dienst: string }>).filter((x) => x.codenaam === cn('s'));
+    expect(van).toHaveLength(3);
+    expect(van.filter((x) => x.dienst.includes('rest van het blok'))).toHaveLength(2);
+    const echt = await importeer(kleiner, true);
+    expect(echt.json.data.wijzigingen).toEqual(check.json.data.wijzigingen);
+    for (const d of dagen) expect(niveau(s, d, 'ND')).toBe('LIEVER_NIET');
+  });
+});
+

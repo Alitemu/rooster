@@ -724,6 +724,28 @@ export const aiosGeneratie = sqliteTable('dienstrooster_aios_generatie', {
 });
 
 /**
+ * The deelnamefactor (the AIOS's fte) of each person as it was when the
+ * period's roster was made (lib/deelnamefactor.ts, lib/aiosFteVast.ts). The
+ * factor follows from the part-time days a person gives, which change from
+ * one period to the next (1,0 now, 0,8 the next): what a made roster, its
+ * publication check, the carry-over and the dienstpercentage count with is
+ * what they counted with when it was made. Replaced by a new generation,
+ * removed with the roster; cascades with the period and the person.
+ */
+export const periodFactor = sqliteTable(
+  'dienstrooster_period_factor',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    factor: real('factor').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('period_factor_uniq').on(table.period_id, table.person_id),
+  })
+);
+
+/**
  * Why an AIOS marks a day geblokkeerd or liever niet, in their own words
  * and optional (lib/aiosReden.ts). Private: only the AIOS's planner sees it,
  * in the diensten of a roster being corrected by hand and in the

@@ -61,9 +61,7 @@ function markering(d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>, toelichting?: 
   const keuze = KEUZE[d.level];
   if (d.bron === 'PARTTIME') return `${keuze} (parttime)`;
   if (d.bron === 'ABSENCE') return `${keuze} (afwezig)`;
-  // The day's toelichting belongs to a block or a liever niet; a voorkeur of the same day has none (the import
-  // refuses a toelichting there).
-  return toelichting && d.level !== 'VOORKEUR' ? `${keuze}: ${toelichting}` : keuze;
+  return toelichting ? `${keuze}: ${toelichting}` : keuze;
 }
 
 function blokTekst(d: AiosVoorkeurDienst): string | null {
@@ -71,10 +69,17 @@ function blokTekst(d: AiosVoorkeurDienst): string | null {
   return `${d.blok.soort === 'AVOND' ? 'avondblok' : 'nachtblok'} ${BLOK_VORM_LABELS[d.blok.vorm]}`;
 }
 
-/** Voorkeuren per dienst: a row per dienst, a column per AIOS. */
-export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode): XlsxSheet {
+/**
+ * Voorkeuren per dienst: a row per dienst, a column per AIOS.
+ *
+ * `metToelichting`: the beheerder's file, the back-up, which holds every
+ * toelichting (after each mark of its day) and which the import reads back.
+ * The planner's file has none: the planner sees a toelichting only while
+ * correcting or filling in the roster by hand (lib/aiosReden.ts).
+ */
+export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode, opties: { metToelichting?: boolean } = {}): XlsxSheet {
   const deelnemers = aiosDeelnemers(period);
-  const redenen = loadAlleAiosRedenen(period.id);
+  const redenen = opties.metToelichting ? loadAlleAiosRedenen(period.id) : new Map<string, string>();
   const perPersoon = deelnemers.map((p) => {
     const marks = new Map<string, string | null>();
     for (const dag of loadAiosVoorkeurDagen(p.id, period.id)) {

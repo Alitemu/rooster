@@ -22,6 +22,7 @@ import { db } from '@/db/client';
 import { postJson } from '@/lib/solverClient';
 import { errorReference, internalErrorMessage } from '@/lib/api-errors';
 import { aiosSolverInvoer } from '@/lib/aiosSolverInvoer';
+import { legAiosFteVast, wisAiosFteVast } from '@/lib/aiosFteVast';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 
 export const AIOS_TIJDSLIMIETEN = [60, 120, 300, 600] as const;
@@ -142,7 +143,7 @@ export function startAiosGeneratie(period: AiosUitnodigPeriode & { row_version: 
 
 async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: number }, tijdslimiet: number): Promise<void> {
   try {
-    const invoer = aiosSolverInvoer(period, tijdslimiet);
+    const invoer = aiosSolverInvoer(period, tijdslimiet, { vers: true });
     // Building the model is not bounded by the search time; minutes of margin.
     const antwoord = await postJson(`${solverUrl()}/solve`, invoer, tijdslimiet * 1000 + 300_000);
     if (!antwoord.ok) {
@@ -177,6 +178,8 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
       );
       const op = new Date().toISOString();
       for (const t of uit.toewijzingen) insert.run(randomUUID(), period.id, t.aios_id, t.dienst_id, op);
+      // The fte this roster was made with stays with it (lib/aiosFteVast.ts).
+      legAiosFteVast(period.id, invoer.aios);
       db.prepare('DELETE FROM dienstrooster_aios_doel WHERE period_id = ?').run(period.id);
       const doel = db.prepare(
         'INSERT INTO dienstrooster_aios_doel (id, period_id, person_id, doel_punten, doel_feestdagen) VALUES (?, ?, ?, ?, ?)'
@@ -212,6 +215,7 @@ export function verwijderAiosRooster(periodId: string): number {
     const n = db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId).changes;
     db.prepare('DELETE FROM dienstrooster_aios_doel WHERE period_id = ?').run(periodId);
     db.prepare('DELETE FROM dienstrooster_aios_generatie WHERE period_id = ?').run(periodId);
+    wisAiosFteVast(periodId);
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN', row_version = row_version + 1 WHERE id = ?`).run(periodId);
     return n;
   })();

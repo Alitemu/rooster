@@ -32,7 +32,15 @@ const TEKST: Record<string, string> = {
   GEPUBLICEERD: '📝 Status: Gepubliceerd',
 };
 
-export function AiosPeriodeStatus({ period, onChanged }: { period: { id: string; status: string }; onChanged: () => void }) {
+export function AiosPeriodeStatus({
+  period,
+  definitief = false,
+  onChanged,
+}: {
+  period: { id: string; status: string };
+  definitief?: boolean;
+  onChanged: () => void;
+}) {
   const [bezig, setBezig] = useState(false);
   const [zeker, setZeker] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -74,7 +82,9 @@ export function AiosPeriodeStatus({ period, onChanged }: { period: { id: string;
 
   return (
     <div className="flex flex-col items-start gap-2" data-testid="aios-periode-status">
-      <div className={`px-4 py-2 rounded font-semibold ${KLEUR[period.status] ?? KLEUR.CONCEPT}`}>{TEKST[period.status] ?? period.status}</div>
+      <div className={`px-4 py-2 rounded font-semibold ${KLEUR[period.status] ?? KLEUR.CONCEPT}`}>
+        {period.status === 'GEPUBLICEERD' ? (definitief ? '✅ Status: Definitief' : '📝 Status: Voorlopig gepubliceerd') : (TEKST[period.status] ?? period.status)}
+      </div>
 
       {period.status === 'OPEN' && (
         <div className="flex flex-col items-start gap-2 max-w-sm">

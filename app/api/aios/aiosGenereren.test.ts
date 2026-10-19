@@ -404,6 +404,31 @@ describe('making the AIOS roster', () => {
     expect(periodeStatus().row_version).toBe(rv);
   });
 
+  it('holds the fte each AIOS had when the roster was made: part-time days that change later do not rewrite its percentages', async () => {
+    const factoren = () =>
+      Object.fromEntries(
+        (db.prepare('SELECT person_id, factor FROM dienstrooster_period_factor WHERE period_id = ?').all(w.period) as Array<{ person_id: string; factor: number }>).map(
+          (r) => [r.person_id, r.factor]
+        )
+      );
+    expect(factoren()).toEqual({ [w.x]: 0.8, [w.y]: 1 });
+    const fteVan = async () => {
+      const res = await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period));
+      return (await res.json()).data.per_aios.find((a: any) => a.person_id === w.x);
+    };
+    const voor = await fteVan();
+    expect(voor.fte).toBe(0.8);
+    // x stops being part-time (the pattern ends before the quarter): the next quarter is 1,0, this one stays 0,8.
+    db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2000-01-01' WHERE person_id = ?`).run(w.x);
+    try {
+      const na = await fteVan();
+      expect(na.fte).toBe(0.8);
+      expect(na.dienstpercentage).toBe(voor.dienstpercentage);
+    } finally {
+      db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2099-12-31' WHERE person_id = ?`).run(w.x);
+    }
+  });
+
   it('"Rooster verwijderen" empties it and takes the period back to gesloten, once', async () => {
     const res = await verwijderen(req(`${w.period}/rooster-verwijderen`, staffCookie(w.planner), 'POST'), ctx(w.period));
     expect(res.status).toBe(200);
@@ -411,6 +436,8 @@ describe('making the AIOS roster', () => {
     expect(periodeStatus().status).toBe('GESLOTEN');
     // What it told about the empty diensten goes with the roster.
     expect(db.prepare('SELECT 1 FROM dienstrooster_aios_generatie WHERE period_id = ?').get(w.period)).toBeUndefined();
+    // And the fte held with it: without a roster the fte follows the part-time days as they are.
+    expect(db.prepare('SELECT 1 FROM dienstrooster_period_factor WHERE period_id = ?').get(w.period)).toBeUndefined();
     const leeg = await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period));
     expect((await leeg.json()).data.generatie).toBeNull();
     const nogEens = await verwijderen(req(`${w.period}/rooster-verwijderen`, staffCookie(w.planner), 'POST'), ctx(w.period));

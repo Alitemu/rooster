@@ -266,6 +266,14 @@ describe.each(['GELIJK', 'NAAR_RATO'])('the solver is told the streefbereik the 
     buildPeriod(mode);
     const input = await generate();
     expect(input.participation_factors[ids.parttime]).toBe(0.5);
+    // And held with the roster: what the check and the carry-over count with later (lib/deelnamefactor.ts).
+    const vast = Object.fromEntries(
+      (db.prepare('SELECT person_id, factor FROM dienstrooster_period_factor WHERE period_id = ?').all(ids.period) as Array<{ person_id: string; factor: number }>).map(
+        (r) => [r.person_id, r.factor]
+      )
+    );
+    expect(vast[ids.parttime]).toBe(0.5);
+    expect(Object.keys(vast).sort()).toEqual([...(input.people as string[])].sort());
     for (const personId of input.people as string[]) {
       if (personId !== ids.parttime) expect(input.participation_factors[personId] ?? 1).toBe(1);
     }

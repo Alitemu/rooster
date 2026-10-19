@@ -118,10 +118,12 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   expect((db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period) as { status: string }).status).toBe('GEPUBLICEERD');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
-  // The workbook, as the planner downloads it.
-  const excel = await page.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-rooster`);
-  expect(excel.status()).toBe(200);
-  expect(excel.headers()['content-type']).toContain('spreadsheetml');
+  // Voorlopig goes nowhere: the bar says so, and the Excel for the roosterbureau is not there yet.
+  await expect(page.getByTestId('aios-periode-status')).toContainText('Status: Voorlopig gepubliceerd');
+  await expect(paneel.getByTestId('aios-excel-pas-definitief')).toBeVisible();
+  await expect(paneel.getByRole('link', { name: 'Rooster per dag' })).toHaveCount(0);
+  const nog = await page.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-rooster`);
+  expect(nog.status()).toBe(409);
 
   // The AIOS, on their own link, in a browser of their own.
   const aiosContext = await browser.newContext({ viewport: { width: 375, height: 800 } });
@@ -138,6 +140,12 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   await paneel.getByRole('button', { name: 'Definitief maken' }).click();
   await paneel.getByRole('button', { name: 'Ja, definitief maken' }).click();
   await expect(paneel.getByText(/^Het rooster is definitief\./)).toBeVisible();
+  await expect(page.getByTestId('aios-periode-status')).toContainText('Status: Definitief');
+  // Now the workbook, as the planner downloads it for the roosterbureau.
+  await expect(paneel.getByRole('link', { name: 'Rooster per dag' })).toBeVisible();
+  const excel = await page.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-rooster`);
+  expect(excel.status()).toBe(200);
+  expect(excel.headers()['content-type']).toContain('spreadsheetml');
   await aios.reload();
   await expect(mijn.getByText('Dit rooster is definitief.')).toBeVisible();
   await expect(mijn.getByTestId('aios-voorlopig')).toHaveCount(0);

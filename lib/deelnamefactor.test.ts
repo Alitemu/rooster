@@ -4,6 +4,9 @@ import {
   afgeleideDeelnamefactor,
   deelnamefactorVoorLijst,
   laadAfgeleideDeelnamefactoren,
+  bevrorenFactoren,
+  legFactorenVast,
+  wisBevrorenFactoren,
   periodeMetDatums,
   relevantePeriode,
   type DeeltijdPatroon,
@@ -260,6 +263,52 @@ describe('what Personeel beheren shows', () => {
       // The pattern holds over the second membership only: 33 days of the 73 they are present.
       patroon(c, 'MA', 'ELKE_WEEK', '2097-03-01', '2099-12-31');
       expect(factor(c)).toBeCloseTo(1 - 0.2 * (33 / 73), 6);
+    });
+  });
+
+  describe('held with the roster', () => {
+    // 0,8 now (a day off every week), but the roster of this period was made when it was 1,0.
+    const poolV = insert('dienstrooster_pool', { naam: `DfVast-${tag}`, type: 'ACHTERWACHT', ruleset_id: ruleset, aangemaakt_op: now });
+    const periodeV = maakPeriode(poolV, 'Vast', VAN, TOT, 'GESLOTEN');
+    const wie = insert('dienstrooster_person', { codenaam: `df-v-${tag}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    const laatkomer = insert('dienstrooster_person', { codenaam: `df-l-${tag}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    for (const id of [wie, laatkomer]) insert('dienstrooster_pool_membership', { person_id: id, pool_id: poolV, geldig_vanaf: '2090-01-01', geldig_tot: '2099-12-31' });
+    patroon(wie, 'MA', 'ELKE_WEEK');
+    patroon(laatkomer, 'MA', 'ELKE_WEEK');
+    const factor = (id: string, opties = {}) =>
+      loadPeriodMembers({ id: periodeV, pool_id: poolV, start_datum: VAN, eind_datum: TOT }, opties).find((m) => m.id === id)?.deelnamefactor;
+    const status = (s: string) => db.prepare('UPDATE dienstrooster_schedule_period SET status = ? WHERE id = ?').run(s, periodeV);
+
+    it('counts only while there is a roster: before it the factor follows the part-time days', () => {
+      legFactorenVast(periodeV, [{ id: wie, deelnamefactor: 1 }]);
+      expect(bevrorenFactoren(periodeV).size).toBe(0);
+      expect(factor(wie)).toBe(0.8);
+    });
+
+    it('with a roster the factor is the one it was made with, whatever the part-time days say now', () => {
+      status('GEGENEREERD');
+      expect(factor(wie)).toBe(1);
+      status('GEPUBLICEERD');
+      expect(factor(wie)).toBe(1);
+    });
+
+    it('someone who was not there when it was made is counted by their part-time days', () => {
+      expect(factor(laatkomer)).toBe(0.8);
+    });
+
+    it('the generation itself takes the factors of now (vers), and a new roster replaces the held ones', () => {
+      status('GEGENEREERD');
+      expect(factor(wie, { vers: true })).toBe(0.8);
+      legFactorenVast(periodeV, [{ id: wie, deelnamefactor: 0.8 }]);
+      expect(factor(wie)).toBe(0.8);
+      expect(bevrorenFactoren(periodeV).size).toBe(1);
+    });
+
+    it('once the roster is removed they are gone, and the factor follows the part-time days again', () => {
+      legFactorenVast(periodeV, [{ id: wie, deelnamefactor: 1 }]);
+      wisBevrorenFactoren(periodeV);
+      expect(bevrorenFactoren(periodeV).size).toBe(0);
+      expect(factor(wie)).toBe(0.8);
     });
   });
 });

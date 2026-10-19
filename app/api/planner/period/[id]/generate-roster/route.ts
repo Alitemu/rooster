@@ -21,6 +21,7 @@ import {
   type PeriodMember,
   type Teller,
 } from '@/lib/rosterBands';
+import { legFactorenVast } from '@/lib/deelnamefactor';
 import { getFellowIds } from '@/lib/fellows';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // both count for their streefbereik (lib/rosterBands.ts
     // loadPeriodMembers). The days outside them are blocked further down
     // (blockOutsideMembership).
-    const poolMembers = loadPeriodMembers(period);
+    const poolMembers = loadPeriodMembers(period, { vers: true });
 
     const people = poolMembers.map((m) => m.id);
 
@@ -183,6 +184,11 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         { status: 400 }
       );
     }
+
+    // What this roster counts with, held for good: the factors of now, replacing those of an earlier
+    // roster of this period (lib/deelnamefactor.ts). A change in someone's part-time days after this
+    // is for the next period, not for this one.
+    legFactorenVast(period.id, poolMembers);
 
     // Everything from here on is the slow part - the solver call itself can
     // legitimately run for minutes (up to 600s plus model-build overhead).

@@ -26,6 +26,7 @@
  */
 
 import { randomUUID } from 'crypto';
+import { aiosIsDefinitief } from '@/lib/aiosDefinitief';
 import { db } from '@/db/client';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht, type VerzendlijstSoort } from '@/lib/aiosVerzendlijst';
 import { formatSwapDate } from '@/lib/aiosTeksten';
@@ -332,7 +333,11 @@ const GEPUBLICEERD = 'Ruilen kan als het rooster gepubliceerd is.';
 
 // ---- mail -------------------------------------------------------------------
 
-const DOORGEVEN_AAN = ['Planner', 'Roosterbureau'] as const;
+/**
+ * Who is told a swap went through: the planner always, the roosterbureau only once the roster is definitief
+ * (a voorlopig roster does not go there; the Excel it gets then holds the swap).
+ */
+export const doorgevenAan = (periodId: string) => (aiosIsDefinitief(periodId) ? (['Planner', 'Roosterbureau'] as const) : (['Planner'] as const));
 
 const dienstTekst = (e: EenheidUit) =>
   e.van === e.tot ? `${e.naam.toLowerCase()} op ${formatSwapDate(e.van)}` : `${e.naam.toLowerCase()} van ${formatSwapDate(e.van)} tot en met ${formatSwapDate(e.tot)}`;
@@ -492,7 +497,7 @@ export function keurAiosRuilGoed(period: AiosUitnodigPeriode, personId: string, 
       period,
       'RUIL_DOORGEVEN',
       // personen: the two who swapped, as the achterwacht's (lib/meldingMail.ts DoorgevenMail); no link.
-      DOORGEVEN_AAN.map((aan) => ({
+      doorgevenAan(period.id).map((aan) => ({
         soort: 'RUIL_DOORGEVEN' as const,
         codenaam: aan,
         personen: verzendlijstPersonen(aanvrager, [collega]),
