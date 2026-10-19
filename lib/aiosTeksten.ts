@@ -13,6 +13,17 @@ const PERIOD_STATUS_LABELS: Record<string, string> = {
   GEPUBLICEERD: 'gepubliceerd',
 };
 
+/**
+ * Back to open is from GESLOTEN only: what to do first from the later
+ * statuses. The route answers with these words and the page shows them
+ * (components/AiosPeriodeStatus.tsx).
+ */
+export const EERST_VERWIJDEREN: Record<string, string> = {
+  GEGENEREERD: 'Het rooster is al gemaakt. Verwijder eerst het rooster, bij Rooster met Rooster verwijderen. Daarna kan de periode terug naar open.',
+  GEPUBLICEERD:
+    'Het rooster is gepubliceerd. Trek eerst de publicatie in en verwijder daarna het rooster, bij Rooster met Rooster verwijderen. Daarna kan de periode terug naar open.',
+};
+
 /** "gesloten" for GESLOTEN; an unknown value is passed through lowercased. */
 export function periodStatusLabel(status: string): string {
   return PERIOD_STATUS_LABELS[status] ?? status.toLowerCase();

@@ -20,6 +20,7 @@ import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
 import { AiosRuilenOverzicht } from '@/components/AiosRuilenOverzicht';
 import { AiosVoortgangstoets, FellowVak } from '@/components/AiosVoortgangstoets';
+import { AiosPeriodeStatus } from '@/components/AiosPeriodeStatus';
 import { AiosHarmonica, AiosSectie } from '@/components/AiosSectie';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
@@ -246,7 +247,6 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [melding, setMelding] = useState<string | null>(null);
-  const [zeker, setZeker] = useState(false);
   const [beheerder, setBeheerder] = useState(false);
 
   useEffect(() => {
@@ -268,7 +268,6 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
         await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
         fallback
       );
-      setZeker(false);
       if (klaar) setMelding(klaar(data));
       onChanged();
     } catch (err) {
@@ -410,47 +409,14 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
               Opslaan
             </button>
           </div>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => (zeker ? doe(withBasePath(`/api/aios/periode/${period.id}/sluiten`), 'POST', {}, 'Sluiten van de periode is mislukt') : setZeker(true))}
-              disabled={bezig}
-              className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
-            >
-              {bezig ? 'Bezig...' : zeker ? 'Zeker weten? Nogmaals klikken' : 'Periode sluiten'}
-            </button>
-            {zeker && (
-              <button type="button" onClick={() => setZeker(false)} className="px-4 py-2 rounded font-medium text-neutral-600">
-                Annuleren
-              </button>
-            )}
-          </div>
-          {zeker && (
-            <p className="text-sm text-neutral-700">
-              Na het sluiten kunnen de AIOS hun voorkeuren niet meer wijzigen. Terug naar open kan daarna nog.
-            </p>
-          )}
         </div>
       )}
 
       {period.status === 'GESLOTEN' && (
         <div className="space-y-3">
           <p className="text-sm text-neutral-700">
-            De periode is gesloten: de AIOS kunnen hun voorkeuren niet meer wijzigen. Maak hieronder het rooster.
+            De periode is gesloten: de AIOS kunnen hun voorkeuren niet meer wijzigen. Maak hieronder het rooster. Met de knop bovenaan kan de periode terug naar open.
           </p>
-          <button
-            type="button"
-            onClick={() => (zeker ? doe(withBasePath(`/api/aios/periode/${period.id}/heropenen`), 'POST', {}, 'Terug naar open is mislukt') : setZeker(true))}
-            disabled={bezig}
-            className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-          >
-            {bezig ? 'Bezig...' : zeker ? 'Zeker weten? Nogmaals klikken' : 'Terug naar open'}
-          </button>
-          {zeker && (
-            <p className="text-sm text-neutral-700">
-              De AIOS kunnen hun voorkeuren weer wijzigen tot de deadline. Verschuif die zo nodig daarna.
-            </p>
-          )}
         </div>
       )}
 
@@ -688,16 +654,22 @@ function Pagina({ period: begin }: { period: Period }) {
 
   return (
     <div className="container-main py-8 space-y-6">
-      <div className="card p-6 space-y-2">
-        <Link href="/planner" className="text-sm text-blue-600 hover:text-blue-700">
-          ← Periodes
-        </Link>
-        <h1 className="text-3xl font-bold text-neutral-900 break-words">{period.naam}</h1>
-        <p className="text-neutral-600">
-          AIOS · {datumLang(period.start_datum)} t/m {datumLang(period.eind_datum)}
-          {weken.length > 0 && ` · ${weken.length} weken`}
-        </p>
-        <p className="text-sm text-neutral-600">Deadline voorkeuren: {deadlineTekst(period.deadline)}</p>
+      <div className="card p-6">
+        {/* Stacked on a phone, side by side from sm up, as the achterwacht's header. */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <Link href="/planner" className="text-sm text-blue-600 hover:text-blue-700">
+              ← Periodes
+            </Link>
+            <h1 className="text-3xl font-bold text-neutral-900 break-words">{period.naam}</h1>
+            <p className="text-neutral-600">
+              AIOS · {datumLang(period.start_datum)} t/m {datumLang(period.eind_datum)}
+              {weken.length > 0 && ` · ${weken.length} weken`}
+            </p>
+            <p className="text-sm text-neutral-600">Deadline voorkeuren: {deadlineTekst(period.deadline)}</p>
+          </div>
+          <AiosPeriodeStatus period={period} onChanged={herlaad} />
+        </div>
       </div>
 
       <Stappen period={period} stand={stand} onChanged={herlaad} />
@@ -752,7 +724,7 @@ function Pagina({ period: begin }: { period: Period }) {
             </p>
           </AiosSectie>
 
-          <AiosSectie sleutel="diensten" titel="Diensten" hint="codes, tijden en punten">
+          <AiosSectie sleutel="diensten" titel="Diensten (toelichting)" hint="codes, tijden en punten">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left text-neutral-600">

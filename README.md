@@ -427,7 +427,7 @@ staat een opgeknipt blok per dag en de tweede AIOS op oudjaarsnacht in de rij
 *Nacht 2*.
 
 **Vanaf versie 0.77.0** pas je het rooster van de AIOS met de hand aan. Tik
-in *Het rooster per week* op een blok of dienst. Je ziet per AIOS wat het zou
+in *Handmatige correctie gegenereerde rooster* op een blok of dienst. Je ziet per AIOS wat het zou
 kosten: een harde regel die erbij komt (zoals een compensatiedag of te weinig
 rust), wat die AIOS markeerde, of het blok niet meer heel is en het
 dienstpercentage daarna. Kies een AIOS. Met een waarschuwing vraagt de app
@@ -538,6 +538,19 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 0.90.0** staat bovenaan de pagina van een AIOS-periode de
+status, met de knoppen *Periode sluiten* en *Terug naar open*, zoals bij de
+achterwacht. Terug naar open kan alleen vanuit gesloten. Is het rooster al
+gemaakt, dan zegt de pagina dat je eerst het rooster moet verwijderen
+(bij *Rooster*), en bij een gepubliceerd rooster ook dat je eerst de
+publicatie intrekt. Wat de app na het maken van het rooster meldt over de
+diensten die leeg bleven, blijft nu bewaard: je ziet het ook na verversen of
+opnieuw inloggen. Een dienst die je met de hand invult, verdwijnt uit de
+lijst *Nog leeg*. De sectie *Diensten* heet nu *Diensten (toelichting)* en
+*Het rooster per week* heet *Handmatige correctie gegenereerde rooster*.
+Dit vraagt een databasewijziging (migratie 0030), die bij het opstarten
+vanzelf gebeurt.
 
 **Vanaf versie 0.87.1** zegt de app bij het maken van het rooster van de
 AIOS wat er misging. *De solver van de AIOS is niet bereikbaar* betekent

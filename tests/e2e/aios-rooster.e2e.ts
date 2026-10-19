@@ -91,13 +91,13 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
 
   await expect(page.getByRole('heading', { name: 'Per AIOS' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Het rooster per week' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Handmatige correctie gegenereerde rooster' })).toBeVisible();
   // Every AIOS a row with a percentage; the roster names them.
   await openAiosSectie(page, 'Per AIOS');
   const tabel = page.locator('table', { hasText: 'Percentage' });
   await expect(tabel.locator('tbody tr')).toHaveCount(8);
   await expect(tabel.getByText(/\d+(,\d)?%/).first()).toBeVisible();
-  await openAiosSectie(page, 'Het rooster per week');
+  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
   await expect(page.locator('td span', { hasText: new RegExp(`^ar0\\d-${stamp % 100000}`) }).first()).toBeVisible();
   const ingedeeld = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(ids.period) as { n: number }).n;
   expect(ingedeeld).toBeGreaterThan(0);
@@ -166,7 +166,7 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
 
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
-  await openAiosSectie(page, 'Het rooster per week');
+  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
   await expect(page.getByRole('cell', { name: 'Nacht 2', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 

@@ -158,6 +158,12 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
       return;
     }
     const dienst = new Map(invoer.diensten.map((d) => [d.id, d]));
+    const uitkomst: AiosGeneratieUitkomst = {
+      status: uit.status,
+      gevuld: uit.toewijzingen.length,
+      leeg: uit.leeg.map((l) => ({ dienst_id: l.dienst_id, datum: dienst.get(l.dienst_id)!.datum, code: dienst.get(l.dienst_id)!.code, redenen: l.redenen })),
+      tijd_seconden: uit.tijd_seconden,
+    };
     const geschreven = db.transaction(() => {
       // Moved since we started (another generation, a status change): leave it.
       const nu = db.prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?').get(period.id) as
@@ -176,6 +182,12 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
         'INSERT INTO dienstrooster_aios_doel (id, period_id, person_id, doel_punten, doel_feestdagen) VALUES (?, ?, ?, ?, ?)'
       );
       for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten);
+      // What the planner is told about the empty diensten stays with the roster.
+      db.prepare('DELETE FROM dienstrooster_aios_generatie WHERE period_id = ?').run(period.id);
+      db.prepare(
+        `INSERT INTO dienstrooster_aios_generatie (period_id, gemaakt_op, solver_status, gevuld, tijd_seconden, leeg_json)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(period.id, op, uitkomst.status, uitkomst.gevuld, uitkomst.tijd_seconden, JSON.stringify(uitkomst.leeg));
       db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD', row_version = row_version + 1 WHERE id = ?`).run(
         period.id
       );
@@ -186,12 +198,7 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
       job.fout = 'De periode is intussen gewijzigd. Maak het rooster opnieuw.';
       return;
     }
-    job.uitkomst = {
-      status: uit.status,
-      gevuld: uit.toewijzingen.length,
-      leeg: uit.leeg.map((l) => ({ dienst_id: l.dienst_id, datum: dienst.get(l.dienst_id)!.datum, code: dienst.get(l.dienst_id)!.code, redenen: l.redenen })),
-      tijd_seconden: uit.tijd_seconden,
-    };
+    job.uitkomst = uitkomst;
     job.status = 'KLAAR';
   } catch (error) {
     job.status = 'FOUT';
@@ -204,7 +211,46 @@ export function verwijderAiosRooster(periodId: string): number {
   return db.transaction(() => {
     const n = db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(periodId).changes;
     db.prepare('DELETE FROM dienstrooster_aios_doel WHERE period_id = ?').run(periodId);
+    db.prepare('DELETE FROM dienstrooster_aios_generatie WHERE period_id = ?').run(periodId);
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN', row_version = row_version + 1 WHERE id = ?`).run(periodId);
     return n;
   })();
+}
+
+export interface AiosLaatsteGeneratie {
+  gemaakt_op: string;
+  status: string;
+  gevuld: number;
+  tijd_seconden: number;
+  /** Which diensten stayed empty when it was made. */
+  leeg_bij_maken: number;
+  /** Of those, the ones still without an AIOS: what the planner has not filled by hand yet. */
+  nog_leeg: AiosLeeg[];
+}
+
+/**
+ * What the last generation told the planner, as it stands now: the diensten
+ * that stayed empty, less the ones filled by hand since. The planner sees it
+ * again after a refresh or another login. Undefined without a roster that
+ * was made by the solver.
+ */
+export function laatsteAiosGeneratie(periodId: string): AiosLaatsteGeneratie | undefined {
+  const rij = db
+    .prepare('SELECT gemaakt_op, solver_status, gevuld, tijd_seconden, leeg_json FROM dienstrooster_aios_generatie WHERE period_id = ?')
+    .get(periodId) as { gemaakt_op: string; solver_status: string; gevuld: number; tijd_seconden: number; leeg_json: string } | undefined;
+  if (!rij) return undefined;
+  const leeg = JSON.parse(rij.leeg_json) as AiosLeeg[];
+  const bezet = new Set(
+    (db.prepare('SELECT slot_id FROM dienstrooster_assignment WHERE schedule_version_id = ?').all(periodId) as Array<{ slot_id: string }>).map(
+      (r) => r.slot_id
+    )
+  );
+  return {
+    gemaakt_op: rij.gemaakt_op,
+    status: rij.solver_status,
+    gevuld: rij.gevuld,
+    tijd_seconden: rij.tijd_seconden,
+    leeg_bij_maken: leeg.length,
+    nog_leeg: leeg.filter((l) => !bezet.has(l.dienst_id)),
+  };
 }

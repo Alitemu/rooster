@@ -104,7 +104,7 @@ test('the planner gives the date, and the night before says Fellow', async ({ pa
   // In the week table and in the roster: the one pinned open, so both show.
   await openAiosSectie(page, 'Per week');
   await page.getByRole('button', { name: /^Vastzetten/ }).click();
-  await openAiosSectie(page, 'Het rooster per week');
+  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
   const fellow = page.getByTitle('Nacht voor de voortgangstoets: een fellow');
   await expect(fellow).toHaveCount(2);
   expect(nacht('2094-10-19')).toBeUndefined();
@@ -118,7 +118,7 @@ test('the planner gives the date, and the night before says Fellow', async ({ pa
   await expect(
     kaart.getByText('Opgeslagen. De nacht van dinsdag 19 oktober 2094 staat weer in het rooster, bij de AIOS die de rest van dat blok heeft.')
   ).toBeVisible();
-  await openAiosSectie(page, 'Het rooster per week');
+  await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
   await expect(fellow).toHaveCount(0);
   expect(nacht('2094-10-19')).toEqual({ person_id: houder });
 });

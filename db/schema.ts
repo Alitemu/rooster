@@ -709,6 +709,21 @@ export const aiosDoel = sqliteTable(
 );
 
 /**
+ * What the last generation of an AIOS quarter told the planner: how many
+ * diensten it filled, and which stayed empty and why (lib/aiosGenereren.ts).
+ * Kept with the roster, so the planner still sees it after a refresh or
+ * another login; written with the roster, gone with it.
+ */
+export const aiosGeneratie = sqliteTable('dienstrooster_aios_generatie', {
+  period_id: text('period_id').primaryKey().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+  gemaakt_op: text('gemaakt_op').notNull(),
+  solver_status: text('solver_status').notNull(),
+  gevuld: integer('gevuld').notNull(),
+  tijd_seconden: real('tijd_seconden').notNull(),
+  leeg_json: text('leeg_json').notNull(), // [{ dienst_id, datum, code, redenen }]
+});
+
+/**
  * What an AIOS did before the app (docs/aios-rooster.md, "Eerlijkheid";
  * G9, O3, O4), read in from the old Excel per pool: the diensten per soort,
  * the feestdagdiensten among them, the fte and the months it covers. The

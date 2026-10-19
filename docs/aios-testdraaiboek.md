@@ -91,7 +91,7 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 
 ## Deel 4: het rooster maken
 
-14. **Sluiten.** Klik op *Periode sluiten* en daarna nog een keer.
+14. **Sluiten.** Klik bovenaan de pagina op *Periode sluiten* en daarna nog een keer.
 15. **Blokken rond feestdagen.** Bij *Rooster* vraagt de app wat er moet
     gebeuren met de avond- en nachtblokken rond Pasen. Kies er een *heel
     laten* en een *opknippen* en klik op *Keuzes bewaren*.

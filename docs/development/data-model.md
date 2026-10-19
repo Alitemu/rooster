@@ -52,6 +52,13 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   solver's fair share (doel_punten, doel_feestdagen), written with the
   roster, removed with it; the next quarter's saldo is measured against it
   (lib/aiosSaldo.ts). Cascades with the period and the person.
+- `aios_generatie` (0.90.0, migration 0030) - per AIOS period what the last
+  generation told: when, the solver's status, how many diensten it filled
+  and which stayed empty with the reasons (leeg_json). Written with the
+  roster in the same transaction, removed with it (Rooster verwijderen);
+  lib/aiosGenereren.ts laatsteAiosGeneratie gives it back with the
+  diensten still empty (an assignment since filled it by hand), so the
+  planner sees it again after a refresh. Cascades with the period.
 - `aios_beginstand` (0.79.0, migration 0027) - per AIOS pool and AIOS what
   they did before the app, read in from the old Excel
   (lib/aiosGeschiedenis.ts): the diensten per soort, the feestdagdiensten

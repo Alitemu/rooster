@@ -14,6 +14,8 @@ import { POST as genereren } from './periode/[id]/genereren/route';
 import { GET as status } from './periode/[id]/genereren/status/route';
 import { GET as rooster } from './periode/[id]/rooster/route';
 import { POST as verwijderen } from './periode/[id]/rooster-verwijderen/route';
+import { POST as heropenen } from './periode/[id]/heropenen/route';
+import { EERST_VERWIJDEREN } from '@/lib/aiosTeksten';
 import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, staff, staffCookie, tag, type World } from '../../../tests/fixtures/dienstWorlds';
 
 /**
@@ -224,6 +226,32 @@ describe('making the AIOS roster', () => {
     expect((await res.json()).data).toMatchObject({ status: 'KLAAR', fout: null });
   });
 
+  it('keeps what it told about the empty diensten: after a refresh, and less what is filled by hand since', async () => {
+    const lees = async () => (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.generatie;
+    const g = await lees();
+    const leeg = slotsVan(w.period).filter((s) => !toewijzingen().some((t) => t.slot_id === s.id));
+    expect(g).toMatchObject({ gevuld: toewijzingen().length, leeg_bij_maken: 1, status: 'HAALBAAR' });
+    expect(g.nog_leeg).toEqual([expect.objectContaining({ dienst_id: leeg[0].id, code: 'UD', redenen: { GEBLOKKEERD: 1, BEZET: 1 } })]);
+    // The planner fills it by hand: it is no longer empty, but still counted as left empty when it was made.
+    db.prepare(
+      `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+       VALUES (?, ?, ?, ?, 'MANUAL', 1, ?)`
+    ).run(`hand-${tag}`, w.period, w.y, leeg[0].id, now);
+    try {
+      expect(await lees()).toMatchObject({ leeg_bij_maken: 1, nog_leeg: [] });
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(`hand-${tag}`);
+    }
+    expect((await lees()).nog_leeg).toHaveLength(1);
+  });
+
+  it('back to open is refused from a made roster, and says to remove the roster first', async () => {
+    const res = await heropenen(req(`${w.period}/heropenen`, staffCookie(w.planner), 'POST', {}), ctx(w.period));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toBe(EERST_VERWIJDEREN.GEGENEREERD);
+    expect(periodeStatus().status).toBe('GEGENEREERD');
+  });
+
   it('shows who has what, and each AIOS their points and dienstpercentage', async () => {
     const res = await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period));
     const data = (await res.json()).data;
@@ -333,6 +361,10 @@ describe('making the AIOS roster', () => {
     expect(res.status).toBe(200);
     expect(toewijzingen()).toEqual([]);
     expect(periodeStatus().status).toBe('GESLOTEN');
+    // What it told about the empty diensten goes with the roster.
+    expect(db.prepare('SELECT 1 FROM dienstrooster_aios_generatie WHERE period_id = ?').get(w.period)).toBeUndefined();
+    const leeg = await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period));
+    expect((await leeg.json()).data.generatie).toBeNull();
     const nogEens = await verwijderen(req(`${w.period}/rooster-verwijderen`, staffCookie(w.planner), 'POST'), ctx(w.period));
     expect(nogEens.status).toBe(409);
   });

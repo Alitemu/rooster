@@ -49,18 +49,18 @@ test('the beheerder makes an AIOS quarter and sees its diensten, blocks and poin
 
   // Every part folds, as on the achterwacht's page (0.86.0): all closed at first.
   const knop = (titel: string) => page.getByRole('heading', { name: titel, exact: true }).getByRole('button');
-  for (const titel of ['Voorkeuren van de AIOS', 'Voortgangstoets', 'Geschiedenis van vóór de app', 'Punten in dit kwartaal', 'Diensten', 'Per week']) {
+  for (const titel of ['Voorkeuren van de AIOS', 'Voortgangstoets', 'Geschiedenis van vóór de app', 'Punten in dit kwartaal', 'Diensten (toelichting)', 'Per week']) {
     await expect(knop(titel)).toHaveAttribute('aria-expanded', 'false');
   }
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeHidden();
   await openAiosSectie(page, 'Punten in dit kwartaal');
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeVisible();
   // Opening another closes it, unless it is pinned.
-  await openAiosSectie(page, 'Diensten');
+  await openAiosSectie(page, 'Diensten (toelichting)');
   await expect(knop('Punten in dit kwartaal')).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('button', { name: /^Vastzetten/ }).click();
   await openAiosSectie(page, 'Voorkeuren van de AIOS');
-  await expect(knop('Diensten')).toHaveAttribute('aria-expanded', 'true');
+  await expect(knop('Diensten (toelichting)')).toHaveAttribute('aria-expanded', 'true');
 
   // Opening asks for an AIOS taking part; the demo's AIOS pool is empty.
   await expect(page.getByLabel('Deadline voor de voorkeuren')).toBeVisible();

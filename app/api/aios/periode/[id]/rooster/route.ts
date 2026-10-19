@@ -10,7 +10,7 @@ import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { laadAiosPeriode } from '@/lib/aiosRoute';
 import { laadAiosRooster } from '@/lib/aiosRooster';
-import { aiosGeneratieLoopt } from '@/lib/aiosGenereren';
+import { aiosGeneratieLoopt, laatsteAiosGeneratie } from '@/lib/aiosGenereren';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (otherDienst) return otherDienst;
     const period = laadAiosPeriode(id);
     if (period instanceof NextResponse) return period;
-    return NextResponse.json({ success: true, data: { ...laadAiosRooster(period), loopt: aiosGeneratieLoopt(period.id) } });
+    return NextResponse.json({ success: true, data: { ...laadAiosRooster(period), loopt: aiosGeneratieLoopt(period.id), generatie: laatsteAiosGeneratie(period.id) ?? null } });
   } catch (error) {
     return internalErrorResponse('aios-rooster', error);
   }

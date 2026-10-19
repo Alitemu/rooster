@@ -21,7 +21,7 @@ import { FellowVak } from '@/components/AiosVoortgangstoets';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst } from '@/lib/aiosRooster';
-import type { AiosGeneratieUitkomst } from '@/lib/aiosGenereren';
+import type { AiosLaatsteGeneratie } from '@/lib/aiosGenereren';
 
 // The words for the solver's reasons (lib/aiosGenereren.ts REDEN_WOORDEN; repeated: that file is server code).
 const REDEN: Record<string, string> = {
@@ -236,12 +236,50 @@ function JaarPercentage({ waarde, kwartalen }: { waarde: number | null; kwartale
   );
 }
 
+/** What the last generation told: how many were filled, and which diensten are still empty and why. */
+function LegeDiensten({ generatie }: { generatie: AiosLaatsteGeneratie }) {
+  const { leeg_bij_maken: bij, nog_leeg: nog } = generatie;
+  const gemaakt = new Date(generatie.gemaakt_op).toLocaleString('nl-NL', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+  return (
+    <div className="rounded border border-neutral-300 p-3 text-sm space-y-1" role="status" data-testid="aios-lege-diensten">
+      <p className="font-medium">
+        Gemaakt op {gemaakt}: {generatie.gevuld} diensten ingedeeld
+        {bij === 0 ? ', niets leeg.' : `. ${bij} ${bij === 1 ? 'dienst bleef' : 'diensten bleven'} leeg.`}
+      </p>
+      {generatie.status !== 'OPTIMAAL' && bij > 0 && (
+        <p className="text-neutral-700">Misschien vindt de solver meer met meer tijd. Kies een langere tijd en maak het opnieuw.</p>
+      )}
+      {bij > 0 && (
+        <p className="font-medium" data-testid="aios-nog-leeg">
+          {nog.length === 0
+            ? 'Alle lege diensten zijn inmiddels met de hand ingevuld.'
+            : `Nog leeg: ${nog.length} ${nog.length === 1 ? 'dienst' : 'diensten'}.`}
+        </p>
+      )}
+      {nog.length > 0 && (
+        <ul className="list-disc pl-5 text-neutral-700">
+          {nog.map((l) => (
+            <li key={l.dienst_id}>
+              {CODE_NAAM[l.code]} {datumKort(l.datum)}:{' '}
+              {Object.entries(l.redenen)
+                .sort((a, b) => b[1] - a[1])
+                .map(([r, n]) => `${n} ${REDEN[r] ?? r}`)
+                .join(', ')}
+            </li>
+          ))}
+        </ul>
+      )}
+      {nog.length > 0 && <p className="text-neutral-700">Een lege dienst vul je met de hand, voordat je publiceert.</p>}
+    </div>
+  );
+}
+
 export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: string; status: string; onChanged: () => void }) {
-  const [rooster, setRooster] = useState<(AiosRooster & { loopt: boolean }) | null>(null);
+  // `generatie`: what the last generation told, kept by the server (a refresh or another login shows it again).
+  const [rooster, setRooster] = useState<(AiosRooster & { loopt: boolean; generatie: AiosLaatsteGeneratie | null }) | null>(null);
   const [tijd, setTijd] = useState(60);
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [uitkomst, setUitkomst] = useState<AiosGeneratieUitkomst | null>(null);
   const [zeker, setZeker] = useState<'opnieuw' | 'verwijderen' | null>(null);
   const [feestdag, setFeestdag] = useState<FeestdagStaat>({ open: 0, gewijzigd: false });
   const [gekozen, setGekozen] = useState<Keuze | null>(null);
@@ -266,7 +304,6 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
   const maken = async () => {
     setBezig(true);
     setFout(null);
-    setUitkomst(null);
     setZeker(null);
     // A new roster: the change by hand before it is gone, and so its way back.
     setLaatste(null);
@@ -289,7 +326,6 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
         const data = await antwoord(res, 'Het rooster maken is mislukt');
         if (data.status === 'BEZIG') continue;
         if (data.status === 'FOUT') throw new Error(data.fout);
-        setUitkomst(data.uitkomst);
         break;
       }
       onChanged();
@@ -309,7 +345,6 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
     setGekozen(null);
     try {
       await antwoord(await fetch(withBasePath(`/api/aios/periode/${periodId}/rooster-verwijderen`), { method: 'POST' }), 'Verwijderen is mislukt');
-      setUitkomst(null);
       onChanged();
       laad();
     } catch (err) {
@@ -423,31 +458,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
             {fout}
           </p>
         )}
-        {uitkomst && (
-          <div className="rounded border border-neutral-300 p-3 text-sm space-y-1" role="status">
-            <p className="font-medium">
-              Klaar: {uitkomst.gevuld} diensten ingedeeld
-              {uitkomst.leeg.length === 0 ? ', niets leeg.' : `. ${uitkomst.leeg.length} ${uitkomst.leeg.length === 1 ? 'dienst bleef' : 'diensten bleven'} leeg.`}
-            </p>
-            {uitkomst.status !== 'OPTIMAAL' && uitkomst.leeg.length > 0 && (
-              <p className="text-neutral-700">Misschien vindt de solver meer met meer tijd. Kies een langere tijd en maak het opnieuw.</p>
-            )}
-            {uitkomst.leeg.length > 0 && (
-              <ul className="list-disc pl-5 text-neutral-700">
-                {uitkomst.leeg.map((l) => (
-                  <li key={l.dienst_id}>
-                    {CODE_NAAM[l.code]} {datumKort(l.datum)}:{' '}
-                    {Object.entries(l.redenen)
-                      .sort((a, b) => b[1] - a[1])
-                      .map(([r, n]) => `${n} ${REDEN[r] ?? r}`)
-                      .join(', ')}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {uitkomst.leeg.length > 0 && <p className="text-neutral-700">Een lege dienst vul je straks met de hand, voordat je publiceert.</p>}
-          </div>
-        )}
+        {rooster?.generatie && <LegeDiensten generatie={rooster.generatie} />}
       </AiosSectie>
 
       {zichtbaar && <AiosPubliceren periodId={periodId} status={status} onChanged={onChanged} />}
@@ -506,7 +517,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
               </table>
             </div>
           </AiosSectie>
-          <AiosSectie sleutel="rooster-week" titel="Het rooster per week" hint="kies een dienst of blok om het te wijzigen">
+          <AiosSectie sleutel="rooster-week" titel="Handmatige correctie gegenereerde rooster" hint="kies een dienst of blok om het te wijzigen">
             {laatste && (
               <div className="rounded border border-neutral-400 p-3 text-sm space-y-1" role="status" data-testid="aios-laatste-wijziging">
                 <p className="font-medium">Gewijzigd. {laatste.tekst}</p>

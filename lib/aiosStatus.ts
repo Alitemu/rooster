@@ -9,7 +9,7 @@
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { writeAuditLog } from '@/lib/auditLog';
-import { periodStatusLabel } from '@/lib/aiosTeksten';
+import { EERST_VERWIJDEREN, periodStatusLabel } from '@/lib/aiosTeksten';
 import { haalTweedeNachtWeg } from '@/lib/aiosFeestdagBlokken';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 
@@ -57,7 +57,11 @@ export function sluitAiosPeriode(period: AiosUitnodigPeriode, actorId: string): 
 
 export function heropenAiosPeriode(period: AiosUitnodigPeriode, actorId: string): StatusUitkomst {
   if (period.status !== 'GESLOTEN') {
-    return nee(409, 'INVALID_STATUS', `Periode kan niet terug naar open vanuit status "${periodStatusLabel(period.status)}"`);
+    return nee(
+      409,
+      'INVALID_STATUS',
+      EERST_VERWIJDEREN[period.status] ?? `Periode kan niet terug naar open vanuit status "${periodStatusLabel(period.status)}"`
+    );
   }
   db.transaction(() => {
     wissel(period, 'GESLOTEN', 'OPEN', 'terug naar open', actorId);
