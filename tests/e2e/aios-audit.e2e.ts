@@ -348,6 +348,7 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
     const aantal = await avond.count();
     expect(aantal).toBeGreaterThan(0);
     let gezien = 0;
+    let dubbelGezien = 0;
     for (let i = 0; i < aantal; i++) {
       await avond.nth(i).click();
       const dialoog = page.getByTestId('aios-wijzigen');
@@ -360,10 +361,25 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
         await expect(toelichting.first()).toContainText(`Toelichting van de AIOS voor `);
         await expect(dialoog).toContainText(TEKST_A_NIEUW);
         await expect(dialoog).not.toContainText('Bruiloft');
+        // Choosing A shows the same reason again in the step that asks to be sure.
+        await dialoog.locator('ul[aria-label="AIOS"] > li').filter({ hasText: TEKST_A_NIEUW }).getByRole('button', { name: /^Kies / }).click();
+        await expect(dialoog.getByTestId('aios-toelichting-zeker')).toContainText(TEKST_A_NIEUW);
+        await dialoog.getByRole('button', { name: 'Annuleren' }).click();
+      }
+      // Whoever has the nights of these days would have two diensten a day: said with the dienst, and asked twice.
+      const dubbel = dialoog.locator('ul[aria-label="AIOS"] > li').filter({ hasText: 'al een andere dienst' });
+      if (await dubbel.count()) {
+        dubbelGezien++;
+        await expect(dubbel.first()).toContainText('Een AIOS kan maar één dienst per dag doen.');
+        await dubbel.first().getByRole('button', { name: /^Kies / }).click();
+        await expect(dialoog.getByTestId('aios-twee-op-een-dag')).toContainText('Is dit echt de bedoeling?');
+        await expect(dialoog.getByRole('button', { name: 'Ja, dit is echt de bedoeling' })).toBeVisible();
+        await dialoog.getByRole('button', { name: 'Annuleren' }).click();
       }
       await dialoog.getByRole('button', { name: 'Sluiten' }).click();
     }
     expect(gezien).toBeGreaterThan(0);
+    expect(dubbelGezien).toBeGreaterThan(0);
 
     // An empty night block to someone: what is still empty drops, now and after a refresh.
     await page.getByRole('button', { name: /^Nachtblok .*: leeg\. Wijzigen$/ }).first().click();

@@ -24,6 +24,7 @@ import { db } from '@/db/client';
 import { objectRows, optionalText } from '@/lib/requestFields';
 import { aiosSolverInvoer, type AiosSolverAios, type AiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 import { aiosWerkdagen, dienstpercentage, PERCENTAGE_GRENS } from '@/lib/aiosFte';
+import { aiosDienstType, type AiosCode } from '@/lib/aiosDiensten';
 import { controleerAiosRooster, regelZin, type Overtreding, type Regel } from '@/lib/aiosRegels';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
@@ -118,7 +119,25 @@ function waarschuwingen(ctx: Context, a: AiosSolverAios, diensten: string[], voo
     uit.push({ code: 'LIEVER_NIET', tekst: `Liever niet op ${lijst([...op('LIEVER_NIET', 'MANUAL'), ...op('LIEVER_NIET', 'ABSENCE')])}.` });
   }
   const nieuw = erbij(vanAios(ctx.invoer, voor, a.id), vanAios(ctx.invoer, na, a.id));
-  for (const regel of new Set(nieuw.map((s) => (JSON.parse(s) as Overtreding)[0]))) uit.push({ code: regel, tekst: regelZin(regel) });
+  // Two diensten on one day get a warning of their own that names the other dienst: the planner is
+  // asked whether that is meant (never refused, as with the rest), and the other dienst stays.
+  const metAnderen = new Map<string, string[]>();
+  for (const s of nieuw) {
+    const [regel, , ids] = JSON.parse(s) as Overtreding;
+    if (regel !== '3_TWEE_OP_EEN_DAG') continue;
+    for (const id of ids.filter((x) => !diensten.includes(x))) {
+      const d = ctx.dienst.get(id)!;
+      metAnderen.set(d.datum, [...(metAnderen.get(d.datum) ?? []), aiosDienstType(d.code as AiosCode).naam.toLowerCase()]);
+    }
+  }
+  if (metAnderen.size > 0) {
+    const lijst = [...metAnderen].sort(([x], [y]) => x.localeCompare(y)).map(([datum, namen]) => `${datumKort(datum)} (${namen.join(' en ')})`);
+    uit.push({ code: '3_TWEE_OP_EEN_DAG', tekst: `Heeft op ${lijst.join(', ')} al een andere dienst. Een AIOS kan maar één dienst per dag doen. Die dienst blijft staan.` });
+  }
+  for (const regel of new Set(nieuw.map((s) => (JSON.parse(s) as Overtreding)[0]))) {
+    if (regel === '3_TWEE_OP_EEN_DAG' && metAnderen.size > 0) continue;
+    uit.push({ code: regel, tekst: regelZin(regel) });
+  }
   const pct = percentage(ctx, a, na);
   if (pct !== null && pct > PERCENTAGE_GRENS) {
     uit.push({ code: 'BOVEN_25', tekst: `Dienstpercentage daarna ${(pct * 100).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%: boven 25%.` });

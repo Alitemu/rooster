@@ -122,6 +122,21 @@ const MUTATIONS = [
     replace: 'if (true) {',
     tests: ['app/api/aios/aiosVoorkeurImport'],
   },
+  // 0.100.0: two diensten on one day by hand get a warning of their own.
+  {
+    name: 'handmatig: two diensten on one day get the short sentence again, without the other dienst',
+    file: 'lib/aiosHandmatig.ts',
+    find: "if (regel !== '3_TWEE_OP_EEN_DAG') continue;",
+    replace: 'continue;',
+    tests: ['app/api/aios/aiosHandmatig'],
+  },
+  {
+    name: 'handmatig: the dienst that is being given counts as the other dienst of that day',
+    file: 'lib/aiosHandmatig.ts',
+    find: 'for (const id of ids.filter((x) => !diensten.includes(x))) {',
+    replace: 'for (const id of ids) {',
+    tests: ['app/api/aios/aiosHandmatig'],
+  },
   {
     name: 'rate limit: an attempt past the limit still goes through',
     file: 'lib/rateLimit.ts',

@@ -129,6 +129,32 @@ describe('before choosing', () => {
     expect(later.kandidaten[later.kandidaten.length - 1].person_id).toBe(w.z);
   });
 
+  it('two diensten on one day: one warning that names the other dienst and says it stays', async () => {
+    // x has the night of 12 juli (the first night block); the avonddienst and the uitloopdienst of that day are x's second.
+    const avond = (await (await vraag(slot('AD', '2094-07-12').id, false)).json()).data.kandidaten.find((c: any) => c.person_id === w.x);
+    const dag = avond.waarschuwingen.filter((x: any) => x.code === '3_TWEE_OP_EEN_DAG');
+    expect(dag).toEqual([
+      { code: '3_TWEE_OP_EEN_DAG', tekst: 'Heeft op ma 12 jul (nachtdienst) al een andere dienst. Een AIOS kan maar één dienst per dag doen. Die dienst blijft staan.' },
+    ]);
+    const uitloop = (await (await vraag(slot('UD', '2094-07-12').id, false)).json()).data.kandidaten.find((c: any) => c.person_id === w.x);
+    expect(uitloop.waarschuwingen).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: '3_TWEE_OP_EEN_DAG', tekst: expect.stringContaining('ma 12 jul (nachtdienst)') })])
+    );
+    // y has no dienst that day: no such warning.
+    const y = (await (await vraag(slot('AD', '2094-07-12').id, false)).json()).data.kandidaten.find((c: any) => c.person_id === w.y);
+    expect(y.waarschuwingen.some((x: any) => x.code === '3_TWEE_OP_EEN_DAG')).toBe(false);
+  });
+
+  it('a whole block over several days names every day, once', async () => {
+    // The evening block zo t/m di of x's nights: three days with a night of x's.
+    const blok = slot('AD', '2094-07-12').blok!;
+    const k = (await (await vraag(slot('AD', '2094-07-12').id, true)).json()).data.kandidaten.find((c: any) => c.person_id === w.x);
+    const dag = k.waarschuwingen.filter((x: any) => x.code === '3_TWEE_OP_EEN_DAG');
+    expect(blokDiensten(blok).length).toBeGreaterThan(1);
+    expect(dag).toHaveLength(1);
+    expect(dag[0].tekst).toMatch(/^Heeft op .*ma 12 jul \(nachtdienst\).*di 13 jul \(nachtdienst\).* al een andere dienst\./);
+  });
+
   it('the marks: liever niet and geblokkeerd as the AIOS marked them', async () => {
     const dd = (await (await vraag(slot('DD', '2094-07-17').id, false)).json()).data;
     expect(dd.kandidaten.find((c: any) => c.person_id === w.y).waarschuwingen).toEqual(
@@ -340,5 +366,22 @@ describe('the way back', () => {
       ),
       { numRuns: 15 }
     );
+  });
+});
+
+describe('two diensten on one day, at the end: it leaves edit rows behind', () => {
+  it('never refused: the change goes through with the warning, and the other dienst stays', async () => {
+    const avond = slot('AD', '2094-07-12');
+    // Whoever has that night by now (earlier tests moved some of it).
+    const nacht = wieHeeft(slot('ND', '2094-07-12').id)!;
+    const res = await zet([{ dienst_id: avond.id, aios_id: nacht, was: null }]);
+    expect(res.status).toBe(200);
+    const data = (await res.json()).data;
+    expect(data.waarschuwingen.map((x: any) => x.code)).toContain('3_TWEE_OP_EEN_DAG');
+    expect(wieHeeft(avond.id)).toBe(nacht);
+    expect(wieHeeft(slot('ND', '2094-07-12').id)).toBe(nacht);
+    // Back to how it was.
+    expect((await zet([{ dienst_id: avond.id, aios_id: null, was: nacht }])).status).toBe(200);
+    expect(wieHeeft(avond.id)).toBeNull();
   });
 });

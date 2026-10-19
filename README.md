@@ -539,6 +539,17 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.100.0:**
+- *Twee diensten op één dag bij het met de hand aanpassen:* kies je voor een dienst
+  een AIOS die die dag al een andere dienst heeft, bijvoorbeeld een nachtdienst
+  voor wie al een avonddienst doet, dan staat bij die AIOS een eigen waarschuwing
+  die de andere dienst en de dag noemt. Kies je die AIOS, dan vraagt het scherm
+  nog eens of het echt de bedoeling is, met een eigen knop om te bevestigen.
+  Het blijft een waarschuwing, geen blokkade. De andere dienst blijft staan.
+- *Toelichting bij het kiezen:* in dat scherm staat de toelichting van de AIOS bij
+  een geblokkeerde of liever-niet-dag nu ook nog eens in de vraag of je zeker
+  weet dat je die AIOS kiest.
+
 **Vanaf versie 0.99.0:**
 - *Parttimedagen in het Voorkeurenoverzicht:* onder de verzoeken staan de regels
   *Parttime 1* en *Parttime 2* (meer als een AIOS er meer heeft) met de

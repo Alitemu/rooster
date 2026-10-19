@@ -164,12 +164,26 @@ export function AiosRoosterWijzigen({
             <p>{heel && keuze.blok ? 'Deze diensten worden' : 'Deze dienst wordt'} leeg. Een lege dienst houdt het publiceren tegen.</p>
           ) : (
             <>
+              {zeker.waarschuwingen.some((w) => w.code === '3_TWEE_OP_EEN_DAG') && (
+                <p className="rounded border border-red-300 bg-red-50 p-2 font-medium text-red-900" data-testid="aios-twee-op-een-dag">
+                  Dit zijn twee diensten op één dag voor {zeker.codenaam}. Een AIOS kan maar één dienst per dag doen. Is dit echt de bedoeling?
+                </p>
+              )}
               <p className="font-medium">Let op bij {zeker.codenaam}:</p>
               <ul className="list-disc pl-5">
                 {zeker.waarschuwingen.map((w) => (
                   <li key={w.tekst}>{w.tekst}</li>
                 ))}
               </ul>
+              {zeker.toelichtingen.length > 0 && (
+                <ul className="text-neutral-800" data-testid="aios-toelichting-zeker">
+                  {zeker.toelichtingen.map((t) => (
+                    <li key={t.datum}>
+                      Toelichting van {zeker.codenaam} voor {datumKort(t.datum)}: {t.tekst}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </>
           )}
           <div className="flex flex-wrap gap-2">
@@ -179,7 +193,7 @@ export function AiosRoosterWijzigen({
               disabled={bezig || zonderReden}
               onClick={() => (zeker === 'leeg' ? zet(null, '') : zet(zeker.person_id, zeker.codenaam))}
             >
-              {zeker === 'leeg' ? 'Ja, leeg laten' : 'Ja, toch indelen'}
+              {zeker === 'leeg' ? 'Ja, leeg laten' : zeker.waarschuwingen.some((w) => w.code === '3_TWEE_OP_EEN_DAG') ? 'Ja, dit is echt de bedoeling' : 'Ja, toch indelen'}
             </button>
             <button type="button" className={knop} disabled={bezig} onClick={() => setZeker(null)}>
               Annuleren
@@ -209,7 +223,9 @@ export function AiosRoosterWijzigen({
                 {k.waarschuwingen.length > 0 && (
                   <ul className="text-xs text-neutral-900">
                     {k.waarschuwingen.map((w) => (
-                      <li key={w.tekst}>⚠ {w.tekst}</li>
+                      <li key={w.tekst} className={w.code === '3_TWEE_OP_EEN_DAG' ? 'font-semibold text-red-900' : undefined}>
+                        ⚠ {w.tekst}
+                      </li>
                     ))}
                   </ul>
                 )}
