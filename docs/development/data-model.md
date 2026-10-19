@@ -59,6 +59,12 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   lib/aiosGenereren.ts laatsteAiosGeneratie gives it back with the
   diensten still empty (an assignment since filled it by hand), so the
   planner sees it again after a refresh. Cascades with the period.
+- `aios_reden` (0.91.0, migration 0031) - the optional toelichting an AIOS
+  gives for a day they marked geblokkeerd or liever niet by hand (tekst, at
+  most REDEN_MAX_LENGTH characters), per period, person and day. Private to
+  the AIOS's planner (lib/aiosReden.ts says where it is read). It counts
+  only while the day has such a mark: reading checks that, and a cleared
+  mark deletes it. Cascades with the period and the person.
 - `aios_beginstand` (0.79.0, migration 0027) - per AIOS pool and AIOS what
   they did before the app, read in from the old Excel
   (lib/aiosGeschiedenis.ts): the diensten per soort, the feestdagdiensten

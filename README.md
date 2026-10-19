@@ -539,6 +539,15 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.91.0** kan een AIOS bij een dag die ze op geblokkeerd of
+liever niet zetten een toelichting geven. Die is niet verplicht en hoogstens
+120 tekens. Alleen de planner van de AIOS ziet de toelichting: bij het met
+de hand aanpassen van het rooster, bij elke AIOS die de dienst kan krijgen,
+en in het voorkeurenoverzicht (Excel) achter de keuze, bijvoorbeeld
+*geblokkeerd: ziek kind*. De toelichting staat nooit in een ruilverzoek en
+niet op het scherm van een andere AIOS. Dit vraagt een databasewijziging
+(migratie 0031), die bij het opstarten vanzelf gebeurt.
+
 **Vanaf versie 0.90.0** staat bovenaan de pagina van een AIOS-periode de
 status, met de knoppen *Periode sluiten* en *Terug naar open*, zoals bij de
 achterwacht. Terug naar open kan alleen vanuit gesloten. Is het rooster al

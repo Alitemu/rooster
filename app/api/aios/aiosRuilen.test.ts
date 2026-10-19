@@ -7,6 +7,8 @@ import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
 import { aiosPersoonlijkeLink, aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { aiosEenheden, aiosRuilKandidaten, losseSleutel } from '@/lib/aiosRuilen';
 import { trekAiosPublicatieIn } from '@/lib/aiosPublicatie';
+import { loadAiosPeriode, setAiosVoorkeur } from '@/lib/aiosPreferences';
+import { saveAiosReden } from '@/lib/aiosReden';
 import { startSmtpSink, configureSmtp, clearSmtpConfig, verzendlijstPayload, waitForMails, type SmtpSink } from '@/tests/smtpSink';
 import { GET as overzicht, POST as aanvragen } from './deelnemer/[id]/periode/[periodId]/ruilen/route';
 import { GET as kandidaten } from './deelnemer/[id]/periode/[periodId]/ruilen/kandidaten/route';
@@ -324,5 +326,37 @@ describe('a parttimer', () => {
     const voor = (eenheid: string) => aiosRuilKandidaten(periode, q, eenheid, nu)!.map((k) => k.eenheid.id);
     expect(voor(`blok:${blokVan('ADW', '2094-08-29')}`)).toContain(`blok:${blokVan('ADW', '2094-09-12')}`);
     expect(voor(`dienst:${slot('UD', '2094-09-20').id}`)).not.toContain(`dienst:${slot('UD', '2094-09-21').id}`);
+  });
+});
+
+describe("the AIOS's toelichting bij een dag (lib/aiosReden.ts)", () => {
+  it('is never in a swap request, its mail, the candidates, the pages of the colleagues or the planner', async () => {
+    const GEHEIM = `geheime-reden-${tag}`;
+    const dagdienst = slot('DD', '2094-08-08').id;
+    expect(setAiosVoorkeur(w.z, w.period, dagdienst, 'LIEVER_NIET')).toEqual({ ok: true });
+    expect(saveAiosReden(w.z, loadAiosPeriode(w.period)!, '2094-08-08', GEHEIM)).toEqual({ ok: true });
+    sink.received.length = 0;
+    // v asks z for the dagdienst of 8 augustus, the one z gave a toelichting for.
+    const r = await vraag(w.v, `dienst:${slot('DD', '2094-07-24').id}`, `dienst:${dagdienst}`);
+    expect(r.status).toBe(200);
+    await waitForMails(sink, 2);
+    const gezien = [JSON.stringify(r.json), ...sink.received.map((m) => JSON.stringify(verzendlijstPayload(m.raw)))];
+    for (const wie of [w.v, w.z, w.x]) gezien.push(JSON.stringify(await (await overzicht(preq(wie, ''), pctx(wie))).json()));
+    const kandidatenVoorV = JSON.stringify(
+      await (await kandidaten(preq(w.v, `/kandidaten?eenheid=dienst:${slot('DD', '2094-07-24').id}`), pctx(w.v))).json()
+    );
+    // Not vacuous: z is among them.
+    expect(kandidatenVoorV).toContain(dagdienst);
+    gezien.push(kandidatenVoorV);
+    gezien.push(
+      JSON.stringify(
+        await (
+          await plannerRuilen(new NextRequest(`http://localhost/api/aios/periode/${w.period}/ruilen`, { headers: { cookie: staffCookie(w.planner) } }), {
+            params: Promise.resolve({ id: w.period }),
+          })
+        ).json()
+      )
+    );
+    for (const tekst of gezien) expect(tekst).not.toContain(GEHEIM);
   });
 });

@@ -28,6 +28,7 @@ import { controleerAiosRooster, regelZin, type Overtreding, type Regel } from '@
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
+import { loadAlleAiosRedenen } from '@/lib/aiosReden';
 import { sluitVervallenAiosRuilen } from '@/lib/aiosRuilen';
 
 // What the marks say instead: a planner overriding a mark is told it as the mark.
@@ -143,6 +144,8 @@ export interface Kandidaat {
   waarschuwingen: Waarschuwing[];
   voorkeur: boolean;
   percentage_na: number | null;
+  /** Why the AIOS marked a day of these diensten geblokkeerd or liever niet, in their words (lib/aiosReden.ts): the planner's alone. */
+  toelichtingen: Array<{ datum: string; tekst: string }>;
 }
 
 export type DienstKeuze = { ok: true; diensten: string[] } | { ok: false; message: string };
@@ -194,6 +197,8 @@ export function aiosKandidaten(period: AiosUitnodigPeriode, diensten: string[]):
   const ctx = context(period);
   const voor = huidigRooster(period.id);
   const codenaam = new Map(aiosDeelnemers(period).map((p) => [p.id, p.codenaam]));
+  const redenen = loadAlleAiosRedenen(period.id);
+  const datums = [...new Set(diensten.map((id) => ctx.dienst.get(id)!.datum))].sort();
   const uit = ctx.invoer.aios.map((a): Kandidaat => {
     const na = new Map(voor);
     for (const id of diensten) na.set(id, a.id);
@@ -210,6 +215,11 @@ export function aiosKandidaten(period: AiosUitnodigPeriode, diensten: string[]):
       waarschuwingen: reden || nu ? [] : [...waarschuwingen(ctx, a, diensten, voor, na), ...[blokNietHeel(ctx, diensten, na)].filter((w) => w !== null)],
       voorkeur: diensten.some((id) => markering.get(id) === 'VOORKEUR'),
       percentage_na: percentage(ctx, a, na),
+      // Who has it already, or cannot have it at all, has nothing to explain.
+      toelichtingen:
+        reden || nu
+          ? []
+          : datums.flatMap((datum) => (redenen.has(`${a.id}|${datum}`) ? [{ datum, tekst: redenen.get(`${a.id}|${datum}`)! }] : [])),
     };
   });
   uit.sort(

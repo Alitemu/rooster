@@ -210,7 +210,18 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   patronen die een dag delen telden voor de fte dubbel, 0.85.0),
   "4 avonden", "4 nachten", "twee dagdiensten", "Inwerken", een onderbreking van
   de opleiding en algemene verzoeken (vrije tekst, hoogstens 120 tekens).
-- Geen reden per dag: die werd niet gebruikt bij het maken van het rooster.
+- De reden bij een dag (0.91.0, de keuze van de planner in oktober 2026): bij
+  elke dag die een AIOS zelf op geblokkeerd of liever niet zet, kan de AIOS
+  een toelichting geven, niet verplicht en hoogstens 120 tekens. Dat staat
+  erbij in het scherm en zegt dat alleen de planner van de AIOS het ziet.
+  Het is privé: de planner leest het bij het met de hand aanpassen van het
+  rooster (bij elke AIOS die de dienst kan krijgen, de toelichting van die
+  dag) en in het voorkeurenoverzicht (Excel, achter de keuze: "geblokkeerd:
+  ziek kind"). Het staat nooit in een ruilverzoek, de mail daarvan, de
+  kandidaten voor een ruil of op het scherm van een andere AIOS
+  (app/api/aios/aiosRuilen.test.ts houdt dat vast). De solver gebruikt het
+  niet. Een dag zonder eigen markering heeft geen toelichting: wordt de
+  markering weggehaald, dan gaat de toelichting mee.
 - Geen voorkeur voor met wie iemand dienst doet (D6, I7).
 
 ## Inwerken

@@ -724,6 +724,28 @@ export const aiosGeneratie = sqliteTable('dienstrooster_aios_generatie', {
 });
 
 /**
+ * Why an AIOS marks a day geblokkeerd or liever niet, in their own words
+ * and optional (lib/aiosReden.ts). Private: only the AIOS's planner sees it,
+ * in the diensten of a roster being corrected by hand and in the
+ * voorkeurenoverzicht; never in a swap request or to another AIOS.
+ * One per AIOS and day; it counts only while that day has such a mark.
+ */
+export const aiosReden = sqliteTable(
+  'dienstrooster_aios_reden',
+  {
+    id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+    period_id: text('period_id').notNull().references(() => schedulePeriod.id, { onDelete: 'cascade' }),
+    person_id: text('person_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
+    datum: text('datum').notNull(), // YYYY-MM-DD
+    tekst: text('tekst').notNull(),
+    gewijzigd_op: text('gewijzigd_op').notNull(),
+  },
+  (table) => ({
+    uniq: uniqueIndex('aios_reden_uniq').on(table.period_id, table.person_id, table.datum),
+  })
+);
+
+/**
  * What an AIOS did before the app (docs/aios-rooster.md, "Eerlijkheid";
  * G9, O3, O4), read in from the old Excel per pool: the diensten per soort,
  * the feestdagdiensten among them, the fte and the months it covers. The

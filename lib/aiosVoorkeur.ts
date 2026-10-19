@@ -11,6 +11,14 @@ export type Niveau = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 export type Bron = 'MANUAL' | 'PARTTIME' | 'ABSENCE';
 
 export const OPMERKING_MAX_LENGTH = 120;
+/** The optional reason (toelichting) for a day marked geblokkeerd or liever niet. */
+export const REDEN_MAX_LENGTH = 120;
+
+/** The toelichting of one day (lib/aiosReden.ts). */
+export interface AiosReden {
+  datum: string;
+  tekst: string;
+}
 
 export interface AiosVoorkeurDienst {
   slot_id: string;

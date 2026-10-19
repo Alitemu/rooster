@@ -492,6 +492,17 @@ async function createTables() {
       leeg_json TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_reden (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
+      datum TEXT NOT NULL,
+      tekst TEXT NOT NULL,
+      gewijzigd_op TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS aios_reden_uniq
+      ON dienstrooster_aios_reden(period_id, person_id, datum);
+
     CREATE TABLE IF NOT EXISTS dienstrooster_aios_beginstand (
       id TEXT PRIMARY KEY NOT NULL,
       pool_id TEXT NOT NULL REFERENCES dienstrooster_pool(id) ON DELETE CASCADE,
@@ -639,6 +650,7 @@ const SEEDED_TABLES = [
   'dienstrooster_aios_blokkeuze',
   'dienstrooster_aios_doel',
   'dienstrooster_aios_generatie',
+  'dienstrooster_aios_reden',
   'dienstrooster_aios_beginstand',
   'dienstrooster_aios_ruil',
   'dienstrooster_mail_queue',

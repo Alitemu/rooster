@@ -5,7 +5,10 @@
  * - Voorkeuren per dienst: one row per dienst (date, day, ISO week, the
  *   dienst, its block, the feestdag), one column per AIOS with what they
  *   marked there in words, and why when it is not their own (parttime,
- *   afwezig). A block's mark stands on each of its diensten.
+ *   afwezig). A block's mark stands on each of its diensten. A mark the
+ *   AIOS made by hand shows their own toelichting of that day after a colon
+ *   ("geblokkeerd: ziek kind"), on each dienst of the day, the planner's
+ *   alone (lib/aiosReden.ts).
  * - Verzoeken per AIOS: one row per AIOS, with where their hand-in stands,
  *   what they asked besides (4 avonden, 4 nachten, twee dagdiensten,
  *   inwerken, onderbreking, opmerking), their part-time days and absences
@@ -22,6 +25,7 @@
 import { db } from '@/db/client';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { loadAlleAiosRedenen } from '@/lib/aiosReden';
 import {
   blokkadeTellers,
   loadAiosVoorkeurDagen,
@@ -48,13 +52,16 @@ const weekdag = (datum: string) => DAG[new Date(`${datum}T12:00:00Z`).getUTCDay(
 const kort = (datum: string) =>
   new Date(`${datum}T12:00:00Z`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
 
-/** The mark in words, with why it is there when the AIOS did not set it. */
-function markering(d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>): string | null {
+/**
+ * The mark in words, with why it is there when the AIOS did not set it, and
+ * with their own toelichting of the day when they did and gave one.
+ */
+function markering(d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>, toelichting?: string): string | null {
   if (!d.level) return null;
   const keuze = KEUZE[d.level];
   if (d.bron === 'PARTTIME') return `${keuze} (parttime)`;
   if (d.bron === 'ABSENCE') return `${keuze} (afwezig)`;
-  return keuze;
+  return toelichting ? `${keuze}: ${toelichting}` : keuze;
 }
 
 function blokTekst(d: AiosVoorkeurDienst): string | null {
@@ -65,10 +72,11 @@ function blokTekst(d: AiosVoorkeurDienst): string | null {
 /** Voorkeuren per dienst: a row per dienst, a column per AIOS. */
 export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode): XlsxSheet {
   const deelnemers = aiosDeelnemers(period);
+  const redenen = loadAlleAiosRedenen(period.id);
   const perPersoon = deelnemers.map((p) => {
     const marks = new Map<string, string | null>();
     for (const dag of loadAiosVoorkeurDagen(p.id, period.id)) {
-      for (const d of dag.diensten) marks.set(d.slot_id, markering(d));
+      for (const d of dag.diensten) marks.set(d.slot_id, markering(d, redenen.get(`${p.id}|${dag.datum}`)));
     }
     return marks;
   });

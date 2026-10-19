@@ -25,6 +25,7 @@ import {
   blokkadeTellers,
   bovenHelftUitleg,
   OPMERKING_MAX_LENGTH,
+  REDEN_MAX_LENGTH,
   telMarkeringen,
   TELLER_LABELS,
   vakKeuzes,
@@ -32,6 +33,7 @@ import {
   volgendeVakStand,
   type VoorkeurVak,
   type AiosVoorkeurDag,
+  type AiosReden,
   type AiosVoorkeurDienst,
   type AiosWens,
   type BlokkadeTeller,
@@ -42,6 +44,7 @@ interface Scherm {
   period: { id: string; naam: string; start_datum: string; eind_datum: string; deadline: string; status: string };
   dagen: AiosVoorkeurDag[];
   wens: AiosWens;
+  redenen: AiosReden[];
   tellers: BlokkadeTeller[];
   voortgangstoets: { datum: string | null; nacht: string | null };
   indiening: { status: string; ingediend_op: string | null } | null;
@@ -260,6 +263,72 @@ function Week({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/** One optional toelichting for a day marked geblokkeerd or liever niet; saved when the field is left. */
+function RedenVeld({
+  datum,
+  tekst,
+  readOnly,
+  onOpslaan,
+}: {
+  datum: string;
+  tekst: string;
+  readOnly: boolean;
+  onOpslaan: (datum: string, tekst: string) => Promise<void>;
+}) {
+  const [waarde, setWaarde] = useState(tekst);
+  useEffect(() => setWaarde(tekst), [tekst]);
+  const id = `aios-reden-${datum}`;
+  return (
+    <div>
+      <label htmlFor={id} className="block text-sm text-neutral-800 mb-1">
+        Toelichting voor {datumLang(datum)} <span className="text-neutral-600">(niet verplicht)</span>
+      </label>
+      <input
+        id={id}
+        type="text"
+        maxLength={REDEN_MAX_LENGTH}
+        value={waarde}
+        disabled={readOnly}
+        onChange={(e) => setWaarde(e.target.value)}
+        onBlur={() => {
+          if (waarde.trim() !== tekst) void onOpslaan(datum, waarde.trim());
+        }}
+        className="w-full px-2 py-1 border rounded text-sm disabled:bg-neutral-100"
+      />
+    </div>
+  );
+}
+
+/** The days of a week the AIOS marked geblokkeerd or liever niet by hand, each with its optional toelichting. */
+function WeekToelichtingen({
+  dagen,
+  redenen,
+  readOnly,
+  onOpslaan,
+}: {
+  dagen: AiosVoorkeurDag[];
+  redenen: AiosReden[];
+  readOnly: boolean;
+  onOpslaan: (datum: string, tekst: string) => Promise<void>;
+}) {
+  const gemarkeerd = dagen.filter((d) => d.diensten.some((x) => x.bron === 'MANUAL' && (x.level === 'ABSOLUUT' || x.level === 'LIEVER_NIET')));
+  if (gemarkeerd.length === 0) return null;
+  return (
+    <div className="space-y-2 rounded border border-neutral-200 p-3" data-testid="aios-redenen">
+      <p className="text-sm font-medium text-neutral-800">
+        Toelichting bij je dagen in deze week <span className="font-normal text-neutral-600">(niet verplicht)</span>
+      </p>
+      <p className="text-xs text-neutral-600">
+        Waarom je die dag geen dienst of liever geen dienst wilt. Alleen de planner van de AIOS ziet dit, en alleen als die het
+        rooster met de hand aanpast. Andere AIOS zien het nooit, ook niet bij een ruilverzoek.
+      </p>
+      {gemarkeerd.map((d) => (
+        <RedenVeld key={d.datum} datum={d.datum} tekst={redenen.find((r) => r.datum === d.datum)?.tekst ?? ''} readOnly={readOnly} onOpslaan={onOpslaan} />
+      ))}
     </div>
   );
 }
@@ -529,6 +598,22 @@ export function AiosVoorkeuren({
     }
   };
 
+  const bewaarReden = async (datum: string, tekst: string) => {
+    setFout(null);
+    try {
+      const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${periodId}/reden`), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ datum, tekst }),
+      });
+      const data = await json(res, 'Opslaan is mislukt. Probeer het opnieuw.');
+      setScherm((nu) => (nu ? { ...nu, redenen: data.redenen } : nu));
+    } catch (err) {
+      setFout(err instanceof Error ? err.message : 'Opslaan is mislukt. Probeer het opnieuw.');
+      await laad();
+    }
+  };
+
   if (laadFout) return <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{laadFout}</div>;
   if (!scherm) return <div className="card p-8 text-center text-neutral-600">Diensten laden...</div>;
 
@@ -575,7 +660,10 @@ export function AiosVoorkeuren({
           </div>
         )}
         {weken.map((week) => (
-          <Week key={week[0].datum} dagen={week} bezig={bezig} readOnly={readOnly} onKies={kies} />
+          <div key={week[0].datum} className="space-y-2">
+            <Week dagen={week} bezig={bezig} readOnly={readOnly} onKies={kies} />
+            <WeekToelichtingen dagen={week} redenen={scherm.redenen} readOnly={readOnly} onOpslaan={bewaarReden} />
+          </div>
         ))}
         {feestdagen.length > 0 && (
           <div className="text-sm text-neutral-700">

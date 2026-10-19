@@ -197,6 +197,15 @@ export function AiosRoosterWijzigen({
                 {k.voorkeur && <span className="ml-1">+ voorkeur</span>}
                 <span className="block text-xs text-neutral-600">daarna {procent(k.percentage_na)}</span>
                 {k.reden && <span className="block text-xs text-neutral-800">{k.reden}</span>}
+                {k.toelichtingen.length > 0 && (
+                  <ul className="text-xs text-neutral-800" data-testid="aios-toelichting">
+                    {k.toelichtingen.map((t) => (
+                      <li key={t.datum}>
+                        Toelichting van de AIOS voor {datumKort(t.datum)}: {t.tekst}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {k.waarschuwingen.length > 0 && (
                   <ul className="text-xs text-neutral-900">
                     {k.waarschuwingen.map((w) => (

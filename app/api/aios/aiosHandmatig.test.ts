@@ -4,7 +4,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { setAiosVoorkeur } from '@/lib/aiosPreferences';
+import { loadAiosPeriode, setAiosVoorkeur } from '@/lib/aiosPreferences';
+import { saveAiosReden } from '@/lib/aiosReden';
 import { laadAiosRooster } from '@/lib/aiosRooster';
 import { aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { GET as kandidaten } from './periode/[id]/rooster/kandidaten/route';
@@ -135,6 +136,17 @@ describe('before choosing', () => {
     );
     const nacht = (await (await vraag(slot('ND', '2094-07-14').id, true)).json()).data;
     expect(nacht.kandidaten.find((c: any) => c.person_id === w.y).waarschuwingen.map((x: any) => x.code)).toContain('GEBLOKKEERD');
+  });
+
+  it("the AIOS's own words on a marked day, for the planner correcting by hand", async () => {
+    const periode = loadAiosPeriode(w.period)!;
+    expect(saveAiosReden(w.y, periode, '2094-07-17', 'Mijn zus trouwt')).toEqual({ ok: true });
+    const dd = (await (await vraag(slot('DD', '2094-07-17').id, false)).json()).data;
+    expect(dd.kandidaten.find((c: any) => c.person_id === w.y).toelichtingen).toEqual([{ datum: '2094-07-17', tekst: 'Mijn zus trouwt' }]);
+    // Not for another AIOS, a day without one, nor for who has the dienst already.
+    expect(dd.kandidaten.find((c: any) => c.person_id === w.x).toelichtingen).toEqual([]);
+    const andere = (await (await vraag(slot('DD', '2094-07-10').id, false)).json()).data;
+    expect(andere.kandidaten.find((c: any) => c.person_id === w.y).toelichtingen).toEqual([]);
   });
 
   it("a part-time day's evening: liever niet, said as the part-time day's", async () => {

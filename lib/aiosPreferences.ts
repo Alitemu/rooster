@@ -35,6 +35,7 @@ import {
 export * from '@/lib/aiosVoorkeur';
 import { checkPeriodAcceptsInput } from '@/lib/aiosInvoer';
 import { syncAiosPersoon } from '@/lib/aiosSync';
+import { ruimAiosRedenenOp } from '@/lib/aiosReden';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { validateSingleLine } from '@/lib/vrijeTekst';
 
@@ -239,6 +240,8 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
       const now = new Date().toISOString();
       for (const id of eigen) upsert.run(crypto.randomUUID(), personId, id, level, now);
     }
+    // A day that lost its mark takes its toelichting with it (lib/aiosReden.ts).
+    ruimAiosRedenenOp(personId, periodId);
     markeerBegonnen(personId, periodId);
   })();
   // A cleared dienst may be one a part-time day or an absence covers but
