@@ -224,15 +224,21 @@ export interface AiosLaatsteGeneratie {
   tijd_seconden: number;
   /** Which diensten stayed empty when it was made. */
   leeg_bij_maken: number;
-  /** Of those, the ones still without an AIOS: what the planner has not filled by hand yet. */
+  /**
+   * The diensten without an AIOS now: those of the generation not filled by hand yet, with why the solver
+   * left them, and any other that is empty since (made empty by hand, a night the voortgangstoets put
+   * back), which have no reason of the solver's.
+   */
   nog_leeg: AiosLeeg[];
 }
 
 /**
- * What the last generation told the planner, as it stands now: the diensten
- * that stayed empty, less the ones filled by hand since. The planner sees it
- * again after a refresh or another login. Undefined without a roster that
- * was made by the solver.
+ * What the last generation told the planner, as it stands now: what the
+ * solver filled and left empty is history, which diensten are empty is
+ * counted from the roster itself, so a dienst filled by hand is gone from
+ * the list, one made empty by hand is in it, and a dienst that no longer
+ * exists is not. The planner sees it again after a refresh or another login.
+ * Undefined without a roster that was made by the solver.
  */
 export function laatsteAiosGeneratie(periodId: string): AiosLaatsteGeneratie | undefined {
   const rij = db
@@ -240,17 +246,22 @@ export function laatsteAiosGeneratie(periodId: string): AiosLaatsteGeneratie | u
     .get(periodId) as { gemaakt_op: string; solver_status: string; gevuld: number; tijd_seconden: number; leeg_json: string } | undefined;
   if (!rij) return undefined;
   const leeg = JSON.parse(rij.leeg_json) as AiosLeeg[];
-  const bezet = new Set(
-    (db.prepare('SELECT slot_id FROM dienstrooster_assignment WHERE schedule_version_id = ?').all(periodId) as Array<{ slot_id: string }>).map(
-      (r) => r.slot_id
+  const redenen = new Map(leeg.map((l) => [l.dienst_id, l.redenen]));
+  const nu = db
+    .prepare(
+      `SELECT sl.id AS dienst_id, sl.datum, st.code FROM dienstrooster_shift_slot sl
+       JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+       WHERE sl.period_id = ?
+         AND NOT EXISTS (SELECT 1 FROM dienstrooster_assignment a WHERE a.slot_id = sl.id AND a.schedule_version_id = sl.period_id)
+       ORDER BY sl.datum, st.code, sl.id`
     )
-  );
+    .all(periodId) as Array<{ dienst_id: string; datum: string; code: string }>;
   return {
     gemaakt_op: rij.gemaakt_op,
     status: rij.solver_status,
     gevuld: rij.gevuld,
     tijd_seconden: rij.tijd_seconden,
     leeg_bij_maken: leeg.length,
-    nog_leeg: leeg.filter((l) => !bezet.has(l.dienst_id)),
+    nog_leeg: nu.map((d) => ({ ...d, redenen: redenen.get(d.dienst_id) ?? {} })),
   };
 }

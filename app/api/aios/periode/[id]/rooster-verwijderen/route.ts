@@ -11,6 +11,7 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { aiosFout, laadAiosPeriode } from '@/lib/aiosRoute';
+import { haalTweedeNachtWeg } from '@/lib/aiosFeestdagBlokken';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt, verwijderAiosRooster } from '@/lib/aiosGenereren';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -27,6 +28,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
     if (aiosGeneratieLoopt(period.id)) return aiosFout(409, 'GENERATION_RUNNING', AIOS_GENERATIE_LOOPT);
     const verwijderd = verwijderAiosRooster(period.id);
+    // The second night of oudjaar belongs to a generation, as when the period is opened again.
+    haalTweedeNachtWeg(period);
     writeAuditLog({
       actorId: auth!.userId,
       entiteit: 'period',

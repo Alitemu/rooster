@@ -33,6 +33,7 @@ import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { loadAiosPeriode, setAiosVoorkeur, type Niveau } from '@/lib/aiosPreferences';
 import { loadAiosRedenen, saveAiosReden } from '@/lib/aiosReden';
 import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
+import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 
 const NIVEAU_VAN_WOORD: Record<string, Niveau> = {
   geblokkeerd: 'ABSOLUUT',
@@ -325,6 +326,9 @@ export function importeerAiosVoorkeuren(period: AiosUitnodigPeriode, bestand: un
           : 'Het rooster van deze periode is al gemaakt. Voorkeuren importeren kan alleen daarvoor.',
     };
   }
+  // The generation read the preferences when it began and only looks at status and version when it ends:
+  // preferences read in meanwhile would be left out of the roster without a word.
+  if (aiosGeneratieLoopt(period.id)) return { ok: false, status: 409, code: 'GENERATION_RUNNING', message: AIOS_GENERATIE_LOOPT };
   let rows: string[][];
   try {
     rows = readFirstSheet(Buffer.from(bestand, 'base64'));

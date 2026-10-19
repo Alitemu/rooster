@@ -14,7 +14,7 @@
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { combinedMembership } from '@/lib/coverageFactor';
-import { laadAfgeleideDeelnamefactoren } from '@/lib/deelnamefactor';
+import { afgeleideDeelnamefactor, laadParttimePatronen } from '@/lib/deelnamefactor';
 import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
@@ -201,10 +201,20 @@ export function loadPeriodMembers(period: {
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<MembershipRow & { codenaam: string }>;
   // The deelnamefactor is the person's own, from their part-time days
-  // (lib/deelnamefactor.ts), not the column of the membership.
-  const factoren = laadAfgeleideDeelnamefactoren([...new Set(rows.map((r) => r.id))], period);
+  // (lib/deelnamefactor.ts), not the column of the membership: over the days
+  // of each membership within the period, so combineMemberships weighs them
+  // by those days and a part-time pattern that follows a partial membership
+  // is not diluted by the days outside it.
+  const patronen = laadParttimePatronen([...new Set(rows.map((r) => r.id))], period.start_datum, period.eind_datum);
   return combineMemberships(
-    rows.map((r) => ({ ...r, deelnamefactor: factoren.get(r.id) ?? 1 })),
+    rows.map((r) => ({
+      ...r,
+      deelnamefactor: afgeleideDeelnamefactor(
+        patronen.get(r.id) ?? [],
+        r.geldig_vanaf > period.start_datum ? r.geldig_vanaf : period.start_datum,
+        r.geldig_tot < period.eind_datum ? r.geldig_tot : period.eind_datum
+      ),
+    })),
     period
   );
 }

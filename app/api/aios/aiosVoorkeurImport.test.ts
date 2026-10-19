@@ -280,3 +280,40 @@ describe('a file with problems is refused whole', () => {
     expect(check.json.data.problemen.some((p: string) => p.includes('feestdag'))).toBe(true);
   });
 });
+
+describe('the toelichting stays with the blokkade', () => {
+  it('a voorkeur of the day of a toelichting has no text, and such an overview reads back unchanged', async () => {
+    const v = insert('dienstrooster_person', { codenaam: cn('v'), rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
+    insert('dienstrooster_pool_membership', { person_id: v, pool_id: w.pool, deelnamefactor: 1, geldig_vanaf: '2090-01-01', geldig_tot: '2099-12-31' });
+    const dag = '2097-06-11';
+    expect(setAiosVoorkeur(v, w.period, slotId(dag, 'UD'), 'LIEVER_NIET')).toEqual({ ok: true });
+    expect(setAiosVoorkeur(v, w.period, slotId(dag, 'AD'), 'VOORKEUR')).toEqual({ ok: true });
+    expect(saveAiosReden(v, loadAiosPeriode(w.period)!, dag, 'kind ziek')).toEqual({ ok: true });
+    const rows = await gelezen();
+    // The text belongs to the liever niet: the voorkeur of the same day says voorkeur and no more.
+    expect(rijen(rows, dag, 'UD')[0][kolom(rows, 'v')]).toBe('liever niet: kind ziek');
+    expect(rijen(rows, dag, 'AD')[0][kolom(rows, 'v')]).toBe('voorkeur');
+    // The file as it was downloaded is accepted as it is: nothing changes, nothing is refused.
+    const gecontroleerd = await importeer(rows, false);
+    expect(gecontroleerd.status).toBe(200);
+    expect(gecontroleerd.json.data).toMatchObject({ wijzigingen: [], problemen: [], toegepast: false });
+    expect((await importeer(rows, true)).json.data).toMatchObject({ wijzigingen: [], problemen: [], toegepast: true });
+    expect(loadAiosRedenen(v, w.period)).toEqual([{ datum: dag, tekst: 'kind ziek' }]);
+  });
+
+  it('not while a roster is being made: the generation read the preferences when it began', async () => {
+    const opslag = globalThis as unknown as { __aiosGeneratieJobs?: Map<string, unknown> };
+    const rows = await gelezen();
+    opslag.__aiosGeneratieJobs!.set('loopt-import', { id: 'loopt-import', periodId: w.period, status: 'BEZIG', gestart: Date.now() });
+    try {
+      for (const toepassen of [false, true]) {
+        const res = await importeer(rows, toepassen);
+        expect(res.status).toBe(409);
+        expect(res.json.error.code).toBe('GENERATION_RUNNING');
+      }
+    } finally {
+      opslag.__aiosGeneratieJobs!.delete('loopt-import');
+    }
+    expect((await importeer(rows, false)).status).toBe(200);
+  });
+});

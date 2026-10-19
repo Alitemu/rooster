@@ -90,7 +90,7 @@ under its own row for a change or a removal, scrolled into sight; only a
 failed load of the list shows above it. Everything showed above the list,
 out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
 
-## Deelnamefactor (0.93.0)
+## Deelnamefactor (0.93.0, audit 0.94.0)
 
 The planner does not type it in any more, for either dienst: it follows
 from the part-time days the person gives themselves in the Deeltijd step
@@ -98,7 +98,31 @@ from the part-time days the person gives themselves in the Deeltijd step
 0,8, one every other week 0,9, none 1,0; a pattern that holds for part of the
 period counts pro rata; never below 0,2. It is the AIOS's fte rule
 (lib/aiosFte.ts) copied, so the achterwacht does not import the AIOS's code
-(lib/deelnamefactor.test.ts checks the two agree for any patterns).
+(lib/deelnamefactor.test.ts checks the two agree for any patterns the AIOS
+may enter, one per weekday).
+
+Audit 0.94.0 on top of that:
+- **A weekday counts once.** The AIOS's routes always refused a second
+  pattern over a day (lib/aiosDeeltijd.ts PATTERN_OVERLAPS) because the
+  fte counts each pattern; the achterwacht's did not, so a participant who
+  added instead of changed got 0,6 for one day off. The routes now refuse it
+  too (lib/parttimeSync.ts `patternsOverlap`, 409 PATTERN_OVERLAPS; even and
+  odd weeks of one weekday share no day), and for rows from before the
+  derivation takes the union per weekday: every week beats every other
+  week, even and odd weeks together are every week.
+- **Monday to Friday only.** A part-time day means "I do not work this
+  weekday" (PARTTIME_WEEKDAGEN); a Saturday or Sunday pattern from before
+  that rule says nothing about the weekday diensten and is left out.
+- **Over the membership.** `loadPeriodMembers` derives the factor over the
+  days of each membership within the period and combinedMembership weighs
+  them by those days, so a pattern that follows a partial membership is not
+  diluted by the days outside it.
+- **Not frozen.** The factor is read from the patterns as they are, for a
+  generated or published period as well, as the typed column always was. A
+  participant who changes a pattern afterwards moves the targets of a
+  period already made (publication check, carry-over of the next one). A
+  snapshot per period would hold it (a table or the frozen ruleset); left
+  to the user's decision.
 
 - **The solver** gets the derived value: `loadPeriodMembers`
   (lib/rosterBands.ts) overrides the stored column with
@@ -110,9 +134,12 @@ period counts pro rata; never below 0,2. It is the AIOS's fte rule
 - **Personeel beheren** shows it (members route GET, `deelnamefactorVoorLijst`):
   `null` ("nog onbekend") until the person's submission for the period the
   pool is dealing with is BEVESTIGD. That period is the active one (the
-  invitations went out last), otherwise the latest OPEN, GESLOTEN or
+  invitations went out last; for the AIOS the day in dienstrooster_aios_
+  periode, not the period row), otherwise the latest OPEN, GESLOTEN or
   GEGENEREERD (`relevantePeriode`); with none, everyone is nog onbekend.
-  A "Voltijd" for someone who has not filled in anything would be a guess.
+  The wizard asks for its own period by its dates (`periodeMetDatums`), and
+  the list names the period it is about (`deelnamefactor_periode`). A
+  "Voltijd" for someone who has not filled in anything would be a guess.
 - **The column** `pool_membership.deelnamefactor` stays in the table, always
   1,0 for new rows, and is no longer read or written (not in the audit rows
   either). The members routes take dates only: a request with only a factor

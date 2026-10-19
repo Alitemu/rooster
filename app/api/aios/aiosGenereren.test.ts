@@ -231,18 +231,46 @@ describe('making the AIOS roster', () => {
     const g = await lees();
     const leeg = slotsVan(w.period).filter((s) => !toewijzingen().some((t) => t.slot_id === s.id));
     expect(g).toMatchObject({ gevuld: toewijzingen().length, leeg_bij_maken: 1, status: 'HAALBAAR' });
-    expect(g.nog_leeg).toEqual([expect.objectContaining({ dienst_id: leeg[0].id, code: 'UD', redenen: { GEBLOKKEERD: 1, BEZET: 1 } })]);
+    // What is empty is counted from the roster: the one the solver told about, with its reasons, and the
+    // diensten this stub of a solver simply left without one (the real one tells every one it leaves).
+    expect(g.nog_leeg).toHaveLength(leeg.length);
+    const doorSolver = g.nog_leeg.find((l: any) => Object.keys(l.redenen).length > 0);
+    expect(doorSolver).toMatchObject({ code: 'UD', redenen: { GEBLOKKEERD: 1, BEZET: 1 } });
     // The planner fills it by hand: it is no longer empty, but still counted as left empty when it was made.
     db.prepare(
       `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
        VALUES (?, ?, ?, ?, 'MANUAL', 1, ?)`
-    ).run(`hand-${tag}`, w.period, w.y, leeg[0].id, now);
+    ).run(`hand-${tag}`, w.period, w.y, doorSolver.dienst_id, now);
     try {
-      expect(await lees()).toMatchObject({ leeg_bij_maken: 1, nog_leeg: [] });
+      const na = await lees();
+      expect(na).toMatchObject({ leeg_bij_maken: 1 });
+      expect(na.nog_leeg.map((l: any) => l.dienst_id)).not.toContain(doorSolver.dienst_id);
+      expect(na.nog_leeg).toHaveLength(leeg.length - 1);
     } finally {
       db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(`hand-${tag}`);
     }
-    expect((await lees()).nog_leeg).toHaveLength(1);
+    expect((await lees()).nog_leeg).toHaveLength(leeg.length);
+  });
+
+  it('a dienst made empty by hand after the roster was made is counted too, without a reason of the solver', async () => {
+    const lees = async () => (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.generatie;
+    const vooraf = (await lees()).nog_leeg.length;
+    const gevuld = toewijzingen()[0];
+    const rij = db.prepare('SELECT * FROM dienstrooster_assignment WHERE slot_id = ? AND schedule_version_id = ?').get(gevuld.slot_id, w.period) as Record<string, unknown>;
+    db.prepare('DELETE FROM dienstrooster_assignment WHERE slot_id = ? AND schedule_version_id = ?').run(gevuld.slot_id, w.period);
+    try {
+      const na = await lees();
+      expect(na.nog_leeg).toHaveLength(vooraf + 1);
+      expect(na.nog_leeg.find((l: any) => l.dienst_id === gevuld.slot_id)).toMatchObject({ redenen: {} });
+      // What the solver told when it was made is history and does not change.
+      expect(na.leeg_bij_maken).toBe(1);
+    } finally {
+      db.prepare(
+        `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+         VALUES (?, ?, ?, ?, ?, 1, ?)`
+      ).run(rij.id, w.period, rij.person_id, rij.slot_id, rij.bron, rij.aangemaakt_op);
+    }
+    expect((await lees()).nog_leeg).toHaveLength(vooraf);
   });
 
   it('back to open is refused from a made roster, and says to remove the roster first', async () => {
@@ -250,6 +278,26 @@ describe('making the AIOS roster', () => {
     expect(res.status).toBe(409);
     expect((await res.json()).error.message).toBe(EERST_VERWIJDEREN.GEGENEREERD);
     expect(periodeStatus().status).toBe('GEGENEREERD');
+  });
+
+  it('back to open is refused while a roster is being made, whatever the status', async () => {
+    const opslag = globalThis as unknown as { __aiosGeneratieJobs?: Map<string, unknown> };
+    opslag.__aiosGeneratieJobs!.set('loopt-heropenen', { id: 'loopt-heropenen', periodId: w.period, status: 'BEZIG', gestart: Date.now() });
+    const voor = periodeStatus();
+    try {
+      const res = await heropenen(req(`${w.period}/heropenen`, staffCookie(w.planner), 'POST', {}), ctx(w.period));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.code).toBe('GENERATION_RUNNING');
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN' WHERE id = ?`).run(w.period);
+      const gesloten = await heropenen(req(`${w.period}/heropenen`, staffCookie(w.planner), 'POST', {}), ctx(w.period));
+      expect(gesloten.status).toBe(409);
+      expect((await gesloten.json()).error.code).toBe('GENERATION_RUNNING');
+      expect(periodeStatus().status).toBe('GESLOTEN');
+    } finally {
+      opslag.__aiosGeneratieJobs!.delete('loopt-heropenen');
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(w.period);
+    }
+    expect(periodeStatus()).toEqual(voor);
   });
 
   it('shows who has what, and each AIOS their points and dienstpercentage', async () => {

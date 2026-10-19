@@ -23,7 +23,7 @@ import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJs
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateCodenaam } from '@/lib/codenaam';
 import { isValidIsoDate } from '@/lib/isoDate';
-import { deelnamefactorVoorLijst } from '@/lib/deelnamefactor';
+import { deelnamefactorVoorLijst, periodeMetDatums } from '@/lib/deelnamefactor';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PoolMember {
@@ -35,6 +35,8 @@ interface PoolMember {
   is_active: boolean;
   /** From the person's own part-time days, null (nog onbekend) until they handed in (lib/deelnamefactor.ts). */
   deelnamefactor: number | null;
+  /** The period that factor is about (its name), null when the pool has none to ask. */
+  deelnamefactor_periode: string | null;
 }
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -71,10 +73,18 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       ORDER BY p.codenaam ASC
     `);
 
-    const rows = membersStmt.all(periodEnd, periodStart, poolId) as Array<Omit<PoolMember, 'deelnamefactor'>>;
-    // Worked out from what each person filled in, not typed in (lib/deelnamefactor.ts).
-    const factoren = deelnamefactorVoorLijst(poolId, [...new Set(rows.map((r) => r.person_id))]);
-    const members: PoolMember[] = rows.map((r) => ({ ...r, deelnamefactor: factoren.get(r.person_id) ?? null }));
+    const rows = membersStmt.all(periodEnd, periodStart, poolId) as Array<Omit<PoolMember, 'deelnamefactor' | 'deelnamefactor_periode'>>;
+    // Worked out from what each person filled in, not typed in (lib/deelnamefactor.ts), over the
+    // period the caller asks about (the wizard sends its own dates) or else the one the pool is dealing with.
+    const gevraagdVan = req.nextUrl.searchParams.get('period_start');
+    const gevraagdTot = req.nextUrl.searchParams.get('period_end');
+    const gevraagd = gevraagdVan && gevraagdTot ? periodeMetDatums(poolId, gevraagdVan, gevraagdTot) : undefined;
+    const { factoren, periode } = deelnamefactorVoorLijst(poolId, [...new Set(rows.map((r) => r.person_id))], gevraagd);
+    const members: PoolMember[] = rows.map((r) => ({
+      ...r,
+      deelnamefactor: factoren.get(r.person_id) ?? null,
+      deelnamefactor_periode: periode?.naam ?? null,
+    }));
 
     const response: ApiSuccessResponse<PoolMember[]> = {
       success: true,

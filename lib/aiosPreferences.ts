@@ -227,6 +227,9 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
   // it counts for the 50% rule. Clearing it brings the liever niet back.
   const eigen = targets.filter((t) => !t.level || t.bron === 'MANUAL' || (parttimeLieverNiet(t) && level !== null)).map((t) => t.id);
   db.transaction(() => {
+    // A toelichting left behind by a mark that went another way (an absence or a part-time day took its place)
+    // must not come back with this new mark.
+    ruimAiosRedenenOp(personId, periodId);
     if (level === null) {
       const del = db.prepare(`DELETE FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ? AND source = 'MANUAL'`);
       for (const id of eigen) del.run(personId, id);

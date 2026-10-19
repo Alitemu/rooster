@@ -539,6 +539,32 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.94.0** is alles van 0.90.0 tot en met 0.93.0 nagelopen en
+bijgewerkt waar dat nodig bleek.
+- *Parttimedagen:* een tweede parttimedag op dezelfde dag en week wordt
+  geweigerd (zoals bij de AIOS al zo was), want de deelnamefactor telt elke
+  dag eenmaal. Wat er al dubbel stond telt ook eenmaal. Een parttimedag op
+  zaterdag of zondag telt niet mee voor de factor. Bij een lidmaatschap voor
+  een deel van de periode telt de factor over de dagen van dat
+  lidmaatschap.
+- *Personeel beheren:* de lijst zegt voor welke periode de factor geldt. In
+  de wizard hoort de factor bij de periode waar je mee bezig bent. Bij de AIOS
+  telt de uitnodiging van het kwartaal ook als dat kwartaal al gepubliceerd
+  is.
+- *AIOS, lege diensten:* de lijst *Nog leeg* komt uit het rooster zelf. Een
+  dienst die je met de hand leegmaakt staat er direct bij. Een dienst die er
+  niet meer is, staat er niet meer in.
+- *AIOS, status:* de melding dat eerst het rooster verwijderd moet worden
+  verdwijnt zodra de status verandert. *Terug naar open* wordt geweigerd
+  terwijl er een rooster gemaakt wordt. Na *Rooster verwijderen* is ook de
+  tweede nacht van oudjaar weg.
+- *AIOS, toelichting en import:* het voorkeurenoverzicht zet de toelichting
+  alleen bij geblokkeerd of liever niet, zodat het bestand ongewijzigd weer
+  ingelezen kan worden. Een oude toelichting komt niet terug bij een nieuwe
+  markering. De import wordt geweigerd terwijl er een rooster gemaakt wordt.
+  De AIOS leest nu dat de planner de toelichting ook in het
+  voorkeurenoverzicht ziet.
+
 **Vanaf versie 0.93.0** typt de planner geen deelnamefactor meer in, bij de
 achterwacht niet en bij de AIOS niet. De factor volgt uit de parttimedagen
 die de medewerker zelf opgeeft bij *Deeltijd*: een dag per week vrij is 0,8

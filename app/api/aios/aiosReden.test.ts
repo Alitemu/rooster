@@ -174,6 +174,21 @@ describe('who sees it', () => {
   });
 });
 
+describe('a toelichting left behind does not come back with a new mark', () => {
+  it('the mark went another way, the AIOS marks the day again: no text they did not type', async () => {
+    const dag = '2097-05-21';
+    expect(setAiosVoorkeur(w.y, w.period, slotOp('UD', dag), 'ABSOLUUT')).toEqual({ ok: true });
+    expect((await put(w.y, w.y, { datum: dag, tekst: 'oude reden' })).status).toBe(200);
+    // An absence or a part-time day takes the mark's place without going through the AIOS's screen.
+    db.prepare(`DELETE FROM dienstrooster_availability WHERE person_id = ?`).run(w.y);
+    expect(db.prepare('SELECT 1 FROM dienstrooster_aios_reden WHERE person_id = ?').get(w.y)).toBeDefined();
+    // The same day marked again: the old text is not theirs to find, nor the planner's.
+    expect(setAiosVoorkeur(w.y, w.period, slotOp('UD', dag), 'LIEVER_NIET')).toEqual({ ok: true });
+    expect((await eigenScherm(w.y)).redenen).toEqual([]);
+    expect(db.prepare('SELECT 1 FROM dienstrooster_aios_reden WHERE person_id = ?').get(w.y)).toBeUndefined();
+  });
+});
+
 describe('a mark that goes takes the toelichting with it', () => {
   it('cleared: not on the screen, not in the table, not in the overview', async () => {
     expect(setAiosVoorkeur(w.x, w.period, slotOp('UD', DAG), null)).toEqual({ ok: true });

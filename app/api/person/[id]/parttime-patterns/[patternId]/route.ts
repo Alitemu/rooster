@@ -16,7 +16,10 @@ import {
   removePatternAvailability,
   getOpenPeriodsForPerson,
   findDeadlinePassedOverlappingPeriods,
+  overlappingPatternOf,
   PARTTIME_WEEKDAGEN,
+  PATTERN_OVERLAPS_MESSAGE,
+  type PatternRule,
 } from '@/lib/parttimeSync';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
@@ -130,6 +133,26 @@ export async function PATCH(
         error: { code: 'INVALID_RANGE', message: '"Vanaf" moet vóór of op "tot en met" liggen' },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // The same refusal as adding one (the factor of the person counts each pattern).
+    if (
+      overlappingPatternOf(
+        id,
+        {
+          weekdag: updates.weekdag ?? pattern.weekdag,
+          frequentie: updates.frequentie ?? pattern.frequentie,
+          geldig_vanaf: newVanaf,
+          geldig_tot: newTot,
+        } as PatternRule,
+        patternId
+      )
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PATTERN_OVERLAPS', message: PATTERN_OVERLAPS_MESSAGE },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // Build UPDATE statement dynamically

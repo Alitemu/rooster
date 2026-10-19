@@ -12,9 +12,9 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
-import { EERST_VERWIJDEREN } from '@/lib/aiosTeksten';
+import { eerstVerwijderenUitleg } from '@/lib/aiosTeksten';
 
 const KLEUR: Record<string, string> = {
   CONCEPT: 'bg-neutral-100 text-neutral-800',
@@ -36,12 +36,20 @@ export function AiosPeriodeStatus({ period, onChanged }: { period: { id: string;
   const [bezig, setBezig] = useState(false);
   const [zeker, setZeker] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
-  const [uitleg, setUitleg] = useState<string | null>(null);
+  // Whether the planner asked and was told what comes first. The text is the one of the status now, so it
+  // goes when the status changes (the roster removed under it, a publication taken back) and never says
+  // something that no longer holds.
+  const [vraagUitleg, setVraagUitleg] = useState(false);
+  useEffect(() => {
+    setVraagUitleg(false);
+    setZeker(false);
+  }, [period.status]);
+  const uitleg = eerstVerwijderenUitleg(vraagUitleg, period.status);
 
   const doe = async (pad: string, fallback: string) => {
     setBezig(true);
     setFout(null);
-    setUitleg(null);
+    setVraagUitleg(false);
     try {
       const res = await fetch(withBasePath(`/api/aios/periode/${period.id}/${pad}`), {
         method: 'POST',
@@ -55,6 +63,8 @@ export function AiosPeriodeStatus({ period, onChanged }: { period: { id: string;
     } catch (err) {
       setZeker(false);
       setFout(err instanceof Error ? err.message : fallback);
+      // Another planner may have changed the status first: show the one it is now.
+      onChanged();
     } finally {
       setBezig(false);
     }
@@ -96,7 +106,7 @@ export function AiosPeriodeStatus({ period, onChanged }: { period: { id: string;
                   // Nothing to confirm: it is not possible yet, and says what comes first.
                   setFout(null);
                   setZeker(false);
-                  setUitleg(EERST_VERWIJDEREN[period.status]);
+                  setVraagUitleg(true);
                   return;
                 }
                 if (zeker) void doe('heropenen', 'Terug naar open is mislukt');

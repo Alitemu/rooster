@@ -16,7 +16,10 @@ import {
   syncAvailabilityForPattern,
   getOpenPeriodsForPerson,
   findDeadlinePassedOverlappingPeriods,
+  overlappingPatternOf,
   PARTTIME_WEEKDAGEN,
+  PATTERN_OVERLAPS_MESSAGE,
+  type PatternRule,
 } from '@/lib/parttimeSync';
 import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
@@ -172,6 +175,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // One part-time day per weekday and week: the factor of the person counts each pattern.
+    if (overlappingPatternOf(id, { weekdag, frequentie, geldig_vanaf, geldig_tot } as PatternRule, null)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PATTERN_OVERLAPS', message: PATTERN_OVERLAPS_MESSAGE },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // Insert pattern and generate its availability blocks atomically

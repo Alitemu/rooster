@@ -120,6 +120,40 @@ export function previewPatternDates(pattern: PatternRule, rangeStart: string, ra
   return days;
 }
 
+/**
+ * Two patterns with a day in common: the same weekday, dates that overlap
+ * and, in at least one week of them, both holding (every week and every
+ * other week, or the same parity). Even and odd weeks of one weekday share
+ * none. The deelnamefactor counts a weekday once however many patterns it
+ * has (lib/deelnamefactor.ts), but a person who forgot they had one and adds
+ * another meant a change, so the routes refuse it (the AIOS's own routes
+ * did from the start: lib/aiosDeeltijd.ts).
+ */
+export function patternsOverlap(a: PatternRule, b: PatternRule): boolean {
+  if (a.weekdag !== b.weekdag) return false;
+  const from = a.geldig_vanaf > b.geldig_vanaf ? a.geldig_vanaf : b.geldig_vanaf;
+  const to = a.geldig_tot < b.geldig_tot ? a.geldig_tot : b.geldig_tot;
+  return previewPatternDates(a, from, to).some((dag) => dateMatchesPattern(b, dag.datum, dag.iso_week));
+}
+
+/**
+ * Another pattern of this person that shares a day with `p` (not `behalve`,
+ * the one being changed). A pattern with the very same weekday and dates is
+ * left to the unique index, which has its own answer.
+ */
+export function overlappingPatternOf(personId: string, p: PatternRule, behalve: string | null): boolean {
+  const anderen = db
+    .prepare(
+      `SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern
+       WHERE person_id = ? AND weekdag = ? AND id IS NOT ?`
+    )
+    .all(personId, p.weekdag, behalve) as PatternRule[];
+  return anderen.some((q) => !(q.geldig_vanaf === p.geldig_vanaf && q.geldig_tot === p.geldig_tot) && patternsOverlap(p, q));
+}
+
+/** What the routes say when a pattern shares a day with another of the person's. */
+export const PATTERN_OVERLAPS_MESSAGE = 'Je hebt al een parttimedag op deze dag in deze periode. Pas dat patroon aan of verwijder het eerst.';
+
 export function isYearBoundaryWeek(isoWeek: number): boolean {
   return isoWeek === 1 || isoWeek === 52 || isoWeek === 53;
 }

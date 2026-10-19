@@ -37,6 +37,8 @@ interface StaffMember {
   is_active: boolean;
   /** Worked out from their own part-time days; null until they handed in (lib/deelnamefactor.ts). */
   deelnamefactor: number | null;
+  /** The period that factor is about; null when the pool has none. */
+  deelnamefactor_periode?: string | null;
 }
 
 // Today on a Dutch calendar, not in UTC (lib/localDate.ts, audit 9).
@@ -444,6 +446,12 @@ export default function PoolStaffPage() {
           <p className="text-xs text-neutral-600" data-testid="deelnamefactor-uitleg">
             De deelnamefactor typ je niet in. Die volgt uit de parttimedagen die de medewerker zelf opgeeft. Hij staat in de lijst
             zodra die de voorkeuren heeft ingediend. Tot dan staat er nog onbekend.
+            {members.find((m) => m.deelnamefactor_periode)?.deelnamefactor_periode && (
+              <span data-testid="deelnamefactor-periode">
+                {' '}
+                De factor in de lijst hoort bij de periode {members.find((m) => m.deelnamefactor_periode)!.deelnamefactor_periode}.
+              </span>
+            )}
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div>

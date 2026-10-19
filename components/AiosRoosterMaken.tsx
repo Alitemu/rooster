@@ -237,7 +237,7 @@ function JaarPercentage({ waarde, kwartalen }: { waarde: number | null; kwartale
 }
 
 /** What the last generation told: how many were filled, and which diensten are still empty and why. */
-function LegeDiensten({ generatie }: { generatie: AiosLaatsteGeneratie }) {
+function LegeDiensten({ generatie, kanOpnieuw }: { generatie: AiosLaatsteGeneratie; kanOpnieuw: boolean }) {
   const { leeg_bij_maken: bij, nog_leeg: nog } = generatie;
   const gemaakt = new Date(generatie.gemaakt_op).toLocaleString('nl-NL', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
   return (
@@ -246,10 +246,10 @@ function LegeDiensten({ generatie }: { generatie: AiosLaatsteGeneratie }) {
         Gemaakt op {gemaakt}: {generatie.gevuld} diensten ingedeeld
         {bij === 0 ? ', niets leeg.' : `. ${bij} ${bij === 1 ? 'dienst bleef' : 'diensten bleven'} leeg.`}
       </p>
-      {generatie.status !== 'OPTIMAAL' && bij > 0 && (
+      {generatie.status !== 'OPTIMAAL' && bij > 0 && nog.length > 0 && kanOpnieuw && (
         <p className="text-neutral-700">Misschien vindt de solver meer met meer tijd. Kies een langere tijd en maak het opnieuw.</p>
       )}
-      {bij > 0 && (
+      {(bij > 0 || nog.length > 0) && (
         <p className="font-medium" data-testid="aios-nog-leeg">
           {nog.length === 0
             ? 'Alle lege diensten zijn inmiddels met de hand ingevuld.'
@@ -261,10 +261,12 @@ function LegeDiensten({ generatie }: { generatie: AiosLaatsteGeneratie }) {
           {nog.map((l) => (
             <li key={l.dienst_id}>
               {CODE_NAAM[l.code]} {datumKort(l.datum)}:{' '}
-              {Object.entries(l.redenen)
-                .sort((a, b) => b[1] - a[1])
-                .map(([r, n]) => `${n} ${REDEN[r] ?? r}`)
-                .join(', ')}
+              {Object.keys(l.redenen).length === 0
+                ? 'leeg sinds het maken van het rooster'
+                : Object.entries(l.redenen)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([r, n]) => `${n} ${REDEN[r] ?? r}`)
+                    .join(', ')}
             </li>
           ))}
         </ul>
@@ -458,7 +460,7 @@ export function AiosRoosterMaken({ periodId, status, onChanged }: { periodId: st
             {fout}
           </p>
         )}
-        {rooster?.generatie && <LegeDiensten generatie={rooster.generatie} />}
+        {rooster?.generatie && <LegeDiensten generatie={rooster.generatie} kanOpnieuw={status === 'GEGENEREERD'} />}
       </AiosSectie>
 
       {zichtbaar && <AiosPubliceren periodId={periodId} status={status} onChanged={onChanged} />}

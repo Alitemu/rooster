@@ -241,4 +241,47 @@ describe('the deelnamefactor of a member is not typed in', () => {
     ).run(crypto.randomUUID(), participant.id, periodId);
     expect((await lijst()).deelnamefactor).toBe(0.8);
   });
+
+  it('the list is about the period the wizard asks for (its dates), else the one the pool is dealing with, and says which', async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const { poolId } = createPool();
+    expect((await addMember(planner.id, poolId, participant.codenaam)).status).toBe(201);
+    const periode = (naam: string, start: string, eind: string, status: string, extra = '') =>
+      db
+        .prepare(
+          `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, status, aangemaakt_op ${extra ? ', uitgenodigd_op' : ''})
+           VALUES (?, ?, ?, ?, ?, '2099-01-01T00:00', ?, datetime('now') ${extra ? ', ?' : ''})`
+        )
+        .run(...([crypto.randomUUID(), poolId, naam, start, eind, status, ...(extra ? [extra] : [])] as string[])) && naam;
+    const idVan = (naam: string) => (db.prepare('SELECT id FROM dienstrooster_schedule_period WHERE pool_id = ? AND naam = ?').get(poolId, naam) as { id: string }).id;
+    periode('Oud', '2026-09-07', '2027-02-28', 'GEPUBLICEERD', '2026-07-01T09:00:00.000Z');
+    periode('Nieuw', '2027-04-05', '2027-09-26', 'OPEN');
+    // Off on Wednesdays from the new period on.
+    db.prepare(
+      `INSERT INTO dienstrooster_parttime_pattern (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, 'WO', 'ELKE_WEEK', '2027-03-01', '2027-12-31', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), participant.id, participant.id);
+    for (const naam of ['Oud', 'Nieuw']) {
+      db.prepare(
+        `INSERT INTO dienstrooster_submission (id, person_id, schedule_period_id, status, ingediend_op, row_version, aangemaakt_op)
+         VALUES (?, ?, ?, 'BEVESTIGD', datetime('now'), 1, datetime('now'))`
+      ).run(crypto.randomUUID(), participant.id, idVan(naam));
+    }
+    const lijst = async (query = '') => {
+      const res = await GET(
+        new NextRequest(`http://localhost/api/planner/pool/${poolId}/members${query}`, { headers: { Cookie: plannerCookie(planner.id) } }),
+        { params: Promise.resolve({ id: poolId }) }
+      );
+      return ((await res.json()).data as Array<{ person_id: string; deelnamefactor: number | null; deelnamefactor_periode: string | null }>).find(
+        (m) => m.person_id === participant.id
+      )!;
+    };
+    // Without a period: the one that went out, over which nothing is off.
+    expect(await lijst()).toMatchObject({ deelnamefactor: 1, deelnamefactor_periode: 'Oud' });
+    // The wizard of the new period sends its dates: that period, where this person is off on Wednesdays.
+    expect(await lijst('?period_start=2027-04-05&period_end=2027-09-26')).toMatchObject({ deelnamefactor: 0.8, deelnamefactor_periode: 'Nieuw' });
+    // Dates of no period: the one the pool is dealing with, not a guess.
+    expect(await lijst('?period_start=2027-04-05&period_end=2027-09-27')).toMatchObject({ deelnamefactor: 1, deelnamefactor_periode: 'Oud' });
+  });
 });

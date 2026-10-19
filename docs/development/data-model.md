@@ -57,8 +57,11 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   and which stayed empty with the reasons (leeg_json). Written with the
   roster in the same transaction, removed with it (Rooster verwijderen);
   lib/aiosGenereren.ts laatsteAiosGeneratie gives it back with the
-  diensten still empty (an assignment since filled it by hand), so the
-  planner sees it again after a refresh. Cascades with the period.
+  diensten empty now, counted from the roster itself (0.94.0: one filled by
+  hand is gone from the list, one made empty by hand is in it without a
+  reason of the solver's, a dienst that no longer exists is not), so the
+  planner sees it again after a refresh. What the solver filled and left is
+  history. Cascades with the period.
 - `aios_reden` (0.91.0, migration 0031) - the optional toelichting an AIOS
   gives for a day they marked geblokkeerd or liever niet by hand (tekst, at
   most REDEN_MAX_LENGTH characters), per period, person and day. Private to

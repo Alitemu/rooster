@@ -21,8 +21,17 @@ const PERIOD_STATUS_LABELS: Record<string, string> = {
 export const EERST_VERWIJDEREN: Record<string, string> = {
   GEGENEREERD: 'Het rooster is al gemaakt. Verwijder eerst het rooster, bij Rooster met Rooster verwijderen. Daarna kan de periode terug naar open.',
   GEPUBLICEERD:
-    'Het rooster is gepubliceerd. Trek eerst de publicatie in en verwijder daarna het rooster, bij Rooster met Rooster verwijderen. Daarna kan de periode terug naar open.',
+    'Het rooster is gepubliceerd. Trek eerst de publicatie in, bij Publiceren. Verwijder daarna het rooster, bij Rooster met Rooster verwijderen. Daarna kan de periode terug naar open.',
 };
+
+/**
+ * What the status bar says after "Terug naar open" was asked: the text of the
+ * status the period has now, nothing once it changed (the roster removed, a
+ * publication taken back), so it never says what no longer holds.
+ */
+export function eerstVerwijderenUitleg(gevraagd: boolean, status: string): string | null {
+  return gevraagd ? (EERST_VERWIJDEREN[status] ?? null) : null;
+}
 
 /** "gesloten" for GESLOTEN; an unknown value is passed through lowercased. */
 export function periodStatusLabel(status: string): string {

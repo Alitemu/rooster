@@ -11,6 +11,7 @@ import { parseISO } from '@/lib/holidays';
 import { writeAuditLog } from '@/lib/auditLog';
 import { EERST_VERWIJDEREN, periodStatusLabel } from '@/lib/aiosTeksten';
 import { haalTweedeNachtWeg } from '@/lib/aiosFeestdagBlokken';
+import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 
 export type StatusUitkomst = { ok: true } | { ok: false; status: number; code: string; message: string };
@@ -56,6 +57,9 @@ export function sluitAiosPeriode(period: AiosUitnodigPeriode, actorId: string): 
 }
 
 export function heropenAiosPeriode(period: AiosUitnodigPeriode, actorId: string): StatusUitkomst {
+  // While a roster is being made the solver works from the period as it is: opening it again, and with it
+  // taking the second night of oudjaar away, would pull that from under it.
+  if (aiosGeneratieLoopt(period.id)) return nee(409, 'GENERATION_RUNNING', AIOS_GENERATIE_LOOPT);
   if (period.status !== 'GESLOTEN') {
     return nee(
       409,

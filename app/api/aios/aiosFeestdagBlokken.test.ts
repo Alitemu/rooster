@@ -14,6 +14,7 @@ import { purgePeriodNow } from '@/lib/periodTrash';
 import { GET as vragen, PUT as bewaren } from './periode/[id]/feestdagblokken/route';
 import { POST as genereren } from './periode/[id]/genereren/route';
 import { POST as heropenen } from './periode/[id]/heropenen/route';
+import { POST as roosterVerwijderen } from './periode/[id]/rooster-verwijderen/route';
 import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, staff, staffCookie, tag, type World } from '../../../tests/fixtures/dienstWorlds';
 
 /**
@@ -336,6 +337,20 @@ describe("New Year's Eve", () => {
     const res = await heropenen(req(`${w.q4}/heropenen`, staffCookie(w.planner), 'POST'), ctx(w.q4));
     expect(res.status).toBe(200);
     expect(status(w.q4)).toBe('OPEN');
+    expect(nachten(w.q4, '2096-12-31')).toHaveLength(1);
+    expect((await haal(w.q4)).oudjaar.aantal).toBe(2);
+  });
+
+  it('removing the roster takes the second night away too: the overview of the closed period has one night that day', async () => {
+    expect((await zet(w.q4, { oudjaar_aantal: 2 })).status).toBe(200);
+    zetStatus(w.q4, 'GESLOTEN');
+    expect((await maak(w.q4)).status).toBe(202);
+    expect(nachten(w.q4, '2096-12-31')).toHaveLength(2);
+    expect(status(w.q4)).toBe('GEGENEREERD');
+    const res = await roosterVerwijderen(req(`${w.q4}/rooster-verwijderen`, staffCookie(w.planner), 'POST', {}), ctx(w.q4));
+    expect(res.status).toBe(200);
+    expect(status(w.q4)).toBe('GESLOTEN');
+    // Two rows for one date and dienst made the voorkeurenoverzicht refuse itself on import.
     expect(nachten(w.q4, '2096-12-31')).toHaveLength(1);
     expect((await haal(w.q4)).oudjaar.aantal).toBe(2);
   });

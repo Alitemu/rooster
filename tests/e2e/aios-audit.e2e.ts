@@ -143,6 +143,8 @@ test('toelichting: the AIOS types it, the planner reads it, a colleague never se
     const groep = page.getByTestId('aios-redenen');
     await expect(groep).toContainText('Toelichting bij je dagen in deze week (niet verplicht)');
     await expect(groep).toContainText('Alleen de planner van de AIOS ziet dit');
+    // Where the planner sees it: by hand correcting the roster and in the voorkeurenoverzicht, nowhere else.
+    await expect(groep).toContainText('bij het met de hand aanpassen van het rooster en in het voorkeurenoverzicht (Excel)');
     await expect(groep).toContainText('Andere AIOS zien het nooit, ook niet bij een ruilverzoek');
     // The block is three days: three fields, each marked optional.
     await expect(groep.getByLabel(/^Toelichting voor .*\(niet verplicht\)/)).toHaveCount(3);
@@ -252,6 +254,8 @@ test('Personeel beheren: the factor from the part-time days, nog onbekend until 
   await expect(factor(A.codenaam)).toHaveText('Voltijd');
   await expect(factor(B.codenaam)).toHaveText('80%');
   await expect(factor(C.codenaam)).toHaveText('nog onbekend');
+  // The list says which period the factors are about.
+  await expect(page.getByTestId('deelnamefactor-periode')).toContainText(`AIOS audit ${stamp}`);
 
   // No place to type it: not when adding and not when changing.
   await expect(page.getByLabel('Deelnamefactor')).toHaveCount(0);
@@ -265,7 +269,7 @@ test('Personeel beheren: the factor from the part-time days, nog onbekend until 
   await page.goto(`${getBaseUrl()}/planner/pool/${achterwacht}/staff`);
   await expect(page.getByLabel('Deelnamefactor')).toHaveCount(0);
   const nieuw = `audit-ach-${stamp}`;
-  await page.getByPlaceholder('bijv. aios01').fill(nieuw);
+  await page.getByPlaceholder('bijv. staf31').fill(nieuw);
   await page.getByRole('button', { name: 'Toevoegen' }).click();
   await expect(factor(nieuw)).toHaveText('nog onbekend');
   const rij = db.prepare(`SELECT pm.deelnamefactor FROM dienstrooster_pool_membership pm JOIN dienstrooster_person p ON p.id = pm.person_id WHERE p.codenaam = ?`).get(nieuw) as {
@@ -276,6 +280,10 @@ test('Personeel beheren: the factor from the part-time days, nog onbekend until 
 
 test('status, the roster, empty diensten that stay, and back to open', async ({ page, browser }) => {
   test.setTimeout(420_000);
+  // Eight fulltimers, as the world says: B's Wednesdays were for the factor of the test before. With them the
+  // nights Sunday to Tuesday could be filled, and nothing would be left to tell about.
+  db.prepare('DELETE FROM dienstrooster_parttime_pattern WHERE person_id = ?').run(ids.mensen[1].id);
+  syncAiosPersoon(ids.mensen[1].id);
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
   const status = page.getByTestId('aios-periode-status');
@@ -309,7 +317,10 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
     await paneel.getByRole('button', { name: 'Rooster maken' }).click();
     const melding = paneel.getByTestId('aios-lege-diensten');
     await expect(melding.getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 250_000 });
-    const nogLeeg = async (p: Page) => Number(((await p.getByTestId('aios-nog-leeg').textContent()) ?? '').match(/Nog leeg: (\d+)/)![1]);
+    const nogLeeg = async (p: Page) => {
+      await expect(p.getByTestId('aios-nog-leeg')).toContainText(/Nog leeg: \d+/);
+      return Number(((await p.getByTestId('aios-nog-leeg').textContent()) ?? '').match(/Nog leeg: (\d+)/)![1]);
+    };
     leeg = await nogLeeg(page);
     expect(leeg).toBeGreaterThan(0);
     await expect(status).toContainText('Status: Gegenereerd');
@@ -386,6 +397,8 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
     await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeVisible();
     await expect(page.getByTestId('aios-lege-diensten')).toHaveCount(0);
     await expect(status).toContainText('Status: Gesloten');
+    // The message about what comes first was for the roster that is gone: it does not stay beside a button that works now.
+    await expect(page.getByTestId('aios-eerst-verwijderen')).toHaveCount(0);
     await page.reload();
     await openAiosSectie(page, 'Rooster');
     await expect(page.getByTestId('aios-lege-diensten')).toHaveCount(0);

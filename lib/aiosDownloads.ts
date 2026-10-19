@@ -61,7 +61,9 @@ function markering(d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>, toelichting?: 
   const keuze = KEUZE[d.level];
   if (d.bron === 'PARTTIME') return `${keuze} (parttime)`;
   if (d.bron === 'ABSENCE') return `${keuze} (afwezig)`;
-  return toelichting ? `${keuze}: ${toelichting}` : keuze;
+  // The day's toelichting belongs to a block or a liever niet; a voorkeur of the same day has none (the import
+  // refuses a toelichting there).
+  return toelichting && d.level !== 'VOORKEUR' ? `${keuze}: ${toelichting}` : keuze;
 }
 
 function blokTekst(d: AiosVoorkeurDienst): string | null {

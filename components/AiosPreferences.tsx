@@ -324,7 +324,8 @@ function WeekToelichtingen({
       </p>
       <p className="text-xs text-neutral-600">
         Waarom je die dag geen dienst of liever geen dienst wilt. Alleen de planner van de AIOS ziet dit. Die ziet het
-        alleen als het rooster met de hand wordt aangepast. Andere AIOS zien het nooit, ook niet bij een ruilverzoek.
+        bij het met de hand aanpassen van het rooster en in het voorkeurenoverzicht (Excel). Andere AIOS zien het nooit,
+        ook niet bij een ruilverzoek.
       </p>
       {gemarkeerd.map((d) => (
         <RedenVeld key={d.datum} datum={d.datum} tekst={redenen.find((r) => r.datum === d.datum)?.tekst ?? ''} readOnly={readOnly} onOpslaan={onOpslaan} />

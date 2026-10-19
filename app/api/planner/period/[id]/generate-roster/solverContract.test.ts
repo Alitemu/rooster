@@ -9,6 +9,7 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { getRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 import { computeMemberTargets, resolveWindowWeeks } from '@/lib/rosterBands';
 import { feestdagTargets } from '@/lib/feestdagHistory';
+import { halveDeelname } from '@/tests/fixtures/deeltijd';
 import { POST } from './route';
 
 /**
@@ -112,9 +113,12 @@ function buildPeriod(distributionMode: string, rules: Record<string, unknown> = 
   // Joins halfway: a single membership that covers half the period.
   ids.halfway = person('halverwege');
   member(ids.halfway, '2031-02-03', '2099-12-31');
-  // Part-time: counts for less only under NAAR_RATO.
+  // Part-time: counts for less only under NAAR_RATO. The factor is the person's own, from their part-time
+  // days (lib/deelnamefactor.ts), not a column of the membership: two days off every week and one every
+  // other week is 0,5.
   ids.parttime = person('deeltijd');
-  member(ids.parttime, '2020-01-01', '2099-12-31', 0.5);
+  member(ids.parttime, '2020-01-01', '2099-12-31');
+  halveDeelname(ids.parttime);
   // Present the whole period, but the planner changed their factor after
   // two weeks by ending one membership and starting the next.
   ids.split = person('gesplitst');
@@ -253,6 +257,31 @@ describe.each(['GELIJK', 'NAAR_RATO'])('the solver is told the streefbereik the 
     // The shift filled in by hand went as a fact, not as a slot to fill.
     expect(input.manual_assignments).toEqual([expect.objectContaining({ person_id: ids.ledger, teller: 'AVOND' })]);
     expect(input.slots).toHaveLength(55);
+  });
+
+  // The solver is sent the factor from the part-time days, whatever the mode: under GELIJK it ignores it,
+  // under NAAR_RATO it narrows the part-timer's band. Both sides above use one loader, so the factor itself
+  // is held here.
+  it('the part-timer is sent with their factor from the part-time days, everyone else with 1', async () => {
+    buildPeriod(mode);
+    const input = await generate();
+    expect(input.participation_factors[ids.parttime]).toBe(0.5);
+    for (const personId of input.people as string[]) {
+      if (personId !== ids.parttime) expect(input.participation_factors[personId] ?? 1).toBe(1);
+    }
+    if (mode === 'NAAR_RATO') {
+      const full = input.people.find((p: string) => ![ids.split, ids.halfway, ids.parttime, ids.ledger, ids.fellow].includes(p));
+      let smaller = 0;
+      for (const teller of TELLERS) {
+        const [minVol, maxVol] = solverBand(input, full, teller);
+        const [minDeel, maxDeel] = solverBand(input, ids.parttime, teller);
+        expect(maxDeel).toBeLessThanOrEqual(maxVol);
+        expect(minDeel).toBeLessThanOrEqual(minVol);
+        if (maxDeel < maxVol) smaller++;
+      }
+      // At least the counter with real numbers in it: the part-timer's band is narrower than a full-timer's.
+      expect(smaller).toBeGreaterThan(0);
+    }
   });
 
   // Audit 7: a person with two memberships in one period (they stopped and
