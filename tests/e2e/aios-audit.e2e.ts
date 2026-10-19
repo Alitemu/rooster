@@ -282,6 +282,7 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
   test.setTimeout(420_000);
   // Eight fulltimers, as the world says: B's Wednesdays were for the factor of the test before. With them the
   // nights Sunday to Tuesday could be filled, and nothing would be left to tell about.
+  db.prepare('DELETE FROM dienstrooster_availability WHERE bron_pattern_id IN (SELECT id FROM dienstrooster_parttime_pattern WHERE person_id = ?)').run(ids.mensen[1].id);
   db.prepare('DELETE FROM dienstrooster_parttime_pattern WHERE person_id = ?').run(ids.mensen[1].id);
   syncAiosPersoon(ids.mensen[1].id);
   await loginAsBeheerder(page);
