@@ -58,6 +58,13 @@ const MUTATIONS = [
     tests: ['app/api/periods/[id]/reset-roster/route'],
   },
   {
+    name: 'verwijderde periode: the AIOS screen answers 404 again instead of 410 PERIOD_DELETED',
+    file: 'app/api/aios/deelnemer/[id]/periode/[periodId]/route.ts',
+    find: "if (verwijderd) {",
+    replace: 'if (false) {',
+    tests: ['app/api/aios/aiosVerwijderd'],
+  },
+  {
     name: 'rate limit: an attempt past the limit still goes through',
     file: 'lib/rateLimit.ts',
     find: '    if (!limit.allowed) return limit;',

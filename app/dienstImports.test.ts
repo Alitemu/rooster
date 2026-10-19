@@ -44,6 +44,7 @@ const SHARED = new Set([
   'lib/freeText.ts',
   'lib/holidays.ts',
   'lib/isoDate.ts',
+  'components/PeriodeVerwijderd.tsx',
   'lib/localDate.ts',
   'lib/rateLimit.ts',
   'lib/requestFields.ts',

@@ -89,8 +89,12 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   The period page still opened from a bookmark or a tab left open, and
   from there it was opened, generated and published: the verzendlijst
   told everyone about a roster none of them could open. Only "Terug naar
-  open" and "Rooster verwijderen" asked. Reading still works, and the
-  page says where the period is (`data-testid="in-prullenbak"`). A
+  open" and "Rooster verwijderen" asked. Since 0.96.0 the period page of a
+  period in the prullenbak shows nothing of it (components/PeriodeVerwijderd.tsx,
+  `data-testid="periode-verwijderd"`): a planner is told to bring it back
+  through the Prullenbak, a participant with their link is told to ask a
+  new one on the startpagina ("Link kwijt?"). The same for the AIOS: its
+  participant route answers 410 PERIOD_DELETED. A
   planner acting for a participant loses it too (lib/periodAccess.ts
   periodUsableFor). app/api/periodTrashGuard.test.ts sweeps both halves:
   the source of every changing handler, and every one of them called on

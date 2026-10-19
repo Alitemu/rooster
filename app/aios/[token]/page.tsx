@@ -24,6 +24,7 @@ import { AiosAfwezigheid, type Absence } from '@/components/AiosAfwezigheid';
 import { AiosBevestigen, AiosVoorkeuren } from '@/components/AiosPreferences';
 import { AiosMijnRooster } from '@/components/AiosMijnRooster';
 import { AiosRuilen } from '@/components/AiosRuilen';
+import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 
 type Stap = 'deeltijd' | 'voorkeuren' | 'bevestigen' | 'ingediend';
 const STAPPEN: Stap[] = ['deeltijd', 'voorkeuren', 'bevestigen', 'ingediend'];
@@ -79,6 +80,7 @@ function AiosLinkPagina() {
   };
 
   const [laden, setLaden] = useState(true);
+  const [verwijderd, setVerwijderd] = useState(false);
   const [fout, setFout] = useState<{ tekst: string; link: boolean } | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
   const [periode, setPeriode] = useState<Periode | null>(null);
@@ -99,6 +101,10 @@ function AiosLinkPagina() {
         const { person_id, period_id } = (await res.json()).data as { person_id: string; period_id: string };
         setPersonId(person_id);
         const scherm = await fetch(withBasePath(`/api/aios/deelnemer/${person_id}/periode/${period_id}`));
+        if (scherm.status === 410) {
+          setVerwijderd(true);
+          return;
+        }
         if (!scherm.ok) {
           setFout({ tekst: 'Deze link hoort niet bij het rooster van de AIOS.', link: true });
           return;
@@ -143,6 +149,8 @@ function AiosLinkPagina() {
       </div>
     );
   }
+
+  if (verwijderd) return <PeriodeVerwijderd />;
 
   if (fout || !periode || !personId) {
     return (

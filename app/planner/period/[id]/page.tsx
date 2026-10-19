@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { AiosPeriodOverview } from '@/components/AiosPeriodOverview';
+import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { vensterTekst } from '@/lib/windowWeeks';
@@ -199,6 +200,9 @@ export default function PlannerPeriodPage() {
     );
   }
 
+  // Opened from a bookmark or a tab left open: nothing of it is shown, it comes back through the Prullenbak.
+  if (period.verwijderd_op) return <PeriodeVerwijderd voorPlanner />;
+
   // The AIOS roster has its own page while it is being built (lib/aiosPeriod.ts).
   if (period.pool_type === 'AIOS') return <AiosPeriodOverview period={period} />;
 
@@ -214,21 +218,6 @@ export default function PlannerPeriodPage() {
 
   return (
     <div className="container-main py-8 space-y-6">
-      {/* Opened from a bookmark or a tab left open: every change is refused
-          there (lib/periodTrash.ts trashedPeriodDenial). */}
-      {period.verwijderd_op && (
-        <div className="card p-4 bg-red-50 border border-red-200" data-testid="in-prullenbak">
-          <p className="text-sm text-red-900">
-            Deze periode staat in de prullenbak. Je kunt hem bekijken, maar niet wijzigen. Zet hem terug via
-            de{' '}
-            <a href={withBasePath('/planner')} className="font-medium underline">
-              Prullenbak op het overzicht
-            </a>
-            .
-          </p>
-        </div>
-      )}
-
       {/* Header */}
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
         {/* Stacked on a phone, side by side from sm up: next to each other the

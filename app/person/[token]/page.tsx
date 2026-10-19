@@ -21,6 +21,7 @@ import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { withBasePath } from '@/lib/basePath';
+import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 
 type Step = 'calendar' | 'parttime' | 'confirmation' | 'submitted' | 'roster';
 
@@ -36,6 +37,7 @@ interface Period {
   eind_datum: string;
   deadline: string;
   status: string;
+  verwijderd_op?: string | null;
 }
 
 interface RosterData {
@@ -92,6 +94,7 @@ function PersonalLinkPageContent() {
   const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
+  const [verwijderd, setVerwijderd] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Separate from `error` (which means "the link itself is invalid/expired"
   // and shows advice to that effect) - a mid-flow data fetch failing after
@@ -263,6 +266,12 @@ function PersonalLinkPageContent() {
 
         const periodData = await periodRes.json();
         const periodInfo = periodData.data;
+        // In the prullenbak: nothing of it is shown, only where to ask a new link.
+        if (periodInfo.verwijderd_op) {
+          setVerwijderd(true);
+          setLoading(false);
+          return;
+        }
         setPeriod(periodInfo);
 
         // If period is published, load roster; otherwise load patterns
@@ -414,6 +423,8 @@ function PersonalLinkPageContent() {
       </div>
     );
   }
+
+  if (verwijderd) return <PeriodeVerwijderd />;
 
   if (error) {
     return (
