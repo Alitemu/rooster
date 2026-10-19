@@ -1189,7 +1189,7 @@ const MUTATIONS = [
     file: 'lib/parttimeSync.ts',
     find: "         AND pl.type <> 'AIOS'\n",
     replace: '',
-    tests: ['app/api/aiosNotYet'],
+    tests: ['app/api/aiosNotYet', 'lib/parttimeSync'],
   },
   {
     name: 'aios: leave on a feestdag blocks it',
