@@ -88,7 +88,7 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(paneel.getByRole('heading', { name: 'Rooster' })).toBeVisible();
   await openAiosSectie(page, 'Rooster');
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
-  await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
+  await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
 
   await expect(page.getByRole('heading', { name: 'Per AIOS' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Handmatige correctie gegenereerde rooster' })).toBeVisible();
@@ -165,7 +165,7 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
   await expect(vragen.getByText('(nog kiezen)')).toHaveCount(0);
 
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
-  await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
+  await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
   await openAiosSectie(page, 'Handmatige correctie gegenereerde rooster');
   await expect(page.getByRole('cell', { name: 'Nacht 2', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);

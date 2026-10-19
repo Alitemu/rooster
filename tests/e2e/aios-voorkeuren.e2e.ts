@@ -143,7 +143,8 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(uitnodigen).toBeDisabled();
   await expect(uitnodigen).toHaveCSS('opacity', '0.6');
   await expect(page.getByRole('button', { name: /Uitnodigingen downloaden/ })).toBeEnabled();
-  await page.getByRole('button', { name: 'Sluiten' }).click();
+  // Exact: the status at the top has its own "Periode sluiten".
+  await page.getByRole('button', { name: 'Sluiten', exact: true }).click();
   await page.getByRole('button', { name: /Mailinstellingen/ }).click();
   await expect(page.getByText('Mail naar de AIOS', { exact: true })).toBeVisible();
   // The AIOS's own automatic reminders, off while their mail is not set up.
@@ -151,7 +152,7 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
 
   // The requests as a workbook, with this AIOS's 4 nachten in it.
   const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Statusrapport downloaden/ }).click()]);
-  expect(download.suggestedFilename()).toMatch(/^verzoeken-aios-.*\.xlsx$/);
+  expect(download.suggestedFilename()).toMatch(/^verzoeken-aios_.*\.xlsx$/);
   const [kop, ...rijen] = readFirstSheet(fs.readFileSync((await download.path())!));
   const mijn = rijen.find((r) => r[0] === ids.codenaam)!;
   expect(mijn[kop.indexOf('Status')]).toBe('Ingediend');
