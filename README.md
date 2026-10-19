@@ -539,6 +539,19 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.93.0** typt de planner geen deelnamefactor meer in, bij de
+achterwacht niet en bij de AIOS niet. De factor volgt uit de parttimedagen
+die de medewerker zelf opgeeft bij *Deeltijd*: een dag per week vrij is 0,8
+(80%), een dag om de week 0,9, nooit onder 0,2. Een patroon dat maar een deel
+van de periode geldt, telt naar verhouding. Bij *Personeel beheren* staat in
+de kolom *Deelnamefactor* eerst *nog onbekend*. Zodra de medewerker de
+voorkeuren voor de periode heeft ingediend, staat er de factor (*Voltijd* of
+een percentage). De solver gebruikt dezelfde afgeleide waarde, ook als de
+medewerker nog niet heeft ingediend (zonder parttimedagen is dat 1,0).
+De waarde die vroeger bij een lid is ingetypt, wordt niet meer gebruikt.
+Had een parttimer die waarde maar geen parttimedagen bij *Deeltijd*, dan telt
+die vanaf nu als voltijd tot de parttimedagen zijn ingevuld.
+
 **Vanaf versie 0.92.0** heeft de pagina van een AIOS-periode een sectie
 *Exporteren & communicatie*, op dezelfde plek en met dezelfde knoppen als bij
 de achterwacht: *Uitnodigingen en herinneringen* (een venster met

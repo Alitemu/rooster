@@ -2480,6 +2480,56 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // The deelnamefactor from the part-time days (0.93.0, lib/deelnamefactor.ts).
+  {
+    name: "deelnamefactor: every other week counts as every week",
+    file: "lib/deelnamefactor.ts",
+    find: "{ ELKE_WEEK: 0.2, EVEN_WEKEN: 0.1, ONEVEN_WEKEN: 0.1 }",
+    replace: "{ ELKE_WEEK: 0.2, EVEN_WEKEN: 0.2, ONEVEN_WEKEN: 0.1 }",
+    tests: ["lib/deelnamefactor"],
+  },
+  {
+    name: "deelnamefactor: a pattern for part of the period counts whole",
+    file: "lib/deelnamefactor.ts",
+    find: "    factor -= MINDER[p.frequentie] * (dagenTussen(begin, eind) / totaal);",
+    replace: "    factor -= MINDER[p.frequentie];",
+    tests: ["lib/deelnamefactor"],
+  },
+  {
+    name: "deelnamefactor: no floor at 0,2",
+    file: "lib/deelnamefactor.ts",
+    find: "return Math.max(0.2, Math.round(factor * 100) / 100);",
+    replace: "return Math.round(factor * 100) / 100;",
+    tests: ["lib/deelnamefactor"],
+  },
+  {
+    name: "deelnamefactor: a factor shown before the person handed in",
+    file: "lib/deelnamefactor.ts",
+    find: "WHERE schedule_period_id = ? AND status = 'BEVESTIGD' AND person_id IN",
+    replace: "WHERE schedule_period_id = ? AND status IN ('BEZIG', 'BEVESTIGD') AND person_id IN",
+    tests: ["lib/deelnamefactor"],
+  },
+  {
+    name: "deelnamefactor: the solver takes the stored column",
+    file: "lib/rosterBands.ts",
+    find: "    rows.map((r) => ({ ...r, deelnamefactor: factoren.get(r.id) ?? 1 })),",
+    replace: "    rows,",
+    tests: ["lib/deelnamefactor", "lib/publicationCheck"],
+  },
+  {
+    name: "deelnamefactor: Personeel beheren shows 1,0 for nog onbekend",
+    file: "app/api/planner/pool/[id]/members/route.ts",
+    find: "deelnamefactor: factoren.get(r.person_id) ?? null",
+    replace: "deelnamefactor: factoren.get(r.person_id) ?? 1",
+    tests: ["app/api/planner/pool/[id]/members/route"],
+  },
+  {
+    name: "deelnamefactor: a typed factor still changes a membership",
+    file: "app/api/planner/pool/[id]/members/[membershipId]/route.ts",
+    find: "    if (!body.geldig_vanaf && !body.geldig_tot) {",
+    replace: "    if (!body.geldig_vanaf && !body.geldig_tot && (body as { deelnamefactor?: number }).deelnamefactor === undefined) {",
+    tests: ["app/api/planner/pool/[id]/members/route"],
+  },
 ];
 
 const args = process.argv.slice(2);

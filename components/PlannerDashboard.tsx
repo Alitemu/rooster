@@ -1174,7 +1174,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
             regardless of how many lines the text takes. */}
         <p className="text-sm text-neutral-600 mb-3">
           Voeg hier personeel toe of verwijder ze. Per persoon pas je hier ook de geldigheidsperiode
-          of deelnamefactor aan. Dit werkt op elk moment, ook in een al gepubliceerd rooster. Dat is
+          aan. De deelnamefactor volgt uit de parttimedagen die de medewerker zelf opgeeft. Dit werkt op elk moment, ook in een al gepubliceerd rooster. Dat is
           handig als iemand halverwege start: voeg diegene hier toe met de juiste
           geldig-vanaf-datum. Die persoon verschijnt dan meteen in de keuzelijst bij het handmatig
           toewijzen van diensten in deze periode.

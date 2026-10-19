@@ -90,6 +90,36 @@ under its own row for a change or a removal, scrolled into sight; only a
 failed load of the list shows above it. Everything showed above the list,
 out of sight under 30 or 40 people (tests/e2e/staff-errors.e2e.ts).
 
+## Deelnamefactor (0.93.0)
+
+The planner does not type it in any more, for either dienst: it follows
+from the part-time days the person gives themselves in the Deeltijd step
+(lib/deelnamefactor.ts `afgeleideDeelnamefactor`). One day off every week is
+0,8, one every other week 0,9, none 1,0; a pattern that holds for part of the
+period counts pro rata; never below 0,2. It is the AIOS's fte rule
+(lib/aiosFte.ts) copied, so the achterwacht does not import the AIOS's code
+(lib/deelnamefactor.test.ts checks the two agree for any patterns).
+
+- **The solver** gets the derived value: `loadPeriodMembers`
+  (lib/rosterBands.ts) overrides the stored column with
+  `laadAfgeleideDeelnamefactoren` before the memberships are combined, so
+  generate-roster, the targets, the publication check, carry-over,
+  the capacity check and the feestdag history all count the same. It does not
+  wait for the person to hand in: the Deeltijd step is what it takes (1,0
+  without part-time days), as the AIOS's solver does.
+- **Personeel beheren** shows it (members route GET, `deelnamefactorVoorLijst`):
+  `null` ("nog onbekend") until the person's submission for the period the
+  pool is dealing with is BEVESTIGD. That period is the active one (the
+  invitations went out last), otherwise the latest OPEN, GESLOTEN or
+  GEGENEREERD (`relevantePeriode`); with none, everyone is nog onbekend.
+  A "Voltijd" for someone who has not filled in anything would be a guess.
+- **The column** `pool_membership.deelnamefactor` stays in the table, always
+  1,0 for new rows, and is no longer read or written (not in the audit rows
+  either). The members routes take dates only: a request with only a factor
+  is answered "Geen velden om bij te werken". A value typed in earlier is
+  ignored: a part-timer without part-time days counts as full-time until
+  they are filled in.
+
 ## Streefbereik, venster and the solver's phases
 
 - **Bands over the effective headcount.** The default band per teller is

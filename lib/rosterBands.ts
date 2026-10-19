@@ -14,6 +14,7 @@
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { combinedMembership } from '@/lib/coverageFactor';
+import { laadAfgeleideDeelnamefactoren } from '@/lib/deelnamefactor';
 import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
@@ -199,7 +200,13 @@ export function loadPeriodMembers(period: {
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<MembershipRow & { codenaam: string }>;
-  return combineMemberships(rows, period);
+  // The deelnamefactor is the person's own, from their part-time days
+  // (lib/deelnamefactor.ts), not the column of the membership.
+  const factoren = laadAfgeleideDeelnamefactoren([...new Set(rows.map((r) => r.id))], period);
+  return combineMemberships(
+    rows.map((r) => ({ ...r, deelnamefactor: factoren.get(r.id) ?? 1 })),
+    period
+  );
 }
 
 /**

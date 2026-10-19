@@ -3,7 +3,7 @@
  *
  * Reverses the single most recently removed membership for this pool - see
  * lib/pendingUndo.ts. Re-creates the exact same person/date-range/
- * deelnamefactor row, but only if nothing has since given this person an
+ * row, but only if nothing has since given this person an
  * overlapping membership in this pool (the same check POST .../members
  * itself already applies to a brand new membership) - otherwise this is
  * refused instead of silently creating a second, overlapping row.
@@ -25,7 +25,6 @@ interface UndoPayload {
   pool_id: string;
   geldig_vanaf: string;
   geldig_tot: string;
-  deelnamefactor: number;
 }
 
 export async function POST(
@@ -65,8 +64,8 @@ export async function POST(
       const membershipId = crypto.randomUUID();
       db.prepare(
         `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(membershipId, payload.person_id, poolId, payload.deelnamefactor, payload.geldig_vanaf, payload.geldig_tot);
+         VALUES (?, ?, ?, 1.0, ?, ?)`
+      ).run(membershipId, payload.person_id, poolId, payload.geldig_vanaf, payload.geldig_tot);
       writeAuditLog({
         actorId: auth!.userId,
         entiteit: 'pool_membership',

@@ -39,8 +39,8 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
 6. **AIOS toevoegen.** Ga bij de pool AIOS naar *Personeel beheren* en voeg
    bij *Nieuw personeelslid toevoegen* vier AIOS toe: `aios01` tot en met
    `aios04`, met Geldig vanaf en Geldig tot rond het kwartaal.
-   - Je ziet: de vier AIOS in de lijst, zonder deelnamefactor (hun fte volgt
-     uit hun parttimedagen).
+   - Je ziet: de vier AIOS in de lijst. Bij *Deelnamefactor* staat *nog
+     onbekend*, want die volgt uit hun parttimedagen. Je typt er niets in.
 
 ## Deel 2: het kwartaal openen
 
@@ -91,6 +91,9 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
       wie meer dan de helft heeft geblokkeerd.
     - Probeer bij *Exporteren & communicatie* het *Voorkeurenoverzicht
       downloaden (Excel)* en het *Statusrapport downloaden*.
+    - Open *Personeel beheren*: bij aios01 staat nu 80% (een parttimedag per
+      week) en bij de andere drie *Voltijd*. Voor wie nog niet heeft
+      ingediend staat er *nog onbekend*.
 
 ## Deel 4: het rooster maken
 

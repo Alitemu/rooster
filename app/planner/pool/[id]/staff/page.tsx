@@ -4,7 +4,8 @@
  * The setup wizard's own "Personeel" step edits the exact same pool
  * membership rows, but only exists once a period exists to attach the
  * wizard to. This page manages a pool's membership directly - add someone,
- * change their geldig_vanaf/geldig_tot or deelnamefactor, remove them -
+ * change their geldig_vanaf/geldig_tot, remove them (the deelnamefactor is
+ * shown, not typed: it follows from their own part-time days) -
  * with no period in the loop at all, so a planner isn't blocked from
  * onboarding or offboarding staff by "first make a period".
  *
@@ -34,7 +35,8 @@ interface StaffMember {
   geldig_vanaf: string;
   geldig_tot: string;
   is_active: boolean;
-  deelnamefactor: number;
+  /** Worked out from their own part-time days; null until they handed in (lib/deelnamefactor.ts). */
+  deelnamefactor: number | null;
 }
 
 // Today on a Dutch calendar, not in UTC (lib/localDate.ts, audit 9).
@@ -46,9 +48,6 @@ export default function PoolStaffPage() {
   const poolId = params.id as string;
 
   const [pool, setPool] = useState<Pool | null>(null);
-  // An AIOS's fte follows from the part-time days they give themselves
-  // (docs/aios-rooster.md, "Eerlijkheid"): no participation factor there.
-  const aiosPool = pool?.type === 'AIOS';
   const [poolLoading, setPoolLoading] = useState(true);
   const [poolError, setPoolError] = useState<string | null>(null);
 
@@ -63,7 +62,6 @@ export default function PoolStaffPage() {
     codenaam: '',
     geldig_vanaf: defaults.geldig_vanaf,
     geldig_tot: defaults.geldig_tot,
-    deelnamefactor: 1,
   });
   const [addingMember, setAddingMember] = useState(false);
   // Each error shows where it was made: under Toevoegen, or under the row
@@ -83,14 +81,14 @@ export default function PoolStaffPage() {
   }, [rowError]);
 
   const [editingMembershipId, setEditingMembershipId] = useState<string | null>(null);
-  const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '', deelnamefactor: 1 });
+  const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '' });
   const [savingMembership, setSavingMembership] = useState(false);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
 
   // The single most recently removed membership for this pool, read from
   // the server (lib/pendingUndo.ts) so it's still there after a reload or
   // for a different planner who opens this page later - only removals get
-  // this, not date/deelnamefactor edits: a misclick that removes someone
+  // this, not date edits: a misclick that removes someone
   // is the one mistake here that isn't just as fast to fix by opening the
   // edit form again and typing the old value back in.
   const [pendingUndo, setPendingUndo] = useState<{ label: string } | null>(null);
@@ -189,10 +187,6 @@ export default function PoolStaffPage() {
       setAddError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
       return;
     }
-    if (Number.isNaN(newMember.deelnamefactor)) {
-      setAddError('Deelnamefactor is verplicht');
-      return;
-    }
     setAddingMember(true);
     setAddError(null);
     try {
@@ -204,7 +198,7 @@ export default function PoolStaffPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
 
-      setNewMember({ codenaam: '', geldig_vanaf: defaults.geldig_vanaf, geldig_tot: defaults.geldig_tot, deelnamefactor: 1 });
+      setNewMember({ codenaam: '', geldig_vanaf: defaults.geldig_vanaf, geldig_tot: defaults.geldig_tot });
       await loadStaff({ silent: true });
     } catch (err) {
       setAddError(err instanceof Error ? err.message : 'Toevoegen mislukt');
@@ -216,14 +210,10 @@ export default function PoolStaffPage() {
   const startEditMembership = (member: StaffMember) => {
     setRowError(null);
     setEditingMembershipId(member.id);
-    setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot, deelnamefactor: member.deelnamefactor });
+    setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot });
   };
 
   const handleSaveMembership = async (membershipId: string) => {
-    if (Number.isNaN(editDates.deelnamefactor)) {
-      setRowError({ membershipId, message: 'Deelnamefactor is verplicht' });
-      return;
-    }
     setSavingMembership(true);
     setRowError(null);
     try {
@@ -336,7 +326,7 @@ export default function PoolStaffPage() {
                   <th className="px-4 py-2 text-left text-sm font-medium">Actief</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig vanaf</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig tot</th>
-                  {!aiosPool && <th className="px-4 py-2 text-left text-sm font-medium">Deelnamefactor</th>}
+                  <th className="px-4 py-2 text-left text-sm font-medium">Deelnamefactor</th>
                   <th className="px-4 py-2 text-left text-sm font-medium"></th>
                 </tr>
               </thead>
@@ -377,27 +367,16 @@ export default function PoolStaffPage() {
                             member.geldig_tot
                           )}
                         </td>
-                        {!aiosPool && (
-                          <td className="px-4 py-2 text-sm">
-                            {isEditing ? (
-                              <input
-                                type="number"
-                                min="0.1"
-                                max="1"
-                                step="0.1"
-                                value={editDates.deelnamefactor}
-                                onChange={(e) =>
-                                  setEditDates({ ...editDates, deelnamefactor: parseFloat(e.target.value) })
-                                }
-                                className="px-2 py-1 border rounded text-sm w-20"
-                              />
-                            ) : member.deelnamefactor < 1 ? (
-                              `${Math.round(member.deelnamefactor * 100)}%`
-                            ) : (
-                              'Voltijd'
-                            )}
-                          </td>
-                        )}
+                        <td className="px-4 py-2 text-sm" data-testid="deelnamefactor">
+                          {/* Worked out from their own part-time days; unknown until they handed in. */}
+                          {member.deelnamefactor === null ? (
+                            <span className="text-neutral-500">nog onbekend</span>
+                          ) : member.deelnamefactor < 1 ? (
+                            `${Math.round(member.deelnamefactor * 100)}%`
+                          ) : (
+                            'Voltijd'
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-sm whitespace-nowrap">
                           {isEditing ? (
                             <div className="flex gap-3">
@@ -462,13 +441,11 @@ export default function PoolStaffPage() {
 
         <div className="border-t border-neutral-200 pt-4 space-y-3">
           <p className="text-sm font-medium text-neutral-800">Nieuw personeelslid toevoegen</p>
-          {aiosPool && (
-            <p className="text-xs text-neutral-600">
-              Bij de AIOS volgt de fte uit de parttimedagen die de AIOS zelf opgeeft. Een deelnamefactor is er daarom
-              niet.
-            </p>
-          )}
-          <div className={`grid grid-cols-1 gap-3 ${aiosPool ? 'sm:grid-cols-4' : 'sm:grid-cols-5'}`}>
+          <p className="text-xs text-neutral-600" data-testid="deelnamefactor-uitleg">
+            De deelnamefactor typ je niet in. Die volgt uit de parttimedagen die de medewerker zelf opgeeft. Hij staat in de lijst
+            zodra die de voorkeuren heeft ingediend. Tot dan staat er nog onbekend.
+          </p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div>
               <label className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
               <input
@@ -498,20 +475,6 @@ export default function PoolStaffPage() {
                 className="w-full px-2 py-2 border rounded text-sm"
               />
             </div>
-            {!aiosPool && (
-              <div>
-                <label className="block text-xs font-medium text-neutral-600 mb-1">Deelnamefactor</label>
-                <input
-                  type="number"
-                  min="0.1"
-                  max="1"
-                  step="0.1"
-                  value={newMember.deelnamefactor}
-                  onChange={(e) => setNewMember({ ...newMember, deelnamefactor: parseFloat(e.target.value) })}
-                  className="w-full px-2 py-2 border rounded text-sm"
-                />
-              </div>
-            )}
             <div className="flex items-end">
               <button
                 onClick={handleAddMember}

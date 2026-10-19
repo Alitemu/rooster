@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { db } from '@/db/client';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import { computeCarryOver, applyCarryOverForPeriod, findPreviousPublishedPeriod } from '@/lib/carryOver';
+import { halveDeelname, deeltijdOpruimen } from '@/tests/fixtures/deeltijd';
 
 /**
  * Carry-over between periods.
@@ -116,7 +117,10 @@ afterEach(() => {
       .prepare('SELECT person_id FROM dienstrooster_pool_membership WHERE pool_id = ?')
       .all(poolId) as Array<{ person_id: string }>;
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(poolId);
-    for (const m of members) db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(m.person_id);
+    for (const m of members) {
+      deeltijdOpruimen(m.person_id);
+      db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(m.person_id);
+    }
     db.prepare('DELETE FROM dienstrooster_shift_type WHERE pool_id = ?').run(poolId);
     const pool = db.prepare('SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?').get(poolId) as
       | { ruleset_id: string }
@@ -287,7 +291,7 @@ describe('carryOver', () => {
 
   it('carries nothing for a part-timer under NAAR_RATO who worked their own, lower target', () => {
     const ctx = createPool(2, [4, 4]);
-    db.prepare(`UPDATE dienstrooster_pool_membership SET deelnamefactor = 0.5 WHERE person_id = ?`).run(ctx.personIds[1]);
+    halveDeelname(ctx.personIds[1]);
     const p1 = createPeriod(ctx, '2027-01-04', '2027-01-31', 'GEPUBLICEERD', [4, 4]);
     db.prepare(`UPDATE dienstrooster_schedule_period SET bevroren_ruleset_json = ? WHERE id = ?`).run(
       JSON.stringify({ bandAvond: [4, 4], distributionMode: 'NAAR_RATO' }),

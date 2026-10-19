@@ -70,8 +70,10 @@ temporary password to the AIOS pool).
   refused (lib/aiosPeriod.ts, swept by app/api/aiosNotYet.test.ts). Step 2
   (0.72.0), the AIOS's preferences, is built on the AIOS's own code, see
   "Copied, not changed" below. The staff page of the AIOS pool suggests
-  aios01 as a codenaam and has no deelnamefactor: an AIOS's fte follows
-  from their part-time days. The pool list sorts without regard to
+  aios01 as a codenaam. Neither dienst has a typed deelnamefactor any more
+  (0.93.0): the list shows the one derived from the part-time days, "nog
+  onbekend" until the AIOS handed in (docs/development/roster-rules.md,
+  "Deelnamefactor"). The pool list sorts without regard to
   capitals, or "AIOS" came before "Achterwacht" in the beheerder's
   new-period form.
 - app/api/dienstSeparationOwn.test.ts holds it from inside each dienst

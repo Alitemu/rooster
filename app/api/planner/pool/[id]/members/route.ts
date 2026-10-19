@@ -23,6 +23,7 @@ import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJs
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateCodenaam } from '@/lib/codenaam';
 import { isValidIsoDate } from '@/lib/isoDate';
+import { deelnamefactorVoorLijst } from '@/lib/deelnamefactor';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PoolMember {
@@ -32,12 +33,8 @@ interface PoolMember {
   geldig_vanaf: string;
   geldig_tot: string | null;
   is_active: boolean;
-  deelnamefactor: number;
-}
-
-/** 0 excluded (no participation at all isn't a membership) - 1 is full-time. */
-function isValidDeelnamefactor(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1;
+  /** From the person's own part-time days, null (nog onbekend) until they handed in (lib/deelnamefactor.ts). */
+  deelnamefactor: number | null;
 }
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -63,7 +60,6 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         p.codenaam,
         pm.geldig_vanaf,
         pm.geldig_tot,
-        pm.deelnamefactor,
         CASE
           WHEN pm.geldig_vanaf <= ? AND (pm.geldig_tot IS NULL OR pm.geldig_tot >= ?)
           THEN 1
@@ -75,7 +71,10 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       ORDER BY p.codenaam ASC
     `);
 
-    const members = membersStmt.all(periodEnd, periodStart, poolId) as PoolMember[];
+    const rows = membersStmt.all(periodEnd, periodStart, poolId) as Array<Omit<PoolMember, 'deelnamefactor'>>;
+    // Worked out from what each person filled in, not typed in (lib/deelnamefactor.ts).
+    const factoren = deelnamefactorVoorLijst(poolId, [...new Set(rows.map((r) => r.person_id))]);
+    const members: PoolMember[] = rows.map((r) => ({ ...r, deelnamefactor: factoren.get(r.person_id) ?? null }));
 
     const response: ApiSuccessResponse<PoolMember[]> = {
       success: true,
@@ -92,7 +91,6 @@ interface AddMemberRequest {
   codenaam: string;
   geldig_vanaf: string;
   geldig_tot: string;
-  deelnamefactor?: number;
 }
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -141,15 +139,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_RANGE', message: '"Geldig vanaf" moet vóór of op "geldig tot" liggen' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
-    const deelnamefactor = body.deelnamefactor ?? 1.0;
-    if (!isValidDeelnamefactor(deelnamefactor)) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_DEELNAMEFACTOR', message: 'Deelnamefactor moet tussen 0 (exclusief) en 1 liggen' },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -224,8 +213,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       const membershipId = crypto.randomUUID();
       db.prepare(
         `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(membershipId, person.id, poolId, deelnamefactor, body.geldig_vanaf, body.geldig_tot);
+         VALUES (?, ?, ?, 1.0, ?, ?)`
+      ).run(membershipId, person.id, poolId, body.geldig_vanaf, body.geldig_tot);
       writeAuditLog({
         actorId: auth!.userId,
         entiteit: 'pool_membership',
@@ -236,7 +225,6 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           pool_id: poolId,
           person_id: person.id,
           codenaam,
-          deelnamefactor,
           geldig_vanaf: body.geldig_vanaf,
           geldig_tot: body.geldig_tot,
         },

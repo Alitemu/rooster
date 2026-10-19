@@ -10,7 +10,7 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 - `person` - staff members (codenaam, role, password_hash, totp_secret, sessie_versie)
 - `person_access_link` - personal links for participants
 - `pool` - shift pool (name, type, settings reference)
-- `pool_membership` - who's in which pool when
+- `pool_membership` - who's in which pool when (its `deelnamefactor` column is no longer read or written since 0.93.0: the factor follows from the part-time days, docs/development/roster-rules.md)
 - `ruleset` - configuration and rules (frozen when period opens)
 - `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
 - `shift_type` - shift definitions (evening, weekend, holiday). An AIOS
