@@ -18,6 +18,12 @@
  *   or a period "dd-mm-jjjj t/m dd-mm-jjjj". A row that is not in the file
  *   leaves that request as it is; a file without any such row (one from
  *   before 0.98.0) touches no request.
+ * - The rows "Parttime 1", "Parttime 2" ... are the AIOS's part-time days
+ *   ("maandag", "dinsdag, even weken"). A column that holds none of them where
+ *   the AIOS has none yet gets them, as the Deeltijd step would add them,
+ *   before the marks are read (a part-time day sets its own marks). An AIOS who
+ *   already has other part-time days in the quarter is a problem: nothing is
+ *   removed or changed here. A file without such rows touches none.
  * - After a geblokkeerd or liever niet comes the AIOS's own toelichting of
  *   that day, as the export writes it: "geblokkeerd: ziek kind"
  *   (lib/aiosReden.ts). A day has one: a different text on two diensten of
@@ -36,7 +42,8 @@ import { parseSheetDate } from '@/lib/isoDate';
 import { withoutFormulaGuard } from '@/lib/csv';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { loadAiosPeriode, loadAiosWens, saveAiosWens, setAiosVoorkeur, type Niveau } from '@/lib/aiosPreferences';
-import { VERZOEK_RIJEN, verzoekPeriode } from '@/lib/aiosDownloads';
+import { VERZOEK_RIJEN, laadDeeltijdVoorKwartaal, deeltijdCel, leesDeeltijdCel, verzoekPeriode, type DeeltijdPatroonRij } from '@/lib/aiosDownloads';
+import { voegPatroonToe } from '@/lib/aiosDeeltijd';
 import { loadAiosRedenen, saveAiosReden } from '@/lib/aiosReden';
 import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
@@ -96,7 +103,18 @@ interface Verzoek {
   waarde: boolean | { van: string; tot: string } | null;
 }
 
+interface DeeltijdCel {
+  personId: string;
+  codenaam: string;
+  regel: number;
+  patroon: DeeltijdPatroonRij;
+}
+
 interface Gelezen {
+  /** Whether the file has rows Parttime N at all: without them no part-time day is looked at. */
+  deeltijdRijen: boolean;
+  deeltijd: DeeltijdCel[];
+  personen: Array<{ id: string; codenaam: string }>;
   verzoeken: Verzoek[];
   cellen: Cel[];
   problemen: string[];
@@ -119,6 +137,8 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   const problemen: string[] = [];
   const cellen: Cel[] = [];
   const verzoeken: Verzoek[] = [];
+  const deeltijd: DeeltijdCel[] = [];
+  let deeltijdRijen = false;
   let overgeslagen = 0;
 
   const kop = rows[0] ?? [];
@@ -127,6 +147,9 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   const dienstKol = klein.indexOf('dienst');
   if (datumKol === -1 || dienstKol === -1) {
     return {
+      deeltijdRijen,
+      deeltijd,
+      personen: [],
       verzoeken,
       cellen,
       problemen: ['De kolommen Datum en Dienst ontbreken. Gebruik het bestand van "Voorkeurenoverzicht downloaden".'],
@@ -184,6 +207,22 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
     const rij = rows[r];
     const regel = r + 1;
     const dienstWoord = rij[dienstKol] ?? '';
+    if (/^parttime \d+$/i.test(dienstWoord.trim())) {
+      deeltijdRijen = true;
+      for (const { kol, id, codenaam } of kolommen) {
+        const ruw = (rij[kol] ?? '').trim();
+        if (ruw === '') continue;
+        const patroon = leesDeeltijdCel(ruw, period.start_datum, period.eind_datum);
+        if (!patroon) {
+          problemen.push(
+            `Regel ${regel}, ${codenaam}: "${ruw}" is geen parttimedag. Schrijf bijvoorbeeld maandag of dinsdag, even weken (alleen maandag t/m vrijdag).`
+          );
+          continue;
+        }
+        deeltijd.push({ personId: id, codenaam, regel, patroon });
+      }
+      continue;
+    }
     if (dienstWoord.trim().toLowerCase().startsWith('verzoek:')) {
       const rijInfo = VERZOEK_RIJEN.find((v) => v.label.toLowerCase() === dienstWoord.trim().toLowerCase());
       if (!rijInfo) {
@@ -274,7 +313,7 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
       cellen.push({ personId: id, codenaam, slotId, datum, dienst: dienstWoord, regel, doel: niveau, tekst: tekst || null });
     }
   }
-  return { verzoeken, cellen, problemen, overgeslagen };
+  return { deeltijdRijen, deeltijd, personen: kolommen.map((k) => ({ id: k.id, codenaam: k.codenaam })), verzoeken, cellen, problemen, overgeslagen };
 }
 
 /** Thrown to roll a transaction back after it was run to see what it does. */
@@ -290,15 +329,60 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
   const aangeraakt = new Set<string>();
   const aiosPeriode = loadAiosPeriode(period.id)!;
   const voor = huidigeMarkeringen(period.id);
+  let cellen = gelezen.cellen;
+  let overgeslagen = gelezen.overgeslagen;
   const redenVoor = new Map<string, Map<string, string>>();
-  for (const id of new Set(gelezen.cellen.map((c) => c.personId))) {
+  for (const id of new Set(cellen.map((c) => c.personId))) {
     redenVoor.set(id, new Map(loadAiosRedenen(id, period.id).map((r) => [r.datum, r.tekst])));
   }
 
   const werk = () => {
-    // The marks first.
+    // The part-time days first: they set marks of their own, which the cells below then find as they are.
+    if (gelezen.deeltijdRijen) {
+      for (const persoon of gelezen.personen) {
+        const gewenst = gelezen.deeltijd.filter((d) => d.personId === persoon.id);
+        const bestaand = laadDeeltijdVoorKwartaal(persoon.id, period.start_datum, period.eind_datum);
+        const sleutel = (p: DeeltijdPatroonRij) => `${p.weekdag}|${p.frequentie}`;
+        const vanBestand = gewenst.map((d) => sleutel(d.patroon)).sort().join(',');
+        if (vanBestand === bestaand.map(sleutel).sort().join(',')) continue;
+        if (bestaand.length > 0) {
+          problemen.push(
+            `${persoon.codenaam}: heeft al andere parttimedagen in dit kwartaal (${bestaand.map((p) => deeltijdCel(p, period.start_datum, period.eind_datum)).join('; ')}). Het bestand zegt: ${gewenst.map((d) => deeltijdCel(d.patroon, period.start_datum, period.eind_datum)).join('; ') || 'geen'}. Haal ze eerst weg bij de AIOS of pas het bestand aan.`
+          );
+          continue;
+        }
+        for (const d of gewenst) {
+          const uitkomst = voegPatroonToe(persoon.id, { weekdag: d.patroon.weekdag, frequentie: d.patroon.frequentie, geldig_vanaf: d.patroon.geldig_vanaf, geldig_tot: d.patroon.geldig_tot });
+          if (uitkomst.status >= 300) {
+            const bericht = (uitkomst.body.error as { message?: string } | undefined)?.message ?? 'Kon de parttimedag niet toevoegen';
+            problemen.push(`Regel ${d.regel}, ${d.codenaam}: ${bericht}`);
+            continue;
+          }
+          aangeraakt.add(persoon.id);
+          wijzigingen.push({ codenaam: d.codenaam, datum: '', dienst: 'parttimedag', van: 'leeg', naar: deeltijdCel(d.patroon, period.start_datum, period.eind_datum) });
+        }
+      }
+    }
+    // A part-time day just made has set marks on its own: the cells of those boxes are as the screen would
+    // have them, skipped (an empty one does not clear them, a toelichting on one is a problem).
+    if (wijzigingen.some((w) => w.dienst === 'parttimedag')) {
+      const nu = huidigeMarkeringen(period.id);
+      cellen = cellen.filter((cel) => {
+        const er = nu.get(`${cel.personId}|${cel.slotId}`);
+        if (!er?.level || er.bron === 'MANUAL') return true;
+        if (cel.tekst) {
+          problemen.push(
+            `Regel ${cel.regel}, ${cel.codenaam}: een toelichting kan niet bij een parttimedag of afwezigheid. Haal de tekst weg of zet hem bij een keuze die de AIOS zelf deed.`
+          );
+        } else if (cel.doel !== null) {
+          overgeslagen++;
+        }
+        return false;
+      });
+    }
+    // The marks.
     const gevraagd = new Set<string>();
-    for (const cel of gelezen.cellen) {
+    for (const cel of cellen) {
       const nu = voor.get(`${cel.personId}|${cel.slotId}`)?.level ?? null;
       if (nu === cel.doel) continue;
       const uitkomst = setAiosVoorkeur(cel.personId, period.id, cel.slotId, cel.doel);
@@ -311,7 +395,7 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
     // A block is one choice: what the file says per dienst has to agree with what the block ended as.
     const na = huidigeMarkeringen(period.id);
     const gemeld = new Set<string>();
-    for (const cel of gelezen.cellen) {
+    for (const cel of cellen) {
       if (!gevraagd.has(`${cel.personId}|${cel.slotId}`) && (voor.get(`${cel.personId}|${cel.slotId}`)?.level ?? null) !== cel.doel) continue;
       const nu = na.get(`${cel.personId}|${cel.slotId}`)?.level ?? null;
       if (nu === cel.doel) continue;
@@ -320,7 +404,7 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
       gemeld.add(sleutel);
       problemen.push(`Regel ${cel.regel}, ${cel.codenaam}: de keuze voor de ${cel.dienst.toLowerCase()} op ${cel.datum} past niet bij de rest van het blok.`);
     }
-    for (const cel of gelezen.cellen) {
+    for (const cel of cellen) {
       const was = voor.get(`${cel.personId}|${cel.slotId}`)?.level ?? null;
       const wordt = na.get(`${cel.personId}|${cel.slotId}`)?.level ?? null;
       if (was === wordt) continue;
@@ -336,8 +420,8 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
 
     // A block is set as a whole: the diensten of it that the file does not name change with it. Said too, or
     // "controleren" would show fewer changes than applying makes.
-    const inBestand = new Set(gelezen.cellen.map((c) => `${c.personId}|${c.slotId}`));
-    const codenaamVan = new Map(gelezen.cellen.map((c) => [c.personId, c.codenaam]));
+    const inBestand = new Set(cellen.map((c) => `${c.personId}|${c.slotId}`));
+    const codenaamVan = new Map(cellen.map((c) => [c.personId, c.codenaam]));
     const slotTekst = new Map(
       (
         db
@@ -371,7 +455,7 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
     // puts it after every mark of the day, a voorkeur included). A day needs a geblokkeerd or liever niet
     // for it to stand: saveAiosReden says so when it does not.
     const perDag = new Map<string, { cel: Cel; teksten: Set<string> }>();
-    for (const cel of gelezen.cellen) {
+    for (const cel of cellen) {
       if (cel.doel === null) continue;
       const sleutel = `${cel.personId}|${cel.datum}`;
       const groep = perDag.get(sleutel) ?? { cel, teksten: new Set<string>() };
@@ -442,7 +526,7 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
     if (!(error instanceof TerugDraaien)) throw error;
   }
   return {
-    plan: { wijzigingen, problemen, overgeslagen: gelezen.overgeslagen, personen: aangeraakt.size },
+    plan: { wijzigingen, problemen, overgeslagen, personen: aangeraakt.size },
     aangeraakt,
   };
 }

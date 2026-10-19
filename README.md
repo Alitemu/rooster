@@ -539,6 +539,16 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.99.0:**
+- *Parttimedagen in het Voorkeurenoverzicht:* onder de verzoeken staan de regels
+  *Parttime 1* en *Parttime 2* (meer als een AIOS er meer heeft) met de
+  parttimedagen van de AIOS in dat kwartaal, bijvoorbeeld *maandag* of *dinsdag, even
+  weken*. Zo blijft ook dit onderdeel van de back-up compleet. De import voegt ze
+  toe bij een AIOS die er nog geen heeft. Heeft de AIOS al andere
+  parttimedagen, dan meldt de import dat als probleem en haalt niets weg. Een
+  bestand zonder die regels laat de parttimedagen zoals ze zijn. Afwezigheid
+  staat nog niet in het bestand: alleen als *(afwezig)* in de cellen.
+
 **Vanaf versie 0.98.0:**
 - *Voorkeurenoverzicht:* bovenaan het Excel-bestand staan vijf regels met wat de AIOS
   verder vraagt: *4 avonden*, *4 nachten*, *twee dagdiensten*, *inwerken* en

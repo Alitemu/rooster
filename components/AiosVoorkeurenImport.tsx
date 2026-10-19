@@ -138,6 +138,7 @@ export function AiosVoorkeurenImportButton({ periodId, periodStatus, onImported 
               <li>Cellen met (parttime) of (afwezig) worden overgeslagen. Die komen uit de parttimedagen of het verlof van de AIOS.</li>
               <li>Achter elke keuze van een dag mag de toelichting van die dag staan, zoals het overzicht van de beheerder die toont: <em>geblokkeerd: ziek kind</em>. Een dag heeft één toelichting. Zonder tekst gaat de toelichting weg.</li>
               <li>De regels bovenaan die met Verzoek beginnen zijn wat de AIOS verder vraagt (4 avonden, 4 nachten, twee dagdiensten, inwerken en onderbreking). Zet <em>ja</em> of laat de cel leeg. Bij inwerken en onderbreking staat een periode als <em>01-04-2097 t/m 30-04-2097</em>. Ontbreken die regels, dan blijven de verzoeken zoals ze zijn.</li>
+              <li>De regels Parttime 1, Parttime 2 enzovoort zijn de parttimedagen van de AIOS, bijvoorbeeld <em>maandag</em> of <em>dinsdag, even weken</em>. Heeft een AIOS er nog geen in dit kwartaal, dan worden ze toegevoegd. Heeft een AIOS al andere parttimedagen, dan is dat een probleem: er wordt niets weggehaald of veranderd. Ontbreken de regels, dan blijven de parttimedagen zoals ze zijn.</li>
               <li>Controleren verandert nog niets. Je ziet eerst wat er zou veranderen.</li>
             </ul>
 

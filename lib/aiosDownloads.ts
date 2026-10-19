@@ -3,7 +3,8 @@
  * October 2026 ("inclusief de voorkeuren wat betreft een blok van 4 dagen"):
  *
  * - Voorkeuren per dienst: first the requests (4 avonden, 4 nachten, twee
- *   dagdiensten, inwerken, onderbreking: VERZOEK_RIJEN), then one row per dienst (date, day, ISO week, the
+ *   dagdiensten, inwerken, onderbreking: VERZOEK_RIJEN) and the part-time
+ *   days (Parttime 1, Parttime 2 ...), then one row per dienst (date, day, ISO week, the
  *   dienst, its block, the feestdag), one column per AIOS with what they
  *   marked there in words, and why when it is not their own (parttime,
  *   afwezig). A block's mark stands on each of its diensten. A mark the
@@ -84,6 +85,66 @@ export const VERZOEK_RIJEN = [
   { label: 'Verzoek: onderbreking van de opleiding', veld: 'onderbreking', soort: 'periode' },
 ] as const;
 
+/**
+ * The part-time days of an AIOS in the quarter, as rows "Parttime 1",
+ * "Parttime 2" (more when someone has more) under the requests: the file is
+ * the back-up, and the import (lib/aiosVoorkeurImport.ts) creates them again.
+ * A cell reads "maandag", "dinsdag, even weken" or "dinsdag, oneven weken", with
+ * ", dd-mm-jjjj t/m dd-mm-jjjj" after it when the pattern holds for only
+ * part of the quarter. The marks they make stay "(parttime)" cells.
+ */
+export const DEELTIJD_DAGEN: Record<string, string> = { MA: 'maandag', DI: 'dinsdag', WO: 'woensdag', DO: 'donderdag', VR: 'vrijdag' };
+const DEELTIJD_FREQUENTIE: Record<string, string> = { ELKE_WEEK: '', EVEN_WEKEN: ', even weken', ONEVEN_WEKEN: ', oneven weken' };
+const DEELTIJD_VOLGORDE = ['MA', 'DI', 'WO', 'DO', 'VR'];
+
+export interface DeeltijdPatroonRij {
+  weekdag: string;
+  frequentie: string;
+  geldig_vanaf: string;
+  geldig_tot: string;
+}
+
+/** The patterns of a person that touch the quarter, in the order of the rows. */
+export function laadDeeltijdVoorKwartaal(personId: string, start: string, eind: string): DeeltijdPatroonRij[] {
+  const rijen = db
+    .prepare(
+      `SELECT weekdag, frequentie, geldig_vanaf, geldig_tot FROM dienstrooster_parttime_pattern
+       WHERE person_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
+    )
+    .all(personId, eind, start) as DeeltijdPatroonRij[];
+  const freq = ['ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN'];
+  return rijen.sort(
+    (a, b) =>
+      DEELTIJD_VOLGORDE.indexOf(a.weekdag) - DEELTIJD_VOLGORDE.indexOf(b.weekdag) ||
+      freq.indexOf(a.frequentie) - freq.indexOf(b.frequentie) ||
+      a.geldig_vanaf.localeCompare(b.geldig_vanaf)
+  );
+}
+
+export function deeltijdCel(p: DeeltijdPatroonRij, start: string, eind: string): string {
+  const van = p.geldig_vanaf > start ? p.geldig_vanaf : start;
+  const tot = p.geldig_tot < eind ? p.geldig_tot : eind;
+  const deel = van > start || tot < eind ? `, ${nlDatum(van)} t/m ${nlDatum(tot)}` : '';
+  return `${DEELTIJD_DAGEN[p.weekdag]}${DEELTIJD_FREQUENTIE[p.frequentie]}${deel}`;
+}
+
+const DEELTIJD_CEL = /^(maandag|dinsdag|woensdag|donderdag|vrijdag)(?:,\s*(elke week|even weken|oneven weken))?(?:,\s*(\d{2})-(\d{2})-(\d{4}) t\/m (\d{2})-(\d{2})-(\d{4}))?$/i;
+
+/** A cell back into a pattern (the whole quarter when no dates are given), or null when it cannot be read. */
+export function leesDeeltijdCel(tekst: string, start: string, eind: string): DeeltijdPatroonRij | null {
+  const m = DEELTIJD_CEL.exec(tekst.trim());
+  if (!m) return null;
+  const weekdag = Object.entries(DEELTIJD_DAGEN).find(([, naam]) => naam === m[1].toLowerCase())![0];
+  const woord = (m[2] ?? 'elke week').toLowerCase();
+  const frequentie = woord === 'even weken' ? 'EVEN_WEKEN' : woord === 'oneven weken' ? 'ONEVEN_WEKEN' : 'ELKE_WEEK';
+  return {
+    weekdag,
+    frequentie,
+    geldig_vanaf: m[3] ? `${m[5]}-${m[4]}-${m[3]}` : start,
+    geldig_tot: m[6] ? `${m[8]}-${m[7]}-${m[6]}` : eind,
+  };
+}
+
 const nlDatum = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
 export const verzoekPeriode = (van: string | null, tot: string | null) => (van && tot ? `${nlDatum(van)} t/m ${nlDatum(tot)}` : null);
 
@@ -108,6 +169,9 @@ export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode, opties: { m
   // The diensten themselves, read once with nobody's marks.
   const dagen = loadAiosVoorkeurDagen('', period.id);
   const wensen = deelnemers.map((p) => loadAiosWens(p.id, period.id));
+  const deeltijd = deelnemers.map((p) => laadDeeltijdVoorKwartaal(p.id, period.start_datum, period.eind_datum));
+  // At least two rows, more when someone has more patterns.
+  const deeltijdRijen = Math.max(2, ...deeltijd.map((d) => d.length));
   const rows: XlsxCell[][] = VERZOEK_RIJEN.map((rij) => [
     null,
     null,
@@ -122,6 +186,9 @@ export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode, opties: { m
       return w[rij.veld] ? 'ja' : null;
     }),
   ]);
+  for (let i = 0; i < deeltijdRijen; i++) {
+    rows.push([null, null, null, `Parttime ${i + 1}`, null, null, null, ...deeltijd.map((d) => (d[i] ? deeltijdCel(d[i], period.start_datum, period.eind_datum) : null))]);
+  }
   for (const dag of dagen) {
     for (const d of dag.diensten) {
       rows.push([

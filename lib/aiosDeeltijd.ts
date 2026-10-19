@@ -125,7 +125,13 @@ function deeltDag(personId: string, p: PatroonVelden, behalve: string | null): A
   return null;
 }
 
-export function maakPatroon(personId: string, body: Record<string, unknown>): Antwoord {
+/**
+ * Adds a pattern and puts it into the AIOS periods that take input: all of
+ * maakPatroon but what follows a change by the AIOS themselves (the backup
+ * file, "begun"), so the import can use it inside a transaction it may roll
+ * back (lib/aiosVoorkeurImport.ts).
+ */
+export function voegPatroonToe(personId: string, body: Record<string, unknown>): Antwoord & { id?: string } {
   const [weekdag, frequentie, van, tot] = [body.weekdag, body.frequentie, body.geldig_vanaf, body.geldig_tot].map(tekst);
   if (!weekdag || !frequentie || !van || !tot) return fout(400, 'INVALID_INPUT', 'Verplichte velden ontbreken');
   const ongeldig = patroonFout(weekdag, frequentie, van, tot);
@@ -147,9 +153,15 @@ export function maakPatroon(personId: string, body: Record<string, unknown>): An
     if (isUniqueViolation(error)) return DUBBEL_PATROON;
     throw error;
   }
+  return { ...goed({ id, weekdag, frequentie, geldig_vanaf: van, geldig_tot: tot }, 201), id };
+}
+
+export function maakPatroon(personId: string, body: Record<string, unknown>): Antwoord {
+  const gedaan = voegPatroonToe(personId, body);
+  if (gedaan.status >= 300) return { status: gedaan.status, body: gedaan.body };
   naWijziging(personId);
-  const w = waarschuwing(personId, van, tot);
-  return goed({ id, weekdag, frequentie, geldig_vanaf: van, geldig_tot: tot, ...(w ? { warning: w } : {}) }, 201);
+  const w = waarschuwing(personId, String(body.geldig_vanaf), String(body.geldig_tot));
+  return goed({ ...(gedaan.body.data as Record<string, unknown>), ...(w ? { warning: w } : {}) }, 201);
 }
 
 export function wijzigPatroon(personId: string, patternId: string, body: Record<string, unknown>): Antwoord {

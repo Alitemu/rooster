@@ -7,6 +7,7 @@ import { aiosQuarter } from '@/lib/aiosQuarter';
 import { syncAiosPeriode } from '@/lib/aiosSync';
 import { setAiosVoorkeur, loadAiosPeriode, loadAiosWens, saveAiosWens } from '@/lib/aiosPreferences';
 import { saveAiosReden, loadAiosRedenen } from '@/lib/aiosReden';
+import { voegPatroonToe } from '@/lib/aiosDeeltijd';
 import { readFirstSheet } from '@/lib/xlsx';
 import { excelSerialToDate } from '@/lib/isoDate';
 import { buildXlsx } from '@/tests/fixtures/buildXlsx';
@@ -417,7 +418,7 @@ describe('the requests of the AIOS at the top of the overview', () => {
 
   it('a file without those rows (from before) touches no request', async () => {
     const voor = [w.x, w.y, w.z].map((id) => loadAiosWens(id, w.period));
-    const rows = kopieer(await gelezen()).filter((r) => !String(r[3]).startsWith('Verzoek:'));
+    const rows = kopieer(await gelezen()).filter((r) => !String(r[3]).startsWith('Verzoek:') && !String(r[3]).startsWith('Parttime'));
     const echt = await importeer(rows, true);
     expect(echt.json.data).toMatchObject({ wijzigingen: [], problemen: [] });
     expect([w.x, w.y, w.z].map((id) => loadAiosWens(id, w.period))).toEqual(voor);
@@ -438,5 +439,86 @@ describe('the requests of the AIOS at the top of the overview', () => {
     expect(problemen.some((p) => p.includes('binnen het kwartaal'))).toBe(true);
     expect(problemen.some((p) => p.includes('"Verzoek: iets anders" is geen verzoek dat bekend is'))).toBe(true);
     expect((await importeer(rows, true)).status).toBe(400);
+  });
+});
+
+describe('the part-time days at the top of the overview', () => {
+  const alleen = (rows: string[][], label: string) => {
+    const rij = rows.find((r) => r[3] === label)!;
+    for (let i = 0; i < rows[0].length; i++) rij[i] ??= '';
+    return rij;
+  };
+  const patronen = (wie: string) =>
+    db.prepare('SELECT weekdag, frequentie FROM dienstrooster_parttime_pattern WHERE person_id = ? ORDER BY weekdag, frequentie').all(wie);
+
+  it('are two rows, the AIOS in the column: a day in words, even weeks after a comma', async () => {
+    for (const body of [
+      { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: q.start_datum, geldig_tot: q.eind_datum },
+      { weekdag: 'DI', frequentie: 'EVEN_WEKEN', geldig_vanaf: q.start_datum, geldig_tot: q.eind_datum },
+    ]) expect(voegPatroonToe(w.x, body).status).toBe(201);
+    const rows = await gelezen();
+    expect(alleen(rows, 'Parttime 1')[kolom(rows, 'x')]).toBe('maandag');
+    expect(alleen(rows, 'Parttime 2')[kolom(rows, 'x')]).toBe('dinsdag, even weken');
+    expect(alleen(rows, 'Parttime 1')[kolom(rows, 'y')]).toBe('');
+    // Read back: nothing changes, and the marks the days make are skipped as (parttime).
+    const echt = await importeer(rows, true);
+    expect(echt.json.data).toMatchObject({ wijzigingen: [], problemen: [], toegepast: true });
+    expect(patronen(w.x)).toHaveLength(2);
+  });
+
+  it('are added for an AIOS who has none yet, and their marks follow; checking says what applying does', async () => {
+    const rows = kopieer(await gelezen());
+    alleen(rows, 'Parttime 1')[kolom(rows, 'z')] = 'woensdag';
+    alleen(rows, 'Parttime 2')[kolom(rows, 'z')] = 'vrijdag, oneven weken';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen).toEqual([]);
+    expect(patronen(w.z)).toHaveLength(0);
+    const echt = await importeer(rows, true);
+    expect(echt.json.data.wijzigingen).toEqual(check.json.data.wijzigingen);
+    expect(echt.json.data.wijzigingen).toEqual(
+      expect.arrayContaining([
+        { codenaam: cn('z'), datum: '', dienst: 'parttimedag', van: 'leeg', naar: 'woensdag' },
+        { codenaam: cn('z'), datum: '', dienst: 'parttimedag', van: 'leeg', naar: 'vrijdag, oneven weken' },
+      ])
+    );
+    expect(patronen(w.z)).toEqual([
+      { weekdag: 'VR', frequentie: 'ONEVEN_WEKEN' },
+      { weekdag: 'WO', frequentie: 'ELKE_WEEK' },
+    ]);
+    // The part-time day sets its own marks: every Wednesday's uitloopdienst is blocked, by the part-time day.
+    const uds = db
+      .prepare(
+        `SELECT sl.datum, av.blocking_level AS level, av.source AS bron FROM dienstrooster_shift_slot sl
+         JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+         LEFT JOIN dienstrooster_availability av ON av.slot_id = sl.id AND av.person_id = ?
+         WHERE sl.period_id = ? AND st.code = 'UD'`
+      )
+      .all(w.z, w.period) as Array<{ datum: string; level: string | null; bron: string | null }>;
+    const woensdagen = uds.filter((r) => new Date(`${r.datum}T12:00:00Z`).getUTCDay() === 3);
+    expect(woensdagen.length).toBeGreaterThan(5);
+    expect(woensdagen.every((r) => r.level === 'ABSOLUUT' && r.bron === 'PARTTIME')).toBe(true);
+  });
+
+  it('other part-time days already there are a problem, and nothing is removed or changed', async () => {
+    const voor = patronen(w.x);
+    const rows = kopieer(await gelezen());
+    alleen(rows, 'Parttime 1')[kolom(rows, 'x')] = 'donderdag';
+    alleen(rows, 'Parttime 2')[kolom(rows, 'x')] = '';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen.some((p: string) => p.includes(cn('x')) && p.includes('heeft al andere parttimedagen'))).toBe(true);
+    expect((await importeer(rows, true)).status).toBe(400);
+    expect(patronen(w.x)).toEqual(voor);
+  });
+
+  it('a cell that is not a day Monday to Friday is a problem; a file without the rows touches no part-time day', async () => {
+    const rows = kopieer(await gelezen());
+    alleen(rows, 'Parttime 1')[kolom(rows, 'y')] = 'zaterdag';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen.some((p: string) => p.includes('"zaterdag" is geen parttimedag'))).toBe(true);
+
+    const voor = [w.x, w.y, w.z].map(patronen);
+    const zonder = kopieer(await gelezen()).filter((r) => !String(r[3]).startsWith('Parttime'));
+    expect((await importeer(zonder, true)).json.data).toMatchObject({ wijzigingen: [], problemen: [] });
+    expect([w.x, w.y, w.z].map(patronen)).toEqual(voor);
   });
 });

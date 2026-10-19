@@ -93,6 +93,35 @@ const MUTATIONS = [
     replace: "van: `${periode[3]}-${periode[1]}-${periode[2]}`",
     tests: ['app/api/aios/aiosVoorkeurImport'],
   },
+  // 0.99.0: the part-time days in the voorkeurenoverzicht, created again by the import.
+  {
+    name: 'voorkeurenoverzicht: the part-time rows are left empty',
+    file: 'lib/aiosDownloads.ts',
+    find: '...deeltijd.map((d) => (d[i] ? deeltijdCel(d[i], period.start_datum, period.eind_datum) : null))',
+    replace: '...deeltijd.map(() => null)',
+    tests: ['app/api/aios/aiosVoorkeurImport', 'app/api/aios/aiosDownloads'],
+  },
+  {
+    name: 'import: other part-time days already there are replaced without a word, or doubled',
+    file: 'lib/aiosVoorkeurImport.ts',
+    find: 'if (bestaand.length > 0) {',
+    replace: 'if (false) {',
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
+  {
+    name: 'import: a part-time day without a frequency is read as every other week',
+    file: 'lib/aiosDownloads.ts',
+    find: "const woord = (m[2] ?? 'elke week').toLowerCase();",
+    replace: "const woord = (m[2] ?? 'even weken').toLowerCase();",
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
+  {
+    name: 'import: a file without part-time rows is read as an AIOS without part-time days',
+    file: 'lib/aiosVoorkeurImport.ts',
+    find: 'if (gelezen.deeltijdRijen) {',
+    replace: 'if (true) {',
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
   {
     name: 'rate limit: an attempt past the limit still goes through',
     file: 'lib/rateLimit.ts',
