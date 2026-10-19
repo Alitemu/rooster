@@ -539,6 +539,14 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.96.0:**
+- *Verwijderde periode:* een persoonlijke link naar een periode in de prullenbak
+  toont de melding dat de periode is verwijderd, met een verwijzing naar de
+  startpagina om een nieuwe link aan te vragen bij "Link kwijt?". Dat geldt voor
+  de achterwacht en de AIOS. Een planner of beheerder die zo'n periode opent,
+  ziet dezelfde melding met een verwijzing naar de Prullenbak om hem terug te
+  zetten.
+
 **Vanaf versie 0.95.0:**
 - *Factoren per periode:* de deelnamefactor (bij de AIOS de fte) wordt vastgelegd
   zodra het rooster van een periode gemaakt wordt. De publicatiecontrole, de
@@ -552,8 +560,8 @@ het met de punaise vastzet.
   van de AIOS-planner heeft ze niet. De planner ziet de toelichting alleen bij
   het met de hand aanpassen of aanvullen van het rooster, en de AIOS leest dat
   ook zo. De import leest de toelichting ook achter een voorkeur.
-  Importeer geen bestand zonder toelichtingen (zoals dat van de planner): zonder
-  tekst achter een keuze gaat de toelichting van die dag weg.
+  Importeer daarom het bestand van de beheerder (de back-up): in een bestand
+  zonder tekst achter een keuze gaat de toelichting van die dag weg.
 - *Voorlopig en definitief:* de statusbalk van de AIOS zegt *Voorlopig
   gepubliceerd* of *Definitief*. De Excel voor het roosterbureau (*Rooster per
   dag* en *Per AIOS*) bestaat pas bij een definitief rooster, en het
