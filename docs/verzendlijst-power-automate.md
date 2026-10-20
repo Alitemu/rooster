@@ -572,20 +572,80 @@ gewoon werken.
 
 ## De stroom voor de AIOS
 
-De AIOS hebben een eigen Power Automate-stroom met een eigen Excel-lijst
-(aios01, aios02 enzovoort). Bouw die op dezelfde manier als hierboven, met:
+De AIOS hebben een eigen Power Automate-stroom met een eigen Excel-lijst. De
+app houdt de twee diensten helemaal uit elkaar: wat de stroom van de
+achterwacht krijgt, ziet de stroom van de AIOS nooit, en andersom.
 
-- een eigen adres waar de stroom op let. Dat vult de beheerder in bij
-  Mailinstellingen, onder het kopje AIOS (of op de pagina van een periode
-  van de AIOS, bij *Mail naar de AIOS*). Het Gmail-account is hetzelfde als dat
-  van de achterwacht, uit Mailinstellingen;
-- een eigen Excel-lijst met de codenamen van de AIOS en hun adres, plus de
-  rijen `Planner` en `Roosterbureau`.
+**Wat gelijk is en wat apart.**
 
-De verzendlijst van de AIOS ziet er precies zo uit als die van de
-achterwacht. De persoonlijke links erin gaan naar het eigen scherm van de
-AIOS. Zolang het adres voor de AIOS leeg is, gaat er geen mail naar de AIOS.
+| | Achterwacht | AIOS |
+|---|---|---|
+| Gmail-account en app-wachtwoord | gedeeld, alleen de beheerder ziet ze | gedeeld |
+| Adres waar de stroom op let | Mailinstellingen, kopje Achterwacht | Mailinstellingen, kopje AIOS |
+| Contactadres van de planner | Mailinstellingen, kopje Achterwacht | Mailinstellingen, kopje AIOS |
+| Excel-lijst | `Adressen` met staf01, staf02 ... | eigen lijst `Adressen` met aios01, aios02 ... |
+| Rijen `Planner` en `Roosterbureau` | ja | ja, met de adressen voor de AIOS |
+| Wachtrij als versturen mislukt | ja, wachtrij van de achterwacht | ja, eigen wachtrij van de AIOS |
+| Formaat van de bijlage | zie stap 4 | exact hetzelfde |
 
-Vanaf versie 0.73.0 krijgen de AIOS ook vanzelf een herinnering, een week en
-een dag voor de deadline, net als bij de achterwacht. Die verzendlijst heeft
-`"automatisch": true`. De stroom hoeft daarvoor niets anders te doen.
+**Bouwen in zeven stappen.**
+
+1. Gmail staat al klaar (stap 1 en 2). Het account is voor beide diensten
+   hetzelfde. Vul daar niets dubbel in.
+2. Open Mailinstellingen (als beheerder) en vul onder het kopje **AIOS** het
+   adres in waar de stroom van de AIOS op let (bijvoorbeeld een eigen
+   postvak, anders dan dat van de achterwacht). Vul daaronder het
+   contactadres van de AIOS-planner in. Dat staat in de melding "Meld dat bij
+   de planner" en in de ruilmeldingen.
+3. Maak een eigen Excel-bestand met een tabel `Adressen` en de kolommen
+   `Codenaam` en `Email`, en eventueel `Naam` (stap 5). Zet erin: elke AIOS
+   (aios01, aios02 ...), plus de rijen `Planner` en `Roosterbureau`. Adressen
+   in kleine letters.
+4. Maak een tweede stroom. Bouw die precies zoals stap 4 hierboven, maar
+   met het AIOS-adres in het Van-filter en de trigger op het postvak van de
+   AIOS, en de lijst van de AIOS in *Een rij ophalen*. Het onderwerpfilter is
+   hetzelfde: `DIENSTROOSTER-VERZENDLIJST`. Neem dus ook de stappen 4b
+   (versturen), 4d (link opnieuw aanvragen) en de CC voor het Roosterbureau
+   over.
+5. De stroom verwerkt dezelfde soorten als de achterwacht. Ze komen vanzelf
+   langs: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
+   `ROOSTER_VOORLOPIG`, `ROOSTER_DEFINITIEF`, `RUILVERZOEK`,
+   `RUIL_BEVESTIGING`, `RUIL_UITKOMST`, `RUIL_INGETROKKEN`,
+   `RUIL_HERINNERING`, `RUIL_HERINNERING_BEVESTIGING`, `RUIL_DOORGEVEN` en
+   `LINK_AANVRAAG`. De stroom hoeft niets per soort te doen.
+6. **De CC bij `RUIL_DOORGEVEN`.** Bij een goedgekeurde ruil gaat één bericht
+   naar de codenaam `Roosterbureau`, met in `cc` de twee AIOS die geruild
+   hebben en `Planner`. Zoek elke codenaam in `cc` op in de lijst van de AIOS
+   en zet de adressen in de CC van die mail. Kent je stroom het veld niet,
+   dan gaat de mail zonder CC naar het Roosterbureau.
+7. **Link opnieuw aanvragen.** Op de startpagina van de AIOS kan iemand het
+   werk-e-mailadres invullen. Dat komt als `LINK_AANVRAAG` bij de stroom van
+   de AIOS, met het adres in `aanvraag_email` en per AIOS een kant-en-klaar
+   bericht in `kandidaten` (`berichten` is leeg). De stroom zoekt het adres
+   op in de eigen lijst (sleutelkolom `Email`), kiest het bericht van die
+   codenaam met *Matrix filteren* en stuurt het naar het adres uit de lijst.
+   Precies zoals stap 4d.
+
+**Wat de AIOS krijgen, en wanneer.**
+
+- Uitnodigingen en herinneringen voor de voorkeuren. Vanzelf een week en een
+  dag voor de deadline, om 09:00 (`"automatisch": true`).
+- Voorlopig publiceren: elke AIOS krijgt de eigen diensten
+  (`ROOSTER_VOORLOPIG`). Definitief maken: de definitieve diensten met wat er
+  voor hen veranderde (`ROOSTER_DEFINITIEF`). Dat gebeurt nooit vanzelf.
+- Ruilen kan alleen bij een definitief rooster. Verzoek, bevestiging,
+  uitkomst, intrekken en herinneringen werken zoals bij de achterwacht
+  (zie Ruilverzoeken hierboven), met dit verschil: de herinnering gaat
+  automatisch na 6 tot 7 dagen om 09:00, en de AIOS of de planner kan er zelf
+  een sturen, niet vaker dan eens per 24 uur.
+- Lukt versturen niet, dan wacht de mail in de wachtrij van de AIOS. Elk uur
+  wordt het opnieuw geprobeerd, en meteen na het opslaan van de
+  Mailinstellingen. Na 7 dagen vervalt een wachtende mail.
+
+**Testen.** Zet in de lijst van de AIOS eerst alleen jouw eigen adres bij
+twee codenamen en verstuur een uitnodiging naar die periode. Controleer dan
+dat (a) de mail aankomt, (b) een codenaam die niet in de lijst staat in de
+Nee-tak belandt, (c) een goedgekeurde testruil één mail aan het
+Roosterbureau geeft met de CC erbij, en (d) een link-aanvraag met jouw adres
+alleen jouw eigen bericht oplevert.
+
