@@ -224,13 +224,13 @@ export function herinnerRuil(
 export function stuurAutomatischeRuilHerinneringen(now: Date = new Date()): number {
   const rijen = db
     .prepare(
-      `${SELECT} WHERE sr.status = 'PENDING' AND sr.laatste_herinnering_op IS NULL
-         AND p.status = 'GEPUBLICEERD' AND p.definitief_op IS NOT NULL AND p.verwijderd_op IS NULL`
+      `${SELECT} WHERE p.status = 'GEPUBLICEERD' AND p.definitief_op IS NOT NULL AND p.verwijderd_op IS NULL`
     )
     .all() as RuilRij[];
   let aantal = 0;
   for (const r of rijen) {
     if (now < ruilHerinneringMoment(r.aangemaakt_op) || inHetVerleden(r, now)) continue;
+    // The claim is the guard: only an open request nobody has reminded yet, one at a time.
     const geclaimd = db
       .prepare(
         `UPDATE dienstrooster_swap_request SET laatste_herinnering_op = ?, laatste_herinnering_door = 'AUTOMATISCH'

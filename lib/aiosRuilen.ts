@@ -784,15 +784,15 @@ export function herinnerAiosRuil(
 /**
  * The automatic reminders: every open request on a definitief roster that
  * has been open 7 x 24 hours (rounded down to 09:00) and has not been
- * reminded yet, by anyone. Run by the hourly check. Returns how many.
+ * reminded yet, by anyone (the claim below says which are open and not
+ * reminded). Run by the hourly check. Returns how many.
  */
 export function stuurAutomatischeAiosRuilHerinneringen(now = new Date()): number {
   const rijen = db
     .prepare(
       `SELECT r.* FROM dienstrooster_aios_ruil r
        JOIN dienstrooster_schedule_period p ON p.id = r.period_id
-       WHERE r.status = 'IN_BEHANDELING' AND r.laatste_herinnering_op IS NULL
-         AND p.status = 'GEPUBLICEERD' AND p.definitief_op IS NOT NULL AND p.verwijderd_op IS NULL`
+       WHERE p.status = 'GEPUBLICEERD' AND p.definitief_op IS NOT NULL AND p.verwijderd_op IS NULL`
     )
     .all() as RuilRij[];
   let aantal = 0;
@@ -801,6 +801,7 @@ export function stuurAutomatischeAiosRuilHerinneringen(now = new Date()): number
     const periode = db
       .prepare('SELECT id, naam, pool_id, start_datum, eind_datum, status FROM dienstrooster_schedule_period WHERE id = ?')
       .get(r.period_id) as AiosUitnodigPeriode;
+    // The claim is the guard: only an open request nobody has reminded yet, one at a time.
     const geclaimd = db
       .prepare(`UPDATE dienstrooster_aios_ruil SET laatste_herinnering_op = ?, laatste_herinnering_door = 'AUTOMATISCH' WHERE id = ? AND laatste_herinnering_op IS NULL AND status = 'IN_BEHANDELING'`)
       .run(now.toISOString(), r.id).changes;
