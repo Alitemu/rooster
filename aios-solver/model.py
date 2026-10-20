@@ -50,7 +50,15 @@ W_LEEG = 1_000_000  # per dienst left empty
 W_BOVEN_HELFT = 20_000  # per blocked option taken from the part above half
 W_PUNT = 100  # per tenth of a point off the share, per AIOS
 W_PUNT_MAX = 200  # per tenth of a point of the largest such difference
-W_SOORT = {'NACHT': 300, 'AVOND': 200, 'DAG': 100}  # per dienst off the share of that soort; nights weigh most (H2)
+# Per dienst off the share of that soort. The planner's order of what must be shared fairly, most important first
+# (0.103.0): nights, dagdiensten, evenings at the weekend, evenings in the week, uitloopdiensten. Counted apart from the
+# points: a night is a point like a dagdienst, and an uitloopdienst (0,2) used to make up for a night someone did not
+# do (the measurement of October 2026: 1 to 8 nights between 20 AIOS, one with 3 nights and 16 uitloopdiensten).
+W_SOORT = {'NACHT': 1500, 'DAG': 600, 'AVOND_WEEKEND': 300, 'AVOND': 150, 'UITLOOP': 50}
+# The soort that fairness counts per code: the evening at the weekend (ADW) is its own, not the evening in the week.
+EERLIJK_VAN_CODE = {'ND': 'NACHT', 'DD': 'DAG', 'ADW': 'AVOND_WEEKEND', 'AD': 'AVOND', 'UD': 'UITLOOP'}
+# Who inwerkt does evenings and nights only after the inwerkperiode: their share of these is pro rata (the others: all werkdagen).
+NA_INWERKEN = ('NACHT', 'AVOND_WEEKEND', 'AVOND')
 W_FEESTDAG = 300  # per feestdagdienst off the share over the years
 W_LIEVER_NIET = 500
 W_SPREIDING = 400  # per block more than one in four weeks, and again per block more than one in two
@@ -79,6 +87,11 @@ class Slot:
     @property
     def soort(self) -> str:
         return SOORT_VAN_CODE[self.code]
+
+    @property
+    def eerlijk_soort(self) -> str:
+        """What fairness shares equally: nights, dagdiensten, evenings at the weekend, evenings in the week, uitloopdiensten."""
+        return EERLIJK_VAN_CODE[self.code]
 
 
 @dataclass
@@ -462,9 +475,9 @@ def oplossen(
     totaal_tienden = sum(s.tienden for s in slots)
     doel = {k: v + next(a.saldo_tienden for a in aios if a.id == k) for k, v in aandeel(totaal_tienden, capaciteit).items()}
     doel_soort: dict[str, dict[str, float]] = {a.id: {} for a in aios}
-    for soort in ('NACHT', 'AVOND', 'DAG'):
-        n = sum(1 for s in slots if s.soort == soort)
-        if soort in ('NACHT', 'AVOND'):
+    for soort in W_SOORT:
+        n = sum(1 for s in slots if s.eerlijk_soort == soort)
+        if soort in NA_INWERKEN:
             # Who inwerkt has evenings and nights only after it (pro rata).
             gew = {a.id: a.fte * werkdagen(a, van, tot, feestdagen, na=a.inwerken[1] if a.inwerken else None) for a in aios}
         else:
@@ -493,7 +506,7 @@ def oplossen(
         m.Add(max_af >= af)
         termen.append(W_PUNT * af)
         for soort, w in W_SOORT.items():
-            aantal = sum(sum(1 for t in o.slots if t.soort == soort) * v for o, v in xs)
+            aantal = sum(sum(1 for t in o.slots if t.eerlijk_soort == soort) * v for o, v in xs)
             afs = m.NewIntVar(0, len(slots), f'afs_{a.id}_{soort}')
             ds = round(doel_soort[a.id][soort])
             m.Add(afs >= aantal - ds)
