@@ -10,6 +10,11 @@
  * Only the beheerder opens it: they are shared by the achterwacht and the
  * AIOS (the API checks it too). Since 0.87.0 a planner no longer gets the
  * button; components/MailStatus.tsx shows them how the mail stands.
+ *
+ * Three parts: the Gmail account, shared by both diensten, and per dienst the
+ * address of its Power Automate flow (where the verzendlijst goes), the
+ * planner's contact address (what participants see when something is wrong
+ * in a voorlopig roster) and what waits in the queue for that dienst.
  */
 
 import { useEffect, useState } from 'react';
@@ -22,7 +27,55 @@ interface Status {
   uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
+  contact_planner: string | null;
   wachtwoord_onleesbaar: boolean;
+  wachtrij: number;
+  wachtrij_items: WachtrijItem[];
+}
+
+interface WachtrijItem {
+  soort: string;
+  codenaam: string;
+  sinds: string;
+  pogingen: number;
+  laatste_poging_op: string | null;
+}
+
+interface AiosStatus {
+  verzendlijst_aan: string | null;
+  contact_planner: string | null;
+  wachtrij: number;
+  wachtrij_items: WachtrijItem[];
+}
+
+const SOORT_TEKST: Record<string, string> = {
+  RUILVERZOEK: 'ruilverzoek',
+  RUIL_BEVESTIGING: 'bevestiging van een ruilverzoek',
+  RUIL_UITKOMST: 'uitkomst van een ruil',
+  RUIL_INGETROKKEN: 'ingetrokken ruilverzoek',
+  RUIL_HERINNERING: 'herinnering voor een ruilverzoek',
+  RUIL_HERINNERING_BEVESTIGING: 'bericht dat er een herinnering is gestuurd',
+  RUIL_DOORGEVEN: 'melding van een ruil',
+};
+
+/** What waits for one dienst: how many, and which: kind, for whom, since when. Never an address or a text. */
+function Wachtrij({ items, aantal }: { items: WachtrijItem[]; aantal: number }) {
+  if (aantal === 0) return <p className="text-xs text-neutral-500">Er wacht geen mail.</p>;
+  return (
+    <div className="text-xs text-neutral-700" data-testid="mail-wachtrij">
+      <p>
+        {aantal} {aantal === 1 ? 'mail wacht' : 'mails wachten'} tot het versturen weer lukt. Wat te oud is of niet meer geldt, wordt weggehaald.
+      </p>
+      <ul className="mt-1 space-y-0.5">
+        {items.map((i, n) => (
+          <li key={n}>
+            {SOORT_TEKST[i.soort] ?? i.soort.toLowerCase()} voor {i.codenaam || 'onbekend'}, sinds {new Date(i.sinds).toLocaleString('nl-NL', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            {i.pogingen > 0 ? `, ${i.pogingen} ${i.pogingen === 1 ? 'poging' : 'pogingen'}` : ''}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 interface Props {
@@ -37,6 +90,10 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
   const [gebruiker, setGebruiker] = useState('');
   const [wachtwoord, setWachtwoord] = useState('');
   const [aan, setAan] = useState('');
+  const [contact, setContact] = useState('');
+  const [aios, setAios] = useState<AiosStatus | null>(null);
+  const [aiosAan, setAiosAan] = useState('');
+  const [aiosContact, setAiosContact] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [melding, setMelding] = useState<string | null>(null);
@@ -49,7 +106,13 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     setStatus(s);
     setGebruiker(s.gebruiker ?? '');
     setAan(s.verzendlijst_aan ?? '');
+    setContact(s.contact_planner ?? '');
     setWachtwoord('');
+  };
+  const applyAios = (a: AiosStatus) => {
+    setAios(a);
+    setAiosAan(a.verzendlijst_aan ?? '');
+    setAiosContact(a.contact_planner ?? '');
   };
 
   useEffect(() => {
@@ -64,6 +127,10 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
         else setError('De mailinstellingen konden niet geladen worden.');
       })
       .catch(() => setError('De mailinstellingen konden niet geladen worden.'));
+    fetch(withBasePath('/api/aios/mail-instellingen'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.success && applyAios(data.data))
+      .catch(() => {});
   }, [isOpen]);
 
   if (!isOpen) return null;
@@ -88,8 +155,37 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
-      apply(data.data);
+      const contactRes = await fetch(withBasePath('/api/planner/mail-settings/contact'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contact_planner: contact }),
+      });
+      const contactData = await contactRes.json().catch(() => null);
+      if (!contactRes.ok || !contactData?.success) throw new Error(contactData?.error?.message || 'Het contactadres opslaan is mislukt.');
+      apply({ ...data.data, contact_planner: contactData.data.contact_planner });
       setMelding('Opgeslagen. De inlog bij Gmail is gelukt.');
+      onChanged?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Opslaan is mislukt.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveAios = async () => {
+    setBusy(true);
+    setError(null);
+    setMelding(null);
+    try {
+      const res = await fetch(withBasePath('/api/aios/mail-instellingen'), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verzendlijst_aan: aiosAan, contact_planner: aiosContact }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
+      applyAios({ ...data.data, wachtrij_items: aios?.wachtrij_items ?? [] });
+      setMelding('De instellingen van de AIOS zijn opgeslagen.');
       onChanged?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Opslaan is mislukt.');
@@ -156,6 +252,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
             </p>
           )}
 
+          <h3 className="text-sm font-bold text-neutral-900 border-b pb-1">Gmail-account voor de achterwacht en de AIOS samen</h3>
           <div>
             <label htmlFor="mail-gebruiker" className="block text-sm font-semibold text-neutral-900 mb-1">
               Gmail-adres
@@ -187,6 +284,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
           </div>
 
           <div>
+            <h3 className="text-sm font-bold text-neutral-900 border-b pb-1 mb-2">Achterwacht</h3>
             <label htmlFor="mail-aan" className="block text-sm font-semibold text-neutral-900 mb-1">
               Verzendlijst sturen naar
             </label>
@@ -194,15 +292,77 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
               id="mail-aan"
               type="email"
               autoComplete="off"
-              placeholder="het adres waar de stroom op let"
+              placeholder="het adres waar de stroom van de achterwacht op let"
               value={aan}
               onChange={(e) => setAan(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg text-sm"
             />
             <p className="text-xs text-neutral-500 mt-1">
-              De mailbox waar je Power Automate-stroom naar kijkt. Daar komt de mail met de verzendlijst binnen.
-              Deelnemers zien dit adres ook bij een ruilverzoek: daar geven ze een ruil door die niet via de app kan.
+              De mailbox waar de Power Automate-stroom van de achterwacht naar kijkt. Deelnemers zien dit adres niet.
             </p>
+            <label htmlFor="mail-contact" className="block text-sm font-semibold text-neutral-900 mt-3 mb-1">
+              Contactadres van de planner
+            </label>
+            <input
+              id="mail-contact"
+              type="email"
+              autoComplete="off"
+              placeholder="het adres dat deelnemers mailen"
+              value={contact}
+              onChange={(e) => setContact(e.target.value)}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+            />
+            <p className="text-xs text-neutral-500 mt-1">
+              Dat adres zien deelnemers bij een voorlopig rooster en in het venster voor een ruil die niet via de app kan. Het is een
+              adres van een persoon, niet de mailbox van de stroom. Laat leeg om geen adres te tonen.
+            </p>
+            {status && <div className="mt-2"><Wachtrij items={status.wachtrij_items} aantal={status.wachtrij} /></div>}
+          </div>
+
+          <div>
+            <h3 className="text-sm font-bold text-neutral-900 border-b pb-1 mb-2">AIOS</h3>
+            {aios ? (
+              <>
+                <label htmlFor="aios-stroom" className="block text-sm font-semibold text-neutral-900 mb-1">
+                  Verzendlijst van de AIOS sturen naar
+                </label>
+                <input
+                  id="aios-stroom"
+                  type="email"
+                  autoComplete="off"
+                  placeholder="het adres waar de stroom van de AIOS op let"
+                  value={aiosAan}
+                  onChange={(e) => setAiosAan(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  De AIOS hebben een eigen stroom met een eigen adressenlijst. Het Gmail-account hierboven verstuurt ook hun mail.
+                </p>
+                <label htmlFor="aios-contact" className="block text-sm font-semibold text-neutral-900 mt-3 mb-1">
+                  Contactadres van de planner van de AIOS
+                </label>
+                <input
+                  id="aios-contact"
+                  type="email"
+                  autoComplete="off"
+                  placeholder="het adres dat de AIOS mailen"
+                  value={aiosContact}
+                  onChange={(e) => setAiosContact(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm"
+                />
+                <p className="text-xs text-neutral-500 mt-1">
+                  Dat adres zien de AIOS bij een voorlopig rooster. Laat leeg om geen adres te tonen.
+                </p>
+                <div className="mt-2 flex justify-end">
+                  <button type="button" onClick={saveAios} disabled={busy} className="btn-secondary">
+                    Opslaan voor de AIOS
+                  </button>
+                </div>
+                <div className="mt-2"><Wachtrij items={aios.wachtrij_items} aantal={aios.wachtrij} /></div>
+              </>
+            ) : (
+              <p className="text-xs text-neutral-500">De instellingen van de AIOS worden geladen.</p>
+            )}
           </div>
 
           {error && (

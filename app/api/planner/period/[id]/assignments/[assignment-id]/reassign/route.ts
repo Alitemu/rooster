@@ -14,6 +14,7 @@
  * entry.
  */
 
+import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
@@ -200,6 +201,8 @@ export async function POST(
 
     const newAssignmentId = uuid();
 
+    // Open swap requests about a dienst that changed hands can never be approved: withdrawn, both sides told.
+    const swapMeldingen: Array<{ send: () => void }> = [];
     const run = db.transaction(() => {
       db.prepare(
         `INSERT INTO dienstrooster_assignment_edit
@@ -285,9 +288,11 @@ export async function POST(
         // Which heading its "ongedaan maken" belongs under (lib/pendingUndo.ts).
         onderdeel: parseOnderdeel(body.onderdeel),
       });
+      swapMeldingen.push(...closeSwapsAfterRosterChange(periodId, new Date().toISOString()).meldingen);
     });
 
     run();
+    swapMeldingen.forEach((m) => m.send());
 
     // Prepared for when there's a way to reach the participant outside the
     // app - see lib/notifications.ts. A no-op today (NOTIFICATIONS_ENABLED

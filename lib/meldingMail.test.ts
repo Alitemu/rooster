@@ -101,8 +101,8 @@ function createFixture() {
   const periodId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
-       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, aangemaakt_op)
-     VALUES (?, ?, 'Voorjaar 2099', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', '{"windowWeeks":2}', datetime('now'))`
+       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, definitief_op, aangemaakt_op)
+     VALUES (?, ?, 'Voorjaar 2099', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', '{"windowWeeks":2}', datetime('now'), datetime('now'))`
   ).run(periodId, poolId);
 
   const person = () => {
@@ -325,21 +325,28 @@ describe('mail about swap requests', () => {
       { params: Promise.resolve({ id: f.collega, 'swap-id': swapId }) }
     );
     expect(res.status).toBe(200);
-    await waitForMails(sink, 4);
+    await waitForMails(sink, 5);
 
     const uitkomst = berichtenFor(f.aanvrager).find((b) => b.onderwerp === 'Je ruilverzoek is goedgekeurd')!;
     // The in-app **bold** is not left as asterisks in the mail.
     expect(uitkomst.tekst).toContain('Je ruilverzoek is goedgekeurd.');
     expect(uitkomst.tekst).toContain(`Jij geeft: je avonddienst op dinsdag 3 maart 2099 aan ${codenaam(f.collega)}`);
     expect(uitkomst.tekst).toContain(`Jij krijgt: de avonddienst op dinsdag 14 april 2099 van ${codenaam(f.collega)}`);
-    expect(uitkomst.tekst).toContain('De planner en het roosterbureau krijgen deze ruil ook door.');
+    expect(uitkomst.tekst).toContain('Het Roosterbureau en de planner zijn hiervan op de hoogte gebracht.');
     expect(linkOwner(uitkomst.tekst)).toBe(f.aanvrager);
 
-    // One verzendlijst for the planner and the roster office: two
-    // fixed codenamen the flow finds in its own sheet, never an address.
+    // The colleague who approved gets a confirmation as well, now with the requester's name.
+    const bevestiging = berichtenFor(f.collega).find((b) => b.onderwerp === 'Je hebt een ruil goedgekeurd')!;
+    expect(bevestiging.soort).toBe('RUIL_UITKOMST');
+    expect(bevestiging.tekst).toContain(`Je hebt het ruilverzoek van ${codenaam(f.aanvrager)} goedgekeurd.`);
+    expect(bevestiging.tekst).toContain(`Jij geeft: je avonddienst op dinsdag 14 april 2099 aan ${codenaam(f.aanvrager)}`);
+    expect(linkOwner(bevestiging.tekst)).toBe(f.collega);
+
+    // One bericht to the roster office, the two who swapped and the Planner in the CC: codenamen the
+    // flow finds in its own sheet, never an address.
     const doorgeven = sink.received.map((m) => verzendlijstPayload(m.raw)).find((l) => l.soort === 'RUIL_DOORGEVEN')!;
-    expect(doorgeven).toMatchObject({ automatisch: true, aantal: 2, aanvraag_email: null, kandidaten: null });
-    expect(doorgeven.berichten.map((b) => b.codenaam)).toEqual(['Planner', 'Roosterbureau']);
+    expect(doorgeven).toMatchObject({ automatisch: true, aantal: 1, aanvraag_email: null, kandidaten: null });
+    expect(doorgeven.berichten.map((b) => b.codenaam)).toEqual(['Roosterbureau']);
     for (const b of doorgeven.berichten) {
       expect(b.onderwerp).toBe(`Ruil goedgekeurd: ${codenaam(f.aanvrager)} en ${codenaam(f.collega)}`);
       expect(b.tekst).toContain(
@@ -348,6 +355,7 @@ describe('mail about swap requests', () => {
       expect(b.tekst).toContain(
         `${codenaam(f.collega)} neemt de avonddienst op dinsdag 3 maart 2099 over van ${codenaam(f.aanvrager)}.`
       );
+      expect([...(b.cc ?? [])].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega), 'Planner'].sort());
       // Both who swapped, so the flow writes them out in full; no personal link.
       expect([...b.personen].sort()).toEqual([codenaam(f.aanvrager), codenaam(f.collega)].sort());
       expect(b.tekst).not.toMatch(/\/person\//);
@@ -551,9 +559,9 @@ describe('a swap request that is withdrawn or lapses', () => {
     );
     // The outcome to the requester, the confirmation for the planner and
     // the notice to the third colleague.
-    await waitForMails(sink, 7);
+    await waitForMails(sink, 8);
     await new Promise((r) => setTimeout(r, 200));
-    expect(sink.received).toHaveLength(7);
+    expect(sink.received).toHaveLength(8);
 
     const row = db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(naarDerde) as {
       status: string;
@@ -629,23 +637,23 @@ describe('a swap request that is withdrawn or lapses', () => {
       }),
       { params: Promise.resolve({ id: f.collega, 'swap-id': eerste }) }
     );
-    // Outcome to the first requester, plus both sides of the lapsed one.
-    await waitForMails(sink, 7);
+    // Outcome to the first requester, confirmation to the colleague, the roster office, plus both sides of the withdrawn one.
+    await waitForMails(sink, 8);
 
     const row = db.prepare('SELECT status, reden_afwijzing FROM dienstrooster_swap_request WHERE id = ?').get(tweede) as {
       status: string;
       reden_afwijzing: string;
     };
-    expect(row.status).toBe('AFGEWEZEN');
+    expect(row.status).toBe('INGETROKKEN');
     expect(row.reden_afwijzing).toContain('intussen al met iemand anders geruild');
 
-    const naarDerde = berichtenFor(f.derde).find((b) => b.onderwerp === 'Je ruilverzoek is vervallen')!;
+    const naarDerde = berichtenFor(f.derde).find((b) => b.onderwerp === 'Je ruilverzoek is ingetrokken')!;
     expect(naarDerde.tekst).toContain('Je rooster blijft zoals het was.');
     expectAnonymous(naarDerde, [f.collega, f.aanvrager]);
-    expect(inApp(f.derde).map((n) => n.onderwerp)).toContain('Je ruilverzoek is vervallen');
+    expect(inApp(f.derde).map((n) => n.onderwerp)).toContain('Je ruilverzoek is ingetrokken');
 
     const naarCollega = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
-    expect(naarCollega.onderwerp).toBe('Een ruilverzoek aan jou is vervallen');
+    expect(naarCollega.onderwerp).toBe('Een ruilverzoek aan jou is ingetrokken');
     expectAnonymous(naarCollega, [f.derde]);
   });
 
@@ -663,9 +671,9 @@ describe('a swap request that is withdrawn or lapses', () => {
     // The outcome to the requester, the confirmation for the planner and the
     // notice to the colleague: seven in all. Waiting for six, the notice
     // could still be on its way on a busy machine.
-    await waitForMails(sink, 7);
+    await waitForMails(sink, 8);
     await new Promise((r) => setTimeout(r, 200));
-    expect(sink.received).toHaveLength(7);
+    expect(sink.received).toHaveLength(8);
 
     expect(statusOf(tweede)).toBe('INGETROKKEN');
     const notice = berichtenFor(f.collega).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
@@ -687,9 +695,9 @@ describe('a swap request that is withdrawn or lapses', () => {
     expect((await res.json()).data.afgesloten).toEqual([{ id: eigen, status: 'INGETROKKEN' }]);
     // The outcome to the requester, the confirmation for the planner and
     // the notice to the third colleague.
-    await waitForMails(sink, 7);
+    await waitForMails(sink, 8);
     await new Promise((r) => setTimeout(r, 200));
-    expect(sink.received).toHaveLength(7);
+    expect(sink.received).toHaveLength(8);
 
     expect(statusOf(eigen)).toBe('INGETROKKEN');
     const naarDerde = berichtenFor(f.derde).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
@@ -771,13 +779,13 @@ describe('ruilmails die niet meteen weg konden', () => {
     const swapId = await requestSwap(f);
     expect((await approveAs(f.collega, swapId)).status).toBe(200);
     await new Promise((r) => setTimeout(r, 100));
-    // The request mails no longer apply; the outcome and the confirmation do.
+    // The request mails no longer apply; the outcome, the colleague's confirmation and the roster office's do.
     configureSmtp(sink);
     const result = await flushMailQueue();
-    expect(result.verstuurd).toBe(2);
+    expect(result.verstuurd).toBe(3);
     expect(queued(f)).toEqual([]);
     const soorten = sink.received.map((m) => verzendlijstPayload(m.raw).soort).sort();
-    expect(soorten).toEqual(['RUIL_DOORGEVEN', 'RUIL_UITKOMST']);
+    expect(soorten).toEqual(['RUIL_DOORGEVEN', 'RUIL_UITKOMST', 'RUIL_UITKOMST']);
   });
 
   it('keeps a mail the server refused and sends it once the server takes it, stopping at the first refusal', async () => {

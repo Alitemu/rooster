@@ -15,7 +15,7 @@
 
 import nodemailer from 'nodemailer';
 import { db } from '@/db/client';
-import { clearMailFailure, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
+import { clearMailFailure, getContactPlanner, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
 import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
 interface MailConfig {
@@ -69,6 +69,8 @@ export function mailConfigStatus(): {
   uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
+  /** The address participants mail about a voorlopig roster, apart from the flow's mailbox. */
+  contact_planner: string | null;
   /** Saved, but the password can no longer be read (new session secret). */
   wachtwoord_onleesbaar: boolean;
   /** The last failed send, until one succeeds again. */
@@ -85,6 +87,7 @@ export function mailConfigStatus(): {
     uitgeschakeld: mailSwitchedOff(),
     gebruiker: stored?.gebruiker ?? null,
     verzendlijst_aan: stored?.verzendlijstAan ?? null,
+    contact_planner: getContactPlanner(),
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
     laatste_fout: getMailFailure(),
     wachtrij,

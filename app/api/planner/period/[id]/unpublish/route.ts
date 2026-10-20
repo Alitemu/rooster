@@ -32,6 +32,7 @@
  *     withdrawal can't silently apply to a roster that has since changed.
  */
 
+import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
@@ -89,6 +90,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       )
       .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
 
+    // Back to voorlopig: no request can stand, ruilen kan pas als het rooster weer definitief is.
+    const swapMeldingen: Array<{ send: () => void }> = [];
     const unpublishTx = db.transaction(() => {
       db.prepare(
         `UPDATE dienstrooster_schedule_period
@@ -126,10 +129,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         now
       );
 
+      swapMeldingen.push(...closeSwapsAfterRosterChange(periodId, now, { alle: true }).meldingen);
+
       return people.length;
     });
 
     const notificationsCreated = unpublishTx();
+    swapMeldingen.forEach((m) => m.send());
 
     return NextResponse.json({
       success: true,

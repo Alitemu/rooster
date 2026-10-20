@@ -20,6 +20,7 @@ import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verz
 
 const AAN = 'aios.mail.verzendlijst_aan';
 const LAATSTE_FOUT = 'aios.mail.laatste_fout';
+const CONTACT = 'aios.contact.planner';
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -45,7 +46,31 @@ export function aiosStroomAdres(): string | null {
   return get(AAN) ?? null;
 }
 
+/**
+ * The address a participant mails when something is wrong in a voorlopig
+ * roster: the AIOS planner's own, apart from the flow's mailbox (which the
+ * flow reads, not a person), and from the achterwacht's. Set by the
+ * beheerder, never in code.
+ */
+export function aiosContactAdres(): string | null {
+  return get(CONTACT) ?? null;
+}
+
 export type AdresUitkomst = { ok: true } | { ok: false; message: string };
+
+/** Saves (or with an empty value removes) the address participants mail about their voorlopige roster. */
+export function bewaarAiosContactAdres(adres: string, actorId: string): AdresUitkomst {
+  const schoon = adres.trim();
+  if (schoon === '') {
+    db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(CONTACT);
+    return { ok: true };
+  }
+  if (schoon.length > 254 || !EMAIL.test(schoon)) {
+    return { ok: false, message: 'Het contactadres van de planner is geen geldig e-mailadres.' };
+  }
+  zet(CONTACT, schoon, actorId);
+  return { ok: true };
+}
 
 /** Saves (or with an empty value removes) the AIOS's flow mailbox. */
 export function bewaarAiosStroomAdres(adres: string, actorId: string): AdresUitkomst {
@@ -113,7 +138,11 @@ export function aiosMailStatus(): {
   account: boolean;
   uitgeschakeld: boolean;
   verzendlijst_aan: string | null;
+  /** The address the AIOS mail about a voorlopig roster: the planner's own, apart from the flow's mailbox. */
+  contact_planner: string | null;
   laatste_fout: AiosMailFout | null;
+  /** AIOS swap mails waiting to go out (lib/aiosRuilMail.ts). */
+  wachtrij: number;
 } {
   const account = getStoredMailSettings();
   return {
@@ -121,7 +150,10 @@ export function aiosMailStatus(): {
     account: Boolean(account?.wachtwoord),
     uitgeschakeld: uitgeschakeld(),
     verzendlijst_aan: aiosStroomAdres(),
+    contact_planner: aiosContactAdres(),
     laatste_fout: aiosMailFout(),
+    // Counted here rather than imported from lib/aiosRuilMail.ts, which imports this module.
+    wachtrij: (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_mail_queue').get() as { n: number }).n,
   };
 }
 
@@ -186,6 +218,9 @@ export async function verstuurAiosVerzendlijst(lijst: Verzendlijst): Promise<Aio
       ],
     });
     db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(LAATSTE_FOUT);
+    // Sending works (again): swap mails that waited go now rather than at the next hourly run.
+    // Imported when needed: lib/aiosRuilMail.ts imports this module.
+    void import('./aiosRuilMail').then((m) => m.flushAiosNaVerzending()).catch(() => {});
     return { ok: true, aantal: lijst.aantal };
   } catch (error) {
     console.error(`[aios-mail] ${lijst.soort} failed`, error);

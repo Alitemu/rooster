@@ -22,7 +22,7 @@ import { getAuthContextFromRequest, requireAdminAccess, requirePlannerAccess } f
 import { unauthorizedResponse, forbiddenResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { deleteMailSettings, getStoredMailSettings, saveMailSettings } from '@/lib/appSettings';
 import { mailConfigStatus, verifyMailLogin } from '@/lib/verzendlijstMail';
-import { flushMailQueue } from '@/lib/meldingMail';
+import { flushMailQueue, mailWachtrijItems } from '@/lib/meldingMail';
 
 const ALLEEN_BEHEERDER =
   'Alleen de beheerder kan de mailinstellingen wijzigen. Ze gelden voor de achterwacht en de AIOS samen.';
@@ -39,8 +39,10 @@ function audit(actorId: string, oud: unknown, nieuw: unknown, actie: 'UPDATE' | 
 
 export async function GET(req: NextRequest) {
   try {
-    if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
-    return NextResponse.json({ success: true, data: mailConfigStatus() });
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    // What waits (kind, for whom, since when) is the beheerder's to see; a planner sees the number.
+    return NextResponse.json({ success: true, data: { ...mailConfigStatus(), wachtrij_items: requireAdminAccess(auth) ? mailWachtrijItems() : [] } });
   } catch (error) {
     return internalErrorResponse('mail-settings-get', error);
   }

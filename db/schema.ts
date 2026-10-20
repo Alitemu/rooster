@@ -812,11 +812,17 @@ export const aiosRuil = sqliteTable(
     respondent_id: text('respondent_id').notNull().references(() => person.id, { onDelete: 'cascade' }),
     aangeboden_json: text('aangeboden_json').notNull(),
     gevraagd_json: text('gevraagd_json').notNull(),
+    // VERVALLEN is no longer written: what lapsed is INGETROKKEN (0.102.0).
+    // The value stays allowed so a database from before still opens.
     status: text('status', { enum: ['IN_BEHANDELING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN', 'VERVALLEN'] }).notNull(),
     toelichting: text('toelichting'),
     reden_afwijzing: text('reden_afwijzing'),
     aangemaakt_op: text('aangemaakt_op').notNull(),
     beantwoord_op: text('beantwoord_op'),
+    // When the colleague opened their requests on their own page ("gelezen" for the planner).
+    gezien_op: text('gezien_op'),
+    laatste_herinnering_op: text('laatste_herinnering_op'),
+    laatste_herinnering_door: text('laatste_herinnering_door'),
   },
   (table) => ({
     periode: index('aios_ruil_periode_idx').on(table.period_id),
@@ -908,6 +914,10 @@ export const swapRequest = sqliteTable(
     // overview can show whether it has been read. Null for requests made
     // before this column existed.
     melding_id: text('melding_id'),
+    // The last reminder to the colleague, and who sent it: AUTOMATISCH,
+    // AANVRAGER or PLANNER. Null: none yet (lib/ruilHerinnering.ts).
+    laatste_herinnering_op: text('laatste_herinnering_op'),
+    laatste_herinnering_door: text('laatste_herinnering_door'),
     row_version: integer('row_version').default(1).notNull(),
   },
   (table) => ({
@@ -1005,6 +1015,17 @@ export const appSetting = sqliteTable('dienstrooster_app_setting', {
  * only built when it actually goes out. Dropped after 7 days, or earlier
  * once the swap it is about has moved on.
  */
+export const aiosMailQueue = sqliteTable('dienstrooster_aios_mail_queue', {
+  id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
+  period_id: text('period_id').notNull().references(() => schedulePeriod.id),
+  ruil_id: text('ruil_id'),
+  soort: text('soort').notNull(),
+  melding_json: text('melding_json').notNull(),
+  pogingen: integer('pogingen').default(0).notNull(),
+  laatste_poging_op: text('laatste_poging_op'),
+  aangemaakt_op: text('aangemaakt_op').notNull(),
+});
+
 export const mailQueue = sqliteTable('dienstrooster_mail_queue', {
   id: text('id').primaryKey().$defaultFn(() => crypto.randomUUID()),
   period_id: text('period_id').notNull().references(() => schedulePeriod.id),

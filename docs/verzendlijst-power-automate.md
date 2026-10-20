@@ -29,10 +29,22 @@ mail. Daar hoef je niets voor te doen, want het gaat via dezelfde stroom:
 
 - Bij een nieuw ruilverzoek krijgt de collega een mail met het verzoek. De
   aanvrager krijgt een bevestiging.
-- Bij goedkeuren of afwijzen krijgt de aanvrager de uitkomst. Bij een
-  afwijzing staat de reden erbij.
+- Bij goedkeuren krijgen de aanvrager en de collega die goedkeurde allebei
+  een bevestiging. Bij afwijzen krijgt de aanvrager de uitkomst, met de
+  reden als die is ingevuld.
 - Trekt de aanvrager een verzoek in, dan krijgt de collega een mail dat het
   verzoek is ingetrokken en dat er niets meer hoeft te gebeuren.
+- Ruilen kan alleen bij een definitief rooster. Bij een voorlopig rooster
+  gaat er dus geen ruilmail uit.
+- Een verzoek dat na 6 tot 7 dagen nog openstaat, krijgt vanzelf een
+  herinnering, om 09:00 afgerond naar beneden. Een verzoek op vrijdagmiddag
+  wordt dus de vrijdag erna herinnerd, nooit op zaterdag. De aanvrager of de
+  planner kan ook zelf een herinnering sturen, na een bevestiging en niet
+  vaker dan eens per 24 uur. De collega krijgt de herinnering (soort
+  `RUIL_HERINNERING`, zonder naam van de aanvrager). De aanvrager krijgt een
+  bericht dat er een herinnering is gestuurd (soort
+  `RUIL_HERINNERING_BEVESTIGING`). Je stroom hoeft hiervoor niets te weten:
+  de mail gaat naar de codenaam, net als de andere ruilmails.
 
 **Anoniem tot de ruil doorgaat.** Zolang een ruil niet is goedgekeurd, noemt
 geen enkele mail de ander. De collega leest "Er is een ruilverzoek voor je
@@ -42,15 +54,24 @@ tegen wie. In de app zien beide wel elkaars codenaam: dat is een
 pseudoniem. In `personen` staat dan alleen de lezer zelf, dus de stroom kan
 er ook geen echte naam van maken.
 
-Gaat de ruil door, dan noemt de mail aan de aanvrager de collega. De
-planner en het roosterbureau krijgen dan een bevestiging met beide
-dienstdoenden: "staf03 neemt de avonddienst op woensdag 3 maart 2027
-over van staf07." Met stap 5 staan daar de volledige namen. Die
-bevestiging gaat naar twee vaste codenamen, `Planner` en `Roosterbureau`
-(soort `RUIL_DOORGEVEN`). Zet die twee als rij in je Excel-lijst, met het
-adres van de planner en van het roosterbureau (stap 3). Dienstrooster zet zelf nooit een e-mailadres in de verzendlijst.
-Zo kan een nagemaakte verzendlijst alleen mensen uit jouw lijst bereiken.
-De stroom hoeft hiervoor niet te veranderen.
+Gaat de ruil door, dan noemt de mail aan de aanvrager de collega, en de mail
+aan de collega de aanvrager. Het roosterbureau krijgt dan een bevestiging
+met beide dienstdoenden: "staf03 neemt de avonddienst op woensdag 3 maart
+2027 over van staf07." Met stap 5 staan daar de volledige namen. Dat is één
+bericht aan de vaste codenaam `Roosterbureau` (soort `RUIL_DOORGEVEN`). Zet
+`Planner` en `Roosterbureau` als rij in je Excel-lijst, met het adres van de
+planner en van het roosterbureau (stap 3). Dienstrooster zet zelf nooit een
+e-mailadres in de verzendlijst. Zo kan een nagemaakte verzendlijst alleen
+mensen uit jouw lijst bereiken.
+
+**Eén wijziging in de stroom: de CC.** Bij `RUIL_DOORGEVEN` staat in het
+bericht een veld `cc` met drie codenamen: de twee die geruild hebben en
+`Planner`. Laat de stroom die in jouw lijst opzoeken, zoals de `codenaam`, en
+in de CC van de mail aan het Roosterbureau zetten. Zo weten beide
+collega's en de planner dat het Roosterbureau de ruil heeft gekregen. Dat
+betekent ook dat zij elkaars adres zien in die mail. Kent je stroom het veld
+niet, dan werkt alles gewoon door en gaat de mail zonder CC naar het
+Roosterbureau.
 
 **Eén dienst aan meerdere collega's aanbieden.** Een deelnemer mag dezelfde
 dienst tegelijk aan meerdere collega's aanbieden, om de kans op een ruil zo
@@ -68,8 +89,13 @@ groot mogelijk te maken. Wie het eerst goedkeurt, ruilt:
   aan wie het gericht was, krijgt een mail. Wie goedkeurt, ziet het meteen
   op het scherm.
 - Had iemand anders ook een verzoek lopen voor een van de twee geruilde
-  diensten, dan vervalt dat verzoek. De aanvrager en de collega van dat
-  verzoek krijgen er allebei bericht van.
+  diensten, dan wordt dat verzoek ook ingetrokken. De aanvrager en de collega
+  van dat verzoek krijgen er allebei bericht van. Bij de achterwacht stond dat
+  eerst als afgewezen, nu als ingetrokken.
+- Wijzigt de planner een dienst met de hand of trekt hij de publicatie in,
+  dan worden de verzoeken die daardoor niet meer kunnen ingetrokken. De
+  aanvrager en de collega krijgen een mail met de reden "Het rooster is
+  aangepast." Dat geldt voor de achterwacht en de AIOS.
 
 Dezelfde collega twee keer vragen voor dezelfde dienst kan niet. In het
 venster voor een ruilverzoek staat wie al gevraagd is. Die collega is niet
@@ -245,6 +271,13 @@ codenaam `Planner` met het adres van de planner (bijvoorbeeld het gedeelde
 postvak) en codenaam `Roosterbureau` met het adres van het roosterbureau.
 Precies zo gespeld.
 
+**Contactadres van de planner.** Dat is iets anders dan het adres van de
+stroom. Het adres van de stroom is de mailbox waar je stroom op let. Het
+contactadres is het adres dat deelnemers zien als er iets niet klopt in hun
+voorlopige rooster, en dat ze mailen voor een ruil die niet via de app kan. De
+beheerder vult het in bij Mailinstellingen, per dienst. Zonder contactadres
+staat er "Meld dat bij de planner" en geen adres.
+
 Selecteer de cellen en kies **Opmaken als tabel**. Geef de tabel de naam
 `Adressen`. Power Automate kan alleen rijen uit een tabel lezen, niet uit
 losse cellen. De codenaam moet precies zo geschreven zijn als in
@@ -299,8 +332,13 @@ versie iets verschillen.
 
       - `soort`: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
         `RUILVERZOEK`, `RUIL_BEVESTIGING`, `RUIL_UITKOMST`,
-        `RUIL_INGETROKKEN`, `LINK_AANVRAAG`, `ROOSTER_VOORLOPIG`,
+        `RUIL_INGETROKKEN`, `RUIL_HERINNERING`,
+        `RUIL_HERINNERING_BEVESTIGING`, `LINK_AANVRAAG`, `ROOSTER_VOORLOPIG`,
         `ROOSTER_DEFINITIEF` of `RUIL_DOORGEVEN`.
+      - `cc` (bij `RUIL_DOORGEVEN`, anders afwezig): de codenamen die in
+        de CC horen, de twee die geruild hebben en `Planner`. Zoek ze op
+        zoals `codenaam`, in je eigen lijst. Kent je stroom dit veld niet,
+        dan gaat de mail zonder CC naar het Roosterbureau.
       - `aanvraag_email` en `kandidaten` zijn alleen gevuld bij
         `LINK_AANVRAAG` (stap 4d), anders `null`.
       - `html` is dezelfde tekst, klaar om als hoofdtekst van de mail te
@@ -537,10 +575,10 @@ gewoon werken.
 De AIOS hebben een eigen Power Automate-stroom met een eigen Excel-lijst
 (aios01, aios02 enzovoort). Bouw die op dezelfde manier als hierboven, met:
 
-- een eigen adres waar de stroom op let. Dat vult de beheerder in op de
-  pagina van een periode van de AIOS, bij *Mail naar de AIOS*. Het
-  Gmail-account is hetzelfde als dat van de achterwacht, uit
-  Mailinstellingen;
+- een eigen adres waar de stroom op let. Dat vult de beheerder in bij
+  Mailinstellingen, onder het kopje AIOS (of op de pagina van een periode
+  van de AIOS, bij *Mail naar de AIOS*). Het Gmail-account is hetzelfde als dat
+  van de achterwacht, uit Mailinstellingen;
 - een eigen Excel-lijst met de codenamen van de AIOS en hun adres, plus de
   rijen `Planner` en `Roosterbureau`.
 

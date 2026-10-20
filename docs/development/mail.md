@@ -16,12 +16,49 @@ switch per period in dienstrooster_aios_periode.auto_herinneren (the
 period's own auto_herinneren stays 0, so the achterwacht's never take an
 AIOS period). Asked for because the AIOS's only went by hand in 0.72.0.
 Swaps between AIOS (lib/aiosRuilen.ts, 0.80.0) send RUILVERZOEK,
-RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN and on approval
-RUIL_DOORGEVEN (to the codenamen Planner and Roosterbureau, `personen` the
-two who swapped) to the AIOS's flow, a request anonymous until it goes
-through, as the achterwacht's. After the commit and not awaited, but not
-queued: a mail that fails is not tried again (the request is on both
-pages, and the failure shows in the AIOS's mail settings).
+RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN, since 0.102.0 also
+RUIL_HERINNERING and RUIL_HERINNERING_BEVESTIGING, and on approval
+RUIL_DOORGEVEN to the AIOS's flow, a request anonymous until it goes
+through, as the achterwacht's. Since 0.102.0 the AIOS has a queue of its
+own for them (lib/aiosRuilMail.ts, table dienstrooster_aios_mail_queue):
+a mail that can't go out waits and goes at the hourly run, after saving the
+AIOS's address and after any other successful send; dropped after 7 days,
+a request mail once the request was answered, and a withdrawal for a
+request the colleague never heard of takes that request's mails with it.
+The personal link is made when the mail is sent. The beheerder sees what
+waits (kind, codenaam, since when) in Mailinstellingen, no addresses and
+no texts. Swapping only on a definitief roster; there is no status
+vervallen: what can never go through any more is INGETROKKEN, the colleague
+(and for a third party's request or a roster change the requester too) is
+told (meldAiosRuilenIngetrokken).
+
+RUIL_DOORGEVEN (0.102.0): ONE bericht, to the codenaam Roosterbureau, with
+`cc` (codenamen: the requester, the colleague and Planner) and `personen`
+the two who swapped. The app never holds an address; the flow looks the
+codenamen up in its own sheet, so the operator updates the flow once to
+put the `cc` codenamen in the CC. Until then the field is ignored and the
+bericht goes to the Roosterbureau alone. The colleague who approved gets
+a RUIL_UITKOMST of their own, with the requester's name.
+
+Reminders (0.102.0, lib/ruilHerinnering.ts for the achterwacht, lib/aiosRuilen.ts
+for the AIOS): automatic once, at the last 09:00 at or before 7 x 24 hours
+after the request (a Friday afternoon request: the next Friday morning),
+by the hourly check (instrumentation-node.ts); by hand, by the requester
+or the planner, after a yes in the page (`bevestigd: true`), not within 24
+hours of the last one. Columns laatste_herinnering_op and
+laatste_herinnering_door (AUTOMATISCH, AANVRAGER, PLANNER) on both swap
+tables. The colleague gets RUIL_HERINNERING (anonymous), the requester
+RUIL_HERINNERING_BEVESTIGING with the advice to consider another day or
+colleague, that more than one request is possible and that the others are
+withdrawn when someone accepts.
+
+Contact addresses (0.102.0): a participant never sees the flow's mailbox.
+What they mail about a voorlopig roster, or a swap the app can't make, is
+the planner's own address per dienst, set by the beheerder in
+Mailinstellingen (`mail.contact_planner` for the achterwacht,
+`aios.contact.planner` for the AIOS; lib/appSettings.ts getContactPlanner,
+lib/aiosMail.ts aiosContactAdres). Without one the text says "Meld dat bij
+de planner" and no address.
 Publishing the AIOS's roster (lib/aiosPublicatie.ts, 0.78.0) sends the
 verzendlijst kinds ROOSTER_VOORLOPIG and ROOSTER_DEFINITIEF to that flow,
 with their own texts: per AIOS their diensten, their dienstpercentage
@@ -124,8 +161,9 @@ the exact same request twice is refused): the first to approve wins. That
 approval withdraws the other open requests of either side of that swap
 (INGETROKKEN, only the colleague each was sent to is told; the requester
 hears it in the approval mail, the approver on screen from the response's
-`afgesloten`) and closes anyone else's request on either shift as
-AFGEWEZEN ("vervallen", both sides told) (lib/swapLifecycle.ts). One
+`afgesloten`) and withdraws anyone else's request on either shift as
+well (INGETROKKEN with the reason that one of the diensten was swapped, both
+sides told; before 0.102.0 it was AFGEWEZEN) (lib/swapLifecycle.ts). One
 participant may start at most 20 swap requests per 24 hours, withdrawn
 ones included (lib/swapQuota.ts, 429): each mails two people, and the
 sending account's daily limit is shared with invitations and reminders. Invitations go out only for an OPEN period before

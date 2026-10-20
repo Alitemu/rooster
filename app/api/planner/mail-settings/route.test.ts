@@ -24,6 +24,7 @@ import {
 } from '@/tests/smtpSink';
 import { GET, PUT, DELETE } from './route';
 import { GET as swapContactsGET } from '../../person/[id]/swap-contacts/route';
+import { PUT as contactPUT } from './contact/route';
 
 /**
  * Mailinstellingen in the app, so the operator can set up sending without
@@ -38,8 +39,12 @@ import { GET as swapContactsGET } from '../../person/[id]/swap-contacts/route';
  *   could point the flow mailbox elsewhere would get the other dienst's
  *   personal links (lib/dienstAccess.ts). Every change is in the audit
  *   trail without the password.
- * - the flow mailbox is the planner's address in the swap dialog; a
- *   participant reads only that, for themselves.
+ * - the planner's address in the swap dialog and on a voorlopig roster is a
+ *   contact address of its own, set by the beheerder; the flow's mailbox is
+ *   never shown to a participant, who reads only the contact address, for
+ *   themselves.
+ * - what waits in the queue is listed for the beheerder only: kind, for whom
+ *   and since when, no addresses and no texts.
  */
 
 let sink: SmtpSink;
@@ -257,7 +262,7 @@ describe('Mailinstellingen in de app', () => {
     }
   });
 
-  it('gives the swap dialog the flow mailbox as the planner\'s address, and only to the person themselves', async () => {
+  it("gives the swap dialog the planner's contact address, never the flow mailbox, and only to the person themselves", async () => {
     configureSmtpServerOnly(sink);
     const planner = person('ADMIN');
     const deelnemer = person('DEELNEMER');
@@ -272,17 +277,94 @@ describe('Mailinstellingen in de app', () => {
         { params: Promise.resolve({ id }) }
       );
     };
+    const zetContact = (as: string, body: unknown) =>
+      contactPUT(
+        new NextRequest('http://localhost/api/planner/mail-settings/contact', {
+          method: 'PUT',
+          headers: {
+            Cookie: `${SESSION_COOKIE_NAME}=${createSessionToken({ kind: 'staff', personId: as, sessionVersion: getSessionVersion(as)! } as never, STAFF_SESSION_MAX_AGE_SECONDS)}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+      );
 
     expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null });
     await PUT(request('PUT', planner, goed));
+    // The flow's mailbox is set, a contact address is not: a participant sees no address.
+    expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null });
+    expect((await (await GET(request('GET', planner))).json()).data.contact_planner).toBeNull();
+
+    expect((await zetContact(planner, { contact_planner: 'planner@ziekenhuis.test' })).status).toBe(200);
     const eigen = await contacts(deelnemer, deelnemer);
     expect(eigen.status).toBe(200);
-    // Only that address: nothing else from the mail settings.
-    expect((await eigen.json()).data).toEqual({ planner: 'flow@ziekenhuis.test' });
+    // Only that address: nothing else from the mail settings, the flow's mailbox least of all.
+    const tekst = JSON.stringify((await eigen.json()).data);
+    expect(tekst).toBe('{"planner":"planner@ziekenhuis.test"}');
+    expect(tekst).not.toContain('flow@ziekenhuis.test');
     expect((await contacts(deelnemer, ander)).status).toBe(403);
+    expect((await (await GET(request('GET', planner))).json()).data.contact_planner).toBe('planner@ziekenhuis.test');
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM dienstrooster_audit_log WHERE entiteit = 'app_setting' AND entiteit_id = 'contact_planner' AND actor_id = ?`).get(planner)).toEqual({ n: 1 });
 
-    await DELETE(request('DELETE', planner));
+    // Empty removes it.
+    expect((await zetContact(planner, { contact_planner: '' })).status).toBe(200);
     expect((await (await contacts(deelnemer, deelnemer)).json()).data).toEqual({ planner: null });
+    await DELETE(request('DELETE', planner));
+  });
+
+  it('the contact address: only the beheerder, only a real address', async () => {
+    const admin = person('ADMIN');
+    const planner = person('PLANNER');
+    const deelnemer = person('DEELNEMER');
+    const als = (id: string, kind: 'staff' | 'person', body: unknown) =>
+      contactPUT(
+        new NextRequest('http://localhost/api/planner/mail-settings/contact', {
+          method: 'PUT',
+          headers: {
+            Cookie: `${SESSION_COOKIE_NAME}=${createSessionToken({ kind, personId: id, sessionVersion: getSessionVersion(id)! } as never, kind === 'staff' ? STAFF_SESSION_MAX_AGE_SECONDS : PERSON_SESSION_MAX_AGE_SECONDS)}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        })
+      );
+    expect((await als(deelnemer, 'person', { contact_planner: 'a@b.test' })).status).toBe(401);
+    expect((await als(planner, 'staff', { contact_planner: 'a@b.test' })).status).toBe(403);
+    expect((await als(admin, 'staff', { contact_planner: 'geen adres' })).status).toBe(400);
+    expect((await als(admin, 'staff', {})).status).toBe(400);
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM dienstrooster_app_setting WHERE sleutel = 'mail.contact_planner'`).get()).toEqual({ n: 0 });
+  });
+
+  it('what waits in the queue is listed for the beheerder only, without addresses or texts', async () => {
+    const admin = person('ADMIN');
+    const planner = person('PLANNER');
+    const deelnemer = person('DEELNEMER');
+    // A period of its own for the queue row to belong to.
+    const ruleset = crypto.randomUUID();
+    db.prepare(`INSERT INTO dienstrooster_ruleset (id, naam, config_json, aangemaakt_op) VALUES (?, 'R', '{}', datetime('now'))`).run(ruleset);
+    const pool = crypto.randomUUID();
+    db.prepare(`INSERT INTO dienstrooster_pool (id, naam, ruleset_id, aangemaakt_op) VALUES (?, 'P', ?, datetime('now'))`).run(pool, ruleset);
+    const periode = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, status, aangemaakt_op)
+       VALUES (?, ?, 'Wachtrij', '2099-03-02', '2099-03-29', '2099-01-01T00:00', 'GEPUBLICEERD', datetime('now'))`
+    ).run(periode, pool);
+    db.prepare(
+      `INSERT INTO dienstrooster_mail_queue (id, period_id, swap_id, soort, melding_json, aangemaakt_op) VALUES (?, ?, NULL, 'RUILVERZOEK', ?, datetime('now'))`
+    ).run('wachtrij-test', periode, JSON.stringify({ personId: deelnemer, periodId: periode, soort: 'RUILVERZOEK', template: { sleutel: 'X' }, placeholders: { details: 'geheim@example.test' }, anderen: [], linkIntro: '' }));
+    try {
+      const alsAdmin = (await (await GET(request('GET', admin))).json()).data;
+      expect(alsAdmin.wachtrij).toBeGreaterThanOrEqual(1);
+      expect(alsAdmin.wachtrij_items.map((i: { soort: string }) => i.soort)).toContain('RUILVERZOEK');
+      expect(JSON.stringify(alsAdmin.wachtrij_items)).not.toContain('example.test');
+      const alsPlanner = (await (await GET(request('GET', planner))).json()).data;
+      expect(alsPlanner.wachtrij).toBeGreaterThanOrEqual(1);
+      expect(alsPlanner.wachtrij_items).toEqual([]);
+    } finally {
+      db.prepare(`DELETE FROM dienstrooster_mail_queue WHERE id = 'wachtrij-test'`).run();
+      db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periode);
+      db.prepare('DELETE FROM dienstrooster_pool WHERE id = ?').run(pool);
+      db.prepare('DELETE FROM dienstrooster_ruleset WHERE id = ?').run(ruleset);
+    }
   });
 
   it('is for planners only', async () => {

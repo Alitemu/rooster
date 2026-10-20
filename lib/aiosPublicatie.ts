@@ -32,7 +32,7 @@ import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import { writeAuditLog } from '@/lib/auditLog';
 import { formatSwapDate, periodStatusLabel } from '@/lib/aiosTeksten';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
-import { vervalOpenAiosRuilen } from '@/lib/aiosRuilen';
+import { meldAiosRuilenIngetrokken, trekAlleOpenAiosRuilenIn, type IngetrokkenRuil } from '@/lib/aiosRuilen';
 
 export interface AiosGepubliceerd {
   person_id: string;
@@ -324,6 +324,7 @@ export function trekAiosPublicatieIn(period: AiosUitnodigPeriode, actorId: strin
   if (period.status !== 'GEPUBLICEERD') {
     return nee(409, 'INVALID_STATUS', `Intrekken kan alleen bij een gepubliceerd rooster, niet in status "${periodStatusLabel(period.status)}".`);
   }
+  let ingetrokken: IngetrokkenRuil[] = [];
   db.transaction(() => {
     db.prepare(
       `UPDATE dienstrooster_schedule_period
@@ -331,8 +332,8 @@ export function trekAiosPublicatieIn(period: AiosUitnodigPeriode, actorId: strin
            definitief_op = NULL, definitief_door_person_id = NULL, voorlopig_rooster_json = NULL, row_version = row_version + 1
        WHERE id = ?`
     ).run(period.id);
-    // Swaps only on a published roster: what was asked can't go through any more.
-    vervalOpenAiosRuilen(period.id);
+    // Swaps only on a definitief roster: what was asked can't go through any more. Withdrawn, told after the commit.
+    ingetrokken = trekAlleOpenAiosRuilenIn(period.id);
     writeAuditLog({
       actorId,
       entiteit: 'period',
@@ -342,6 +343,7 @@ export function trekAiosPublicatieIn(period: AiosUitnodigPeriode, actorId: strin
       nieuw: { wijziging: 'publicatie rooster AIOS ingetrokken', status: 'GEGENEREERD' },
     });
   })();
+  meldAiosRuilenIngetrokken(period, ingetrokken);
   return { ok: true, mail: { verstuurd: true, aantal: 0 } };
 }
 

@@ -30,7 +30,7 @@ import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { loadAlleAiosRedenen } from '@/lib/aiosReden';
-import { sluitVervallenAiosRuilen } from '@/lib/aiosRuilen';
+import { meldAiosRuilenIngetrokken, trekOnmogelijkeAiosRuilenIn, type IngetrokkenRuil } from '@/lib/aiosRuilen';
 
 // What the marks say instead: a planner overriding a mark is told it as the mark.
 const ALS_MARKERING: ReadonlySet<Regel> = new Set(['1_GEBLOKKEERD', '1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT', '1_AFWEZIG_OF_PARTTIME']);
@@ -308,6 +308,7 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
 
   const op = new Date().toISOString();
   let gevolgen: Waarschuwing[] = [];
+  let ingetrokken: IngetrokkenRuil[] = [];
   const geschreven = db.transaction(() => {
     const voor = huidigRooster(period.id);
     if (wijzigingen.some((w) => (voor.get(w.dienst_id) ?? null) !== w.was)) return false;
@@ -346,8 +347,8 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
     const blok = blokNietHeel(ctx, ids, na);
     if (blok) gevolgen.push(blok);
     gevolgen = gevolgen.filter((w, i) => gevolgen.findIndex((x) => x.tekst === w.tekst) === i);
-    // A swap asked for one of these diensten can never go through now.
-    sluitVervallenAiosRuilen(period.id);
+    // A swap asked for one of these diensten can never go through now: withdrawn, those involved are told after the commit.
+    ingetrokken = trekOnmogelijkeAiosRuilenIn(period.id);
     db.prepare(
       `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
        VALUES (?, ?, 'period', ?, 'UPDATE', ?, ?, ?)`
@@ -367,5 +368,6 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
     return true;
   })();
   if (!geschreven) return nee(409, 'STALE', AIOS_ROOSTER_VERANDERD);
+  meldAiosRuilenIngetrokken(period, ingetrokken);
   return { ok: true, waarschuwingen: gevolgen, terug: wijzigingen.map((w) => ({ dienst_id: w.dienst_id, aios_id: w.was, was: w.aios_id })) };
 }

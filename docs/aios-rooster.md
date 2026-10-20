@@ -413,11 +413,16 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   waarmee de ruil voor allebei binnen de harde regels blijft. Eigen
   blokkades met de hand tellen dan niet: die geeft de AIOS zelf op. De
   collega keurt goed of wijst af, met een reden als die wil. De aanvrager kan
-  intrekken. Een verzoek vervalt als een van de diensten intussen bij iemand
-  anders is, of als de publicatie wordt ingetrokken. De mail over een verzoek
-  noemt de aanvrager niet, zoals bij de achterwacht. Gaat de ruil door, dan
-  krijgen de planner en het roosterbureau bericht via de stroom van de AIOS.
-  De planner ziet alle verzoeken op de pagina van de periode.
+  intrekken. Een verzoek wordt ingetrokken (er is geen status vervallen meer,
+  0.102.0) als een van de diensten intussen bij iemand anders is, als de
+  planner een dienst met de hand wijzigt of als de publicatie wordt
+  ingetrokken. Ruilen kan alleen bij een definitief rooster. De mail over een
+  verzoek noemt de aanvrager niet, zoals bij de achterwacht. Gaat de ruil door,
+  dan krijgen de aanvrager en de collega een bevestiging en het Roosterbureau
+  één mail met de twee en de planner in de CC. Na 6 tot 7 dagen (09:00 naar
+  beneden afgerond) krijgt de collega een herinnering, ook met een knop voor de
+  aanvrager en de planner. De planner ziet alle verzoeken op de pagina van de
+  periode, met of de collega ze al heeft geopend.
 
 ## In de app
 

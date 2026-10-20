@@ -384,6 +384,17 @@ async function createTables() {
       aangemaakt_op TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_mail_queue (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      ruil_id TEXT,
+      soort TEXT NOT NULL,
+      melding_json TEXT NOT NULL,
+      pogingen INTEGER NOT NULL DEFAULT 0,
+      laatste_poging_op TEXT,
+      aangemaakt_op TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS dienstrooster_app_setting (
       sleutel TEXT PRIMARY KEY NOT NULL,
       waarde TEXT NOT NULL,
@@ -541,6 +552,9 @@ async function createTables() {
       reden_afwijzing TEXT,
       aangemaakt_op TEXT NOT NULL,
       beantwoord_op TEXT,
+      gezien_op TEXT,
+      laatste_herinnering_op TEXT,
+      laatste_herinnering_door TEXT,
       CONSTRAINT aios_ruil_status_check CHECK(status IN ('IN_BEHANDELING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN', 'VERVALLEN'))
     );
     CREATE INDEX IF NOT EXISTS aios_ruil_periode_idx ON dienstrooster_aios_ruil(period_id);
@@ -664,6 +678,7 @@ const SEEDED_TABLES = [
   'dienstrooster_aios_beginstand',
   'dienstrooster_aios_ruil',
   'dienstrooster_mail_queue',
+  'dienstrooster_aios_mail_queue',
   // References a person (gewijzigd_door), so a reset clears it as well.
   'dienstrooster_app_setting',
   'dienstrooster_notification_template',
@@ -709,6 +724,13 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_swap_request: {
     reden_afwijzing: 'TEXT',
     melding_id: 'TEXT',
+    laatste_herinnering_op: 'TEXT',
+    laatste_herinnering_door: 'TEXT',
+  },
+  dienstrooster_aios_ruil: {
+    gezien_op: 'TEXT',
+    laatste_herinnering_op: 'TEXT',
+    laatste_herinnering_door: 'TEXT',
   },
   dienstrooster_schedule_period: {
     auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
@@ -784,6 +806,37 @@ function applyMissingColumns() {
   }
   for (const backfill of backfills) db.exec(backfill);
   repairDefinitiefBackfill();
+  repairRuilen();
+}
+
+/**
+ * Swapping needs a definitief roster (0.102.0), and a lapsed request is
+ * ingetrokken, there is no status vervallen. Safe on every start: what it
+ * touches is not allowed to exist, so there is nothing to find once it
+ * has run. The same two lines are in migration 0033 for a database the
+ * migrations built.
+ */
+function repairRuilen() {
+  const hasTable = (naam: string) => Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(naam));
+  if (hasTable('dienstrooster_aios_ruil')) {
+    db.exec(`UPDATE dienstrooster_aios_ruil SET status = 'INGETROKKEN' WHERE status = 'VERVALLEN'`);
+    const n = db
+      .prepare(
+        `UPDATE dienstrooster_aios_ruil SET status = 'INGETROKKEN', reden_afwijzing = 'Het rooster is nog voorlopig.', beantwoord_op = ?
+         WHERE status = 'IN_BEHANDELING' AND period_id IN (SELECT id FROM dienstrooster_schedule_period WHERE definitief_op IS NULL)`
+      )
+      .run(new Date().toISOString()).changes;
+    if (n > 0) console.log(`  Withdrew ${n} AIOS swap request(s) on a voorlopig roster`);
+  }
+  if (hasTable('dienstrooster_swap_request')) {
+    const n = db
+      .prepare(
+        `UPDATE dienstrooster_swap_request SET status = 'INGETROKKEN', reden_afwijzing = 'Het rooster is nog voorlopig.', beantwoord_op = ?
+         WHERE status = 'PENDING' AND periode_id IN (SELECT id FROM dienstrooster_schedule_period WHERE definitief_op IS NULL)`
+      )
+      .run(new Date().toISOString()).changes;
+    if (n > 0) console.log(`  Withdrew ${n} swap request(s) on a voorlopig roster`);
+  }
 }
 
 /**

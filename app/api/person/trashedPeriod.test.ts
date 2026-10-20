@@ -74,6 +74,7 @@ beforeAll(async () => {
     eind_datum: '2099-04-26',
     deadline: '2099-01-01T00:00',
     status: 'GEPUBLICEERD',
+    definitief_op: now,
     bevroren_ruleset_json: '{"windowWeeks":2}',
     aangemaakt_op: now,
   });

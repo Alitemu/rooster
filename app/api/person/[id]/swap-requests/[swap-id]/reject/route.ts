@@ -125,6 +125,10 @@ export async function POST(
           inhoud: rendered.inhoud,
         });
       }
+      // The colleague answered: the notice about the request is read, whatever the button in the notices says.
+      if (swapRequest.melding_id) {
+        db.prepare('UPDATE dienstrooster_notification SET gelezen = 1 WHERE id = ?').run(swapRequest.melding_id);
+      }
 
       db.prepare(
         `INSERT INTO dienstrooster_audit_log

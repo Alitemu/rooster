@@ -6,10 +6,14 @@ import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
 import { getBaseUrl } from './setup';
 
 /**
- * Step 4f (docs/aios-rooster.md, "Ruilen"): on a published AIOS roster one
+ * Step 4f (docs/aios-rooster.md, "Ruilen"): on a definitief AIOS roster one
  * AIOS asks another, on their own link, to swap a Saturday dagdienst for
- * the colleague's of a week later; the colleague approves on theirs, and
- * both rosters show it. At 375 pixels, each in a browser of their own.
+ * the colleague's of a week later; the requester can remind the colleague
+ * (after a yes in the box); the colleague approves on theirs, and both
+ * rosters show it. Their requests in two categories, each with its filter on
+ * status and the number behind every option. On a voorlopig roster the page
+ * says why nothing can be swapped yet. At 375 pixels, each in a browser of
+ * their own.
  */
 
 const START = '2094-09-01'; // a Wednesday
@@ -42,8 +46,8 @@ test.beforeAll(() => {
   const pool = (db.prepare(`SELECT id FROM dienstrooster_pool WHERE type = 'AIOS' ORDER BY rowid LIMIT 1`).get() as { id: string }).id;
   ids.period = uuid();
   db.prepare(
-    `INSERT INTO dienstrooster_schedule_period (id, naam, pool_id, start_datum, eind_datum, deadline, status, auto_herinneren, aangemaakt_op)
-     VALUES (?, ?, ?, ?, ?, ?, 'GEPUBLICEERD', 0, datetime('now'))`
+    `INSERT INTO dienstrooster_schedule_period (id, naam, pool_id, start_datum, eind_datum, deadline, status, definitief_op, auto_herinneren, aangemaakt_op)
+     VALUES (?, ?, ?, ?, ?, ?, 'GEPUBLICEERD', datetime('now'), 0, datetime('now'))`
   ).run(ids.period, `AIOS ruilen e2e ${stamp}`, pool, START, EIND, '2094-07-01T17:00');
   db.transaction(() => persistAiosSlots(ids.period, aiosShiftTypes(pool)!, START, EIND))();
   const persoon = (n: string) => {
@@ -99,14 +103,38 @@ test('one AIOS asks, the other approves, and both rosters show the swap', async 
   await kandidaten.getByLabel('Toelichting voor je collega (mag leeg)').fill('familieweekend');
   await kandidaten.getByRole('button', { name: `Vraag ${naamB}: Dagdienst, za 11 sep` }).click();
   await expect(ruilenA.getByText(/^Je ruilverzoek is verstuurd\./)).toBeVisible();
-  await expect(ruilenA.getByText(/in behandeling/)).toBeVisible();
+  // Their requests: "Jouw ruilverzoeken" with a filter and the number behind every status.
+  const verzonden = ruilenA.getByTestId('aios-ruilen-verzonden');
+  await expect(verzonden.getByRole('heading', { name: 'Jouw ruilverzoeken' })).toBeVisible();
+  await expect(verzonden.getByLabel('Filter op status: Jouw ruilverzoeken').locator('option')).toHaveText([
+    'Alle statussen (1)',
+    'In afwachting (1)',
+    'Goedgekeurd (0)',
+    'Afgewezen (0)',
+    'Ingetrokken (0)',
+  ]);
+  await expect(verzonden.getByTestId('aios-ruil-verzonden')).toContainText('In afwachting');
+  // A reminder: only after the yes, which says there was none yet.
+  const herinnering = verzonden.getByTestId('aios-ruil-herinnering');
+  await expect(herinnering).toContainText('Er is nog geen herinnering gestuurd.');
+  await herinnering.getByRole('button', { name: 'Herinnering sturen' }).click();
+  await expect(herinnering.getByRole('alertdialog')).toContainText('Weet je zeker dat je een herinnering wilt sturen');
+  await herinnering.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(herinnering).toContainText('Er is nog geen herinnering gestuurd.');
+  await herinnering.getByRole('button', { name: 'Herinnering sturen' }).click();
+  await herinnering.getByRole('button', { name: 'Ja, stuur herinnering' }).click();
+  await expect(herinnering).toContainText('Laatste herinnering:');
+  await expect(herinnering.getByRole('button', { name: 'Herinnering sturen' })).toBeDisabled();
   expect(await a.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
   const ctxB = await browser.newContext({ viewport: { width: 375, height: 800 } });
   const b = await ctxB.newPage();
   await b.goto(ids.linkB);
+  const ontvangen = b.getByTestId('aios-ruilen-ontvangen');
+  await expect(ontvangen.getByRole('heading', { name: 'Ontvangen ruilverzoeken' })).toBeVisible();
+  await expect(ontvangen.getByLabel('Filter op status: Ontvangen ruilverzoeken').locator('option').first()).toHaveText('Alle statussen (1)');
   const verzoek = b.getByTestId('aios-ruil-aan-mij');
-  await expect(verzoek).toContainText('vraagt je om te ruilen');
+  await expect(verzoek).toContainText('In afwachting');
   await expect(verzoek).toContainText('Toelichting: familieweekend');
   await verzoek.getByRole('button', { name: 'Goedkeuren' }).click();
   await expect(b.getByText('Goedgekeurd. Je rooster is aangepast.', { exact: false })).toBeVisible();
@@ -116,7 +144,24 @@ test('one AIOS asks, the other approves, and both rosters show the swap', async 
   expect(wieHeeft(ids.ddB)).toBe(ids.a);
   await a.reload();
   await expect(a.getByTestId('aios-mijn-rooster').getByText(/za 11 sep/)).toBeVisible();
-  await expect(a.getByTestId('aios-ruilen').getByText(/goedgekeurd/)).toBeVisible();
+  // The default filter shows what waits; "Alle statussen" shows it as approved.
+  await a.getByTestId('aios-ruilen').getByLabel('Filter op status: Jouw ruilverzoeken').selectOption('');
+  await expect(a.getByTestId('aios-ruil-verzonden')).toContainText('Goedgekeurd');
   await ctxA.close();
   await ctxB.close();
+});
+
+test('on a voorlopig roster the page says why nothing can be swapped, and asks for no request', async ({ browser }) => {
+  db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = NULL WHERE id = ?`).run(ids.period);
+  try {
+    const ctx = await browser.newContext({ viewport: { width: 375, height: 800 } });
+    const page = await ctx.newPage();
+    await page.goto(ids.linkA);
+    const voorlopig = page.getByTestId('aios-ruilen-voorlopig');
+    await expect(voorlopig).toContainText('Ruilen kan pas als het rooster definitief is. Klopt er iets niet in je voorlopige rooster? Meld dat bij de planner');
+    await expect(page.getByTestId('aios-ruilen').getByRole('button', { name: /^Ruilen: / })).toHaveCount(0);
+    await ctx.close();
+  } finally {
+    db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = datetime('now') WHERE id = ?`).run(ids.period);
+  }
 });

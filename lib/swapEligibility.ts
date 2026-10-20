@@ -5,7 +5,10 @@
  * being involved, so it must only ever touch a roster that is already
  * final and still in the future:
  *
- * - GEPUBLICEERD only. On a CONCEPT/GESLOTEN/GEGENEREERD period the
+ * - Definitief only (GEPUBLICEERD with `definitief_op` set). A voorlopig
+ *   roster is there for the participants to check: if something is wrong
+ *   the planner puts it right first, and swapping on it would move
+ *   diensten that may still change. On a CONCEPT/GESLOTEN/GEGENEREERD period the
  *   planner is still working on the roster, and an approved swap writes
  *   `bron = 'MANUAL'` on both assignments - which a regenerate then
  *   deliberately preserves (see lib/rosterGaps.ts's clearSolverAssignments).
@@ -20,7 +23,7 @@
 
 export interface SwapEligibilityResult {
   allowed: boolean;
-  code?: 'PERIOD_NOT_PUBLISHED' | 'SHIFT_IN_PAST';
+  code?: 'PERIOD_NOT_PUBLISHED' | 'PERIOD_NOT_DEFINITIEF' | 'SHIFT_IN_PAST';
   message?: string;
 }
 
@@ -31,14 +34,21 @@ function todayISO(now: Date): string {
 }
 
 export function checkSwapAllowed(
-  params: { periodStatus: string; slotDates: Array<string | null | undefined> },
+  params: { periodStatus: string; definitiefOp: string | null | undefined; slotDates: Array<string | null | undefined> },
   now: Date = new Date()
 ): SwapEligibilityResult {
   if (params.periodStatus !== 'GEPUBLICEERD') {
     return {
       allowed: false,
       code: 'PERIOD_NOT_PUBLISHED',
-      message: 'Ruilen kan pas als het rooster gepubliceerd is',
+      message: 'Ruilen kan pas als het rooster definitief is',
+    };
+  }
+  if (!params.definitiefOp) {
+    return {
+      allowed: false,
+      code: 'PERIOD_NOT_DEFINITIEF',
+      message: 'Ruilen kan pas als het rooster definitief is. Klopt er iets niet in je voorlopige rooster? Meld dat bij de planner.',
     };
   }
 

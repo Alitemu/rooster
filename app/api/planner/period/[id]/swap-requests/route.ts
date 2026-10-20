@@ -33,6 +33,8 @@ export interface PlannerSwapRequest {
   reden_afwijzing: string | null;
   /** null = unknown (request predates the notification link, or no notification was sent). */
   gelezen: boolean | null;
+  laatste_herinnering_op: string | null;
+  laatste_herinnering_door: 'AUTOMATISCH' | 'AANVRAGER' | 'PLANNER' | null;
 }
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -57,6 +59,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       .prepare(
         `SELECT
            sr.id, sr.status, sr.aangemaakt_op, sr.beantwoord_op, sr.opmerkingen, sr.reden_afwijzing,
+           sr.laatste_herinnering_op, sr.laatste_herinnering_door,
            ap.codenaam AS aanvrager_codenaam,
            rp.codenaam AS respondent_codenaam,
            aos.datum AS aangeboden_datum, ast.teller AS aangeboden_teller,
@@ -77,9 +80,12 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       Omit<PlannerSwapRequest, 'gelezen'> & { melding_gelezen: number | null; melding_bestaat: string | null }
     >;
 
+    // A request that was answered has been read, whatever the button in the
+    // notices says: the colleague had to open it to answer. That also puts
+    // right the requests answered before the notice was marked read by itself.
     const swapRequests: PlannerSwapRequest[] = rows.map(({ melding_gelezen, melding_bestaat, ...rest }) => ({
       ...rest,
-      gelezen: melding_bestaat ? melding_gelezen === 1 : null,
+      gelezen: rest.status === 'GOEDGEKEURD' || rest.status === 'AFGEWEZEN' ? true : melding_bestaat ? melding_gelezen === 1 : null,
     }));
 
     return NextResponse.json({ success: true, data: { swap_requests: swapRequests } });

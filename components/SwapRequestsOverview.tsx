@@ -14,6 +14,7 @@
 import { useState, useEffect } from 'react';
 import { swapStatusLabel } from '@/lib/statusLabels';
 import { withBasePath } from '@/lib/basePath';
+import { RuilHerinnering } from '@/components/RuilHerinnering';
 
 interface SwapRequestRow {
   id: string;
@@ -29,6 +30,8 @@ interface SwapRequestRow {
   opmerkingen: string | null;
   reden_afwijzing: string | null;
   gelezen: boolean | null;
+  laatste_herinnering_op: string | null;
+  laatste_herinnering_door: string | null;
 }
 
 interface Props {
@@ -67,6 +70,8 @@ export function SwapRequestsOverview({ periodId }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  // Bumped after a reminder, so the list shows when it went.
+  const [vers, setVers] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -87,7 +92,7 @@ export function SwapRequestsOverview({ periodId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [periodId]);
+  }, [periodId, vers]);
 
   if (loading) return <div className="p-4 text-center text-neutral-600">Ruilverzoeken laden...</div>;
   if (error) return <div className="p-4 text-center text-red-600">{error}</div>;
@@ -156,7 +161,18 @@ export function SwapRequestsOverview({ periodId }: Props) {
                     </div>
                     {r.opmerkingen && <div className="text-xs text-neutral-600 italic mt-1">&ldquo;{r.opmerkingen}&rdquo;</div>}
                     {r.reden_afwijzing && (
-                      <div className="text-xs text-red-700 mt-1">Reden van afwijzen: &ldquo;{r.reden_afwijzing}&rdquo;</div>
+                      <div className="text-xs text-red-700 mt-1">
+                        {r.status === 'AFGEWEZEN' ? 'Reden van afwijzen' : 'Reden'}: &ldquo;{r.reden_afwijzing}&rdquo;
+                      </div>
+                    )}
+                    {r.status === 'PENDING' && (
+                      <RuilHerinnering
+                        stuur={() => fetch(withBasePath(`/api/planner/period/${periodId}/swap-requests/${r.id}/remind`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bevestigd: true }) })}
+                        laatste={r.laatste_herinnering_op}
+                        door={r.laatste_herinnering_door}
+                        eigen={false}
+                        onKlaar={() => setVers((v) => v + 1)}
+                      />
                     )}
                   </td>
                   <td className="px-3 py-2 whitespace-nowrap">

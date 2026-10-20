@@ -18,7 +18,7 @@ async function antwoord(res: Response, fallback: string) {
 
 /** The AIOS's mail: whether it can go, and for the beheerder the AIOS's flow mailbox. */
 export function AiosMailPaneel({ beheerder, onChanged }: { beheerder: boolean; onChanged: () => void }) {
-  const [status, setStatus] = useState<{ ingesteld: boolean; account: boolean; uitgeschakeld: boolean; verzendlijst_aan: string | null; laatste_fout: { melding: string } | null } | null>(null);
+  const [status, setStatus] = useState<{ ingesteld: boolean; account: boolean; uitgeschakeld: boolean; verzendlijst_aan: string | null; laatste_fout: { melding: string } | null; wachtrij: number } | null>(null);
   const [adres, setAdres] = useState('');
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -73,6 +73,11 @@ export function AiosMailPaneel({ beheerder, onChanged }: { beheerder: boolean; o
         <strong>{status.verzendlijst_aan ?? 'nog niet ingesteld'}</strong>
       </p>
       {status.laatste_fout && <p className="text-red-800">Laatste keer mislukt: {status.laatste_fout.melding}</p>}
+      {status.wachtrij > 0 && (
+        <p className="text-amber-900" data-testid="aios-mail-wachtrij">
+          {status.wachtrij} {status.wachtrij === 1 ? 'ruilmail wacht' : 'ruilmails wachten'} tot het versturen weer lukt. Ze gaan vanzelf, elk uur een nieuwe poging.
+        </p>
+      )}
       {beheerder && (
         <div className="flex flex-wrap items-end gap-2">
           <div className="min-w-0 flex-1">

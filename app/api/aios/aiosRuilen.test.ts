@@ -5,7 +5,7 @@ import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
 import { aiosPersoonlijkeLink, aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
-import { aiosEenheden, aiosRuilKandidaten, doorgevenAan, losseSleutel } from '@/lib/aiosRuilen';
+import { aiosEenheden, aiosRuilKandidaten, losseSleutel } from '@/lib/aiosRuilen';
 import { trekAiosPublicatieIn } from '@/lib/aiosPublicatie';
 import { loadAiosPeriode, setAiosVoorkeur } from '@/lib/aiosPreferences';
 import { saveAiosReden } from '@/lib/aiosReden';
@@ -28,10 +28,12 @@ import { buildWorld, deleteRowsAfter, insert, now, personCookie, rowidSnapshot, 
  * - only colleagues' equal eenheden that break no hard rule for either (L3),
  *   still to come;
  * - a request anonymous by mail; approved, the diensten change hands, the
- *   planner and the roosterbureau are told, other requests for them lapse;
- *   rejected with a reason; taken back; lapsed when the planner changed one
- *   by hand or the publication is withdrawn;
- * - only on a published roster, only the AIOS's own.
+ *   requester, the colleague and the roosterbureau (the two and the Planner
+ *   in the CC) are told, other requests for them are withdrawn;
+ *   rejected with a reason; taken back; withdrawn (there is no status
+ *   vervallen) when the planner changed one by hand or the publication is
+ *   withdrawn;
+ * - only on a definitief roster, only the AIOS's own.
  */
 
 const AAN_AIOS = 'stroom-aios@example.test';
@@ -89,6 +91,7 @@ beforeAll(async () => {
     eind_datum: EIND,
     deadline: '2094-05-01T17:00',
     status: 'GEPUBLICEERD',
+    definitief_op: now,
     auto_herinneren: 0,
     aangemaakt_op: now,
   });
@@ -179,7 +182,7 @@ describe('a request', () => {
 
   it('asked: anonymous by mail to the colleague, a confirmation to the requester', async () => {
     const r = await vraag(w.x, `blok:${blokVan('ND', '2094-07-14')}`, `blok:${blokVan('ND', '2094-07-28')}`, 'ik heb een cursus');
-    expect(r.status).toBe(200);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
     expect(r.json.data.mail).toBe(true);
     expect(status(r.json.data.id)).toBe('IN_BEHANDELING');
     await waitForMails(sink, 2);
@@ -194,9 +197,16 @@ describe('a request', () => {
     expect((await vraag(w.x, `blok:${blokVan('ND', '2094-07-14')}`, `blok:${blokVan('ND', '2094-07-28')}`)).json.error.code).toBe('DUPLICATE');
   });
 
-  it('on both pages', async () => {
+  it('on both pages; the planner reads "gelezen" once the colleague has opened their requests, not before', async () => {
+    const gezien = () =>
+      (db.prepare('SELECT gezien_op FROM dienstrooster_aios_ruil WHERE period_id = ? AND status = ?').all(w.period, 'IN_BEHANDELING') as Array<{ gezien_op: string | null }>).map(
+        (r) => r.gezien_op
+      );
     const x = (await (await overzicht(preq(w.x, ''), pctx(w.x))).json()).data;
+    // The requester's own page is not the colleague's reading.
+    expect(gezien()).toEqual([null]);
     const y = (await (await overzicht(preq(w.y, ''), pctx(w.y))).json()).data;
+    expect(gezien().every((g) => g !== null)).toBe(true);
     expect(x.uit).toHaveLength(1);
     expect(y.in).toHaveLength(1);
     expect(y.in[0]).toMatchObject({ aanvrager: cn('x'), status: 'IN_BEHANDELING', toelichting: 'ik heb een cursus' });
@@ -206,7 +216,7 @@ describe('a request', () => {
 });
 
 describe('the answer', () => {
-  it('approved on a voorlopig roster: the diensten change hands, only the planner is told, the roosterbureau is not', async () => {
+  it('approved: the diensten change hands, the requester, the colleague and the roosterbureau are told', async () => {
     const y = (await (await overzicht(preq(w.y, ''), pctx(w.y))).json()).data;
     const id = y.in[0].id;
     // Only the colleague asked can approve it.
@@ -220,19 +230,30 @@ describe('the answer', () => {
       .prepare(`SELECT person_id, oorspronkelijke_person_id FROM dienstrooster_assignment_edit WHERE periode_id = ? AND edit_type = 'RUIL'`)
       .all(w.period);
     expect(edits).toHaveLength(6);
-    await waitForMails(sink, 2);
-    const lijsten = sink.received.map((m) => verzendlijstPayload(m.raw));
-    const uitkomst = lijsten.find((l) => l.soort === 'RUIL_UITKOMST')!.berichten[0];
-    expect(uitkomst.tekst).toContain(`${cn('y')} heeft je ruil goedgekeurd`);
-    const door = lijsten.find((l) => l.soort === 'RUIL_DOORGEVEN')!.berichten;
-    expect(door.map((b) => b.codenaam)).toEqual(['Planner']);
-    expect(door[0].personen.sort()).toEqual([cn('x'), cn('y')].sort());
+    await waitForMails(sink, 3);
+    const berichten = sink.received.map((m) => verzendlijstPayload(m.raw));
+    // The requester: the outcome, with the colleague's name.
+    const aanvrager = berichten.find((l) => l.berichten[0].codenaam === cn('x'))!.berichten[0];
+    expect(aanvrager.soort).toBe('RUIL_UITKOMST');
+    expect(aanvrager.tekst).toContain(`${cn('y')} heeft je ruil goedgekeurd`);
+    // The colleague who approved: a confirmation, with the requester's name.
+    const collega = berichten.find((l) => l.berichten[0].codenaam === cn('y'))!.berichten[0];
+    expect(collega.soort).toBe('RUIL_UITKOMST');
+    expect(collega.onderwerp).toBe('Je hebt een ruil goedgekeurd');
+    expect(collega.tekst).toContain(`Je hebt het ruilverzoek van ${cn('x')} goedgekeurd`);
+    // One bericht to the Roosterbureau; the two and the Planner in the CC, codenamen only.
+    const door = berichten.filter((l) => l.soort === 'RUIL_DOORGEVEN');
+    expect(door).toHaveLength(1);
+    expect(door[0].berichten).toHaveLength(1);
+    expect(door[0].berichten[0]).toMatchObject({ codenaam: 'Roosterbureau' });
+    expect((door[0].berichten[0] as any).cc.sort()).toEqual([cn('x'), cn('y'), 'Planner'].sort());
+    expect(door[0].berichten[0].personen).toEqual(expect.arrayContaining([cn('x'), cn('y')]));
     expect((await goedkeuren(preq(w.y, `/${id}/goedkeuren`, 'POST', {}), rctx(w.y, id))).status).toBe(409);
   });
 
   it('rejected with a reason; the mail says no more than that', async () => {
     const r = await vraag(w.x, `dienst:${slot('DD', '2094-07-24').id}`, `dienst:${slot('DD', '2094-08-08').id}`);
-    expect(r.status).toBe(200);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
     await waitForMails(sink, 2);
     sink.received.length = 0;
     const res = await afwijzen(preq(w.z, `/${r.json.data.id}/afwijzen`, 'POST', { reden: 'dan ben ik weg' }), rctx(w.z, r.json.data.id));
@@ -248,7 +269,7 @@ describe('the answer', () => {
   it('taken back by who asked, not by the colleague', async () => {
     // x now has y's old night block (28 to 30 juli): the Saturday evening after it is out of reach, the dagdienst of 8 augustus not.
     const r = await vraag(w.x, `dienst:${slot('DD', '2094-07-24').id}`, `dienst:${slot('DD', '2094-08-08').id}`);
-    expect(r.status).toBe(200);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
     const id = r.json.data.id;
     await waitForMails(sink, 2);
     expect((await intrekken(preq(w.z, `/${id}/intrekken`, 'POST', {}), rctx(w.z, id))).status).toBe(404);
@@ -260,11 +281,13 @@ describe('the answer', () => {
   });
 });
 
-describe('lapsed', () => {
-  it('when the planner gives one of its diensten to someone else by hand', async () => {
+describe('withdrawn', () => {
+  it('when the planner gives one of its diensten to someone else by hand: INGETROKKEN, both are told', async () => {
     const dd = slot('DD', '2094-07-24').id;
     const r = await vraag(w.x, `dienst:${dd}`, `dienst:${slot('DD', '2094-08-08').id}`);
-    expect(r.status).toBe(200);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    await waitForMails(sink, 2);
+    sink.received.length = 0;
     const res = await wijzigen(
       new NextRequest(`http://localhost/api/aios/periode/${w.period}/rooster/wijzigen`, {
         method: 'POST',
@@ -274,20 +297,92 @@ describe('lapsed', () => {
       { params: Promise.resolve({ id: w.period }) }
     );
     expect(res.status).toBe(200);
-    expect(status(r.json.data.id)).toBe('VERVALLEN');
+    expect(status(r.json.data.id)).toBe('INGETROKKEN');
+    await waitForMails(sink, 2);
+    const ontvangers = sink.received.map((m) => verzendlijstPayload(m.raw).berichten[0]);
+    expect(ontvangers.map((b) => b.codenaam).sort()).toEqual([cn('x'), cn('z')].sort());
+    for (const b of ontvangers) {
+      expect(b.tekst).toContain('Het rooster is aangepast.');
+      // Neither names the other: the swap did not go through.
+      expect(b.personen).toEqual([b.codenaam]);
+    }
     const ja = await goedkeuren(preq(w.z, `/${r.json.data.id}/goedkeuren`, 'POST', {}), rctx(w.z, r.json.data.id));
     expect(ja.status).toBe(409);
   });
 
+  it('when another request for the same dienst is approved: the colleague of that one is told, the maker is not', async () => {
+    // x offers an uitloopdienst to both y and z at once; z says yes first.
+    const [ux, uy, uz] = ['2094-09-06', '2094-09-14', '2094-09-22'].map((d) => slot('UD', d).id);
+    geef([ux], w.x);
+    geef([uy], w.y);
+    geef([uz], w.z);
+    const metZ = await vraag(w.x, `dienst:${ux}`, `dienst:${uz}`);
+    const metY = await vraag(w.x, `dienst:${ux}`, `dienst:${uy}`);
+    expect(metZ.status, JSON.stringify(metZ.json)).toBe(200);
+    expect(metY.status, JSON.stringify(metY.json)).toBe(200);
+    await waitForMails(sink, 4);
+    sink.received.length = 0;
+    const ja = await goedkeuren(preq(w.z, `/${metZ.json.data.id}/goedkeuren`, 'POST', {}), rctx(w.z, metZ.json.data.id));
+    expect(ja.status).toBe(200);
+    expect(status(metY.json.data.id)).toBe('INGETROKKEN');
+    await waitForMails(sink, 4);
+    const berichten = sink.received.map((m) => verzendlijstPayload(m.raw).berichten[0]);
+    const aanY = berichten.find((b) => b.soort === 'RUIL_INGETROKKEN')!;
+    expect(aanY.codenaam).toBe(cn('y'));
+    expect(aanY.tekst).toContain('De dienst is al met een andere collega geruild.');
+    expect(aanY.tekst).toContain('Je hoeft niets meer te doen');
+    // The maker (x) reads the number in the approval mail, no separate mail about it.
+    expect(berichten.filter((b) => b.soort === 'RUIL_INGETROKKEN')).toHaveLength(1);
+    const uitkomst = berichten.find((b) => b.codenaam === cn('x') && b.soort === 'RUIL_UITKOMST')!;
+    expect(uitkomst.tekst).toContain('Je andere ruilverzoek voor deze dienst is ingetrokken.');
+  });
+
   it('when the publication is withdrawn; and no swapping then', async () => {
-    // v has the dagdienst of 24 juli now (the planner's change above).
+    // v has the dagdienst of 24 juli since the planner's change above.
     const r = await vraag(w.z, `dienst:${slot('DD', '2094-08-08').id}`, `dienst:${slot('DD', '2094-07-24').id}`);
-    expect(r.status).toBe(200);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    await waitForMails(sink, 2);
+    sink.received.length = 0;
     expect(trekAiosPublicatieIn(aiosUitnodigPeriode(w.period)!, w.planner).ok).toBe(true);
-    expect(status(r.json.data.id)).toBe('VERVALLEN');
+    expect(status(r.json.data.id)).toBe('INGETROKKEN');
+    await waitForMails(sink, 2);
+    expect(sink.received.map((m) => verzendlijstPayload(m.raw).berichten[0].codenaam).sort()).toEqual([cn('v'), cn('z')].sort());
     expect((await overzicht(preq(w.z, ''), pctx(w.z))).status).toBe(404);
-    expect((await vraag(w.z, `dienst:${slot('DD', '2094-08-08').id}`, `dienst:${slot('DD', '2094-07-24').id}`)).json.error.code).toBe('NOT_PUBLISHED');
-    db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD' WHERE id = ?`).run(w.period);
+    expect((await vraag(w.z, `dienst:${slot('DD', '2094-08-08').id}`, `dienst:${slot('DD', '2094-07-24').id}`)).json.error.code).toBe('NOT_DEFINITIEF');
+    db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD', definitief_op = ? WHERE id = ?`).run(now, w.period);
+  });
+});
+
+describe('only on a definitief roster', () => {
+  it('a voorlopig roster: no request, no approval, no candidates, no reminder; the page says why', async () => {
+    const dd = slot('DD', '2094-07-24').id;
+    const dd2 = slot('DD', '2094-08-08').id;
+    const holder = (id: string) => wieHeeft(id)!;
+    const van = holder(dd);
+    const naar = holder(dd2);
+    const open = await vraag(van, `dienst:${dd}`, `dienst:${dd2}`);
+    expect(open.status, JSON.stringify(open.json)).toBe(200);
+    db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = NULL WHERE id = ?`).run(w.period);
+    try {
+      const nieuw = await vraag(van, `dienst:${dd}`, `dienst:${slot('DD', '2094-08-15').id}`);
+      expect(nieuw.status).toBe(409);
+      expect(nieuw.json.error).toMatchObject({ code: 'NOT_DEFINITIEF' });
+      expect(nieuw.json.error.message).toMatch(/^Ruilen kan pas als het rooster definitief is\. Klopt er iets niet in je voorlopige rooster\? Meld dat bij de planner\.$/);
+      expect((await goedkeuren(preq(naar, `/${open.json.data.id}/goedkeuren`, 'POST', {}), rctx(naar, open.json.data.id))).status).toBe(409);
+      expect(status(open.json.data.id)).toBe('IN_BEHANDELING');
+      const k = await kandidaten(preq(van, `/kandidaten?eenheid=dienst:${dd}`), pctx(van));
+      expect(k.status).toBe(409);
+      const pagina = (await (await overzicht(preq(van, ''), pctx(van))).json()).data;
+      expect(pagina).toMatchObject({ ruilen_kan: false, eenheden: [] });
+    } finally {
+      db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = ? WHERE id = ?`).run(now, w.period);
+      db.prepare(`UPDATE dienstrooster_aios_ruil SET status = 'INGETROKKEN' WHERE id = ?`).run(open.json.data.id);
+    }
+    expect((await (await overzicht(preq(van, ''), pctx(van))).json()).data.ruilen_kan).toBe(true);
+  });
+
+  it('there is no status vervallen: nothing is ever written as VERVALLEN', () => {
+    expect(db.prepare(`SELECT COUNT(*) AS n FROM dienstrooster_aios_ruil WHERE status = 'VERVALLEN'`).get()).toEqual({ n: 0 });
   });
 });
 
@@ -297,7 +392,7 @@ describe('the planner', () => {
       params: Promise.resolve({ id: w.period }),
     });
     const lijst = (await res.json()).data;
-    expect(lijst.map((r: any) => r.status).sort()).toEqual(['AFGEWEZEN', 'GOEDGEKEURD', 'INGETROKKEN', 'VERVALLEN', 'VERVALLEN']);
+    expect(lijst.map((r: any) => r.status).sort()).toEqual(['AFGEWEZEN', 'GOEDGEKEURD', 'GOEDGEKEURD', 'INGETROKKEN', 'INGETROKKEN', 'INGETROKKEN', 'INGETROKKEN', 'INGETROKKEN']);
     const stafRes = await plannerRuilen(new NextRequest(`http://localhost/api/aios/periode/${w.period}/ruilen`, { headers: { cookie: staffCookie(staf.planner) } }), {
       params: Promise.resolve({ id: w.period }),
     });
@@ -338,7 +433,7 @@ describe("the AIOS's toelichting bij een dag (lib/aiosReden.ts)", () => {
     sink.received.length = 0;
     // v asks z for the dagdienst of 8 augustus, the one z gave a toelichting for.
     const r = await vraag(w.v, `dienst:${slot('DD', '2094-07-24').id}`, `dienst:${dagdienst}`);
-    expect(r.status).toBe(200);
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
     await waitForMails(sink, 2);
     const gezien = [JSON.stringify(r.json), ...sink.received.map((m) => JSON.stringify(verzendlijstPayload(m.raw)))];
     for (const wie of [w.v, w.z, w.x]) gezien.push(JSON.stringify(await (await overzicht(preq(wie, ''), pctx(wie))).json()));
@@ -358,20 +453,5 @@ describe("the AIOS's toelichting bij een dag (lib/aiosReden.ts)", () => {
       )
     );
     for (const tekst of gezien) expect(tekst).not.toContain(GEHEIM);
-  });
-});
-
-describe('who is told when a swap went through', () => {
-  it('the roosterbureau only once the roster is definitief; before, the planner alone', () => {
-    expect(doorgevenAan(w.period)).toEqual(['Planner']);
-    db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = ? WHERE id = ?`).run(now, w.period);
-    try {
-      expect(doorgevenAan(w.period)).toEqual(['Planner', 'Roosterbureau']);
-      // Not definitief when it is not even published.
-      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(w.period);
-      expect(doorgevenAan(w.period)).toEqual(['Planner']);
-    } finally {
-      db.prepare(`UPDATE dienstrooster_schedule_period SET definitief_op = NULL, status = 'GEPUBLICEERD' WHERE id = ?`).run(w.period);
-    }
   });
 });

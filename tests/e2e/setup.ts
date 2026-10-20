@@ -71,12 +71,13 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   }
 
   // Create period
+  // A published period is definitief (swapping needs that, 0.102.0): the planner's publication tests start from GEGENEREERD.
   db.prepare(`
     INSERT INTO dienstrooster_schedule_period (
-      id, pool_id, naam, status, start_datum, eind_datum, deadline, aangemaakt_op
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      id, pool_id, naam, status, start_datum, eind_datum, deadline, definitief_op, aangemaakt_op
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(periodId, pool.id, `E2E-Period-${timestamp}`, status,
-    '2027-01-04', '2027-02-21', '2026-12-31T23:59:59Z');
+    '2027-01-04', '2027-02-21', '2026-12-31T23:59:59Z', status === 'GEPUBLICEERD' ? new Date().toISOString() : null);
 
   // Create test users
   const users = createTestUsers(5, periodId);

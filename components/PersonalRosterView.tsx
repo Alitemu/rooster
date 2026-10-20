@@ -12,6 +12,7 @@
 
 import { useState, useEffect } from 'react';
 import { parseISO } from '@/lib/holidays';
+import { withBasePath } from '@/lib/basePath';
 import { SwapRequestDialog } from './SwapRequestDialog';
 import { SwapManagementPanel } from './SwapManagementPanel';
 
@@ -50,6 +51,8 @@ interface Props {
   blockedOverrideViolations?: SoftBlockViolation[];
   /** Reload the roster itself - an approved swap moves shifts. */
   onRosterChanged?: () => void;
+  /** Swapping only on a definitief roster: a voorlopig one says why not, and where to report what is wrong. */
+  definitief?: boolean;
 }
 
 interface WeekGroup {
@@ -66,7 +69,17 @@ export function PersonalRosterView({
   softBlockViolations = [],
   blockedOverrideViolations = [],
   onRosterChanged,
+  definitief = true,
 }: Props) {
+  // The planner's contact address, set by the beheerder: where to report a mistake in a voorlopig roster.
+  const [contactPlanner, setContactPlanner] = useState<string | null>(null);
+  useEffect(() => {
+    if (definitief) return;
+    fetch(withBasePath(`/api/person/${personId}/swap-contacts`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.success && setContactPlanner(data.data.planner ?? null))
+      .catch(() => {});
+  }, [definitief, personId]);
   const [weekView, setWeekView] = useState<Map<string, WeekGroup>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [showSwapManagement, setShowSwapManagement] = useState(false);
@@ -291,13 +304,32 @@ export function PersonalRosterView({
               Vraag een collega om een dienst te ruilen
             </p>
           </div>
-          <button
-            onClick={() => setSwapDialogOpen(true)}
-            className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            + Ruilverzoek
-          </button>
+          {definitief && (
+            <button
+              onClick={() => setSwapDialogOpen(true)}
+              className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              + Ruilverzoek
+            </button>
+          )}
         </div>
+
+        {!definitief && (
+          <p className="text-sm text-neutral-800" data-testid="ruilen-voorlopig">
+            Ruilen kan pas als het rooster definitief is. Klopt er iets niet in je voorlopige rooster? Meld dat bij de planner
+            {contactPlanner ? (
+              <>
+                {': mail naar '}
+                <a className="underline font-medium break-all" href={`mailto:${contactPlanner}`}>
+                  {contactPlanner}
+                </a>
+                .
+              </>
+            ) : (
+              '.'
+            )}
+          </p>
+        )}
 
         {swapSuccessMessage && (
           <div role="status" className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">

@@ -211,6 +211,20 @@ export function startAutoReminderScheduler(): void {
     } catch (error) {
       console.error('[aios-herinneringen] controle mislukt', error);
     }
+    // The reminders for swap requests open 6 to 7 days, and the AIOS's swap mails that could not go out earlier.
+    try {
+      const { stuurAutomatischeRuilHerinneringen } = await import('./lib/ruilHerinnering');
+      const achterwachtAantal = stuurAutomatischeRuilHerinneringen();
+      if (achterwachtAantal > 0) console.warn(`[ruilherinneringen] verstuurd: ${achterwachtAantal}`);
+      const { stuurAutomatischeAiosRuilHerinneringen } = await import('./lib/aiosRuilen');
+      const aantal = stuurAutomatischeAiosRuilHerinneringen();
+      if (aantal > 0) console.warn(`[aios-ruilherinneringen] verstuurd: ${aantal}`);
+      const { flushAiosMailWachtrij } = await import('./lib/aiosRuilMail');
+      const { verstuurd, over } = await flushAiosMailWachtrij();
+      if (verstuurd > 0 || over > 0) console.warn(`[aios-ruilmails] alsnog verstuurd: ${verstuurd}, wachten nog: ${over}`);
+    } catch (error) {
+      console.error('[aios-ruilherinneringen] controle mislukt', error);
+    }
     // Today's copy of the database, if there is none yet (lib/dbBackup.ts).
     try {
       const { runDailyDatabaseBackup } = await import('./lib/dbBackup');

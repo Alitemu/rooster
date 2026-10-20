@@ -539,6 +539,34 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.102.0:**
+
+- *Ruilen alleen bij een definitief rooster* (achterwacht en AIOS). Bij een voorlopig
+  rooster staat op de pagina van de deelnemer waarom, met het contactadres van de
+  planner. Open verzoeken op een voorlopig rooster zijn bij deze update ingetrokken.
+- *Ingetrokken in plaats van vervallen:* wat niet meer kan, is nu ingetrokken. Dat
+  geldt ook voor het verzoek van een derde als iemand anders de dienst al geruild
+  heeft (bij de achterwacht stond dat als afgewezen). Wijzigt de planner een
+  dienst met de hand of trekt hij de publicatie in, dan krijgen de aanvrager en de
+  collega een mail dat het verzoek is ingetrokken.
+- *Herinneringen:* een verzoek dat na 6 tot 7 dagen nog openstaat, krijgt om 09:00
+  vanzelf een herinnering. Bij elk openstaand verzoek staat ook een knop *Herinnering
+  sturen*, voor de aanvrager en voor de planner. Die vraagt eerst een bevestiging en
+  toont wanneer de vorige herinnering ging. Niet vaker dan eens per 24 uur. De
+  aanvrager krijgt een bericht dat er een herinnering is gestuurd.
+- *Twee overzichten:* de deelnemer ziet *Jouw ruilverzoeken* en *Ontvangen ruilverzoeken*,
+  elk met een keuzelijst op status en het aantal erachter. De planner ziet dezelfde tabel
+  bij de AIOS als bij de achterwacht, met *Gelezen* en de laatste herinnering.
+- *Gelezen:* bij de achterwacht bleef een verzoek op *Nog niet gelezen* staan, ook als
+  de collega al had geantwoord. Dat is opgelost. De AIOS krijgen dezelfde kolom.
+- *Mail bij een gelukte ruil:* de aanvrager en de collega krijgen allebei een
+  bevestiging. Het Roosterbureau krijgt één mail, met de twee collega's en de planner
+  in de CC (de stroom zoekt die op, zie docs/verzendlijst-power-automate.md).
+- *Wachtrij voor de AIOS:* ruilmails van de AIOS die niet weg kunnen, wachten en gaan
+  later, zoals bij de achterwacht. De beheerder ziet bij Mailinstellingen wat er wacht.
+- *Mailinstellingen per dienst:* het Gmail-account blijft voor beide samen. Per dienst
+  staan er het adres van de stroom, het contactadres van de planner en de wachtrij.
+
 **Vanaf versie 0.101.0:**
 - *Dienstrooster:* de secties *Per week*, *Handmatige correctie gegenereerde
   rooster*, *Diensten (toelichting)* en *Ruilen* van de AIOS-pagina zijn één

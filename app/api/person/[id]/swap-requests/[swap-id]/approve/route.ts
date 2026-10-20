@@ -14,7 +14,7 @@ import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { formatSwapDate, swapMailDetails } from '@/lib/swapMailDetails';
-import { mailMelding } from '@/lib/meldingMail';
+import { mailMelding, SWAP_APPROVED_COLLEAGUE_TEMPLATE } from '@/lib/meldingMail';
 import { closeLapsedSwaps } from '@/lib/swapLifecycle';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { swapMembershipProblem } from '@/lib/membershipWindow';
@@ -117,14 +117,15 @@ export async function POST(
       .prepare('SELECT datum FROM dienstrooster_shift_slot WHERE id = ?')
       .get(swapRequest.gevraagde_slot_id) as { datum: string } | undefined;
     const period = db
-      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(swapRequest.periode_id) as { status: string; pool_id: string } | undefined;
+      .prepare('SELECT status, pool_id, definitief_op FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(swapRequest.periode_id) as { status: string; pool_id: string; definitief_op: string | null } | undefined;
 
     // Re-checked here, not just at creation: a request can sit PENDING
     // while the planner reopens/regenerates the period, or simply until
     // one of the two shifts has already been worked.
     const eligibility = checkSwapAllowed({
       periodStatus: period?.status ?? '',
+      definitiefOp: period?.definitief_op,
       slotDates: [offeredSlotForCheck?.datum, requestedSlotForCheck?.datum],
     });
     if (!eligibility.allowed) {
@@ -218,6 +219,10 @@ export async function POST(
           inhoud: rendered.inhoud,
         });
       }
+      // The colleague answered: the notice about the request is read, whatever the button in the notices says.
+      if (swapRequest.melding_id) {
+        db.prepare('UPDATE dienstrooster_notification SET gelezen = 1 WHERE id = ?').run(swapRequest.melding_id);
+      }
 
       db.prepare(
         `INSERT INTO dienstrooster_audit_log
@@ -269,7 +274,29 @@ export async function POST(
       soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
     });
-    // And to the planner and the roster office, with both names.
+    // The colleague who approved gets a confirmation as well.
+    void mailMelding({
+      swapId,
+      personId: swapRequest.respondent_person_id,
+      periodId: swapRequest.periode_id,
+      template: SWAP_APPROVED_COLLEAGUE_TEMPLATE,
+      placeholders: {
+        codenaam: collega?.codenaam ?? '',
+        aanvrager: aanvrager?.codenaam ?? '',
+        details: swapMailDetails({
+          lezer: 'collega',
+          aanvrager: aanvrager?.codenaam ?? '',
+          collega: collega?.codenaam ?? '',
+          aangeboden: offeredSlot ?? { datum: '', teller: '' },
+          gevraagd: requestedSlot ?? { datum: '', teller: '' },
+          goedgekeurd: true,
+        }),
+      },
+      anderen: [aanvrager?.codenaam ?? ''],
+      soort: 'RUIL_UITKOMST',
+      linkIntro: 'Bekijk je rooster via je persoonlijke link:',
+    });
+    // And to the roster office, with the two who swapped and the Planner in the CC.
     void mailMelding({ doorgeven: true, soort: 'RUIL_DOORGEVEN', swapId, periodId: swapRequest.periode_id });
 
     return NextResponse.json({

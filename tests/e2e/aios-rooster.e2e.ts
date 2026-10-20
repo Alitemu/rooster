@@ -149,8 +149,8 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(dienstdoende.locator('tbody tr')).toHaveCount(8);
   await expect(dienstdoende.getByRole('row', { name: /^Samen/ })).toBeVisible();
   await sectie.getByRole('tab', { name: /Ruilverzoeken/ }).click();
-  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Nog geen ruilverzoeken.');
-  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster gepubliceerd is.');
+  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Er zijn nog geen ruilverzoeken gedaan.');
+  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster definitief is.');
   await sectie.getByRole('tab', { name: /Kalender/ }).click();
 
   await openAiosSectie(page, 'Rooster');

@@ -23,7 +23,7 @@ import { mailBaseUrl } from './baseUrl';
 import { renderNotificationTemplate, renderTemplate } from './notifications';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstSoort } from './verzendlijst';
-import { DOORGEVEN_AAN, swapDoorgevenBericht, type SwapShift } from './swapMailDetails';
+import { DOORGEVEN_AAN, DOORGEVEN_CC_PLANNER, swapDoorgevenBericht, type SwapShift } from './swapMailDetails';
 
 export interface MeldingMail {
   personId: string;
@@ -62,7 +62,7 @@ type Mail = MeldingMail | DoorgevenMail;
 export const MAIL_QUEUE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Mails about a request that is still open: pointless once it was answered, withdrawn or lapsed. */
-const ONLY_WHILE_PENDING = new Set<VerzendlijstSoort>(['RUILVERZOEK', 'RUIL_BEVESTIGING']);
+const ONLY_WHILE_PENDING = new Set<VerzendlijstSoort>(['RUILVERZOEK', 'RUIL_BEVESTIGING', 'RUIL_HERINNERING', 'RUIL_HERINNERING_BEVESTIGING']);
 
 type Delivery = 'SENT' | 'FAILED' | 'GONE';
 
@@ -154,14 +154,15 @@ async function deliverDoorgeven(mail: DoorgevenMail): Promise<Delivery> {
     aangeboden,
     gevraagd,
   });
-  // Only the two who swapped: the flow writes them out in full. Longest
-  // first, like verzendlijstPersonen.
+  // The two who swapped: the flow writes them out in full. Longest
+  // first, like verzendlijstPersonen. They are in the CC with the Planner,
+  // by codenaam: the flow looks up the addresses, the app holds none.
   const personen = verzendlijstPersonen(swap.aanvrager, [swap.collega]);
+  const cc = [swap.aanvrager, swap.collega, DOORGEVEN_CC_PLANNER];
   const result = await sendVerzendlijst(
-    buildVerzendlijst(
-      { soort: 'RUIL_DOORGEVEN', automatisch: true, periode: swap.periode },
-      DOORGEVEN_AAN.map((codenaam) => ({ soort: 'RUIL_DOORGEVEN' as const, codenaam, personen, onderwerp, tekst }))
-    )
+    buildVerzendlijst({ soort: 'RUIL_DOORGEVEN', automatisch: true, periode: swap.periode }, [
+      { soort: 'RUIL_DOORGEVEN' as const, codenaam: DOORGEVEN_AAN, personen, onderwerp, tekst, cc },
+    ])
   );
   if (!result.ok) {
     console.error(`[melding-mail] RUIL_DOORGEVEN not sent: ${result.message}`);
@@ -193,7 +194,8 @@ function enqueue(melding: Mail): void {
 function dropQueuedRequest(swapId: string): boolean {
   const removed = db
     .prepare(
-      `DELETE FROM dienstrooster_mail_queue WHERE swap_id = ? AND soort IN ('RUILVERZOEK', 'RUIL_BEVESTIGING')
+      `DELETE FROM dienstrooster_mail_queue
+       WHERE swap_id = ? AND soort IN ('RUILVERZOEK', 'RUIL_BEVESTIGING', 'RUIL_HERINNERING', 'RUIL_HERINNERING_BEVESTIGING')
        RETURNING soort`
     )
     .all(swapId) as Array<{ soort: string }>;
@@ -236,6 +238,20 @@ async function sendOrQueue(melding: Mail): Promise<void> {
   } catch (error) {
     console.error(`[melding-mail] ${templateName(melding)} failed`, error);
   }
+}
+
+/** What waits, for the beheerder: which kind, for whom, since when. No addresses and no texts. */
+export function mailWachtrijItems(): Array<{ soort: string; codenaam: string; sinds: string; pogingen: number; laatste_poging_op: string | null }> {
+  const rijen = db
+    .prepare('SELECT soort, melding_json, aangemaakt_op, pogingen, laatste_poging_op FROM dienstrooster_mail_queue ORDER BY aangemaakt_op, rowid')
+    .all() as Array<{ soort: string; melding_json: string; aangemaakt_op: string; pogingen: number; laatste_poging_op: string | null }>;
+  return rijen.map((r) => {
+    const mail = JSON.parse(r.melding_json) as Mail;
+    const codenaam = 'doorgeven' in mail
+      ? DOORGEVEN_AAN
+      : ((db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(mail.personId) as { codenaam: string } | undefined)?.codenaam ?? '');
+    return { soort: r.soort, codenaam, sinds: r.aangemaakt_op, pogingen: r.pogingen, laatste_poging_op: r.laatste_poging_op };
+  });
 }
 
 export function queuedMailCount(): number {
@@ -365,4 +381,11 @@ export const SWAP_SUBMITTED_TEMPLATE = {
     'Beste {{codenaam}},\n\nJe ruilverzoek is verstuurd met het volgende voorstel:\n\n{{details}}\n\n' +
     'Je krijgt een mail zodra je collega het verzoek heeft goedgekeurd of afgewezen. ' +
     'Tot die tijd blijft je rooster zoals het is.\n\n{{link}}',
+};
+
+/** The confirmation for the colleague who approved a swap: now with the requester's name. */
+export const SWAP_APPROVED_COLLEAGUE_TEMPLATE = {
+  naam: 'SWAP_APPROVED_COLLEAGUE',
+  onderwerp: 'Je hebt een ruil goedgekeurd',
+  tekst: 'Beste {{codenaam}},\n\nJe hebt het ruilverzoek van {{aanvrager}} goedgekeurd. Je rooster is aangepast.\n\n{{details}}\n\n{{link}}',
 };

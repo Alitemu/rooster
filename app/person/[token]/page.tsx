@@ -618,6 +618,7 @@ function PersonalLinkPageContent() {
           personId={personId}
           periodId={period.id}
           onRosterChanged={reloadRoster}
+          definitief={Boolean(rosterData.period.definitief_op)}
           assignedShifts={rosterData.assignments.map((a) => ({
             datum: a.datum,
             iso_jaar: a.iso_jaar,

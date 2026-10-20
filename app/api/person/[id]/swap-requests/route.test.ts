@@ -44,8 +44,8 @@ function createFixture() {
   const periodId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
-       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, aangemaakt_op)
-     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', '{"windowWeeks":2}', datetime('now'))`
+       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, definitief_op, aangemaakt_op)
+     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', '{"windowWeeks":2}', datetime('now'), datetime('now'))`
   ).run(periodId, poolId);
 
   const person = () => {

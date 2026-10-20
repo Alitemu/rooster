@@ -24,6 +24,8 @@ export type VerzendlijstSoort =
   | 'RUIL_BEVESTIGING'
   | 'RUIL_UITKOMST'
   | 'RUIL_INGETROKKEN'
+  | 'RUIL_HERINNERING'
+  | 'RUIL_HERINNERING_BEVESTIGING'
   | 'LINK_AANVRAAG'
   | 'ROOSTER_VOORLOPIG'
   | 'ROOSTER_DEFINITIEF'
@@ -35,6 +37,12 @@ export interface VerzendlijstBericht {
   personen: string[];
   onderwerp: string;
   tekst: string;
+  /**
+   * Codenamen the flow puts in the CC, only on RUIL_DOORGEVEN (the two who
+   * swapped and the Planner). Never an address: the flow looks each up in
+   * its own sheet, like `codenaam`. Absent on every other bericht.
+   */
+  cc?: string[];
 }
 
 /**

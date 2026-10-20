@@ -14,6 +14,7 @@
  * overwriting whatever is there now.
  */
 
+import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
@@ -199,6 +200,9 @@ export async function POST(
     }
 
     clearPendingUndo(periodId);
+
+    // An undo can move a dienst to someone else again: open swap requests about it can never be approved.
+    db.transaction(() => closeSwapsAfterRosterChange(periodId, now))().meldingen.forEach((m) => m.send());
 
     const response: ApiSuccessResponse<{ undone: true; label: string }> = {
       success: true,

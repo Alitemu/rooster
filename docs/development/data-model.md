@@ -81,7 +81,9 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 - `aios_ruil` (0.80.0, migration 0028) - a swap between two AIOS
   (lib/aiosRuilen.ts): the diensten of each side as a JSON array of slot
   ids (a whole block, or one dienst), status IN_BEHANDELING, GOEDGEKEURD,
-  AFGEWEZEN, INGETROKKEN or VERVALLEN. Approved, the assignments change
+  AFGEWEZEN or INGETROKKEN (VERVALLEN is no longer written, 0.102.0: what lapses is
+  INGETROKKEN; the value stays allowed in the check). Also gezien_op, laatste_herinnering_op
+  and laatste_herinnering_door. Approved, the assignments change
   hands with assignment_edit rows of type RUIL.
 - `assignment_edit` holds the AIOS's changes by hand too (0.77.0,
   lib/aiosHandmatig.ts), with the same edit types as the achterwacht's.

@@ -37,8 +37,8 @@ function createFixture(windowWeeks: number) {
   const periodId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
-       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, aangemaakt_op)
-     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', ?, datetime('now'))`
+       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, definitief_op, aangemaakt_op)
+     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', ?, datetime('now'), datetime('now'))`
   ).run(periodId, poolId, JSON.stringify({ windowWeeks }));
 
   // Everyone takes part for the whole period unless a test says otherwise.

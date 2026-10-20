@@ -67,8 +67,8 @@ export function getSwapCandidates(
   now: Date = new Date()
 ): SwapCandidatesResult {
   const period = db
-    .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
-    .get(periodId) as { status: string; pool_id: string } | undefined;
+    .prepare('SELECT status, pool_id, definitief_op FROM dienstrooster_schedule_period WHERE id = ?')
+    .get(periodId) as { status: string; pool_id: string; definitief_op: string | null } | undefined;
   if (!period) return { ok: false, status: 404, message: 'Periode niet gevonden' };
 
   const offered = db
@@ -84,7 +84,7 @@ export function getSwapCandidates(
     | undefined;
   if (!offered) return { ok: false, status: 400, message: 'Je hebt de aangeboden dienst niet toegewezen gekregen' };
 
-  const eligibility = checkSwapAllowed({ periodStatus: period.status, slotDates: [offered.datum] }, now);
+  const eligibility = checkSwapAllowed({ periodStatus: period.status, definitiefOp: period.definitief_op, slotDates: [offered.datum] }, now);
   if (!eligibility.allowed) return { ok: false, status: 403, message: eligibility.message! };
 
   const others = db
@@ -127,7 +127,7 @@ export function getSwapCandidates(
   for (const other of others) {
     // Same rule as the create route: a shift already behind us can't be
     // swapped, so it is not offered at all.
-    if (!checkSwapAllowed({ periodStatus: period.status, slotDates: [other.datum] }, now).allowed) continue;
+    if (!checkSwapAllowed({ periodStatus: period.status, definitiefOp: period.definitief_op, slotDates: [other.datum] }, now).allowed) continue;
     // Nor one that would hand a shift to someone not taking part that day.
     if (swapMembershipProblem(period.pool_id, requesterId, other.person_id, offered.datum, other.datum)) continue;
 

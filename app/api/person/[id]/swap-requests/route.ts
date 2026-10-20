@@ -55,7 +55,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     // Build query
     let query = `
       SELECT
-        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op, sr.opmerkingen, sr.reden_afwijzing,
+        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op, sr.beantwoord_op, sr.opmerkingen, sr.reden_afwijzing,
+        sr.laatste_herinnering_op, sr.laatste_herinnering_door,
         sr.aanvrager_person_id, ap.codenaam as aanvrager_codenaam,
         sr.respondent_person_id, rp.codenaam as respondent_codenaam,
         sr.aangeboden_slot_id, sr.gevraagde_slot_id,
@@ -85,6 +86,18 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     query += ' ORDER BY sr.aangemaakt_op DESC';
 
     const rows = db.prepare(query).all(...params_list) as any[];
+
+    // The colleague opened their requests: the notices about them count as
+    // read. Until now only the button in the notices set it, so a request
+    // answered or looked at long ago still showed "Nog niet gelezen" to the
+    // planner.
+    db.prepare(
+      `UPDATE dienstrooster_notification SET gelezen = 1
+       WHERE gelezen = 0 AND id IN (
+         SELECT melding_id FROM dienstrooster_swap_request
+         WHERE respondent_person_id = ? AND melding_id IS NOT NULL ${periodId ? 'AND periode_id = ?' : ''}
+       )`
+    ).run(...(periodId ? [personId, periodId] : [personId]));
 
     // For a request still waiting: would it leave either of them with two
     // shifts close together? Not a reason to refuse (their own call), but
@@ -197,13 +210,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // time too, since a period can move on while a request sits pending.
     // Not in the prullenbak: a period there is gone for its participants (audit 13).
     const period = db
-      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
-      .get(period_id as string) as { status: string; pool_id: string } | undefined;
+      .prepare('SELECT status, pool_id, definitief_op FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
+      .get(period_id as string) as { status: string; pool_id: string; definitief_op: string | null } | undefined;
     if (!period) {
       return NextResponse.json({ success: false, error: 'Periode niet gevonden' }, { status: 404 });
     }
     const eligibility = checkSwapAllowed({
       periodStatus: period.status,
+      definitiefOp: period.definitief_op,
       slotDates: [offeredSlot?.datum, requestedSlot?.datum],
     });
     if (!eligibility.allowed) {

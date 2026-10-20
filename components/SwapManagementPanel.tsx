@@ -7,8 +7,9 @@
  * Shows requests where user is requester or respondent.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { RuilHerinnering } from '@/components/RuilHerinnering';
 
 /** "di 5 jan 2027": a stored YYYY-MM-DD as people read it. */
 function datumTekst(datum: string): string {
@@ -36,6 +37,8 @@ interface SwapRequest {
   gevraagde_type: string;
   opmerkingen: string | null;
   reden_afwijzing: string | null;
+  laatste_herinnering_op: string | null;
+  laatste_herinnering_door: string | null;
   // Only ever true for a request still waiting - see the list route.
   aanvrager_te_dichtbij?: boolean;
   respondent_te_dichtbij?: boolean;
@@ -58,6 +61,64 @@ interface Props {
   onSwapsChanged?: () => void;
 }
 
+const FILTER_STATUSSEN = [
+  ['PENDING', 'In afwachting'],
+  ['GOEDGEKEURD', 'Goedgekeurd'],
+  ['AFGEWEZEN', 'Afgewezen'],
+  ['INGETROKKEN', 'Ingetrokken'],
+] as const;
+
+/** One category of requests (sent or received) with its own status filter, the number behind every option. */
+function Categorie({
+  titel,
+  testid,
+  naam,
+  alle,
+  filter,
+  setFilter,
+  kaart,
+  leeg,
+}: {
+  titel: string;
+  testid: string;
+  naam: string;
+  alle: SwapRequest[];
+  filter: string;
+  setFilter: (value: string) => void;
+  kaart: (swap: SwapRequest) => ReactNode;
+  leeg: string;
+}) {
+  const zichtbaar = filter ? alle.filter((s) => s.status === filter) : alle;
+  return (
+    <section className="space-y-3" data-testid={testid}>
+      <h3 className="text-lg font-semibold">{titel}</h3>
+      <div className="card p-4 bg-neutral-50">
+        <select
+          name={naam}
+          aria-label={`Filter op status: ${titel}`}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="px-3 py-2 border rounded text-sm"
+        >
+          <option value="">Alle statussen ({alle.length})</option>
+          {FILTER_STATUSSEN.map(([waarde, label]) => (
+            <option key={waarde} value={waarde}>
+              {label} ({alle.filter((s) => s.status === waarde).length})
+            </option>
+          ))}
+        </select>
+      </div>
+      {zichtbaar.length === 0 ? (
+        <div className="card p-6 text-center">
+          <p className="text-neutral-600">{alle.length === 0 ? leeg : 'Geen ruilverzoeken met deze status.'}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">{zichtbaar.map((swap) => kaart(swap))}</div>
+      )}
+    </section>
+  );
+}
+
 export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwapsChanged }: Props) {
   // What the last load returned, to notice a background refresh bringing
   // back something different (see onSwapsChanged).
@@ -69,10 +130,14 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   // whole panel below) - an approve/reject/cancel failure must not hide
   // the filter and the rest of the list, just report itself.
   const [actionError, setActionError] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState('PENDING');
+  // One filter per category: "Jouw ruilverzoeken" (sent) and "Ontvangen ruilverzoeken" (received).
+  const [filterVerzonden, setFilterVerzonden] = useState('PENDING');
+  const [filterOntvangen, setFilterOntvangen] = useState('PENDING');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Bumped after a reminder, so the card shows when it went.
+  const [herlaad, setHerlaad] = useState(0);
 
   useEffect(() => {
     // Same reason as NotificationCenter's list: changing the status filter
@@ -88,8 +153,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       if (!silent) setError(null);
 
       try {
-        let url = withBasePath(`/api/person/${personId}/swap-requests?period_id=${periodId}`);
-        if (filterStatus) url += `&status=${filterStatus}`;
+        // All of them: the counts behind the filters need every status.
+        const url = withBasePath(`/api/person/${personId}/swap-requests?period_id=${periodId}`);
 
         const res = await fetch(url);
         if (!res.ok) throw new Error('Laden van ruilverzoeken mislukt');
@@ -115,7 +180,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
 
     // The other side of a swap acts somewhere else: a colleague approving
     // or rejecting your request never touched this page, so the list kept
-    // showing it as "In behandeling" until a full reload. Refresh when you
+    // showing it as "In afwachting" until a full reload. Refresh when you
     // come back to the tab, and every 20 seconds while it's visible.
     const refreshIfVisible = () => {
       if (document.visibilityState === 'visible') loadSwaps(true);
@@ -129,12 +194,12 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       document.removeEventListener('visibilitychange', refreshIfVisible);
       window.removeEventListener('focus', refreshIfVisible);
     };
-  }, [personId, periodId, filterStatus, refreshKey]);
+  }, [personId, periodId, refreshKey, herlaad]);
 
   // A new request is always "in afwachting" - switch to that filter so it
   // is actually in the list you're looking at, whichever one was chosen.
   useEffect(() => {
-    if (refreshKey > 0) setFilterStatus('PENDING');
+    if (refreshKey > 0) setFilterVerzonden('PENDING');
   }, [refreshKey]);
 
   const showSuccess = (message: string) => {
@@ -142,21 +207,11 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
     setTimeout(() => setSuccessMessage(null), 5000);
   };
 
-  // Updates the swap's status in place rather than always removing it from
-  // the list - removing unconditionally was only correct while filtering
-  // on PENDING; with "Alle statussen" (or any filter that still matches
-  // the new status) the row used to just vanish instead of showing its new
-  // badge. The list itself is fetched pre-filtered by ?status=, so a swap
-  // whose new status no longer matches the active filter is dropped here
-  // to stay consistent with what a fresh reload would show.
+  // Updates the swap's status in place: the lists filter on it themselves,
+  // so a swap whose new status no longer matches a filter leaves that list
+  // as a fresh reload would show it, and the counts behind the filters follow.
   const updateSwapStatus = (swapId: string, newStatus: string) => {
-    setSwapRequests((prev) => {
-      const updated = prev.map((s) => (s.id === swapId ? { ...s, status: newStatus } : s));
-      if (filterStatus && filterStatus !== newStatus) {
-        return updated.filter((s) => s.id !== swapId);
-      }
-      return updated;
-    });
+    setSwapRequests((prev) => prev.map((s) => (s.id === swapId ? { ...s, status: newStatus } : s)));
   };
 
   const handleApprove = async (swapId: string) => {
@@ -205,15 +260,15 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Weigeren van ruil mislukt');
+        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Afwijzen van ruil mislukt');
       }
 
       updateSwapStatus(swapId, 'AFGEWEZEN');
       setRejectingId(null);
       setRejectionReason('');
-      showSuccess('Ruil geweigerd');
+      showSuccess('Ruil afgewezen');
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Weigeren van ruil mislukt');
+      setActionError(err instanceof Error ? err.message : 'Afwijzen van ruil mislukt');
     }
   };
 
@@ -250,73 +305,13 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   };
 
   const statusLabels: Record<string, string> = {
-    PENDING: 'In behandeling',
+    PENDING: 'In afwachting',
     GOEDGEKEURD: 'Goedgekeurd',
-    AFGEWEZEN: 'Geweigerd',
+    AFGEWEZEN: 'Afgewezen',
     INGETROKKEN: 'Ingetrokken',
   };
 
-  if (loading) {
-    return (
-      <div className="card p-8 text-center">
-        <p className="text-lg text-neutral-600">Ruilverzoeken laden...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="card p-8 bg-red-50 border border-red-200">
-        <p className="text-red-700">{error}</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4">
-      {successMessage && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-          {successMessage}
-        </div>
-      )}
-
-      {actionError && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start justify-between gap-3">
-          <p className="text-sm text-red-700">{actionError}</p>
-          <button
-            onClick={() => setActionError(null)}
-            className="shrink-0 px-3 py-1 rounded border border-red-300 bg-white text-red-700 text-sm font-medium hover:bg-red-100"
-          >
-            Sluiten
-          </button>
-        </div>
-      )}
-
-      {/* Filter */}
-      <div className="card p-4 bg-neutral-50">
-        <select
-          name="status-filter"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 border rounded text-sm"
-        >
-          <option value="">Alle statussen</option>
-          <option value="PENDING">In behandeling</option>
-          <option value="GOEDGEKEURD">Goedgekeurd</option>
-          <option value="AFGEWEZEN">Geweigerd</option>
-          <option value="INGETROKKEN">Ingetrokken</option>
-        </select>
-      </div>
-
-      {/* Swap Requests */}
-      {swapRequests.length === 0 && (
-        <div className="card p-8 text-center">
-          <p className="text-neutral-600">Geen ruilverzoeken gevonden</p>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {swapRequests.map((swap) => {
+  const kaart = (swap: SwapRequest) => {
           const isRequester = swap.aanvrager_person_id === personId;
           const isRespondent = swap.respondent_person_id === personId;
           const isPending = swap.status === 'PENDING';
@@ -392,6 +387,16 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   <p className="text-xs text-neutral-500">
                     {new Date(swap.aangemaakt_op).toLocaleDateString('nl-NL')}
                   </p>
+
+                  {isPending && isRequester && (
+                    <RuilHerinnering
+                      stuur={() => fetch(withBasePath(`/api/person/${personId}/swap-requests/${swap.id}/remind`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bevestigd: true }) })}
+                      laatste={swap.laatste_herinnering_op}
+                      door={swap.laatste_herinnering_door}
+                      eigen
+                      onKlaar={() => setHerlaad((n) => n + 1)}
+                    />
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -410,7 +415,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                       }}
                       className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
                     >
-                      Weigeren
+                      Afwijzen
                     </button>
                   </div>
                 )}
@@ -444,7 +449,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                       onClick={() => handleReject(swap.id, rejectionReason)}
                       className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
                     >
-                      Weigeren
+                      Afwijzen
                     </button>
                     <button
                       onClick={() => setRejectingId(null)}
@@ -457,8 +462,64 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
               )}
             </div>
           );
-        })}
+  };
+
+  if (loading) {
+    return (
+      <div className="card p-8 text-center">
+        <p className="text-lg text-neutral-600">Ruilverzoeken laden...</p>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="card p-8 bg-red-50 border border-red-200">
+        <p className="text-red-700">{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {successMessage && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+          {successMessage}
+        </div>
+      )}
+
+      {actionError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start justify-between gap-3">
+          <p className="text-sm text-red-700">{actionError}</p>
+          <button
+            onClick={() => setActionError(null)}
+            className="shrink-0 px-3 py-1 rounded border border-red-300 bg-white text-red-700 text-sm font-medium hover:bg-red-100"
+          >
+            Sluiten
+          </button>
+        </div>
+      )}
+
+      <Categorie
+        titel="Jouw ruilverzoeken"
+        testid="swap-verzonden"
+        naam="status-filter-verzonden"
+        alle={swapRequests.filter((s) => s.aanvrager_person_id === personId)}
+        filter={filterVerzonden}
+        setFilter={setFilterVerzonden}
+        kaart={kaart}
+        leeg="Je hebt geen ruilverzoeken gedaan."
+      />
+      <Categorie
+        titel="Ontvangen ruilverzoeken"
+        testid="swap-ontvangen"
+        naam="status-filter-ontvangen"
+        alle={swapRequests.filter((s) => s.respondent_person_id === personId)}
+        filter={filterOntvangen}
+        setFilter={setFilterOntvangen}
+        kaart={kaart}
+        leeg="Je hebt geen ruilverzoeken ontvangen."
+      />
     </div>
   );
 }

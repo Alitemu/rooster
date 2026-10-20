@@ -102,6 +102,7 @@ function buildRoster(): Map<string, string> {
     eind_datum: '2099-05-24',
     deadline: '2099-01-01T00:00',
     status: 'GEPUBLICEERD',
+    definitief_op: now,
     bevroren_ruleset_json: JSON.stringify({ windowWeeks: 0 }),
     aangemaakt_op: now,
   });
