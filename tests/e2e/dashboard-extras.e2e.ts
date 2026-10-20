@@ -75,8 +75,28 @@ test.describe('Periodepagina', () => {
     await dialog.getByLabel('Gmail-adres').fill('iemand@outlook.com');
     await dialog.getByLabel('App-wachtwoord').fill('abcdefghijklmnop');
     await dialog.getByLabel('Verzendlijst sturen naar').fill('flow@ziekenhuis.test');
-    await dialog.getByRole('button', { name: 'Opslaan' }).click();
+    await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText('alleen via Gmail');
+  });
+
+  test('Mailinstellingen: the Gmail account for both, and per dienst the flow, the contact address and what waits', async ({ page }) => {
+    await loginAsBeheerder(page);
+    await page.goto(`${getBaseUrl()}/planner`);
+    await page.getByRole('button', { name: 'Mailinstellingen' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
+    await expect(dialog.getByRole('heading', { name: 'Gmail-account voor de achterwacht en de AIOS samen' })).toBeVisible();
+    const achterwacht = dialog.locator('div', { has: dialog.getByRole('heading', { name: 'Achterwacht', exact: true }) }).last();
+    await expect(achterwacht.getByLabel('Verzendlijst sturen naar')).toBeVisible();
+    await expect(achterwacht.getByLabel('Contactadres van de planner')).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'AIOS', exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('Verzendlijst van de AIOS sturen naar')).toBeVisible();
+    await expect(dialog.getByLabel('Contactadres van de planner van de AIOS')).toBeVisible();
+    // Nothing waits on a test server without mail: both say so.
+    await expect(dialog.getByText('Er wacht geen mail.')).toHaveCount(2);
+    // A contact address that is no address is refused for the AIOS, and saves nothing.
+    await dialog.getByLabel('Contactadres van de planner van de AIOS').fill('geen adres');
+    await dialog.getByRole('button', { name: 'Opslaan voor de AIOS' }).click();
+    await expect(dialog.getByRole('alert')).toContainText('geen geldig e-mailadres');
   });
 
   test('the beheerder reaches Mailinstellingen from the overview too, a planner does not', async ({ page }) => {
