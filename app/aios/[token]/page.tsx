@@ -240,7 +240,7 @@ function AiosLinkPagina() {
             patterns={patronen}
             defaultVanaf={periode.start_datum}
             defaultTot={periode.eind_datum}
-            readOnly={deadlineVoorbij}
+            readOnly={invoerDicht}
             onPatternsChange={setPatronen}
           />
           <AiosAfwezigheid
@@ -249,7 +249,7 @@ function AiosLinkPagina() {
             absences={afwezigheden}
             defaultVanaf={periode.start_datum}
             defaultTot={periode.eind_datum}
-            readOnly={deadlineVoorbij}
+            readOnly={invoerDicht}
             onAbsencesChange={setAfwezigheden}
           />
           <button

@@ -465,11 +465,11 @@ function PersonalLinkPageContent() {
 
   // Deadline is one cutoff for input, independent of whether the planner
   // has gotten around to closing the period yet. Viewing what was entered
-  // is never blocked, only changing it. Still used on its own for the
-  // deeltijd/afwezigheid editors below: those are the participant's own
-  // standing data, not scoped to one period, and their routes accept a
-  // change whatever this period's status is (they warn instead - see
-  // lib/periodInputGate.ts's buildDeadlinePassedWarning).
+  // is never blocked, only changing it. The deeltijd/afwezigheid editors
+  // follow inputClosed below, like everything else on this screen: their
+  // routes accept a change whatever the period's status (they warn
+  // instead, lib/periodInputGate.ts buildDeadlinePassedWarning), so only
+  // the screen keeps a closed period closed.
   const deadlinePassed = period.status !== 'GEPUBLICEERD' && new Date() > new Date(period.deadline);
 
   // The voorkeurenkalender and the bevestigingsstap are different: their
@@ -669,7 +669,7 @@ function PersonalLinkPageContent() {
             patterns={patterns}
             defaultVanaf={period.start_datum}
             defaultTot={period.eind_datum}
-            readOnly={deadlinePassed}
+            readOnly={inputClosed}
             onPatternsChange={(next) => {
               setPatterns(next);
               // A changed pattern means the generated days below may have
@@ -686,7 +686,7 @@ function PersonalLinkPageContent() {
             absences={absences}
             defaultVanaf={period.start_datum}
             defaultTot={period.eind_datum}
-            readOnly={deadlinePassed}
+            readOnly={inputClosed}
             onAbsencesChange={(next) => {
               setAbsences(next);
               // Same reasoning as onPatternsChange below - an added, edited,

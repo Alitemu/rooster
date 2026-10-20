@@ -317,6 +317,13 @@ test.describe('Input gate - E2E', () => {
     expect(await page.locator('button[title*="rechtsklik voor opties"]:not([disabled])').count()).toBe(0);
 
     await expect(page.getByText(/De roosteraar heeft deze periode gesloten/)).toBeVisible();
+
+    // Deeltijd and afwezigheid are closed too: nothing to add, only to look at.
+    await page.getByRole('button', { name: /Deeltijd/ }).first().click();
+    await expect(page.getByText(/Deeltijdpatronen kun je nu alleen nog bekijken/)).toBeVisible();
+    await expect(page.getByText(/Afwezigheid kun je nu alleen nog bekijken/)).toBeVisible();
+    await expect(page.getByText('Nieuw patroon toevoegen')).toHaveCount(0);
+    await expect(page.getByText('Nieuwe afwezigheid toevoegen')).toHaveCount(0);
   });
 
   test('an open period leaves the preferences editable', async ({ page }) => {
@@ -338,6 +345,10 @@ test.describe('Input gate - E2E', () => {
     await expect(editable.first()).toBeVisible();
     expect(await editable.count()).toBeGreaterThan(0);
     await expect(page.getByText(/De roosteraar heeft deze periode gesloten/)).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Deeltijd/ }).first().click();
+    await expect(page.getByText('Nieuw patroon toevoegen')).toBeVisible();
+    await expect(page.getByText('Nieuwe afwezigheid toevoegen')).toBeVisible();
   });
 });
 

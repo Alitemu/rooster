@@ -217,11 +217,17 @@ export function AiosRoosterMaken({
   const knop = 'px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
 
   const hint = rooster?.loopt || bezig ? 'Wordt gemaakt' : gepubliceerd ? 'Gepubliceerd' : gemaakt ? 'Gemaakt' : 'Nog niet gemaakt';
+  // The roster can be made once the period is closed (and made again until it is published).
+  const kanMaken = !gepubliceerd && (status === 'GESLOTEN' || gemaakt);
+  const feestdagHint = feestdag.open > 0 ? 'nog te beantwoorden' : feestdag.gewijzigd ? 'nog te bewaren' : 'beantwoord';
 
   return (
     <>
       {/* Kept loaded while closed: the choices about the feestdag blocks are not lost. */}
-      <AiosSectie sleutel="rooster" titel="Rooster" testId="aios-rooster-maken" hint={hint} blijfGeladen>
+      <div className="card p-4 space-y-3" data-testid="aios-rooster-maken">
+        <p className="text-sm text-neutral-600" data-testid="aios-rooster-status">
+          Status rooster: <span className="font-semibold text-neutral-900">{hint}</span>
+        </p>
         {gepubliceerd ? (
           <p className="text-sm text-neutral-700">
             Het rooster is gepubliceerd. Opnieuw maken kan dan niet meer. Trek daarvoor eerst de publicatie in. Met de hand aanpassen kan wel,
@@ -236,7 +242,6 @@ export function AiosRoosterMaken({
                 ? 'Het rooster is gemaakt. Je kunt het opnieuw laten maken. Dan wordt het hele rooster opnieuw gemaakt, ook wat je met de hand hebt veranderd.'
                 : 'De solver van de AIOS maakt het rooster: per blok één AIOS, binnen de harde regels en zo eerlijk mogelijk naar fte.'}
             </p>
-            <AiosFeestdagBlokken periodId={periodId} status={status} disabled={bezig || !!rooster?.loopt} onStaat={setFeestdag} />
             {nietKlaar && (
               <p className="text-sm font-medium text-neutral-900">
                 {feestdag.open > 0
@@ -287,66 +292,83 @@ export function AiosRoosterMaken({
           </p>
         )}
         {rooster?.generatie && <LegeDiensten generatie={rooster.generatie} kanOpnieuw={status === 'GEGENEREERD'} />}
-      </AiosSectie>
+        {zichtbaar && <AiosPubliceren periodId={periodId} status={status} onChanged={onChanged} />}
+      </div>
 
-      {zichtbaar && <AiosPubliceren periodId={periodId} status={status} onChanged={onChanged} />}
-
-      {zichtbaar && rooster && (
-        <>
-          <AiosSectie sleutel="dienstpercentage" titel="Dienstpercentage en saldo" hint="punten, dienstpercentage en saldo">
-            <p className="text-sm text-neutral-600">
-              Dienstpercentage: punten gedeeld door werkdagen keer fte. Boven 25% is te veel volgens het opleidingsplan. Dat is een
-              waarschuwing, geen weigering. Het opleidingsplan telt per opleidingsjaar. Daarom staat eronder ook het percentage over
-              dit kwartaal en de drie ervoor samen, met de geschiedenis van vóór de app. Het saldo is wat de AIOS meeneemt: wie vorig
-              kwartaal minder deed dan het doel, krijgt er nu meer.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-neutral-600">
-                    <th className="py-1 pr-2 font-medium">AIOS</th>
-                    <th className="py-1 pr-2 font-medium">Percentage</th>
-                    <th className="py-1 pr-2 font-medium text-right">Punten</th>
-                    <th className="py-1 pr-2 font-medium text-right" title="nachten, avonden, dagdiensten, uitloopdiensten">
-                      N/A/D/U
-                    </th>
-                    <th className="py-1 pr-2 font-medium text-right" title="ingedeeld op liever niet">
-                      Liever niet
-                    </th>
-                    <th className="py-1 font-medium" title="uit het vorige kwartaal of van vóór de app">
-                      Saldo
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {rooster.per_aios.map((a) => (
-                    <tr key={a.person_id}>
-                      <td className="py-1 pr-2">
-                        {a.codenaam}
-                        <span className="block text-xs text-neutral-500">fte {a.fte.toLocaleString('nl-NL')}</span>
-                      </td>
-                      <td className="py-1 pr-2">
-                        <Percentage waarde={a.dienstpercentage} />
-                        <JaarPercentage waarde={a.jaar_percentage} kwartalen={a.jaar_kwartalen} />
-                      </td>
-                      <td className="py-1 pr-2 text-right">{a.punten.toLocaleString('nl-NL')}</td>
-                      <td className="py-1 pr-2 text-right whitespace-nowrap">
-                        {a.nachten}/{a.avonden}/{a.dagdiensten}/{a.uitloopdiensten}
-                      </td>
-                      <td className="py-1 pr-2 text-right">{a.liever_niet + a.geblokkeerd}</td>
-                      <td className="py-1 text-xs">
-                        {a.saldo}
-                        {a.saldo_bron === 'BEGINSTAND' && <span className="block text-neutral-500">van vóór de app</span>}
-                        {a.saldo_bron === 'VORIG_KWARTAAL' && <span className="block text-neutral-500">uit het vorige kwartaal</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </AiosSectie>
-        </>
+      {/* Kept loaded while closed: the choices about the feestdag blocks are not lost, and the button above waits for them. */}
+      {kanMaken && (
+        <AiosSectie sleutel="feestdagblokken" titel="Blokken rond de feestdagen" hint={feestdagHint} blijfGeladen>
+          <AiosFeestdagBlokken periodId={periodId} status={status} disabled={bezig || !!rooster?.loopt} onStaat={setFeestdag} />
+        </AiosSectie>
       )}
+
     </>
+  );
+}
+
+/** "Dienstpercentage en saldo": per AIOS, once the roster is made. Reads the roster again when `versie` changes. */
+export function AiosDienstpercentage({ periodId, status, versie }: { periodId: string; status: string; versie: number }) {
+  const [rooster, setRooster] = useState<AiosRooster | null>(null);
+  useEffect(() => {
+    if (status !== 'GEGENEREERD' && status !== 'GEPUBLICEERD') return;
+    fetch(withBasePath(`/api/aios/periode/${periodId}/rooster`))
+      .then((res) => antwoord(res, 'Laden van het rooster is mislukt'))
+      .then((data) => setRooster(data))
+      .catch(() => setRooster(null));
+  }, [periodId, status, versie]);
+  if ((status !== 'GEGENEREERD' && status !== 'GEPUBLICEERD') || !rooster) return null;
+  return (
+    <AiosSectie sleutel="dienstpercentage" titel="Dienstpercentage en saldo" hint="punten, dienstpercentage en saldo">
+      <p className="text-sm text-neutral-600">
+        Dienstpercentage: punten gedeeld door werkdagen keer fte. Boven 25% is te veel volgens het opleidingsplan. Dat is een
+        waarschuwing, geen weigering. Het opleidingsplan telt per opleidingsjaar. Daarom staat eronder ook het percentage over
+        dit kwartaal en de drie ervoor samen, met de geschiedenis van vóór de app. Het saldo is wat de AIOS meeneemt: wie vorig
+        kwartaal minder deed dan het doel, krijgt er nu meer.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-neutral-600">
+              <th className="py-1 pr-2 font-medium">AIOS</th>
+              <th className="py-1 pr-2 font-medium">Percentage</th>
+              <th className="py-1 pr-2 font-medium text-right">Punten</th>
+              <th className="py-1 pr-2 font-medium text-right" title="nachten, avonden, dagdiensten, uitloopdiensten">
+                N/A/D/U
+              </th>
+              <th className="py-1 pr-2 font-medium text-right" title="ingedeeld op liever niet">
+                Liever niet
+              </th>
+              <th className="py-1 font-medium" title="uit het vorige kwartaal of van vóór de app">
+                Saldo
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {rooster.per_aios.map((a) => (
+              <tr key={a.person_id}>
+                <td className="py-1 pr-2">
+                  {a.codenaam}
+                  <span className="block text-xs text-neutral-500">fte {a.fte.toLocaleString('nl-NL')}</span>
+                </td>
+                <td className="py-1 pr-2">
+                  <Percentage waarde={a.dienstpercentage} />
+                  <JaarPercentage waarde={a.jaar_percentage} kwartalen={a.jaar_kwartalen} />
+                </td>
+                <td className="py-1 pr-2 text-right">{a.punten.toLocaleString('nl-NL')}</td>
+                <td className="py-1 pr-2 text-right whitespace-nowrap">
+                  {a.nachten}/{a.avonden}/{a.dagdiensten}/{a.uitloopdiensten}
+                </td>
+                <td className="py-1 pr-2 text-right">{a.liever_niet + a.geblokkeerd}</td>
+                <td className="py-1 text-xs">
+                  {a.saldo}
+                  {a.saldo_bron === 'BEGINSTAND' && <span className="block text-neutral-500">van vóór de app</span>}
+                  {a.saldo_bron === 'VORIG_KWARTAAL' && <span className="block text-neutral-500">uit het vorige kwartaal</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </AiosSectie>
   );
 }

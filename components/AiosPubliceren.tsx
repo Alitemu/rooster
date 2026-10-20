@@ -10,7 +10,6 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
-import { AiosSectie } from '@/components/AiosSectie';
 import type { AiosPublicatieControle, AiosPublicatieStand } from '@/lib/aiosPublicatie';
 
 const moment = (iso: string) => new Date(iso).toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
@@ -74,10 +73,9 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
   const kan = c.problemen.length === 0;
   const metWaarschuwing = c.waarschuwingen.length > 0;
 
-  const hint = gepubliceerd ? (stand.definitief_op ? 'Definitief' : 'Voorlopig gepubliceerd') : 'Nog niet gepubliceerd';
-
   return (
-    <AiosSectie sleutel="publiceren" titel="Publiceren" testId="aios-publiceren" hint={hint}>
+    // A block of the card at the top of the page (components/AiosRoosterMaken.tsx), not a section of its own.
+    <div className="border-t pt-3 space-y-3" data-testid="aios-publiceren">
       {!gepubliceerd && (
         <p className="text-sm text-neutral-700">
           Voorlopig publiceren: elke AIOS krijgt een mail met de eigen diensten om na te kijken en ziet ze in de app. Daarna maak je het rooster
@@ -181,6 +179,6 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
           </p>
         )}
       </div>
-    </AiosSectie>
+    </div>
   );
 }

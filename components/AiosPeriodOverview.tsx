@@ -18,7 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
 import { AiosExporteren } from '@/components/AiosExporteren';
-import { AiosRoosterMaken } from '@/components/AiosRoosterMaken';
+import { AiosDienstpercentage, AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
 import { AiosDienstrooster } from '@/components/AiosDienstrooster';
 import { AiosVoortgangstoets } from '@/components/AiosVoortgangstoets';
@@ -164,7 +164,7 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
       {period.status === 'GESLOTEN' && (
         <div className="space-y-3">
           <p className="text-sm text-neutral-700">
-            De periode is gesloten: de AIOS kunnen hun voorkeuren niet meer wijzigen. Maak hieronder het rooster. Met de knop bovenaan kan de periode terug naar open.
+            De periode is gesloten: de AIOS kunnen hun voorkeuren niet meer wijzigen. Maak bovenaan het rooster. De periode kan terug naar open met de knop in de kop van de pagina.
           </p>
         </div>
       )}
@@ -172,13 +172,13 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
       {period.status === 'GEGENEREERD' && (
         <p className="text-sm text-neutral-700">
           De periode is gesloten en het rooster is gemaakt. Moet de periode terug naar open, verwijder dan eerst het rooster
-          hieronder.
+          bovenaan.
         </p>
       )}
 
       {period.status === 'GEPUBLICEERD' && (
         <p className="text-sm text-neutral-700">
-          Het rooster is gepubliceerd. De AIOS zien hun diensten op hun eigen pagina. Hieronder maak je het definitief of trek je de
+          Het rooster is gepubliceerd. De AIOS zien hun diensten op hun eigen pagina. Bovenaan maak je het definitief of trek je de
           publicatie in.
         </p>
       )}
@@ -358,15 +358,7 @@ function Pagina({ period: begin }: { period: Period }) {
         </div>
       </div>
 
-      {/* The history from before the app is the first section (the planner's wish): the quarter starts from it. */}
-      <AiosGeschiedenis periodId={period.id} />
-      <Stappen period={period} stand={stand} onChanged={herlaad} />
-      <AiosVoortgangstoets periodId={period.id} status={period.status} onChanged={() => setToetsVersie((v) => v + 1)} />
-      {period.status !== 'CONCEPT' && (
-        <StatusVoorkeuren periodId={period.id} refreshKey={`${period.status}|${period.deadline}`} />
-      )}
-      {period.status !== 'CONCEPT' && <AiosExporteren period={period} stand={stand} onChanged={herlaad} />}
-
+      {/* Making, publishing and withdrawing the roster come first, as on the achterwacht's page: a card, not a section. */}
       {period.status !== 'CONCEPT' && (
         <AiosRoosterMaken
           key={toetsVersie}
@@ -379,6 +371,16 @@ function Pagina({ period: begin }: { period: Period }) {
           }}
         />
       )}
+
+      {/* The history from before the app is the first section (the planner's wish): the quarter starts from it. */}
+      <AiosGeschiedenis periodId={period.id} />
+      <Stappen period={period} stand={stand} onChanged={herlaad} />
+      <AiosVoortgangstoets periodId={period.id} status={period.status} onChanged={() => setToetsVersie((v) => v + 1)} />
+      {period.status !== 'CONCEPT' && (
+        <StatusVoorkeuren periodId={period.id} refreshKey={`${period.status}|${period.deadline}`} />
+      )}
+      {period.status !== 'CONCEPT' && <AiosExporteren period={period} stand={stand} onChanged={herlaad} />}
+      <AiosDienstpercentage periodId={period.id} status={period.status} versie={roosterVersie + handmatigVersie + toetsVersie} />
 
       {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {!overzicht && !error && <div className="card p-8 text-center text-neutral-600">Diensten laden...</div>}

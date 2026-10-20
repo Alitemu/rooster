@@ -85,8 +85,9 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
 
   const paneel = page.getByTestId('aios-rooster-maken');
-  await expect(paneel.getByRole('heading', { name: 'Rooster' })).toBeVisible();
-  await openAiosSectie(page, 'Rooster');
+  // Making, publishing and withdrawing sit at the top as a card, not in sections of their own.
+  await expect(page.getByRole('heading', { name: 'Rooster', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Publiceren', exact: true })).toHaveCount(0);
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
 
@@ -153,7 +154,6 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster definitief is.');
   await sectie.getByRole('tab', { name: /Kalender/ }).click();
 
-  await openAiosSectie(page, 'Rooster');
   await paneel.getByRole('button', { name: 'Rooster verwijderen' }).click();
   await paneel.getByRole('button', { name: 'Ja, rooster verwijderen' }).click();
   await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeVisible();
@@ -172,8 +172,8 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
   await page.goto(`${getBaseUrl()}/planner/period/${ids.kerst}`);
 
   const paneel = page.getByTestId('aios-rooster-maken');
-  await openAiosSectie(page, 'Rooster');
-  const vragen = paneel.getByTestId('aios-feestdagblokken');
+  await openAiosSectie(page, 'Blokken rond de feestdagen');
+  const vragen = page.getByTestId('aios-feestdagblokken');
   await expect(vragen.getByRole('heading', { name: '★ Blokken rond feestdagen' })).toBeVisible();
   await expect(vragen.getByText(/Eerste Kerstdag en Tweede Kerstdag/)).toBeVisible();
   await expect(paneel.getByText('Kies eerst bij elk blok rond de feestdagen wat ermee gebeurt en bewaar je keuzes.')).toBeVisible();

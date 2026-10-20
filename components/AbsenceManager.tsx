@@ -221,7 +221,7 @@ export function AbsenceManager({
       {readOnly ? (
         <div className="border-t border-neutral-200 pt-4">
           <p className="text-sm text-neutral-600">
-            De deadline voor deze periode is verstreken. Afwezigheid kun je nu alleen nog bekijken.
+            Deze periode is gesloten voor wijzigingen. Afwezigheid kun je nu alleen nog bekijken.
           </p>
         </div>
       ) : (

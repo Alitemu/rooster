@@ -109,8 +109,6 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
   const paneel = page.getByTestId('aios-publiceren');
-  await expect(paneel.getByRole('heading', { name: 'Publiceren' })).toBeVisible();
-  await openAiosSectie(page, 'Publiceren');
   await paneel.getByRole('button', { name: 'Voorlopig publiceren' }).click();
   await paneel.getByRole('button', { name: /^Ja, (toch )?publiceren$/ }).click();
   await expect(paneel.getByText(/^Voorlopig gepubliceerd\. Er is geen e-mail verstuurd/)).toBeVisible();

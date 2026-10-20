@@ -314,7 +314,6 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
 
   let leeg = 0;
   await test.step('making the roster; what is still empty is told, and told again after a refresh and a new login', async () => {
-    await openAiosSectie(page, 'Rooster');
     const paneel = page.getByTestId('aios-rooster-maken');
     await paneel.getByRole('button', { name: 'Rooster maken' }).click();
     const melding = paneel.getByTestId('aios-lege-diensten');
@@ -329,14 +328,12 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
     const tekst = await melding.textContent();
 
     await page.reload();
-    await openAiosSectie(page, 'Rooster');
     await expect(page.getByTestId('aios-lege-diensten')).toHaveText(tekst!);
 
     const ctx = await browser.newContext({ viewport: { width: 1100, height: 900 } });
     const nieuw = await ctx.newPage();
     await loginAsBeheerder(nieuw);
     await nieuw.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
-    await openAiosSectie(nieuw, 'Rooster');
     await expect(nieuw.getByTestId('aios-lege-diensten')).toHaveText(tekst!);
     await ctx.close();
   });
@@ -390,11 +387,9 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
     await expect(klaar.or(toch)).toBeVisible();
     if (await toch.isVisible()) await toch.click();
     await expect(klaar).toBeVisible();
-    await openAiosSectie(page, 'Rooster');
     const nu = Number(((await page.getByTestId('aios-nog-leeg').textContent()) ?? '').match(/(\d+)/)?.[1] ?? '0');
     expect(nu).toBeLessThan(leeg);
     await page.reload();
-    await openAiosSectie(page, 'Rooster');
     const naVerversen = ((await page.getByTestId('aios-nog-leeg').textContent()) ?? '').match(/(\d+)/)?.[1];
     expect(Number(naVerversen)).toBe(nu);
   });
@@ -410,7 +405,6 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
   });
 
   await test.step('follow what it says: remove the roster, the message about empty diensten goes with it, then open again', async () => {
-    await openAiosSectie(page, 'Rooster');
     const paneel = page.getByTestId('aios-rooster-maken');
     await paneel.getByRole('button', { name: 'Rooster verwijderen' }).click();
     await paneel.getByRole('button', { name: 'Ja, rooster verwijderen' }).click();
@@ -420,7 +414,6 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
     // The message about what comes first was for the roster that is gone: it does not stay beside a button that works now.
     await expect(page.getByTestId('aios-eerst-verwijderen')).toHaveCount(0);
     await page.reload();
-    await openAiosSectie(page, 'Rooster');
     await expect(page.getByTestId('aios-lege-diensten')).toHaveCount(0);
     expect((db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_generatie WHERE period_id = ?').get(ids.period) as { n: number }).n).toBe(0);
     await open();
