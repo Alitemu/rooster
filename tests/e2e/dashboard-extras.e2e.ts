@@ -85,9 +85,9 @@ test.describe('Periodepagina', () => {
     await page.getByRole('button', { name: 'Mailinstellingen' }).click();
     const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
     await expect(dialog.getByRole('heading', { name: 'Gmail-account voor de achterwacht en de AIOS samen' })).toBeVisible();
-    const achterwacht = dialog.locator('div', { has: dialog.getByRole('heading', { name: 'Achterwacht', exact: true }) }).last();
-    await expect(achterwacht.getByLabel('Verzendlijst sturen naar')).toBeVisible();
-    await expect(achterwacht.getByLabel('Contactadres van de planner')).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Achterwacht', exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('Verzendlijst sturen naar', { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('Contactadres van de planner', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('heading', { name: 'AIOS', exact: true })).toBeVisible();
     await expect(dialog.getByLabel('Verzendlijst van de AIOS sturen naar')).toBeVisible();
     await expect(dialog.getByLabel('Contactadres van de planner van de AIOS')).toBeVisible();
