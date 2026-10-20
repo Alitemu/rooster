@@ -387,8 +387,10 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
     await expect(klaar.or(toch)).toBeVisible();
     if (await toch.isVisible()) await toch.click();
     await expect(klaar).toBeVisible();
-    const nu = Number(((await page.getByTestId('aios-nog-leeg').textContent()) ?? '').match(/(\d+)/)?.[1] ?? '0');
-    expect(nu).toBeLessThan(leeg);
+    // The card above reads the roster again after the change: wait for the new number.
+    const nogLeegNu = async () => Number(((await page.getByTestId('aios-nog-leeg').textContent()) ?? '').match(/(\d+)/)?.[1] ?? '0');
+    await expect.poll(nogLeegNu).toBeLessThan(leeg);
+    const nu = await nogLeegNu();
     await page.reload();
     const naVerversen = ((await page.getByTestId('aios-nog-leeg').textContent()) ?? '').match(/(\d+)/)?.[1];
     expect(Number(naVerversen)).toBe(nu);
