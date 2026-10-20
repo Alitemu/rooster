@@ -116,3 +116,32 @@ def test_one_block_in_four_weeks_where_it_can():
         # Every other week, not two weeks running.
         assert all(b - a >= 2 for a, b in zip(weken_, weken_[1:])), (naam, weken_)
 
+
+
+def _soort_aantallen(inp, toegewezen, code):
+    per = {a['id']: 0 for a in inp['aios']}
+    for dienst_id, aios_id in toegewezen.items():
+        if dienst_id.startswith(f'{code}-'):
+            per[aios_id] += 1
+    return per
+
+
+def test_nights_are_shared_before_anything_else():
+    inp = weken(4)
+    _meer(inp, 10)
+    uit, toegewezen = los_op(inp)
+    assert not uit.leeg
+    nachten = _soort_aantallen(inp, toegewezen, 'ND')
+    # 28 nights over 10 AIOS: 2 or 3 each (a block holds 3 nights or 1, so one more or less is room).
+    assert max(nachten.values()) - min(nachten.values()) <= 3, nachten
+
+
+def test_the_order_of_what_is_shared_fairly():
+    import model
+
+    # The planner's order, most important first: nights, dagdiensten, evenings at the weekend, in the week, uitloop.
+    volgorde = ['NACHT', 'DAG', 'AVOND_WEEKEND', 'AVOND', 'UITLOOP']
+    gewichten = [model.W_SOORT[s] for s in volgorde]
+    assert gewichten == sorted(gewichten, reverse=True) and len(set(gewichten)) == 5
+    # An evening at the weekend is its own soort, not the evening in the week.
+    assert [model.EERLIJK_VAN_CODE[c] for c in ('ND', 'DD', 'ADW', 'AD', 'UD')] == volgorde

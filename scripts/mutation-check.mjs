@@ -2506,6 +2506,24 @@ const MUTATIONS = [
   },
   // The AIOS's own solver (aios-solver/, docs/aios-rooster.md step 3).
   {
+    name: "aios-solver: the evening at the weekend counted with the evenings in the week",
+    file: "aios-solver/model.py",
+    find: "'ADW': 'AVOND_WEEKEND'",
+    replace: "'ADW': 'AVOND'",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_eerlijkheid.py", "-k", "order_of_what"],
+  },
+  {
+    name: "aios-solver: nights weigh less than uitloopdiensten",
+    file: "aios-solver/model.py",
+    find: "W_SOORT = {'NACHT': 1500,",
+    replace: "W_SOORT = {'NACHT': 50,",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_eerlijkheid.py", "-k", "order_of_what or nights_are_shared"],
+  },
+  {
     name: "aios-solver: someone outside Geldig vanaf/tot",
     file: "aios-solver/model.py",
     find: "    regel_1_beschikbaar,\n",

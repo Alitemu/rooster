@@ -539,6 +539,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.103.0:** de AIOS-solver verdeelt de diensten eerlijker per soort, in de volgorde die de planner koos: nachtdiensten, dagdiensten, avonddiensten in het weekend, avonddiensten doordeweeks en uitloopdiensten. In een meting met 20 AIOS liep het aantal nachtdiensten eerst uiteen van 0 tot 8 en nu van 3 tot 6. Uitloopdiensten compenseren een gemiste nachtdienst minder snel. De achterwacht verandert niet.
+
 **Vanaf versie 0.102.0:**
 
 - *Ruilen alleen bij een definitief rooster* (achterwacht en AIOS). Bij een voorlopig

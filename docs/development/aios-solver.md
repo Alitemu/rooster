@@ -248,12 +248,21 @@ Soft, weighted in one objective (the planner's choice, as the achterwacht's:
 fairness before liever niet): W_LEEG per empty dienst (1 000 000), W_BOVEN_HELFT
 (20 000) per option from the part above half, W_PUNT (100 per tenth of a point)
 off the share plus W_PUNT_MAX on the largest such difference, per soort
-(nights 300, evenings 200, dagdiensten 100 per dienst; nights weigh most, H2),
+W_SOORT (0.103.0, the planner's order, most important first: nights 1500,
+dagdiensten 600, evenings at the weekend 300, evenings in the week 200,
+uitloopdiensten 100, per dienst off the share; the evening at the weekend
+(ADW) is its own soort, `Slot.eerlijk_soort`; the points are not enough on
+their own: an uitloopdienst counts 0,2 and made up for a night not done),
 W_FEESTDAG (300) per feestdagdienst off the share over the years, W_LIEVER_NIET
 (500), spreading W_SPREIDING (400) per block too many in any two and in any
 four weeks (the planner's choice: one block in four weeks; with four weeks
 alone three blocks in three weeks came out as cheap as one every other week),
 a granted 4-block or two dagdiensten -300, voorkeur -150.
+
+Measured on 20 AIOS in a quarter (120 s, 40% of the options blocked):
+before 0.103.0 nights 0 to 8 per AIOS and uitloopdiensten 0 to 14; since,
+nights 3 to 6 and uitloopdiensten 0 to 7. Heavier nights (2500) made the
+percentages drift apart (14,8 to 19,1) for no gain, so 1500 it is.
 
 Shares: points to fte x the werkdagen (Monday to Friday, no feestdag) someone
 can do diensten on (within Geldig vanaf/tot, not during an onderbreking; leave

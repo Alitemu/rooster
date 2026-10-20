@@ -54,7 +54,7 @@ W_PUNT_MAX = 200  # per tenth of a point of the largest such difference
 # (0.103.0): nights, dagdiensten, evenings at the weekend, evenings in the week, uitloopdiensten. Counted apart from the
 # points: a night is a point like a dagdienst, and an uitloopdienst (0,2) used to make up for a night someone did not
 # do (the measurement of October 2026: 1 to 8 nights between 20 AIOS, one with 3 nights and 16 uitloopdiensten).
-W_SOORT = {'NACHT': 1500, 'DAG': 600, 'AVOND_WEEKEND': 300, 'AVOND': 150, 'UITLOOP': 50}
+W_SOORT = {'NACHT': 1500, 'DAG': 600, 'AVOND_WEEKEND': 300, 'AVOND': 200, 'UITLOOP': 100}
 # The soort that fairness counts per code: the evening at the weekend (ADW) is its own, not the evening in the week.
 EERLIJK_VAN_CODE = {'ND': 'NACHT', 'DD': 'DAG', 'ADW': 'AVOND_WEEKEND', 'AD': 'AVOND', 'UD': 'UITLOOP'}
 # Who inwerkt does evenings and nights only after the inwerkperiode: their share of these is pro rata (the others: all werkdagen).
