@@ -335,8 +335,8 @@ export function AiosDienstpercentage({ periodId, status, versie }: { periodId: s
               <th className="py-1 pr-2 font-medium text-right" title="nachten, avonden, dagdiensten, uitloopdiensten">
                 N/A/D/U
               </th>
-              <th className="py-1 pr-2 font-medium text-right" title="ingedeeld op liever niet">
-                Liever niet
+              <th className="py-1 pr-2 font-medium text-right" title="Aantal diensten waarop de AIOS is ingedeeld terwijl die dag liever niet of geblokkeerd was">
+                Ingedeeld op liever niet dagen
               </th>
               <th className="py-1 font-medium" title="uit het vorige kwartaal of van vóór de app">
                 Saldo
