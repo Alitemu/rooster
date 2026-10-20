@@ -136,6 +136,7 @@ describe('POST /api/link-aanvragen', () => {
 
     expect(res.status).toBe(200);
     const lijst = verzendlijstPayload(sink.received[0].raw);
+    expect(lijst.dienst).toBe('ACHTERWACHT');
     expect(lijst.soort).toBe('LINK_AANVRAAG');
     expect(lijst.periode).toBe('Najaar 2099');
     expect(lijst.aanvraag_email).toBe('iemand@werk.example');

@@ -158,6 +158,7 @@ describe('voorlopig publiceren en definitief maken', () => {
 
     const lijst = verzendlijstPayload(sink.received[0].raw);
     expect(lijst.soort).toBe('ROOSTER_VOORLOPIG');
+    expect(lijst.dienst).toBe('ACHTERWACHT');
     const vanA = lijst.berichten.find((b: { codenaam: string }) => b.codenaam === `A-${f.tag}`)!;
     expect(vanA.onderwerp).toBe('Voorlopig rooster Voorjaar');
     expect(vanA.tekst).toContain('- dinsdag 5 januari 2027: avonddienst');

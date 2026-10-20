@@ -460,9 +460,10 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   meldt bij een AIOS met andere) en verzoeken per AIOS (4 avonden, 4 nachten, twee dagdiensten, inwerken,
   onderbreking, parttimedagen, afwezigheid en de tellers).
 - Mail: één mailaccount voor beide roosters, hoogstens 100 tot 150 mails per dag
-  als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de
-  keuze van de planner in oktober 2026): de verzendlijst van de AIOS gaat naar
-  een eigen stroomadres. Dat stelt de beheerder in op de pagina van een periode
+  als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroomadres (N1, de
+  keuze van de planner in oktober 2026). Sinds 0.105.0 kan dat hetzelfde postvak zijn
+  als dat van de achterwacht: elke bijlage zegt in het veld `dienst` van wie ze is,
+  zodat één stroom beide bedient. Dat stelt de beheerder in op de pagina van een periode
   van de AIOS. Ook de mails over ruilen gaan via die stroom (0.80.0). De lijst met adressen van de AIOS staat bij de
   roosteraar (N2). Geen kopie voor de opleider (N4). Herinneringen gaan ook
   vanzelf, een week en een dag voor de deadline, net als bij de achterwacht

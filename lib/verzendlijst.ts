@@ -82,7 +82,18 @@ export function tekstNaarHtml(tekst: string): string {
     .replace(/\r?\n/g, '<br>');
 }
 
+/**
+ * Whose mailing it is. One flow can serve both diensten: it reads this field
+ * and looks the codenamen up in the rows of that dienst (the codenamen of the
+ * two never clash, but `Planner` and `Roosterbureau` are one pair per dienst).
+ * Set by buildVerzendlijst, never by the caller: a mailing cannot claim to be
+ * the other dienst's.
+ */
+export type VerzendlijstDienst = 'ACHTERWACHT' | 'AIOS';
+
 export interface Verzendlijst {
+  /** Which dienst this mailing is of; the flow picks its rows by it. */
+  dienst: VerzendlijstDienst;
   /** What this mailing is. Every bericht in it has the same soort. */
   soort: VerzendlijstSoort;
   /** Sent without the planner pressing a button (a scheduled reminder, a swap). */
@@ -126,6 +137,7 @@ export function buildVerzendlijst(
 ): Verzendlijst {
   const uit = (b: VerzendlijstBericht): VerzendlijstBerichtUit => ({ ...b, html: tekstNaarHtml(b.tekst) });
   return {
+    dienst: 'ACHTERWACHT',
     soort: meta.soort,
     automatisch: meta.automatisch,
     periode: meta.periode,

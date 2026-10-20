@@ -6,7 +6,10 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 
 ## Mailing personal links (verzendlijst)
 
-The AIOS have their own flow (docs/aios-rooster.md, "Mail"): their mail
+The AIOS have their own address setting (docs/aios-rooster.md, "Mail"), and since 0.105.0 the
+same flow can serve both: every verzendlijst carries `dienst` (`ACHTERWACHT` or `AIOS`),
+set by buildVerzendlijst in each copy, never by a caller, and the flow picks its rows by
+it (docs/verzendlijst-power-automate.md). The AIOS's mail
 goes through lib/aiosMail.ts, a copy of the sending here, to the address
 under `aios.mail.verzendlijst_aan`, from the same Gmail account. Their
 automatic reminders (lib/aiosAutoHerinneringen.ts, 0.73.0) are a copy of

@@ -286,6 +286,7 @@ describe("the AIOS's mail goes to their own flow", () => {
     expect(res.status, await res.clone().text()).toBe(200);
     await waitForMails(sink, 1);
     expect(sink.received[0].to).toEqual([AAN_AIOS]);
+    expect(verzendlijstPayload(sink.received[0].raw).dienst).toBe('AIOS');
     const bericht = verzendlijstPayload(sink.received[0].raw).berichten.find((b) => b.codenaam === aios.codenaam)!;
     expect(bericht.tekst).toMatch(/Het rooster van de AIOS voor/);
     expect(bericht.tekst).toMatch(/\/aios\/[A-Za-z0-9_-]+/);
@@ -327,6 +328,7 @@ describe("the AIOS's mail goes to their own flow", () => {
     expect(res.status, await res.clone().text()).toBe(200);
     await waitForMails(sink, 1);
     expect(sink.received[0].to).toEqual([AAN_AIOS]);
+    expect(verzendlijstPayload(sink.received[0].raw).dienst).toBe('AIOS');
     const lijst = JSON.stringify(verzendlijstPayload(sink.received[0].raw));
     expect(lijst).toContain(aios.codenaam);
     expect(lijst).not.toContain(staf.xCodenaam);

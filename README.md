@@ -539,6 +539,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.105.0:** elke verzendlijst heeft een veld `dienst` (`ACHTERWACHT` of `AIOS`). Eén Power Automate-stroom kan daarmee beide diensten bedienen, met één tabel `Adressen` met een kolom `Dienst`, en dezelfde stroom voor één postvak. Een stroom die alleen voor de achterwacht is gebouwd, werkt ongewijzigd door. Het draaiboek in docs/verzendlijst-power-automate.md beschrijft de stroom nu voor beide diensten.
+
 **Vanaf versie 0.104.0:** op de AIOS-periodepagina staan rooster maken, publiceren, definitief maken en publicatie intrekken nu bovenaan in één kaart met de status, zoals bij de achterwacht. De vragen over de blokken rond de feestdagen staan eronder in een eigen sectie. Is een periode gesloten, dan kunnen deelnemers ook geen deeltijddagen of afwezigheid meer toevoegen of wijzigen, bij de achterwacht en bij de AIOS. Eerder kon dat nog wel, terwijl voorkeuren en bevestigen al dicht waren. In Dienstpercentage en saldo heet de kolom "Liever niet" nu "Ingedeeld op liever niet dagen".
 
 **Vanaf versie 0.103.0:** de AIOS-solver verdeelt de diensten eerlijker per soort, in de volgorde die de planner koos: nachtdiensten, dagdiensten, avonddiensten in het weekend, avonddiensten doordeweeks en uitloopdiensten. In een meting met 20 AIOS liep het aantal nachtdiensten eerst uiteen van 0 tot 8 en nu van 3 tot 6. Uitloopdiensten compenseren een gemiste nachtdienst minder snel. De achterwacht verandert niet.

@@ -1386,6 +1386,20 @@ const MUTATIONS = [
     tests: ["lib/aiosVoorkeur"],
   },
   {
+    name: "verzendlijst: the achterwacht's mailing says it is the AIOS's",
+    file: "lib/verzendlijst.ts",
+    find: "    dienst: 'ACHTERWACHT',",
+    replace: "    dienst: 'AIOS',",
+    tests: ["lib/verzendlijst.test.ts", "app/api/link-aanvragen/route.test.ts"],
+  },
+  {
+    name: "aios: the AIOS's mailing says it is the achterwacht's",
+    file: "lib/aiosVerzendlijst.ts",
+    find: "    dienst: 'AIOS',",
+    replace: "    dienst: 'ACHTERWACHT',",
+    tests: ["lib/aiosVerzendlijst.test.ts", "app/api/aios/aiosApart.test.ts"],
+  },
+  {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
     file: 'lib/aiosMail.ts',
     find: '  const to = aiosStroomAdres();',
