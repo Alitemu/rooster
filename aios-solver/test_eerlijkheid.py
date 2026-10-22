@@ -101,20 +101,19 @@ def test_feestdagen_go_to_who_had_fewer_over_the_years():
         assert _per(uit, meer).feestdagdiensten > _per(uit, minder).feestdagdiensten
 
 
-@pytest.mark.parametrize('seed', [1, 2, 3])
+@pytest.mark.parametrize('seed', [1, 2, 3, 4, 5, 6])
 def test_a_feestdag_debt_is_not_level_with_a_fair_share(seed):
-    """0.111.0: the share of feestdagdiensten is small (here 1,5), and it was rounded to a whole dienst after the
-    debt was held at none: who had two too many looked like who is level. In hundredths the debt counts."""
-    inp = weken(4, {dag(1), dag(8), dag(15)})
+    """0.111.0: the share of feestdagdiensten is small (here 0,5), and it was rounded to a whole dienst after the
+    debt was held at none: who had two too many looked like who is level, and the dienst could go to either."""
+    inp = weken(4, {dag(1)})
     aios(inp, 'schuld', feestdag_achterstand=-2)
     _meer(inp, 5)
     inp['seed'] = seed
     uit, _ = los_op(inp)
     schuld = _per(uit, 'schuld')
-    # 9 feestdagdiensten over 6: 1,5 each, -0,5 with the debt: kept as it is, for the next quarter.
-    assert schuld.doel_feestdagdiensten == pytest.approx(-0.5, abs=0.05)
+    # 3 feestdagdiensten over 6: 0,5 each, -1,5 with the debt: kept as it is, for the next quarter.
+    assert schuld.doel_feestdagdiensten == pytest.approx(-1.5, abs=0.05)
     assert schuld.feestdagdiensten == 0, schuld.feestdagdiensten
-    assert all(_per(uit, f'a{i:02d}').feestdagdiensten >= 1 for i in range(5))
 
 
 def test_one_block_in_four_weeks_where_it_can():

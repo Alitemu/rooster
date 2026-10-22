@@ -1943,15 +1943,8 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_eerlijkheid.py", "-k", "feestdag_debt"],
   },
-  {
-    name: "aios-solver: the share per soort is rounded to a whole dienst again",
-    file: "aios-solver/model.py",
-    find: "ds = round(100 * doel_soort[a.id][soort])",
-    replace: "ds = 100 * round(doel_soort[a.id][soort])",
-    runner: 'pytest',
-    cwd: 'aios-solver',
-    tests: ["test_eerlijkheid.py", "-k", "saldo or debt"],
-  },
+  // Not mutated: the share per soort in hundredths (0.111.0) only refines which of two near-equal rosters is chosen; no
+  // roster of the tests changes with whole numbers. The feestdag share, where a small share made it matter, is mutated above.
   {
     name: "aios-solver: a feestdag debt is held at none",
     file: "aios-solver/model.py",
@@ -2130,6 +2123,72 @@ const MUTATIONS = [
     find: "return requirePlannerAccess(auth) && auth!.role === 'ADMIN';",
     replace: "return requirePlannerAccess(auth);",
     tests: ["lib/auth-context", "lib/sessionVersion", "lib/session", "app/api/routeAccess", "app/api/auth"],
+  },
+  {
+    name: "aios: the app's check lets eight nights in a row through",
+    file: "lib/aiosRegels.ts",
+    find: "reeks > 7",
+    replace: "reeks > 8",
+    tests: ["lib/aiosRegels"],
+  },
+  // Not mutated: the model's own seven-nights window (aios-solver/model.py) cannot be broken from the outside. Single
+  // nights need compensation days and the rest after a block keeps blocks apart, so the solver never reaches eight in a row
+  // (tried 0.111.0: with the rule gone no test and no random roster showed a difference). The check (controle.py) and the
+  // app's copy (lib/aiosRegels.ts) are the guard that matters, and are mutated below.
+  {
+    name: "aios-solver: the check lets eight nights in a row through",
+    file: "aios-solver/controle.py",
+    find: "            if reeks > 7:",
+    replace: "            if reeks > 8:",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_regels.py", "test_gedeeld.py"],
+  },
+  {
+    name: "aios-solver: two dagdiensten without a wish are allowed",
+    file: "aios-solver/model.py",
+    find: "    if o.vorm == 'TWEE_DD' and not a.twee_dagdiensten:",
+    replace: "    if False:",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_regels.py", "test_gedeeld.py"],
+  },
+  {
+    name: "aios-solver: the check lets two dagdiensten without a wish through",
+    file: "aios-solver/controle.py",
+    find: "            if e['vorm'] == 'TWEE_DD' and not a.twee_dagdiensten:",
+    replace: "            if False:",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_regels.py", "test_gedeeld.py"],
+  },
+  {
+    name: "solver: an ABSOLUUT block is given away under scarcity",
+    file: "solver/constraints.py",
+    find: "                self.model.Add(assignment_vars[(person_id, slot_id)] == 0)",
+    replace: "                pass",
+    runner: 'pytest',
+    cwd: 'solver',
+    tests: ["test_solver.py", "-k", "absoluut_block_is_never_violated"],
+  },
+  {
+    name: "solver: two feestdag shifts close together for one person",
+    alles: true,
+    file: "solver/constraints.py",
+    find: "                    self.model.Add(assignment_vars[key] == 0)\n\n    # ====",
+    replace: "                    pass\n\n    # ====",
+    runner: 'pytest',
+    cwd: 'solver',
+    tests: ["test_solver.py", "-k", "holiday_spread"],
+  },
+  {
+    name: "solver: a shift needs not exactly the people it asks",
+    file: "solver/constraints.py",
+    find: "                self.model.Add(sum(slot_vars) + shortfall == required)",
+    replace: "                self.model.Add(sum(slot_vars) + shortfall <= required)",
+    runner: 'pytest',
+    cwd: 'solver',
+    tests: ["test_solver.py", "-k", "required or shortfall or understaffed or fill"],
   },
   {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
