@@ -1816,13 +1816,6 @@ const MUTATIONS = [
     tests: ["lib/periodInputGate"],
   },
   {
-    name: "period: the deadline route does not compare the row version",
-    file: "app/api/periods/[id]/deadline/route.ts",
-    find: "if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {",
-    replace: "if (false) {",
-    tests: ["app/api/periods/[id]/deadline"],
-  },
-  {
     name: "swap: the list of requests shows those of a period in the prullenbak",
     file: "app/api/person/[id]/swap-requests/route.ts",
     find: "        AND per.verwijderd_op IS NULL\n",
@@ -1854,7 +1847,7 @@ const MUTATIONS = [
     name: "aios: the swap limit counts only pending requests, so withdraw and ask again never ends",
     file: "lib/aiosRuilen.ts",
     find: "WHERE aanvrager_id = ? AND aangemaakt_op > ?').get(personId, sinds)",
-    replace: "WHERE aanvrager_id = ? AND status = \'IN_BEHANDELING\' AND aangemaakt_op > ?').get(personId, sinds)",
+    replace: "WHERE aanvrager_id = ? AND status = \\'IN_BEHANDELING\\' AND aangemaakt_op > ?').get(personId, sinds)",
     tests: ["app/api/aios/aiosRuilen"],
   },
   {
@@ -2004,13 +1997,6 @@ const MUTATIONS = [
     find: "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n        with:\n          persist-credentials: false\n      - run: npm ci",
     replace: "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n      - run: npm ci",
     tests: ["deployConfig"],
-  },
-  {
-    name: "period: the ruleset route does not compare the row version",
-    file: "app/api/periods/[id]/ruleset/route.ts",
-    find: "    if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {",
-    replace: "    if (false) {",
-    tests: ["app/api/periods/[id]/ruleset"],
   },
   {
     name: "participant: a preference is taken after the deadline",
@@ -2228,6 +2214,23 @@ const MUTATIONS = [
     find: "      for (const d of compensatie(e, feestdagen)) if (d >= vanaf) dagen.add(d);",
     replace: "",
     tests: ["lib/aiosRegels"],
+  },
+  // Not mutated: the early row-version check of the deadline and the ruleset routes. Each route checks the version twice
+  // (before, and in the WHERE of the write), so removing the first changes nothing a request can see: the write still
+  // answers 409. The tests (deadline/route.test.ts, ruleset/route.test.ts) prove the behaviour; no one mutation can break both.
+  {
+    name: "aios: a quarter is opened with a deadline that is not written as one",
+    file: "lib/aiosOpen.ts",
+    find: "!isDeadlineTekst(deadline) || ",
+    replace: "",
+    tests: ["lib/aiosOpen"],
+  },
+  {
+    name: "aios: a deadline that cannot be read counts as not passed",
+    file: "lib/aiosInvoer.ts",
+    find: "return isNaN(moment) || now.getTime() > moment;",
+    replace: "return now.getTime() > moment;",
+    tests: ["lib/aiosInvoer"],
   },
   {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",

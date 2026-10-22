@@ -48,7 +48,7 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Frontend + Backend | Next.js App Router | 16.3.8 |
+| Frontend + Backend | Next.js App Router | 16.4.2 |
 | Language | TypeScript | 5.5+ |
 | Styling | Tailwind CSS + shadcn/ui | 3.4+ (build only, devDependencies) |
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |

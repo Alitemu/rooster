@@ -36,6 +36,19 @@ export function buildDeadlinePassedWarning(periods: Array<{ naam: string }>): st
 }
 
 /**
+ * A deadline as the forms write it ("2026-11-05T17:00", with seconds, a zone or milliseconds if added): a copy of the
+ * achterwacht's isDeadlineText (lib/periodInputGate.ts), as the rest of this file is. A number or an object passed
+ * `new Date(...)` and was stored as it came, and a deadline that cannot be read is never passed.
+ */
+export function isDeadlineTekst(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/.test(value) &&
+    !isNaN(new Date(value).getTime())
+  );
+}
+
+/**
  * Whether a deadline has passed. A deadline is stored as the planner's
  * datetime-local input sent it (no timezone, "2027-01-15T17:00"), which
  * `new Date()` reads as local time: the ward's clock, pinned via TZ in
@@ -43,7 +56,9 @@ export function buildDeadlinePassedWarning(periods: Array<{ naam: string }>): st
  * treats it as UTC.
  */
 export function deadlinePassed(deadline: string, now: Date = new Date()): boolean {
-  return now > new Date(deadline);
+  const moment = new Date(deadline).getTime();
+  // A deadline that cannot be read counts as passed: closed, not open for ever.
+  return isNaN(moment) || now.getTime() > moment;
 }
 
 export function checkPeriodAcceptsInput(period: PeriodForInputGate, now: Date = new Date()): InputGateResult {
