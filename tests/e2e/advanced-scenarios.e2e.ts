@@ -5,6 +5,7 @@ import {
   getBaseUrl,
   cleanupTestData,
   loginAsPlanner,
+  openSecties,
 } from './setup';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
@@ -58,6 +59,7 @@ test.describe('Concurrent Operations - E2E', () => {
       // and ignores its timeout, so the old check simply raced the page's
       // client-side fetch and failed about 3 runs in 5.
       const openDialog = async (page: typeof page1) => {
+        await openSecties(page);
         const button = page.getByRole('button', { name: '+ Ruilverzoek' });
         await button.waitFor({ state: 'visible', timeout: 15000 });
         await button.click();
@@ -92,6 +94,7 @@ test.describe('Concurrent Operations - E2E', () => {
     try {
       // Establish the respondent's session, then answer twice.
       await page.goto(getPersonalLinkUrl(respondent.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const url = `${getBaseUrl()}/api/person/${respondent.id}/swap-requests/${swapId}/approve`;
@@ -135,6 +138,7 @@ test.describe('Notification System - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: '🔔 Meldingen' }).click();
 
@@ -178,6 +182,7 @@ test.describe('Notification System - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: '🔔 Meldingen' }).click();
 
@@ -235,6 +240,7 @@ test.describe('Error Handling - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
 
@@ -259,6 +265,7 @@ test.describe('Error Handling - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const res = await page.request.post(
@@ -303,6 +310,7 @@ test.describe('Input gate - E2E', () => {
     const user = testData.users[0];
 
     await page.goto(getPersonalLinkUrl(user.token));
+    await openSecties(page);
     await page.waitForLoadState('networkidle');
     const calendarTab = page.getByRole('button', { name: /Voorkeuren/ }).first();
     if (await calendarTab.count()) {
@@ -331,6 +339,7 @@ test.describe('Input gate - E2E', () => {
     const user = testData.users[0];
 
     await page.goto(getPersonalLinkUrl(user.token));
+    await openSecties(page);
     await page.waitForLoadState('networkidle');
     const calendarTab = page.getByRole('button', { name: /Voorkeuren/ }).first();
     if (await calendarTab.count()) {
@@ -370,6 +379,7 @@ test.describe('Mobile Responsiveness - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       await expect(page.locator('main')).toBeVisible();
@@ -392,6 +402,7 @@ test.describe('Mobile Responsiveness - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
 

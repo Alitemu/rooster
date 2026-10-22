@@ -16,7 +16,8 @@ const datumLang = (d: string) =>
   new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 const procent = (x: number) => `${(x * 100).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`;
 
-export function AiosMijnRooster({ personId, periodId }: { personId: string; periodId: string }) {
+/** `inSectie`: on the page's foldable section, which has the title and the frame (0.110.0). */
+export function AiosMijnRooster({ personId, periodId, inSectie = false }: { personId: string; periodId: string; inSectie?: boolean }) {
   const [rooster, setRooster] = useState<AiosEigenRooster | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
@@ -40,8 +41,8 @@ export function AiosMijnRooster({ personId, periodId }: { personId: string; peri
   if (!rooster) return <div className="card p-4 text-sm text-neutral-600">Je rooster laden...</div>;
 
   return (
-    <div className="card p-4 space-y-3" data-testid="aios-mijn-rooster">
-      <h2 className="text-xl font-semibold">Jouw rooster</h2>
+    <div className={inSectie ? 'space-y-3' : 'card p-4 space-y-3'} data-testid="aios-mijn-rooster">
+      {!inSectie && <h2 className="text-xl font-semibold">Jouw rooster</h2>}
       {rooster.voorlopig ? (
         <div className="rounded border-2 border-dashed border-neutral-800 p-3 text-sm" data-testid="aios-voorlopig">
           <p className="font-semibold">Dit is het voorlopige rooster.</p>

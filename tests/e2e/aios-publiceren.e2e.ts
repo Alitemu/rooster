@@ -3,7 +3,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
-import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, openSecties } from './setup';
 import { buildXlsx } from '../fixtures/buildXlsx';
 
 /**
@@ -127,6 +127,11 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   const aiosContext = await browser.newContext({ viewport: { width: 375, height: 800 } });
   const aios = await aiosContext.newPage();
   await aios.goto(ids.link);
+  // Once published: three foldable sections, all closed to begin with.
+  for (const [id, titel] of [['rooster', 'Jouw rooster'], ['ruilen', 'Ruilen'], ['voorkeuren', 'Voorkeuren']]) {
+    await expect(aios.getByTestId(`aios-sectie-${id}`).getByRole('heading', { name: titel }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  }
+  await openSecties(aios);
   const mijn = aios.getByTestId('aios-mijn-rooster');
   await expect(mijn.getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
   await expect(mijn.getByTestId('aios-voorlopig')).toContainText('Dit is het voorlopige rooster.');

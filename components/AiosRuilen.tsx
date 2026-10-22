@@ -87,7 +87,18 @@ function Categorie({
   );
 }
 
-export function AiosRuilen({ personId, periodId, onGeruild }: { personId: string; periodId: string; onGeruild: () => void }) {
+/** `inSectie`: on the page's foldable section, which has the title and the frame (0.110.0). */
+export function AiosRuilen({
+  personId,
+  periodId,
+  onGeruild,
+  inSectie = false,
+}: {
+  personId: string;
+  periodId: string;
+  onGeruild: () => void;
+  inSectie?: boolean;
+}) {
   const [overzicht, setOverzicht] = useState<Overzicht | null>(null);
   const [gekozen, setGekozen] = useState<EenheidUit | null>(null);
   const [kandidaten, setKandidaten] = useState<Kandidaat[] | null>(null);
@@ -225,8 +236,8 @@ export function AiosRuilen({ personId, periodId, onGeruild }: { personId: string
   );
 
   return (
-    <div className="card p-4 space-y-4" data-testid="aios-ruilen">
-      <h2 className="text-xl font-semibold">Ruilen</h2>
+    <div className={inSectie ? 'space-y-4' : 'card p-4 space-y-4'} data-testid="aios-ruilen">
+      {!inSectie && <h2 className="text-xl font-semibold">Ruilen</h2>}
       {!overzicht.ruilen_kan ? (
         <p className="text-sm text-neutral-800" data-testid="aios-ruilen-voorlopig">
           Ruilen kan pas als het rooster definitief is. Klopt er iets niet in je voorlopige rooster? Meld dat bij de planner

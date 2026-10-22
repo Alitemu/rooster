@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react';
 import { parseISO } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { SwapRequestDialog } from './SwapRequestDialog';
+import { DeelnemerHarmonica, DeelnemerSectie } from '@/components/DeelnemerSectie';
 import { SwapManagementPanel } from './SwapManagementPanel';
 
 interface AssignedShift {
@@ -146,10 +147,13 @@ export function PersonalRosterView({
   );
 
   return (
+    // Two foldable sections, closed to begin with (0.110.0, layout only): the roster and the swapping.
+    <DeelnemerHarmonica>
+    <div className="space-y-4">
+    <DeelnemerSectie sleutel="rooster" titel="Jouw rooster" testId="deelnemer-sectie-rooster">
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-neutral-900 mb-2">Jouw rooster</h2>
         <p className="text-neutral-600">
           Toegewezen diensten voor deze periode, op basis van je voorkeuren en beschikbaarheid
         </p>
@@ -291,9 +295,24 @@ export function PersonalRosterView({
         </div>
       </div>
 
+      {/* Help text */}
+      <div className="bg-neutral-50 p-4 rounded text-sm text-neutral-600 space-y-2">
+        <p>
+          <strong>A</strong> = Avonddienst | <strong>W</strong> = Weekenddienst |{' '}
+          <strong>F</strong> = Feestdagdienst
+        </p>
+        <p>
+          Vragen over je rooster? Neem contact op met de roosteraar.
+        </p>
+      </div>
+    </div>
+    </DeelnemerSectie>
+
+    <DeelnemerSectie sleutel="ruilen" titel="Ruilen" testId="deelnemer-sectie-ruilen" blijfGeladen>
+    <div className="space-y-8">
       {/* Shift Swap Management - not on paper: a printed roster is for
           reading, the buttons do nothing there. */}
-      <div className="card p-6 space-y-4 print:hidden">
+      <div className="space-y-4 print:hidden">
         {/* Stacks on narrow screens: side by side, the button cannot shrink
             and pushed this row ~18px past the viewport at 375px, which
             CLAUDE.md rules out ("readable on 375px width"). */}
@@ -370,16 +389,9 @@ export function PersonalRosterView({
         )}
       </div>
 
-      {/* Help text */}
-      <div className="bg-neutral-50 p-4 rounded text-sm text-neutral-600 space-y-2">
-        <p>
-          <strong>A</strong> = Avonddienst | <strong>W</strong> = Weekenddienst |{' '}
-          <strong>F</strong> = Feestdagdienst
-        </p>
-        <p>
-          Vragen over je rooster? Neem contact op met de roosteraar.
-        </p>
-      </div>
+    </div>
+    </DeelnemerSectie>
+    </div>
 
       {/* Swap Request Dialog */}
       <SwapRequestDialog
@@ -396,6 +408,6 @@ export function PersonalRosterView({
           setTimeout(() => setSwapSuccessMessage(null), mailVertraagd ? 15000 : 5000);
         }}
       />
-    </div>
+    </DeelnemerHarmonica>
   );
 }

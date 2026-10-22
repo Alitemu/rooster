@@ -3,7 +3,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
-import { getBaseUrl } from './setup';
+import { getBaseUrl, openSecties } from './setup';
 
 /**
  * Step 4f (docs/aios-rooster.md, "Ruilen"): on a definitief AIOS roster one
@@ -96,6 +96,7 @@ test('one AIOS asks, the other approves, and both rosters show the swap', async 
   const ctxA = await browser.newContext({ viewport: { width: 375, height: 800 } });
   const a = await ctxA.newPage();
   await a.goto(ids.linkA);
+  await openSecties(a);
   const ruilenA = a.getByTestId('aios-ruilen');
   await expect(ruilenA.getByRole('heading', { name: 'Ruilen', exact: true })).toBeVisible();
   await ruilenA.getByRole('button', { name: /^Ruilen: Dagdienst, za 4 sep/ }).click();
@@ -130,6 +131,7 @@ test('one AIOS asks, the other approves, and both rosters show the swap', async 
   const ctxB = await browser.newContext({ viewport: { width: 375, height: 800 } });
   const b = await ctxB.newPage();
   await b.goto(ids.linkB);
+  await openSecties(b);
   const ontvangen = b.getByTestId('aios-ruilen-ontvangen');
   await expect(ontvangen.getByRole('heading', { name: 'Ontvangen ruilverzoeken' })).toBeVisible();
   await expect(ontvangen.getByLabel('Filter op status: Ontvangen ruilverzoeken').locator('option').first()).toHaveText('Alle statussen (1)');
@@ -157,6 +159,7 @@ test('on a voorlopig roster the page says why nothing can be swapped, and asks f
     const ctx = await browser.newContext({ viewport: { width: 375, height: 800 } });
     const page = await ctx.newPage();
     await page.goto(ids.linkA);
+    await openSecties(page);
     const voorlopig = page.getByTestId('aios-ruilen-voorlopig');
     await expect(voorlopig).toContainText('Ruilen kan pas als het rooster definitief is. Klopt er iets niet in je voorlopige rooster? Meld dat bij de planner');
     await expect(page.getByTestId('aios-ruilen').getByRole('button', { name: /^Ruilen: / })).toHaveCount(0);

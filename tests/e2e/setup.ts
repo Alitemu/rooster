@@ -223,6 +223,26 @@ export async function openDienstrooster(page: Page): Promise<void> {
 }
 
 /**
+ * A published roster puts the participant's page in foldable sections, all
+ * closed to begin with (0.110.0): open them all and pin them, so the rest of
+ * a test sees the page as it saw it before. A page that is not published has
+ * none and is left alone.
+ */
+export async function openSecties(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle');
+  const ids = ['aios-sectie-rooster', 'aios-sectie-ruilen', 'aios-sectie-voorkeuren', 'deelnemer-sectie-rooster', 'deelnemer-sectie-ruilen'];
+  for (const id of ids) {
+    const sectie = page.getByTestId(id);
+    if ((await sectie.count()) === 0) continue;
+    const kop = sectie.getByRole('heading').getByRole('button');
+    if ((await kop.getAttribute('aria-expanded')) !== 'true') await kop.click();
+    await expect(kop).toHaveAttribute('aria-expanded', 'true');
+    const vast = sectie.getByRole('button', { name: /^Vastzetten|^Losmaken/ });
+    if ((await vast.getAttribute('aria-pressed')) !== 'true') await vast.click();
+  }
+}
+
+/**
  * Get personal link URL for a user
  */
 export function getPersonalLinkUrl(token: string): string {

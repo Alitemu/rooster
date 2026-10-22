@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getPersonalLinkUrl, getBaseUrl, cleanupTestData } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, getBaseUrl, cleanupTestData, openSecties } from './setup';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 
@@ -119,6 +119,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(requester.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       // Open the list of own swap requests first - with it already open,
@@ -189,6 +190,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(respondent.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
@@ -217,6 +219,7 @@ test.describe('Swap Request Workflow - E2E', () => {
     const page = await context.newPage();
     try {
       await page.goto(getPersonalLinkUrl(requester.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
       const herinnering = page.getByTestId('swap-verzonden').getByTestId('ruil-herinnering').first();
@@ -269,6 +272,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await requesterPage.goto(getPersonalLinkUrl(requester.token));
+      await openSecties(requesterPage);
       await requesterPage.waitForLoadState('networkidle');
       await requesterPage.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
       const pendingOwn = requesterPage.getByRole('button', { name: 'Intrekken' });
@@ -276,6 +280,7 @@ test.describe('Swap Request Workflow - E2E', () => {
       const pendingBefore = await pendingOwn.count();
 
       await page.goto(getPersonalLinkUrl(respondent.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
 
@@ -318,6 +323,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(requester.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const created = await page.request.post(
@@ -338,6 +344,7 @@ test.describe('Swap Request Workflow - E2E', () => {
       const swapId = (await created.json()).data.swap_request_id as string;
 
       await page.goto(getPersonalLinkUrl(respondent.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
 
@@ -376,6 +383,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
 
@@ -410,6 +418,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const res = await page.request.post(`${getBaseUrl()}/api/person/${user.id}/swap-requests`, {
@@ -450,6 +459,7 @@ test.describe('Swap Request Workflow - E2E', () => {
       // A third party with a valid session of their own must not be able to
       // approve someone else's swap.
       await page.goto(getPersonalLinkUrl(bystander.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const res = await page.request.post(
@@ -513,6 +523,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(respondent.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const res = await page.request.post(
@@ -540,6 +551,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(user.token));
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
       await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
 

@@ -24,6 +24,7 @@ import { AiosAfwezigheid, type Absence } from '@/components/AiosAfwezigheid';
 import { AiosBevestigen, AiosVoorkeuren } from '@/components/AiosPreferences';
 import { AiosMijnRooster } from '@/components/AiosMijnRooster';
 import { AiosRuilen } from '@/components/AiosRuilen';
+import { AiosHarmonica, AiosSectie } from '@/components/AiosSectie';
 import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 
 type Stap = 'deeltijd' | 'voorkeuren' | 'bevestigen' | 'ingediend';
@@ -178,31 +179,8 @@ function AiosLinkPagina() {
   const deadlineVoorbij = new Date() > new Date(periode.deadline);
   const invoerDicht = !checkPeriodAcceptsInput(periode).allowed;
 
-  return (
-    <div className="container-main py-8 space-y-6">
-      {waarschuwing && <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">{waarschuwing}</div>}
-
-      <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{periode.naam}</h1>
-            <p className="text-neutral-600 mb-4">
-              AIOS · {datum(periode.start_datum)} t/m {datum(periode.eind_datum)}
-            </p>
-            <p className="text-sm text-neutral-600">Deadline: {deadlineTekst(periode.deadline)}</p>
-          </div>
-          <button
-            onClick={uitloggen}
-            className="shrink-0 self-start px-4 py-2 rounded font-medium bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-colors text-sm print:hidden"
-          >
-            Uitloggen
-          </button>
-        </div>
-      </div>
-
-      {periode.status === 'GEPUBLICEERD' && <AiosMijnRooster key={geruild} personId={personId} periodId={periode.id} />}
-      {periode.status === 'GEPUBLICEERD' && <AiosRuilen personId={personId} periodId={periode.id} onGeruild={() => setGeruild((n) => n + 1)} />}
-
+  const voorkeurenInhoud = (
+    <>
       {invoerDicht && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-900">
@@ -298,6 +276,48 @@ function AiosLinkPagina() {
             {deadlineVoorbij ? 'Ingevoerde voorkeuren bekijken' : 'Voorkeuren aanpassen'}
           </button>
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="container-main py-8 space-y-6">
+      {waarschuwing && <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">{waarschuwing}</div>}
+
+      <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{periode.naam}</h1>
+            <p className="text-neutral-600 mb-4">
+              AIOS · {datum(periode.start_datum)} t/m {datum(periode.eind_datum)}
+            </p>
+            <p className="text-sm text-neutral-600">Deadline: {deadlineTekst(periode.deadline)}</p>
+          </div>
+          <button
+            onClick={uitloggen}
+            className="shrink-0 self-start px-4 py-2 rounded font-medium bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-colors text-sm print:hidden"
+          >
+            Uitloggen
+          </button>
+        </div>
+      </div>
+
+      {periode.status === 'GEPUBLICEERD' ? (
+        // Once the roster is published: three foldable sections, all closed to begin with (0.110.0, layout only).
+        // Open for input, the page stays as it was: the steps one after the other.
+        <AiosHarmonica>
+          <AiosSectie sleutel="rooster" titel="Jouw rooster" testId="aios-sectie-rooster">
+            <AiosMijnRooster key={geruild} personId={personId} periodId={periode.id} inSectie />
+          </AiosSectie>
+          <AiosSectie sleutel="ruilen" titel="Ruilen" testId="aios-sectie-ruilen">
+            <AiosRuilen personId={personId} periodId={periode.id} onGeruild={() => setGeruild((n) => n + 1)} inSectie />
+          </AiosSectie>
+          <AiosSectie sleutel="voorkeuren" titel="Voorkeuren" testId="aios-sectie-voorkeuren" blijfGeladen>
+            <div className="space-y-6">{voorkeurenInhoud}</div>
+          </AiosSectie>
+        </AiosHarmonica>
+      ) : (
+        voorkeurenInhoud
       )}
     </div>
   );

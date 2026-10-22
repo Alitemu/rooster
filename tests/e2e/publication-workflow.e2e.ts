@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner } from './setup';
+import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner, openSecties } from './setup';
 import { db } from '@/db/client';
 
 /**
@@ -211,6 +211,12 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
       await page.waitForLoadState('networkidle');
 
+      // Foldable sections, closed to begin with: the roster and the swapping.
+      for (const [id, titel] of [['rooster', 'Jouw rooster'], ['ruilen', 'Ruilen']]) {
+        await expect(page.getByTestId(`deelnemer-sectie-${id}`).getByRole('heading', { name: titel }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+      }
+      await openSecties(page);
+
       await expect(page.getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
 
       const expected = (
@@ -240,6 +246,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
     try {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const stored = db
