@@ -9,7 +9,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { LIVE_SWAP_REQUEST_SQL } from '@/lib/periodAccess';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { herinnerRuil } from '@/lib/ruilHerinnering';
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         { status: uitkomst.status }
       );
     }
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, personId, { wijziging: 'herinnering voor ruil gestuurd door planner' });
     return NextResponse.json({ success: true, data: { swap_request_id: swapId, message: 'Herinnering gestuurd' } });
   } catch (error) {
     return internalErrorResponse('swap-remind', error);

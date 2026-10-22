@@ -5,7 +5,7 @@ import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
 import { aiosPersoonlijkeLink, aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
-import { aiosEenheden, aiosRuilKandidaten, losseSleutel } from '@/lib/aiosRuilen';
+import { aiosEenheden, aiosRuilKandidaten, aiosRuilQuotumBereikt, losseSleutel, MAX_AIOS_RUILVERZOEKEN_PER_DAG } from '@/lib/aiosRuilen';
 import { trekAiosPublicatieIn } from '@/lib/aiosPublicatie';
 import { loadAiosPeriode, setAiosVoorkeur } from '@/lib/aiosPreferences';
 import { saveAiosReden } from '@/lib/aiosReden';
@@ -195,6 +195,41 @@ describe('a request', () => {
     expect(verzoek.tekst).toContain('Toelichting: ik heb een cursus');
     expect(lijsten.find((l) => l.soort === 'RUIL_BEVESTIGING')!.berichten[0].codenaam).toBe(cn('x'));
     expect((await vraag(w.x, `blok:${blokVan('ND', '2094-07-14')}`, `blok:${blokVan('ND', '2094-07-28')}`)).json.error.code).toBe('DUPLICATE');
+  });
+
+  it('at most twenty requests per AIOS per 24 hours, withdrawn ones counted; older ones are not', async () => {
+    const eerste = db.prepare(`SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? AND aanvrager_id = ?`).get(w.period, w.x) as { id: string; aangeboden_json: string; gevraagd_json: string; respondent_id: string };
+    const vul = (aantal: number, aangemaakt: string) => {
+      const ids: string[] = [];
+      for (let i = 0; i < aantal; i++) {
+        ids.push(
+          insert('dienstrooster_aios_ruil', {
+            period_id: w.period, aanvrager_id: w.x, respondent_id: eerste.respondent_id,
+            aangeboden_json: '[]', gevraagd_json: '[]', status: 'INGETROKKEN', aangemaakt_op: aangemaakt,
+          })
+        );
+      }
+      return ids;
+    };
+    const ruim = new Date(Date.now() - 25 * 3600_000).toISOString();
+    const oud = vul(MAX_AIOS_RUILVERZOEKEN_PER_DAG, ruim);
+    expect(aiosRuilQuotumBereikt(w.x)).toBe(false);
+    db.prepare(`DELETE FROM dienstrooster_aios_ruil WHERE id IN (${oud.map(() => '?').join(',')})`).run(...oud);
+
+    // The pending one withdrawn so the same pair can be asked again: it still counts, with 19 more it is 20.
+    db.prepare(`UPDATE dienstrooster_aios_ruil SET status = 'INGETROKKEN' WHERE id = ?`).run(eerste.id);
+    const nieuw = vul(MAX_AIOS_RUILVERZOEKEN_PER_DAG - 1, new Date().toISOString());
+    try {
+      expect(aiosRuilQuotumBereikt(w.x)).toBe(true);
+      const voor = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_ruil WHERE period_id = ?').get(w.period) as { n: number }).n;
+      const r = await vraag(w.x, `blok:${blokVan('ND', '2094-07-14')}`, `blok:${blokVan('ND', '2094-07-28')}`);
+      expect(r.status).toBe(429);
+      expect(r.json.error.code).toBe('QUOTA');
+      expect((db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_ruil WHERE period_id = ?').get(w.period) as { n: number }).n).toBe(voor);
+    } finally {
+      db.prepare(`DELETE FROM dienstrooster_aios_ruil WHERE id IN (${nieuw.map(() => '?').join(',')})`).run(...nieuw);
+      db.prepare(`UPDATE dienstrooster_aios_ruil SET status = 'IN_BEHANDELING' WHERE id = ?`).run(eerste.id);
+    }
   });
 
   it('on both pages; the planner reads "gelezen" once the colleague has opened their requests, not before', async () => {

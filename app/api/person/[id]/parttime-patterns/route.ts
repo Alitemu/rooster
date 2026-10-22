@@ -25,7 +25,7 @@ import {
 import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isPlausibleIsoDate, isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ParttimePattern {
@@ -147,7 +147,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // Same reason as the absences route: the range check below compares
     // two strings alphabetically, and every sync compares these against
     // slot dates as YYYY-MM-DD text - a non-date silently matches nothing.
-    if (!isValidIsoDate(geldig_vanaf) || !isValidIsoDate(geldig_tot)) {
+    if (!isValidIsoDate(geldig_vanaf) || !isValidIsoDate(geldig_tot) || !isPlausibleIsoDate(geldig_vanaf) || !isPlausibleIsoDate(geldig_tot)) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_DATE', message: 'Gebruik een geldige datum (JJJJ-MM-DD)' },

@@ -10,7 +10,7 @@
 import { db } from '@/db/client';
 import { isUniqueViolation } from '@/lib/api-errors';
 import { optionalFreeText } from '@/lib/freeText';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isPlausibleIsoDate, isValidIsoDate } from '@/lib/isoDate';
 import { addDays, getISOWeek, parseISO } from '@/lib/holidays';
 import { buildDeadlinePassedWarning } from '@/lib/aiosInvoer';
 import type { AuthContext } from '@/lib/auth-context';
@@ -88,7 +88,7 @@ function patroonFout(weekdag?: string, frequentie?: string, van?: string, tot?: 
   }
   if (frequentie !== undefined && !FREQUENTIES.includes(frequentie)) return fout(400, 'INVALID_FREQUENTIE', 'Onbekende frequentie');
   for (const d of [van, tot]) {
-    if (d !== undefined && !isValidIsoDate(d)) return fout(400, 'INVALID_DATE', 'Gebruik een geldige datum (JJJJ-MM-DD)');
+    if (d !== undefined && (!isValidIsoDate(d) || !isPlausibleIsoDate(d))) return fout(400, 'INVALID_DATE', 'Gebruik een geldige datum (JJJJ-MM-DD)');
   }
   if (van !== undefined && tot !== undefined && van > tot) {
     return fout(400, 'INVALID_RANGE', '"Vanaf" moet vóór of op "tot en met" liggen');

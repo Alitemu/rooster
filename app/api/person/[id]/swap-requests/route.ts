@@ -8,7 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
@@ -69,7 +70,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       JOIN dienstrooster_shift_type ast ON aos.shift_type_id = ast.id
       JOIN dienstrooster_shift_slot gvs ON sr.gevraagde_slot_id = gvs.id
       JOIN dienstrooster_shift_type gst ON gvs.shift_type_id = gst.id
+      JOIN dienstrooster_schedule_period per ON per.id = sr.periode_id
       WHERE (sr.aanvrager_person_id = ? OR sr.respondent_person_id = ?)
+        AND per.verwijderd_op IS NULL
     `;
     const params_list: any[] = [personId, personId];
 
@@ -96,6 +99,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
        WHERE gelezen = 0 AND id IN (
          SELECT melding_id FROM dienstrooster_swap_request
          WHERE respondent_person_id = ? AND melding_id IS NOT NULL ${periodId ? 'AND periode_id = ?' : ''}
+           AND periode_id IN (SELECT id FROM dienstrooster_schedule_period WHERE verwijderd_op IS NULL)
        )`
     ).run(...(periodId ? [personId, periodId] : [personId]));
 
@@ -395,6 +399,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       linkIntro: 'Je kunt het verzoek volgen of intrekken via je persoonlijke link:',
     });
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, personId, { wijziging: 'ruilverzoek aangemaakt door planner' });
     return NextResponse.json({
       success: true,
       data: {

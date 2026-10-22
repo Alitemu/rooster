@@ -7,8 +7,9 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
 import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { loadAiosPeriode } from '@/lib/aiosPreferences';
 import { herinnerAiosRuil } from '@/lib/aiosRuilen';
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         { status: uitkomst.status }
       );
     }
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'herinnering voor ruil gestuurd door planner' });
     return NextResponse.json({ success: true, data: { id: uitkomst.id, mail: uitkomst.mail } });
   } catch (error) {
     return internalErrorResponse('aios-ruil-herinneren', error);

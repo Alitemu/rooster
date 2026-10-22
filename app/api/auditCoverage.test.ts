@@ -87,3 +87,35 @@ describe('every change a planner makes reaches the audit log', () => {
     expect(Object.keys(EXEMPT).filter((r) => !all.has(r))).toEqual([]);
   });
 });
+
+// A planner may act for a participant (personAccessDenial lets the planner of the dienst through). What they change
+// for them is logged under their own name (writeOnBehalfAuditLog), not only as a row about the participant: the
+// absence and part-time routes and the swaps had none (the audit of 0.111.0).
+const OP_NAAM_VRIJGESTELD: Record<string, string> = {
+  'person/[id]/notifications/[notif-id]/read': 'marks a notice read, no roster data',
+  'person/[id]/notifications/[notif-id]/dismiss': 'hides a notice, no roster data',
+  'person/[id]/preferences/slot/[slotId]': 'logs on behalf in a helper of its own branch (onBehalfAudit.test.ts)',
+  'person/[id]/preferences/submission': 'logs on behalf (onBehalfAudit.test.ts)',
+  'person/[id]/parttime-check': 'logs on behalf (onBehalfAudit.test.ts)',
+  'person/[id]/fellow': 'logs on behalf in lib/fellows.ts',
+};
+
+describe('what a planner does for a participant is logged under their name', () => {
+  it('names the planner in every handler of a participant route that changes data', () => {
+    const missing = walk(apiRoot)
+      .flatMap((file) => {
+        const rel = path.relative(apiRoot, path.dirname(file)).split(path.sep).join('/');
+        if (!/^(person|aios\/deelnemer)\//.test(rel) || rel in OP_NAAM_VRIJGESTELD) return [];
+        const src = fs.readFileSync(file, 'utf8');
+        if (!/personAccessDenial/.test(src)) return [];
+        // Per handler, not per file: a PATCH that logs must not cover the DELETE next to it.
+        return src
+          .split(/(?=export async function )/)
+          .filter((deel) => MUTATING.some((m) => new RegExp(`^export async function ${m}\\b`).test(deel)))
+          .filter((deel) => !/writeOnBehalfAuditLog\(/.test(deel))
+          .map((deel) => `${rel} ${deel.match(/^export async function (\w+)/)![1]}`);
+      })
+      .sort();
+    expect(missing).toEqual([]);
+  });
+});

@@ -49,6 +49,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       SELECT id, periode_id, type, onderwerp, inhoud, gelezen, gesloten_op, aangemaakt_op
       FROM dienstrooster_notification
       WHERE person_id = ? AND gesloten_op IS NULL
+        AND (periode_id IS NULL OR periode_id IN (SELECT id FROM dienstrooster_schedule_period WHERE verwijderd_op IS NULL))
     `;
     const params_list: any[] = [personId];
 
@@ -76,7 +77,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     // Count unread - dismissed notifications don't count, same as the list above
     const unreadCount = db
       .prepare(
-        'SELECT COUNT(*) as count FROM dienstrooster_notification WHERE person_id = ? AND gelezen = 0 AND gesloten_op IS NULL'
+        `SELECT COUNT(*) as count FROM dienstrooster_notification WHERE person_id = ? AND gelezen = 0 AND gesloten_op IS NULL
+           AND (periode_id IS NULL OR periode_id IN (SELECT id FROM dienstrooster_schedule_period WHERE verwijderd_op IS NULL))`
       )
       .get(personId) as any;
 

@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
 import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { loadAiosPeriode } from '@/lib/aiosPreferences';
 import { aiosRuilOverzicht, vraagAiosRuilAan } from '@/lib/aiosRuilen';
@@ -49,6 +50,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!uitkomst.ok) {
       return NextResponse.json({ success: false, error: { code: uitkomst.code, message: uitkomst.message } }, { status: uitkomst.status });
     }
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'ruilverzoek aangemaakt door planner' });
     return NextResponse.json({ success: true, data: { id: uitkomst.id, mail: uitkomst.mail } });
   } catch (error) {
     return internalErrorResponse('aios-ruil-aanvragen', error);

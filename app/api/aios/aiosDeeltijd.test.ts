@@ -113,6 +113,8 @@ describe("an AIOS's part-time days", () => {
       { ...goed, weekdag: 'maandag' },
       { ...goed, frequentie: 'SOMS' },
       { ...goed, geldig_vanaf: '2097-02-30' },
+      // The overlap check walks the days of a pattern: thousands of years held the whole app for seconds.
+      { ...goed, geldig_vanaf: '1000-01-01', geldig_tot: '9999-12-31' },
       { ...goed, geldig_vanaf: '2097-12-31', geldig_tot: '2097-01-01' },
       { ...goed, geldig_tot: undefined },
     ]) {

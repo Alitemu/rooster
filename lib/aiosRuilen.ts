@@ -462,6 +462,20 @@ export function meldAiosRuilenIngetrokken(period: AiosUitnodigPeriode, rijen: In
 // ---- the steps --------------------------------------------------------------
 
 /** A request: one of the AIOS's own eenheden for an equal one of a colleague's. */
+/**
+ * How many swap requests one AIOS may start per 24 hours. A copy of the achterwacht's lib/swapQuota.ts, on the
+ * AIOS's own table: every request mails two people and a withdrawal a third, and one AIOS (or whoever has their
+ * link) asking every combination of equal diensten could use up the sending account's daily limit, after which
+ * invitations and reminders fail too. Withdrawn requests count: the limit survives withdraw-and-ask-again.
+ */
+export const MAX_AIOS_RUILVERZOEKEN_PER_DAG = 20;
+
+export function aiosRuilQuotumBereikt(personId: string, now = new Date()): boolean {
+  const sinds = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const { n } = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_ruil WHERE aanvrager_id = ? AND aangemaakt_op > ?').get(personId, sinds) as { n: number };
+  return n >= MAX_AIOS_RUILVERZOEKEN_PER_DAG;
+}
+
 export function vraagAiosRuilAan(
   period: AiosUitnodigPeriode,
   personId: string,
@@ -490,6 +504,9 @@ export function vraagAiosRuilAan(
     .prepare(`SELECT 1 FROM dienstrooster_aios_ruil WHERE period_id = ? AND status = 'IN_BEHANDELING' AND aangeboden_json = ? AND gevraagd_json = ?`)
     .get(period.id, JSON.stringify(mijn.diensten), JSON.stringify(hun.diensten));
   if (bestaand) return nee(409, 'DUPLICATE', 'Dit ruilverzoek heb je al gedaan.');
+  if (aiosRuilQuotumBereikt(personId, now)) {
+    return nee(429, 'QUOTA', `Je hebt de afgelopen 24 uur al ${MAX_AIOS_RUILVERZOEKEN_PER_DAG} ruilverzoeken gedaan. Wacht tot morgen of vraag de planner om hulp.`);
+  }
 
   const id = randomUUID();
   db.transaction(() => {

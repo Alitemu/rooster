@@ -7,7 +7,8 @@ import { createSessionToken, SESSION_COOKIE_NAME, PERSON_SESSION_MAX_AGE_SECONDS
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { softDeletePeriod } from '@/lib/periodTrash';
 import { GET as roster } from './[id]/roster/[period-id]/route';
-import { POST as createSwap } from './[id]/swap-requests/route';
+import { GET as listSwaps, POST as createSwap } from './[id]/swap-requests/route';
+import { GET as listNotifications } from './[id]/notifications/route';
 import { POST as approveSwap } from './[id]/swap-requests/[swap-id]/approve/route';
 import { POST as rejectSwap } from './[id]/swap-requests/[swap-id]/reject/route';
 import { POST as cancelSwap } from './[id]/swap-requests/[swap-id]/cancel/route';
@@ -125,6 +126,18 @@ describe('a published period in the prullenbak is gone for its participants', ()
   it('takes no new swap request', async () => {
     const res = await call(createSwap, `/api/person/${ids.b}/swap-requests`, ids.b, { id: ids.b }, { period_id: ids.period, offered_slot_id: ids.slotB, requested_slot_id: ids.slotA2 });
     expect(res.status).toBe(404);
+  });
+
+  it('lists none of its swap requests and none of its notices', async () => {
+    insert('dienstrooster_notification', { person_id: ids.a, periode_id: ids.period, type: 'RUIL_GOEDGEKEURD', onderwerp: 'Ruil', inhoud: 'x', gelezen: 0, aangemaakt_op: new Date().toISOString() });
+    const swaps = await call(listSwaps, `/api/person/${ids.a}/swap-requests`, ids.a, { id: ids.a });
+    expect(swaps.status).toBe(200);
+    expect((await swaps.json()).data.swap_requests).toEqual([]);
+    const meldingen = await call(listNotifications, `/api/person/${ids.a}/notifications`, ids.a, { id: ids.a });
+    expect(meldingen.status).toBe(200);
+    const body = await meldingen.json();
+    expect(JSON.stringify(body)).not.toContain('Ruil');
+    expect(body.data.unread_count ?? 0).toBe(0);
   });
 
   it('approves, rejects or withdraws nothing, and moves no shift', async () => {

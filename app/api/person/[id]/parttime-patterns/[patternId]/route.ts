@@ -26,7 +26,7 @@ import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isPlausibleIsoDate, isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePatternRequest {
@@ -100,7 +100,7 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
     for (const value of [body.geldig_vanaf, body.geldig_tot]) {
-      if (value && !isValidIsoDate(value)) {
+      if (value && (!isValidIsoDate(value) || !isPlausibleIsoDate(value))) {
         const response: ApiErrorResponse = {
           success: false,
           error: { code: 'INVALID_DATE', message: 'Gebruik een geldige datum (JJJJ-MM-DD)' },
