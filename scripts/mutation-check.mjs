@@ -2076,6 +2076,27 @@ const MUTATIONS = [
     tests: ["app/api/planner/period/[id]/finalize"],
   },
   {
+    name: "aios: a planner deletes the AIOS's mail address (DELETE mail-instellingen)",
+    file: "app/api/aios/mail-instellingen/route.ts",
+    find: "    if (!requireAdminAccess(auth)) return forbiddenResponse(ALLEEN_BEHEERDER);\n    return bewaar(auth!, { verzendlijst_aan: '' });",
+    replace: "    return bewaar(auth!, { verzendlijst_aan: '' });",
+    tests: ["app/api/routeAccess"],
+  },
+  {
+    name: "mail: a planner deletes the mail settings (DELETE mail-settings)",
+    file: "app/api/planner/mail-settings/route.ts",
+    find: "    if (!requireAdminAccess(auth)) return forbiddenResponse(ALLEEN_BEHEERDER);\n    const before = mailConfigStatus();",
+    replace: "    const before = mailConfigStatus();",
+    tests: ["app/api/routeAccess"],
+  },
+  {
+    name: "mail: a planner changes the contact address of the planner",
+    file: "app/api/planner/mail-settings/contact/route.ts",
+    find: "    if (!requireAdminAccess(auth)) return forbiddenResponse('Alleen de beheerder kan het contactadres van de planner wijzigen.');\n",
+    replace: "",
+    tests: ["app/api/routeAccess"],
+  },
+  {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
     file: 'lib/aiosMail.ts',
     find: '  const to = aiosStroomAdres();',
