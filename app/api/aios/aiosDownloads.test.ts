@@ -154,9 +154,9 @@ describe('Voorkeuren per dienst', () => {
     // Leave on a weekday blocks; on Koningsdag it is liever niet.
     const koningsdag = rows.slice(1).filter((r) => r[6] === 'Koningsdag');
     expect(koningsdag.length).toBeGreaterThan(0);
-    expect(new Set(koningsdag.map((r) => r[kolom('y')]))).toEqual(new Set(['liever niet (afwezig)']));
+    expect(new Set(koningsdag.map((r) => r[kolom('y')]))).toEqual(new Set(['liever niet (afwezig: vakantie)']));
     const dagErvoor = rows.slice(1).filter((r) => excelSerialToDate(Number(r[0])) === '2097-04-26');
-    expect(new Set(dagErvoor.map((r) => r[kolom('y')]))).toEqual(new Set(['geblokkeerd (afwezig)']));
+    expect(new Set(dagErvoor.map((r) => r[kolom('y')]))).toEqual(new Set(['geblokkeerd (afwezig: vakantie)']));
     // z marked nothing: an empty column, not a missing one.
     expect(rows.slice(1).every((r) => !r[kolom('z')])).toBe(true);
   });
@@ -178,6 +178,19 @@ describe('Verzoeken per AIOS', () => {
     expect(cel(x, 'Boven de helft: nachtblokken')).toBe('');
     expect(cel(y, 'Afwezigheid')).toMatch(/^vakantie 26 apr\.? 2097 t\/m 27 apr\.? 2097$/);
     expect(cel(z, 'Status')).toBe('Nog niets ingevuld');
+  });
+
+  it('names the soort of the absence behind a blocked day, both when two overlap', async () => {
+    const id = insert('dienstrooster_absence', { person_id: w.y, van_datum: '2097-04-27', tot_datum: '2097-04-27', soort: 'ONDERWIJS', aangemaakt_door: w.y, aangemaakt_op: now });
+    try {
+      const rows = await blad(voorkeuren, w.period);
+      const kolom = (n: string) => rows[0].indexOf(codenaam(n));
+      const op = (datum: string) => new Set(rows.slice(1).filter((r) => excelSerialToDate(Number(r[0])) === datum).map((r) => r[kolom('y')]));
+      expect(op('2097-04-26')).toEqual(new Set(['geblokkeerd (afwezig: vakantie)']));
+      expect(op('2097-04-27')).toEqual(new Set(['liever niet (afwezig: vakantie en onderwijs)']));
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(id);
+    }
   });
 
   it('names an absence for onderwijs', async () => {

@@ -58,11 +58,12 @@ const kort = (datum: string) =>
  * The mark in words, with why it is there when the AIOS did not set it, and
  * with their own toelichting of the day when they did and gave one.
  */
-function markering(d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>, toelichting?: string): string | null {
+function markering(d: Pick<AiosVoorkeurDienst, 'level' | 'bron'>, toelichting?: string, afwezigSoort?: string): string | null {
   if (!d.level) return null;
   const keuze = KEUZE[d.level];
   if (d.bron === 'PARTTIME') return `${keuze} (parttime)`;
-  if (d.bron === 'ABSENCE') return `${keuze} (afwezig)`;
+  // Since 0.109.0 with the soort of the absence; the import still skips a file with "(afwezig)" alone.
+  if (d.bron === 'ABSENCE') return afwezigSoort ? `${keuze} (afwezig: ${afwezigSoort})` : `${keuze} (afwezig)`;
   return toelichting ? `${keuze}: ${toelichting}` : keuze;
 }
 
@@ -159,10 +160,18 @@ export const verzoekPeriode = (van: string | null, tot: string | null) => (van &
 export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode, opties: { metToelichting?: boolean } = {}): XlsxSheet {
   const deelnemers = aiosDeelnemers(period);
   const redenen = opties.metToelichting ? loadAlleAiosRedenen(period.id) : new Map<string, string>();
+  const afwezigheden = db.prepare(
+    `SELECT van_datum, tot_datum, soort FROM dienstrooster_absence
+     WHERE person_id = ? AND van_datum <= ? AND tot_datum >= ? ORDER BY van_datum`
+  );
   const perPersoon = deelnemers.map((p) => {
     const marks = new Map<string, string | null>();
+    const verlof = afwezigheden.all(p.id, period.eind_datum, period.start_datum) as Array<{ van_datum: string; tot_datum: string; soort: string }>;
+    // The soort of the absence(s) on a day: "vakantie", or "vakantie en onderwijs" when two overlap.
+    const soortOp = (datum: string) =>
+      [...new Set(verlof.filter((a) => a.van_datum <= datum && a.tot_datum >= datum).map((a) => AFWEZIG[a.soort] ?? a.soort))].join(' en ');
     for (const dag of loadAiosVoorkeurDagen(p.id, period.id)) {
-      for (const d of dag.diensten) marks.set(d.slot_id, markering(d, redenen.get(`${p.id}|${dag.datum}`)));
+      for (const d of dag.diensten) marks.set(d.slot_id, markering(d, redenen.get(`${p.id}|${dag.datum}`), soortOp(dag.datum)));
     }
     return marks;
   });

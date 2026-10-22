@@ -11,7 +11,7 @@
  *   or "voorkeur", set as setAiosVoorkeur sets it (a block as a whole, the
  *   rules of a feestdag and of leave kept). An empty cell takes a hand mark
  *   away. A cell the export wrote with a reason, "(parttime)" or
- *   "(afwezig)", comes from a part-time day or an absence, which keep it in
+ *   "(afwezig: vakantie)" or "(afwezig)" (the older file), comes from a part-time day or an absence, which keep it in
  *   step themselves: it is skipped, and an empty cell never clears one.
  * - The rows at the top that start with "Verzoek:" are what the AIOS asks
  *   besides their marks (lib/aiosDownloads.ts VERZOEK_RIJEN): "ja" or empty,
@@ -60,7 +60,7 @@ const WOORD_VAN_NIVEAU: Record<Niveau, string> = {
   VOORKEUR: 'voorkeur',
 };
 const CEL = /^(geblokkeerd|liever niet|voorkeur)(?::\s*(.+))?$/;
-const AUTOMATISCH = /^(geblokkeerd|liever niet|voorkeur) \((parttime|afwezig)\)$/;
+const AUTOMATISCH = /^(geblokkeerd|liever niet|voorkeur) \((parttime|afwezig(: [^()]+)?)\)$/;
 
 /** Statuses in which the preferences can still change; after them a roster rests on them. */
 const INVOER_STATUSSEN = ['OPEN', 'GESLOTEN'];

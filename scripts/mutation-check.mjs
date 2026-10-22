@@ -1701,6 +1701,20 @@ const MUTATIONS = [
     tests: ["app/api/aios/aiosDownloads"],
   },
   {
+    name: "aios: the soort of the absence left out of the blocked day in the file",
+    file: "lib/aiosDownloads.ts",
+    find: "(afwezig: ${afwezigSoort})",
+    replace: "(afwezig)",
+    tests: ["app/api/aios/aiosDownloads"],
+  },
+  {
+    name: "aios: a cell with the soort of the absence read back as a hand mark",
+    file: "lib/aiosVoorkeurImport.ts",
+    find: "afwezig(: [^()]+)?",
+    replace: "afwezig",
+    tests: ["app/api/aios/aiosVoorkeurImport"],
+  },
+  {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
     file: 'lib/aiosMail.ts',
     find: '  const to = aiosStroomAdres();',

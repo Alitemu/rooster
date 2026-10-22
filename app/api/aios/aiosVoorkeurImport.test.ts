@@ -20,7 +20,7 @@ import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, staff, staffCo
  * - only the beheerder, only an AIOS period, only before the roster is made;
  * - the overview read back unchanged changes nothing, toelichting included;
  * - a changed cell sets the mark as the AIOS's screen would (a block whole),
- *   an emptied one takes a hand mark away, "(parttime)" and "(afwezig)"
+ *   an emptied one takes a hand mark away, "(parttime)" and "(afwezig: soort)"
  *   cells are never touched;
  * - the toelichting follows the text after the colon, one a day;
  * - checking says exactly what applying does, and a file with problems is
@@ -224,7 +224,7 @@ describe('the overview read back', () => {
   it("never touches leave: (afwezig) cells are skipped and an empty cell does not clear them", async () => {
     const rows = kopieer(await gelezen());
     const afwezig = rijen(rows, '2097-04-26', 'UD')[0];
-    expect(afwezig[kolom(rows, 'y')]).toBe('geblokkeerd (afwezig)');
+    expect(afwezig[kolom(rows, 'y')]).toBe('geblokkeerd (afwezig: vakantie)');
     afwezig[kolom(rows, 'y')] = '';
     const echt = await importeer(rows, true);
     expect(echt.json.data.problemen).toEqual([]);
@@ -346,10 +346,18 @@ describe('what the import used to pass over in silence', () => {
     expect((await importeer(leeg, false)).json.data.problemen).toEqual([]);
   });
 
+  it('skips a cell of an older file too, with "(afwezig)" and no soort', async () => {
+    const rows = kopieer(await gelezen());
+    const cel = rijen(rows, '2097-04-26', 'UD')[0];
+    cel[kolom(rows, 'y')] = 'geblokkeerd (afwezig)';
+    const check = await importeer(rows, false);
+    expect(check.json.data.problemen).toEqual([]);
+  });
+
   it('a toelichting on a part-time day or an absence is a problem, not thrown away', async () => {
     const rows = kopieer(await gelezen());
     const cel = rijen(rows, '2097-04-26', 'UD')[0];
-    expect(cel[kolom(rows, 'y')]).toContain('(afwezig)');
+    expect(cel[kolom(rows, 'y')]).toContain('(afwezig: vakantie)');
     cel[kolom(rows, 'y')] = 'liever niet: toch niet weg';
     const check = await importeer(rows, false);
     expect((check.json.data.problemen as string[]).some((p) => p.includes(cn('y')) && p.includes('een toelichting kan niet bij een parttimedag of afwezigheid'))).toBe(true);
