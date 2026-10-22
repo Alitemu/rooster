@@ -193,7 +193,14 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   (0.107.0, the same for the nights: negative = fewer nights this quarter,
   default 0), saldo_dagen and saldo_weekendavonden (0.108.0, the same for the
   dagdiensten and the avonddiensten at the weekend, default 0),
-  feestdag_achterstand (positive = had fewer than fair so far)}.
+  feestdag_achterstand (positive = had fewer than fair so far),
+  eerdere_diensten [{id, datum, code, start_tijd, eind_tijd, blok_id,
+  blok_soort, blok_vorm}] (0.111.0, what they did in the last eight days of
+  the quarter before in the pool: rules 7, 8 and 9 run on over the boundary.
+  model.py makes options of them as for the quarter, 4-blocks and two
+  dagdiensten kept whole, and forbids what breaks the rest or a compensation
+  day of theirs (the reason KWARTAALGRENS); controle.py and lib/aiosRegels.ts
+  take them along and judge only the diensten of this quarter)}.
   The answer's per_aios holds doel_nachten, doel_dagen and doel_weekendavonden:
   the fair number of each this quarter, the saldo of the years before
   included (a debt stays a debt).

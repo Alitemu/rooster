@@ -165,6 +165,26 @@ describe('after a published quarter', () => {
     }
   });
 
+  it("sends what each AIOS did in the last days of it, for the rest and compensation days (0.111.0)", async () => {
+    const laatste = nachten(w.a).at(-1)!.id;
+    const toewijzing = insert('dienstrooster_assignment', { schedule_version_id: w.a, person_id: w.z, slot_id: laatste, bron: 'SOLVER', row_version: 1, aangemaakt_op: now });
+    try {
+      await maakB();
+      const verstuurd = new Map<string, Array<Record<string, unknown>>>(opgevangen[0].aios.map((a: any) => [a.id, a.eerdere_diensten]));
+      expect(verstuurd.get(w.z)).toHaveLength(1);
+      expect(verstuurd.get(w.z)![0]).toMatchObject({ id: laatste, datum: '2094-07-20', code: 'ND', start_tijd: '22:30', eind_tijd: '08:30' });
+      // In a block, so the solver knows which: its soort and form.
+      const dienst = verstuurd.get(w.z)![0];
+      expect(dienst.blok_id).not.toBeNull();
+      expect(['AVOND', 'NACHT']).toContain(dienst.blok_soort);
+      expect(['ZO_DI', 'WO_VR', 'ZA', 'LOS']).toContain(dienst.blok_vorm);
+      // x's nights lie before the last days (beyond any rest or compensation): nothing sent.
+      expect(verstuurd.get(w.x)).toEqual([]);
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(toewijzing);
+    }
+  });
+
   it('a quarter not published does not count', async () => {
     zetStatus(w.a, 'GEGENEREERD');
     try {

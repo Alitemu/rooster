@@ -40,6 +40,7 @@ export const REDEN_WOORDEN: Record<string, string> = {
   GEBLOKKEERD: 'geblokkeerd',
   FULLTIME_NACHTBLOK: 'fte 0,9 of meer, dus geen nachtblok zo t/m di',
   INWERKEN: 'inwerken',
+  KWARTAALGRENS: 'rust of compensatiedagen van het vorige kwartaal',
   BEZET: 'al een dienst of compensatiedag in de buurt',
 };
 

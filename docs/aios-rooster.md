@@ -320,7 +320,11 @@ solver.
    altijd al uit regel 7, maar niet als regel 8 een feestdag vrijgeeft: na een
    nachtblok zo t/m di dat op woensdag Koningsdag eindigt, mag er op die
    woensdag toch geen dienst komen. Een ruil mag deze regels ook niet breken
-   (L3).
+   (L3). De regels 7, 8 en 9 lopen door over de grens van het kwartaal (sinds
+   0.111.0): wie het laatste nachtblok van het vorige kwartaal op de
+   dinsdag voor de start deed, heeft de woensdag en donderdag vrij en 46 uur
+   rust. De app geeft de solver per AIOS de diensten van de laatste acht dagen
+   van het vorige kwartaal van de pool mee.
 
 Het gemiddelde van 46 uur per week over een jaar (F5) bewaakt het roosterbureau
 met de compensatiedagen; de app kent de uren overdag niet (F9).
