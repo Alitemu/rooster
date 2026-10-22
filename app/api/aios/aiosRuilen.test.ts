@@ -205,6 +205,10 @@ describe('a request', () => {
     const x = (await (await overzicht(preq(w.x, ''), pctx(w.x))).json()).data;
     // The requester's own page is not the colleague's reading.
     expect(gezien()).toEqual([null]);
+    // Nor is the planner looking at the colleague's page on their behalf.
+    const alsPlanner = new NextRequest(`http://localhost/api/aios/deelnemer/${w.y}/periode/${w.period}/ruilen`, { headers: { cookie: staffCookie(w.planner) } });
+    expect((await overzicht(alsPlanner, pctx(w.y))).status).toBe(200);
+    expect(gezien()).toEqual([null]);
     const y = (await (await overzicht(preq(w.y, ''), pctx(w.y))).json()).data;
     expect(gezien().every((g) => g !== null)).toBe(true);
     expect(x.uit).toHaveLength(1);

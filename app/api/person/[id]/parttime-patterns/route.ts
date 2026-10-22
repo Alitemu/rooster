@@ -9,7 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import {
@@ -244,6 +245,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'deeltijdpatroon toegevoegd door planner' });
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
     // parttime_pattern_uniq covers (person_id, weekdag, geldig_vanaf,

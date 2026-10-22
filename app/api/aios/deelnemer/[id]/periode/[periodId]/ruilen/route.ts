@@ -9,7 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
 import { aiosPeriodeBruikbaarVoor, geenAiosDenial } from '@/lib/aiosToegang';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { loadAiosPeriode } from '@/lib/aiosPreferences';
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (period.status !== 'GEPUBLICEERD') {
       return NextResponse.json({ success: false, error: { code: 'NOT_PUBLISHED', message: 'Ruilen kan als het rooster gepubliceerd is.' } }, { status: 404 });
     }
-    return NextResponse.json({ success: true, data: aiosRuilOverzicht(period, id) });
+    return NextResponse.json({ success: true, data: aiosRuilOverzicht(period, id, new Date(), !requirePlannerAccess(auth)) });
   } catch (error) {
     return internalErrorResponse('aios-ruilen', error);
   }

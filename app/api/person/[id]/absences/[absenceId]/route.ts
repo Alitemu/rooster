@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
@@ -175,6 +176,7 @@ export async function PATCH(
       data: { updated: true, ...(warning ? { warning } : {}) },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'afwezigheid gewijzigd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     return internalErrorResponse('absence-update', error);
@@ -261,6 +263,7 @@ export async function DELETE(
       data: { deleted: true },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'afwezigheid verwijderd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     return internalErrorResponse('absence-delete', error);

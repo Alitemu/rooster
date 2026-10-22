@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import {
@@ -200,6 +201,7 @@ export async function PATCH(
       data: { updated: true, availability_generated: syncResult.inserted, ...(warning ? { warning } : {}) },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'deeltijdpatroon gewijzigd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     // Moving a pattern onto a weekday the same person already has collides
@@ -290,6 +292,7 @@ export async function DELETE(
       data: { deleted: true },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'deeltijdpatroon verwijderd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     return internalErrorResponse('parttime-pattern-delete', error);

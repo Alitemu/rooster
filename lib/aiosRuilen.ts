@@ -346,17 +346,21 @@ function uitRijen(periodId: string, rijen: RuilRij[]): RuilUit[] {
 export function aiosRuilOverzicht(
   period: AiosUitnodigPeriode,
   personId: string,
-  now = new Date()
+  now = new Date(),
+  // False for a planner looking at the page on their behalf: that is not the AIOS reading their requests.
+  markeerGezien = true
 ): { ruilen_kan: boolean; contact_planner: string | null; eenheden: EenheidUit[]; uit: RuilUit[]; in: RuilUit[] } {
   meldAiosRuilenIngetrokken(period, trekOnmogelijkeAiosRuilenIn(period.id, now));
   const s = stand(period);
   const dag = vandaag(now);
   // They opened their requests: what the planner reads as "gelezen".
-  db.prepare(`UPDATE dienstrooster_aios_ruil SET gezien_op = ? WHERE period_id = ? AND respondent_id = ? AND gezien_op IS NULL`).run(
-    now.toISOString(),
-    period.id,
-    personId
-  );
+  if (markeerGezien) {
+    db.prepare(`UPDATE dienstrooster_aios_ruil SET gezien_op = ? WHERE period_id = ? AND respondent_id = ? AND gezien_op IS NULL`).run(
+      now.toISOString(),
+      period.id,
+      personId
+    );
+  }
   const rijen = db
     .prepare('SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? AND (aanvrager_id = ? OR respondent_id = ?) ORDER BY aangemaakt_op DESC')
     .all(period.id, personId, personId) as RuilRij[];

@@ -9,7 +9,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { periodUsableFor } from '@/lib/periodAccess';
 import { optionalFreeText } from '@/lib/freeText';
@@ -282,6 +283,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       data: { ...createdAbsence, ...(warning ? { warning } : {}) },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'afwezigheid toegevoegd door planner' });
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
     return internalErrorResponse('absence-create', error);

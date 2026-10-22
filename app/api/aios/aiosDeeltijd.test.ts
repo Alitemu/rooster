@@ -12,7 +12,7 @@ import { PATCH as wijzigPatroon, DELETE as verwijderPatroon } from './deelnemer/
 import { GET as afwezigheden, POST as nieuweAfwezigheid } from './deelnemer/[id]/afwezigheid/route';
 import { PATCH as wijzigAfwezigheid, DELETE as verwijderAfwezigheid } from './deelnemer/[id]/afwezigheid/[absenceId]/route';
 import { POST as indienen } from './deelnemer/[id]/periode/[periodId]/indienen/route';
-import { deleteRowsAfter, insert, now, personCookie, rowidSnapshot, tag } from '../../../tests/fixtures/dienstWorlds';
+import { buildWorld, deleteRowsAfter, insert, now, personCookie, rowidSnapshot, tag } from '../../../tests/fixtures/dienstWorlds';
 
 /**
  * An AIOS's part-time days and leave on their own routes (lib/aiosDeeltijd.ts):
@@ -199,6 +199,19 @@ describe("an AIOS's leave", () => {
       expect(res.status, JSON.stringify(fout)).toBe(400);
     }
     expect(aantal('dienstrooster_absence', w.y)).toBe(0);
+  });
+
+  it("answers the period of the other dienst as it answers one that does not exist (no day count of a stranger's calendar)", async () => {
+    const achterwacht = buildWorld('ACHTERWACHT');
+    // The slots of that period are in March 2098: leave that covers them, so a count would show.
+    const res = await maakAfwezigheid(w.y, { van_datum: '2098-03-03', tot_datum: '2098-03-16', soort: 'VAKANTIE' });
+    expect(res.status).toBe(201);
+    const lijst = async (periodId: string) =>
+      (await (await afwezigheden(vraag(`${w.y}/afwezigheid?period_id=${periodId}`, 'GET', w.y), ctx({ id: w.y }))).json()).data;
+    const andere = await lijst(achterwacht.period);
+    expect(andere).toEqual(await lijst(crypto.randomUUID()));
+    expect(andere.find((a: { id: string }) => a.id === res.json.data.id).total_days_in_period).toBe(0);
+    db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(res.json.data.id);
   });
 
   it('takes onderwijs as a soort and blocks its days as the others', async () => {

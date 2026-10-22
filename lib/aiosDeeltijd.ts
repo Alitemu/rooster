@@ -13,6 +13,9 @@ import { optionalFreeText } from '@/lib/freeText';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { addDays, getISOWeek, parseISO } from '@/lib/holidays';
 import { buildDeadlinePassedWarning } from '@/lib/aiosInvoer';
+import type { AuthContext } from '@/lib/auth-context';
+import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
+import { loadAiosPeriode } from '@/lib/aiosPreferences';
 import {
   aiosPeriodesNaDeadline,
   aiosPeriodesVoorInvoer,
@@ -218,8 +221,12 @@ export function verwijderPatroon(personId: string, patternId: string): Antwoord 
 
 // --- Absences ---------------------------------------------------------------
 
-export function lijstAfwezigheden(personId: string, periodId: string | null): Antwoord {
+export function lijstAfwezigheden(personId: string, gevraagd: string | null, auth: AuthContext | null): Antwoord {
   if (!bestaatPersoon(personId)) return geenPersoon(personId);
+  // A period that is not this person's to use (another dienst's, one in the prullenbak, a stranger's) gives what a
+  // period that does not exist gives: no days in it. Like the achterwacht's list (periodUsableFor).
+  const period = gevraagd ? loadAiosPeriode(gevraagd) : undefined;
+  const periodId = gevraagd ? (period && auth && aiosPeriodeBruikbaarVoor(auth, personId, period) ? gevraagd : 'geen-periode') : null;
   const rows = db
     .prepare(
       `SELECT a.id, a.van_datum, a.tot_datum, a.soort, a.notitie,

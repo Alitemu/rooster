@@ -16,7 +16,7 @@ import path from 'path';
  * branches.
  */
 
-const AUDIT = /writeAuditLog|INSERT INTO dienstrooster_audit_log/;
+const AUDIT = /writeAuditLog\(|writeOnBehalfAuditLog\(|INSERT INTO dienstrooster_audit_log/;
 const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 /** Changes no data of its own, or is recorded elsewhere. */
@@ -43,7 +43,8 @@ function walk(dir: string): string[] {
 const libCache = new Map<string, boolean>();
 function libWritesAudit(mod: string, depth: number): boolean {
   const file = path.join(process.cwd(), 'lib', `${mod}.ts`);
-  if (depth > 2 || !fs.existsSync(file)) return false;
+  // lib/auditLog.ts holds the word itself: importing anything from it is not writing a row.
+  if (depth > 2 || mod === 'auditLog' || !fs.existsSync(file)) return false;
   const key = `${file}:${depth}`;
   if (libCache.has(key)) return libCache.get(key)!;
   libCache.set(key, false);
@@ -58,7 +59,8 @@ function routesWithoutAudit(): string[] {
   return walk(apiRoot)
     .filter((file) => {
       const src = fs.readFileSync(file, 'utf8');
-      if (!/requirePlannerAccess|requireAdminAccess/.test(src)) return false;
+      // Also what a planner may do on behalf of a participant (personAccessDenial lets the planner of the dienst through).
+      if (!/requirePlannerAccess|requireAdminAccess|personAccessDenial/.test(src)) return false;
       if (!MUTATING.some((m) => new RegExp(`export async function ${m}\\b`).test(src))) return false;
       if (AUDIT.test(src)) return false;
       return ![...src.matchAll(/from ['"]@\/lib\/([\w/]+)['"]/g)].some((m) => libWritesAudit(m[1], 0));
