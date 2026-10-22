@@ -52,6 +52,8 @@ export interface AiosSolverAios {
   erboven: Partial<Record<TellerGroep, number>>;
   saldo_punten: number;
   saldo_nachten: number;
+  saldo_dagen: number;
+  saldo_weekendavonden: number;
   feestdag_achterstand: number;
 }
 
@@ -134,6 +136,8 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
       erboven,
       saldo_punten: saldi.get(p.id)!.saldo_punten,
       saldo_nachten: saldi.get(p.id)!.saldo_nachten,
+      saldo_dagen: saldi.get(p.id)!.saldo_dagen,
+      saldo_weekendavonden: saldi.get(p.id)!.saldo_weekendavonden,
       feestdag_achterstand: saldi.get(p.id)!.feestdag_achterstand,
     };
   });

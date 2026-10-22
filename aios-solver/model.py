@@ -151,6 +151,9 @@ class Aios:
     feestdag_achterstand: float  # > 0: had fewer feestdagen than fair so far
     # Nights short of the fair number so far (0.107.0); a delta as the points: < 0 = fewer nights this quarter.
     saldo_nachten: float = 0.0
+    # The same for the dagdiensten and the avonddiensten in the weekend (0.108.0).
+    saldo_dagen: float = 0.0
+    saldo_weekendavonden: float = 0.0
 
 
 def _groep(soort: str, vorm: str, slots: list[Slot]) -> Optional[str]:
@@ -486,10 +489,11 @@ def oplossen(
             gew = capaciteit
         for k, v in aandeel(n, gew).items():
             doel_soort[k][soort] = v
-        if soort == 'NACHT':
-            # Who had fewer nights than fair before gets more now, who had more gets fewer; never below none.
+        if soort in ('NACHT', 'DAG', 'AVOND_WEEKEND'):
+            # Who had fewer of this soort than fair before gets more now, who had more gets fewer; never below none.
             for a in aios:
-                doel_soort[a.id][soort] = max(0.0, doel_soort[a.id][soort] + a.saldo_nachten)
+                saldo = {'NACHT': a.saldo_nachten, 'DAG': a.saldo_dagen, 'AVOND_WEEKEND': a.saldo_weekendavonden}[soort]
+                doel_soort[a.id][soort] = max(0.0, doel_soort[a.id][soort] + saldo)
     n_feest = sum(1 for s in slots if s.feestdag)
     doel_feest = {
         k: max(0.0, v + next(a.feestdag_achterstand for a in aios if a.id == k)) for k, v in aandeel(n_feest, capaciteit).items()

@@ -51,7 +51,9 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 - `aios_doel` (0.79.0, migration 0027) - per AIOS quarter and AIOS the
   solver's fair share (doel_punten, doel_feestdagen, and since 0.107.0,
   migration 0034, doel_nachten: NULL for a quarter made before, whose nights
-  saldo is then none), written with the roster, removed with it; the next
+  saldo is then none, and since 0.108.0, migration 0035, doel_dagen and
+  doel_weekendavonden, the same for the dagdiensten and the weekend evenings),
+  written with the roster, removed with it; the next
   quarter's saldo is measured against it (lib/aiosSaldo.ts). Cascades with
   the period and the person.
 - `aios_generatie` (0.90.0, migration 0030) - per AIOS period what the last

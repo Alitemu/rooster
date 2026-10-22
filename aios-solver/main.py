@@ -112,6 +112,9 @@ class Aios(BaseModel):
     feestdag_achterstand: float = 0
     # Nights short of a fair share so far; a delta as saldo_punten: negative = had more.
     saldo_nachten: float = Field(default=0, ge=-200, le=200)
+    # The same for the dagdiensten and the avonddiensten in the weekend (0.108.0).
+    saldo_dagen: float = Field(default=0, ge=-200, le=200)
+    saldo_weekendavonden: float = Field(default=0, ge=-200, le=200)
 
     _check = field_validator('parttime_dagen')(classmethod(lambda cls, v: [_iso(d) for d in v]))
 
@@ -183,6 +186,9 @@ class PerAios(BaseModel):
     doel_feestdagdiensten: float
     # The fair number of nights this quarter, the saldo of the years before included (0.107.0).
     doel_nachten: float
+    # Likewise the fair number of dagdiensten and of avonddiensten in the weekend (0.108.0).
+    doel_dagen: float
+    doel_weekendavonden: float
     blokken: int
     liever_niet: int
     voorkeur: int
@@ -241,6 +247,8 @@ def naar_model(inp: SolveInput):
             saldo_tienden=round(a.saldo_punten * 10),
             feestdag_achterstand=a.feestdag_achterstand,
             saldo_nachten=a.saldo_nachten,
+            saldo_dagen=a.saldo_dagen,
+            saldo_weekendavonden=a.saldo_weekendavonden,
         )
         for a in inp.aios
     ]
@@ -281,6 +289,8 @@ def los_op(inp: SolveInput) -> SolveOutput:
                 feestdagdiensten=sum(1 for s in mijn if s.feestdag),
                 doel_feestdagdiensten=round(u.doel_feestdagen[a.id], 2),
                 doel_nachten=round(u.doel_soort[a.id]['NACHT'], 2),
+                doel_dagen=round(u.doel_soort[a.id]['DAG'], 2),
+                doel_weekendavonden=round(u.doel_soort[a.id]['AVOND_WEEKEND'], 2),
                 blokken=sum(1 for o in gekregen if o.is_blok),
                 liever_niet=sum(1 for o in gekregen if niveau(o, 'LIEVER_NIET')),
                 voorkeur=sum(1 for o in gekregen if niveau(o, 'VOORKEUR')),

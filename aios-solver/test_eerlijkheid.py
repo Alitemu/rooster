@@ -172,3 +172,35 @@ def test_no_night_saldo_is_the_share_alone():
     _meer(inp, 10)
     uit, _ = los_op(inp)
     assert all(p.doel_nachten == pytest.approx(2.8, abs=0.05) for p in uit.per_aios)
+
+
+@pytest.mark.parametrize(
+    'veld, code, doel',
+    [('saldo_dagen', 'DD', 'doel_dagen'), ('saldo_weekendavonden', 'ADW', 'doel_weekendavonden')],
+)
+def test_a_weekend_saldo_moves_those_diensten_to_who_had_fewer(veld, code, doel):
+    """0.108.0: the dagdiensten and the avonddiensten in the weekend have a saldo as the nights have."""
+    inp = weken(4)
+    aios(inp, 'x', **{veld: 3})
+    aios(inp, 'y', **{veld: -3})
+    _meer(inp, 8)
+    uit, toegewezen = los_op(inp)
+    assert not uit.leeg
+    aantallen = _soort_aantallen(inp, toegewezen, code)
+    assert aantallen['x'] > aantallen['y'], aantallen
+    x, y = _per(uit, 'x'), _per(uit, 'y')
+    # 8 of them over 10 AIOS: 0,8 each; with the saldo 3,8 and (never below none) 0.
+    assert getattr(x, doel) == pytest.approx(3.8, abs=0.05)
+    assert getattr(y, doel) == 0
+    assert getattr(_per(uit, 'a00'), doel) == pytest.approx(0.8, abs=0.05)
+
+
+def test_one_weekend_saldo_leaves_the_other_alone():
+    inp = weken(4)
+    aios(inp, 'x', saldo_dagen=3)
+    _meer(inp, 9)
+    uit, _ = los_op(inp)
+    x = _per(uit, 'x')
+    assert x.doel_dagen == pytest.approx(3.8, abs=0.05)
+    assert x.doel_weekendavonden == pytest.approx(0.8, abs=0.05)
+    assert x.doel_nachten == pytest.approx(2.8, abs=0.05)

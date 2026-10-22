@@ -311,8 +311,8 @@ describe('over more quarters', () => {
     try {
       const s = aiosSaldi({ id: c, pool_id: w.pool, start_datum: '2094-08-04' }, [w.x, w.y]);
       // B's share already held what A left: counted again, x would get a point extra in C.
-      expect(s.get(w.x)).toEqual({ saldo_punten: 0, saldo_nachten: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
-      expect(s.get(w.y)).toEqual({ saldo_punten: 0, saldo_nachten: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
+      expect(s.get(w.x)).toEqual({ saldo_punten: 0, saldo_nachten: 0, saldo_dagen: 0, saldo_weekendavonden: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
+      expect(s.get(w.y)).toEqual({ saldo_punten: 0, saldo_nachten: 0, saldo_dagen: 0, saldo_weekendavonden: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
       // One night less in B for x: one point to make up in C, not two.
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ? AND slot_id = ?').run(w.b, n[0].id);
       expect(aiosSaldi({ id: c, pool_id: w.pool, start_datum: '2094-08-04' }, [w.x]).get(w.x)!.saldo_punten).toBe(1);
@@ -369,5 +369,59 @@ describe('the nights saldo', () => {
     const rij = (wie: string) => db.prepare('SELECT doel_nachten FROM dienstrooster_aios_doel WHERE period_id = ? AND person_id = ?').get(w.b, wie);
     expect(rij(w.x)).toEqual({ doel_nachten: 4.4 });
     expect(rij(w.y)).toEqual({ doel_nachten: 2.2 });
+  });
+});
+
+describe('the saldo of the dagdiensten and the weekend evenings', () => {
+  const gedaan = (wie: string, code: string) =>
+    (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM dienstrooster_assignment a JOIN dienstrooster_shift_slot sl ON sl.id = a.slot_id
+           JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+           WHERE a.schedule_version_id = ? AND a.person_id = ? AND st.code = ?`
+        )
+        .get(w.a, wie, code) as { n: number }
+    ).n;
+
+  it("is the quarter's target minus what was done, and the solver is sent it", async () => {
+    const [dx, ex, dy, ey] = [gedaan(w.x, 'DD'), gedaan(w.x, 'ADW'), gedaan(w.y, 'DD'), gedaan(w.y, 'ADW')];
+    const zet = (wie: string, dagen: number, avonden: number) =>
+      db.prepare('UPDATE dienstrooster_aios_doel SET doel_dagen = ?, doel_weekendavonden = ? WHERE period_id = ? AND person_id = ?').run(dagen, avonden, w.a, wie);
+    zet(w.x, dx + 2, ex - 0);
+    zet(w.y, dy + 0, ey + 3);
+    try {
+      await maakB();
+      const verstuurd = new Map<string, { saldo_dagen: number; saldo_weekendavonden: number }>(opgevangen[0].aios.map((a: any) => [a.id, a]));
+      expect(verstuurd.get(w.x)).toMatchObject({ saldo_dagen: 2, saldo_weekendavonden: 0 });
+      expect(verstuurd.get(w.y)).toMatchObject({ saldo_dagen: 0, saldo_weekendavonden: 3 });
+      expect(verstuurd.get(w.z)).toMatchObject({ saldo_dagen: 0, saldo_weekendavonden: 0 });
+      const rooster = laadAiosRooster(aiosUitnodigPeriode(w.b)!);
+      expect(rooster.per_aios.find((a) => a.person_id === w.x)!.saldo).toContain('2 dagdiensten extra');
+      expect(rooster.per_aios.find((a) => a.person_id === w.y)!.saldo).toContain('3 weekendavonddiensten extra');
+    } finally {
+      db.prepare('UPDATE dienstrooster_aios_doel SET doel_dagen = NULL, doel_weekendavonden = NULL WHERE period_id = ?').run(w.a);
+    }
+  });
+
+  it('is none for a quarter made before they had a target, whatever was done', async () => {
+    await maakB();
+    for (const a of opgevangen[0].aios) expect([a.saldo_dagen, a.saldo_weekendavonden], a.id).toEqual([0, 0]);
+  });
+
+  it("keeps the solver's targets with the roster, for the quarter after", async () => {
+    perAios = (invoer) =>
+      invoer.aios.map((a: any) => ({
+        aios_id: a.id,
+        doel_punten: 3,
+        doel_feestdagdiensten: 0,
+        doel_dagen: a.id === w.x ? 1.4 : 0.6,
+        doel_weekendavonden: a.id === w.x ? 2.4 : 0.8,
+      }));
+    await maakB();
+    const rij = (wie: string) =>
+      db.prepare('SELECT doel_dagen, doel_weekendavonden FROM dienstrooster_aios_doel WHERE period_id = ? AND person_id = ?').get(w.b, wie);
+    expect(rij(w.x)).toEqual({ doel_dagen: 1.4, doel_weekendavonden: 2.4 });
+    expect(rij(w.y)).toEqual({ doel_dagen: 0.6, doel_weekendavonden: 0.8 });
   });
 });

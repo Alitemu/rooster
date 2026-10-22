@@ -705,6 +705,9 @@ export const aiosDoel = sqliteTable(
     // The fair number of nights of this quarter, the saldo before included (0.107.0). NULL for a quarter made
     // before: its nights saldo is unknown and counts as none, or all its nights would read as too many.
     doel_nachten: real('doel_nachten'),
+    // The same for the dagdiensten and the avonddiensten in the weekend (0.108.0); NULL for a quarter made before.
+    doel_dagen: real('doel_dagen'),
+    doel_weekendavonden: real('doel_weekendavonden'),
   },
   (table) => ({
     uniq: uniqueIndex('aios_doel_uniq').on(table.period_id, table.person_id),
