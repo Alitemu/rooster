@@ -49,9 +49,11 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   chosen or when the period is reopened. An ND without shift_block_id is
   always that one. Taken away, its assignment_edit rows go with it.
 - `aios_doel` (0.79.0, migration 0027) - per AIOS quarter and AIOS the
-  solver's fair share (doel_punten, doel_feestdagen), written with the
-  roster, removed with it; the next quarter's saldo is measured against it
-  (lib/aiosSaldo.ts). Cascades with the period and the person.
+  solver's fair share (doel_punten, doel_feestdagen, and since 0.107.0,
+  migration 0034, doel_nachten: NULL for a quarter made before, whose nights
+  saldo is then none), written with the roster, removed with it; the next
+  quarter's saldo is measured against it (lib/aiosSaldo.ts). Cascades with
+  the period and the person.
 - `aios_generatie` (0.90.0, migration 0030) - per AIOS period what the last
   generation told: when, the solver's status, how many diensten it filled
   and which stayed empty with the reasons (leeg_json). Written with the

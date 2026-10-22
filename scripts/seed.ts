@@ -489,7 +489,8 @@ async function createTables() {
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
       doel_punten REAL NOT NULL,
-      doel_feestdagen REAL NOT NULL
+      doel_feestdagen REAL NOT NULL,
+      doel_nachten REAL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS aios_doel_uniq
       ON dienstrooster_aios_doel(period_id, person_id);
@@ -726,6 +727,9 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
     melding_id: 'TEXT',
     laatste_herinnering_op: 'TEXT',
     laatste_herinnering_door: 'TEXT',
+  },
+  dienstrooster_aios_doel: {
+    doel_nachten: 'REAL',
   },
   dienstrooster_aios_ruil: {
     gezien_op: 'TEXT',

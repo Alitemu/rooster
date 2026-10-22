@@ -7,6 +7,8 @@ niet and voorkeur where fairness leaves the choice (the planner's choice:
 as the achterwacht's, fairness first), and one block in four weeks.
 """
 
+import pytest
+
 from test_hulp import aios, blok, dag, los_op, markeer, van, weken
 
 
@@ -145,3 +147,28 @@ def test_the_order_of_what_is_shared_fairly():
     assert gewichten == sorted(gewichten, reverse=True) and len(set(gewichten)) == 5
     # An evening at the weekend is its own soort, not the evening in the week.
     assert [model.EERLIJK_VAN_CODE[c] for c in ('ND', 'DD', 'ADW', 'AD', 'UD')] == volgorde
+
+
+def test_a_night_saldo_moves_nights_to_who_had_fewer():
+    """0.107.0: who had fewer nights than fair before gets more now, who had more gets fewer."""
+    inp = weken(4)
+    aios(inp, 'x', saldo_nachten=3)
+    aios(inp, 'y', saldo_nachten=-3)
+    _meer(inp, 8)
+    uit, toegewezen = los_op(inp)
+    assert not uit.leeg
+    nachten = _soort_aantallen(inp, toegewezen, 'ND')
+    assert nachten['x'] > nachten['y'], nachten
+    x, y = _per(uit, 'x'), _per(uit, 'y')
+    # 28 nights over 10 AIOS: 2,8 each; with the saldo 5,8 and (never below none) 0.
+    assert x.doel_nachten == pytest.approx(5.8, abs=0.05)
+    assert y.doel_nachten == 0
+    # The others keep their own share.
+    assert _per(uit, 'a00').doel_nachten == pytest.approx(2.8, abs=0.05)
+
+
+def test_no_night_saldo_is_the_share_alone():
+    inp = weken(4)
+    _meer(inp, 10)
+    uit, _ = los_op(inp)
+    assert all(p.doel_nachten == pytest.approx(2.8, abs=0.05) for p in uit.per_aios)

@@ -28,7 +28,9 @@ copy of the hard rules, for changing the roster by hand.
   week is 0,8, every other week 0,9, pro rata over the quarter), Geldig
   vanaf/tot clipped to the quarter, the part-time days (patroonDekt), inwerken,
   onderbreking and the wishes from aios_wens, the marks with their bron, and
-  `erboven` from blokkadeTellers. saldo_punten and feestdag_achterstand from
+  `erboven` from blokkadeTellers. saldo_punten, saldo_nachten (0.107.0: the
+  nights target of the quarter before, aios_doel.doel_nachten, minus the nights
+  done; NULL for a quarter made before: none) and feestdag_achterstand from
   lib/aiosSaldo.ts (0.79.0, step 4e): the solver's own share of the last
   published quarter the AIOS had one in (aios_doel, kept from per_aios
   doel_punten and doel_feestdagdiensten at every generation, gone with
@@ -185,8 +187,11 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   vanaf/tot), onderbreking, inwerken, parttime_dagen, vier_avonden,
   vier_nachten, twee_dagdiensten, markeringen [{dienst_id, niveau ABSOLUUT|
   LIEVER_NIET|VOORKEUR, bron MANUAL|PARTTIME|ABSENCE}], erboven {counter:
-  n}, saldo_punten (a delta: negative = fewer this quarter),
-  feestdag_achterstand (positive = had fewer than fair so far)}.
+  n}, saldo_punten (a delta: negative = fewer this quarter), saldo_nachten
+  (0.107.0, the same for the nights: negative = fewer nights this quarter,
+  default 0), feestdag_achterstand (positive = had fewer than fair so far)}.
+  The answer's per_aios holds doel_nachten: the fair number of nights this
+  quarter, the saldo of the years before included.
 - `tijdslimiet_seconden` (1 to 600, default 60), `seed`.
 
 `erboven` comes from the app's own counters (lib/aiosVoorkeur.ts

@@ -73,17 +73,65 @@ describe('against the average per fte x maanden', () => {
   });
 });
 
-describe('in words', () => {
-  it('extra or minder, never a sign, a comma for the decimals', () => {
-    expect(aiosSaldoWoorden({ saldo_punten: 2.4, feestdag_achterstand: 0 })).toBe('2,4 punten extra');
-    expect(aiosSaldoWoorden({ saldo_punten: -1, feestdag_achterstand: 0 })).toBe('1 punt minder');
-    expect(aiosSaldoWoorden({ saldo_punten: 0, feestdag_achterstand: 1 })).toBe('1 feestdagdienst extra');
-    expect(aiosSaldoWoorden({ saldo_punten: -0.6, feestdag_achterstand: -1.5 })).toBe('0,6 punten minder en 1,5 feestdagdiensten minder');
-    expect(aiosSaldoWoorden({ saldo_punten: 0.02, feestdag_achterstand: 0.01 })).toBe('niets in te halen');
+describe('the nights have a saldo of their own', () => {
+  it('against the average nights per fte x maanden: more nights, fewer now; fewer, more now', () => {
+    const s = beginstandSaldi([rij('a'), rij('b'), rij('c', { nachten: 25 }), rij('d', { nachten: 0 })]);
+    // 45 nights over four with the same fte and months: 11,25 each.
+    expect(s.get('a')!.saldo_nachten).toBeCloseTo(1.3, 1);
+    expect(s.get('c')!.saldo_nachten).toBeLessThan(-13);
+    expect(s.get('d')!.saldo_nachten).toBeCloseTo(11.3, 1);
+  });
+
+  it('half the fte, half the share of the nights', () => {
+    const s = beginstandSaldi([rij('a', { fte: 1, nachten: 20 }), rij('b', { fte: 0.5, nachten: 0 }), rij('c', { fte: 0.5, nachten: 0 })]);
+    expect(s.get('b')!.saldo_nachten).toBeCloseTo(s.get('c')!.saldo_nachten, 1);
+    expect(s.get('b')!.saldo_nachten).toBeGreaterThan(0);
+  });
+
+  it('the night saldi add up to nothing, whatever was read in', () => {
+    const aantal = fc.integer({ min: 0, max: 200 });
+    const persoon = fc.record({
+      nachten: aantal,
+      avonden: aantal,
+      avonden_weekend: aantal,
+      dagdiensten: aantal,
+      uitloopdiensten: aantal,
+      feestdagdiensten: fc.integer({ min: 0, max: 20 }),
+      fte: fc.constantFrom(0.5, 0.6, 0.8, 0.9, 1),
+      maanden: fc.integer({ min: 1, max: 48 }),
+    });
     fc.assert(
-      fc.property(fc.double({ min: -50, max: 50, noNaN: true }), fc.double({ min: -5, max: 5, noNaN: true }), (p, f) => {
-        expect(aiosSaldoWoorden({ saldo_punten: p, feestdag_achterstand: f })).not.toMatch(/[-+]\d/);
+      fc.property(fc.array(persoon, { minLength: 1, maxLength: 30 }), (mensen) => {
+        const s = beginstandSaldi(mensen.map((m, i) => ({ person_id: `p${i}`, ...m })));
+        const som = [...s.values()].reduce((t, x) => t + x.saldo_nachten, 0);
+        expect(Math.abs(som)).toBeLessThanOrEqual(0.05 * mensen.length + 1e-9);
       })
     );
+  });
+});
+
+describe('in words', () => {
+  it('extra or minder, never a sign, a comma for the decimals', () => {
+    expect(aiosSaldoWoorden({ saldo_punten: 2.4, saldo_nachten: 0, feestdag_achterstand: 0 })).toBe('2,4 punten extra');
+    expect(aiosSaldoWoorden({ saldo_punten: -1, saldo_nachten: 0, feestdag_achterstand: 0 })).toBe('1 punt minder');
+    expect(aiosSaldoWoorden({ saldo_punten: 0, saldo_nachten: 0, feestdag_achterstand: 1 })).toBe('1 feestdagdienst extra');
+    expect(aiosSaldoWoorden({ saldo_punten: -0.6, saldo_nachten: 0, feestdag_achterstand: -1.5 })).toBe('0,6 punten minder en 1,5 feestdagdiensten minder');
+    expect(aiosSaldoWoorden({ saldo_punten: 0.02, saldo_nachten: 0, feestdag_achterstand: 0.01 })).toBe('niets in te halen');
+    fc.assert(
+      fc.property(fc.double({ min: -50, max: 50, noNaN: true }), fc.double({ min: -5, max: 5, noNaN: true }), (p, f) => {
+        expect(aiosSaldoWoorden({ saldo_punten: p, saldo_nachten: 0, feestdag_achterstand: f })).not.toMatch(/[-+]\d/);
+      })
+    );
+  });
+});
+
+describe('the nights saldo in words', () => {
+  it('a nachtdienst or nachtdiensten, extra or minder, with the points', () => {
+    expect(aiosSaldoWoorden({ saldo_punten: 0, saldo_nachten: 1, feestdag_achterstand: 0 })).toBe('1 nachtdienst extra');
+    expect(aiosSaldoWoorden({ saldo_punten: 0, saldo_nachten: -2, feestdag_achterstand: 0 })).toBe('2 nachtdiensten minder');
+    expect(aiosSaldoWoorden({ saldo_punten: 1.2, saldo_nachten: 1.5, feestdag_achterstand: 0 })).toBe('1,2 punten extra en 1,5 nachtdiensten extra');
+    expect(aiosSaldoWoorden({ saldo_punten: 0, saldo_nachten: 0.02, feestdag_achterstand: 0 })).toBe('niets in te halen');
+    // Three: a comma, then "en" before the last, as the Dutch style wants.
+    expect(aiosSaldoWoorden({ saldo_punten: 2, saldo_nachten: -1, feestdag_achterstand: 1 })).toBe('2 punten extra, 1 nachtdienst minder en 1 feestdagdienst extra');
   });
 });

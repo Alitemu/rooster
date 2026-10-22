@@ -51,6 +51,7 @@ export interface AiosSolverAios {
   markeringen: Array<{ dienst_id: string; niveau: 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR'; bron: 'MANUAL' | 'PARTTIME' | 'ABSENCE' }>;
   erboven: Partial<Record<TellerGroep, number>>;
   saldo_punten: number;
+  saldo_nachten: number;
   feestdag_achterstand: number;
 }
 
@@ -132,6 +133,7 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
       markeringen: markeringen.all(p.id, period.id) as AiosSolverAios['markeringen'],
       erboven,
       saldo_punten: saldi.get(p.id)!.saldo_punten,
+      saldo_nachten: saldi.get(p.id)!.saldo_nachten,
       feestdag_achterstand: saldi.get(p.id)!.feestdag_achterstand,
     };
   });
