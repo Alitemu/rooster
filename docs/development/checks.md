@@ -68,6 +68,14 @@ test_gedeeld.py there and lib/aiosRegels.test.ts here check the same
 rosters (tests/fixtures/aios-regels.json): the solver's check and the
 app's copy of the AIOS's hard rules must find the same.
 
+`node scripts/mutation-check.mjs --droog` runs no test: it only checks that
+every `find` is still in its file, and once (a find that occurs twice
+mutated only the first; say `alles: true` to mutate every occurrence).
+Fast, so worth running after changing a file a mutation names. Since
+0.111.0 a mutation counts as caught only when a test fails: a timeout, a
+syntax or import error that fails the suite while loading, or a crash is
+a broken mutation and is reported as such.
+
 Which mutations a release runs (the user's choice in October 2026; until
 0.81.0 every release ran all of them, about 12 minutes): a 0.x.0 release
 runs `node scripts/mutation-check.mjs --sinds v<the previous 0.x.0>`, the

@@ -2223,6 +2223,13 @@ const MUTATIONS = [
     tests: ["test_regels.py", "test_gedeeld.py"],
   },
   {
+    name: "aios: the compensation days of the quarter before are left out of the download",
+    file: "lib/aiosRegels.ts",
+    find: "      for (const d of compensatie(e, feestdagen)) if (d >= vanaf) dagen.add(d);",
+    replace: "",
+    tests: ["lib/aiosRegels"],
+  },
+  {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
     file: 'lib/aiosMail.ts',
     find: '  const to = aiosStroomAdres();',

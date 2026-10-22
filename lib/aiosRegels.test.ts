@@ -88,3 +88,31 @@ describe('a roster that holds someone who is no longer a participant', () => {
     expect(controleerAiosRooster(invoer, new Map([['ND-2097-05-26', 'weg']]))).toEqual([['1_BUITEN_LIDMAATSCHAP', 'weg', ['ND-2097-05-26']]]);
   });
 });
+
+describe('the compensation days of the quarter before', () => {
+  it('start the quarter off: nights zo t/m di right before it give Wednesday and Thursday', () => {
+    const invoer = {
+      periode: { van: '2097-01-02', tot: '2097-01-08' },
+      feestdagen: [],
+      diensten: ['2097-01-02', '2097-01-04'].map((datum) => ({ id: `UD-${datum}`, datum, code: 'UD', start_tijd: '17:36', eind_tijd: '20:00', punten: 0.2, blok_id: null })),
+      blokken: [],
+      aios: [
+        {
+          id: 'a',
+          eerdere_diensten: ['2096-12-30', '2096-12-31', '2097-01-01'].map((datum) => ({
+            id: `ND-${datum}`,
+            datum,
+            code: 'ND',
+            start_tijd: '22:30',
+            eind_tijd: '08:30',
+            blok_id: 'oud',
+            blok_soort: 'NACHT',
+            blok_vorm: 'ZO_DI',
+          })),
+        },
+      ],
+      tijdslimiet_seconden: 5,
+    } as unknown as AiosSolverInvoer;
+    expect(aiosCompensatiedagen(invoer, new Map())).toEqual(new Map([['a', ['2097-01-02', '2097-01-03']]]));
+  });
+});

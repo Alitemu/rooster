@@ -286,6 +286,10 @@ export function fingerprint(w: World): string {
     q('SELECT * FROM dienstrooster_aios_reden WHERE period_id = ? ORDER BY id', w.period),
     q('SELECT * FROM dienstrooster_aios_doel WHERE period_id = ? ORDER BY id', w.period),
     q('SELECT * FROM dienstrooster_aios_periode WHERE period_id = ?', w.period),
+    // 0.111.0: these three were not in the fingerprint either.
+    q('SELECT * FROM dienstrooster_aios_blokkeuze WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_generatie WHERE period_id = ?', w.period),
+    q('SELECT * FROM dienstrooster_aios_beginstand WHERE pool_id = ? ORDER BY id', w.pool),
     q('SELECT * FROM dienstrooster_shift_block WHERE period_id = ? ORDER BY id', w.period),
     q('SELECT * FROM dienstrooster_holiday_history WHERE person_id IN (?, ?) ORDER BY id', w.x, w.y),
     q('SELECT id, scope, scope_id, action_type, payload_json FROM dienstrooster_pending_undo WHERE scope_id IN (?, ?) ORDER BY id', w.period, w.pool),
