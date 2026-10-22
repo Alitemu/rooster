@@ -197,6 +197,33 @@ describe('POST /api/auth/totp/confirm', () => {
   });
 });
 
+describe('a second enrollment and odd input', () => {
+  it('refuses a second authenticator while one is on, and leaves the secret as it was', async () => {
+    const personId = await createStaff();
+    await enroll(personId);
+    const voor = (db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(personId) as { totp_secret: string }).totp_secret;
+
+    const setupBody = await (await setupTotp(staffRequest('/api/auth/totp/setup', sessionCookie(personId)))).json();
+    const res = await confirmTotp(
+      staffRequest('/api/auth/totp/confirm', sessionCookie(personId), {
+        setup_token: setupBody.data.setup_token,
+        code: generateTOTPCode(setupBody.data.secret),
+      })
+    );
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('TOTP_ALREADY_ENABLED');
+    expect((db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(personId) as { totp_secret: string }).totp_secret).toBe(voor);
+  });
+
+  it('answers 400, not 500, to a setup token or a code that is not text', async () => {
+    const personId = await createStaff();
+    for (const body of [{ setup_token: 5, code: '123456' }, { setup_token: 'x', code: 123456 }, { setup_token: {}, code: [] }]) {
+      const res = await confirmTotp(staffRequest('/api/auth/totp/confirm', sessionCookie(personId), body));
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+  });
+});
+
 describe('a TOTP secret stored before encryption, or one that can no longer be read', () => {
   it('still logs in with a plain-text secret and encrypts it on the way', async () => {
     const personId = await createStaff();

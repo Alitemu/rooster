@@ -46,8 +46,23 @@ export function buildDeadlinePassedWarning(periods: Array<{ naam: string }>): st
  * participant's browser gives it. Never compare the stored string against
  * an ISO timestamp as text: that silently treats it as UTC instead.
  */
+/**
+ * A deadline as the forms send it: "2026-11-05T17:00", with seconds, a zone or milliseconds if the caller adds them.
+ * A number, an object or a date in another notation passed `new Date(...)` and was stored as it came, and then
+ * deadlinePassed read it as an invalid date, which is never passed: the period took input for ever.
+ */
+export function isDeadlineText(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/.test(value) &&
+    !isNaN(new Date(value).getTime())
+  );
+}
+
 export function deadlinePassed(deadline: string, now: Date = new Date()): boolean {
-  return now > new Date(deadline);
+  const moment = new Date(deadline).getTime();
+  // A deadline that cannot be read counts as passed: closed, not open for ever.
+  return isNaN(moment) || now.getTime() > moment;
 }
 
 export function checkPeriodAcceptsInput(period: PeriodForInputGate, now: Date = new Date()): InputGateResult {

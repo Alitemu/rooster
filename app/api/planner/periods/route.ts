@@ -4,6 +4,7 @@
  * POST /api/planner/periods - Create new period for planner
  */
 
+import { isDeadlineText } from '@/lib/periodInputGate';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const end = parseISO(body.eind_datum);
     const deadline = new Date(body.deadline);
 
-    if (isNaN(deadline.getTime())) {
+    if (!isDeadlineText(body.deadline) || isNaN(deadline.getTime())) {
       const response: ApiErrorResponse = {
         success: false,
         error: {

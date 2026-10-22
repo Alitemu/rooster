@@ -59,6 +59,16 @@ describe('POST /api/auth/totp/disable', () => {
     expect(res.status).toBe(401);
   });
 
+  it('answers 400, not 500, to a password that is not text, and leaves totp_secret untouched', async () => {
+    const personId = await createStaff(true);
+    const before = db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(personId);
+    for (const wachtwoord of [5, {}, ['x']]) {
+      const res = await POST(request(sessionCookie(personId), { wachtwoord }));
+      expect(res.status, JSON.stringify(wachtwoord)).toBe(400);
+    }
+    expect(db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(personId)).toEqual(before);
+  });
+
   it('rejects the wrong password, and leaves totp_secret untouched', async () => {
     const personId = await createStaff(true);
     const before = db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(personId);

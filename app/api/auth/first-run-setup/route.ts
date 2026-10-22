@@ -66,7 +66,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // The token was right: nothing below is a guess.
     releaseAttempt(rateLimitKey);
 
-    if (!codenaam || !password) {
+    if (typeof codenaam !== 'string' || typeof password !== 'string' || !codenaam || !password) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'MISSING_FIELDS', message: 'Codenaam en wachtwoord zijn verplicht' },

@@ -44,7 +44,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const body = await parseJsonBody<DisableTotpRequest>(req);
     const { wachtwoord } = body;
 
-    if (!wachtwoord) {
+    if (typeof wachtwoord !== 'string' || !wachtwoord) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'MISSING_FIELDS', message: 'Wachtwoord is verplicht' },

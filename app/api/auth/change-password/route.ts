@@ -57,7 +57,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const body = await parseJsonBody<ChangePasswordRequest>(req);
     const { huidig_wachtwoord, nieuw_wachtwoord } = body;
 
-    if (!huidig_wachtwoord || !nieuw_wachtwoord) {
+    if (typeof huidig_wachtwoord !== 'string' || typeof nieuw_wachtwoord !== 'string' || !huidig_wachtwoord || !nieuw_wachtwoord) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'MISSING_FIELDS', message: 'Huidig en nieuw wachtwoord zijn verplicht' },

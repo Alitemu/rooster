@@ -7,6 +7,7 @@
  * shift slots, and transitions status CONCEPT -> OPEN.
  */
 
+import { isDeadlineText } from '@/lib/periodInputGate';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { persistSlotsForPeriod } from '@/lib/slotPersistence';
@@ -138,7 +139,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const endCheck = parseISO(eind_datum);
     const deadlineCheck = new Date(deadline);
 
-    if (isNaN(deadlineCheck.getTime())) {
+    if (!isDeadlineText(deadline) || isNaN(deadlineCheck.getTime())) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_DEADLINE', message: 'Ongeldige deadline' },

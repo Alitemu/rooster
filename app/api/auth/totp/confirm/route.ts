@@ -36,7 +36,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const body = await parseJsonBody<{ setup_token: string; code: string }>(request);
     const { setup_token: setupToken, code } = body;
 
-    if (!setupToken || !code || !isValidTOTPFormat(code)) {
+    if (typeof setupToken !== 'string' || typeof code !== 'string' || !setupToken || !code || !isValidTOTPFormat(code)) {
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_INPUT', message: 'Setup-token en 6-cijferige code zijn verplicht' } },
         { status: 400 }
@@ -48,6 +48,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(
         { success: false, error: { code: 'SETUP_EXPIRED', message: 'Setup-token is ongeldig of verlopen. Begin opnieuw.' } },
         { status: 400 }
+      );
+    }
+
+    // A second authenticator replaces the first without the password or a code of the first: someone at an
+    // unattended session could lock the owner out. Switching it off needs the password; do that first.
+    const heeft = db.prepare('SELECT totp_secret FROM dienstrooster_person WHERE id = ?').get(auth.userId) as { totp_secret: string | null } | undefined;
+    if (heeft?.totp_secret) {
+      return NextResponse.json(
+        { success: false, error: { code: 'TOTP_ALREADY_ENABLED', message: 'Tweestapsverificatie staat al aan. Zet die eerst uit met je wachtwoord.' } },
+        { status: 409 }
       );
     }
 

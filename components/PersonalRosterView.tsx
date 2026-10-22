@@ -150,7 +150,7 @@ export function PersonalRosterView({
     // Two foldable sections, closed to begin with (0.110.0, layout only): the roster and the swapping.
     <DeelnemerHarmonica>
     <div className="space-y-4">
-    <DeelnemerSectie sleutel="rooster" titel="Jouw rooster" testId="deelnemer-sectie-rooster">
+    <DeelnemerSectie sleutel="rooster" titel="Jouw rooster" testId="deelnemer-sectie-rooster" printOpen>
     <div className="space-y-8">
       {/* Header */}
       <div>

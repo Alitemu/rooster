@@ -18,6 +18,7 @@
  * and app/api/aios/aiosApart.test.ts holds it.
  */
 
+import { isDeadlineText } from '@/lib/periodInputGate';
 import { db } from '@/db/client';
 import { parseISO } from './holidays';
 import { writeAuditLog } from './auditLog';
@@ -54,7 +55,7 @@ export function openAiosPeriod(periodId: string, actorId: string, gevraagdeDeadl
   }
   const deadline = gevraagdeDeadline || period.deadline;
   const moment = new Date(deadline);
-  if (isNaN(moment.getTime())) {
+  if (!isDeadlineText(deadline) || isNaN(moment.getTime())) {
     return { ok: false, status: 400, code: 'INVALID_DEADLINE', message: 'Ongeldige deadline' };
   }
   if (moment < now) {

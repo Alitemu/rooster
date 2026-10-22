@@ -61,6 +61,7 @@ export function AiosSectie({
   hint,
   testId,
   blijfGeladen = false,
+  printOpen = false,
   children,
 }: {
   sleutel: string;
@@ -68,11 +69,14 @@ export function AiosSectie({
   hint?: string;
   testId?: string;
   blijfGeladen?: boolean;
+  /** On paper the body is there although the section is closed (a roster to print, 0.111.0). */
+  printOpen?: boolean;
   children: ReactNode;
 }) {
   const harmonica = useContext(HarmonicaContext)!;
   const isOpen = harmonica.open.has(sleutel);
   const vast = harmonica.vast.has(sleutel);
+  const bodyBestaat = isOpen || blijfGeladen || printOpen;
   const bodyId = `aios-sectie-${sleutel}`;
   return (
     <div className="card overflow-hidden" data-testid={testId}>
@@ -82,7 +86,7 @@ export function AiosSectie({
       >
         <h2 className="font-bold text-neutral-900">
           {/* The click bubbles to the row, which opens and closes it. */}
-          <button type="button" aria-expanded={isOpen} aria-controls={bodyId} className="flex items-center gap-2 text-left">
+          <button type="button" aria-expanded={isOpen} aria-controls={bodyBestaat ? bodyId : undefined} className="flex items-center gap-2 text-left">
             <svg
               className={`w-4 h-4 text-neutral-500 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
               viewBox="0 0 20 20"
@@ -108,11 +112,13 @@ export function AiosSectie({
                 harmonica.zetVast(sleutel);
               }}
               title={vast ? 'Losmaken: klapt dicht zodra je een andere sectie opent' : 'Vastzetten: blijft open, ook als je een andere sectie opent'}
+              aria-label="Vastzetten"
               aria-pressed={vast}
-              className={`px-1.5 py-1 rounded transition-colors ${vast ? 'text-red-600 hover:text-red-800' : 'text-neutral-300 hover:text-neutral-500'}`}
+              className={`p-2.5 rounded transition-colors ${vast ? 'text-red-600 hover:text-red-800' : 'text-neutral-500 hover:text-neutral-700'}`}
             >
-              {/* An SVG in currentColor, not 📌: an emoji keeps its own colour, so pinned would look like unpinned. */}
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              {/* An SVG in currentColor, not 📌: an emoji keeps its own colour, so pinned would look like unpinned.
+                  Pinned is filled, not pinned is an outline: not by colour alone. */}
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill={vast ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <circle cx="10" cy="7" r="4" />
                 <rect x="9" y="10" width="2" height="7" rx="1" />
               </svg>
@@ -120,8 +126,8 @@ export function AiosSectie({
           )}
         </span>
       </div>
-      {(isOpen || blijfGeladen) && (
-        <div id={bodyId} className={isOpen ? 'border-t border-neutral-100 p-4 space-y-3' : 'hidden'}>
+      {bodyBestaat && (
+        <div id={bodyId} className={isOpen ? 'border-t border-neutral-100 p-4 space-y-3' : printOpen ? 'hidden print:block border-t border-neutral-100 p-4 space-y-3' : 'hidden'}>
           {children}
         </div>
       )}

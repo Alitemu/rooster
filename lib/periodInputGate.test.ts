@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { checkPeriodAcceptsInput } from './periodInputGate';
+import { checkPeriodAcceptsInput, deadlinePassed, isDeadlineText } from './periodInputGate';
 
 describe('checkPeriodAcceptsInput', () => {
   it('allows input while OPEN and before the deadline', () => {
@@ -36,5 +36,22 @@ describe('checkPeriodAcceptsInput', () => {
     const deadline = '2027-01-15T17:00:00.000Z';
     const result = checkPeriodAcceptsInput({ status: 'OPEN', deadline }, new Date(deadline));
     expect(result.allowed).toBe(true);
+  });
+});
+
+describe('isDeadlineText and a deadline that cannot be read', () => {
+  it('takes what the forms write and nothing else', () => {
+    for (const ok of ['2027-01-15T17:00', '2027-01-15T17:00:00', '2027-01-15T17:00:00Z', '2027-01-15T17:00:00.000+01:00']) {
+      expect(isDeadlineText(ok), ok).toBe(true);
+    }
+    for (const kapot of [1893456000000, null, undefined, {}, '', 'morgen', '2027-01-15', '15-01-2027', '2027-13-45T17:00']) {
+      expect(isDeadlineText(kapot), String(kapot)).toBe(false);
+    }
+  });
+
+  it('counts a deadline it cannot read as passed, so the period does not take input for ever', () => {
+    expect(deadlinePassed('1893456000000', new Date('2027-01-10T12:00:00Z'))).toBe(true);
+    expect(deadlinePassed('kapot', new Date('2027-01-10T12:00:00Z'))).toBe(true);
+    expect(checkPeriodAcceptsInput({ status: 'OPEN', deadline: 'kapot' }, new Date('2027-01-10T12:00:00Z')).allowed).toBe(false);
   });
 });

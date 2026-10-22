@@ -76,13 +76,13 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(page.getByText(/Je avond op die dag staat op liever niet/)).toBeVisible();
 
   // A new absence starts empty, not on the whole quarter; a "van" sets "tot en met" to the next day; onderwijs is a soort.
-  const afwezigheid = page.locator('div.space-y-3', { has: page.getByText('Nieuwe afwezigheid toevoegen') }).last();
-  const datums = afwezigheid.locator('input[type="date"]');
-  await expect(datums.nth(0)).toHaveValue('');
-  await expect(datums.nth(1)).toHaveValue('');
-  await expect(afwezigheid.getByRole('option', { name: 'Onderwijs' })).toHaveCount(1);
-  await datums.nth(0).fill('2097-05-06');
-  await expect(datums.nth(1)).toHaveValue('2097-05-07');
+  const vanVeld = page.getByLabel('Van', { exact: true });
+  const totVeld = page.getByLabel('Tot en met');
+  await expect(vanVeld).toHaveValue('');
+  await expect(totVeld).toHaveValue('');
+  await expect(page.getByLabel('Soort').getByRole('option', { name: 'Onderwijs' })).toHaveCount(1);
+  await vanVeld.fill('2097-05-06');
+  await expect(totVeld).toHaveValue('2097-05-07');
 
   await page.getByRole('button', { name: 'Volgende: voorkeuren opgeven' }).click();
 

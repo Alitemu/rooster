@@ -306,10 +306,10 @@ function AiosLinkPagina() {
         // Once the roster is published: three foldable sections, all closed to begin with (0.110.0, layout only).
         // Open for input, the page stays as it was: the steps one after the other.
         <AiosHarmonica>
-          <AiosSectie sleutel="rooster" titel="Jouw rooster" testId="aios-sectie-rooster">
+          <AiosSectie sleutel="rooster" titel="Jouw rooster" testId="aios-sectie-rooster" printOpen>
             <AiosMijnRooster key={geruild} personId={personId} periodId={periode.id} inSectie />
           </AiosSectie>
-          <AiosSectie sleutel="ruilen" titel="Ruilen" testId="aios-sectie-ruilen">
+          <AiosSectie sleutel="ruilen" titel="Ruilen" testId="aios-sectie-ruilen" blijfGeladen>
             <AiosRuilen personId={personId} periodId={periode.id} onGeruild={() => setGeruild((n) => n + 1)} inSectie />
           </AiosSectie>
           <AiosSectie sleutel="voorkeuren" titel="Voorkeuren" testId="aios-sectie-voorkeuren" blijfGeladen>

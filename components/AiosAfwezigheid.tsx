@@ -7,7 +7,7 @@
  * not a change to it (docs/development/diensten.md, "Copied, not changed").
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
@@ -47,6 +47,8 @@ const SOORT_LABEL: Record<string, string> = {
 };
 
 // Both dates start empty: the whole quarter as the start would be a wrong absence if saved as it is.
+const datumLeesbaar = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
+
 const emptyForm = () => ({
   van_datum: '',
   tot_datum: '',
@@ -61,6 +63,7 @@ export function AiosAfwezigheid({
   readOnly = false,
   onAbsencesChange,
 }: Props) {
+  const veld = useId();
   const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -171,7 +174,7 @@ export function AiosAfwezigheid({
               <div>
                 <span className="font-medium">{SOORT_LABEL[a.soort] || a.soort}</span>
                 <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
-                  {a.van_datum} t/m {a.tot_datum}
+                  {datumLeesbaar(a.van_datum)} t/m {datumLeesbaar(a.tot_datum)}
                 </span>
                 {a.notitie && <span className="text-neutral-600 text-xs block sm:inline sm:ml-2">{a.notitie}</span>}
                 {typeof a.total_days_in_period === 'number' && (
@@ -226,8 +229,9 @@ export function AiosAfwezigheid({
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
+              <label htmlFor={`${veld}-soort`} className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
               <select
+                id={`${veld}-soort`}
                 value={form.soort}
                 onChange={(e) => setForm({ ...form, soort: e.target.value })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -238,8 +242,9 @@ export function AiosAfwezigheid({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
+              <label htmlFor={`${veld}-van`} className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
               <input
+                id={`${veld}-van`}
                 type="date"
                 value={form.van_datum}
                 onChange={(e) => {
@@ -259,8 +264,9 @@ export function AiosAfwezigheid({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
+              <label htmlFor={`${veld}-tot`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
               <input
+                id={`${veld}-tot`}
                 type="date"
                 value={form.tot_datum}
                 onChange={(e) => setForm({ ...form, tot_datum: e.target.value })}
@@ -268,8 +274,9 @@ export function AiosAfwezigheid({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
+              <label htmlFor={`${veld}-notitie`} className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
               <input
+                id={`${veld}-notitie`}
                 type="text"
                 value={form.notitie}
                 onChange={(e) => setForm({ ...form, notitie: e.target.value })}
@@ -277,7 +284,7 @@ export function AiosAfwezigheid({
               />
             </div>
           </div>
-          {form.van_datum > form.tot_datum && (
+          {form.van_datum && form.tot_datum && form.van_datum > form.tot_datum && (
             <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;tot&quot; liggen</p>
           )}
           <div className="flex gap-3">
