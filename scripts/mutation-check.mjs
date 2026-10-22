@@ -1185,8 +1185,8 @@ const MUTATIONS = [
   {
     name: 'aios downloads: leave on a dienst without saying so',
     file: 'lib/aiosDownloads.ts',
-    find: "  if (d.bron === 'ABSENCE') return `${keuze} (afwezig)`;",
-    replace: '',
+    find: "  if (d.bron === 'ABSENCE') return afwezigSoort ?",
+    replace: "  if (false) return afwezigSoort ?",
     tests: ['app/api/aios/aiosDownloads'],
   },
   {
