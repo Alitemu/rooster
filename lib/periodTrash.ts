@@ -19,7 +19,9 @@
  */
 
 import { NextResponse } from 'next/server';
-import { db } from '@/db/client';
+import fs from 'fs';
+import path from 'path';
+import { db, dbFilePath } from '@/db/client';
 import { overlapMessage, overlappingPeriod } from './periodOverlap';
 import { isAiosPool } from './aiosPeriod';
 
@@ -167,6 +169,28 @@ function cascadeDeletePeriod(periodId: string): void {
 }
 
 /**
+ * The back-up CSVs of a period's preferences (lib/preferencesBackup.ts, lib/aiosVoorkeurBackup.ts) live outside the
+ * database, one per person and period, with the period's id in the name. Purging the period left them for ever:
+ * codenames, the period's name and every mark. Run after the transaction has committed, so a purge that fails keeps them.
+ * The folders are spelled out here, as the sweep of the prullenbak serves both diensten.
+ */
+function ruimBackupsOp(periodIds: string[]): void {
+  const map = path.join(path.dirname(dbFilePath), 'backups');
+  for (const sub of ['preferences', 'aios-voorkeuren']) {
+    const dir = path.join(map, sub);
+    let namen: string[];
+    try {
+      namen = fs.readdirSync(dir);
+    } catch {
+      continue; // no back-ups made yet
+    }
+    for (const naam of namen) {
+      if (periodIds.some((id) => naam.includes(`__${id}__`))) fs.rmSync(path.join(dir, naam), { force: true });
+    }
+  }
+}
+
+/**
  * Permanently purges a period right now, skipping the rest of its
  * retention window. Only allowed on a period already in the trash - that
  * makes the trash the one path to permanent deletion, so a planner always
@@ -182,6 +206,7 @@ export function purgePeriodNow(periodId: string, actorId: string): void {
     logAudit(actorId, periodId, 'DELETE', { naam: period.naam, status: period.status }, { type: 'PERMANENT_PURGE' });
   });
   run();
+  ruimBackupsOp([periodId]);
 }
 
 /**
@@ -213,6 +238,7 @@ export function purgeExpiredPeriods(actorId: string, dienst: string | null = nul
     }
   });
   run();
+  ruimBackupsOp(expired.map((p) => p.id));
 
   return { purged: expired.length };
 }

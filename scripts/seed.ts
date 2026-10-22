@@ -827,27 +827,26 @@ function applyMissingColumns() {
 function repairAbsenceSoort() {
   const rij = db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'dienstrooster_absence'`).get() as { sql: string } | undefined;
   if (!rij || rij.sql.includes('ONDERWIJS')) return;
+  // The table as it is, with only the CHECK widened and every column it has copied: a column added later
+  // (LATER_COLUMNS runs first) must not drop out of a fixed list.
+  const nieuweSql = rij.sql
+    .replace(/'CONGRES',\s*'OVERIG'/, "'CONGRES', 'ONDERWIJS', 'OVERIG'")
+    .replace(/^CREATE TABLE\s+(IF NOT EXISTS\s+)?[`"]?dienstrooster_absence[`"]?/i, 'CREATE TABLE __new_dienstrooster_absence');
+  if (!nieuweSql.includes('ONDERWIJS') || !nieuweSql.includes('__new_dienstrooster_absence')) {
+    throw new Error('dienstrooster_absence has a definition this repair does not know: soort onderwijs cannot be added');
+  }
+  const kolommen = (db.prepare('PRAGMA table_info(dienstrooster_absence)').all() as Array<{ name: string }>).map((c) => `"${c.name}"`).join(', ');
   console.log('  Making dienstrooster_absence again with the soort onderwijs');
   db.pragma('foreign_keys = OFF');
   try {
     db.transaction(() => {
-      db.exec(`
-        CREATE TABLE __new_dienstrooster_absence (
-          id TEXT PRIMARY KEY NOT NULL,
-          person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
-          van_datum TEXT NOT NULL,
-          tot_datum TEXT NOT NULL,
-          soort TEXT NOT NULL
-            CHECK(soort IN ('VAKANTIE', 'CONGRES', 'ONDERWIJS', 'OVERIG')),
-          notitie TEXT,
-          aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
-          aangemaakt_op TEXT NOT NULL
-        );
-        INSERT INTO __new_dienstrooster_absence (id, person_id, van_datum, tot_datum, soort, notitie, aangemaakt_door, aangemaakt_op)
-          SELECT id, person_id, van_datum, tot_datum, soort, notitie, aangemaakt_door, aangemaakt_op FROM dienstrooster_absence;
-        DROP TABLE dienstrooster_absence;
-        ALTER TABLE __new_dienstrooster_absence RENAME TO dienstrooster_absence;
-      `);
+      db.exec(`DROP TABLE IF EXISTS __new_dienstrooster_absence`);
+      db.exec(nieuweSql);
+      db.exec(`INSERT INTO __new_dienstrooster_absence (${kolommen}) SELECT ${kolommen} FROM dienstrooster_absence`);
+      db.exec('DROP TABLE dienstrooster_absence');
+      db.exec('ALTER TABLE __new_dienstrooster_absence RENAME TO dienstrooster_absence');
+      const kapot = db.prepare('PRAGMA foreign_key_check(dienstrooster_absence)').all();
+      if (kapot.length > 0) throw new Error(`foreign keys broken after remaking dienstrooster_absence: ${JSON.stringify(kapot.slice(0, 3))}`);
     })();
   } finally {
     db.pragma('foreign_keys = ON');

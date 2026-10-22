@@ -101,6 +101,22 @@ def test_feestdagen_go_to_who_had_fewer_over_the_years():
         assert _per(uit, meer).feestdagdiensten > _per(uit, minder).feestdagdiensten
 
 
+@pytest.mark.parametrize('seed', [1, 2, 3])
+def test_a_feestdag_debt_is_not_level_with_a_fair_share(seed):
+    """0.111.0: the share of feestdagdiensten is small (here 1,5), and it was rounded to a whole dienst after the
+    debt was held at none: who had two too many looked like who is level. In hundredths the debt counts."""
+    inp = weken(4, {dag(1), dag(8), dag(15)})
+    aios(inp, 'schuld', feestdag_achterstand=-2)
+    _meer(inp, 5)
+    inp['seed'] = seed
+    uit, _ = los_op(inp)
+    schuld = _per(uit, 'schuld')
+    # 9 feestdagdiensten over 6: 1,5 each, -0,5 with the debt: kept as it is, for the next quarter.
+    assert schuld.doel_feestdagdiensten == pytest.approx(-0.5, abs=0.05)
+    assert schuld.feestdagdiensten == 0, schuld.feestdagdiensten
+    assert all(_per(uit, f'a{i:02d}').feestdagdiensten >= 1 for i in range(5))
+
+
 def test_one_block_in_four_weeks_where_it_can():
     # Eight weekly evening blocks for two AIOS, each wanting four in a row:
     # spread out, every other week, not four or three in a row.
@@ -160,9 +176,9 @@ def test_a_night_saldo_moves_nights_to_who_had_fewer():
     nachten = _soort_aantallen(inp, toegewezen, 'ND')
     assert nachten['x'] > nachten['y'], nachten
     x, y = _per(uit, 'x'), _per(uit, 'y')
-    # 28 nights over 10 AIOS: 2,8 each; with the saldo 5,8 and (never below none) 0.
+    # 28 nights over 10 AIOS: 2,8 each; with the saldo 5,8 and -0,2: the debt stays a debt, for the next quarter.
     assert x.doel_nachten == pytest.approx(5.8, abs=0.05)
-    assert y.doel_nachten == 0
+    assert y.doel_nachten == pytest.approx(-0.2, abs=0.05)
     # The others keep their own share.
     assert _per(uit, 'a00').doel_nachten == pytest.approx(2.8, abs=0.05)
 
@@ -189,9 +205,9 @@ def test_a_weekend_saldo_moves_those_diensten_to_who_had_fewer(veld, code, doel)
     aantallen = _soort_aantallen(inp, toegewezen, code)
     assert aantallen['x'] > aantallen['y'], aantallen
     x, y = _per(uit, 'x'), _per(uit, 'y')
-    # 8 of them over 10 AIOS: 0,8 each; with the saldo 3,8 and (never below none) 0.
+    # 8 of them over 10 AIOS: 0,8 each; with the saldo 3,8 and -2,2: a debt, not held at none.
     assert getattr(x, doel) == pytest.approx(3.8, abs=0.05)
-    assert getattr(y, doel) == 0
+    assert getattr(y, doel) == pytest.approx(-2.2, abs=0.05)
     assert getattr(_per(uit, 'a00'), doel) == pytest.approx(0.8, abs=0.05)
 
 

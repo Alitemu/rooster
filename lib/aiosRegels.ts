@@ -269,7 +269,14 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
   }
 
   for (const [aiosId, lijst] of perAiosVan(slots, toewijzingen)) {
-    const a = wie.get(aiosId)!;
+    const a = wie.get(aiosId);
+    // Someone who is no longer one of the participants (membership ended or removed after the roster was made):
+    // their diensten are outside any membership, said so in words, and the other rules have no data on them.
+    // It threw before, and with it the roster page, publishing and swapping.
+    if (!a) {
+      for (const s of lijst) fout.push(['1_BUITEN_LIDMAATSCHAP', aiosId, [s.id]]);
+      continue;
+    }
     const eigen = eenheden(lijst, blokVorm);
     const markering = new Map(a.markeringen.map((m) => [m.dienst_id, m]));
     const boven = new Map<string, number>();

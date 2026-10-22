@@ -74,3 +74,17 @@ describe('the compensation days per AIOS, for the roosterbureau', () => {
     expect(aiosCompensatiedagen(invoer(['2097-05-30']), rooster)).toEqual(new Map([['a', ['2097-05-29', '2097-05-31']]]));
   });
 });
+
+describe('a roster that holds someone who is no longer a participant', () => {
+  it('names their diensten as outside the membership, and does not throw', () => {
+    const invoer = {
+      periode: { van: '2097-05-25', tot: '2097-05-31' },
+      feestdagen: [],
+      diensten: [{ id: 'ND-2097-05-26', datum: '2097-05-26', code: 'ND', start_tijd: '22:30', eind_tijd: '08:30', punten: 1, blok_id: null }],
+      blokken: [],
+      aios: [],
+      tijdslimiet_seconden: 5,
+    } as unknown as AiosSolverInvoer;
+    expect(controleerAiosRooster(invoer, new Map([['ND-2097-05-26', 'weg']]))).toEqual([['1_BUITEN_LIDMAATSCHAP', 'weg', ['ND-2097-05-26']]]);
+  });
+});

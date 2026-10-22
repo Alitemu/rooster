@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { db } from '@/db/client';
-import { purgeExpiredPeriods } from './periodTrash';
+import { purgeExpiredPeriods, purgePeriodNow } from './periodTrash';
+import { writePreferencesBackup } from './preferencesBackup';
 import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, tag, type World } from '../tests/fixtures/dienstWorlds';
 
 /**
@@ -70,6 +71,28 @@ describe('purgeExpiredPeriods', () => {
     expect(() => purgeExpiredPeriods(aios.planner, 'AIOS')).not.toThrow();
     expect(bestaat(periode)).toBe(false);
     expect(db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_mail_queue WHERE period_id = ?').get(periode)).toEqual({ n: 0 });
+  });
+});
+
+describe("the back-up files of a purged period (0.111.0: they stayed for ever)", () => {
+  it('go with the period, those of another period stay, also on a purge by hand', () => {
+    const weg = verlopenPeriode(staf);
+    const blijft = verlopenPeriode(staf);
+    const handmatig = verlopenPeriode(staf);
+    const bestand = (periodId: string) => writePreferencesBackup(staf.x, periodId)!;
+    const [a, b, c] = [bestand(weg), bestand(blijft), bestand(handmatig)];
+    expect([a, b, c].every((f) => f && existsSync(f))).toBe(true);
+
+    purgePeriodNow(handmatig, staf.planner);
+    expect(existsSync(c)).toBe(false);
+    expect(existsSync(a) && existsSync(b)).toBe(true);
+
+    // Only the expired ones of this sweep: all three are 40 days in the trash, so `blijft` goes too; keep it out.
+    db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = ? WHERE id = ?').run(new Date().toISOString(), blijft);
+    purgeExpiredPeriods(staf.planner, 'ACHTERWACHT');
+    expect(existsSync(a)).toBe(false);
+    expect(existsSync(b)).toBe(true);
+    db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(blijft);
   });
 });
 

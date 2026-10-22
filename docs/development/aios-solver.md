@@ -196,7 +196,7 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   feestdag_achterstand (positive = had fewer than fair so far)}.
   The answer's per_aios holds doel_nachten, doel_dagen and doel_weekendavonden:
   the fair number of each this quarter, the saldo of the years before
-  included (never below none).
+  included (a debt stays a debt).
 - `tijdslimiet_seconden` (1 to 600, default 60), `seed`.
 
 `erboven` comes from the app's own counters (lib/aiosVoorkeur.ts

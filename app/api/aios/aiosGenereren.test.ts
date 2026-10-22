@@ -336,6 +336,20 @@ describe('making the AIOS roster', () => {
     expect(na.every((r, i) => r.person_id !== voor[i].person_id)).toBe(true);
   });
 
+  it('says so when nobody takes part, instead of asking the solver for a roster of no one', async () => {
+    const lidmaatschappen = db.prepare('SELECT id, geldig_tot FROM dienstrooster_pool_membership WHERE pool_id = ?').all(w.pool) as Array<{ id: string; geldig_tot: string }>;
+    const voor = toewijzingen();
+    db.prepare(`UPDATE dienstrooster_pool_membership SET geldig_tot = '2000-01-01' WHERE pool_id = ?`).run(w.pool);
+    try {
+      const job = await klaar(await maak());
+      expect(job.status).toBe('FOUT');
+      expect(job.fout).toBe('Geen enkele AIOS doet mee in dit kwartaal. Zet de deelnemers eerst in de pool, met een lidmaatschap dat het kwartaal raakt.');
+      expect(toewijzingen()).toEqual(voor);
+    } finally {
+      for (const l of lidmaatschappen) db.prepare('UPDATE dienstrooster_pool_membership SET geldig_tot = ? WHERE id = ?').run(l.geldig_tot, l.id);
+    }
+  });
+
   it('writes nothing when the solver fails or the period changed meanwhile', async () => {
     const voor = toewijzingen();
     const rv = periodeStatus().row_version;

@@ -144,6 +144,12 @@ export function startAiosGeneratie(period: AiosUitnodigPeriode & { row_version: 
 async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: number }, tijdslimiet: number): Promise<void> {
   try {
     const invoer = aiosSolverInvoer(period, tijdslimiet, { vers: true });
+    // Nobody takes part: the solver would refuse the request with a 422 the planner cannot read.
+    if (invoer.aios.length === 0) {
+      job.status = 'FOUT';
+      job.fout = 'Geen enkele AIOS doet mee in dit kwartaal. Zet de deelnemers eerst in de pool, met een lidmaatschap dat het kwartaal raakt.';
+      return;
+    }
     // Building the model is not bounded by the search time; minutes of margin.
     const antwoord = await postJson(`${solverUrl()}/solve`, invoer, tijdslimiet * 1000 + 300_000);
     if (!antwoord.ok) {

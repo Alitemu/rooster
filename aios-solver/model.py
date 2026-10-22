@@ -490,13 +490,15 @@ def oplossen(
         for k, v in aandeel(n, gew).items():
             doel_soort[k][soort] = v
         if soort in ('NACHT', 'DAG', 'AVOND_WEEKEND'):
-            # Who had fewer of this soort than fair before gets more now, who had more gets fewer; never below none.
+            # Who had fewer of this soort than fair before gets more now, who had more gets fewer. Not held at
+            # none: a target below none is the debt, which the next quarter needs to see (the objective below
+            # measures |count - target|, which for a count of none or more has the same slope either way).
             for a in aios:
                 saldo = {'NACHT': a.saldo_nachten, 'DAG': a.saldo_dagen, 'AVOND_WEEKEND': a.saldo_weekendavonden}[soort]
-                doel_soort[a.id][soort] = max(0.0, doel_soort[a.id][soort] + saldo)
+                doel_soort[a.id][soort] = doel_soort[a.id][soort] + saldo
     n_feest = sum(1 for s in slots if s.feestdag)
     doel_feest = {
-        k: max(0.0, v + next(a.feestdag_achterstand for a in aios if a.id == k)) for k, v in aandeel(n_feest, capaciteit).items()
+        k: v + next(a.feestdag_achterstand for a in aios if a.id == k) for k, v in aandeel(n_feest, capaciteit).items()
     }
 
     # ---- objective ----
@@ -516,18 +518,19 @@ def oplossen(
         m.Add(max_af >= af)
         termen.append(W_PUNT * af)
         for soort, w in W_SOORT.items():
-            aantal = sum(sum(1 for t in o.slots if t.eerlijk_soort == soort) * v for o, v in xs)
-            afs = m.NewIntVar(0, len(slots), f'afs_{a.id}_{soort}')
-            ds = round(doel_soort[a.id][soort])
+            # In hundredths of a dienst: a share of 0,48 is not none, or who had too many and who is level look alike.
+            aantal = 100 * sum(sum(1 for t in o.slots if t.eerlijk_soort == soort) * v for o, v in xs)
+            afs = m.NewIntVar(0, 100 * len(slots) + abs(round(100 * doel_soort[a.id][soort])), f'afs_{a.id}_{soort}')
+            ds = round(100 * doel_soort[a.id][soort])
             m.Add(afs >= aantal - ds)
             m.Add(afs >= ds - aantal)
-            termen.append(w * afs)
+            termen.append((w // 100) * afs)
         feest = sum(sum(1 for t in o.slots if t.feestdag) * v for o, v in xs)
-        aff = m.NewIntVar(0, len(slots), f'aff_{a.id}')
-        df = round(doel_feest[a.id])
-        m.Add(aff >= feest - df)
-        m.Add(aff >= df - feest)
-        termen.append(W_FEESTDAG * aff)
+        aff = m.NewIntVar(0, 100 * len(slots) + abs(round(100 * doel_feest[a.id])), f'aff_{a.id}')
+        df = round(100 * doel_feest[a.id])
+        m.Add(aff >= 100 * feest - df)
+        m.Add(aff >= df - 100 * feest)
+        termen.append((W_FEESTDAG // 100) * aff)
         for o, v in xs:
             niveaus = {a.markeringen.get(s.id, ('', ''))[0] for s in o.slots}
             if boven_helft(a, o):
