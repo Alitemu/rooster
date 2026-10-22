@@ -344,6 +344,7 @@ const MUTATIONS = [
   },
   {
     name: 'previous period: one in the prullenbak counts again',
+    alles: true,
     file: 'lib/previousPeriod.ts',
     find: "WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND verwijderd_op IS NULL AND eind_datum < ?",
     replace: "WHERE pool_id = ? AND status = 'GEPUBLICEERD' AND eind_datum < ?",
@@ -771,6 +772,7 @@ const MUTATIONS = [
   },
   {
     name: 'aios reden: a cleared mark keeps its toelichting',
+    alles: true,
     file: 'lib/aiosPreferences.ts',
     find: '    ruimAiosRedenenOp(personId, periodId);\n',
     replace: '',
@@ -974,6 +976,7 @@ const MUTATIONS = [
   },
   {
     name: 'mailinstellingen: a planner saves them',
+    alles: true,
     file: 'app/api/planner/mail-settings/route.ts',
     find: 'if (!requireAdminAccess(auth)) return forbiddenResponse(ALLEEN_BEHEERDER);',
     replace: '',
@@ -2008,6 +2011,69 @@ const MUTATIONS = [
     find: "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n        with:\n          persist-credentials: false\n      - run: npm ci",
     replace: "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n      - run: npm ci",
     tests: ["deployConfig"],
+  },
+  {
+    name: "period: the ruleset route does not compare the row version",
+    file: "app/api/periods/[id]/ruleset/route.ts",
+    find: "    if (body.rowVersion !== undefined && body.rowVersion !== period.row_version) {",
+    replace: "    if (false) {",
+    tests: ["app/api/periods/[id]/ruleset"],
+  },
+  {
+    name: "participant: a preference is taken after the deadline",
+    file: "app/api/person/[id]/preferences/slot/[slotId]/route.ts",
+    find: "    if (!gate.allowed) {",
+    replace: "    if (false) {",
+    tests: ["app/api/person/[id]/inputGate"],
+  },
+  {
+    name: "participant: a hand-in is taken after the deadline",
+    file: "app/api/person/[id]/preferences/submission/route.ts",
+    find: "    if (!gate.allowed) {",
+    replace: "    if (false) {",
+    tests: ["app/api/person/[id]/inputGate"],
+  },
+  {
+    name: "participant: a fellow choice is taken after the deadline",
+    file: "app/api/person/[id]/fellow/route.ts",
+    find: "      if (!gate.allowed) {",
+    replace: "      if (false) {",
+    tests: ["app/api/person/[id]/inputGate"],
+  },
+  {
+    name: "participant: the gate lets a period that is not open through",
+    file: "lib/periodInputGate.ts",
+    find: "  if (period.status !== 'OPEN') {",
+    replace: "  if (false) {",
+    tests: ["app/api/person/[id]/inputGate"],
+  },
+  {
+    name: "finalize: a roster with deliberate exceptions is made final without asking",
+    file: "app/api/planner/period/[id]/finalize/route.ts",
+    find: "check.requiresConfirmation && body.confirmOverrides !== true",
+    replace: "false",
+    tests: ["app/api/planner/period/[id]/finalize"],
+  },
+  {
+    name: "finalize: an unpublished roster is made final",
+    file: "app/api/planner/period/[id]/finalize/route.ts",
+    find: "if (period.status !== 'GEPUBLICEERD') {",
+    replace: "if (false) {",
+    tests: ["app/api/planner/period/[id]/finalize"],
+  },
+  {
+    name: "finalize: a final roster is made final again",
+    file: "app/api/planner/period/[id]/finalize/route.ts",
+    find: "if (period.definitief_op) return fail(409, 'ALREADY_FINAL'",
+    replace: "if (false) return fail(409, 'ALREADY_FINAL'",
+    tests: ["app/api/planner/period/[id]/finalize"],
+  },
+  {
+    name: "finalize: an incomplete roster is made final",
+    file: "app/api/planner/period/[id]/finalize/route.ts",
+    find: "if (!check.valid) {",
+    replace: "if (false) {",
+    tests: ["app/api/planner/period/[id]/finalize"],
   },
   {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
@@ -3763,7 +3829,8 @@ if (sindsAt >= 0 && !sinds) {
   console.error('--sinds needs a git ref, such as v0.81.0');
   process.exit(2);
 }
-const only = args.filter((_, i) => sindsAt < 0 || (i !== sindsAt && i !== sindsAt + 1))[0];
+const droog = args.includes('--droog');
+const only = args.filter((a, i) => a !== '--droog' && (sindsAt < 0 || (i !== sindsAt && i !== sindsAt + 1)))[0];
 let changed = null;
 if (sinds) {
   const diff = spawnSync('git', ['diff', '--name-only', sinds], { cwd: repoRoot, encoding: 'utf8' });
@@ -3789,6 +3856,20 @@ process.on('SIGINT', () => {
   process.exit(130);
 });
 
+// --droog: no test runs; only whether every `find` is still in its file, once (or says alles: true). Fast.
+if (droog) {
+  const slecht = [];
+  for (const m of MUTATIONS) {
+    const bron = fs.readFileSync(path.join(repoRoot, m.file), 'utf8');
+    const n = bron.split(m.find).length - 1;
+    if (n === 0) slecht.push(`${m.name} (niet gevonden)`);
+    else if (n > 1 && !m.alles) slecht.push(`${m.name} (${n} keer gevonden)`);
+  }
+  console.log(`${MUTATIONS.length} mutaties, ${slecht.length} met een find die niet klopt`);
+  for (const s of slecht) console.log(`  - ${s}`);
+  process.exit(slecht.length ? 1 : 0);
+}
+
 const survived = [];
 for (const m of chosen) {
   const file = path.join(repoRoot, m.file);
@@ -3798,9 +3879,17 @@ for (const m of chosen) {
     survived.push(`${m.name} (niet gevonden)`);
     continue;
   }
+  // A find that occurs twice mutated only the first: the other handler or call stayed unguarded, unseen.
+  // Either make it unique or say `alles: true` (every occurrence, which a guard test must catch too).
+  const keer = src.split(m.find).length - 1;
+  if (keer > 1 && !m.alles) {
+    console.log(`? ${m.name} - the find text occurs ${keer} times, make it unique or say alles: true`);
+    survived.push(`${m.name} (${keer} keer gevonden)`);
+    continue;
+  }
   originals.set(file, src);
   try {
-    fs.writeFileSync(file, src.replace(m.find, m.replace));
+    fs.writeFileSync(file, m.alles ? src.split(m.find).join(m.replace) : src.replace(m.find, m.replace));
     // A solver mutation runs the solver's own tests (pytest in ./solver,
     // SOLVER_PYTHON or python3 with OR-Tools and pytest installed).
     const pytest = m.runner === 'pytest';
@@ -3822,10 +3911,23 @@ for (const m of chosen) {
       survived.push(`${m.name} (geen tests gevonden)`);
       continue;
     }
-    const caught = run.status !== 0;
     const summary = (
       (pytest ? output.match(/^.*\b(failed|passed)\b.* in [\d.]+s.*$/m) : run.stdout.match(/Tests\s+.*$/m)) || ['(no summary)']
     )[0].trim();
+    // Caught means a TEST failed. A timeout (status null), a mutation that breaks loading (a syntax or import
+    // error fails the suite without one failing test) or a crash of the runner is a broken mutation, not a catch.
+    const eenTestFaalde = /\bfailed\b/.test(summary) && !/Failed to load|SyntaxError|Cannot find module|ERR_MODULE_NOT_FOUND/.test(summary);
+    const caught = typeof run.status === 'number' && run.status !== 0 && !run.signal && eenTestFaalde;
+    if (!caught && typeof run.status === 'number' && run.status !== 0) {
+      console.log(`? ${m.name} - the run failed, but no test did (${summary}): a broken mutation or a runner problem`);
+      survived.push(`${m.name} (geen falende test)`);
+      continue;
+    }
+    if (run.status === null) {
+      console.log(`? ${m.name} - the run did not finish (timeout or signal)`);
+      survived.push(`${m.name} (niet afgerond)`);
+      continue;
+    }
     console.log(`${caught ? '✓ gevangen ' : '✗ OVERLEEFT'}  ${m.name}  [${summary}]`);
     if (!caught) survived.push(m.name);
   } finally {
