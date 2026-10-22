@@ -201,6 +201,15 @@ describe("an AIOS's leave", () => {
     expect(aantal('dienstrooster_absence', w.y)).toBe(0);
   });
 
+  it('takes onderwijs as a soort and blocks its days as the others', async () => {
+    const res = await maakAfwezigheid(w.y, { van_datum: '2097-05-20', tot_datum: '2097-05-20', soort: 'ONDERWIJS' });
+    expect(res.status, JSON.stringify(res.json)).toBe(201);
+    expect(db.prepare('SELECT soort FROM dienstrooster_absence WHERE id = ?').get(res.json.data.id)).toEqual({ soort: 'ONDERWIJS' });
+    expect([...new Set(markeringen(w.y, w.open, 'ABSENCE').map((d) => d.slice(0, 10)))]).toEqual(['2097-05-20']);
+    db.prepare('DELETE FROM dienstrooster_availability WHERE bron_absence_id = ?').run(res.json.data.id);
+    db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(res.json.data.id);
+  });
+
   it('blocks its days in the open quarter, moves with a change and goes when removed', async () => {
     const res = await maakAfwezigheid(w.y, { van_datum: '2097-05-06', tot_datum: '2097-05-06', soort: 'CONGRES' });
     expect(res.status).toBe(201);

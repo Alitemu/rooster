@@ -35,8 +35,6 @@ interface Props {
   // saved.
   periodId?: string;
   absences: Absence[];
-  defaultVanaf: string;
-  defaultTot: string;
   readOnly?: boolean; // True once the period's deadline has passed - view only
   onAbsencesChange: (absences: Absence[]) => void;
 }
@@ -44,12 +42,14 @@ interface Props {
 const SOORT_LABEL: Record<string, string> = {
   VAKANTIE: 'Vakantie',
   CONGRES: 'Congres/cursus',
+  ONDERWIJS: 'Onderwijs',
   OVERIG: 'Overig',
 };
 
-const emptyForm = (defaultVanaf: string, defaultTot: string) => ({
-  van_datum: defaultVanaf,
-  tot_datum: defaultTot,
+// Both dates start empty: the whole quarter as the start would be a wrong absence if saved as it is.
+const emptyForm = () => ({
+  van_datum: '',
+  tot_datum: '',
   soort: 'VAKANTIE',
   notitie: '',
 });
@@ -58,12 +58,10 @@ export function AiosAfwezigheid({
   personId,
   periodId,
   absences,
-  defaultVanaf,
-  defaultTot,
   readOnly = false,
   onAbsencesChange,
 }: Props) {
-  const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
+  const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -95,7 +93,7 @@ export function AiosAfwezigheid({
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(emptyForm(defaultVanaf, defaultTot));
+    setForm(emptyForm());
     setError(null);
   };
 

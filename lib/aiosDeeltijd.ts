@@ -34,7 +34,7 @@ const goed = (data: unknown, status = 200): Antwoord => ({ status, body: { succe
 
 const WEEKDAGEN = ['MA', 'DI', 'WO', 'DO', 'VR'];
 const FREQUENTIES = ['ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN'];
-const SOORTEN = ['VAKANTIE', 'CONGRES', 'OVERIG'];
+const SOORTEN = ['VAKANTIE', 'CONGRES', 'ONDERWIJS', 'OVERIG'];
 
 const bestaatPersoon = (id: string) => Boolean(db.prepare('SELECT 1 FROM dienstrooster_person WHERE id = ?').get(id));
 const geenPersoon = (id: string) => fout(404, 'PERSON_NOT_FOUND', `Persoon ${id} niet gevonden`);

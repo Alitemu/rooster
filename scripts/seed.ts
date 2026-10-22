@@ -427,7 +427,7 @@ async function createTables() {
       van_datum TEXT NOT NULL,
       tot_datum TEXT NOT NULL,
       soort TEXT NOT NULL
-        CHECK(soort IN ('VAKANTIE', 'CONGRES', 'OVERIG')),
+        CHECK(soort IN ('VAKANTIE', 'CONGRES', 'ONDERWIJS', 'OVERIG')),
       notitie TEXT,
       aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
       aangemaakt_op TEXT NOT NULL
@@ -815,6 +815,43 @@ function applyMissingColumns() {
   for (const backfill of backfills) db.exec(backfill);
   repairDefinitiefBackfill();
   repairRuilen();
+  repairAbsenceSoort();
+}
+
+/**
+ * The absence table of a database the seed built before 0.109.0 only allows
+ * three soorten: a CHECK cannot be altered, so the table is made again with
+ * the new one (onderwijs), rows kept. Migration 0036 does the same for a
+ * database the migrations built. Nothing to do once the table allows it.
+ */
+function repairAbsenceSoort() {
+  const rij = db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'dienstrooster_absence'`).get() as { sql: string } | undefined;
+  if (!rij || rij.sql.includes('ONDERWIJS')) return;
+  console.log('  Making dienstrooster_absence again with the soort onderwijs');
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE __new_dienstrooster_absence (
+          id TEXT PRIMARY KEY NOT NULL,
+          person_id TEXT NOT NULL REFERENCES dienstrooster_person(id),
+          van_datum TEXT NOT NULL,
+          tot_datum TEXT NOT NULL,
+          soort TEXT NOT NULL
+            CHECK(soort IN ('VAKANTIE', 'CONGRES', 'ONDERWIJS', 'OVERIG')),
+          notitie TEXT,
+          aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
+          aangemaakt_op TEXT NOT NULL
+        );
+        INSERT INTO __new_dienstrooster_absence (id, person_id, van_datum, tot_datum, soort, notitie, aangemaakt_door, aangemaakt_op)
+          SELECT id, person_id, van_datum, tot_datum, soort, notitie, aangemaakt_door, aangemaakt_op FROM dienstrooster_absence;
+        DROP TABLE dienstrooster_absence;
+        ALTER TABLE __new_dienstrooster_absence RENAME TO dienstrooster_absence;
+      `);
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
 }
 
 /**

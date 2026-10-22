@@ -47,7 +47,7 @@ const KEUZE: Record<string, string> = {
 const DAG = ['zondag', 'maandag', 'dinsdag', 'woensdag', 'donderdag', 'vrijdag', 'zaterdag'];
 const WEEKDAG: Record<string, string> = { MA: 'maandag', DI: 'dinsdag', WO: 'woensdag', DO: 'donderdag', VR: 'vrijdag' };
 const FREQUENTIE: Record<string, string> = { ELKE_WEEK: 'elke week', EVEN_WEKEN: 'even weken', ONEVEN_WEKEN: 'oneven weken' };
-const AFWEZIG: Record<string, string> = { VAKANTIE: 'vakantie', CONGRES: 'congres/cursus', OVERIG: 'overig' };
+const AFWEZIG: Record<string, string> = { VAKANTIE: 'vakantie', CONGRES: 'congres/cursus', ONDERWIJS: 'onderwijs', OVERIG: 'overig' };
 
 // Noon UTC: the weekday of a plain date, whatever the server's timezone.
 const weekdag = (datum: string) => DAG[new Date(`${datum}T12:00:00Z`).getUTCDay()];

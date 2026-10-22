@@ -1685,6 +1685,21 @@ const MUTATIONS = [
     replace: "null, null)",
     tests: ["app/api/aios/aiosSaldo"],
   },
+  // 0.109.0: onderwijs is a soort of absence for the AIOS.
+  {
+    name: "aios: onderwijs refused as a soort of absence",
+    file: "lib/aiosDeeltijd.ts",
+    find: "'CONGRES', 'ONDERWIJS', 'OVERIG']",
+    replace: "'CONGRES', 'OVERIG']",
+    tests: ["app/api/aios/aiosDeeltijd"],
+  },
+  {
+    name: "aios: an absence for onderwijs has no name in the download",
+    file: "lib/aiosDownloads.ts",
+    find: "ONDERWIJS: 'onderwijs', ",
+    replace: "",
+    tests: ["app/api/aios/aiosDownloads"],
+  },
   {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
     file: 'lib/aiosMail.ts',

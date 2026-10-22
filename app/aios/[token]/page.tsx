@@ -247,8 +247,6 @@ function AiosLinkPagina() {
             personId={personId}
             periodId={periode.id}
             absences={afwezigheden}
-            defaultVanaf={periode.start_datum}
-            defaultTot={periode.eind_datum}
             readOnly={invoerDicht}
             onAbsencesChange={setAfwezigheden}
           />

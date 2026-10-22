@@ -180,6 +180,17 @@ describe('Verzoeken per AIOS', () => {
     expect(cel(z, 'Status')).toBe('Nog niets ingevuld');
   });
 
+  it('names an absence for onderwijs', async () => {
+    const id = insert('dienstrooster_absence', { person_id: w.z, van_datum: '2097-04-28', tot_datum: '2097-04-28', soort: 'ONDERWIJS', aangemaakt_door: w.z, aangemaakt_op: now });
+    try {
+      const [kop, ...rijen] = await blad(verzoeken, w.period);
+      const z = rijen.find((r) => r[0] === codenaam('z'))!;
+      expect(z[kop.indexOf('Afwezigheid')]).toMatch(/^onderwijs 28 apr\.? 2097 t\/m 28 apr\.? 2097$/);
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(id);
+    }
+  });
+
   it('says how many may still be rostered once someone blocked more than half', async () => {
     const blokken = db
       .prepare(

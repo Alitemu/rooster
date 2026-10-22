@@ -48,6 +48,11 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   (its availability copied from the block's night), taken away with one
   chosen or when the period is reopened. An ND without shift_block_id is
   always that one. Taken away, its assignment_edit rows go with it.
+- `absence.soort` (0.109.0, migration 0036): VAKANTIE, CONGRES, ONDERWIJS or
+  OVERIG. Only the AIOS's screens offer ONDERWIJS; the achterwacht's routes
+  and screen are not changed. A CHECK cannot be altered, so migration 0036
+  makes the table again, and seed.ts repairAbsenceSoort does the same for a
+  database the seed built (upgrade-drift checks both).
 - `aios_doel` (0.79.0, migration 0027) - per AIOS quarter and AIOS the
   solver's fair share (doel_punten, doel_feestdagen, and since 0.107.0,
   migration 0034, doel_nachten: NULL for a quarter made before, whose nights

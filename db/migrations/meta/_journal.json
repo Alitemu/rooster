@@ -253,6 +253,13 @@
       "when": 1789579800000,
       "tag": "0035_aios_doel_weekend",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1789666200000,
+      "tag": "0036_absence_soort_onderwijs",
+      "breakpoints": true
     }
   ]
 }
