@@ -2285,7 +2285,7 @@ const MUTATIONS = [
   {
     name: "aios saldo: the solver's share not kept",
     file: "lib/aiosGenereren.ts",
-    find: "      for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten);\n",
+    find: "      for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten, a.doel_nachten ?? null);\n",
     replace: "",
     tests: ["app/api/aios/aiosSaldo"],
   },
