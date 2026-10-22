@@ -6,7 +6,8 @@
  * address it is. It hands the question to the Power Automate flow that
  * already owns the address list: one LINK_AANVRAAG verzendlijst with the
  * address and, in `kandidaten`, a ready bericht for everyone taking part in
- * a pool's active period (lib/activePeriod.ts), of every pool. The flow finds the address in
+ * the active period (lib/activePeriod.ts) of each of the achterwacht's pools. The AIOS asks its own
+ * way (app/api/aios/link-aanvragen), with the AIOS's own periods and links. The flow finds the address in
  * its sheet, takes that codenaam's bericht and sends it to the address in
  * the sheet - so a link only ever goes to an address the planner
  * registered, whatever a visitor types. See lib/verzendlijst.ts for why
@@ -44,9 +45,9 @@ export function periodeUitleg(period: ActivePeriod, now: Date = new Date()): str
 }
 
 /**
- * A bericht per participant of each pool's active period, each with a
- * fresh link: the achterwacht's and the AIOS's alike, since the flow and
- * its address list are shared. A pool contributes nothing when it has no
+ * A bericht per participant of each achterwacht pool's active period, each with a
+ * fresh link. Never an AIOS pool: its participants are the AIOS's own to ask for (a link to
+ * the achterwacht's page would be one it refuses). A pool contributes nothing when it has no
  * active period, or no address for links is known for it (no BASE_URL, no
  * invitations sent yet): the request's own Host header is never used,
  * anyone can forge it.
@@ -54,7 +55,7 @@ export function periodeUitleg(period: ActivePeriod, now: Date = new Date()): str
 export function linkAanvraagKandidaten(now: Date = new Date()): { periode: string | null; kandidaten: VerzendlijstBericht[] } {
   const namen: string[] = [];
   const kandidaten: VerzendlijstBericht[] = [];
-  for (const period of getActivePeriods()) {
+  for (const period of getActivePeriods('ACHTERWACHT')) {
     const baseUrl = mailBaseUrl(period.id);
     if (!baseUrl) continue;
 

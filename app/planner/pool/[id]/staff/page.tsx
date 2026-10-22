@@ -88,12 +88,15 @@ export default function PoolStaffPage() {
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
 
   // The single most recently removed membership for this pool, read from
-  // the server (lib/pendingUndo.ts) so it's still there after a reload or
-  // for a different planner who opens this page later - only removals get
-  // this, not date edits: a misclick that removes someone
-  // is the one mistake here that isn't just as fast to fix by opening the
-  // edit form again and typing the old value back in.
-  const [pendingUndo, setPendingUndo] = useState<{ label: string } | null>(null);
+  // the server (lib/pendingUndo.ts) - only removals get this, not date
+  // edits: a misclick that removes someone is the one mistake here that
+  // isn't just as fast to fix by opening the edit form again and typing the
+  // old value back in. Only for the acute moment (0.106.0): what was already
+  // there when the page opened stays hidden (undoBasis), and what is shown
+  // goes away after two minutes, as the server stops accepting it by then.
+  const [pendingUndo, setPendingUndo] = useState<{ id: string; label: string; verloopt_over_seconden: number } | null>(null);
+  // undefined: not read yet; null: nothing was there when the page opened.
+  const undoBasis = useRef<string | null | undefined>(undefined);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
 
@@ -134,13 +137,23 @@ export default function PoolStaffPage() {
     try {
       const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/pending-undo`));
       const data = await res.json();
-      setPendingUndo(res.ok ? data.data?.pending ?? null : null);
+      const gelezen = res.ok ? data.data?.pending ?? null : null;
+      if (undoBasis.current === undefined) undoBasis.current = gelezen?.id ?? null;
+      setPendingUndo(gelezen && gelezen.id !== undoBasis.current ? gelezen : null);
     } catch {
       setPendingUndo(null);
     }
   }, [poolId]);
 
+  // The button goes away when the two minutes are over.
   useEffect(() => {
+    if (!pendingUndo) return;
+    const timer = setTimeout(() => setPendingUndo(null), pendingUndo.verloopt_over_seconden * 1000);
+    return () => clearTimeout(timer);
+  }, [pendingUndo]);
+
+  useEffect(() => {
+    undoBasis.current = undefined;
     loadStaff();
     loadPendingUndo();
   }, [loadStaff, loadPendingUndo]);

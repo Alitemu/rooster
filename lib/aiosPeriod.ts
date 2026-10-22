@@ -14,7 +14,7 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { notThisDienstResponse } from '@/lib/dienstAccess';
+import { dienstenVan, notThisDienstResponse } from '@/lib/dienstAccess';
 
 export function isAiosPool(poolId: string): boolean {
   const row = db.prepare('SELECT type FROM dienstrooster_pool WHERE id = ?').get(poolId) as { type: string } | undefined;
@@ -34,16 +34,13 @@ export function isAiosPeriod(periodId: string): boolean {
 export const AIOS_NOG_NIET =
   'Dit kan nog niet bij een periode van de AIOS. Het voorkeurenscherm, het maken van het rooster en het publiceren voor de AIOS komen in een volgende versie.';
 
-/** Someone of the AIOS: a member of an AIOS pool, at any time (a person belongs to one dienst). */
+/**
+ * Someone of the AIOS: anything of theirs in an AIOS pool or period, at any
+ * time (a person belongs to one dienst), also once removed from every pool
+ * (lib/dienstAccess.ts dienstenVan).
+ */
 export function isAiosPerson(personId: string): boolean {
-  return Boolean(
-    db
-      .prepare(
-        `SELECT 1 FROM dienstrooster_pool_membership pm JOIN dienstrooster_pool pl ON pl.id = pm.pool_id
-         WHERE pm.person_id = ? AND pl.type = 'AIOS' LIMIT 1`
-      )
-      .get(personId)
-  );
+  return dienstenVan(personId).has('AIOS');
 }
 
 /**

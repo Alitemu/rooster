@@ -4,7 +4,7 @@
  * send). A pool's participants deal with one period at a time, so:
  *
  * - "Link kwijt?" on the start page links to it and nothing else
- *   (lib/linkAanvraag.ts), for every pool;
+ *   (lib/linkAanvraag.ts), for every pool of the achterwacht (the AIOS has its own, app/api/aios/link-aanvragen);
  * - another period of the pool can only be invited once the active one's
  *   roster is published - at that point the new one takes over. Sending
  *   the active period's own invitations again is always allowed;
@@ -41,9 +41,11 @@ export function getActivePeriod(poolId: string): ActivePeriod | undefined {
   return db.prepare(LATEST_INVITED).get(poolId) as ActivePeriod | undefined;
 }
 
-/** The active period of every pool that has one. */
-export function getActivePeriods(): ActivePeriod[] {
-  const pools = db.prepare('SELECT id FROM dienstrooster_pool ORDER BY naam').all() as Array<{ id: string }>;
+/** The active period of every pool that has one, of one dienst (a type of pool) or of all when none is given. */
+export function getActivePeriods(dienst?: string): ActivePeriod[] {
+  const pools = db
+    .prepare('SELECT id FROM dienstrooster_pool WHERE (@dienst IS NULL OR type = @dienst) ORDER BY naam')
+    .all({ dienst: dienst ?? null }) as Array<{ id: string }>;
   return pools.map((p) => getActivePeriod(p.id)).filter((p): p is ActivePeriod => p !== undefined);
 }
 

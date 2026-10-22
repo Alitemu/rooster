@@ -132,8 +132,8 @@ operator adds those two rows to the flow's sheet; the app never puts an
 address in a verzendlijst, so a forged one can't reach anyone outside it. The swap dialog says only an equal swap goes through the app (one shift
 for one of the same kind, which the create route enforces); any other
 trade colleagues agree themselves and mail it themselves to the planner
-(the Mailinstellingen flow mailbox, lib/appSettings.ts getSwapContacts,
-GET /api/person/[id]/swap-contacts) and to "het roosterbureau", named
+(the contact address of the dienst, lib/appSettings.ts getSwapContacts,
+GET /api/person/[id]/swap-contacts; not the flow mailbox since 0.102.0) and to "het roosterbureau", named
 without an address. The address lives in the app, never in code. Started after the
 commit and never awaited, so a mail failure can't fail or slow the swap.
 A swap mail that can't go out (not set up, or refused) waits in

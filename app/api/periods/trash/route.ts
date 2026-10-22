@@ -20,7 +20,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return unauthorizedResponse();
     }
 
-    purgeExpiredPeriods(auth!.userId);
+    purgeExpiredPeriods(auth!.userId, visibleDienst(auth!));
 
     const response: ApiSuccessResponse<TrashedPeriod[]> = {
       success: true,

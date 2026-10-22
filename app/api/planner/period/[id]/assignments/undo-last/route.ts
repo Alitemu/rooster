@@ -65,7 +65,7 @@ export async function POST(
     if (!pending || pending.scope !== 'PERIOD_ASSIGNMENT') {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'NOTHING_TO_UNDO', message: 'Er is niets meer om ongedaan te maken' },
+        error: { code: 'NOTHING_TO_UNDO', message: 'Ongedaan maken kan alleen direct na de wijziging. Pas het zo nodig met de hand aan.' },
       };
       return NextResponse.json(response, { status: 404 });
     }

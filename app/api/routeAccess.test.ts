@@ -134,7 +134,7 @@ afterAll(() => {
 describe('every API route refuses who may not use it', () => {
   it('finds the routes', () => {
     // A glob that silently matched nothing would make every test below pass.
-    expect(routes.length).toBeGreaterThan(100);
+    expect(routes.length).toBeGreaterThan(180);
   });
 
   const guarded = routes.filter((r) => !PUBLIC.has(r.path));

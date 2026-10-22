@@ -5,8 +5,8 @@ import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, ge
 
 /**
  * Four things on the planner's period page:
- * - "Ongedaan maken" sits under the heading the change was made in and
- *   folds away with it (lib/pendingUndo.ts `onderdeel`);
+ * - "Ongedaan maken" sits under the heading the change was made in, folds
+ *   away with it (lib/pendingUndo.ts `onderdeel`) and is gone after a reload;
  * - "Mailinstellingen" under Exporteren & communicatie, Gmail only, and
  *   only for the beheerder (shared by the achterwacht and the AIOS; a
  *   planner sees how the mail stands, 0.87.0);
@@ -36,21 +36,20 @@ test.describe('Periodepagina', () => {
   const section = (page: import('@playwright/test').Page, title: string) =>
     page.locator('div.card', { has: page.locator('[role="button"]', { hasText: title }) }).first();
 
-  test('the undo for a change made in "Rooster vooraf invullen" is under that heading and folds away with it', async ({ page }) => {
+  test('the undo for a change made in "Rooster vooraf invullen" is under that heading, folds away with it and is gone after a reload', async ({ page }) => {
     await loginAsPlanner(page);
-    const assign = await page.request.post(
-      `${getBaseUrl()}/api/planner/period/${testData.period.id}/assignments/manual-assign`,
-      { data: { person_id: testData.users[1].id, slot_id: freeSlot, reason: 'test', onderdeel: 'VOORAF' } }
-    );
-    expect(assign.ok()).toBe(true);
-
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
 
+    // The change is made on the page itself: pick someone for the open evening and apply.
     const vooraf = section(page, 'Rooster vooraf invullen');
     const header = vooraf.locator('[role="button"]').first();
     const banner = vooraf.getByText('Laatst gewijzigd:');
-    if (!(await banner.isVisible())) await header.click();
+    await header.click();
+    await expect(banner).toHaveCount(0);
+    await vooraf.locator('select').first().selectOption({ index: 1 });
+    await vooraf.getByRole('button', { name: /Alle toewijzingen toepassen/ }).click();
+
     await expect(banner).toBeVisible();
     await expect(vooraf.getByRole('button', { name: /Ongedaan maken/ })).toBeVisible();
 
@@ -59,6 +58,14 @@ test.describe('Periodepagina', () => {
 
     await header.click();
     await expect(page.getByText('Laatst gewijzigd:')).toBeHidden();
+
+    // Only for the acute moment: after a reload nothing is offered any more, though the server still holds it for two minutes.
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    const naVerversen = section(page, 'Rooster vooraf invullen');
+    await naVerversen.locator('[role="button"]').first().click();
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toHaveCount(0);
   });
 
   test('Mailinstellingen says Gmail only and refuses another address', async ({ page }) => {

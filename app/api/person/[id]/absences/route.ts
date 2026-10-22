@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { syncAvailabilityForAbsence } from '@/lib/absenceSync';
@@ -47,6 +48,14 @@ interface CreateAbsenceRequest {
 /**
  * GET /api/person/[id]/absences - List all absences
  */
+/** Whether the period exists and is this person's to use (a participant's own, a planner's own dienst). */
+function periodBruikbaar(req: NextRequest, personId: string, periodId: string): boolean {
+  const period = db
+    .prepare('SELECT id, pool_id, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ?')
+    .get(periodId) as { id: string; pool_id: string; start_datum: string; eind_datum: string } | undefined;
+  return Boolean(period) && periodUsableFor(getAuthContextFromRequest(req)!, personId, period!);
+}
+
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
   try {
@@ -77,7 +86,10 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     // absenceSync.ts's "never overwrite a MANUAL row" rule - not a sign of
     // failure) and lets the UI draw a day-by-day calendar instead of a
     // single trust-me count.
-    const periodId = req.nextUrl.searchParams.get('period_id');
+    // A period that is not this person's to use gives what a period that does not exist gives: no days in it
+    // (docs/development/diensten.md, periodUsableFor).
+    const gevraagd = req.nextUrl.searchParams.get('period_id');
+    const periodId = gevraagd && periodBruikbaar(req, id, gevraagd) ? gevraagd : gevraagd ? 'geen-periode' : null;
 
     const stmt = db.prepare(
       periodId

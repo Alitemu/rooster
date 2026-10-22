@@ -253,6 +253,19 @@ describe('a file with problems is refused whole', () => {
     expect((db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_availability').get() as { n: number }).n).toBe(voor.n);
   });
 
+  it("a codenaam of the achterwacht is as unknown as one that does not exist: the message does not tell it exists", async () => {
+    const rows = kopieer(await gelezen());
+    rows[0].push(staf.xCodenaam);
+    rows[0].push('bestaat-niet-zeker');
+    const problemen: string[] = (await importeer(rows, false)).json.data.problemen;
+    const van = problemen.find((p) => p.includes(staf.xCodenaam))!;
+    const onbekend = problemen.find((p) => p.includes('bestaat-niet-zeker'))!;
+    expect(van).toBeDefined();
+    expect(van.replace(staf.xCodenaam, 'NAAM')).toBe(onbekend.replace('bestaat-niet-zeker', 'NAAM'));
+    expect(van).toContain('geen deelnemer');
+    expect(van).not.toContain('doet niet mee');
+  });
+
   it('a block is one choice: one dienst of it different from the rest is a problem', async () => {
     const rows = kopieer(await gelezen());
     const dagen = nachtDagen();

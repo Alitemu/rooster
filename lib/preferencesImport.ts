@@ -30,6 +30,7 @@ import { writePreferencesBackup } from './preferencesBackup';
 import { parseSheetDate } from './isoDate';
 import { withoutFormulaGuard } from './csv';
 import { loadPeriodMembers } from './rosterBands';
+import { isAiosPerson } from './aiosPeriod';
 
 type Level = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 
@@ -109,9 +110,11 @@ function plan(period: ImportPeriod, rows: string[][]): { plan: ImportPlan; write
   }
   const firstPersonCol = Math.max(datumCol, dienstCol, lower.indexOf('dag'), lower.indexOf('week')) + 1;
 
-  const people = db
-    .prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE rol = 'DEELNEMER'`)
-    .all() as Array<{ id: string; codenaam: string }>;
+  // Not the AIOS's: such a codenaam is as unknown here as one that does not exist, or the message below would
+  // tell whether it exists (docs/development/diensten.md).
+  const people = (
+    db.prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE rol = 'DEELNEMER'`).all() as Array<{ id: string; codenaam: string }>
+  ).filter((p) => !isAiosPerson(p.id));
   const exact = new Map(people.map((p) => [p.codenaam, p]));
   const anyCase = new Map(people.map((p) => [p.codenaam.toLowerCase(), p]));
   // Only the period's own participants, the people the overview has a

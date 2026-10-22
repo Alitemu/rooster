@@ -74,7 +74,8 @@ const ACHTERWACHT_USES_AIOS: Record<string, string[]> = {
   // A member added or changed: the AIOS's sync after the achterwacht's (audit of the separation).
   'app/api/planner/pool/[id]/members/route.ts': ['lib/aiosSync.ts'],
   'app/api/planner/pool/[id]/members/[membershipId]/route.ts': ['lib/aiosSync.ts'],
-  // The hourly check runs the AIOS's reminders (for the voorkeuren, and for swap requests that wait) and its swap mail queue, each in a try of their own.
+  'app/api/planner/pool/[id]/members/undo-last/route.ts': ['lib/aiosSync.ts'],
+  // The hourly check runs the AIOS's reminders (for the voorkeuren, and for swap requests that wait) and its swap mail queue, each task on its own (lib/taakUitvoerder.ts).
   'instrumentation-node.ts': ['lib/aiosAutoHerinneringen.ts', 'lib/aiosRuilen.ts', 'lib/aiosRuilMail.ts'],
   // Every start makes sure the AIOS pool exists.
   'scripts/seed.ts': ['lib/aiosPool.ts'],

@@ -237,9 +237,11 @@ export async function runAutoReminders(
 
   const periods = db
     .prepare(
-      `SELECT id, naam, deadline, pool_id, start_datum, eind_datum, basis_url
-       FROM dienstrooster_schedule_period
-       WHERE status = 'OPEN' AND auto_herinneren = 1 AND verwijderd_op IS NULL`
+      `SELECT sp.id, sp.naam, sp.deadline, sp.pool_id, sp.start_datum, sp.eind_datum, sp.basis_url
+       FROM dienstrooster_schedule_period sp
+       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id
+       WHERE sp.status = 'OPEN' AND sp.auto_herinneren = 1 AND sp.verwijderd_op IS NULL
+         AND pl.type = 'ACHTERWACHT'`
     )
     .all() as AutoPeriod[];
 

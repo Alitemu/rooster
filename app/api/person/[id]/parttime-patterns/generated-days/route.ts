@@ -14,6 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
+import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { isYearBoundaryWeek, previewPatternDates, findBlockedElsewhereDays, type PatternRule } from '@/lib/parttimeSync';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -52,9 +53,12 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       return NextResponse.json(response, { status: 400 });
     }
 
-    const period = db
-      .prepare('SELECT status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
-      .get(periodId) as { status: string; start_datum: string; eind_datum: string } | undefined;
+    const found = db
+      .prepare('SELECT id, pool_id, status, start_datum, eind_datum FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
+      .get(periodId) as { id: string; pool_id: string; status: string; start_datum: string; eind_datum: string } | undefined;
+    // A period that is not this person's to use answers as one that does not exist: its dates are not for them
+    // (docs/development/diensten.md, periodUsableFor).
+    const period = found && periodUsableFor(auth!, id, found) ? found : undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {

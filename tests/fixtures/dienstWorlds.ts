@@ -279,6 +279,19 @@ export function fingerprint(w: World): string {
     q('SELECT * FROM dienstrooster_parttime_pattern WHERE person_id = ? ORDER BY id', w.x),
     q('SELECT * FROM dienstrooster_notification WHERE person_id IN (?, ?) ORDER BY id', w.x, w.y),
     q('SELECT id, codenaam, actief, sessie_versie FROM dienstrooster_person WHERE id IN (?, ?) ORDER BY id', w.x, w.y),
+    // What the AIOS keeps with a period, and what both keep around one (0.106.0: these were not in the fingerprint,
+    // so a write there by the other dienst would not have shown).
+    q('SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_wens WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_reden WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_doel WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_periode WHERE period_id = ?', w.period),
+    q('SELECT * FROM dienstrooster_shift_block WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_holiday_history WHERE person_id IN (?, ?) ORDER BY id', w.x, w.y),
+    q('SELECT id, scope, scope_id, action_type, payload_json FROM dienstrooster_pending_undo WHERE scope_id IN (?, ?) ORDER BY id', w.period, w.pool),
+    q('SELECT * FROM dienstrooster_mail_queue WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_aios_mail_queue WHERE period_id = ? ORDER BY id', w.period),
+    q('SELECT * FROM dienstrooster_audit_log WHERE entiteit_id IN (?, ?, ?, ?) ORDER BY id', w.period, w.pool, w.x, w.y),
   ]);
 }
 

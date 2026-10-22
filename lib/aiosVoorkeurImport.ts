@@ -45,6 +45,7 @@ import { loadAiosPeriode, loadAiosWens, saveAiosWens, setAiosVoorkeur, type Nive
 import { VERZOEK_RIJEN, laadDeeltijdVoorKwartaal, deeltijdCel, leesDeeltijdCel, verzoekPeriode, type DeeltijdPatroonRij } from '@/lib/aiosDownloads';
 import { voegPatroonToe } from '@/lib/aiosDeeltijd';
 import { loadAiosRedenen, saveAiosReden } from '@/lib/aiosReden';
+import { isAiosPerson } from '@/lib/aiosPeriod';
 import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 
@@ -161,7 +162,11 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   const deelnemers = aiosDeelnemers(period);
   const exact = new Map(deelnemers.map((p) => [p.codenaam, p]));
   const hoofdletterloos = new Map(deelnemers.map((p) => [p.codenaam.toLowerCase(), p]));
-  const alle = db.prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE rol = 'DEELNEMER'`).all() as Array<{ id: string; codenaam: string }>;
+  // Only the AIOS's own: a codenaam of the achterwacht is as unknown here as one that does not exist,
+  // or this message would tell whether it exists.
+  const alle = (db.prepare(`SELECT id, codenaam FROM dienstrooster_person WHERE rol = 'DEELNEMER'`).all() as Array<{ id: string; codenaam: string }>).filter((p) =>
+    isAiosPerson(p.id)
+  );
   const bekend = new Set(alle.map((p) => p.codenaam.toLowerCase()));
 
   const kolommen: Array<{ kol: number; id: string; codenaam: string }> = [];

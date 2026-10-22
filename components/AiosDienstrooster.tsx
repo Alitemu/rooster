@@ -34,6 +34,9 @@ const CODE_NAAM: Record<string, string> = {
   ND: 'Nachtdienst',
 };
 
+// How long "Ongedaan maken" stays: the acute moment only. The achterwacht's server holds the same two minutes (lib/pendingUndo.ts).
+const UNDO_VENSTER_SECONDEN = 120;
+
 const DAG_KOP = ['wo', 'do', 'vr', 'za', 'zo', 'ma', 'di'];
 
 const datumKort = (datum: string) =>
@@ -555,6 +558,14 @@ export function AiosDienstrooster({
   const [laatste, setLaatste] = useState<Gewijzigd | null>(null);
   const [terugFout, setTerugFout] = useState<string | null>(null);
   const [bezig, setBezig] = useState(false);
+
+  // Undoing is for the acute moment: the notice and its button go away after two minutes (the same as the
+  // achterwacht's, lib/pendingUndo.ts), and a reload never shows them, as the notice lives in this state only.
+  useEffect(() => {
+    if (!laatste) return;
+    const timer = setTimeout(() => setLaatste(null), UNDO_VENSTER_SECONDEN * 1000);
+    return () => clearTimeout(timer);
+  }, [laatste]);
 
   // Only the answer of the latest reading counts: a slow answer from before the roster was removed must not bring it back.
   const lezing = useRef(0);

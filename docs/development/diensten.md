@@ -50,11 +50,43 @@ temporary password to the AIOS pool).
 - The active period is per pool (lib/activePeriod.ts getActivePeriod(poolId),
   getActivePeriods): one for the app kept the AIOS planner from inviting
   while the achterwacht's period was open, and the refusal named it.
-  "Link kwijt?" offers the links of every pool's active period.
-- One shared Mailinstellingen and flow for both (the planner's choice), so
-  only the beheerder saves or removes them (403 for a planner, who sees
-  them read-only): a planner who could point the flow mailbox elsewhere
-  would get the other dienst's personal links.
+  "Link kwijt?" offers the links of the achterwacht's pools' active periods
+  only (getActivePeriods('ACHTERWACHT')); the AIOS asks its own way
+  (app/api/aios/link-aanvragen).
+- Mail settings (0.106.0): the Gmail account and its password are the one
+  thing shared. Each dienst has its own flow address and contact address
+  (`mail.*` and `aios.mail.*` / `aios.contact.planner` in app_setting), seen
+  by its own planner only (GET planner/mail-settings answers an AIOS planner
+  404, GET aios/mail-instellingen the achterwacht's; exports/verzendlijst-status
+  too, lib/dienstAccess.ts eigenDienstDenial) and changed by the beheerder
+  only (403 for a planner): one who could point the flow mailbox elsewhere
+  would get the other dienst's personal links. One flow and one mailbox can
+  serve both since 0.105.0: every verzendlijst carries `dienst`, set by
+  buildVerzendlijst in each copy and never by a caller, and the operator's
+  flow reads the Excel file of that dienst (docs/verzendlijst-power-automate.md).
+  Beyond that point the app cannot keep them apart: that is the operator's.
+- A person belongs to one dienst by anything of theirs, not by a membership
+  alone (0.106.0): lib/dienstAccess.ts dienstenVan reads the pools and
+  periods of the membership, a link, a mark, a dienst, a hand-in, a swap, a
+  balance, a fellow, a prior assignment, a notice and the AIOS's wishes,
+  reasons, targets, balances and swaps. staffMayAccessPerson, isAiosPerson
+  and personHasOtherDienst all use it, so someone removed from every pool
+  stays in the dienst they were in. Undoing a removal of a member refuses
+  when the other dienst took the person over in between.
+- A codenaam is unique over both diensten, so adding one that belongs to the
+  other dienst answers 409 ANDERE_DIENST: that tells it exists, and cannot be
+  avoided without a codenaam per dienst. The imports answer "geen deelnemer"
+  for the other dienst's names as for unknown ones. An id of the other dienst
+  in a path answers the 404 "Niet gevonden", an unknown one the route's own
+  404 (the ids are uuids, nothing to guess).
+- The prullenbak purges per dienst (purgeExpiredPeriods(actor, dienst)), and
+  every table with a foreign key to a period is in cascadeDeletePeriod or
+  cascades itself (lib/periodTrash.test.ts holds that).
+- The hourly work runs task by task (lib/taakUitvoerder.ts), so a failing
+  task of the achterwacht never holds up the AIOS's, nor the other way round.
+- Undoing a manual change (lib/pendingUndo.ts) is for the acute moment: two
+  minutes, for the button and for a request alike. The pages do not read it
+  when they open (what was there stays hidden), and logging out removes it.
 - Codenamen: staf01, staf02, ... for the achterwacht and aios01, ... for
   the AIOS (lib/startParticipants.ts). A production start creates
   staf01..staf30; an installation from before had Persoon-01..30, renamed
@@ -86,9 +118,10 @@ temporary password to the AIOS pool).
   sends the solver only its own pool; "Link kwijt?" pairs everyone with a
   period of their own pool. Both separation tests build their two worlds
   with tests/fixtures/dienstWorlds.ts.
-- The participant's swap dialog names the achterwacht's flow mailbox for a
-  swap the app cannot make (lib/appSettings.ts getSwapContacts). The AIOS
-  swap later on their own screen, with their own flow (docs/aios-rooster.md).
+- The participant's swap dialog names the contact address of the dienst for a
+  swap the app cannot make (lib/appSettings.ts getSwapContacts, since 0.102.0 the
+  contact address and not the flow mailbox). The AIOS's own screen names theirs
+  (docs/aios-rooster.md).
 - app/api/dienstSeparation.test.ts holds it: two complete worlds, every
   route file called by each world's planner with the other's ids (and
   for participant routes their own participant with the other's period,

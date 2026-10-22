@@ -13,7 +13,7 @@
  * - Generate roster button
  */
 
-import { useState, useEffect, type ReactNode } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
@@ -306,13 +306,14 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
   const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar' | 'dienstdoende' | 'ruilverzoeken'>('list');
   // The single most recent reversible assign/reassign/remove for this
-  // period, read from the server (lib/pendingUndo.ts) rather than kept in
-  // this component's own state - that's what makes it still show up after
-  // a reload, in a different tab, or for a different planner who opens
-  // this same period later, and what makes undoing it a real button
-  // instead of a client-only ctrl+z that only the person who made the
-  // change could ever use.
-  const [pendingUndo, setPendingUndo] = useState<{ label: string; onderdeel?: string } | null>(null);
+  // period, read from the server (lib/pendingUndo.ts). Only for the acute
+  // moment (0.106.0, the planner's wish): what was already there when this
+  // page opened stays hidden (undoBasis holds its id), so a reload or a new
+  // login shows no button, and what is shown goes away after two minutes,
+  // as the server stops accepting it by then.
+  const [pendingUndo, setPendingUndo] = useState<{ id: string; label: string; onderdeel?: string; verloopt_over_seconden: number } | null>(null);
+  // undefined: not read yet; null: nothing was there when the page opened.
+  const undoBasis = useRef<string | null | undefined>(undefined);
   const [undoing, setUndoing] = useState(false);
   const [mailSettingsOpen, setMailSettingsOpen] = useState(false);
   // Bumped when the mail settings change, so the automatic-reminder panel
@@ -393,7 +394,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     try {
       const pendingRes = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/pending-undo`));
       const pendingData = await pendingRes.json();
-      setPendingUndo(pendingRes.ok ? pendingData.data?.pending ?? null : null);
+      const gelezen = pendingRes.ok ? pendingData.data?.pending ?? null : null;
+      if (undoBasis.current === undefined) undoBasis.current = gelezen?.id ?? null;
+      setPendingUndo(gelezen && gelezen.id !== undoBasis.current ? gelezen : null);
     } catch {
       setPendingUndo(null);
     }
@@ -401,8 +404,17 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
   useEffect(() => {
     setSuggestionCount(null);
+    undoBasis.current = undefined;
+    setPendingUndo(null);
     loadData();
   }, [periodId]);
+
+  // The button goes away when the two minutes are over.
+  useEffect(() => {
+    if (!pendingUndo) return;
+    const timer = setTimeout(() => setPendingUndo(null), pendingUndo.verloopt_over_seconden * 1000);
+    return () => clearTimeout(timer);
+  }, [pendingUndo]);
 
   useEffect(() => {
     fetch(withBasePath('/api/planner/mail-settings'))

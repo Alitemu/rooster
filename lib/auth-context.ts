@@ -80,8 +80,9 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
       role: current.rol as 'ADMIN' | 'PLANNER',
       timestamp: new Date().toISOString(),
       wachtwoordWijzigen: session.wachtwoordWijzigen === true,
-      // Read live like the role, so moving an account to the other dienst
-      // takes effect at its next request. Every staff account got
+      // Read live like the role, so a change takes effect at its next
+      // request (there is no route that moves an account to the other
+      // dienst: dienst_type is set when it is created). Every staff account got
       // ACHTERWACHT when the column came (migration 0022), and that is what
       // an account is created with unless the beheerder picks otherwise.
       dienst: current.dienst_type ?? 'ACHTERWACHT',
