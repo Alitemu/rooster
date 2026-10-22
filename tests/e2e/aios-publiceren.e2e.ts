@@ -101,8 +101,8 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   });
   await geschiedenis.getByRole('button', { name: 'Controleren' }).click();
   const voorbeeld = geschiedenis.getByTestId('aios-geschiedenis-voorbeeld');
-  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap0-${stamp % 100000} .*5 punten minder$`) })).toBeVisible();
-  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap1-${stamp % 100000} .*5 punten extra$`) })).toBeVisible();
+  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap0-${stamp % 100000} .*5 punten minder en 5 nachtdiensten minder$`) })).toBeVisible();
+  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap1-${stamp % 100000} .*5 punten extra en 5 nachtdiensten extra$`) })).toBeVisible();
   await geschiedenis.getByRole('button', { name: 'Bewaren' }).click();
   await expect(geschiedenis.getByText(/^Bewaard\./)).toBeVisible();
   await expect(geschiedenis.getByText('Ingelezen voor 2 AIOS.')).toBeVisible();
