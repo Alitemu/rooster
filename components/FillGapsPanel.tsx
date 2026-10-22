@@ -164,6 +164,13 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // "Ongedaan maken" for what was applied here, for the acute moment only (lib/pendingUndo.ts, 0.106.0): what was
+  // already there when this page opened stays hidden (undoBasis), and what is shown goes away after two minutes.
+  const [undo, setUndo] = useState<{ id: string; label: string; verloopt_over_seconden: number } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  // undefined: not read yet; null: nothing was there when the page opened.
+  const undoBasis = useRef<string | null | undefined>(undefined);
 
   // Restore any draft left over from a previous visit - before the first
   // load() below runs, so its "drop selections for slots no longer open"
@@ -239,6 +246,71 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
     load();
   }, [load]);
 
+  const loadUndo = useCallback(async () => {
+    try {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/pending-undo`));
+      const data = await res.json();
+      const gelezen = res.ok ? data.data?.pending ?? null : null;
+      if (undoBasis.current === undefined) undoBasis.current = gelezen?.id ?? null;
+      setUndo(gelezen && gelezen.id !== undoBasis.current ? gelezen : null);
+    } catch {
+      setUndo(null);
+    }
+  }, [periodId]);
+
+  useEffect(() => {
+    undoBasis.current = undefined;
+    loadUndo();
+  }, [loadUndo]);
+
+  // The button goes away when the two minutes are over.
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), undo.verloopt_over_seconden * 1000);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  const handleUndo = async () => {
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/undo-last`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Handmatig aangevuld, ongedaan gemaakt' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Ongedaan maken mislukt');
+      setUndo(null);
+      onAssignmentsChanged?.();
+      await load();
+    } catch (err) {
+      setUndoError(err instanceof Error ? err.message : 'Ongedaan maken mislukt');
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const undoBanner = undo ? (
+    <div className="mb-4 p-3 rounded border border-neutral-300 bg-white flex flex-wrap items-center justify-between gap-3" data-testid="fillgaps-undo">
+      <p className="text-sm text-neutral-800">
+        <span className="font-medium">Laatst gewijzigd:</span> {undo.label}
+      </p>
+      <button
+        type="button"
+        onClick={handleUndo}
+        disabled={undoing}
+        className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50"
+      >
+        {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
+      </button>
+    </div>
+  ) : undoError ? (
+    <p role="alert" className="mb-4 text-sm text-red-700">
+      {undoError}
+    </p>
+  ) : null;
+
   const stagedCount = Object.keys(selection).length;
 
   const handleApplyAll = async () => {
@@ -292,6 +364,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
     // only picks for slots still open (including any that just failed)
     // survive, so a retry doesn't need to be redone from scratch.
     await load();
+    await loadUndo();
     setApplying(false);
   };
 
@@ -316,6 +389,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
   if (slots.length === 0) {
     return (
       <div className="card p-4 bg-green-50 border border-green-200">
+        {undoBanner}
         <p className="text-sm text-green-900 font-medium">
           ✓ Elke dienst in dit rooster is ingevuld.
         </p>
@@ -325,6 +399,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
 
   return (
     <div className="card p-6 bg-amber-50 border border-amber-200">
+      {undoBanner}
       <h3 className="font-semibold text-amber-900 mb-1">
         ⚠️ {slots.length} dienst{slots.length === 1 ? '' : 'en'} nog niet ingevuld
       </h3>

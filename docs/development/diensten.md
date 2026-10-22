@@ -86,7 +86,12 @@ temporary password to the AIOS pool).
   task of the achterwacht never holds up the AIOS's, nor the other way round.
 - Undoing a manual change (lib/pendingUndo.ts) is for the acute moment: two
   minutes, for the button and for a request alike. The pages do not read it
-  when they open (what was there stays hidden), and logging out removes it.
+  when they open (what was there stays hidden, by the id of the row), and
+  logging out removes it. The button is where the change is made: the period
+  dashboard (the roster, the redistribution), the page "Rooster vooraf
+  invullen" (components/FillGapsPanel.tsx, which has its own now: the change is
+  made there, no longer on the dashboard), the staff page of a pool, and the AIOS's
+  Dienstrooster (its notice lives in the page's state only).
 - Codenamen: staf01, staf02, ... for the achterwacht and aios01, ... for
   the AIOS (lib/startParticipants.ts). A production start creates
   staf01..staf30; an installation from before had Persoon-01..30, renamed

@@ -5,8 +5,8 @@ import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, ge
 
 /**
  * Four things on the planner's period page:
- * - "Ongedaan maken" sits under the heading the change was made in, folds
- *   away with it (lib/pendingUndo.ts `onderdeel`) and is gone after a reload;
+ * - "Ongedaan maken" is for the acute moment (lib/pendingUndo.ts): on the page
+ *   where the change is made, gone after a reload, never offered on opening;
  * - "Mailinstellingen" under Exporteren & communicatie, Gmail only, and
  *   only for the beheerder (shared by the achterwacht and the AIOS; a
  *   planner sees how the mail stands, 0.87.0);
@@ -36,36 +36,51 @@ test.describe('Periodepagina', () => {
   const section = (page: import('@playwright/test').Page, title: string) =>
     page.locator('div.card', { has: page.locator('[role="button"]', { hasText: title }) }).first();
 
-  test('the undo for a change made in "Rooster vooraf invullen" is under that heading, folds away with it and is gone after a reload', async ({ page }) => {
+  test('"Ongedaan maken" is for the acute moment: on the page where the change is made, gone after a reload and not on the dashboard', async ({ page }) => {
     await loginAsPlanner(page);
-    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}/fill-gaps`);
     await page.waitForLoadState('networkidle');
 
+    // Nothing to undo yet.
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
     // The change is made on the page itself: pick someone for the open evening and apply.
-    const vooraf = section(page, 'Rooster vooraf invullen');
-    const header = vooraf.locator('[role="button"]').first();
-    const banner = vooraf.getByText('Laatst gewijzigd:');
-    await header.click();
-    await expect(banner).toHaveCount(0);
-    await vooraf.locator('select').first().selectOption({ index: 1 });
-    await vooraf.getByRole('button', { name: /Alle toewijzingen toepassen/ }).click();
+    await page.locator('select').first().selectOption({ index: 1 });
+    await page.getByRole('button', { name: /Alle toewijzingen toepassen/ }).click();
+    await expect(page.getByText('Laatst gewijzigd:')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toBeVisible();
 
-    await expect(banner).toBeVisible();
-    await expect(vooraf.getByRole('button', { name: /Ongedaan maken/ })).toBeVisible();
-
-    // Not loose between the headings, not under the roster.
-    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(1);
-
-    await header.click();
-    await expect(page.getByText('Laatst gewijzigd:')).toBeHidden();
-
-    // Only for the acute moment: after a reload nothing is offered any more, though the server still holds it for two minutes.
+    // A reload: nothing is offered any more, though the server still holds it for two minutes.
     await page.reload();
     await page.waitForLoadState('networkidle');
-    const naVerversen = section(page, 'Rooster vooraf invullen');
-    await naVerversen.locator('[role="button"]').first().click();
     await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toHaveCount(0);
+
+    // And the dashboard opening afterwards does not offer it either, under no heading.
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
+    const vooraf = section(page, 'Rooster vooraf invullen');
+    await vooraf.locator('[role="button"]').first().click();
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toHaveCount(0);
+  });
+
+  test('"Ongedaan maken" on the fill-gaps page undoes what was just applied', async ({ page }) => {
+    // The first test filled the open evening of beforeAll: another one, in another week nobody works yet.
+    const avond = db.prepare(`SELECT id FROM dienstrooster_shift_type WHERE teller = 'AVOND' AND code IS NULL LIMIT 1`).get() as { id: string };
+    db.prepare(
+      `INSERT INTO dienstrooster_shift_slot (id, period_id, datum, iso_jaar, iso_week, shift_type_id)
+       VALUES (?, ?, '2027-03-03', 2027, 9, ?)`
+    ).run(uuid(), testData.period.id, avond.id);
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}/fill-gaps`);
+    await page.waitForLoadState('networkidle');
+    const voor = await page.locator('select').count();
+    await page.locator('select').first().selectOption({ index: 1 });
+    await page.getByRole('button', { name: /Alle toewijzingen toepassen/ }).click();
+    await page.getByRole('button', { name: /Ongedaan maken/ }).click();
+    // The open evening is open again.
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
+    await expect(page.locator('select')).toHaveCount(voor);
   });
 
   test('Mailinstellingen says Gmail only and refuses another address', async ({ page }) => {
