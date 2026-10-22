@@ -132,6 +132,25 @@ def grens_nachtblok(inp: dict) -> list[list[str]]:
     return [[i, a['id']] for a, nr in zip(inp['aios'], range(3)) for i in zo_di_nachten(inp, nr)]
 
 
+def na_een_nachtblok(inp: dict, wie: dict) -> list[list[list[str]]]:
+    """0.111.0: rest and compensation days run on over the quarter boundary: nights zo t/m di just before it."""
+    wie['eerdere_diensten'] = [
+        {
+            'id': f'ND-{dag(k).isoformat()}',
+            'datum': dag(k).isoformat(),
+            'code': 'ND',
+            'start_tijd': '22:30',
+            'eind_tijd': '08:30',
+            'blok_id': 'oud-1',
+            'blok_soort': 'NACHT',
+            'blok_vorm': 'ZO_DI',
+        }
+        for k in (-3, -2, -1)
+    ]
+    # Wednesday is a compensation day with too little rest; Friday is 57 hours after the last night, and fine.
+    return [[[dienst('UD', dag(0)), wie['id']]], [[dienst('UD', dag(2)), wie['id']]]]
+
+
 def main_() -> None:
     rnd = random.Random(2026)
     gevallen = []
@@ -146,6 +165,8 @@ def main_() -> None:
             roosters.append(vier_en_twee_dd(inp, inp['aios'][0]['id']))
         if n == 3:
             roosters.append(grens_nachtblok(inp))
+        if n == 4:
+            roosters.extend(na_een_nachtblok(inp, inp['aios'][0]))
         if n < 3:
             # The solver's own: nothing broken.
             inp['tijdslimiet_seconden'] = 5

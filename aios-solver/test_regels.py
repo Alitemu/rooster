@@ -328,6 +328,53 @@ def test_regel_9_46_hours_after_three_nights_14_after_one():
     assert not model.regel_9_rust(een, donderdag)
 
 
+def _nachtblok_voor_het_kwartaal() -> list[dict]:
+    """The nights Sunday to Tuesday just before START: the quarter before, as the app sends them (0.111.0)."""
+    return [
+        {
+            'id': f'ND-{dag(k).isoformat()}',
+            'datum': dag(k).isoformat(),
+            'code': 'ND',
+            'start_tijd': '22:30',
+            'eind_tijd': '08:30',
+            'blok_id': 'oud-1',
+            'blok_soort': 'NACHT',
+            'blok_vorm': 'ZO_DI',
+        }
+        for k in (-3, -2, -1)
+    ]
+
+
+def test_regel_7_9_the_rest_and_compensation_days_run_on_over_the_quarter_boundary():
+    """Nights Sunday to Tuesday before the quarter: Wednesday and Thursday are off, and 46 hours of rest after the last night."""
+
+    def uitkomst(eerder: list[dict]) -> set[str]:
+        inp = weken(1)
+        x = aios(inp, 'x', eerdere_diensten=eerder)
+        # x is the only one, and only for the first two days.
+        _alleen(inp, x, [dienst('UD', dag(0)), dienst('UD', dag(1)), dienst('UD', dag(2))])
+        uit, t = los_op(inp)  # the check knows the quarter before too
+        return van(t, 'x')
+
+    assert uitkomst([]) == {dienst('UD', dag(0)), dienst('UD', dag(1)), dienst('UD', dag(2))}
+    # With the block before: Wednesday and Thursday are compensation days; Friday's uitloopdienst is 57 hours later.
+    assert uitkomst(_nachtblok_voor_het_kwartaal()) == {dienst('UD', dag(2))}
+
+
+def test_regel_7_9_the_check_names_a_dienst_on_a_compensation_day_of_the_quarter_before():
+    import controle
+
+    inp = weken(1)
+    aios(inp, 'x', eerdere_diensten=_nachtblok_voor_het_kwartaal())
+    slots, blok_vorm, mensen, feestdagen = main.naar_model(main.SolveInput(**inp))
+    woensdag = dienst('UD', dag(0))
+    fouten = controle.controleer(slots, blok_vorm, mensen, feestdagen, {woensdag: 'x'})
+    regels = {r for r, _, _ in fouten}
+    assert '7_COMPENSATIEDAG' in regels and '9_RUST' in regels
+    # Without a dienst of this quarter there is nothing to judge: what lies wholly before it is not.
+    assert controle.controleer(slots, blok_vorm, mensen, feestdagen, {}) == []
+
+
 def test_regel_9_the_check_finds_more_than_seven_nights_in_a_row():
     import controle
 

@@ -142,14 +142,26 @@ def controleer(slots, blok_vorm, aios, feestdagen: set[date], toewijzingen: dict
     per_aios: dict[str, list] = {}
     for dienst_id, aios_id in toewijzingen.items():
         per_aios.setdefault(aios_id, []).append(per_id[dienst_id])
+    # What each AIOS did in the last days of the quarter before (0.111.0): their rest and compensation days run on.
+    # Only used to judge the diensten of this quarter; what lies wholly before it is not judged here.
+    eerder_ids: set[str] = set()
+    for a in aios:
+        if a.id in per_aios:
+            for s in getattr(a, 'eerder', []):
+                per_aios[a.id].append(s)
+                eerder_ids.add(s.id)
+    nieuw_vanaf = min((s.datum for s in slots), default=None)
     for lijst in per_aios.values():
         lijst.sort(key=lambda s: s.begin)
     eenheden = _eenheden(per_aios, blok_vorm)
+    eerder_eenheid = lambda e: all(s.id in eerder_ids for s in e['slots'])  # noqa: E731
 
     for aios_id, lijst in per_aios.items():
         a = wie[aios_id]
         boven: dict[str, int] = {}
         for e in eenheden[aios_id]:
+            if eerder_eenheid(e):
+                continue
             ids = [s.id for s in e['slots']]
             if e['vorm'] == 'VIER' and not (a.vier_avonden if e['soort'] == 'AVOND' else a.vier_nachten):
                 fout.append(('VIER_ZONDER_WENS', aios_id, ids))
@@ -193,14 +205,14 @@ def controleer(slots, blok_vorm, aios, feestdagen: set[date], toewijzingen: dict
         for s in lijst:
             dagen.setdefault(s.datum, []).append(s.id)
         for ids in dagen.values():
-            if len(ids) > 1:
+            if len(ids) > 1 and not all(i in eerder_ids for i in ids):
                 fout.append(('3_TWEE_OP_EEN_DAG', aios_id, ids))
 
         # Rules 7 and 8: nothing on another eenheid's compensation day.
         for e in eenheden[aios_id]:
             comp = _compensatie(e, feestdagen)
             for f in eenheden[aios_id]:
-                if f is e:
+                if f is e or (eerder_eenheid(e) and eerder_eenheid(f)):
                     continue
                 for s in f['slots']:
                     if s.datum in comp:
@@ -215,7 +227,7 @@ def controleer(slots, blok_vorm, aios, feestdagen: set[date], toewijzingen: dict
                 laatste_nacht.add(nachten[-1].id)
         for i, s in enumerate(lijst):
             for t in lijst[i + 1 :]:
-                if eenheid_van[s.id] == eenheid_van[t.id] or s.datum == t.datum:
+                if eenheid_van[s.id] == eenheid_van[t.id] or s.datum == t.datum or (s.id in eerder_ids and t.id in eerder_ids):
                     continue
                 nodig = timedelta(hours=46 if s.id in laatste_nacht else 14)
                 if t.begin - s.eind < nodig:
@@ -224,12 +236,14 @@ def controleer(slots, blok_vorm, aios, feestdagen: set[date], toewijzingen: dict
         reeks = 1
         for vorige, d in zip(nachtdagen, nachtdagen[1:]):
             reeks = reeks + 1 if d - vorige == timedelta(days=1) else 1
-            if reeks > 7:
+            if reeks > 7 and nieuw_vanaf is not None and d >= nieuw_vanaf:
                 fout.append(('9_MEER_DAN_7_NACHTEN', aios_id, [str(d)]))
 
         # One loose weekend dienst per weekend.
         per_weekend: dict[date, int] = {}
         for e in eenheden[aios_id]:
+            if eerder_eenheid(e):
+                continue
             if e['naam'] in ('za', 'weekend-dd', 'twee-dd', 'wo-za'):
                 za = e['tot'] if e['naam'] == 'wo-za' else (e['van'] if e['van'].weekday() == ZATERDAG else _dag(e['van'], -1))
                 per_weekend[za] = per_weekend.get(za, 0) + 1

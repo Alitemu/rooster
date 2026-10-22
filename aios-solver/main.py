@@ -83,6 +83,31 @@ class Blok(BaseModel):
     vorm: Literal['ZO_DI', 'WO_VR', 'ZA', 'LOS']
 
 
+class EerdereDienst(BaseModel):
+    """
+    A dienst the AIOS did in the quarter before (its last days): rest after it and the compensation days of its block
+    run on over the quarter boundary, so the new quarter may not break them (0.111.0). With its block's soort and
+    vorm, when it was part of one.
+    """
+
+    id: str = Field(min_length=1, max_length=64)
+    datum: str
+    code: Literal['UD', 'DD', 'AD', 'ADW', 'ND']
+    start_tijd: str = Field(pattern=r'^\d{2}:\d{2}$')
+    eind_tijd: str = Field(pattern=r'^\d{2}:\d{2}$')
+    blok_id: Optional[str] = None
+    blok_soort: Optional[Literal['AVOND', 'NACHT']] = None
+    blok_vorm: Optional[Literal['ZO_DI', 'WO_VR', 'ZA', 'LOS']] = None
+
+    _check = field_validator('datum')(classmethod(lambda cls, v: _iso(v)))
+
+    @model_validator(mode='after')
+    def _blok(self):
+        if self.blok_id and not (self.blok_soort and self.blok_vorm):
+            raise ValueError('een blok heeft een soort en een vorm nodig')
+        return self
+
+
 class Markering(BaseModel):
     dienst_id: str
     niveau: Literal['ABSOLUUT', 'LIEVER_NIET', 'VOORKEUR']
@@ -115,6 +140,8 @@ class Aios(BaseModel):
     # The same for the dagdiensten and the avonddiensten in the weekend (0.108.0).
     saldo_dagen: float = Field(default=0, ge=-200, le=200)
     saldo_weekendavonden: float = Field(default=0, ge=-200, le=200)
+    # What the AIOS did in the last days of the quarter before (0.111.0), for the rest and compensation days.
+    eerdere_diensten: list[EerdereDienst] = Field(default_factory=list, max_length=60)
 
     _check = field_validator('parttime_dagen')(classmethod(lambda cls, v: [_iso(d) for d in v]))
 
@@ -230,6 +257,18 @@ def naar_model(inp: SolveInput):
             )
         )
     blok_vorm = {b.id: (b.soort, b.vorm) for b in inp.blokken}
+    # The quarter before: its diensten and blocks get an id of their own, so they never meet this quarter's.
+    eerder: dict[str, list[model.Slot]] = {}
+    for a in inp.aios:
+        lijst = []
+        for d in a.eerdere_diensten:
+            dag = kalender.datum(d.datum)
+            begin, eind = kalender.begin_en_eind(dag, d.start_tijd, d.eind_tijd)
+            blok = f'eerder:{d.blok_id}' if d.blok_id else None
+            if blok:
+                blok_vorm[blok] = (d.blok_soort, d.blok_vorm)
+            lijst.append(model.Slot(id=f'eerder:{d.id}', datum=dag, code=d.code, begin=begin, eind=eind, tienden=0, blok_id=blok, feestdag=dag in feestdagen))
+        eerder[a.id] = lijst
     periode = lambda p: (kalender.datum(p.van), kalender.datum(p.tot)) if p else None  # noqa: E731
     aios = [
         model.Aios(
@@ -249,9 +288,12 @@ def naar_model(inp: SolveInput):
             saldo_nachten=a.saldo_nachten,
             saldo_dagen=a.saldo_dagen,
             saldo_weekendavonden=a.saldo_weekendavonden,
+            eerder=eerder[a.id],
         )
         for a in inp.aios
     ]
+    for a in aios:
+        a.eerdere_opties = model.eerdere_opties(a.eerder, blok_vorm, feestdagen)
     return slots, blok_vorm, aios, feestdagen
 
 

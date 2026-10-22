@@ -154,6 +154,9 @@ class Aios:
     # The same for the dagdiensten and the avonddiensten in the weekend (0.108.0).
     saldo_dagen: float = 0.0
     saldo_weekendavonden: float = 0.0
+    # What the AIOS did in the last days of the quarter before (0.111.0): their rest and compensation days run on.
+    eerder: list[Slot] = field(default_factory=list)
+    eerdere_opties: list['Optie'] = field(default_factory=list)
 
 
 def _groep(soort: str, vorm: str, slots: list[Slot]) -> Optional[str]:
@@ -203,6 +206,25 @@ def opties_maken(slots: list[Slot], blok_vorm: dict[str, tuple[str, str]], feest
         o.groep = _groep(o.soort, o.vorm, o.slots)
         o.compensatie = kalender.compensatiedagen(o.soort, o.vorm, o.eerste, o.laatste, feestdagen)
     return opties
+
+
+def eerdere_opties(slots: list[Slot], blok_vorm: dict[str, tuple[str, str]], feestdagen: set[date]) -> list[Optie]:
+    """
+    What an AIOS did in the quarter before, as options: their rest and compensation days are checked against what
+    they are given now. Built as the quarter's own are, and the 4-blocks and the two dagdiensten kept whole (their
+    parts left out), as the check (controle.py) reads them.
+    """
+    if not slots:
+        return []
+    gedaan = {s.id for s in slots}
+    alles = [o for o in opties_maken(slots, blok_vorm, feestdagen) if all(s.id in gedaan for s in o.slots)]
+    gekozen: list[Optie] = []
+    gebruikt: set[str] = set()
+    for o in sorted(alles, key=lambda o: -len(o.slots)):
+        if gebruikt.isdisjoint(s.id for s in o.slots):
+            gekozen.append(o)
+            gebruikt.update(s.id for s in o.slots)
+    return gekozen
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +308,13 @@ def regel_6_inwerken(a: Aios, o: Optie) -> Optional[str]:
     return None
 
 
+def regel_7_9_kwartaalgrens(a: Aios, o: Optie) -> Optional[str]:
+    """Hard rules 7, 8 and 9 over the quarter boundary: the rest and the compensation days of what they did before."""
+    if any(botsen(p, o) for p in a.eerdere_opties):
+        return 'KWARTAALGRENS'
+    return None
+
+
 REGELS_PER_OPTIE = [
     regel_wens,
     regel_1_beschikbaar,
@@ -294,6 +323,7 @@ REGELS_PER_OPTIE = [
     regel_4_parttime,
     regel_5_fulltime,
     regel_6_inwerken,
+    regel_7_9_kwartaalgrens,
 ]
 
 
