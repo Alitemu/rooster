@@ -123,3 +123,40 @@ describe('the installation files in the image', () => {
     expect(gids).toContain('--entrypoint tar $IMAGE -cf - -C /app/installatie .');
   });
 });
+
+/**
+ * The workflows (0.111.0): a release checks everything before `stable` moves, and the jobs that run the packages of
+ * the lockfiles hold no write rights and no stored git credentials.
+ */
+describe('the workflows', () => {
+  const release = readFileSync('.github/workflows/release.yml', 'utf8');
+  const images = readFileSync('.github/workflows/images.yml', 'utf8');
+
+  it('the release checks the images and the tag before it moves stable', () => {
+    const controle = release.indexOf('name: Check the images and the tag');
+    const stable = release.indexOf('name: Point stable at this version');
+    expect(controle).toBeGreaterThan(-1);
+    expect(stable).toBeGreaterThan(controle);
+    // The AIOS's solver is one of the images that must exist, from 0.74.0 on.
+    expect(release.slice(controle, stable)).toMatch(/images="\$images aios-solver"/);
+    expect(release.slice(controle, stable)).toContain('Tag $tag bestaat niet');
+  });
+
+  it('only a job that pushes an image may write packages; the workflow itself writes nothing', () => {
+    const werk = images.slice(images.indexOf('\npermissions:'), images.indexOf('\nconcurrency:'));
+    expect(werk).toContain('contents: read');
+    expect(werk).not.toContain('write');
+    const jobs = images.slice(images.indexOf('\njobs:'));
+    const delen = jobs.split(/\n  (?=[a-z-]+:\n)/).slice(1);
+    const packagesWrite = delen.filter((d) => /packages: write/.test(d)).map((d) => d.split(':')[0]);
+    expect(packagesWrite).toEqual(['build']);
+  });
+
+  it('every checkout keeps no git credentials', () => {
+    for (const bron of [images, release]) {
+      const checkouts = bron.match(/uses: actions\/checkout@[^\n]*\n(\s+with:\n(\s+[a-z-]+: [^\n]*\n)+)?/g) ?? [];
+      expect(checkouts.length).toBeGreaterThan(0);
+      for (const c of checkouts) expect(c).toContain('persist-credentials: false');
+    }
+  });
+});

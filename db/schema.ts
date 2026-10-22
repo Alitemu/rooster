@@ -603,6 +603,8 @@ export const availability = sqliteTable(
   },
   (table) => ({
     uniq: uniqueIndex('availability_uniq').on(table.person_id, table.slot_id),
+    // The unique one starts with the person: what a slot has marked on it was a scan (0.111.0).
+    slotIdx: index('availability_slot_idx').on(table.slot_id),
   })
 );
 
@@ -890,6 +892,9 @@ export const assignment = sqliteTable(
   },
   (table) => ({
     uniq: uniqueIndex('assignment_uniq').on(table.schedule_version_id, table.slot_id),
+    // The unique one starts with the period: who has a slot, and what a person has, were scans (0.111.0).
+    slotIdx: index('assignment_slot_idx').on(table.slot_id),
+    personIdx: index('assignment_person_idx').on(table.person_id),
   })
 );
 

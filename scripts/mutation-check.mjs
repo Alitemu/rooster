@@ -1989,6 +1989,27 @@ const MUTATIONS = [
     tests: ["lib/periodTrash.dienst"],
   },
   {
+    name: "workflow: the release moves stable before it has checked the images and the tag",
+    file: ".github/workflows/release.yml",
+    find: "      - name: Check the images and the tag\n",
+    replace: "      - name: Point stable at this version (after)\n",
+    tests: ["deployConfig"],
+  },
+  {
+    name: "workflow: the workflow itself may write packages again",
+    file: ".github/workflows/images.yml",
+    find: "permissions:\n  contents: read\n\nconcurrency:",
+    replace: "permissions:\n  contents: read\n  packages: write\n\nconcurrency:",
+    tests: ["deployConfig"],
+  },
+  {
+    name: "workflow: a checkout keeps git credentials",
+    file: ".github/workflows/images.yml",
+    find: "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n        with:\n          persist-credentials: false\n      - run: npm ci",
+    replace: "      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0\n      - run: npm ci",
+    tests: ["deployConfig"],
+  },
+  {
     name: "aios: the AIOS's verzendlijst goes to the achterwacht's flow",
     file: 'lib/aiosMail.ts',
     find: '  const to = aiosStroomAdres();',

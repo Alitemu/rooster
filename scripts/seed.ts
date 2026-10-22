@@ -447,6 +447,8 @@ async function createTables() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS availability_uniq
       ON dienstrooster_availability(person_id, slot_id);
+    CREATE INDEX IF NOT EXISTS availability_slot_idx
+      ON dienstrooster_availability(slot_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_aios_wens (
       id TEXT PRIMARY KEY NOT NULL,
@@ -597,6 +599,10 @@ async function createTables() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS assignment_uniq
       ON dienstrooster_assignment(schedule_version_id, slot_id);
+    CREATE INDEX IF NOT EXISTS assignment_slot_idx
+      ON dienstrooster_assignment(slot_id);
+    CREATE INDEX IF NOT EXISTS assignment_person_idx
+      ON dienstrooster_assignment(person_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_swap_request (
       id TEXT PRIMARY KEY NOT NULL,

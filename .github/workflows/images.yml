@@ -38,9 +38,10 @@ on:
         default: ''
         type: string
 
+# Least to start with; a job that pushes an image asks for packages: write itself (0.111.0). The test jobs run the
+# packages of the lockfiles: they hold no write rights and no stored git credentials.
 permissions:
   contents: read
-  packages: write
 
 concurrency:
   group: images
@@ -49,10 +50,15 @@ concurrency:
 jobs:
   version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Version from package.json
         id: version
@@ -80,6 +86,8 @@ jobs:
     container: node:22
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run lint
@@ -93,6 +101,8 @@ jobs:
         working-directory: solver
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: pip install --no-cache-dir -r requirements-dev.txt
       - run: python -m pytest -q
 
@@ -105,12 +115,17 @@ jobs:
         working-directory: aios-solver
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: pip install --no-cache-dir -r requirements-dev.txt
       - run: python -m pytest -q
 
   build:
     needs: [version, test-app, test-solver, test-aios-solver]
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: true
       matrix:
@@ -123,6 +138,8 @@ jobs:
             context: ./aios-solver
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
