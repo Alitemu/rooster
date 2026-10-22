@@ -133,7 +133,7 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   }
   await openSecties(aios);
   const mijn = aios.getByTestId('aios-mijn-rooster');
-  await expect(mijn.getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
+  await expect(aios.getByTestId('aios-sectie-rooster').getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
   await expect(mijn.getByTestId('aios-voorlopig')).toContainText('Dit is het voorlopige rooster.');
   await expect(mijn.getByText(/Je dienstpercentage dit kwartaal: \d+(,\d)?%/)).toBeVisible();
   const eigen = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ? AND person_id = ?').get(ids.period, ids.mensen[0]) as { n: number }).n;
@@ -150,6 +150,7 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   expect(excel.status()).toBe(200);
   expect(excel.headers()['content-type']).toContain('spreadsheetml');
   await aios.reload();
+  await openSecties(aios);
   await expect(mijn.getByText('Dit rooster is definitief.')).toBeVisible();
   await expect(mijn.getByTestId('aios-voorlopig')).toHaveCount(0);
   await aiosContext.close();

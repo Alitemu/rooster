@@ -98,7 +98,7 @@ test('one AIOS asks, the other approves, and both rosters show the swap', async 
   await a.goto(ids.linkA);
   await openSecties(a);
   const ruilenA = a.getByTestId('aios-ruilen');
-  await expect(ruilenA.getByRole('heading', { name: 'Ruilen', exact: true })).toBeVisible();
+  await expect(a.getByTestId('aios-sectie-ruilen').getByRole('heading', { name: 'Ruilen', exact: true })).toBeVisible();
   await ruilenA.getByRole('button', { name: /^Ruilen: Dagdienst, za 4 sep/ }).click();
   const kandidaten = ruilenA.getByTestId('aios-ruil-kandidaten');
   await kandidaten.getByLabel('Toelichting voor je collega (mag leeg)').fill('familieweekend');
@@ -145,6 +145,7 @@ test('one AIOS asks, the other approves, and both rosters show the swap', async 
   expect(wieHeeft(ids.ddA)).toBe(ids.b);
   expect(wieHeeft(ids.ddB)).toBe(ids.a);
   await a.reload();
+  await openSecties(a);
   await expect(a.getByTestId('aios-mijn-rooster').getByText(/za 11 sep/)).toBeVisible();
   // The default filter shows what waits; "Alle statussen" shows it as approved.
   await a.getByTestId('aios-ruilen').getByLabel('Filter op status: Jouw ruilverzoeken').selectOption('');

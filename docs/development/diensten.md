@@ -189,6 +189,16 @@ in lib/aiosToegang.ts. The AIOS's:
   loaded while closed (`blijfGeladen`: the roster with its feestdag
   choices, the toets, Status voorkeuren, ruilen, the history). The e2e
   tests open a part with openAiosSectie (tests/e2e/setup.ts).
+  The participant's pages fold the same way once the roster is published
+  (0.110.0, layout only): the AIOS's page into "Jouw rooster", "Ruilen" and
+  "Voorkeuren" (the steps, kept loaded while closed, with `inSectie` on
+  AiosMijnRooster and AiosRuilen so the section brings the title and the
+  frame), the achterwacht's into "Jouw rooster" and "Ruilen" inside
+  PersonalRosterView, with its own copy of the folding,
+  components/DeelnemerSectie.tsx (the achterwacht may not import AiosSectie).
+  All closed at first; a page whose roster is not published is as it was.
+  The e2e tests open them with openSecties (tests/e2e/setup.ts), also after
+  a reload, which closes them again.
   A primary button of the AIOS's dims when off (`disabled:opacity-50`;
   globals.css's btn-primary has no disabled look, and the achterwacht's is
   left as it is): "Uitnodigingen versturen" without the mail was off but
