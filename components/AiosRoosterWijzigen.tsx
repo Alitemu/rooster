@@ -12,6 +12,7 @@
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import type { Kandidaat, Waarschuwing, Wijziging } from '@/lib/aiosHandmatig';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 export interface Keuze {
   naam: string; // "Nachtblok zo t/m di" or "Dagdienst"
@@ -72,7 +73,7 @@ export function AiosRoosterWijzigen({
         if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Laden is mislukt');
         if (actief) setAntwoord(data.data);
       })
-      .catch((err) => actief && setFout(err instanceof Error ? err.message : 'Laden is mislukt'));
+      .catch((err) => actief && setFout(foutTekst(err, 'Laden is mislukt')));
     return () => {
       actief = false;
     };
@@ -97,7 +98,7 @@ export function AiosRoosterWijzigen({
       const wat = heel ? `${keuze.naam} vanaf ${datumKort(datum)}` : `${keuze.naam} ${datumKort(datum)}`;
       onGewijzigd({ tekst: aiosId ? `${wat}: nu ${wie}.` : `${wat}: nu leeg.`, waarschuwingen: data.data.waarschuwingen, terug: data.data.terug });
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Wijzigen is mislukt');
+      setFout(foutTekst(err, 'Wijzigen is mislukt'));
     } finally {
       setBezig(false);
     }

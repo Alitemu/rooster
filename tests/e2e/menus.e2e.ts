@@ -56,7 +56,7 @@ test.describe('Keuzemenu’s sluiten na een keuze', () => {
       await loginAsPlanner(page);
       await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
       await page.waitForLoadState('networkidle');
-      await page.locator('[role="button"]:has-text("Dienstrooster")').first().click();
+      await page.getByRole('heading', { name: /^Dienstrooster/ }).getByRole('button').click();
       await expect(page.getByRole('button', { name: /Wisselen/ }).first()).toBeVisible();
     };
 

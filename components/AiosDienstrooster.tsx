@@ -25,6 +25,8 @@ import type { AiosCode } from '@/lib/aiosDiensten';
 import { aiosDienstroosterStatus } from '@/lib/aiosTeksten';
 import type { AiosRooster, AiosRoosterDag, AiosRoosterDienst, AiosRoosterPerAios } from '@/lib/aiosRooster';
 import type { AiosDag, AiosDienstenOverzicht, AiosDienstRegel } from '@/lib/aiosSlots';
+import { foutTekst } from '@/lib/aiosFoutTekst';
+import { telwoord } from '@/lib/aiosTelwoord';
 
 const CODE_NAAM: Record<string, string> = {
   UD: 'Uitloopdienst',
@@ -582,7 +584,7 @@ export function AiosDienstrooster({
         setRooster(data);
         setFout(null);
       })
-      .catch((err) => nr === lezing.current && setFout(err instanceof Error ? err.message : 'Laden van het rooster is mislukt'));
+      .catch((err) => nr === lezing.current && setFout(foutTekst(err, 'Laden van het rooster is mislukt')));
   }, [periodId, gemaakt]);
   useEffect(() => {
     setGekozen(null);
@@ -607,7 +609,7 @@ export function AiosDienstrooster({
       laad();
       onHandmatig();
     } catch (err) {
-      setTerugFout(err instanceof Error ? err.message : 'Ongedaan maken is mislukt');
+      setTerugFout(foutTekst(err, 'Ongedaan maken is mislukt'));
     } finally {
       setBezig(false);
     }
@@ -627,7 +629,7 @@ export function AiosDienstrooster({
   // The heading waits for the roster before it says "automatisch" or "handmatig".
   const label = status === 'GEGENEREERD' && !rooster ? null : aiosDienstroosterStatus(status, rooster?.handmatig ?? false);
   const titel = label ? `Dienstrooster (${label})` : 'Dienstrooster';
-  const hint = rooster ? (rooster.leeg > 0 ? `${rooster.leeg} ${rooster.leeg === 1 ? 'dienst' : 'diensten'} leeg` : 'alle diensten ingedeeld') : `${leegWeken.length} weken`;
+  const hint = rooster ? (rooster.leeg > 0 ? `${rooster.leeg} ${rooster.leeg === 1 ? 'dienst' : 'diensten'} leeg` : 'alle diensten ingedeeld') : telwoord(leegWeken.length, 'week', 'weken');
 
   const wijzigen: Wijzigen | null =
     !rooster || rooster.loopt || bezig

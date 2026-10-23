@@ -13,6 +13,7 @@ import { withBasePath } from '@/lib/basePath';
 import { personaliseReminder } from '@/lib/reminderText';
 import { herinnerdOpTekst } from '@/lib/herinnerdOp';
 import { deadlineTekst } from '@/lib/verzendlijst';
+import { foutTekst } from '@/lib/foutTekst';
 
 export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
@@ -253,7 +254,7 @@ export function ExportDialog({
       }
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden van herinneringen mislukt');
+      setError(foutTekst(err, 'Laden van herinneringen mislukt'));
       setRemindersLoadFailed(true);
       setLoading(false);
     }
@@ -340,7 +341,7 @@ export function ExportDialog({
 
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
+      setError(foutTekst(err, 'Downloaden mislukt'));
     }
   };
 
@@ -353,7 +354,7 @@ export function ExportDialog({
 
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
+      setError(foutTekst(err, 'Downloaden mislukt'));
     }
   };
 
@@ -640,10 +641,10 @@ export function ExportDialog({
                   <p className="text-sm font-semibold text-green-900">Versturen via Power Automate</p>
                   <p className="text-sm text-green-900">
                     {unsentReminders.length === reminders.length
-                      ? `Stuurt alle ${reminders.length} herinneringen met de tekst hierboven naar de Power Automate-stroom.`
+                      ? `Stuurt ${reminders.length === 1 ? 'de herinnering' : `alle ${reminders.length} herinneringen`} met de tekst hierboven naar de Power Automate-stroom.`
                       : unsentReminders.length === 0
                         ? 'Alle herinneringen zijn verstuurd.'
-                        : `Stuurt de ${unsentReminders.length} herinneringen die nog niet verstuurd zijn.`}
+                        : `Stuurt ${unsentReminders.length === 1 ? 'de herinnering' : `de ${unsentReminders.length} herinneringen`} die nog niet verstuurd ${unsentReminders.length === 1 ? 'is' : 'zijn'}.`}
                   </p>
                   {unsentReminders.length > 0 && (
                     <SendButton

@@ -22,6 +22,8 @@ import { useState, useEffect } from 'react';
 import { parseISO, dateToISO } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
 
 interface ParttimePattern {
   id: string;
@@ -113,7 +115,7 @@ export function PartTimeCheckStep({
         // actually verified. Surface the failure instead of hiding it.
         setGeneratedDays([]);
         setBlockedElsewhereDays([]);
-        setLoadError(err instanceof Error ? err.message : 'Ophalen van deeltijddagen mislukt');
+        setLoadError(foutTekst(err, 'Ophalen van deeltijddagen mislukt'));
       } finally {
         setLoading(false);
       }
@@ -347,10 +349,10 @@ export function PartTimeCheckStep({
 
       {/* Summary */}
       <div className="text-xs text-neutral-500 italic">
-        Totaal: {generatedDays.length} deeltijddagen
-        {absenceOnlyCount > 0 && <> • {absenceOnlyCount} afwezigheidsdagen</>}
-        {boundaryDays.length > 0 && <> • Jaarwisseling: {boundaryDays.length} dagen</>}
-        {blockedElsewhereDays.length > 0 && <> • Al elders geblokkeerd: {blockedElsewhereDays.length} dagen</>}
+        Totaal: {telwoord(generatedDays.length, 'deeltijddag', 'deeltijddagen')}
+        {absenceOnlyCount > 0 && <> • {telwoord(absenceOnlyCount, 'afwezigheidsdag', 'afwezigheidsdagen')}</>}
+        {boundaryDays.length > 0 && <> • Jaarwisseling: {telwoord(boundaryDays.length, 'dag', 'dagen')}</>}
+        {blockedElsewhereDays.length > 0 && <> • Al elders geblokkeerd: {telwoord(blockedElsewhereDays.length, 'dag', 'dagen')}</>}
       </div>
     </div>
   );

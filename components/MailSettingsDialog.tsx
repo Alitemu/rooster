@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Status {
   ingesteld: boolean;
@@ -166,7 +167,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       setMelding('Opgeslagen. De inlog bij Gmail is gelukt.');
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan is mislukt.');
+      setError(foutTekst(err, 'Opslaan is mislukt.'));
     } finally {
       setBusy(false);
     }
@@ -188,7 +189,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       setMelding('De instellingen van de AIOS zijn opgeslagen.');
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan is mislukt.');
+      setError(foutTekst(err, 'Opslaan is mislukt.'));
     } finally {
       setBusy(false);
     }
@@ -207,7 +208,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       setMelding('De instellingen zijn verwijderd. Er wordt geen mail meer verstuurd.');
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen is mislukt.');
+      setError(foutTekst(err, 'Verwijderen is mislukt.'));
     } finally {
       setBusy(false);
     }

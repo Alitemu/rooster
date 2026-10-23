@@ -15,6 +15,7 @@
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { eerstVerwijderenUitleg } from '@/lib/aiosTeksten';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const KLEUR: Record<string, string> = {
   CONCEPT: 'bg-neutral-100 text-neutral-800',
@@ -70,7 +71,7 @@ export function AiosPeriodeStatus({
       onChanged();
     } catch (err) {
       setZeker(false);
-      setFout(err instanceof Error ? err.message : fallback);
+      setFout(foutTekst(err, fallback));
       // Another planner may have changed the status first: show the one it is now.
       onChanged();
     } finally {

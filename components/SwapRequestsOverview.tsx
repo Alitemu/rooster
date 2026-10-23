@@ -15,6 +15,7 @@ import { useState, useEffect } from 'react';
 import { swapStatusLabel } from '@/lib/statusLabels';
 import { withBasePath } from '@/lib/basePath';
 import { RuilHerinnering } from '@/components/RuilHerinnering';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface SwapRequestRow {
   id: string;
@@ -84,7 +85,7 @@ export function SwapRequestsOverview({ periodId }: Props) {
         }
         if (!cancelled) setRequests(data.data.swap_requests);
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Laden van ruilverzoeken mislukt');
+        if (!cancelled) setError(foutTekst(err, 'Laden van ruilverzoeken mislukt'));
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -27,6 +27,8 @@ import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
 
@@ -117,11 +119,13 @@ function formatDayLong(datum: string): string {
 function coverageNoteText(cov: CoverageInfo): string {
   const day = formatDayLong(cov.datum);
   if (cov.absoluut_blocked === 0) {
-    return `Op ${day} heeft nog niemand geblokkeerd. Alle ${cov.total_in_pool} collega's zijn beschikbaar.`;
+    return cov.total_in_pool === 1
+      ? `Op ${day} heeft nog niemand geblokkeerd. De collega is beschikbaar.`
+      : `Op ${day} heeft nog niemand geblokkeerd. Alle ${cov.total_in_pool} collega's zijn beschikbaar.`;
   }
   return (
-    `Op ${day} hebben ${cov.absoluut_blocked} van de ${cov.total_in_pool} collega's al geblokkeerd. ` +
-    `Er blijven ${cov.available} mensen over voor die dag.`
+    `Op ${day} ${cov.absoluut_blocked === 1 ? 'heeft' : 'hebben'} ${cov.absoluut_blocked} van de ${telwoord(cov.total_in_pool, 'collega', "collega's")} al geblokkeerd. ` +
+    (cov.available === 1 ? 'Er blijft 1 persoon over voor die dag.' : `Er blijven ${cov.available} mensen over voor die dag.`)
   );
 }
 
@@ -180,7 +184,7 @@ export function PreferencesCalendar({
       setPreferences(prefs);
       setBudget(data.data.blokkadebudget ?? {});
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Ophalen van voorkeuren mislukt');
+      setLoadError(foutTekst(error, 'Ophalen van voorkeuren mislukt'));
     } finally {
       setLoading(false);
     }
@@ -271,7 +275,7 @@ export function PreferencesCalendar({
         // even started).
         setHasChanged(false);
         onPreferencesChange?.(false);
-        setSaveError(error instanceof Error ? error.message : 'Opslaan van voorkeur mislukt');
+        setSaveError(foutTekst(error, 'Opslaan van voorkeur mislukt'));
       } finally {
         setIsSaving(false);
       }
@@ -331,7 +335,8 @@ export function PreferencesCalendar({
   // Left click: cycle null → VOORKEUR → LIEVER_NIET → ABSOLUUT → null
   const handleTogglePreference = useCallback(
     (datum: string, teller: string) => {
-      if (readOnly) return;
+      // While a save runs the cells stay focusable (aria-disabled), so a keyboard user does not lose their place.
+      if (readOnly || isSaving) return;
       const slot = preferences.get(datum)?.slots.get(teller);
       if (!slot) {
         console.error('Slot not found for', datum, teller);
@@ -346,7 +351,7 @@ export function PreferencesCalendar({
 
       applyPreferenceLevel(datum, teller, next);
     },
-    [preferences, applyPreferenceLevel, readOnly]
+    [preferences, applyPreferenceLevel, readOnly, isSaving]
   );
 
   // Right click (or long-press on touch devices, which fires the same
@@ -362,7 +367,15 @@ export function PreferencesCalendar({
       // keeps bubbling.
       e.stopPropagation();
       if (isSaving || readOnly) return;
-      setContextMenu({ datum, teller, x: e.clientX, y: e.clientY });
+      // The menu key and Shift+F10 fire the same event without a pointer position: open it under the cell.
+      let x = e.clientX;
+      let y = e.clientY;
+      if (x === 0 && y === 0) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        x = rect.left;
+        y = rect.bottom;
+      }
+      setContextMenu({ datum, teller, x, y });
     },
     [isSaving, readOnly]
   );
@@ -658,6 +671,8 @@ export function PreferencesCalendar({
                                     return (
                                       <div
                                         key={`${datum}-${counter}`}
+                                        role="img"
+                                        aria-label={`${formatDayLong(datum)}, ${COUNTER_LABEL[counter] || counter}: ${explanation}`}
                                         className={`${cellClass} w-full h-8 rounded text-[20px] leading-none font-semibold
                                           flex items-center justify-center cursor-not-allowed`}
                                         title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
@@ -680,9 +695,13 @@ export function PreferencesCalendar({
                                       key={`${datum}-${counter}`}
                                       onClick={() => handleTogglePreference(datum, counter)}
                                       onContextMenu={(e) => handleContextMenu(e, datum, counter)}
-                                      disabled={isSaving || readOnly}
+                                      disabled={readOnly}
+                                      aria-disabled={isSaving || readOnly}
+                                      aria-label={`${formatDayLong(datum)}, ${COUNTER_LABEL[counter] || counter}: ${
+                                        slot.fellow && level === 'ABSOLUUT' ? 'geblokkeerd omdat je fellow bent' : level ? LEVEL_LABEL[level].toLowerCase() : 'beschikbaar'
+                                      }`}
                                       className={`w-full h-8 rounded text-[20px] leading-none font-semibold transition-all
-                                        ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
+                                        ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50 aria-disabled:opacity-50`}
                                       title={
                                         slot.fellow && level === 'ABSOLUUT'
                                           ? `${COUNTER_LABEL[counter] || counter}: geblokkeerd omdat je fellow bent (klik om vrij te geven)`
@@ -736,17 +755,17 @@ export function PreferencesCalendar({
             </div>
           )}
           {isSaving && (
-            <div className="p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
+            <div role="status" className="p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
               Voorkeuren opslaan...
             </div>
           )}
           {saveError && !isSaving && (
-            <div className="p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
+            <div role="alert" className="p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
               {saveError} De laatste wijziging is niet opgeslagen en teruggezet.
             </div>
           )}
           {hasChanged && !isSaving && (
-            <div className="p-2 bg-green-50 border-t border-green-200 text-sm text-green-700">
+            <div role="status" className="p-2 bg-green-50 border-t border-green-200 text-sm text-green-700">
               Voorkeuren opgeslagen
             </div>
           )}
@@ -765,8 +784,18 @@ export function PreferencesCalendar({
         return (
           <div
             role="menu"
+            aria-label={`${formatDayLong(contextMenu.datum)}, ${COUNTER_LABEL[contextMenu.teller] || contextMenu.teller}`}
             className="fixed z-50 w-44 rounded-lg border border-neutral-200 bg-white shadow-lg py-1"
             style={{ left, top }}
+            onKeyDown={(e) => {
+              // Arrow keys move through the choices, as a menu does; Escape is the shared dismiss rule.
+              if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+              e.preventDefault();
+              const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+              const at = items.indexOf(document.activeElement as HTMLElement);
+              const next = e.key === 'ArrowDown' ? (at + 1) % items.length : (at - 1 + items.length) % items.length;
+              items[next]?.focus();
+            }}
           >
             <div className="px-3 py-1.5 text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">
               {COUNTER_LABEL[contextMenu.teller] || contextMenu.teller}
@@ -775,6 +804,7 @@ export function PreferencesCalendar({
               <button
                 key={level ?? 'NEUTRAL'}
                 role="menuitem"
+                autoFocus={currentLevel === level}
                 onClick={() => selectContextMenuLevel(level)}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-neutral-100
                   ${currentLevel === level ? 'font-semibold text-blue-700' : 'text-neutral-800'}`}

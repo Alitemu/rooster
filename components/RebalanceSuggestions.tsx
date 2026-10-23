@@ -16,6 +16,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 /** "di 2 mrt": a calendar day, so no timezone may shift it. */
 function datumTekst(datum: string): string {
@@ -78,7 +79,7 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
       setSuggestions(loaded);
       onCountChange?.(loaded.length);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Laden van voorstellen mislukt');
+      setLoadError(foutTekst(err, 'Laden van voorstellen mislukt'));
     } finally {
       setLoading(false);
     }
@@ -113,7 +114,7 @@ export function RebalanceSuggestions({ periodId, isPublished, onApplied, onCount
     } catch (err) {
       setActionError({
         assignmentId: suggestion.assignment_id,
-        message: err instanceof Error ? err.message : 'Toepassen mislukt',
+        message: foutTekst(err, 'Toepassen mislukt'),
       });
     } finally {
       setApplyingId(null);

@@ -17,6 +17,7 @@ import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosRuilHerinnering } from '@/components/AiosRuilHerinnering';
 import type { EenheidUit, RuilStatus, RuilUit } from '@/lib/aiosRuilen';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const kort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 const wat = (e: EenheidUit) => (e.van === e.tot ? `${e.naam}, ${kort(e.van)}` : `${e.naam}, ${kort(e.van)} t/m ${kort(e.tot)}`);
@@ -51,7 +52,7 @@ export function AiosRuilenOverzicht({ periodId, gepubliceerd }: { periodId: stri
         if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Laden is mislukt');
         setRuilen(data.data);
       })
-      .catch((err) => setFout(err instanceof Error ? err.message : 'Laden is mislukt'));
+      .catch((err) => setFout(foutTekst(err, 'Laden is mislukt')));
   }, [periodId, vers]);
 
   const zichtbaar = ruilen ? (filter ? ruilen.filter((r) => r.status === filter) : ruilen) : [];

@@ -31,6 +31,7 @@ import { queueBlockOverriddenNotification } from '@/lib/notifications';
 import { setPendingUndo, assignmentSlotLabel, parseOnderdeel } from '@/lib/pendingUndo';
 import { isEligibleForPeriod, notMemberOnSlotDate } from '@/lib/rosterGaps';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { telwoord } from '@/lib/telwoord';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
@@ -195,7 +196,7 @@ export async function POST(
       : windowConflict
         ? {
             code: 'WINDOW_OVERRIDE',
-            message: `Let op: deze persoon heeft al een dienst binnen het ingestelde venster (avond ${windowWeeks.avond}, weekend/feestdag ${windowWeeks.weekendFeestdag} weken).`,
+            message: `Let op: deze persoon heeft al een dienst binnen het ingestelde venster (avond ${telwoord(windowWeeks.avond, 'week', 'weken')}, weekend/feestdag ${telwoord(windowWeeks.weekendFeestdag, 'week', 'weken')}).`,
           }
         : null;
 

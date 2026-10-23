@@ -29,6 +29,7 @@ import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface ValidationCheck {
   slots_filled: boolean;
@@ -100,7 +101,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
         const data = await res.json();
         setCheckResult(data.data);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Valideren van rooster mislukt');
+        setError(foutTekst(err, 'Valideren van rooster mislukt'));
       } finally {
         setValidating(false);
       }
@@ -136,7 +137,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
       setResultaat(data.data?.mail ?? { verstuurd: true, aantal: 0 });
       if (onSuccess) onSuccess();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Publiceren van rooster mislukt');
+      setError(foutTekst(err, 'Publiceren van rooster mislukt'));
     } finally {
       setPublishing(false);
     }

@@ -13,7 +13,7 @@
  * - Generate roster button
  */
 
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useId, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
@@ -36,6 +36,8 @@ import { MailStatus } from './MailStatus';
 import { PreferencesImportButton } from './PreferencesImportDialog';
 import { withBasePath } from '@/lib/basePath';
 import { herinnerdOpTekst, isRecentHerinnerd } from '@/lib/herinnerdOp';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
 
 interface PersonProgress {
   person_id: string;
@@ -122,36 +124,33 @@ function Section({
   keepMounted?: boolean;
   children: ReactNode;
 }) {
+  const bodyId = useId();
+  const bodyExists = isOpen || keepMounted;
   return (
     <div className="card overflow-hidden">
       <div
-        role="button"
-        tabIndex={0}
         onClick={onToggleOpen}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggleOpen();
-          }
-        }}
-        aria-expanded={isOpen}
         className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none hover:bg-neutral-50"
       >
-        <span className="flex items-center gap-2 font-bold text-neutral-900">
-          <svg
-            className={`w-4 h-4 text-neutral-500 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path
-              fillRule="evenodd"
-              d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
-              clipRule="evenodd"
-            />
-          </svg>
-          {title}
-        </span>
+        {/* The title is a heading with a button in it (the pattern for an accordion); the pin is next to it,
+            not inside it, so Enter on the pin pins instead of folding. The click bubbles to the row. */}
+        <h2 className="font-bold text-neutral-900">
+          <button type="button" aria-expanded={isOpen} aria-controls={bodyExists ? bodyId : undefined} className="flex items-center gap-2 text-left">
+            <svg
+              className={`w-4 h-4 text-neutral-500 shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z"
+                clipRule="evenodd"
+              />
+            </svg>
+            {title}
+          </button>
+        </h2>
         <span className="flex items-center gap-3 shrink-0">
           {hint && <span className="text-sm text-neutral-500 text-right">{hint}</span>}
           {isOpen && (
@@ -166,17 +165,19 @@ function Section({
                   ? 'Losmaken: klapt dicht zodra je een andere sectie opent'
                   : 'Vastzetten: blijft open, ook als je een andere sectie opent'
               }
+              aria-label={pinned ? 'Losmaken' : 'Vastzetten'}
               aria-pressed={pinned}
-              className={`px-1.5 py-1 rounded transition-colors ${
-                pinned ? 'text-red-600 hover:text-red-800' : 'text-neutral-300 hover:text-neutral-500'
+              className={`p-2.5 rounded transition-colors ${
+                pinned ? 'text-red-600 hover:text-red-800' : 'text-neutral-500 hover:text-neutral-700'
               }`}
             >
               {/* A plain 📌 emoji doesn't work here - emoji glyphs carry
                   their own fixed color and ignore the text-color classes
                   above, so pinned/unpinned would look identical. This SVG
                   uses currentColor instead, so the color toggle above is
-                  actually visible. */}
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                  actually visible. Pinned is filled, not pinned an outline:
+                  not by colour alone. */}
+              <svg className="w-4 h-4" viewBox="0 0 20 20" fill={pinned ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                 <circle cx="10" cy="7" r="4" />
                 <rect x="9" y="10" width="2" height="7" rx="1" />
               </svg>
@@ -184,8 +185,8 @@ function Section({
           )}
         </span>
       </div>
-      {(isOpen || keepMounted) && (
-        <div className={isOpen ? 'border-t border-neutral-100 p-4' : 'hidden'}>{children}</div>
+      {bodyExists && (
+        <div id={bodyId} className={isOpen ? 'border-t border-neutral-100 p-4' : 'hidden'}>{children}</div>
       )}
     </div>
   );
@@ -384,7 +385,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       setLoading(false);
       if (bumpAssignmentsKey) setAssignmentsRefreshKey((k) => k + 1);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Laden van dashboard mislukt');
+      setLoadError(foutTekst(err, 'Laden van dashboard mislukt'));
       setLoading(false);
     }
 
@@ -462,7 +463,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       await loadData(false);
       setAssignmentsRefreshKey((k) => k + 1);
     } catch (err) {
-      setUndoError(err instanceof Error ? err.message : 'Ongedaan maken mislukt');
+      setUndoError(foutTekst(err, 'Ongedaan maken mislukt'));
     } finally {
       setUndoing(false);
     }
@@ -482,7 +483,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       // The status badge at the top of the page is the page's own state.
       onPeriodChanged?.();
     } catch (err) {
-      setUnpublishError(err instanceof Error ? err.message : 'Intrekken van publicatie mislukt');
+      setUnpublishError(foutTekst(err, 'Intrekken van publicatie mislukt'));
     } finally {
       setUnpublishing(false);
     }
@@ -591,7 +592,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       await loadData();
     } catch (err) {
       setLocal(!fellow);
-      setActionError({ personId, message: err instanceof Error ? err.message : 'Aanpassen mislukt' });
+      setActionError({ personId, message: foutTekst(err, 'Aanpassen mislukt') });
     } finally {
       setSubmittingFor(null);
     }
@@ -744,7 +745,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       {dashboard.large_imbalances.length > 0 && (
         <div className="card p-6 bg-amber-50 border border-amber-200">
           <h3 className="font-bold text-lg mb-3">
-            ⚠️ Grote verschillen (≥{dashboard.large_balance_threshold} diensten verschil)
+            ⚠️ Grote verschillen (≥{telwoord(dashboard.large_balance_threshold, 'dienst', 'diensten')} verschil)
           </h3>
           <div className="space-y-2">
             {dashboard.large_imbalances.slice(0, 8).map((item) => (
@@ -893,7 +894,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
       <Section
         title="Status voorkeuren"
-        hint={`${dashboard.total_staff} personen · ${stats.confirmed} bevestigd, ${stats.in_progress} bezig, ${stats.not_started} niet begonnen`}
+        hint={`${telwoord(dashboard.total_staff, 'persoon', 'personen')} · ${stats.confirmed} bevestigd, ${stats.in_progress} bezig, ${stats.not_started} niet begonnen`}
         isOpen={openSections.has('personeel')}
         pinned={pinnedSections.has('personeel')}
         onToggleOpen={() => toggleSectionOpen('personeel')}

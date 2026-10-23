@@ -146,11 +146,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       }
       const isMember = memberStmt.get(c.person_id, period.pool_id, period.eind_datum, period.start_datum);
       if (!isMember) {
+        const naam = (db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(c.person_id) as { codenaam: string } | undefined)?.codenaam ?? 'Deze persoon';
         const response: ApiErrorResponse = {
           success: false,
           error: {
             code: 'PERSON_NOT_IN_POOL',
-            message: `Persoon ${c.person_id} is geen lid van deze pool voor deze periode`,
+            message: `${naam} is geen lid van deze pool voor deze periode`,
           },
         };
         return NextResponse.json(response, { status: 400 });

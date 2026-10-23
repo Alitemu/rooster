@@ -1,3 +1,4 @@
+import { telwoord } from './telwoord';
 /**
  * Capacity checking utilities
  *
@@ -66,7 +67,7 @@ export function checkTotalCapacity(
       maxPerPerson: null,
       poolCapacity: null,
       slotsNeeded: totalSlots,
-      message: `Geen limiet per persoon bij een venster van 0 weken. Er is dus altijd voldoende capaciteit voor ${totalSlots} diensten.`,
+      message: `Geen limiet per persoon bij een venster van 0 weken. Er is dus altijd voldoende capaciteit voor ${telwoord(totalSlots, 'dienst', 'diensten')}.`,
     };
   }
 
@@ -76,10 +77,10 @@ export function checkTotalCapacity(
 
   let message = '';
   if (passed) {
-    message = `Pool has sufficient capacity: ${poolCapacity} shifts available for ${totalSlots} needed.`;
+    message = `De pool heeft genoeg capaciteit: ${telwoord(poolCapacity, 'dienst', 'diensten')} beschikbaar voor ${telwoord(totalSlots, 'dienst', 'diensten')} nodig.`;
   } else {
     const shortfall = totalSlots - poolCapacity;
-    message = `Pool lacks capacity: only ${poolCapacity} shifts available but ${totalSlots} needed (${shortfall} short).`;
+    message = `De pool heeft te weinig capaciteit: ${telwoord(poolCapacity, 'dienst', 'diensten')} beschikbaar, maar ${telwoord(totalSlots, 'dienst', 'diensten')} nodig (${shortfall} te weinig).`;
   }
 
   return {
@@ -168,15 +169,15 @@ export function getCapacityInterpretation(windowWeeks: number, slots: number, pe
   const distinctRequired = 7 * windowWeeks;
 
   const lines = [
-    `Bij een venster van ${windowWeeks} weken:`,
+    `Bij een venster van ${telwoord(windowWeeks, 'week', 'weken')}:`,
     `- zijn minimaal ${distinctRequired} verschillende mensen nodig om alle weken te dekken`,
     `- ${gemiddeldTekst(slots, people)}`,
   ];
 
   if (people < distinctRequired) {
-    lines.push(`✗ Onvoldoende: er zijn ${people} mensen, maar ${distinctRequired} nodig`);
+    lines.push(`✗ Onvoldoende: ${people === 1 ? 'er is 1 persoon' : `er zijn ${people} mensen`}, maar ${distinctRequired} nodig`);
   } else {
-    lines.push(`✓ Voldoende: ${people} mensen beschikbaar`);
+    lines.push(`✓ Voldoende: ${telwoord(people, 'persoon', 'mensen')} beschikbaar`);
   }
 
   return lines.join('\n');

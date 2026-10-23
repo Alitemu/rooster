@@ -21,6 +21,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Props {
   periodId: string;
@@ -48,7 +49,7 @@ export function FillGapsSummary({ periodId, onCountChange, refreshKey }: Props) 
       setCount(data.data.count);
       onCountChange?.(data.data.count);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Laden van openstaande diensten mislukt');
+      setLoadError(foutTekst(err, 'Laden van openstaande diensten mislukt'));
     }
     // onCountChange is PlannerDashboard's stable setState setter (see
     // RebalanceSuggestions' identical reasoning for its own onCountChange).

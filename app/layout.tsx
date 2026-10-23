@@ -8,7 +8,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Dienstrooster',
+  title: { default: 'Dienstrooster', template: '%s | Dienstrooster' },
   description: 'Verdeling van diensten voor medische afdelingen',
   // The tab icon's own route (app/tab-icon/route.tsx), with the sub-folder.
   icons: { icon: [{ url: withBasePath('/tab-icon'), type: 'image/png', sizes: '32x32' }] },
@@ -43,12 +43,12 @@ export default function RootLayout({
     <html lang="nl" suppressHydrationWarning>
       <body className={inter.className}>
         <div className="min-h-screen flex flex-col">
-          <header className="bg-primary-600 text-white shadow-md">
+          <header className="bg-primary-700 text-white shadow-md">
             <div className="max-w-7xl mx-auto px-4 py-4 flex items-baseline justify-between gap-4">
               <AppHeader />
               {/* Which version is running, from package.json - handy when
                   asking whether an update has landed on the server. */}
-              <span className="text-sm italic text-white/90" data-testid="app-versie">
+              <span className="text-sm italic text-white" data-testid="app-versie">
                 versie {packageJson.version}
               </span>
             </div>

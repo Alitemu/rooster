@@ -63,7 +63,7 @@ test('checking and applying say the same number, and the list says it shows a pa
   await loginAsAdmin(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await page.waitForLoadState('networkidle');
-  await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+  await page.locator('h2:has-text("Exporteren & communicatie") > button').first().click();
   await page.getByRole('button', { name: /Voorkeuren importeren \(test\)/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Voorkeuren importeren' });
 

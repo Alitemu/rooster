@@ -49,7 +49,7 @@ test.describe('Fellows', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    const section = page.getByRole('button', { name: /Status voorkeuren/ }).first();
+    const section = page.getByRole('heading', { name: /Status voorkeuren/ }).getByRole('button');
     const rows = page.locator('tr', { has: page.locator(`a[href$="/person/${user.id}"]`) });
     if (!(await rows.first().isVisible())) await section.click();
 

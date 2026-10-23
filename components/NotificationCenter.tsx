@@ -8,6 +8,7 @@
 
 import { useState, useEffect } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Notification {
   id: string;
@@ -68,7 +69,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
         setUnreadCount(data.data.unread_count);
       } catch (err) {
         if (!current) return;
-        setError(err instanceof Error ? err.message : 'Laden van meldingen mislukt');
+        setError(foutTekst(err, 'Laden van meldingen mislukt'));
       } finally {
         if (current) setLoading(false);
       }
@@ -101,7 +102,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
         setActionError(data?.error?.message || 'Markeren als gelezen mislukt');
       }
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Markeren als gelezen mislukt');
+      setActionError(foutTekst(err, 'Markeren als gelezen mislukt'));
     }
   };
 
@@ -123,7 +124,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
         setActionError(data?.error?.message || 'Sluiten van melding mislukt');
       }
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Sluiten van melding mislukt');
+      setActionError(foutTekst(err, 'Sluiten van melding mislukt'));
     }
   };
 

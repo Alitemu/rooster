@@ -10,6 +10,7 @@
 import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { RuilHerinnering } from '@/components/RuilHerinnering';
+import { foutTekst } from '@/lib/foutTekst';
 
 /** "di 5 jan 2027": a stored YYYY-MM-DD as people read it. */
 function datumTekst(datum: string): string {
@@ -170,7 +171,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
         setSwapRequests(data.data.swap_requests);
       } catch (err) {
         if (!current) return;
-        setError(err instanceof Error ? err.message : 'Laden van ruilverzoeken mislukt');
+        setError(foutTekst(err, 'Laden van ruilverzoeken mislukt'));
       } finally {
         if (current) setLoading(false);
       }
@@ -245,7 +246,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       // The two shifts just changed hands - the roster above must show it.
       onSwapsChanged?.();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Goedkeuren van ruil mislukt');
+      setActionError(foutTekst(err, 'Goedkeuren van ruil mislukt'));
     }
   };
 
@@ -268,7 +269,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       setRejectionReason('');
       showSuccess('Ruil afgewezen');
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Afwijzen van ruil mislukt');
+      setActionError(foutTekst(err, 'Afwijzen van ruil mislukt'));
     }
   };
 
@@ -287,7 +288,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       updateSwapStatus(swapId, 'INGETROKKEN');
       showSuccess('Ruilverzoek ingetrokken');
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Intrekken van ruilverzoek mislukt');
+      setActionError(foutTekst(err, 'Intrekken van ruilverzoek mislukt'));
     }
   };
 

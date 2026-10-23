@@ -10,6 +10,7 @@
 
 import { useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 export interface ParttimePattern {
   id: string;
@@ -126,7 +127,7 @@ export function AiosDeeltijdEditor({
       cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan van deeltijdpatroon mislukt');
+      setError(foutTekst(err, 'Opslaan van deeltijdpatroon mislukt'));
     } finally {
       setSaving(false);
     }
@@ -146,7 +147,7 @@ export function AiosDeeltijdEditor({
       if (editingId === patternId) cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van deeltijdpatroon mislukt');
+      setError(foutTekst(err, 'Verwijderen van deeltijdpatroon mislukt'));
     } finally {
       setRemovingId(null);
     }

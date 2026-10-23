@@ -14,6 +14,7 @@ import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { vensterTekst } from '@/lib/windowWeeks';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Period {
   id: string;
@@ -62,7 +63,7 @@ export default function PlannerPeriodPage() {
       setPeriod(data.data);
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden van periode mislukt');
+      setError(foutTekst(err, 'Laden van periode mislukt'));
       setLoading(false);
     }
   };
@@ -98,7 +99,7 @@ export default function PlannerPeriodPage() {
       setEditingDeadline(false);
       await loadPeriod();
     } catch (err) {
-      setDeadlineError(err instanceof Error ? err.message : 'Aanpassen van deadline mislukt');
+      setDeadlineError(foutTekst(err, 'Aanpassen van deadline mislukt'));
     } finally {
       setSavingDeadline(false);
     }
@@ -120,7 +121,7 @@ export default function PlannerPeriodPage() {
       if (!res.ok) throw new Error(data.error?.message || 'Sluiten van periode mislukt');
       await loadPeriod();
     } catch (err) {
-      setCloseError(err instanceof Error ? err.message : 'Sluiten van periode mislukt');
+      setCloseError(foutTekst(err, 'Sluiten van periode mislukt'));
     } finally {
       setClosing(false);
     }
@@ -142,7 +143,7 @@ export default function PlannerPeriodPage() {
       if (!res.ok) throw new Error(data.error?.message || 'Terugzetten naar open mislukt');
       await loadPeriod();
     } catch (err) {
-      setReopenError(err instanceof Error ? err.message : 'Terugzetten naar open mislukt');
+      setReopenError(foutTekst(err, 'Terugzetten naar open mislukt'));
     } finally {
       setReopening(false);
     }
@@ -169,7 +170,7 @@ export default function PlannerPeriodPage() {
       setResetOokHandmatig(false);
       await loadPeriod();
     } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Verwijderen van het rooster mislukt');
+      setResetError(foutTekst(err, 'Verwijderen van het rooster mislukt'));
     } finally {
       setResetting(false);
     }

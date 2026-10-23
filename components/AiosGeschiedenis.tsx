@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosSectie } from '@/components/AiosSectie';
 import type { GeschiedenisPlan, GeschiedenisRij } from '@/lib/aiosGeschiedenis';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 /** The largest workbook sent: as base64 it must stay under the 1 MB a request body may be, or the server sees no file at all (a copy of lib/sheetUpload.ts, which is the achterwacht's). */
 const MAX_WERKMAP_BYTES = 700_000;
@@ -70,7 +71,7 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
         if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Laden is mislukt');
         setStand(data.data);
       })
-      .catch((err) => setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt' }));
+      .catch((err) => setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt') }));
   }, [periodId]);
   useEffect(() => laad(), [laad]);
 
@@ -114,7 +115,7 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
         laad();
       }
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Inlezen is mislukt' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Inlezen is mislukt') });
     } finally {
       setBezig(false);
     }

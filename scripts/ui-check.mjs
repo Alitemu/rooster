@@ -176,12 +176,12 @@ rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(aw
 // Accordion sections (PlannerDashboard's Section component): opening one
 // closes any other open-but-unpinned section, and pinning (📌, shown only
 // while a section is open) keeps it open even when another section opens.
-await page.click('[role="button"]:has-text("Status voorkeuren")');
+await page.click('h2:has-text("Status voorkeuren") > button');
 await page.waitForTimeout(300);
 const staffTableVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 rec('Opening "Status voorkeuren" shows its content', staffTableVisible);
 
-await page.click('[role="button"]:has-text("Exporteren & communicatie")');
+await page.click('h2:has-text("Exporteren & communicatie") > button');
 await page.waitForTimeout(300);
 const staffTableStillVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 const exportVisible = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
@@ -192,11 +192,11 @@ rec(
 );
 
 // Reopen "Status voorkeuren" and pin it before opening the export section again.
-await page.click('[role="button"]:has-text("Status voorkeuren")');
+await page.click('h2:has-text("Status voorkeuren") > button');
 await page.waitForTimeout(300);
-await page.click('[role="button"]:has-text("Status voorkeuren") button[aria-pressed]');
+await page.click('.card:has(h2:has-text("Status voorkeuren")) button[aria-pressed]');
 await page.waitForTimeout(200);
-await page.click('[role="button"]:has-text("Exporteren & communicatie")');
+await page.click('h2:has-text("Exporteren & communicatie") > button');
 await page.waitForTimeout(300);
 const staffTableVisibleAfterPin = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 const exportVisibleToo = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
@@ -222,7 +222,7 @@ page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) calendarN
 // Section component), same mechanism as "Status voorkeuren" etc. -
 // there's no separate "Tonen" button anymore, clicking the header itself
 // opens it.
-await page.click('[role="button"]:has-text("Dienstrooster")');
+await page.click('h2:has-text("Dienstrooster") > button');
 await page.waitForTimeout(500);
 await page.click('button:has-text("Kalender")');
 await page.waitForTimeout(800);
@@ -261,7 +261,7 @@ rec('The undo banner disappears once used', !(await undoBanner.isVisible().catch
 // swap that happened in real life after a CSV was made can still be
 // corrected by hand.
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await page.click('[role="button"]:has-text("Eerdere toewijzingen")');
+await page.click('h2:has-text("Eerdere toewijzingen") > button');
 await page.waitForTimeout(300);
 rec(
   'The "Eerdere toewijzingen" section explains why it is needed',
@@ -413,7 +413,7 @@ await (async () => {
 })();
 
 await mpage.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await mpage.click('[role="button"]:has-text("Dienstrooster")');
+await mpage.click('h2:has-text("Dienstrooster") > button');
 await mpage.waitForTimeout(500);
 const mobileScrollWidth = await mpage.evaluate(() => document.documentElement.scrollWidth);
 rec('No horizontal page overflow at 375px once the roster panel is shown', mobileScrollWidth === 375, `scrollWidth=${mobileScrollWidth}`);
@@ -555,7 +555,7 @@ if (rosterPeriod) {
     );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${BASE}/planner/period/${rosterPeriod.id}`, { waitUntil: 'networkidle' });
-  await page.locator('[role="button"]:has-text("Dienstrooster")').first().click();
+  await page.locator('h2:has-text("Dienstrooster") > button').first().click();
   await page.waitForSelector('button:has-text("Wisselen")');
 
   const row = page.locator('table tbody tr').nth(15);

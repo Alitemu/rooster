@@ -20,6 +20,7 @@ import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface SlotAssignment {
   id: string;
@@ -290,7 +291,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
         await loadSlots(true);
         onChanged?.();
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : 'Bijwerken van toewijzing mislukt');
+        setActionError(foutTekst(err, 'Bijwerken van toewijzing mislukt'));
       } finally {
         setActionBusy(false);
       }

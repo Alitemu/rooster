@@ -23,7 +23,7 @@ test.describe('Exporteren & communicatie', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    await page.getByRole('heading', { name: /Exporteren & communicatie/ }).getByRole('button').click();
     await page.getByRole('button', { name: /Uitnodigingen en herinneringen/ }).click();
     return page.getByRole('dialog', { name: 'Exporteren' });
   };
@@ -56,9 +56,9 @@ test.describe('Exporteren & communicatie', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    await page.getByRole('heading', { name: /Exporteren & communicatie/ }).getByRole('button').click();
     await expect(page.getByRole('button', { name: /Deadlineherinnering versturen/ })).toBeDisabled();
-    await page.locator('[role="button"]:has-text("Status voorkeuren")').first().click();
+    await page.getByRole('heading', { name: /Status voorkeuren/ }).getByRole('button').click();
     await expect(page.getByRole('button', { name: /Herinnering sturen aan iedereen/ })).toBeDisabled();
     await expect(page.getByTestId('mail-nog-niet')).toHaveText(
       'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.'
@@ -72,7 +72,7 @@ test.describe('Exporteren & communicatie', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    await page.getByRole('heading', { name: /Exporteren & communicatie/ }).getByRole('button').click();
     const panel = page.getByTestId('auto-herinneringen');
     await expect(panel).toContainText('Automatische herinneringen');
     await expect(panel).toContainText('versturen is nog niet ingesteld');

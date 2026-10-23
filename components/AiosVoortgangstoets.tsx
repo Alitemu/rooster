@@ -9,6 +9,7 @@
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosSectie } from '@/components/AiosSectie';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const kort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 
@@ -73,7 +74,7 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
     fetch(withBasePath(`/api/aios/periode/${periodId}/voortgangstoets`))
       .then((res) => json(res, 'Laden van de voortgangstoets is mislukt.'))
       .then(neem)
-      .catch((err) => setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt.' }));
+      .catch((err) => setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt.') }));
   }, [periodId, status]);
 
   const bewaar = async () => {
@@ -90,7 +91,7 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
       setMelding({ fout: false, tekst: opgeslagen(status, nieuw.teruggezet) });
       onChanged();
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Opslaan is mislukt.' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Opslaan is mislukt.') });
     } finally {
       setBezig(false);
     }

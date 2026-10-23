@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import type { AiosEigenRooster } from '@/lib/aiosPublicatie';
 import { KWARTALEN_WOORD } from '@/lib/aiosFte';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const datumLang = (d: string) =>
   new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -28,7 +29,7 @@ export function AiosMijnRooster({ personId, periodId, inSectie = false }: { pers
         if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Laden van je rooster is mislukt.');
         setRooster(data.data);
       })
-      .catch((err) => setFout(err instanceof Error ? err.message : 'Laden van je rooster is mislukt.'));
+      .catch((err) => setFout(foutTekst(err, 'Laden van je rooster is mislukt.')));
   }, [personId, periodId]);
 
   if (fout) {

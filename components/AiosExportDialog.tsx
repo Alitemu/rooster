@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useAiosDialoogSluiten, useAiosScrollSlot } from '@/lib/aiosDialoog';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 export type AiosExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
@@ -156,7 +157,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
         if (!data?.success) throw new Error(data?.error?.message ?? 'Laden van de AIOS is mislukt');
         setDeelnemers(data.data.deelnemers);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Laden van de AIOS is mislukt'));
+      .catch((err) => setError(foutTekst(err, 'Laden van de AIOS is mislukt')));
   }, [periodId]);
   useEffect(() => {
     if (isOpen && exportType === 'reminders' && deelnemers === null) laadDeelnemers();
@@ -198,7 +199,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
       await bewaarDownload(res, `links-aios_${periodName.replace(/ /g, '_')}.xlsx`);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
+      setError(foutTekst(err, 'Downloaden mislukt'));
     }
   };
 
@@ -209,7 +210,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
       await bewaarDownload(res, `wijzigingsgeschiedenis_${periodName.replace(/ /g, '_')}.xlsx`);
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
+      setError(foutTekst(err, 'Downloaden mislukt'));
     }
   };
 

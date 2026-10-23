@@ -27,6 +27,8 @@ import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { periodRangeProblem } from '@/lib/isoDate';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -573,7 +575,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum });
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Toevoegen mislukt');
+      setStaffError(foutTekst(err, 'Toevoegen mislukt'));
     } finally {
       setAddingMember(false);
     }
@@ -600,7 +602,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       setEditingMembershipId(null);
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setStaffError(foutTekst(err, 'Opslaan mislukt'));
     } finally {
       setSavingMembership(false);
     }
@@ -622,7 +624,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      setStaffError(foutTekst(err, 'Verwijderen mislukt'));
     } finally {
       setRemovingMembershipId(null);
     }
@@ -639,7 +641,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       if (!res.ok) throw new Error(data.error?.message || 'Bijwerken mislukt');
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Bijwerken mislukt');
+      setStaffError(foutTekst(err, 'Bijwerken mislukt'));
     } finally {
       setTogglingMembershipId(null);
     }
@@ -666,7 +668,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       fileRows = await readUploadedRows(file);
     } catch (err) {
       setBalanceRows([]);
-      setBalanceParseWarnings([err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.']);
+      setBalanceParseWarnings([foutTekst(err, 'Het bestand kon niet worden gelezen.')]);
       return;
     }
     const [, ...dataLines] = fileRows; // skip header row
@@ -847,7 +849,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       const importWarnings: string[] = [];
       if (linksSent < toLink.length) {
         importWarnings.push(
-          `Slechts ${linksSent} van ${toLink.length} uitnodigingen zijn daadwerkelijk aangemaakt.`
+          `Slechts ${linksSent} van ${telwoord(toLink.length, 'uitnodiging', 'uitnodigingen')} ${toLink.length === 1 ? 'is' : 'zijn'} daadwerkelijk aangemaakt.`
         );
       }
 
@@ -864,7 +866,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           const rowErrors: string[] = balancesData?.data?.errors || [];
           if (rowErrors.length > 0) {
             importWarnings.push(
-              `${rowErrors.length} rij(en) in de beginsaldi zijn overgeslagen: ${rowErrors.join('; ')}`
+              `${rowErrors.length === 1 ? '1 rij in de beginsaldi is' : `${rowErrors.length} rijen in de beginsaldi zijn`} overgeslagen: ${rowErrors.join('; ')}`
             );
           }
         }
@@ -889,7 +891,7 @@ export function SetupWizard({ period, onComplete }: Props) {
 
       setOpenResult(
         `Periode geopend (${openData.data.start_datum} t/m ${openData.data.eind_datum}): ` +
-          `${openData.data.slots_generated} diensten gegenereerd, ${linksSent} uitnodigingen verstuurd.` +
+          `${telwoord(openData.data.slots_generated, 'dienst', 'diensten')} gegenereerd, ${telwoord(linksSent, 'uitnodiging', 'uitnodigingen')} verstuurd.` +
           (correctionsFailed
             ? ' Let op: de handmatige correcties zijn niet opgeslagen. Noteer ze en laat de beheerder ze alsnog verwerken.'
             : '') +
@@ -897,7 +899,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       );
       onComplete?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Openen van periode mislukt');
+      setError(foutTekst(err, 'Openen van periode mislukt'));
     } finally {
       setLoading(false);
     }
@@ -1015,8 +1017,9 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'period' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Naam periode</label>
+              <label htmlFor="wizard-naam" className="block text-sm font-medium mb-1">Naam periode</label>
               <input
+                id="wizard-naam"
                 type="text"
                 value={periodData.naam}
                 onChange={(e) => setPeriodData({ ...periodData, naam: e.target.value })}
@@ -1027,8 +1030,9 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Startdatum</label>
+                <label htmlFor="wizard-start" className="block text-sm font-medium mb-1">Startdatum</label>
                 <input
+                  id="wizard-start"
                   type="date"
                   value={periodData.start_datum}
                   onChange={(e) => setPeriodData({ ...periodData, start_datum: e.target.value })}
@@ -1036,8 +1040,9 @@ export function SetupWizard({ period, onComplete }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Einddatum</label>
+                <label htmlFor="wizard-eind" className="block text-sm font-medium mb-1">Einddatum</label>
                 <input
+                  id="wizard-eind"
                   type="date"
                   value={periodData.eind_datum}
                   onChange={(e) => setPeriodData({ ...periodData, eind_datum: e.target.value })}
@@ -1047,8 +1052,9 @@ export function SetupWizard({ period, onComplete }: Props) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Deadline voorkeuren</label>
+              <label htmlFor="wizard-deadline" className="block text-sm font-medium mb-1">Deadline voorkeuren</label>
               <input
+                id="wizard-deadline"
                 type="datetime-local"
                 value={periodData.deadline}
                 onChange={(e) => setPeriodData({ ...periodData, deadline: e.target.value })}
@@ -1360,7 +1366,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                       {capacityCheck.distinct_people.satisfied ? '✓' : '✗'}
                     </li>
                     <li>
-                      • Totale capaciteit: {capacityCheck.total_capacity.pool_capacity ?? 'onbeperkt'} diensten beschikbaar voor{' '}
+                      • Totale capaciteit: {capacityCheck.total_capacity.pool_capacity === null ? 'onbeperkt aantal diensten' : telwoord(capacityCheck.total_capacity.pool_capacity, 'dienst', 'diensten')} beschikbaar voor{' '}
                       {capacityCheck.total_capacity.required_slots} benodigd{' '}
                       {capacityCheck.total_capacity.satisfied ? '✓' : '✗'}
                     </li>
@@ -1705,7 +1711,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                           aria-label="Meer diensten"
                           className={`w-12 py-2 text-lg font-bold border-l transition-colors ${
                             correctionAantalSign === 1
-                              ? 'bg-green-600 text-white'
+                              ? 'bg-green-700 text-white'
                               : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                           }`}
                         >
@@ -1809,8 +1815,8 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_active).length} actief in deze periode
                 </p>
                 <p>
-                  <strong>Venster:</strong> avond {windowConfig.windowWeeksAvond} weken · weekend/
-                  feestdag {windowConfig.windowWeeksWeekendFeestdag} weken
+                  <strong>Venster:</strong> avond {telwoord(windowConfig.windowWeeksAvond, 'week', 'weken')} · weekend/
+                  feestdag {telwoord(windowConfig.windowWeeksWeekendFeestdag, 'week', 'weken')}
                 </p>
                 <p>
                   <strong>Verdeling:</strong> {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}

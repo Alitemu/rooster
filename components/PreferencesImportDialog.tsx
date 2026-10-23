@@ -12,6 +12,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { MAX_WORKBOOK_BYTES, WORKBOOK_TOO_LARGE } from '@/lib/sheetUpload';
+import { telwoord } from '@/lib/telwoord';
 
 interface Change {
   codenaam: string;
@@ -197,7 +198,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                         count looked wrong until Toepassen said 3492. */}
                     {plan.wijzigingen.length > SHOWN && (
                       <p className="text-neutral-600 mb-1" data-testid="import-lijst-uitleg">
-                        Hieronder de eerste {SHOWN} van de {plan.wijzigingen.length} wijzigingen.
+                        Hieronder de eerste {SHOWN} van de {telwoord(plan.wijzigingen.length, 'wijziging', 'wijzigingen')}.
                       </p>
                     )}
                     <table className="w-full text-left border-collapse">
@@ -225,7 +226,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                     {plan.wijzigingen.length > SHOWN && (
                       <p className="mt-1 text-neutral-600" data-testid="import-lijst-rest">
                         De andere {plan.wijzigingen.length - SHOWN} staan niet in deze lijst. Toepassen voert alle{' '}
-                        {plan.wijzigingen.length} wijzigingen door.
+                        {telwoord(plan.wijzigingen.length, 'wijziging', 'wijzigingen')} door.
                       </p>
                     )}
                   </div>

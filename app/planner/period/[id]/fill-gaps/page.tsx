@@ -15,6 +15,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { FillGapsPanel } from '@/components/FillGapsPanel';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Period {
   id: string;
@@ -38,7 +39,7 @@ export default function FillGapsPage() {
         setLoading(false);
       })
       .catch((err) => {
-        setError(err instanceof Error ? err.message : 'Laden van periode mislukt');
+        setError(foutTekst(err, 'Laden van periode mislukt'));
         setLoading(false);
       });
   }, [periodId]);

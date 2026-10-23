@@ -11,6 +11,7 @@
 
 import { useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface BlockedDaysSummary {
   AVOND: number;
@@ -72,7 +73,7 @@ export function PreferencesConfirmation({
 
       onSubmit?.(true);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Onbekende fout';
+      const message = foutTekst(err, 'Onbekende fout');
       setError(message);
       onSubmit?.(false);
     } finally {

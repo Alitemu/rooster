@@ -11,6 +11,8 @@ import { useId, useState } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
+import { foutTekst } from '@/lib/aiosFoutTekst';
+import { telwoord } from '@/lib/aiosTelwoord';
 
 export interface Absence {
   id: string;
@@ -120,7 +122,7 @@ export function AiosAfwezigheid({
       cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan van afwezigheid mislukt');
+      setError(foutTekst(err, 'Opslaan van afwezigheid mislukt'));
     } finally {
       setSaving(false);
     }
@@ -140,7 +142,7 @@ export function AiosAfwezigheid({
       if (editingId === absenceId) cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van afwezigheid mislukt');
+      setError(foutTekst(err, 'Verwijderen van afwezigheid mislukt'));
     } finally {
       setRemovingId(null);
     }
@@ -184,11 +186,11 @@ export function AiosAfwezigheid({
                     </span>
                   ) : a.blocked_days_in_period === a.total_days_in_period ? (
                     <span className="text-green-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ✓ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen verwerkt in deze periode
+                      ✓ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} verwerkt in deze periode
                     </span>
                   ) : (
                     <span className="text-amber-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ⚠ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen verwerkt in deze
+                      ⚠ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} verwerkt in deze
                       periode. De rest was al om een andere reden geblokkeerd.
                     </span>
                   )

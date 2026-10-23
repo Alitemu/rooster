@@ -21,6 +21,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { withBasePath } from '@/lib/basePath';
 import { localIsoDate } from '@/lib/localDate';
 import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults } from '@/lib/membershipDefaults';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Pool {
   id: string;
@@ -113,7 +114,7 @@ export default function PoolStaffPage() {
         setPoolLoading(false);
       })
       .catch((err) => {
-        setPoolError(err instanceof Error ? err.message : 'Laden van pool mislukt');
+        setPoolError(foutTekst(err, 'Laden van pool mislukt'));
         setPoolLoading(false);
       });
   }, [poolId]);
@@ -127,7 +128,7 @@ export default function PoolStaffPage() {
       if (!res.ok) throw new Error(data.error?.message || 'Laden van personeel mislukt');
       setMembers(data.data || []);
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Laden van personeel mislukt');
+      setStaffError(foutTekst(err, 'Laden van personeel mislukt'));
     } finally {
       if (!options?.silent) setStaffLoading(false);
     }
@@ -191,7 +192,7 @@ export default function PoolStaffPage() {
       await loadStaff({ silent: true });
       await loadPendingUndo();
     } catch (err) {
-      setUndoError(err instanceof Error ? err.message : 'Ongedaan maken mislukt');
+      setUndoError(foutTekst(err, 'Ongedaan maken mislukt'));
     } finally {
       setUndoing(false);
     }
@@ -216,7 +217,7 @@ export default function PoolStaffPage() {
       setNewMember({ codenaam: '', geldig_vanaf: defaults.geldig_vanaf, geldig_tot: defaults.geldig_tot });
       await loadStaff({ silent: true });
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'Toevoegen mislukt');
+      setAddError(foutTekst(err, 'Toevoegen mislukt'));
     } finally {
       setAddingMember(false);
     }
@@ -243,7 +244,7 @@ export default function PoolStaffPage() {
       setEditingMembershipId(null);
       await loadStaff({ silent: true });
     } catch (err) {
-      setRowError({ membershipId, message: err instanceof Error ? err.message : 'Opslaan mislukt' });
+      setRowError({ membershipId, message: foutTekst(err, 'Opslaan mislukt') });
     } finally {
       setSavingMembership(false);
     }
@@ -264,7 +265,7 @@ export default function PoolStaffPage() {
       await loadStaff({ silent: true });
       await loadPendingUndo();
     } catch (err) {
-      setRowError({ membershipId, message: err instanceof Error ? err.message : 'Verwijderen mislukt' });
+      setRowError({ membershipId, message: foutTekst(err, 'Verwijderen mislukt') });
     } finally {
       setRemovingMembershipId(null);
     }
@@ -342,7 +343,7 @@ export default function PoolStaffPage() {
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig vanaf</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig tot</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Deelnamefactor</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium"></th>
+                  <th className="px-4 py-2 text-left text-sm font-medium"><span className="sr-only">Acties</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -362,6 +363,7 @@ export default function PoolStaffPage() {
                           {isEditing ? (
                             <input
                               type="date"
+                              aria-label={`Geldig vanaf voor ${member.codenaam}`}
                               value={editDates.geldig_vanaf}
                               onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
                               className="px-2 py-1 border rounded text-sm w-36"
@@ -374,6 +376,7 @@ export default function PoolStaffPage() {
                           {isEditing ? (
                             <input
                               type="date"
+                              aria-label={`Geldig tot voor ${member.codenaam}`}
                               value={editDates.geldig_tot}
                               onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
                               className="px-2 py-1 border rounded text-sm w-36"
@@ -468,8 +471,9 @@ export default function PoolStaffPage() {
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
+              <label htmlFor="nieuw-lid-codenaam" className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
               <input
+                id="nieuw-lid-codenaam"
                 type="text"
                 value={newMember.codenaam}
                 onChange={(e) => setNewMember({ ...newMember, codenaam: e.target.value })}
@@ -479,8 +483,9 @@ export default function PoolStaffPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig vanaf</label>
+              <label htmlFor="nieuw-lid-vanaf" className="block text-xs font-medium text-neutral-600 mb-1">Geldig vanaf</label>
               <input
+                id="nieuw-lid-vanaf"
                 type="date"
                 value={newMember.geldig_vanaf}
                 onChange={(e) => setNewMember({ ...newMember, geldig_vanaf: e.target.value })}
@@ -488,8 +493,9 @@ export default function PoolStaffPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig tot</label>
+              <label htmlFor="nieuw-lid-tot" className="block text-xs font-medium text-neutral-600 mb-1">Geldig tot</label>
               <input
+                id="nieuw-lid-tot"
                 type="date"
                 value={newMember.geldig_tot}
                 onChange={(e) => setNewMember({ ...newMember, geldig_tot: e.target.value })}

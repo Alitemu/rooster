@@ -16,6 +16,7 @@ import { withBasePath } from '@/lib/basePath';
 import { SwapRequestDialog } from './SwapRequestDialog';
 import { DeelnemerHarmonica, DeelnemerSectie } from '@/components/DeelnemerSectie';
 import { SwapManagementPanel } from './SwapManagementPanel';
+import { telwoord } from '@/lib/telwoord';
 
 interface AssignedShift {
   datum: string;
@@ -198,8 +199,8 @@ export function PersonalRosterView({
                 Ingedeeld op een dag die je had geblokkeerd
               </p>
               <p className="text-sm text-red-800 mt-1">
-                De roosteraar heeft je bewust ingedeeld op {blockedOverrideViolations.length}{' '}
-                dag(en) die je had geblokkeerd. Neem contact op met de roosteraar als dit niet
+                De roosteraar heeft je bewust ingedeeld op{' '}
+                {telwoord(blockedOverrideViolations.length, 'dag', 'dagen')} die je had geblokkeerd. Neem contact op met de roosteraar als dit niet
                 klopt.
               </p>
               <ul className="text-sm text-red-800 mt-2 space-y-1">
@@ -227,7 +228,7 @@ export function PersonalRosterView({
                 Ingedeeld op dagen met voorkeur "liever niet"
               </p>
               <p className="text-sm text-amber-800 mt-1">
-                Je bent ingedeeld op {softBlockViolations.length} dag(en) die je hebt
+                Je bent ingedeeld op {telwoord(softBlockViolations.length, 'dag', 'dagen')} die je hebt
                 gemarkeerd als "liever niet":
               </p>
               <ul className="text-sm text-amber-800 mt-2 space-y-1">

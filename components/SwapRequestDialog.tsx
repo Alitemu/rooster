@@ -10,6 +10,7 @@ import { useState, useEffect } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Assignment {
   id: string;
@@ -107,7 +108,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
         setAssignments(ownData.data.assignments);
         setCandidates(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Laden van rooster mislukt');
+        setError(foutTekst(err, 'Laden van rooster mislukt'));
       } finally {
         setLoading(false);
       }
@@ -141,7 +142,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
       .catch((err) => {
         if (!current) return;
         setCandidates([]);
-        setError(err instanceof Error ? err.message : 'Laden van collega\'s mislukt');
+        setError(foutTekst(err, 'Laden van collega\'s mislukt'));
       })
       .finally(() => {
         if (current) setCandidatesLoading(false);
@@ -185,7 +186,7 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
       if (onSuccess) onSuccess({ mailVertraagd: Boolean(data?.data?.mail_vertraagd) });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Aanmaken van ruilverzoek mislukt');
+      setError(foutTekst(err, 'Aanmaken van ruilverzoek mislukt'));
     } finally {
       setSubmitting(false);
     }

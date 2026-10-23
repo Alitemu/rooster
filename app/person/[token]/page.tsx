@@ -22,6 +22,7 @@ import { NotificationCenter } from '@/components/NotificationCenter';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { withBasePath } from '@/lib/basePath';
 import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
+import { foutTekst } from '@/lib/foutTekst';
 
 type Step = 'calendar' | 'parttime' | 'confirmation' | 'submitted' | 'roster';
 
@@ -365,7 +366,7 @@ function PersonalLinkPageContent() {
 
         setLoading(false);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Kon voorkeuren niet laden';
+        const message = foutTekst(err, 'Kon voorkeuren niet laden');
         setError(message);
         setLoading(false);
       }

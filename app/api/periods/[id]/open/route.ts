@@ -193,7 +193,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getHolidayInfo } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Assignment {
   id: string;
@@ -147,7 +148,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       setAssignments(data.data.assignments);
       setTotalPages(data.data.pagination.total_pages);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Laden van toewijzingen mislukt');
+      setLoadError(foutTekst(err, 'Laden van toewijzingen mislukt'));
     } finally {
       setLoading(false);
     }
@@ -177,7 +178,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       await loadAssignments(true);
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van toewijzing mislukt');
+      setError(foutTekst(err, 'Verwijderen van toewijzing mislukt'));
     } finally {
       setRemoving(null);
     }
@@ -199,7 +200,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Ophalen van beschikbare collega\'s mislukt');
       setEligiblePeople(data.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ophalen van beschikbare collega\'s mislukt');
+      setError(foutTekst(err, 'Ophalen van beschikbare collega\'s mislukt'));
       setEligiblePeople([]);
     } finally {
       setEligibleLoading(false);
@@ -233,7 +234,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       await loadAssignments(true);
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Wisselen van toewijzing mislukt');
+      setError(foutTekst(err, 'Wisselen van toewijzing mislukt'));
     } finally {
       setReassigning(null);
     }

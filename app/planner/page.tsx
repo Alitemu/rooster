@@ -24,6 +24,7 @@ import {
   aiosQuarterWeeks,
   type AiosQuarter,
 } from '@/lib/aiosQuarter';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Period {
   id: string;
@@ -251,7 +252,7 @@ export default function PlannerHomePage() {
       setDeletingPeriod(null);
       loadTrash();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      setDeleteError(foutTekst(err, 'Verwijderen mislukt'));
     } finally {
       setDeleteBusy(false);
     }
@@ -278,7 +279,7 @@ export default function PlannerHomePage() {
       setPeriods((prev) => prev.map((p) => (p.id === renamingId ? { ...p, naam: data.data.naam } : p)));
       setRenamingId(null);
     } catch (err) {
-      setRenameError(err instanceof Error ? err.message : 'Naam wijzigen mislukt');
+      setRenameError(foutTekst(err, 'Naam wijzigen mislukt'));
     } finally {
       setRenameBusy(false);
       // Opslaan was disabled while saving, which drops the focus; back in
@@ -299,7 +300,7 @@ export default function PlannerHomePage() {
       await loadData();
     } catch (err) {
       // Leave it in the trash list - the planner can retry
-      setRestoreError(err instanceof Error ? err.message : 'Herstellen mislukt');
+      setRestoreError(foutTekst(err, 'Herstellen mislukt'));
     } finally {
       setTrashActionBusy(null);
     }
@@ -317,7 +318,7 @@ export default function PlannerHomePage() {
       setTrash((prev) => prev.filter((p) => p.id !== purgingPeriod.id));
       setPurgingPeriod(null);
     } catch (err) {
-      setPurgeError(err instanceof Error ? err.message : 'Definitief verwijderen mislukt');
+      setPurgeError(foutTekst(err, 'Definitief verwijderen mislukt'));
     } finally {
       setTrashActionBusy(null);
     }
@@ -347,7 +348,7 @@ export default function PlannerHomePage() {
       // An AIOS period has no setup wizard (yet): its own page shows its diensten.
       router.push(aiosGekozen ? `/planner/period/${data.data.id}` : `/planner/setup/${data.data.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Aanmaken van periode mislukt');
+      setError(foutTekst(err, 'Aanmaken van periode mislukt'));
       setCreating(false);
     }
   };
@@ -565,7 +566,7 @@ export default function PlannerHomePage() {
                 <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
                 <th className="px-4 py-2 text-left text-sm font-medium">Data</th>
                 <th className="px-4 py-2 text-left text-sm font-medium">Status</th>
-                <th className="px-4 py-2 text-left text-sm font-medium"></th>
+                <th className="px-4 py-2 text-left text-sm font-medium"><span className="sr-only">Acties</span></th>
               </tr>
             </thead>
             <tbody className="divide-y">

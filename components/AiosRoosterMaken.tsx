@@ -19,6 +19,8 @@ import { AiosPubliceren } from '@/components/AiosPubliceren';
 import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import type { AiosRooster } from '@/lib/aiosRooster';
 import type { AiosLaatsteGeneratie } from '@/lib/aiosGenereren';
+import { foutTekst } from '@/lib/aiosFoutTekst';
+import { telwoord } from '@/lib/aiosTelwoord';
 
 // The words for the solver's reasons (lib/aiosGenereren.ts REDEN_WOORDEN; repeated: that file is server code).
 const REDEN: Record<string, string> = {
@@ -94,7 +96,7 @@ function LegeDiensten({ generatie, kanOpnieuw }: { generatie: AiosLaatsteGenerat
   return (
     <div className="rounded border border-neutral-300 p-3 text-sm space-y-1" role="status" data-testid="aios-lege-diensten">
       <p className="font-medium">
-        Gemaakt op {gemaakt}: {generatie.gevuld} diensten ingedeeld
+        Gemaakt op {gemaakt}: {telwoord(generatie.gevuld, 'dienst', 'diensten')} ingedeeld
         {bij === 0 ? ', niets leeg.' : `. ${bij} ${bij === 1 ? 'dienst bleef' : 'diensten bleven'} leeg.`}
       </p>
       {generatie.status !== 'OPTIMAAL' && bij > 0 && nog.length > 0 && kanOpnieuw && (
@@ -152,7 +154,7 @@ export function AiosRoosterMaken({
     fetch(withBasePath(`/api/aios/periode/${periodId}/rooster`))
       .then((res) => antwoord(res, 'Laden van het rooster is mislukt'))
       .then((data) => setRooster(data))
-      .catch((err) => setFout(err instanceof Error ? err.message : 'Laden van het rooster is mislukt'));
+      .catch((err) => setFout(foutTekst(err, 'Laden van het rooster is mislukt')));
   }, [periodId]);
   useEffect(() => {
     actief.current = true;
@@ -189,7 +191,7 @@ export function AiosRoosterMaken({
       onChanged();
       laad();
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Het rooster maken is mislukt');
+      setFout(foutTekst(err, 'Het rooster maken is mislukt'));
     } finally {
       setBezig(false);
     }
@@ -204,7 +206,7 @@ export function AiosRoosterMaken({
       onChanged();
       laad();
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Verwijderen is mislukt');
+      setFout(foutTekst(err, 'Verwijderen is mislukt'));
     } finally {
       setBezig(false);
     }

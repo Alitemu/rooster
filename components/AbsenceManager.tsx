@@ -14,6 +14,8 @@
 import { useState } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
 
 export interface Absence {
   id: string;
@@ -122,7 +124,7 @@ export function AbsenceManager({
       cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan van afwezigheid mislukt');
+      setError(foutTekst(err, 'Opslaan van afwezigheid mislukt'));
     } finally {
       setSaving(false);
     }
@@ -142,7 +144,7 @@ export function AbsenceManager({
       if (editingId === absenceId) cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van afwezigheid mislukt');
+      setError(foutTekst(err, 'Verwijderen van afwezigheid mislukt'));
     } finally {
       setRemovingId(null);
     }
@@ -186,11 +188,11 @@ export function AbsenceManager({
                     </span>
                   ) : a.blocked_days_in_period === a.total_days_in_period ? (
                     <span className="text-green-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ✓ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen geblokkeerd in deze periode
+                      ✓ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} geblokkeerd in deze periode
                     </span>
                   ) : (
                     <span className="text-amber-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ⚠ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen geblokkeerd in deze
+                      ⚠ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} geblokkeerd in deze
                       periode. De rest was al om een andere reden geblokkeerd.
                     </span>
                   )

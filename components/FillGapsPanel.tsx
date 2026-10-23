@@ -30,6 +30,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
 // comment there for why a person can only ever be in one of these.
@@ -238,7 +239,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
 
       if (data.data.length === 0 && onAllFilled) onAllFilled();
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Laden van openstaande diensten mislukt');
+      setLoadError(foutTekst(err, 'Laden van openstaande diensten mislukt'));
     }
   }, [periodId, onAllFilled]);
 
@@ -285,7 +286,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
       onAssignmentsChanged?.();
       await load();
     } catch (err) {
-      setUndoError(err instanceof Error ? err.message : 'Ongedaan maken mislukt');
+      setUndoError(foutTekst(err, 'Ongedaan maken mislukt'));
     } finally {
       setUndoing(false);
     }
@@ -339,7 +340,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
         const label = slot
           ? `${new Date(slot.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} (${TELLER_LABELS[slot.teller] || slot.teller})`
           : slotId;
-        failures.push(`${label}: ${err instanceof Error ? err.message : 'Toewijzen mislukt'}`);
+        failures.push(`${label}: ${foutTekst(err, 'Toewijzen mislukt')}`);
       }
     }
 

@@ -10,6 +10,7 @@
  */
 
 import { useState } from 'react';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const DAG_MS = 24 * 60 * 60 * 1000;
 
@@ -64,7 +65,7 @@ export function AiosRuilHerinnering({
       setGestuurd(true);
       onKlaar();
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Herinnering sturen is mislukt');
+      setFout(foutTekst(err, 'Herinnering sturen is mislukt'));
     } finally {
       setBezig(false);
     }

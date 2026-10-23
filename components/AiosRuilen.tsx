@@ -16,6 +16,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosRuilHerinnering } from '@/components/AiosRuilHerinnering';
 import type { EenheidUit, Kandidaat, RuilStatus, RuilUit } from '@/lib/aiosRuilen';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const kort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 const wat = (e: EenheidUit) => (e.van === e.tot ? `${e.naam}, ${kort(e.van)}` : `${e.naam}, ${kort(e.van)} t/m ${kort(e.tot)}`);
@@ -113,7 +114,7 @@ export function AiosRuilen({
     fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${periodId}/ruilen`))
       .then((res) => json(res, 'Laden van het ruilen is mislukt.'))
       .then(setOverzicht)
-      .catch((err) => setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt.' }));
+      .catch((err) => setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt.') }));
   }, [personId, periodId]);
   useEffect(() => laad(), [laad]);
 
@@ -125,7 +126,7 @@ export function AiosRuilen({
       const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${periodId}/ruilen/kandidaten?eenheid=${encodeURIComponent(e.id)}`));
       setKandidaten(await json(res, 'Laden is mislukt.'));
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt.' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt.') });
     }
   };
 
@@ -148,7 +149,7 @@ export function AiosRuilen({
       laad();
       if (geruild) onGeruild();
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Dat is mislukt.' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Dat is mislukt.') });
     } finally {
       setBezig(false);
     }

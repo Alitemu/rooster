@@ -16,6 +16,7 @@ import { priorRowsInWindow } from '@/lib/priorAssignmentUpload';
 import { readUploadedRows } from '@/lib/sheetUpload';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface PriorAssignment {
   datum: string;
@@ -139,7 +140,7 @@ export default function PriorAssignmentsPage() {
       setDeriveInfo(result.data.message);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Automatisch afleiden mislukt');
+      setError(foutTekst(err, 'Automatisch afleiden mislukt'));
     } finally {
       setDeriving(false);
     }
@@ -165,7 +166,7 @@ export default function PriorAssignmentsPage() {
       // tried, and retry without picking the person again.
       setEditingKey(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setError(foutTekst(err, 'Opslaan mislukt'));
     } finally {
       setSavingKey(null);
     }
@@ -179,7 +180,7 @@ export default function PriorAssignmentsPage() {
     try {
       rows = await readUploadedRows(file);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.');
+      setError(foutTekst(err, 'Het bestand kon niet worden gelezen.'));
       return;
     }
     setError(null);
@@ -214,7 +215,7 @@ export default function PriorAssignmentsPage() {
       setCsvParseWarnings([]);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Importeren mislukt');
+      setError(foutTekst(err, 'Importeren mislukt'));
     } finally {
       setImporting(false);
     }
@@ -233,7 +234,7 @@ export default function PriorAssignmentsPage() {
       setConfirmResult('Eerdere toewijzingen bevestigd.');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bevestigen mislukt');
+      setError(foutTekst(err, 'Bevestigen mislukt'));
     } finally {
       setConfirming(false);
     }
@@ -461,7 +462,7 @@ export default function PriorAssignmentsPage() {
         className={`w-full py-3 px-4 rounded font-semibold text-white transition-colors ${
           confirming || data.status !== 'complete'
             ? 'bg-neutral-400 cursor-not-allowed'
-            : 'bg-green-600 hover:bg-green-700'
+            : 'bg-green-700 hover:bg-green-800'
         }`}
       >
         {confirming

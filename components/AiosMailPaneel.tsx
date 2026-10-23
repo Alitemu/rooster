@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 async function antwoord(res: Response, fallback: string) {
   const data = await res.json().catch(() => null);
@@ -30,7 +31,7 @@ export function AiosMailPaneel({ beheerder, onChanged }: { beheerder: boolean; o
         setStatus(data);
         setAdres(data.verzendlijst_aan ?? '');
       })
-      .catch((err) => setFout(err instanceof Error ? err.message : 'Laden van de mailinstellingen is mislukt'));
+      .catch((err) => setFout(foutTekst(err, 'Laden van de mailinstellingen is mislukt')));
   }, []);
   useEffect(() => {
     laad();
@@ -51,7 +52,7 @@ export function AiosMailPaneel({ beheerder, onChanged }: { beheerder: boolean; o
       laad();
       onChanged();
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Opslaan is mislukt');
+      setFout(foutTekst(err, 'Opslaan is mislukt'));
     } finally {
       setBezig(false);
     }

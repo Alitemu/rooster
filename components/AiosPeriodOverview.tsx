@@ -29,6 +29,7 @@ import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { benodigdeFte, SOORT_LABELS } from '@/lib/aiosDiensten';
 import type { AiosDienstenOverzicht } from '@/lib/aiosSlots';
 import { bovenHelftPlanner, type AiosWens, type BlokkadeTeller, type MarkeringTelling } from '@/lib/aiosVoorkeur';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 interface Period {
   id: string;
@@ -88,7 +89,7 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
       if (klaar) setMelding(klaar(data));
       onChanged();
     } catch (err) {
-      setFout(err instanceof Error ? err.message : fallback);
+      setFout(foutTekst(err, fallback));
     } finally {
       setBezig(false);
     }
@@ -230,7 +231,7 @@ function StatusVoorkeuren({ periodId, refreshKey }: { periodId: string; refreshK
     fetch(withBasePath(`/api/aios/periode/${periodId}/voorkeuren`))
       .then((res) => antwoord(res, 'Laden van de voorkeuren is mislukt'))
       .then((data) => setDeelnemers(data.deelnemers))
-      .catch((err) => setFout(err instanceof Error ? err.message : 'Laden van de voorkeuren is mislukt'));
+      .catch((err) => setFout(foutTekst(err, 'Laden van de voorkeuren is mislukt')));
   }, [periodId]);
   useEffect(() => {
     laad();
@@ -322,7 +323,7 @@ function Pagina({ period: begin }: { period: Period }) {
         setPeriod((p) => ({ ...p, ...data.period }));
         setStand({ uitgenodigd_op: data.uitgenodigd_op, mail_ingesteld: data.mail_ingesteld, aantal_deelnemers: data.aantal_deelnemers, definitief: data.definitief === true });
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Laden van de periode is mislukt'));
+      .catch((err) => setError(foutTekst(err, 'Laden van de periode is mislukt')));
   }, [begin.id]);
   useEffect(() => {
     herlaad();
@@ -335,7 +336,7 @@ function Pagina({ period: begin }: { period: Period }) {
         if (!res.ok) throw new Error(data.error?.message || 'Laden van de diensten mislukt');
         setOverzicht(data.data);
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Laden van de diensten mislukt'));
+      .catch((err) => setError(foutTekst(err, 'Laden van de diensten mislukt')));
   }, [period.id, toetsVersie]);
 
   return (

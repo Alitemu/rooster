@@ -13,18 +13,8 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { FellowWeekendNotice } from './FellowWeekendNotice';
 import { withBasePath } from '@/lib/basePath';
 import { explainBereikTekort, explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
-
-// Native fetch() throws a plain TypeError with a browser-specific, English,
-// technical message ("Failed to fetch", "NetworkError when attempting to
-// fetch resource.", "Load failed" on Safari) when a request never got a
-// response at all - never show that raw string to a planner, per
-// CLAUDE.md's Dutch-only UI text rule.
-function toDutchErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof TypeError) {
-    return 'Geen verbinding met de server. Controleer je internetverbinding en probeer het opnieuw.';
-  }
-  return err instanceof Error ? err.message : fallback;
-}
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
 
 const POLL_INTERVAL_MS = 2000;
 // A dropped poll just means "ask again in a moment" - the generation itself
@@ -422,7 +412,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         setReconnecting(true);
         if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
           if (!pollCancelledRef.current) {
-            setError(toDutchErrorMessage(err, 'Status ophalen mislukt'));
+            setError(foutTekst(err, 'Status ophalen mislukt'));
             setLoading(false);
             setReconnecting(false);
           }
@@ -542,7 +532,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       await pollJobStatus(jobId, timeLimitSeconds);
     } catch (err) {
       if (!pollCancelledRef.current) {
-        setError(toDutchErrorMessage(err, 'Genereren van rooster mislukt'));
+        setError(foutTekst(err, 'Genereren van rooster mislukt'));
         setLoading(false);
       }
     }
@@ -747,7 +737,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       </div>
                     </div>
                     <p className="text-xs text-neutral-500" data-testid="venster-uitleg">
-                      Het venster telt in dagen: minstens {7 * ruleset.windowWeeksAvond} dagen tussen
+                      Het venster telt in dagen: minstens {telwoord(7 * ruleset.windowWeeksAvond, 'dag', 'dagen')} tussen
                       twee avonddiensten en minstens {7 * ruleset.windowWeeksWeekendFeestdag} tussen twee
                       weekend- of feestdagdiensten van dezelfde persoon. Het kleinste van deze twee geldt
                       ook tussen een avonddienst en een weekend- of feestdagdienst.
@@ -1219,8 +1209,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
 
                 {ruleset && (
                   <p className="text-xs text-green-800 mt-3 pt-3 border-t border-green-200">
-                    Gegenereerd met venster avond {ruleset.windowWeeksAvond} weken, weekend/feestdag{' '}
-                    {ruleset.windowWeeksWeekendFeestdag} weken · avond {ruleset.bandAvond[0]}-
+                    Gegenereerd met venster avond {telwoord(ruleset.windowWeeksAvond, 'week', 'weken')}, weekend/feestdag{' '}
+                    {telwoord(ruleset.windowWeeksWeekendFeestdag, 'week', 'weken')} · avond {ruleset.bandAvond[0]}-
                     {ruleset.bandAvond[1]} · weekend {ruleset.bandWeekend[0]}-{ruleset.bandWeekend[1]} ·
                     feestdag {ruleset.bandFeestdag[0]}-{ruleset.bandFeestdag[1]}
                   </p>

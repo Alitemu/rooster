@@ -38,6 +38,7 @@ import {
   type BlokkadeTeller,
   type Niveau,
 } from '@/lib/aiosVoorkeur';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 interface Scherm {
   period: { id: string; naam: string; start_datum: string; eind_datum: string; deadline: string; status: string };
@@ -97,7 +98,7 @@ function useAiosScherm(personId: string, periodId: string) {
       setScherm(await json(res, 'Je voorkeuren konden niet geladen worden. Probeer de pagina te vernieuwen.'));
       setLaadFout(null);
     } catch (err) {
-      setLaadFout(err instanceof Error ? err.message : 'Je voorkeuren konden niet geladen worden.');
+      setLaadFout(foutTekst(err, 'Je voorkeuren konden niet geladen worden.'));
     }
   }, [personId, periodId]);
   useEffect(() => {
@@ -454,7 +455,7 @@ function Verzoeken({
         setOpgeslagen(true);
         onOpgeslagen();
       } catch (err) {
-        setFout(`Niet opgeslagen. ${err instanceof Error ? err.message : 'Opslaan van je verzoeken is mislukt.'}`);
+        setFout(`Niet opgeslagen. ${foutTekst(err, 'Opslaan van je verzoeken is mislukt.')}`);
       } finally {
         setLopend((n) => n - 1);
       }
@@ -597,7 +598,7 @@ export function AiosVoorkeuren({
       });
       await json(res, 'Opslaan is mislukt. Probeer het opnieuw.');
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Opslaan is mislukt. Probeer het opnieuw.');
+      setFout(foutTekst(err, 'Opslaan is mislukt. Probeer het opnieuw.'));
     } finally {
       await laad();
       setBezig(false);
@@ -615,7 +616,7 @@ export function AiosVoorkeuren({
       const data = await json(res, 'Opslaan is mislukt. Probeer het opnieuw.');
       setScherm((nu) => (nu ? { ...nu, redenen: data.redenen } : nu));
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Opslaan is mislukt. Probeer het opnieuw.');
+      setFout(foutTekst(err, 'Opslaan is mislukt. Probeer het opnieuw.'));
       await laad();
     }
   };
@@ -746,7 +747,7 @@ export function AiosBevestigen({
       await json(res, 'Indienen is mislukt. Probeer het opnieuw.');
       onIngediend();
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Indienen is mislukt. Probeer het opnieuw.');
+      setFout(foutTekst(err, 'Indienen is mislukt. Probeer het opnieuw.'));
     } finally {
       setBezig(false);
     }

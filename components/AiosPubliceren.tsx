@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import type { AiosPublicatieControle, AiosPublicatieStand } from '@/lib/aiosPublicatie';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const moment = (iso: string) => new Date(iso).toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
 
@@ -32,7 +33,7 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
         setStand(data.data);
         setControle(data.data.controle);
       })
-      .catch((err) => setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt' }));
+      .catch((err) => setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt') }));
   }, [periodId]);
   useEffect(() => laad(), [laad, status]);
 
@@ -60,7 +61,7 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
       onChanged();
       laad();
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Dat is mislukt' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Dat is mislukt') });
     } finally {
       setBezig(false);
     }
