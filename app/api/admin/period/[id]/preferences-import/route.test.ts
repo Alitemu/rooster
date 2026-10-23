@@ -6,6 +6,7 @@ import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS 
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { buildXlsx } from '@/tests/fixtures/buildXlsx';
 import { readFirstSheet } from '@/lib/xlsx';
+import { createRosterGenerationJob, completeRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 import { POST } from './route';
 import { GET as exportPreferences } from '../../../../exports/preferences/[period-id]/route';
 
@@ -329,5 +330,71 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     const grid = await exported(f);
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(f.periodId);
     expect((await importXlsx(f, grid, false)).status).toBe(409);
+  });
+
+  // A message points at the row the user sees in Excel: the empty rows in between count.
+  it('names the row as Excel numbers it, empty rows counted', async () => {
+    const f = createFixture();
+    const [a] = f.people;
+    const grid = edit(await exported(f), [[f.slots[0].datum, a.codenaam, 'misschien']]);
+    grid.splice(1, 0, [], []); // two empty rows between the header and the first day
+    const check = await importXlsx(f, grid, false);
+    expect(check.body.data.problemen).toEqual([`Regel 4, ${a.codenaam}: "misschien" is geen geblokkeerd, liever niet of voorkeur.`]);
+  });
+
+  // The file is a little older than the block: the part-time day was added after the download. The plain word
+  // must not turn the part-time block into a hand marking (it would stay when the pattern is removed).
+  it('leaves a part-time block alone when the file repeats it as a plain word', async () => {
+    const f = createFixture();
+    const [, b] = f.people;
+    mark(b.id, f.slots[2].id, 'ABSOLUUT', 'PARTTIME');
+    const before = markings(f);
+    const grid = edit(await exported(f), [[f.slots[2].datum, b.codenaam, 'geblokkeerd']]);
+    const check = await importXlsx(f, grid, false);
+    expect(check.body.data.wijzigingen).toEqual([]);
+    expect(check.body.data.overgeslagen).toBe(1);
+    expect((await importXlsx(f, grid, true)).status).toBe(200);
+    expect(markings(f)).toEqual(before);
+  });
+
+  it('still lets a plain word of another level replace a part-time block', async () => {
+    const f = createFixture();
+    const [, b] = f.people;
+    mark(b.id, f.slots[2].id, 'ABSOLUUT', 'PARTTIME');
+    const grid = edit(await exported(f), [[f.slots[2].datum, b.codenaam, 'voorkeur']]);
+    const check = await importXlsx(f, grid, false);
+    expect(check.body.data.wijzigingen).toEqual([
+      { codenaam: b.codenaam, datum: f.slots[2].datum, dienst: 'avonddienst', van: 'geblokkeerd (automatisch)', naar: 'voorkeur' },
+    ]);
+  });
+
+  it('says so when a column without a name holds markings', async () => {
+    const f = createFixture();
+    const grid = await exported(f);
+    const kolom = grid[0].length; // one past the last codenaam
+    grid.forEach((row, r) => {
+      row[kolom] = r === 0 ? null : r === 1 ? 'geblokkeerd' : null;
+    });
+    const check = await importXlsx(f, grid, false);
+    expect(check.body.data.problemen).toEqual([
+      `Kolom ${kolom + 1} heeft geen kop maar wel gegevens. Zet er de codenaam van een deelnemer boven of haal de kolom weg.`,
+    ]);
+    expect((await importXlsx(f, grid, true)).status).toBe(400);
+  });
+
+  it('is refused while a roster generation runs for the period', async () => {
+    const f = createFixture();
+    const [a] = f.people;
+    const grid = edit(await exported(f), [[f.slots[0].datum, a.codenaam, 'geblokkeerd']]);
+    const job = createRosterGenerationJob(f.periodId);
+    try {
+      const res = await importXlsx(f, grid, true);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('GENERATION_RUNNING');
+      expect(markings(f)).toEqual({});
+    } finally {
+      completeRosterGenerationJob(job, { assignmentsCreated: 0 } as never);
+    }
+    expect((await importXlsx(f, grid, true)).status).toBe(200);
   });
 });

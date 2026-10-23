@@ -36,6 +36,9 @@ interface Props {
   onImported: () => void;
 }
 
+/** The largest workbook sent: as base64 it must stay under the 1 MB a request body may be, or the server sees no file at all (a copy of lib/sheetUpload.ts, which is the achterwacht's). */
+const MAX_WERKMAP_BYTES = 700_000;
+
 const SHOWN = 50;
 
 function toBase64(buffer: ArrayBuffer): string {
@@ -104,6 +107,11 @@ export function AiosVoorkeurenImportButton({ periodId, periodStatus, onImported 
     if (!/\.xlsx$/i.test(file.name)) {
       setBestandData(null);
       setError('Kies een Excel-bestand (.xlsx). Sla het bestand in Excel op als "Excel-werkmap".');
+      return;
+    }
+    if (file.size > MAX_WERKMAP_BYTES) {
+      setBestandData(null);
+      setError('Dit Excel-bestand is te groot om in te lezen.');
       return;
     }
     setBestand(file.name);

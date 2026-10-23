@@ -13,6 +13,9 @@ import { withBasePath } from '@/lib/basePath';
 import { AiosSectie } from '@/components/AiosSectie';
 import type { GeschiedenisPlan, GeschiedenisRij } from '@/lib/aiosGeschiedenis';
 
+/** The largest workbook sent: as base64 it must stay under the 1 MB a request body may be, or the server sees no file at all (a copy of lib/sheetUpload.ts, which is the achterwacht's). */
+const MAX_WERKMAP_BYTES = 700_000;
+
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -78,6 +81,11 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
     if (!/\.xlsx$/i.test(file.name)) {
       setBestand(null);
       setMelding({ fout: true, tekst: 'Kies een Excel-bestand (.xlsx). Sla het bestand in Excel op als "Excel-werkmap".' });
+      return;
+    }
+    if (file.size > MAX_WERKMAP_BYTES) {
+      setBestand(null);
+      setMelding({ fout: true, tekst: 'Dit Excel-bestand is te groot om in te lezen.' });
       return;
     }
     setBestand({ naam: file.name, data: toBase64(await file.arrayBuffer()) });

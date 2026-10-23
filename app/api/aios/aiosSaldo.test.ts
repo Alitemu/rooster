@@ -258,6 +258,12 @@ describe('the history from before the app', () => {
     expect((await kolommen.json()).data.plan.problemen[0]).toMatch(/^De kolommen kloppen niet/);
   });
 
+  it('names the row as Excel numbers it, empty rows counted', async () => {
+    const met_lege_rij = bestand([KOP, [], [], ['niemand', 1, 0, 0, 0, 0, 0, 1, 12]]);
+    const check = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: met_lege_rij, toepassen: false }), ctx(w.b));
+    expect((await check.json()).data.plan.problemen).toEqual(['Rij 4: "niemand" is geen AIOS van deze pool.']);
+  });
+
   it('checked, then saved: per AIOS in words what it means', async () => {
     // x did 20 points at 0,5 fte, z 10 at 1,0 fte, both 12 months: x did more than their share.
     const goed = bestand([KOP, [cn('x'), 20, 0, 0, 0, 0, 2, '0,5', 12], [cn('z'), 10, 0, 0, 0, 0, 0, 1, 12], [cn('y'), null, null, null, null, null, null, null, null]]);

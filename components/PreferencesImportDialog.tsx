@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { MAX_WORKBOOK_BYTES, WORKBOOK_TOO_LARGE } from '@/lib/sheetUpload';
 
 interface Change {
   codenaam: string;
@@ -103,6 +104,11 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
     if (!/\.xlsx$/i.test(file.name)) {
       setBestandData(null);
       setError('Kies een Excel-bestand (.xlsx). Sla het bestand in Excel op als "Excel-werkmap".');
+      return;
+    }
+    if (file.size > MAX_WORKBOOK_BYTES) {
+      setBestandData(null);
+      setError(WORKBOOK_TOO_LARGE);
       return;
     }
     setBestand(file.name);

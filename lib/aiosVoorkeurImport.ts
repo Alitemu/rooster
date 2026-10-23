@@ -37,7 +37,7 @@
  */
 
 import { db } from '@/db/client';
-import { readFirstSheet, XlsxError } from '@/lib/xlsx';
+import { readFirstSheetMetRegels, XlsxError } from '@/lib/xlsx';
 import { parseSheetDate } from '@/lib/isoDate';
 import { withoutFormulaGuard } from '@/lib/csv';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
@@ -134,7 +134,8 @@ function huidigeMarkeringen(periodId: string): Map<string, { level: Niveau | nul
   return new Map(rijen.map((r) => [`${r.person_id}|${r.slot_id}`, { level: r.level, bron: r.bron }]));
 }
 
-function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
+/** `regels`: the Excel row number of each row, so that a message points at the row the user sees. */
+function lees(period: AiosUitnodigPeriode, rows: string[][], regels?: number[]): Gelezen {
   const problemen: string[] = [];
   const cellen: Cel[] = [];
   const verzoeken: Verzoek[] = [];
@@ -210,7 +211,7 @@ function lees(period: AiosUitnodigPeriode, rows: string[][]): Gelezen {
   const gezienOp = new Map<string, number>();
   for (let r = 1; r < rows.length; r++) {
     const rij = rows[r];
-    const regel = r + 1;
+    const regel = regels?.[r] ?? r + 1;
     const dienstWoord = rij[dienstKol] ?? '';
     if (/^parttime \d+$/i.test(dienstWoord.trim())) {
       deeltijdRijen = true;
@@ -556,13 +557,14 @@ export function importeerAiosVoorkeuren(period: AiosUitnodigPeriode, bestand: un
   // preferences read in meanwhile would be left out of the roster without a word.
   if (aiosGeneratieLoopt(period.id)) return { ok: false, status: 409, code: 'GENERATION_RUNNING', message: AIOS_GENERATIE_LOOPT };
   let rows: string[][];
+  let regels: number[];
   try {
-    rows = readFirstSheet(Buffer.from(bestand, 'base64'));
+    ({ rijen: rows, regels } = readFirstSheetMetRegels(Buffer.from(bestand, 'base64')));
   } catch (error) {
     if (error instanceof XlsxError) return { ok: false, status: 400, code: 'NOT_XLSX', message: error.message };
     throw error;
   }
-  const gelezen = lees(period, rows);
+  const gelezen = lees(period, rows, regels);
   // Always done once to see what it does; applying does it again, for real.
   const controle = voerUit(period, gelezen, true);
   if (!toepassen) return { ok: true, plan: controle.plan, toegepast: false };

@@ -100,6 +100,18 @@ describe('parseCsv', () => {
   });
 });
 
+describe('parseCsv: a line break inside a quoted cell', () => {
+  it('stays one cell, in a comma file and in a semicolon file', () => {
+    expect(parseCsv('a,b\n"x\ny",z')).toEqual([['a', 'b'], ['x\ny', 'z']]);
+    expect(parseCsv('a;b\r\n"x\r\ny";z\r\n')).toEqual([['a', 'b'], ['x\r\ny', 'z']]);
+  });
+
+  it('still splits at a line break after a closed quote', () => {
+    expect(parseCsv('"a","b"\n"c","d"')).toEqual([['a', 'b'], ['c', 'd']]);
+    expect(parseCsv('"a ""quoted"" b"\nnext')).toEqual([['a "quoted" b'], ['next']]);
+  });
+});
+
 describe('parseCsv on a file saved by a Dutch Excel', () => {
   /**
    * Audit 12: a Dutch Excel saves "CSV" with semicolons (the list

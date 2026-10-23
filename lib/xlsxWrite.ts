@@ -150,7 +150,9 @@ function sheetXml(sheet: XlsxSheet, strings: (text: string) => number): string {
 
   const cols = sheet.columns
     .map((column, c) => {
-      const widest = Math.max(shownLength(column.header), ...sheet.rows.map((row) => shownLength(row[c])));
+      // A loop, not Math.max(...): spreading 125 000 rows overflows the call stack.
+      let widest = shownLength(column.header);
+      for (const row of sheet.rows) widest = Math.max(widest, shownLength(row[c]));
       const w = column.width ?? Math.min(60, Math.max(8, widest + 2));
       return `<col min="${c + 1}" max="${c + 1}" width="${w}" customWidth="1"/>`;
     })

@@ -26,12 +26,13 @@ export function fileToBase64(buffer: ArrayBuffer): string {
  * request body may be (lib/api-errors.ts), or the server sees no file at
  * all. A roster of two years is some 20 kB.
  */
-const MAX_WORKBOOK_BYTES = 700_000;
+export const MAX_WORKBOOK_BYTES = 700_000;
+export const WORKBOOK_TOO_LARGE = 'Dit Excel-bestand is te groot om in te lezen.';
 
 /** Rows of cell text, the header row first. Throws an Error with a Dutch message when the file can't be read. */
 export async function readUploadedRows(file: File): Promise<string[][]> {
   if (!/\.xlsx$/i.test(file.name)) return parseCsv(await file.text());
-  if (file.size > MAX_WORKBOOK_BYTES) throw new Error('Dit Excel-bestand is te groot om in te lezen.');
+  if (file.size > MAX_WORKBOOK_BYTES) throw new Error(WORKBOOK_TOO_LARGE);
   const res = await fetch(withBasePath('/api/planner/read-workbook'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

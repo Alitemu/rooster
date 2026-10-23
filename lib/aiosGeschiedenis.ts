@@ -15,7 +15,7 @@
 
 import { randomUUID } from 'crypto';
 import { db } from '@/db/client';
-import { readFirstSheet, XlsxError } from '@/lib/xlsx';
+import { readFirstSheetMetRegels, XlsxError } from '@/lib/xlsx';
 import { beginstandPunten, beginstandSaldi, aiosSaldoWoorden, laadBeginstand, type Beginstand } from '@/lib/aiosSaldo';
 import type { XlsxSheet } from '@/lib/xlsxWrite';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
@@ -80,7 +80,8 @@ const getal = (cel: string | undefined): number | null => {
   return Number.isFinite(n) ? n : NaN;
 };
 
-function plan(poolId: string, rows: string[][]): { plan: GeschiedenisPlan; rijen: Beginstand[] } {
+/** `regels`: the Excel row number of each row, so that a message points at the row the user sees. */
+function plan(poolId: string, rows: string[][], regels?: number[]): { plan: GeschiedenisPlan; rijen: Beginstand[] } {
   const problemen: string[] = [];
   const [kop, ...data] = rows;
   if (!kop || kop.length < KOLOMMEN.length || KOLOMMEN.some((k, i) => (kop[i] ?? '').trim() !== k.kop)) {
@@ -94,7 +95,7 @@ function plan(poolId: string, rows: string[][]): { plan: GeschiedenisPlan; rijen
   const rijen: Beginstand[] = [];
   const codenaam = new Map<string, string>();
   data.forEach((r, i) => {
-    const regel = i + 2;
+    const regel = regels?.[i + 1] ?? i + 2;
     const naam = (r[0] ?? '').trim();
     if (naam === '' && r.slice(1).every((c) => (c ?? '').trim() === '')) return;
     const lid = leden.get(naam.toLowerCase());
@@ -162,13 +163,14 @@ export function importeerAiosGeschiedenis(period: AiosUitnodigPeriode, bestand: 
     return { ok: false, status: 400, code: 'NO_FILE', message: 'Kies eerst een Excel-bestand.' };
   }
   let rows: string[][];
+  let regels: number[];
   try {
-    rows = readFirstSheet(Buffer.from(bestand, 'base64'));
+    ({ rijen: rows, regels } = readFirstSheetMetRegels(Buffer.from(bestand, 'base64')));
   } catch (error) {
     if (error instanceof XlsxError) return { ok: false, status: 400, code: 'NOT_XLSX', message: error.message };
     throw error;
   }
-  const { plan: uitkomst, rijen } = plan(period.pool_id, rows);
+  const { plan: uitkomst, rijen } = plan(period.pool_id, rows, regels);
   if (!toepassen) return { ok: true, plan: uitkomst, toegepast: false };
   if (uitkomst.problemen.length > 0) {
     return {
