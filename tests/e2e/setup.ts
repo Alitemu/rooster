@@ -8,6 +8,22 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { expect, type Page } from '@playwright/test';
 import { generateAccessToken, hashToken, hashPassword } from '@/lib/auth';
+import { getISOWeek, parseISO } from '@/lib/holidays';
+import { verschuifDagen, verschuif } from '../../scripts/demoKalender.mjs';
+
+/**
+ * The fixtures were written for January 2027. A period in the past reads
+ * "alleen nog bekijken" and a past shift cannot be swapped, so every date
+ * moves along with the real date in whole weeks (scripts/demoKalender.mjs).
+ */
+const DEMO_SHIFT = verschuifDagen();
+export function demoDatum(basis: string): string {
+  return verschuif(basis, DEMO_SHIFT);
+}
+/** The ISO year and week a (shifted) date falls in, for the slot columns. */
+export function isoJaarWeek(datum: string): [number, number] {
+  return getISOWeek(parseISO(datum));
+}
 
 interface TestUser {
   id: string;
@@ -77,7 +93,7 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
       id, pool_id, naam, status, start_datum, eind_datum, deadline, definitief_op, aangemaakt_op
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).run(periodId, pool.id, `E2E-Period-${timestamp}`, status,
-    '2027-01-04', '2027-02-21', '2026-12-31T23:59:59Z', status === 'GEPUBLICEERD' ? new Date().toISOString() : null);
+    demoDatum('2027-01-04'), demoDatum('2027-02-21'), demoDatum('2026-12-31T23:59:59Z'), status === 'GEPUBLICEERD' ? new Date().toISOString() : null);
 
   // Create test users
   const users = createTestUsers(5, periodId);
@@ -106,8 +122,8 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
   // roster with a standing rule violation in it, and the publication dialog
   // rightly refused to call it ready.
   const WEEK_MONDAYS = [
-    '2027-01-04', '2027-01-11', '2027-01-18', '2027-01-25',
-    '2027-02-01', '2027-02-08', '2027-02-15',
+    demoDatum('2027-01-04'), demoDatum('2027-01-11'), demoDatum('2027-01-18'), demoDatum('2027-01-25'),
+    demoDatum('2027-02-01'), demoDatum('2027-02-08'), demoDatum('2027-02-15'),
   ];
   const slots: Array<{ id: string; datum: string; type: string }> = [];
   for (let i = 0; i < WEEK_MONDAYS.length; i++) {
@@ -119,7 +135,7 @@ export function createTestPeriod(status: string = 'GEPUBLICEERD'): TestData {
       INSERT INTO dienstrooster_shift_slot (
         id, period_id, datum, iso_jaar, iso_week, shift_type_id
       ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(slotId, periodId, datum, 2027, i + 1, shiftTypeId);
+    `).run(slotId, periodId, datum, ...isoJaarWeek(datum), shiftTypeId);
 
     slots.push({ id: slotId, datum, type: i % 3 === 0 ? 'WEEKEND' : 'AVOND' });
   }

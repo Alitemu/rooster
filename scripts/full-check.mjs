@@ -21,6 +21,10 @@ import { execFileSync } from 'child_process';
 import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
+import { verschuifDagen, verschuif } from './demoKalender.mjs';
+
+// The seeded calendar moves along with the real date (scripts/demoKalender.mjs).
+const SHIFT = verschuifDagen();
 
 // This script lives in scripts/, and one check below shells out to tsx to
 // reuse a TypeScript module from the app itself.
@@ -200,7 +204,7 @@ async function main() {
   });
   rec('Open period → OPEN + 154 slots / 22 weeks', open.status === 200 && open.json?.data?.slots_generated === 154 && open.json?.data?.weeks_covered === 22,
       `${open.json?.data?.slots_generated} slots, ${open.json?.data?.weeks_covered} weeks`);
-  rec('Dates auto-rounded to full ISO weeks', open.json?.data?.start_datum === '2027-01-04');
+  rec('Dates auto-rounded to full ISO weeks', open.json?.data?.start_datum === period.start_datum);
 
   // ---------- PARTICIPANT FLOW ----------
   console.log('\n━━ PARTICIPANT FLOW ━━');
@@ -244,7 +248,7 @@ async function main() {
   const freeDay = ['MA', 'DI', 'WO', 'DO', 'VR'].find((d) => !usedDays.includes(d));
 
   const pt = await req('POST', `/api/person/${s1.id}/parttime-patterns`, {
-    jar: person, body: { weekdag: freeDay, frequentie: 'ELKE_WEEK', geldig_vanaf: '2027-01-04', geldig_tot: '2027-09-05' },
+    jar: person, body: { weekdag: freeDay, frequentie: 'ELKE_WEEK', geldig_vanaf: period.start_datum, geldig_tot: verschuif('2027-09-05', SHIFT) },
   });
   rec('Create part-time pattern', eq(pt.status, 201), `weekdag=${freeDay}`);
   const patternId = pt.json?.data?.id;
@@ -259,7 +263,7 @@ async function main() {
   const orphans = db.prepare(`SELECT COUNT(*) c FROM dienstrooster_availability WHERE bron_pattern_id=?`).get(patternId);
   rec('Zero orphaned availability rows', orphans.c === 0);
 
-  const abs = await req('POST', `/api/person/${s1.id}/absences`, { jar: person, body: { van_datum: '2027-02-01', tot_datum: '2027-02-07', soort: 'VAKANTIE' } });
+  const abs = await req('POST', `/api/person/${s1.id}/absences`, { jar: person, body: { van_datum: verschuif('2027-02-01', SHIFT), tot_datum: verschuif('2027-02-07', SHIFT), soort: 'VAKANTIE' } });
   rec('Create absence', eq(abs.status, 201));
   rec('Delete absence', eq((await req('DELETE', `/api/person/${s1.id}/absences/${abs.json?.data?.id}`, { jar: person })).status, 200));
   rec('Notifications', eq((await req('GET', `/api/person/${s1.id}/notifications`, { jar: person })).status, 200));

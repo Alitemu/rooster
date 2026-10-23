@@ -13,6 +13,7 @@ import { v4 as uuid } from 'uuid';
 import { hashToken, hashPassword, validatePasswordStrength, generateAccessToken } from '../lib/auth';
 import { generateSlotsForPeriod } from '../lib/slotGeneration';
 import { createSetupToken } from '../lib/setupToken';
+import { verschuifDagen, verschuif } from './demoKalender.mjs';
 // The planner account gets this password set directly by the seed, on
 // explicit request - a known password checked into git that's trivial to
 // type on a phone during testing, no /planner/login "first run" form or
@@ -1356,8 +1357,10 @@ async function seed() {
 
     // 5. Add staff to pool
     console.log('Adding staff to pool...');
-    const membershipStartDate = '2027-01-01';
-    const membershipEndDate = '2029-12-31';
+    // The demo calendar moves along with the real date (scripts/demoKalender.mjs).
+    const demoShift = verschuifDagen();
+    const membershipStartDate = verschuif('2027-01-01', demoShift);
+    const membershipEndDate = verschuif('2029-12-31', demoShift);
 
     for (const staffId of staffIds) {
       db.prepare(`
@@ -1412,14 +1415,15 @@ async function seed() {
     // each other.
     console.log('Creating period...');
     const periodId = uuid();
-    const periodStart = '2027-01-04'; // Monday
-    const periodEnd = '2027-06-06'; // Sunday (22 full ISO weeks from periodStart)
-    const deadline = '2026-12-15T17:00:00Z';
+    const periodStart = verschuif('2027-01-04', demoShift); // Monday
+    const periodEnd = verschuif('2027-06-06', demoShift); // Sunday (22 full ISO weeks from periodStart)
+    const deadline = verschuif('2026-12-15T17:00:00Z', demoShift);
+    const periodName = `${periodStart.slice(0, 4)}-1 (Jan-Jun)`;
 
     db.prepare(`
       INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(periodId, poolId, '2027-1 (Jan-Jun)', periodStart, periodEnd, deadline, now);
+    `).run(periodId, poolId, periodName, periodStart, periodEnd, deadline, now);
 
     // 8a. Generate this period's shift slots now (not just on /open) so the
     // blockade import in step 11b below has real slot_id values to attach
@@ -1551,10 +1555,10 @@ async function seed() {
     console.log('Creating absences...');
     for (let i = 5; i < 15; i++) {
       const staffId = staffIds[i];
-      const startDate = new Date('2027-02-01');
-      startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 80));
+      const startDate = new Date(`${verschuif('2027-02-01', demoShift)}T00:00:00Z`);
+      startDate.setUTCDate(startDate.getUTCDate() + Math.floor(Math.random() * 80));
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 3 + Math.floor(Math.random() * 7));
+      endDate.setUTCDate(endDate.getUTCDate() + 3 + Math.floor(Math.random() * 7));
 
       db.prepare(`
         INSERT INTO dienstrooster_absence
@@ -1608,7 +1612,7 @@ async function seed() {
     let blockadesImported = 0;
     for (const row of blockadesRows) {
       const [, dagStr, maand] = row;
-      const datum = `2027-${String(maandNummer[maand]).padStart(2, '0')}-${dagStr.padStart(2, '0')}`;
+      const datum = verschuif(`2027-${String(maandNummer[maand]).padStart(2, '0')}-${dagStr.padStart(2, '0')}`, demoShift);
       const slotId = slotIdByDate.get(datum);
       if (!slotId) continue; // outside the generated period, shouldn't happen given the dates match
 
@@ -1700,7 +1704,7 @@ async function seed() {
     }
     console.log(`  - Staff: Persoon-01 through Persoon-31 (personal access links)`);
     console.log(`\nPool: Achterwacht (31 members)`);
-    console.log(`Period: 2027-1 (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);
+    console.log(`Period: ${periodName} (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);
     console.log(`\nPhase 1 Data:`);
     console.log(`  - Part-time patterns: 10 staff members`);
     console.log(`  - Absences: 10 vacation periods`);

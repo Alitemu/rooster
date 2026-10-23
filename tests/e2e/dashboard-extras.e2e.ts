@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, getBaseUrl } from './setup';
+import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, getBaseUrl, demoDatum, isoJaarWeek } from './setup';
 
 /**
  * Four things on the planner's period page:
@@ -25,8 +25,8 @@ test.describe('Periodepagina', () => {
     freeSlot = uuid();
     db.prepare(
       `INSERT INTO dienstrooster_shift_slot (id, period_id, datum, iso_jaar, iso_week, shift_type_id)
-       VALUES (?, ?, '2027-02-24', 2027, 8, ?)`
-    ).run(freeSlot, testData.period.id, avond.id);
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(freeSlot, testData.period.id, demoDatum('2027-02-24'), ...isoJaarWeek(demoDatum('2027-02-24')), avond.id);
   });
 
   test.afterAll(() => {
@@ -69,8 +69,8 @@ test.describe('Periodepagina', () => {
     const avond = db.prepare(`SELECT id FROM dienstrooster_shift_type WHERE teller = 'AVOND' AND code IS NULL LIMIT 1`).get() as { id: string };
     db.prepare(
       `INSERT INTO dienstrooster_shift_slot (id, period_id, datum, iso_jaar, iso_week, shift_type_id)
-       VALUES (?, ?, '2027-03-03', 2027, 9, ?)`
-    ).run(uuid(), testData.period.id, avond.id);
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(uuid(), testData.period.id, demoDatum('2027-03-03'), ...isoJaarWeek(demoDatum('2027-03-03')), avond.id);
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}/fill-gaps`);
     await page.waitForLoadState('networkidle');

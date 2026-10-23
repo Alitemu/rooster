@@ -1,7 +1,7 @@
 /**
  * The planner's own case, end to end: 15 people, one of them a fellow with
- * a part-time day, a period from 2026-12-28 to 2027-09-05 - across ISO week
- * 53 of 2026 and the year boundary - generated with every method the
+ * a part-time day, a period of 36 weeks that starts on the Monday of ISO week
+ * 53 (28 December 2026, the next one 27 December 2032) - across the year boundary - generated with every method the
  * dialog offers (weighted, lexicographic, multi_start, randomized) and
  * several windows, against the real solver.
  *
@@ -31,9 +31,38 @@ import { fileURLToPath } from 'url';
 
 const repoRoot = nodePath.resolve(nodePath.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = process.env.APP_URL || 'http://localhost:3000';
-const START = '2026-12-28';
-const END = '2027-09-05';
+// The period starts on the Monday of ISO week 53 of the next year that has one
+// (28 December 2026, then 27 December 2032), at least four weeks from now: a
+// deadline in the past is refused. END is 36 weeks later.
+const ANKER = JSON.parse(
+  execFileSync(
+    'npx',
+    [
+      'tsx',
+      '-e',
+      `import { getWeeksInYear, getWeekRange, addDays, getHolidaysInRange, parseISO, dateToISO } from './lib/holidays';
+       const grens = dateToISO(new Date(Date.now() + 28 * 86400000));
+       let jaar = new Date().getFullYear();
+       let start = '';
+       for (; jaar < new Date().getFullYear() + 20; jaar++) {
+         if (getWeeksInYear(jaar) !== 53) continue;
+         const maandag = getWeekRange(jaar, 53)[0];
+         if (maandag >= grens) { start = maandag; break; }
+       }
+       const eind = addDays(start, 36 * 7 - 1);
+       const feestdagen = getHolidaysInRange(start, eind).map((h) => h.date);
+       console.log(JSON.stringify({ jaar, start, eind, deadline: addDays(start, -27) + 'T12:00', feestdagen, volgendeMaandag: addDays(start, 7) }));`,
+    ],
+    { cwd: repoRoot, encoding: 'utf8' }
+  ).trim().split('\n').pop()
+);
+const START = ANKER.start;
+const END = ANKER.eind;
+const DEADLINE = ANKER.deadline;
+const WEEK53_JAAR = ANKER.jaar;
+const WEEK1_MAANDAG = ANKER.volgendeMaandag;
 const KORT = process.argv.includes('--kort');
+const addDagen = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
 // Short: weighted at window 1 fills everything within the first 120
 // seconds; window 2 needs "langer proberen" (audit 14).
 const MODES = (process.env.SCENARIO_MODES || (KORT ? 'weighted' : 'weighted,lexicographic,multi_start,randomized')).split(',');
@@ -132,7 +161,7 @@ for (const [naam, teller] of [['Avonddienst', 'AVOND'], ['Zaterdag', 'WEEKEND'],
 const people = [];
 for (let i = 1; i <= 15; i++) {
   const id = insert('dienstrooster_person', { codenaam: `Scenario-${tag}-${String(i).padStart(2, '0')}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
-  insert('dienstrooster_pool_membership', { person_id: id, pool_id: poolId, deelnamefactor: 1, geldig_vanaf: '2026-01-01', geldig_tot: '2029-12-31' });
+  insert('dienstrooster_pool_membership', { person_id: id, pool_id: poolId, deelnamefactor: 1, geldig_vanaf: `${WEEK53_JAAR - 1}-01-01`, geldig_tot: `${WEEK53_JAAR + 3}-12-31` });
   people.push(id);
 }
 const fellow = people[14];
@@ -143,7 +172,7 @@ rec('Planner logs in', login.status === 200, `status=${login.status}`);
 
 const created = await req('POST', '/api/planner/periods', {
   jar: planner,
-  body: { naam: `Scenario ${tag}`, pool_id: poolId, start_datum: START, eind_datum: END, deadline: '2026-12-01T12:00' },
+  body: { naam: `Scenario ${tag}`, pool_id: poolId, start_datum: START, eind_datum: END, deadline: DEADLINE },
 });
 const periodId = created.json?.data?.id;
 rec('Period created', !!periodId, `status=${created.status}`);
@@ -159,7 +188,7 @@ const opened = await req('POST', `/api/periods/${periodId}/open`, {
     naam: `Scenario ${tag}`,
     start_datum: START,
     eind_datum: END,
-    deadline: '2026-12-01T12:00',
+    deadline: DEADLINE,
     ruleset: { windowWeeks: 2, distributionMode: 'GELIJK', bandAvond: suggested?.AVOND, bandWeekend: suggested?.WEEKEND, bandFeestdag: suggested?.FEESTDAG },
   },
 });
@@ -179,13 +208,14 @@ const slots = db
 const days = Math.round((Date.parse(`${END}T00:00:00Z`) - Date.parse(`${START}T00:00:00Z`)) / 86400000) + 1;
 rec('One dienst for every day of the period', slots.length === days && new Set(slots.map((s) => s.datum)).size === days, `${slots.length} diensten, ${days} dagen`);
 const byDate = Object.fromEntries(slots.map((s) => [s.datum, s]));
+const WEEK53_DAGEN = [START, addDagen(START, 4), addDagen(START, 6)];
 rec(
-  '28 December 2026 to 3 January 2027 are ISO week 53 of 2026',
-  ['2026-12-28', '2027-01-01', '2027-01-03'].every((d) => byDate[d]?.iso_jaar === 2026 && byDate[d]?.iso_week === 53) &&
-    byDate['2027-01-04']?.iso_jaar === 2027 && byDate['2027-01-04']?.iso_week === 1,
-  JSON.stringify(['2027-01-01', '2027-01-04'].map((d) => [d, byDate[d]?.iso_jaar, byDate[d]?.iso_week]))
+  `ISO week 53 of ${WEEK53_JAAR} runs to ${WEEK1_MAANDAG} and then week 1 starts`,
+  WEEK53_DAGEN.every((d) => byDate[d]?.iso_jaar === WEEK53_JAAR && byDate[d]?.iso_week === 53) &&
+    byDate[WEEK1_MAANDAG]?.iso_jaar === WEEK53_JAAR + 1 && byDate[WEEK1_MAANDAG]?.iso_week === 1,
+  JSON.stringify([addDagen(START, 4), WEEK1_MAANDAG].map((d) => [d, byDate[d]?.iso_jaar, byDate[d]?.iso_week]))
 );
-const feestdagen = ['2027-01-01', '2027-03-28', '2027-03-29', '2027-04-27', '2027-05-06', '2027-05-16', '2027-05-17'];
+const feestdagen = ANKER.feestdagen;
 rec('Holidays are feestdagdiensten', feestdagen.every((d) => byDate[d]?.teller === 'FEESTDAG'), feestdagen.map((d) => `${d}=${byDate[d]?.teller}`).join(' '));
 
 // ---------- THE FELLOW: weekends and a part-time Monday ----------

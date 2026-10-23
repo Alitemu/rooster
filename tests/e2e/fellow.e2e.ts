@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl, demoDatum, isoJaarWeek } from './setup';
 
 /**
  * "Ik ben fellow" (lib/fellows.ts) from both sides: the participant ticks
@@ -12,7 +12,7 @@ import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, 
 
 test.describe('Fellows', () => {
   let testData: ReturnType<typeof createTestPeriod>;
-  const saturday = '2027-01-09';
+  const saturday = demoDatum('2027-01-09');
 
   test.beforeAll(() => {
     testData = createTestPeriod('OPEN');
@@ -22,8 +22,8 @@ test.describe('Fellows', () => {
     };
     db.prepare(
       `INSERT INTO dienstrooster_shift_slot (id, period_id, datum, iso_jaar, iso_week, shift_type_id)
-       VALUES (?, ?, ?, 2027, 1, ?)`
-    ).run(uuid(), testData.period.id, saturday, weekend.id);
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(uuid(), testData.period.id, saturday, ...isoJaarWeek(saturday), weekend.id);
   });
 
   test.afterAll(() => {

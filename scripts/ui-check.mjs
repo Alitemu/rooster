@@ -20,6 +20,11 @@ import Database from 'better-sqlite3';
 import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
+import { verschuifDagen, verschuif } from './demoKalender.mjs';
+
+// The seeded calendar moves along with the real date (scripts/demoKalender.mjs).
+const SHIFT = verschuifDagen();
+const SEED_JAAR = verschuif('2027-01-04', SHIFT).slice(0, 4);
 
 // APP_URL includes the app's sub-folder when it was built with one (lib/basePath.ts).
 const BASE = process.env.APP_URL || 'http://localhost:3000';
@@ -148,7 +153,7 @@ await page.goto(`${BASE}/planner`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1500);
 rec('Planner reaches the period list', loginStatus === 200 && page.url().endsWith('/planner'), page.url());
 
-rec('Period list shows periods', (await page.locator('text=/2027|Periodes/').count()) > 0);
+rec('Period list shows periods', (await page.locator(`text=/${SEED_JAAR}|Periodes/`).count()) > 0);
 
 // the new password dialog
 await page.click('button:has-text("Wachtwoord wijzigen")');
@@ -450,7 +455,7 @@ const wizardPeriodId = nodeCrypto.randomUUID();
 db.prepare(
   `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)
    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-).run(wizardPeriodId, wizardPoolId, 'UI-check wizard periode', '2028-01-03', '2028-01-16', '2027-12-20T00:00:00Z');
+).run(wizardPeriodId, wizardPoolId, 'UI-check wizard periode', verschuif('2028-01-03', SHIFT), verschuif('2028-01-16', SHIFT), verschuif('2027-12-20T00:00:00Z', SHIFT));
 
 await page.goto(`${BASE}/planner/setup/${wizardPeriodId}`, { waitUntil: 'networkidle' });
 await page.click('button:has-text("3. Venster")');
@@ -519,7 +524,7 @@ await ppage.goto(`${BASE}/person/${token}`, { waitUntil: 'networkidle' });
 await ppage.waitForTimeout(1500);
 const body = await ppage.content();
 rec('Participant page loads without the link error', !/Ongeldige of verlopen toegangslink/.test(body));
-rec('Participant page shows the period name and dates', /2027/.test(body));
+rec('Participant page shows the period name and dates', new RegExp(SEED_JAAR).test(body));
 rec('The new "Uitloggen" button is there', (await ppage.locator('button:has-text("Uitloggen")').count()) > 0);
 
 await ppage.click('button:has-text("Uitloggen")');
