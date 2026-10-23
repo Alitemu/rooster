@@ -166,3 +166,30 @@ describe('the web server', () => {
     expect(readFileSync('next.config.js', 'utf8')).toMatch(/poweredByHeader:\s*false/);
   });
 });
+
+describe('the build context and the start', () => {
+  const dockerignore = readFileSync('.dockerignore', 'utf8').split('\n').map((l) => l.trim());
+
+  it('keeps every secret pattern of .gitignore out of the image, as well', () => {
+    // A build from the source (docker compose up --build) copies the folder: a private key or a
+    // certificate that git ignores would travel into the image.
+    for (const patroon of ['*.pem', '*.key', '*.crt']) {
+      expect(readFileSync('.gitignore', 'utf8')).toContain(patroon);
+      expect(dockerignore, patroon).toContain(patroon);
+      expect(dockerignore, `**/${patroon}`).toContain(`**/${patroon}`);
+    }
+    expect(dockerignore).toContain('certs');
+  });
+
+  it('starts Next itself, so that SIGTERM reaches it', () => {
+    const entrypoint = readFileSync('docker-entrypoint.sh', 'utf8');
+    const laatste = entrypoint.trim().split('\n').filter((l) => !l.trim().startsWith('#')).pop()!;
+    // npm stays between as a parent that passes no signal on; reproduced: the server was left running.
+    expect(laatste).not.toMatch(/\bnpm\b/);
+    expect(laatste).toMatch(/^exec .*next start/);
+  });
+
+  it('re-owns the data folder without following links', () => {
+    expect(readFileSync('docker-entrypoint.sh', 'utf8')).toMatch(/chown -R -h node:node \/data/);
+  });
+});

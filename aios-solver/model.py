@@ -36,6 +36,8 @@ dagdiensten, voorkeur.
 from __future__ import annotations
 
 import math
+import threading
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Optional
@@ -418,6 +420,23 @@ class Uitkomst:
     objectief: float
 
 
+class Stop:
+    """
+    A way to end a running solve from another thread, when the caller has hung up (main.py): the search
+    stops as soon as it can instead of running to the end of its time. Safe to ask repeatedly.
+    """
+
+    def __init__(self) -> None:
+        self.verzocht = threading.Event()
+        self.solver: Optional[cp_model.CpSolver] = None
+
+    def vraag(self) -> None:
+        self.verzocht.set()
+        huidig = self.solver
+        if huidig is not None:
+            huidig.StopSearch()
+
+
 def oplossen(
     slots: list[Slot],
     blok_vorm: dict[str, tuple[str, str]],
@@ -428,7 +447,9 @@ def oplossen(
     tijdslimiet: float = 60.0,
     seed: int = 0,
     workers: int = 0,
+    stop: Optional[Stop] = None,
 ) -> Uitkomst:
+    begin = time.monotonic()
     opties = opties_maken(slots, blok_vorm, feestdagen)
     m = cp_model.CpModel()
 
@@ -536,13 +557,15 @@ def oplossen(
     for s in slots:
         termen.append(W_LEEG * (1 - gevuld[s.id]))
 
-    max_af = m.NewIntVar(0, max(1, totaal_tienden * 2), 'max_af')
+    # The carry-over moves a target by its own size: a bound of the quarter's points alone made a large saldo
+    # an impossible model instead of a large difference.
+    max_af = m.NewIntVar(0, max(1, max(abs(round(doel[a.id])) for a in aios) + totaal_tienden * 2), 'max_af')
     for a in aios:
         eigen = toegestaan[a.id]
         xs = [(o, x[a.id, o.id]) for o in eigen]
         punten = sum(o.tienden * v for o, v in xs)
-        af = m.NewIntVar(0, max(1, totaal_tienden * 2), f'af_{a.id}')
         d = round(doel[a.id])
+        af = m.NewIntVar(0, max(1, abs(d) + totaal_tienden * 2), f'af_{a.id}')
         m.Add(af >= punten - d)
         m.Add(af >= d - punten)
         m.Add(max_af >= af)
@@ -586,8 +609,20 @@ def oplossen(
     termen.append(W_PUNT_MAX * max_af)
     m.Minimize(sum(termen))
 
+    # The empty roster is a roster: a first solution always exists, so a short time or a large quarter ends
+    # in the best found, not in "no solution" (and an empty dienst is told as empty, not as ruled out).
+    for var in x.values():
+        m.AddHint(var, 0)
+    for var in gevuld.values():
+        m.AddHint(var, 0)
+
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = float(tijdslimiet)
+    # The time limit is for the whole job: what building the model took is not left over for the search.
+    solver.parameters.max_time_in_seconds = max(1.0, float(tijdslimiet) - (time.monotonic() - begin))
+    if stop is not None:
+        stop.solver = solver
+        if stop.verzocht.is_set():
+            solver.parameters.max_time_in_seconds = 0.0
     if workers:
         solver.parameters.num_workers = workers  # otherwise CP-SAT's own choice: every core, as the achterwacht's
     solver.parameters.random_seed = seed

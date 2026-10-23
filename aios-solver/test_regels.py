@@ -7,6 +7,7 @@ gains points by it. Every solve also goes through the independent check
 rule in model.py and expects one of these to fail.
 """
 
+import time
 from datetime import date
 
 import pytest
@@ -467,3 +468,80 @@ def test_the_night_before_the_voortgangstoets_in_the_middle_of_a_block():
     if houder == 'x':
         assert dienst('UD', dag(8)) not in t, 'the Thursday: its second compensation day'
     assert kalender.compensatiedagen('NACHT', 'ZO_DI', dag(4), dag(6), set()) == {dag(7), dag(8)}
+
+
+# ---- 0.112.0: a large carry-over is a large difference, not an impossible model ----
+
+
+def _basis_leeg(**kw) -> int:
+    inp = weken(2, kw.pop('feestdagen', frozenset()))
+    for i in range(4):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 10
+    return len(los_op(inp)[0].leeg)
+
+
+@pytest.mark.parametrize('saldo', [100, -100, 400, -400])
+def test_a_large_saldo_still_gives_a_roster(saldo):
+    inp = weken(2)
+    aios(inp, 'a0', saldo_punten=saldo)
+    for i in range(1, 4):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 10
+    uit, toegewezen = los_op(inp)
+    # Before 0.112.0 the answer was "ONMOGELIJK" with every dienst empty from about 100 points.
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+    assert toegewezen
+    assert len(uit.leeg) == _basis_leeg()
+
+
+@pytest.mark.parametrize('achterstand', [100, -100, 200])
+def test_a_large_feestdag_debt_still_gives_a_roster(achterstand):
+    feest = {dag(3)}
+    inp = weken(2, feest)
+    aios(inp, 'a0', feestdag_achterstand=achterstand)
+    for i in range(1, 4):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 10
+    uit, toegewezen = los_op(inp)
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+    assert toegewezen
+    assert len(uit.leeg) == _basis_leeg(feestdagen=feest)
+
+
+def test_a_stop_asked_before_the_search_ends_it_at_once_and_says_nothing_was_solved():
+    inp = weken(2)
+    aios(inp, 'x')
+    aios(inp, 'y')
+    inp['tijdslimiet_seconden'] = 60
+    request = main.SolveInput(**inp)
+    stop = model.Stop()
+    stop.vraag()
+    begin = time.monotonic()
+    uit = main.los_op(request, stop)
+    assert time.monotonic() - begin < 10
+    assert uit.status in ('GEEN_OPLOSSING', 'HAALBAAR')
+
+
+def test_the_empty_roster_is_the_first_answer_when_time_is_short():
+    # No solution found is not the same as nothing to solve: the hint of the empty roster means that a
+    # short time ends in HAALBAAR (the best found), not in GEEN_OPLOSSING.
+    inp = weken(6)
+    for i in range(12):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 1
+    request = main.SolveInput(**inp)
+    uit = main.los_op(request)
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+
+
+def test_the_time_limit_is_for_the_whole_job_including_the_model_building():
+    inp = weken(13)
+    for i in range(30):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 3
+    request = main.SolveInput(**inp)
+    begin = time.monotonic()
+    main.los_op(request)
+    # Building the model took part of the 3 seconds: the whole stays near the limit, not building plus the limit.
+    assert time.monotonic() - begin < 3 + 12

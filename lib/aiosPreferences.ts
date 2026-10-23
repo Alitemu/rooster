@@ -62,40 +62,30 @@ export function loadAiosPeriode(periodId: string): AiosPeriode | undefined {
     .get(periodId) as AiosPeriode | undefined;
 }
 
-/** Every dienst of the period per day, with the person's mark on it. */
-export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosVoorkeurDag[] {
-  const rows = db
-    .prepare(
-      `SELECT sl.id AS slot_id, sl.datum, sl.iso_week, sl.weekend_id, sl.is_feestdag, sl.feestdag_naam,
+interface DienstRij {
+  slot_id: string;
+  datum: string;
+  iso_week: number;
+  weekend_id: string | null;
+  is_feestdag: number;
+  feestdag_naam: string | null;
+  code: AiosCode;
+  naam: string;
+  start_tijd: string;
+  eind_tijd: string;
+  blok_id: string | null;
+  blok_soort: BlokSoort | null;
+  blok_vorm: BlokVorm | null;
+  blok_start: string | null;
+  blok_eind: string | null;
+}
+
+const DIENST_KOLOMMEN = `sl.id AS slot_id, sl.datum, sl.iso_week, sl.weekend_id, sl.is_feestdag, sl.feestdag_naam,
               st.code, st.naam, st.start_tijd, st.eind_tijd,
-              b.id AS blok_id, b.soort AS blok_soort, b.vorm AS blok_vorm, b.start_datum AS blok_start, b.eind_datum AS blok_eind,
-              av.blocking_level AS level, av.source AS bron
-       FROM dienstrooster_shift_slot sl
-       JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
-       LEFT JOIN dienstrooster_shift_block b ON b.id = sl.shift_block_id
-       LEFT JOIN dienstrooster_availability av ON av.slot_id = sl.id AND av.person_id = ?
-       WHERE sl.period_id = ? AND st.code IS NOT NULL
-       ORDER BY sl.datum, st.start_tijd, st.eind_tijd`
-    )
-    .all(personId, periodId) as Array<{
-    slot_id: string;
-    datum: string;
-    iso_week: number;
-    weekend_id: string | null;
-    is_feestdag: number;
-    feestdag_naam: string | null;
-    code: AiosCode;
-    naam: string;
-    start_tijd: string;
-    eind_tijd: string;
-    blok_id: string | null;
-    blok_soort: BlokSoort | null;
-    blok_vorm: BlokVorm | null;
-    blok_start: string | null;
-    blok_eind: string | null;
-    level: Niveau | null;
-    bron: Bron | null;
-  }>;
+              b.id AS blok_id, b.soort AS blok_soort, b.vorm AS blok_vorm, b.start_datum AS blok_start, b.eind_datum AS blok_eind`;
+
+/** The rows of the diensten (one per dienst, in order) as days, each dienst with the mark `markVan` gives it. */
+function dagenUit(rows: DienstRij[], markVan: (slotId: string) => { level: Niveau | null; bron: Bron | null } | undefined): AiosVoorkeurDag[] {
   const dagen: AiosVoorkeurDag[] = [];
   for (const r of rows) {
     let dag = dagen[dagen.length - 1];
@@ -109,6 +99,7 @@ export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosV
       };
       dagen.push(dag);
     }
+    const mark = markVan(r.slot_id);
     dag.diensten.push({
       slot_id: r.slot_id,
       code: r.code,
@@ -120,11 +111,62 @@ export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosV
           ? { id: r.blok_id, soort: r.blok_soort, vorm: r.blok_vorm, start_datum: r.blok_start, eind_datum: r.blok_eind }
           : null,
       // A row without a level (a cleared sync row) reads as no mark.
-      level: r.level ?? null,
-      bron: r.level ? r.bron : null,
+      level: mark?.level ?? null,
+      bron: mark?.level ? (mark.bron ?? null) : null,
     });
   }
   return dagen;
+}
+
+/** Every dienst of the period per day, with the person's mark on it. */
+export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosVoorkeurDag[] {
+  const rows = db
+    .prepare(
+      `SELECT ${DIENST_KOLOMMEN},
+              av.blocking_level AS level, av.source AS bron
+       FROM dienstrooster_shift_slot sl
+       JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+       LEFT JOIN dienstrooster_shift_block b ON b.id = sl.shift_block_id
+       LEFT JOIN dienstrooster_availability av ON av.slot_id = sl.id AND av.person_id = ?
+       WHERE sl.period_id = ? AND st.code IS NOT NULL
+       ORDER BY sl.datum, st.start_tijd, st.eind_tijd`
+    )
+    .all(personId, periodId) as Array<DienstRij & { level: Niveau | null; bron: Bron | null }>;
+  const perDienst = new Map(rows.map((r) => [r.slot_id, { level: r.level, bron: r.bron }]));
+  return dagenUit(rows, (id) => perDienst.get(id));
+}
+
+/**
+ * The same days for several people at once: the diensten of the period are read once and their marks in one
+ * more query, instead of the whole period once per person (72 AIOS took 817 queries to build the solver's input).
+ * Gives each person exactly what loadAiosVoorkeurDagen(person, period) gives.
+ */
+export function loadAiosVoorkeurDagenVoor(personIds: string[], periodId: string): Map<string, AiosVoorkeurDag[]> {
+  const rows = db
+    .prepare(
+      `SELECT ${DIENST_KOLOMMEN}
+       FROM dienstrooster_shift_slot sl
+       JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+       LEFT JOIN dienstrooster_shift_block b ON b.id = sl.shift_block_id
+       WHERE sl.period_id = ? AND st.code IS NOT NULL
+       ORDER BY sl.datum, st.start_tijd, st.eind_tijd`
+    )
+    .all(periodId) as DienstRij[];
+  const wie = new Set(personIds);
+  const marks = new Map<string, Map<string, { level: Niveau | null; bron: Bron | null }>>();
+  for (const r of db
+    .prepare(
+      `SELECT av.person_id, av.slot_id, av.blocking_level AS level, av.source AS bron
+       FROM dienstrooster_availability av JOIN dienstrooster_shift_slot sl ON sl.id = av.slot_id
+       WHERE sl.period_id = ?`
+    )
+    .all(periodId) as Array<{ person_id: string; slot_id: string; level: Niveau | null; bron: Bron | null }>) {
+    if (!wie.has(r.person_id)) continue;
+    let eigen = marks.get(r.person_id);
+    if (!eigen) marks.set(r.person_id, (eigen = new Map()));
+    eigen.set(r.slot_id, { level: r.level, bron: r.bron });
+  }
+  return new Map(personIds.map((id) => [id, dagenUit(rows, (slot) => marks.get(id)?.get(slot))]));
 }
 
 export function loadAiosWens(personId: string, periodId: string): AiosWens {

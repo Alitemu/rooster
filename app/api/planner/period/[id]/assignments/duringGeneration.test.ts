@@ -277,4 +277,27 @@ describe('the roster stays as it is while a generation runs', () => {
     release!();
     expect((await wacht(jobId)).status).toBe('DONE');
   });
+
+  // "Opnieuw proberen helpt dan meestal niet" was the advice for a solver that was only restarting.
+  it('says that the solver cannot be reached, and puts the held factors back', async () => {
+    const factorenVoor = factoren();
+    const roosterVoor = rooster();
+    const bewaard = process.env.SOLVER_URL;
+    process.env.SOLVER_URL = 'http://127.0.0.1:1';
+    try {
+      const started = await generateRoster(request(`/api/planner/period/${ids.period}/generate-roster`, 'POST'), {
+        params: Promise.resolve({ id: ids.period }),
+      });
+      expect(started.status).toBe(200);
+      const job = await wacht((await started.json()).data.job_id as string);
+      expect(job.status).not.toBe('DONE');
+      expect(job.error?.message).toMatch(/niet bereikbaar/);
+      expect(job.error?.message).not.toMatch(/foutcode/);
+      expect(job.error?.status).toBe(503);
+    } finally {
+      process.env.SOLVER_URL = bewaard;
+    }
+    expect(rooster()).toEqual(roosterVoor);
+    expect(factoren()).toEqual(factorenVoor);
+  });
 });

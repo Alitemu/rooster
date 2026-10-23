@@ -54,3 +54,16 @@ backups
 **/.setup_token_hash
 .test-data
 coverage
+
+# TLS_MODUS=bestand: the certificate and its private key sit next to the compose file (./certs). A build
+# from the source (docker compose up --build) would copy them into the image.
+certs
+**/certs
+*.pem
+**/*.pem
+*.key
+**/*.key
+*.crt
+**/*.crt
+*.p12
+**/*.p12

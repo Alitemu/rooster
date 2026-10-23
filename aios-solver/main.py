@@ -23,7 +23,7 @@ from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 import kalender
@@ -52,6 +52,12 @@ def _iso(v: str) -> str:
     return v
 
 
+# A quarter is 13 or 14 weeks; a year is room enough for a different one. Longer made the model building
+# run for minutes (and far beyond the time limit) on a request that could never be a roster.
+MAX_PERIODE_DAGEN = 400
+TIJD = r'^([01]\d|2[0-3]):[0-5]\d$'
+
+
 class Periode(BaseModel):
     van: str
     tot: str
@@ -69,8 +75,8 @@ class Dienst(BaseModel):
     id: str = Field(min_length=1, max_length=64)
     datum: str
     code: Literal['UD', 'DD', 'AD', 'ADW', 'ND']
-    start_tijd: str = Field(pattern=r'^\d{2}:\d{2}$')
-    eind_tijd: str = Field(pattern=r'^\d{2}:\d{2}$')
+    start_tijd: str = Field(pattern=TIJD)
+    eind_tijd: str = Field(pattern=TIJD)
     punten: float = Field(ge=0, le=10)
     blok_id: Optional[str] = None
 
@@ -93,8 +99,8 @@ class EerdereDienst(BaseModel):
     id: str = Field(min_length=1, max_length=64)
     datum: str
     code: Literal['UD', 'DD', 'AD', 'ADW', 'ND']
-    start_tijd: str = Field(pattern=r'^\d{2}:\d{2}$')
-    eind_tijd: str = Field(pattern=r'^\d{2}:\d{2}$')
+    start_tijd: str = Field(pattern=TIJD)
+    eind_tijd: str = Field(pattern=TIJD)
     blok_id: Optional[str] = None
     blok_soort: Optional[Literal['AVOND', 'NACHT']] = None
     blok_vorm: Optional[Literal['ZO_DI', 'WO_VR', 'ZA', 'LOS']] = None
@@ -132,9 +138,9 @@ class Aios(BaseModel):
     # part above half, as lib/aiosVoorkeur.ts blokkadeTellers counts it.
     erboven: dict[TellerGroep, int] = Field(default_factory=dict)
     # Carry-over in points; a delta: negative = fewer this quarter.
-    saldo_punten: float = 0
+    saldo_punten: float = Field(default=0, ge=-500, le=500, allow_inf_nan=False)
     # Feestdagdiensten short of a fair share over the years; negative = had more.
-    feestdag_achterstand: float = 0
+    feestdag_achterstand: float = Field(default=0, ge=-200, le=200, allow_inf_nan=False)
     # Nights short of a fair share so far; a delta as saldo_punten: negative = had more.
     saldo_nachten: float = Field(default=0, ge=-200, le=200)
     # The same for the dagdiensten and the avonddiensten in the weekend (0.108.0).
@@ -168,12 +174,16 @@ class SolveInput(BaseModel):
 
     @model_validator(mode='after')
     def _verwijzingen(self):
+        if (date.fromisoformat(self.periode.tot) - date.fromisoformat(self.periode.van)).days > MAX_PERIODE_DAGEN:
+            raise ValueError('de periode is langer dan een kwartaal')
         blokken = {b.id for b in self.blokken}
         diensten = {d.id for d in self.diensten}
         if len(diensten) != len(self.diensten):
             raise ValueError('een dienst-id komt twee keer voor')
         if len({a.id for a in self.aios}) != len(self.aios):
             raise ValueError('een aios-id komt twee keer voor')
+        if len(blokken) != len(self.blokken):
+            raise ValueError('een blok-id komt twee keer voor')
         for d in self.diensten:
             if d.blok_id is not None and d.blok_id not in blokken:
                 raise ValueError(f'dienst {d.id} hoort bij een onbekend blok')
@@ -183,6 +193,10 @@ class SolveInput(BaseModel):
             for m in a.markeringen:
                 if m.dienst_id not in diensten:
                     raise ValueError(f'een markering van {a.id} hoort bij een onbekende dienst')
+            if len({e.id for e in a.eerdere_diensten}) != len(a.eerdere_diensten):
+                raise ValueError(f'{a.id} heeft een eerdere dienst met een dubbel id')
+            if any(e.datum >= self.periode.van for e in a.eerdere_diensten):
+                raise ValueError(f'een eerdere dienst van {a.id} valt niet voor de periode')
         return self
 
 
@@ -297,7 +311,7 @@ def naar_model(inp: SolveInput):
     return slots, blok_vorm, aios, feestdagen
 
 
-def los_op(inp: SolveInput) -> SolveOutput:
+def los_op(inp: SolveInput, stop: Optional[model.Stop] = None) -> SolveOutput:
     slots, blok_vorm, aios, feestdagen = naar_model(inp)
     u = model.oplossen(
         slots,
@@ -308,6 +322,7 @@ def los_op(inp: SolveInput) -> SolveOutput:
         feestdagen,
         tijdslimiet=inp.tijdslimiet_seconden,
         seed=inp.seed,
+        stop=stop,
     )
     per_id = {s.id: s for s in slots}
     per_aios = []
@@ -353,12 +368,43 @@ async def health():
     return Health()
 
 
+# One solve at a time: a second one started beside the first (the app forgot the first when it restarted)
+# shares the cores and the memory of the container, and both end late.
+_loopt = False
+
+
 @app.post('/solve', response_model=SolveOutput)
-async def solve(inp: SolveInput):
+async def solve(inp: SolveInput, raw_request: Request):
+    global _loopt
+    if _loopt:
+        raise HTTPException(status_code=429, detail='Er loopt al een rooster.')
     logger.info('solve: %d diensten, %d aios, %ss', len(inp.diensten), len(inp.aios), inp.tijdslimiet_seconden)
+    _loopt = True
+    stop = model.Stop()
+
+    def klaar(_taak) -> None:
+        global _loopt
+        _loopt = False
+
     try:
         # CP-SAT holds the GIL little; a thread keeps /health answering meanwhile.
-        return await asyncio.get_running_loop().run_in_executor(None, functools.partial(los_op, inp))
+        taak = asyncio.ensure_future(asyncio.to_thread(los_op, inp, stop))
+        taak.add_done_callback(klaar)
+    except Exception:
+        _loopt = False
+        raise
+    try:
+        # Once the caller has hung up (the app restarted, the request timed out) the search is stopped,
+        # instead of running to the end of its time for nobody.
+        while True:
+            klaar_set, _ = await asyncio.wait({taak}, timeout=1.0)
+            if klaar_set:
+                return taak.result()
+            if await raw_request.is_disconnected():
+                stop.vraag()
+    except asyncio.CancelledError:
+        stop.vraag()
+        raise
     except Exception:
         logger.exception('solve failed')
         raise HTTPException(status_code=500, detail='De AIOS-solver kon dit rooster niet maken.')

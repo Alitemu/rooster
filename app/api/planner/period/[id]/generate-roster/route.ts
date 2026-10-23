@@ -21,6 +21,7 @@ import {
   type PeriodMember,
   type Teller,
 } from '@/lib/rosterBands';
+import { solverVerbindingsFout } from '@/lib/solverFout';
 import { legFactorenVast, neemFactorenOp, zetFactorenTerug, type FactorenOpname } from '@/lib/deelnamefactor';
 import { getFellowIds } from '@/lib/fellows';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
@@ -822,7 +823,17 @@ async function callSolver(
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<SolverCallResult> {
-  const solverResponse = await postJson(`${solverUrl}${path}`, solverInput, timeoutMs, signal);
+  let solverResponse: Awaited<ReturnType<typeof postJson>>;
+  try {
+    solverResponse = await postJson(`${solverUrl}${path}`, solverInput, timeoutMs, signal);
+  } catch (error) {
+    // A cancel by the planner is the caller's to handle; a lost connection is told as what it is.
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    const verbinding = solverVerbindingsFout(error);
+    if (!verbinding) throw error;
+    console.error(`[generate-roster] verbinding met de solver op ${solverUrl} mislukt`, error);
+    return { ok: false, ...verbinding };
+  }
 
   if (!solverResponse.ok) {
     const error = await solverResponse.text();

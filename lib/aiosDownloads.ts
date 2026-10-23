@@ -31,6 +31,7 @@ import { loadAlleAiosRedenen } from '@/lib/aiosReden';
 import {
   blokkadeTellers,
   loadAiosVoorkeurDagen,
+  loadAiosVoorkeurDagenVoor,
   loadAiosWens,
   telMarkeringen,
   TELLER_LABELS,
@@ -164,13 +165,15 @@ export function aiosVoorkeurenPerDienst(period: AiosUitnodigPeriode, opties: { m
     `SELECT van_datum, tot_datum, soort FROM dienstrooster_absence
      WHERE person_id = ? AND van_datum <= ? AND tot_datum >= ? ORDER BY van_datum`
   );
+  // The marks of everyone in one go (lib/aiosPreferences.ts), not the period's diensten once per AIOS.
+  const voorkeurDagen = loadAiosVoorkeurDagenVoor(deelnemers.map((p) => p.id), period.id);
   const perPersoon = deelnemers.map((p) => {
     const marks = new Map<string, string | null>();
     const verlof = afwezigheden.all(p.id, period.eind_datum, period.start_datum) as Array<{ van_datum: string; tot_datum: string; soort: string }>;
     // The soort of the absence(s) on a day: "vakantie", or "vakantie en onderwijs" when two overlap.
     const soortOp = (datum: string) =>
       [...new Set(verlof.filter((a) => a.van_datum <= datum && a.tot_datum >= datum).map((a) => AFWEZIG[a.soort] ?? a.soort))].join(' en ');
-    for (const dag of loadAiosVoorkeurDagen(p.id, period.id)) {
+    for (const dag of voorkeurDagen.get(p.id)!) {
       for (const d of dag.diensten) marks.set(d.slot_id, markering(d, redenen.get(`${p.id}|${dag.datum}`), soortOp(dag.datum)));
     }
     return marks;
@@ -250,8 +253,9 @@ export function aiosVerzoekenPerAios(period: AiosUitnodigPeriode): XlsxSheet {
   );
   const ja = (b: boolean) => (b ? 'ja' : null);
 
+  const voorkeurDagen = loadAiosVoorkeurDagenVoor(deelnemers.map((p) => p.id), period.id);
   const rows: XlsxCell[][] = deelnemers.map((p) => {
-    const dagen = loadAiosVoorkeurDagen(p.id, period.id);
+    const dagen = voorkeurDagen.get(p.id)!;
     const wens = loadAiosWens(p.id, period.id);
     const marks = telMarkeringen(dagen);
     const sub = ingediend.get(p.id, period.id) as { status: string; ingediend_op: string | null } | undefined;

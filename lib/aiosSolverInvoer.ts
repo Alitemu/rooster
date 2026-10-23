@@ -23,7 +23,7 @@ import { addDays, getHolidaysInRange, getISOWeek, parseISO } from '@/lib/holiday
 import { patroonDekt } from '@/lib/aiosSync';
 import { aiosFte } from '@/lib/aiosFte';
 import { bevrorenAiosFte } from '@/lib/aiosFteVast';
-import { blokkadeTellers, loadAiosVoorkeurDagen, loadAiosWens, type TellerGroep } from '@/lib/aiosPreferences';
+import { blokkadeTellers, loadAiosVoorkeurDagenVoor, loadAiosWens, type TellerGroep } from '@/lib/aiosPreferences';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { opgeknipteBlokken } from '@/lib/aiosFeestdagBlokken';
 import { aiosSaldi } from '@/lib/aiosSaldo';
@@ -137,6 +137,8 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
   for (let d = van; d <= tot; d = addDays(d, 1)) dagen.push({ datum: d, week: getISOWeek(parseISO(d))[1] });
 
   const deelnemers = aiosDeelnemers(period);
+  // The marks of everyone in one go: the period's diensten once, not once per AIOS.
+  const voorkeurDagen = loadAiosVoorkeurDagenVoor(deelnemers.map((p) => p.id), period.id);
   const saldi = aiosSaldi(period, deelnemers.map((p) => p.id));
   const vast = opties.vers ? new Map<string, number>() : bevrorenAiosFte(period.id);
   const aios = deelnemers.map((p): AiosSolverAios => {
@@ -148,7 +150,7 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
       geldig_tot: string;
     }>;
     const erboven: AiosSolverAios['erboven'] = {};
-    for (const t of blokkadeTellers(loadAiosVoorkeurDagen(p.id, period.id))) {
+    for (const t of blokkadeTellers(voorkeurDagen.get(p.id)!)) {
       if (t.erboven > 0) erboven[t.groep] = t.erboven;
     }
     return {

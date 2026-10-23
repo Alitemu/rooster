@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { db } from '@/db/client';
@@ -12,6 +12,7 @@ import {
   blokkadeTellers,
   loadAiosPeriode,
   loadAiosVoorkeurDagen,
+  loadAiosVoorkeurDagenVoor,
   loadAiosWens,
   saveAiosWens,
   setAiosVoorkeur,
@@ -381,5 +382,38 @@ describe('the routes', () => {
     } finally {
       db.prepare(`UPDATE dienstrooster_schedule_period SET deadline = '2034-02-01T17:00' WHERE id = ?`).run(ids.period);
     }
+  });
+});
+
+
+describe('the days of several people at once', () => {
+  it('gives each exactly what the call for one gives, and reads the period twice for all of them', () => {
+    const p1 = person('veel1');
+    const p2 = person('veel2');
+    const p3 = person('veel3');
+    expect(setAiosVoorkeur(p1, ids.period, slot('2034-05-02', 'AD'), 'ABSOLUUT')).toEqual({ ok: true });
+    expect(setAiosVoorkeur(p2, ids.period, slot('2034-05-04', 'UD'), 'VOORKEUR')).toEqual({ ok: true });
+    const alle = [ids.a, p1, p2, p3];
+
+    const spy = vi.spyOn(db, 'prepare');
+    const veel = loadAiosVoorkeurDagenVoor(alle, ids.period);
+    const lezingen = spy.mock.calls.length;
+    spy.mockRestore();
+    // The diensten once, the marks once: not once per person (72 AIOS took 817 queries).
+    expect(lezingen).toBe(2);
+
+    for (const id of alle) expect(veel.get(id), id).toEqual(loadAiosVoorkeurDagen(id, ids.period));
+    const niveaus = (id: string) => veel.get(id)!.flatMap((d) => d.diensten).filter((d) => d.level).map((d) => d.level);
+    // Not mixed up between people: the marks of the one are not on the other.
+    expect(niveaus(p1).length).toBeGreaterThan(0);
+    expect(new Set(niveaus(p1))).toEqual(new Set(['ABSOLUUT']));
+    expect(new Set(niveaus(p2))).toEqual(new Set(['VOORKEUR']));
+    expect(niveaus(p3)).toEqual([]);
+  });
+
+  it('gives an empty roster of days for nobody and knows only the people it was asked for', () => {
+    expect(loadAiosVoorkeurDagenVoor([], ids.period).size).toBe(0);
+    const alleenA = loadAiosVoorkeurDagenVoor([ids.a], ids.period);
+    expect([...alleenA.keys()]).toEqual([ids.a]);
   });
 });

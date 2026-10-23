@@ -156,7 +156,12 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
     if (!antwoord.ok) {
       console.error('[aios-genereren] solver', antwoord.status, await antwoord.text());
       job.status = 'FOUT';
-      job.fout = 'De solver van de AIOS kon geen rooster maken. Probeer het opnieuw of neem contact op met de beheerder.';
+      // The solver makes one roster at a time: after a restart of the app it may still be busy with the one it
+      // was asked for before (it stops that as soon as it sees nobody waits).
+      job.fout =
+        antwoord.status === 429
+          ? 'De solver van de AIOS is nog bezig met een eerder rooster. Wacht een minuut en probeer het opnieuw.'
+          : 'De solver van de AIOS kon geen rooster maken. Probeer het opnieuw of neem contact op met de beheerder.';
       return;
     }
     const uit = (await antwoord.json()) as SolverUit;

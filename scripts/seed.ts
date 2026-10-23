@@ -806,20 +806,24 @@ const LATER_COLUMN_BACKFILL: Record<string, string> = {
 function applyMissingColumns() {
   // Backfills run once every column is there: one may fill a column added
   // after its own (definitief_op also sets definitief_door_person_id).
-  const backfills: string[] = [];
-  for (const [table, columns] of Object.entries(LATER_COLUMNS)) {
-    const existing = new Set(
-      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name)
-    );
-    for (const [column, definition] of Object.entries(columns)) {
-      if (existing.has(column)) continue;
-      console.log(`  Adding missing column ${table}.${column}`);
-      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-      const backfill = LATER_COLUMN_BACKFILL[`${table}.${column}`];
-      if (backfill) backfills.push(backfill);
+  // One transaction: a stop between a column and its backfill left the column there, so the next start saw
+  // nothing missing and never filled it (uitgenodigd_op, dienst_type). All of it or none of it.
+  db.transaction(() => {
+    const backfills: string[] = [];
+    for (const [table, columns] of Object.entries(LATER_COLUMNS)) {
+      const existing = new Set(
+        (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name)
+      );
+      for (const [column, definition] of Object.entries(columns)) {
+        if (existing.has(column)) continue;
+        console.log(`  Adding missing column ${table}.${column}`);
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+        const backfill = LATER_COLUMN_BACKFILL[`${table}.${column}`];
+        if (backfill) backfills.push(backfill);
+      }
     }
-  }
-  for (const backfill of backfills) db.exec(backfill);
+    for (const backfill of backfills) db.exec(backfill);
+  })();
   repairDefinitiefBackfill();
   repairRuilen();
   repairAbsenceSoort();

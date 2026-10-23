@@ -369,6 +369,15 @@ describe('making the AIOS roster', () => {
     expect(toewijzingen()).toEqual(voor);
   });
 
+  it('tells when the solver is still busy with an earlier roster, and writes nothing', async () => {
+    const voor = toewijzingen();
+    antwoordVan = () => ({ status: 429, body: { detail: 'Er loopt al een rooster.' } });
+    const job = await klaar(await maak());
+    expect(job.status).toBe('FOUT');
+    expect(job.fout).toBe('De solver van de AIOS is nog bezig met een eerder rooster. Wacht een minuut en probeer het opnieuw.');
+    expect(toewijzingen()).toEqual(voor);
+  });
+
   // The prullenbak bumps no row_version, so the check on status and version alone let the roster in.
   it('writes nothing into a period that went to the prullenbak meanwhile', async () => {
     const voor = toewijzingen();
