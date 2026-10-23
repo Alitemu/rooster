@@ -138,6 +138,22 @@ afterEach(() => {
 });
 
 describe('POST /api/planner/period/[id]/remind', () => {
+  // The check "already reminded" is made before the send and noted after it: two clicks within the send both passed it.
+  it('sends once when the button is pressed twice at the same time', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+
+    const [a, b] = await Promise.all([remind(f.periodId, f.planner), remind(f.periodId, f.planner)]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    expect([a, b].find((r) => r.status === 409)!.body.error.code).toBe('BEZIG');
+    expect(sink.received).toHaveLength(1);
+    expect(remindersLogged(f.periodId).sort()).toEqual([f.nietBegonnen, f.bezig].sort());
+    // The claim is let go afterwards: the next press is answered by the 24 hour rule, not by "bezig".
+    const later = await remind(f.periodId, f.planner);
+    expect(later.body.error.code).toBe('RECENT_HERINNERD');
+  });
+
   it('reminds one person, with a personal link', async () => {
     configureSmtp(sink);
     const f = createFixture();

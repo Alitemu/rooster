@@ -92,6 +92,8 @@ async function send(periodId: string, asPersonId: string, codenamen: string[], o
   return { status: res.status, body: await res.json() };
 }
 
+const codenaamVan = (id: string) => (db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(id) as { codenaam: string }).codenaam;
+
 const logged = (periodId: string) =>
   (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_notification_log WHERE period_id = ?').get(periodId) as { n: number }).n;
 
@@ -115,6 +117,18 @@ afterEach(() => {
 });
 
 describe('POST /api/exports/reminders/[period-id]/send', () => {
+  // The 24 hour check is made before the send and the log written after it: two clicks within the send both passed it.
+  it('sends once when pressed twice at the same time', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    const namen = [codenaamVan(f.a.id), codenaamVan(f.b.id)];
+    const [x, y] = await Promise.all([send(f.periodId, f.planner, namen), send(f.periodId, f.planner, namen)]);
+    expect([x.status, y.status].sort()).toEqual([200, 409]);
+    expect([x, y].find((r) => r.status === 409)!.body.error.code).toBe('BEZIG');
+    expect(sink.received).toHaveLength(1);
+    expect(logged(f.periodId)).toBe(2);
+  });
+
   it('sends the reminders as one verzendlijst and logs them', async () => {
     configureSmtp(sink);
     const f = createFixture();

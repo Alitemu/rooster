@@ -14,6 +14,7 @@ import { POST as reassign } from './[assignment-id]/reassign/route';
 import { DELETE as remove } from './[assignment-id]/delete/route';
 import { POST as undoLast } from './undo-last/route';
 import { POST as publish } from '../publish/route';
+import { DELETE as trash } from '../../../../periods/[id]/route';
 
 /**
  * The rule: while a generation runs, nobody changes the roster under it
@@ -198,5 +199,82 @@ describe('the roster stays as it is while a generation runs', () => {
       { person_id: ids.A, slot_id: ids.slot0, bron: 'MANUAL' },
       { person_id: ids.B, slot_id: ids.slot1, bron: 'SOLVER' },
     ]);
+  });
+
+  const factoren = () =>
+    db.prepare('SELECT person_id, factor FROM dienstrooster_period_factor WHERE period_id = ? ORDER BY person_id').all(ids.period);
+  const rooster = () =>
+    db.prepare('SELECT person_id, slot_id, bron FROM dienstrooster_assignment WHERE schedule_version_id = ? ORDER BY slot_id').all(ids.period);
+  const wacht = async (jobId: string) => {
+    for (let i = 0; i < 200; i++) {
+      if (getRosterGenerationJob(jobId, ids.period)?.status !== 'RUNNING') break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    return getRosterGenerationJob(jobId, ids.period)!;
+  };
+  const start = async () => {
+    const started = await generateRoster(request(`/api/planner/period/${ids.period}/generate-roster`, 'POST'), {
+      params: Promise.resolve({ id: ids.period }),
+    });
+    expect(started.status).toBe(200);
+    const jobId = (await started.json()).data.job_id as string;
+    for (let i = 0; i < 200 && !release; i++) await new Promise((r) => setTimeout(r, 10));
+    expect(release, 'the solver was called').not.toBeNull();
+    return jobId;
+  };
+
+  // A roster that is ready after the period went to the prullenbak must not be written into it, and the
+  // factors the run held for a roster that never came must be put back (the carry-over reads them).
+  it('does not write into a period that went to the prullenbak meanwhile, and leaves the held factors as they were', async () => {
+    db.prepare('UPDATE dienstrooster_pool_membership SET deelnamefactor = 0.5 WHERE person_id = ?').run(ids.A);
+    const factorenVoor = factoren();
+    const roosterVoor = rooster();
+    const statusVoor = db.prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period);
+    answer = [{ person_id: ids.B, slot_id: ids.slot2 }];
+    const jobId = await start();
+
+    // Through the route: refused while the generation runs.
+    const refused = await trash(request(`/api/periods/${ids.period}`, 'DELETE'), { params: Promise.resolve({ id: ids.period }) });
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).error.code).toBe('GENERATION_RUNNING');
+    expect(db.prepare('SELECT verwijderd_op FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period)).toEqual({ verwijderd_op: null });
+
+    // Any other way into the prullenbak (it bumps no row_version): the result is not written.
+    db.prepare("UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?").run(ids.period);
+    release!();
+    const job = await wacht(jobId);
+    expect(job.status).not.toBe('DONE');
+    expect(rooster()).toEqual(roosterVoor);
+    expect(factoren()).toEqual(factorenVoor);
+
+    db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = NULL WHERE id = ?').run(ids.period);
+    expect(db.prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period)).toEqual(statusVoor);
+  });
+
+  it('puts the held factors back when the run ends in an error', async () => {
+    const factorenVoor = factoren();
+    // An answer the roster table refuses (a person who does not exist): the write fails and rolls back.
+    answer = [{ person_id: crypto.randomUUID(), slot_id: ids.slot3 }];
+    const roosterVoor = rooster();
+    const jobId = await start();
+    release!();
+    const job = await wacht(jobId);
+    expect(job.status).not.toBe('DONE');
+    expect(rooster()).toEqual(roosterVoor);
+    expect(factoren()).toEqual(factorenVoor);
+  });
+
+  it('does not touch the held factors when a second generation is refused', async () => {
+    answer = [{ person_id: ids.B, slot_id: ids.slot4 }];
+    const jobId = await start();
+    db.prepare('UPDATE dienstrooster_pool_membership SET deelnamefactor = 1 WHERE person_id = ?').run(ids.A);
+    const factorenVoor = factoren();
+    const second = await generateRoster(request(`/api/planner/period/${ids.period}/generate-roster`, 'POST'), {
+      params: Promise.resolve({ id: ids.period }),
+    });
+    expect(second.status).toBe(409);
+    expect(factoren()).toEqual(factorenVoor);
+    release!();
+    expect((await wacht(jobId)).status).toBe('DONE');
   });
 });

@@ -27,6 +27,7 @@ import { buildVerzendlijst, verzendlijstPersonen } from '@/lib/verzendlijst';
 import { checkRemindersAllowed } from '@/lib/reminderGate';
 import { logRemindersSent, recentlyReminded, reminderGroupCounts } from '@/lib/autoReminders';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
+import { claimVerzending, VERZENDING_BEZIG } from '@/lib/inFlight';
 
 const bodySchema = z.object({
   // The deadline the texts were generated for (deadline_bron from POST ../).
@@ -50,6 +51,7 @@ function fail(status: number, code: string, message: string, extra?: Record<stri
 
 export async function POST(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
   const params = await props.params;
+  let release: (() => void) | null = null;
   try {
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
     const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), params['period-id']);
@@ -111,6 +113,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
         );
       }
     }
+    // One send at a time (lib/inFlight.ts): taken before the first await.
+    release = claimVerzending(`reminders:${period.id}`);
+    if (!release) return fail(409, 'BEZIG', VERZENDING_BEZIG);
+
     const result = await sendVerzendlijst(
       buildVerzendlijst(
         {
@@ -129,5 +135,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
     return internalErrorResponse('export-reminders-send', error);
+  } finally {
+    release?.();
   }
 }

@@ -174,10 +174,11 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
     };
     const geschreven = db.transaction(() => {
       // Moved since we started (another generation, a status change): leave it.
-      const nu = db.prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?').get(period.id) as
-        | { status: string; row_version: number }
+      const nu = db.prepare('SELECT status, row_version, verwijderd_op FROM dienstrooster_schedule_period WHERE id = ?').get(period.id) as
+        | { status: string; row_version: number; verwijderd_op: string | null }
         | undefined;
-      if (!nu || nu.status !== period.status || nu.row_version !== period.row_version) return false;
+      // Also gone to the prullenbak meanwhile (which bumps no row_version): nothing is written into it.
+      if (!nu || nu.verwijderd_op !== null || nu.status !== period.status || nu.row_version !== period.row_version) return false;
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(period.id);
       const insert = db.prepare(
         `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)

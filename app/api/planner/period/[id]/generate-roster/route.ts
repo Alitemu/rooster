@@ -21,7 +21,7 @@ import {
   type PeriodMember,
   type Teller,
 } from '@/lib/rosterBands';
-import { legFactorenVast } from '@/lib/deelnamefactor';
+import { legFactorenVast, neemFactorenOp, zetFactorenTerug, type FactorenOpname } from '@/lib/deelnamefactor';
 import { getFellowIds } from '@/lib/fellows';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
@@ -185,9 +185,24 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
+    // Two generations for the same period would both wipe and rewrite its
+    // assignments; the second to finish dies on the assignment table's
+    // UNIQUE(schedule_version_id, slot_id), after having already cleared
+    // part of the first one's roster.
+    if (hasRunningJobForPeriod(periodId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Er loopt al een roostergeneratie voor deze periode. Wacht tot die klaar is of annuleer hem eerst.',
+        },
+        { status: 409 }
+      );
+    }
+
     // What this roster counts with, held for good: the factors of now, replacing those of an earlier
     // roster of this period (lib/deelnamefactor.ts). A change in someone's part-time days after this
     // is for the next period, not for this one.
+    const factorenVoor = neemFactorenOp(period.id);
     legFactorenVast(period.id, poolMembers);
 
     // Everything from here on is the slow part - the solver call itself can
@@ -204,20 +219,6 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // client poll ./generate-roster/status instead of holding one request
     // open. Each poll is cheap and short, so a dropped one just means "ask
     // again in a moment" rather than losing the whole generation.
-    // Two generations for the same period would both wipe and rewrite its
-    // assignments; the second to finish dies on the assignment table's
-    // UNIQUE(schedule_version_id, slot_id), after having already cleared
-    // part of the first one's roster.
-    if (hasRunningJobForPeriod(periodId)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Er loopt al een roostergeneratie voor deze periode. Wacht tot die klaar is of annuleer hem eerst.',
-        },
-        { status: 409 }
-      );
-    }
-
     // Carry-over from the previous period was booked when this one opened;
     // that roster may have been corrected since (lib/carryOver.ts, audit 8).
     // Before the balances are read, here rather than in the job, so the
@@ -256,13 +257,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }
 
     const jobId = createRosterGenerationJob(periodId);
-    runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people }).catch(
+    runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people, factorenVoor }).catch(
       (error) => {
         // runGeneration reports its own failures via failRosterGenerationJob;
         // this only catches a genuinely unexpected throw that slipped past
         // that, so a job never gets stuck at RUNNING forever.
         const code = errorReference();
         console.error(`[generate-roster] foutcode ${code} unhandled error in background job`, error);
+        zetFactorenTerug(periodId, factorenVoor);
         failRosterGenerationJob(jobId, internalErrorMessage(code));
       }
     );
@@ -284,8 +286,10 @@ async function runGeneration(args: {
   allSlots: any[];
   poolMembers: PeriodMember[];
   people: string[];
+  /** The factors held before this run replaced them: put back when it ends without a roster. */
+  factorenVoor: FactorenOpname;
 }): Promise<void> {
-  const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people } = args;
+  const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people, factorenVoor } = args;
   try {
     // Only consulted by the solver when distribution_mode is NAAR_RATO -
     // see lib/rosterBands's resolveRulesetConfig / the RuleSet comment.
@@ -611,6 +615,7 @@ async function runGeneration(args: {
       });
 
       if (!multiStart.ok) {
+        zetFactorenTerug(periodId, factorenVoor);
         failRosterGenerationJob(jobId, multiStart.message, multiStart.status);
         return;
       }
@@ -621,6 +626,7 @@ async function runGeneration(args: {
     } else {
       const result = await callSolver(solverUrl, '/solve', solverInput, solverTimeoutMs);
       if (!result.ok) {
+        zetFactorenTerug(periodId, factorenVoor);
         failRosterGenerationJob(jobId, result.message, result.status);
         return;
       }
@@ -636,9 +642,14 @@ async function runGeneration(args: {
     // freshly-inserted SOLVER rows.
     const applyGeneratedRoster = db.transaction(() => {
       const current = db
-        .prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?')
-        .get(periodId) as { status: string; row_version: number };
+        .prepare('SELECT status, row_version, verwijderd_op FROM dienstrooster_schedule_period WHERE id = ?')
+        .get(periodId) as { status: string; row_version: number; verwijderd_op: string | null } | undefined;
 
+      // Moved to the prullenbak (which bumps no row_version) or purged while the solver ran: nothing is
+      // written into a period that is on its way out (docs/development/periods.md).
+      if (!current || current.verwijderd_op !== null) {
+        return { conflict: true, assignmentCount: 0, rowVersion: period.row_version };
+      }
       if (current.status !== period.status || current.row_version !== period.row_version) {
         return { conflict: true, assignmentCount: 0, rowVersion: current.row_version };
       }
@@ -696,6 +707,7 @@ async function runGeneration(args: {
     const { conflict, assignmentCount, rowVersion } = applyGeneratedRoster();
 
     if (conflict) {
+      zetFactorenTerug(periodId, factorenVoor);
       failRosterGenerationJob(
         jobId,
         'Deze periode is ondertussen door een andere actie gewijzigd. Ververs de pagina en probeer opnieuw.',
@@ -784,6 +796,7 @@ async function runGeneration(args: {
   } catch (error) {
     const code = errorReference();
     console.error(`[generate-roster] foutcode ${code}`, error);
+    zetFactorenTerug(periodId, factorenVoor);
     failRosterGenerationJob(jobId, internalErrorMessage(code));
   }
 }

@@ -13,6 +13,7 @@ import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { softDeletePeriod, PeriodTrashError } from '@/lib/periodTrash';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -235,6 +236,14 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
     if (otherDienst) return otherDienst;
 
     const { id } = params;
+
+    // A roster that is being made would be written into the prullenbak when it is ready.
+    if (hasRunningJobForPeriod(id)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'GENERATION_RUNNING', message: GENERATION_RUNNING_MESSAGE } },
+        { status: 409 }
+      );
+    }
 
     try {
       softDeletePeriod(id, auth!.userId);

@@ -27,6 +27,7 @@ import {
   rememberBaseUrl,
 } from '@/lib/periodInvitations';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
+import { claimVerzending, VERZENDING_BEZIG } from '@/lib/inFlight';
 import { buildVerzendlijst } from '@/lib/verzendlijst';
 import { checkInvitationsAllowed } from '@/lib/reminderGate';
 import { computeMemberTargets } from '@/lib/rosterBands';
@@ -37,6 +38,7 @@ function fail(status: number, code: string, message: string): NextResponse {
 
 export async function POST(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
   const params = await props.params;
+  let release: (() => void) | null = null;
   try {
     if (!requirePlannerAccess(getAuthContextFromRequest(req))) return unauthorizedResponse();
     const otherDienst = periodDienstDenial(getAuthContextFromRequest(req), params['period-id']);
@@ -61,6 +63,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     const activation = checkMayBecomeActive(period.id);
     if (!activation.allowed) return fail(409, activation.code, activation.message);
 
+    // One send at a time (lib/inFlight.ts): taken before the first await.
+    release = claimVerzending(`invitations:${period.id}`);
+    if (!release) return fail(409, 'BEZIG', VERZENDING_BEZIG);
+
     const baseUrl = resolveBaseUrl(req);
     rememberBaseUrl(period.id, baseUrl);
     const targets = computeMemberTargets(period.id);
@@ -80,5 +86,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
     return internalErrorResponse('export-invitations-send', error);
+  } finally {
+    release?.();
   }
 }

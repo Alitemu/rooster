@@ -369,6 +369,22 @@ describe('making the AIOS roster', () => {
     expect(toewijzingen()).toEqual(voor);
   });
 
+  // The prullenbak bumps no row_version, so the check on status and version alone let the roster in.
+  it('writes nothing into a period that went to the prullenbak meanwhile', async () => {
+    const voor = toewijzingen();
+    antwoordVan = (i) => ({ ...gewoon(i), vertraging: 200 });
+    const id = await maak();
+    db.prepare("UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?").run(w.period);
+    try {
+      const job = await klaar(id);
+      expect(job.status).toBe('FOUT');
+      expect(job.fout).toMatch(/intussen gewijzigd/);
+      expect(toewijzingen()).toEqual(voor);
+    } finally {
+      db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = NULL WHERE id = ?').run(w.period);
+    }
+  });
+
   it('says what failed: no solver there, a connection that broke, or the app itself (0.87.1)', async () => {
     const voor = toewijzingen();
     const rv = periodeStatus().row_version;

@@ -103,6 +103,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
        VALUES (?, ?, ?, ?, ?, ?, ?, 'BEGINSALDO', ?, ?)`
     );
 
+    // A file sent twice (a lost response, a second click) must not count twice: the person's earlier
+    // imported beginsaldo for this period is replaced by what this file says. A correction made by hand
+    // (ledger-corrections) is another category and stays.
+    const deleteEarlier = db.prepare(
+      `DELETE FROM dienstrooster_ledger_entry
+       WHERE person_id = ? AND geldt_voor_periode_id = ? AND categorie = 'BEGINSALDO' AND reden = 'Geïmporteerd beginsaldo'`
+    );
+    const replacedFor = new Set<string>();
+
     const importAll = db.transaction((importRows: BalanceRow[]) => {
       for (const row of importRows) {
         if (typeof row.codenaam !== 'string') {
@@ -130,6 +139,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         if (!person) {
           errors.push(`Onbekende codenaam: ${row.codenaam}`);
           continue;
+        }
+
+        if (!replacedFor.has(person.id)) {
+          deleteEarlier.run(person.id, periodId);
+          replacedFor.add(person.id);
         }
 
         for (const counter of COUNTERS) {

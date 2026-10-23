@@ -205,6 +205,26 @@ export function legFactorenVast(periodId: string, leden: ReadonlyArray<{ id: str
   })();
 }
 
+/** The factors held for the period, as they are now (for putting them back, see zetFactorenTerug). */
+export type FactorenOpname = Array<{ person_id: string; factor: number }>;
+
+export function neemFactorenOp(periodId: string): FactorenOpname {
+  return db.prepare('SELECT person_id, factor FROM dienstrooster_period_factor WHERE period_id = ?').all(periodId) as FactorenOpname;
+}
+
+/**
+ * Puts the factors of an earlier neemFactorenOp back. A generation holds the factors of now before it
+ * runs; one that fails, finds no solution or loses a conflict leaves the roster it did not replace, and
+ * that roster counts with the factors it was made with (the carry-over and the band check read them).
+ */
+export function zetFactorenTerug(periodId: string, opname: FactorenOpname): void {
+  db.transaction(() => {
+    db.prepare('DELETE FROM dienstrooster_period_factor WHERE period_id = ?').run(periodId);
+    const voeg = db.prepare('INSERT INTO dienstrooster_period_factor (id, period_id, person_id, factor) VALUES (?, ?, ?, ?)');
+    for (const r of opname) voeg.run(crypto.randomUUID(), periodId, r.person_id, r.factor);
+  })();
+}
+
 export function wisBevrorenFactoren(periodId: string): void {
   db.prepare('DELETE FROM dienstrooster_period_factor WHERE period_id = ?').run(periodId);
 }
