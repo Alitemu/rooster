@@ -4005,23 +4005,58 @@ const touched = (m) => changed.includes(m.file) || testPaths(m).some((t) => chan
 const chosen = MUTATIONS.filter((m) => (!only || m.name.includes(only)) && (!changed || touched(m)));
 if (changed) console.log(`${MUTATIONS.filter(touched).length} of ${MUTATIONS.length} mutations: their file or a test of theirs changed since ${sinds}\n`);
 const originals = new Map();
+// A copy of a file next to the run, taken before it is mutated: SIGKILL, an out-of-memory kill or a crash of the
+// machine cannot be caught, and left the mutated source in the tree (found in the audit of 0.112.0, for SIGTERM).
+// The next run puts the files back first.
+const backupDir = path.join(repoRoot, '.mutation-backup');
+const backupNaam = (file) => path.join(backupDir, encodeURIComponent(path.relative(repoRoot, file)));
+function herstelAfgebroken() {
+  if (!fs.existsSync(backupDir)) return 0;
+  let n = 0;
+  for (const naam of fs.readdirSync(backupDir)) {
+    fs.writeFileSync(path.join(repoRoot, decodeURIComponent(naam)), fs.readFileSync(path.join(backupDir, naam)));
+    n++;
+  }
+  fs.rmSync(backupDir, { recursive: true, force: true });
+  return n;
+}
 const restoreAll = () => {
   for (const [file, src] of originals) fs.writeFileSync(file, src);
   originals.clear();
+  fs.rmSync(backupDir, { recursive: true, force: true });
 };
-process.on('SIGINT', () => {
+// Every way a process is asked to stop or stops on its own: the source is put back before it goes.
+for (const [signaal, code] of [['SIGINT', 130], ['SIGTERM', 143], ['SIGHUP', 129]]) {
+  process.on(signaal, () => {
+    restoreAll();
+    process.exit(code);
+  });
+}
+process.on('uncaughtException', (error) => {
   restoreAll();
-  process.exit(130);
+  console.error(error);
+  process.exit(1);
 });
+process.on('exit', restoreAll);
+if (!droog) {
+  const hersteld = herstelAfgebroken();
+  if (hersteld) console.log(`Een eerdere run was afgebroken: ${hersteld} bestand(en) teruggezet voor deze begint.\n`);
+}
 
 // --droog: no test runs; only whether every `find` is still in its file, once (or says alles: true). Fast.
 if (droog) {
   const slecht = [];
+  const bestanden = spawnSync('git', ['ls-files'], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }).stdout.split('\n');
   for (const m of MUTATIONS) {
     const bron = fs.readFileSync(path.join(repoRoot, m.file), 'utf8');
     const n = bron.split(m.find).length - 1;
     if (n === 0) slecht.push(`${m.name} (niet gevonden)`);
     else if (n > 1 && !m.alles) slecht.push(`${m.name} (${n} keer gevonden)`);
+    // A test filter that matches no file runs nothing: the other filters may still carry the mutation, but the
+    // entry is dead weight that hides the day the last live one goes.
+    for (const t of m.runner === 'pytest' ? m.tests.filter((x) => x.endsWith('.py')).map((x) => path.posix.join(m.cwd ?? 'solver', x)) : m.tests) {
+      if (!bestanden.some((f) => f.includes(t))) slecht.push(`${m.name} (testfilter ${t} past op geen bestand)`);
+    }
   }
   console.log(`${MUTATIONS.length} mutaties, ${slecht.length} met een find die niet klopt`);
   for (const s of slecht) console.log(`  - ${s}`);
@@ -4046,6 +4081,8 @@ for (const m of chosen) {
     continue;
   }
   originals.set(file, src);
+  fs.mkdirSync(backupDir, { recursive: true });
+  fs.writeFileSync(backupNaam(file), src);
   try {
     fs.writeFileSync(file, m.alles ? src.split(m.find).join(m.replace) : src.replace(m.find, m.replace));
     // A solver mutation runs the solver's own tests (pytest in ./solver,

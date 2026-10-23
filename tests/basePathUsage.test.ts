@@ -37,7 +37,7 @@ function lineOf(src: string, index: number): number {
 
 /** An expression that builds a path, with every path in it wrapped in withBasePath(...). */
 function prefixedExpression(expr: string): boolean {
-  return expr.includes('withBasePath(') && !/(?<!withBasePath\()[`'"]\/(?:api|planner|person)\b/.test(expr);
+  return expr.includes('withBasePath(') && !/(?<!withBasePath\()[`'"]\/(?:api|planner|person|aios|admin|exports)\b/.test(expr);
 }
 
 /** A variable or parameter that only ever holds a withBasePath(...) result. */
@@ -89,10 +89,10 @@ describe('every path the browser asks for goes through withBasePath', () => {
     for (const file of files) {
       const src = fs.readFileSync(file, 'utf8');
       const patterns = [
-        /<(?:a|img|form|iframe)\b[^>]*\b(?:href|src|action)=\{?\s*['"`]\/(?:api|planner|person)\b/g,
-        /window\.location(?:\.href)?\s*=\s*['"`]\/(?:api|planner|person)\b/g,
-        /window\.location\.(?:assign|replace)\(\s*['"`]\/(?:api|planner|person)\b/g,
-        /window\.open\(\s*['"`]\/(?:api|planner|person)\b/g,
+        /<(?:a|img|form|iframe)\b[^>]*\b(?:href|src|action)=\{?\s*['"`]\/(?:api|planner|person|aios|admin|exports)\b/g,
+        /window\.location(?:\.href)?\s*=\s*['"`]\/(?:api|planner|person|aios|admin|exports)\b/g,
+        /window\.location\.(?:assign|replace)\(\s*['"`]\/(?:api|planner|person|aios|admin|exports)\b/g,
+        /window\.open\(\s*['"`]\/(?:api|planner|person|aios|admin|exports)\b/g,
       ];
       for (const re of patterns) {
         for (const m of src.matchAll(re)) bare.push(`${path.relative(ROOT, file)}:${lineOf(src, m.index!)} ${m[0]}`);

@@ -56,6 +56,13 @@ function handlerSource(routePath: string, method: string): string {
   return src.slice(start, next === -1 ? undefined : next);
 }
 
+/** The handler asks aiosNotYetDenial and returns what it answers, in code (a comment does not count). */
+function guardsAiosPeriod(src: string): boolean {
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
+  const m = /const (\w+) = aiosNotYetDenial\([^;]*\);\s*if \(\1\) return \1;/.exec(code);
+  return m !== null;
+}
+
 const tag = crypto.randomUUID().slice(0, 6);
 const now = new Date().toISOString();
 const ids: Record<string, string> = {};
@@ -269,9 +276,20 @@ describe('no achterwacht step runs on an AIOS period yet', () => {
   it('asks aiosNotYetDenial in every changing route under a period\'s path', () => {
     const missing = routes
       .filter((r) => !ALLOWED.has(`${r.path} ${r.method}`) && onAPeriodsPath(r.path))
-      .filter((r) => !handlerSource(r.path, r.method).includes('aiosNotYetDenial('))
+      .filter((r) => !guardsAiosPeriod(handlerSource(r.path, r.method)))
       .map((r) => `${r.method} ${r.path}`);
     expect(missing).toEqual([]);
+  });
+
+  // The call alone is not the guard: its answer has to be returned. A handler that asks and goes on, or only
+  // mentions it in a comment, passed the check on the text `aiosNotYetDenial(`; the bodies of the second half are
+  // mostly empty, so the routes fail on their input first and cannot show a missing guard.
+  it('the guard is a statement that returns the answer, in code and not in a comment', () => {
+    expect(guardsAiosPeriod('const aiosNotYet = aiosNotYetDenial(id);\n    if (aiosNotYet) return aiosNotYet;')).toBe(true);
+    expect(guardsAiosPeriod('const aiosNotYet = aiosNotYetDenial(id);')).toBe(false);
+    expect(guardsAiosPeriod('// const aiosNotYet = aiosNotYetDenial(id);\n// if (aiosNotYet) return aiosNotYet;')).toBe(false);
+    expect(guardsAiosPeriod('const aiosNotYet = aiosNotYetDenial(id);\n    if (other) return aiosNotYet;')).toBe(false);
+    expect(guardsAiosPeriod('aiosNotYetDenial(id);\n    if (aiosNotYet) return aiosNotYet;')).toBe(false);
   });
 
   // Every route a period can reach: in its path, or through the body,

@@ -51,11 +51,16 @@ const soorten = () => (db.prepare('SELECT soort FROM dienstrooster_aios_mail_que
 
 /** Mails go out after the commit and are not awaited: wait until none arrive or queue any more. */
 async function stil() {
-  let n: string;
-  do {
-    n = `${sink.received.length}/${aiosMailWachtrijAantal()}`;
+  // Three readings in a row that agree (not one pair): on a busy machine a mail can arrive later than 250 ms
+  // after the last, and the test then looked at the queue too soon (it failed once under load).
+  let n = '';
+  let gelijk = 0;
+  while (gelijk < 3) {
+    const nu = `${sink.received.length}/${aiosMailWachtrijAantal()}`;
+    gelijk = nu === n ? gelijk + 1 : 0;
+    n = nu;
     await new Promise((r) => setTimeout(r, 250));
-  } while (`${sink.received.length}/${aiosMailWachtrijAantal()}` !== n);
+  }
 }
 
 beforeAll(async () => {

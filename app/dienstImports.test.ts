@@ -21,7 +21,12 @@ const ROOT = path.resolve(__dirname, '..');
 
 /** The AIOS's own files. */
 const isAios = (rel: string) =>
-  /^lib\/aios[^/]*\.tsx?$/.test(rel) || /^components\/Aios[^/]*\.tsx$/.test(rel) || rel.startsWith('app/api/aios/') || rel.startsWith('app/aios/');
+  /^lib\/aios[^/]*\.tsx?$/.test(rel) ||
+  rel.startsWith('lib/aios/') ||
+  /^components\/Aios[^/]*\.tsx$/.test(rel) ||
+  rel.startsWith('components/aios/') ||
+  rel.startsWith('app/api/aios/') ||
+  rel.startsWith('app/aios/');
 
 /**
  * Shared by both: the login and sessions, the database, the shared mail

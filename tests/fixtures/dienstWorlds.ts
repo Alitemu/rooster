@@ -163,6 +163,30 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
     aangemaakt_door: planner,
     aangemaakt_op: now,
   });
+  // One undo pending for the roster and one for the pool's members, so that the undo routes reach their dienst
+  // guard instead of answering "nothing to undo" whatever the guard does. Created a day ahead: the window of two
+  // minutes would otherwise pass during a long test file, and the routes would again answer for lack of a row.
+  const voorUitgang = new Date(Date.now() + 86_400_000).toISOString().slice(0, 19).replace('T', ' ');
+  insert('dienstrooster_pending_undo', {
+    scope: 'PERIOD_ASSIGNMENT',
+    scope_id: period,
+    action_type: 'ASSIGN',
+    payload_json: JSON.stringify({ assignment_id: assignment, person_id: x, slot_id: slots[0] }),
+    label: 'toegewezen',
+    onderdeel: 'ROOSTER',
+    actor_id: planner,
+    aangemaakt_op: voorUitgang,
+  });
+  insert('dienstrooster_pending_undo', {
+    scope: 'POOL_MEMBERSHIP',
+    scope_id: pool,
+    action_type: 'MEMBERSHIP_DELETE',
+    payload_json: JSON.stringify({ person_id: y, pool_id: pool, geldig_vanaf: '2098-01-01', geldig_tot: '2098-12-31' }),
+    label: 'verwijderd uit de pool',
+    onderdeel: 'ROOSTER',
+    actor_id: planner,
+    aangemaakt_op: voorUitgang,
+  });
   return {
     dienst,
     planner,
