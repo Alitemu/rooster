@@ -52,9 +52,9 @@ have one for the release gate.
 that uses 443 itself sets APP_PORT=8010 in .env),
 on any host name, with an on-demand certificate per name, so a renamed
 server needs no config change. `http://:80` in the Caddyfile redirects to
-https on APP_PORT; port 80 is published on every interface only with
-HTTP_PORT=80 in .env (otherwise on the loopback, so a NAS that has it
-taken is not disturbed).
+https on APP_PORT; port 80 is published on every interface by default,
+so a server needs no .env for that. A NAS that has it taken sets
+HTTP_PORT (8080, say) in .env.
 **Certificate:** TLS_MODUS in .env picks the snippet the Caddyfile imports (./certs is created empty by Docker when missing, which `intern` does not mind).
 `intern` (the default) is Caddy's own CA, on demand per name. `bestand` is
 the organisation's own certificate: ./certs/rooster.pem and rooster.key,

@@ -100,12 +100,13 @@ describe('one file is the installation (0.800.0)', () => {
 });
 
 describe('port 80 (HTTP_PORT)', () => {
-  it('is published on every interface only when HTTP_PORT is set, on the loopback otherwise', () => {
-    expect(compose).toContain('"${HTTP_PORT:+0.0.0.0:}${HTTP_PORT:-127.0.0.1:}:80"');
+  it('is published on every interface on port 80 without any .env, and HTTP_PORT moves it', () => {
+    expect(compose).toContain('- "${HTTP_PORT:-80}:80"');
+    expect(compose).not.toContain('127.0.0.1:}');
   });
 
-  it('.env.example documents HTTP_PORT', () => {
-    expect(envExample).toMatch(/^HTTP_PORT=80$/m);
+  it('.env.example documents HTTP_PORT as the way out for a NAS that has port 80 taken', () => {
+    expect(envExample).toMatch(/^# HTTP_PORT=8080$/m);
   });
 });
 

@@ -53,15 +53,15 @@ versie, vervang dan `stable` door het versienummer, bijvoorbeeld `0.88.1`.
 Het certificaat moet de DNS-naam van de server bevatten (als SAN). Heb je een
 `.pfx`, zet het dan eerst om naar twee PEM-bestanden.
 
-**3. Maak `.env`** naast `docker-compose.yml` met deze twee regels:
+**3. Maak `.env`** naast `docker-compose.yml` met deze regel:
 
 ```bash
-HTTP_PORT=80
 TLS_MODUS=bestand
 ```
 
-Meer is niet nodig. De app luistert standaard op poort 443, dus `APP_PORT`
-hoeft er niet in. `HTTP_PORT=80` stuurt `http://` door naar `https://`. Laat
+Meer is niet nodig. De app luistert standaard op poort 443 en op poort 80
+(die stuurt `http://` door naar `https://`), dus `APP_PORT` en `HTTP_PORT`
+hoeven er niet in. Laat
 `BASE_URL` leeg: de app bepaalt zijn adres dan zelf uit de naam waarmee hij
 wordt geopend.
 
@@ -147,7 +147,7 @@ andere toepassing een eigen servernaam.
 
 | Symptoom | Oorzaak en oplossing |
 |---|---|
-| `docker compose up` meldt dat poort 443 of 80 bezet is | Een andere dienst gebruikt de poort. Controleer met `ss -tlnp \| grep ':443 '`. |
+| `docker compose up` meldt dat poort 443 of 80 bezet is | Een andere dienst gebruikt de poort. Controleer met `ss -tlnp \| grep ':443 '`. Zet in `.env` een andere poort: `APP_PORT=8010` voor https, `HTTP_PORT=8080` voor de doorverwijzing van http. |
 | De browser geeft een certificaatwaarschuwing | `TLS_MODUS=bestand` ontbreekt in `.env` (dan gebruikt Caddy zijn eigen CA). Of het certificaat bevat de DNS-naam niet of is verlopen. Zie `docker compose logs caddy --tail 50`. |
 | `caddy` start niet en `docker compose logs caddy` begint met `[dienstrooster] FOUT: certs/rooster.pem ontbreekt of is niet leesbaar` (daarna Caddy's eigen melding `loading certificates`) | Met `TLS_MODUS=bestand` moeten `certs/rooster.pem` en `certs/rooster.key` bestaan en leesbaar zijn. De sleutel mag geen wachtwoord hebben. Zolang `caddy` niet start, is de hele site onbereikbaar. |
 | `caddy` start niet en het log begint met `[dienstrooster] FOUT: TLS_MODUS=... bestaat niet` (daarna Caddy's eigen melding `File to import not found: tls_...`) | De waarde van `TLS_MODUS` in `.env` is fout gespeld. Alleen `bestand` en `intern` bestaan, in kleine letters (`Bestand` of `file` werkt niet). Verbeter `.env` en voer `docker compose up -d` uit. |

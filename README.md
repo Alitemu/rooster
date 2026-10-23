@@ -540,6 +540,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.801.0:** poort 80 staat standaard open en stuurt `http://` door naar `https://`, zonder `.env`. Is poort 80 bezet, zet dan `HTTP_PORT=8080` in `.env`.
+
 **Vanaf versie 0.800.0:** `docker-compose.yml` is de hele installatie. De Caddyfile zit er nu in, dus er hoeft niets naast het bestand te staan behalve `.env` en eventueel de map `certs`. De app luistert standaard op https, poort 443. Draait de NAS zelf al iets op 443, zet dan `APP_PORT=8010` in `.env`, zoals bij een installatie die tot nu toe op de standaardwaarde draaide. Een installatie die `APP_PORT` al in `.env` heeft staan, merkt niets. Ook zijn drie dingen die nog geen eigen test hadden nu gedekt: het stoppen van de AIOS-solver als de aanvrager ophangt, de regelnummers in meldingen van de voorkeurenimport en de grootte van de AIOS-dialogen op een telefoon.
 
 **Vanaf versie 0.112.0:** een tweede audit, nu vanuit andere hoeken: gelijktijdigheid, de solvers onder vijandige invoer, data en tijdzones, beveiliging, import en export, toegankelijkheid en taal, herstel en prestaties, en de kwaliteit van de tests zelf. Wat bleek is hersteld.
@@ -824,15 +826,15 @@ via die naam iets verstuurt (uitnodigingen, een herinnering). Links in mails
 die al verstuurd zijn, bevatten de oude naam. Laat die oude naam daarom nog
 een tijd naar de server wijzen.
 
-Wil je dat `http://rooster.voorbeeld.nl` ook werkt, zet dan in `.env`:
+Ook `http://rooster.voorbeeld.nl` werkt zonder instelling: Caddy luistert
+standaard op poort 80 en stuurt alles door naar https. Is poort 80 op de
+server al bezet (op een NAS meestal), zet dan in `.env` een andere poort:
 
 ```bash
-HTTP_PORT=80
+HTTP_PORT=8080
 ```
 
-Caddy stuurt alles op poort 80 dan door naar https. Zonder `HTTP_PORT` is
-poort 80 van buiten de server niet bereikbaar, omdat die op een NAS meestal
-al bezet is. Een `docker-compose.override.yml` is hiervoor niet meer nodig.
+De doorverwijzing werkt dan alleen voor wie `http://<server>:8080` intikt.
 
 Staat er een andere reverse proxy van de organisatie voor, dan moet die de
 oorspronkelijke naam (de `Host`-header) ongewijzigd doorgeven. Anders kent

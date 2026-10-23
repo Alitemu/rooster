@@ -729,10 +729,10 @@ const MUTATIONS = [
     tests: ['deployConfig'],
   },
   {
-    name: 'deployment: port 80 published to the world by default',
+    name: 'deployment: port 80 only on the loopback by default again',
     file: 'docker-compose.yml',
-    find: '"${HTTP_PORT:+0.0.0.0:}${HTTP_PORT:-127.0.0.1:}:80"',
-    replace: '"80:80"',
+    find: '- "${HTTP_PORT:-80}:80"',
+    replace: '- "${HTTP_PORT:+0.0.0.0:}${HTTP_PORT:-127.0.0.1:}:80"',
     tests: ['deployConfig'],
   },
   {
