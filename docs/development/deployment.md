@@ -39,14 +39,23 @@ true) or else
 `scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
 templates, no data; skipped for a migration-built database).
 
-**Port and address:** Caddy listens on APP_PORT (compose default 8010 for
-a NAS that uses 443 itself; .env.example and the IT instructions use 443),
+**One file (0.800.0):** docker-compose.yml is the whole installation. The
+Caddyfile is a heredoc in the caddy service's `sh -c` (written to
+/tmp/Caddyfile at start, `$$` for `$`), so there is no file next to the
+compose file to forget (a missing bind-mounted file becomes a directory and
+Caddy fails). It works on any Compose version, unlike `configs: content`.
+deployConfig.test.ts reads the Caddyfile back out of the compose file, and
+validates it with a real Caddy when `caddy` (or CADDY_BIN) is on the machine:
+have one for the release gate.
+
+**Port and address:** Caddy listens on APP_PORT (compose default 443; a NAS
+that uses 443 itself sets APP_PORT=8010 in .env),
 on any host name, with an on-demand certificate per name, so a renamed
 server needs no config change. `http://:80` in the Caddyfile redirects to
 https on APP_PORT; port 80 is published on every interface only with
 HTTP_PORT=80 in .env (otherwise on the loopback, so a NAS that has it
 taken is not disturbed).
-**Certificate:** TLS_MODUS in .env picks the snippet the Caddyfile imports.
+**Certificate:** TLS_MODUS in .env picks the snippet the Caddyfile imports (./certs is created empty by Docker when missing, which `intern` does not mind).
 `intern` (the default) is Caddy's own CA, on demand per name. `bestand` is
 the organisation's own certificate: ./certs/rooster.pem and rooster.key,
 mounted read-only at /certs. Caddy does not renew it; replacing the files
@@ -54,7 +63,7 @@ needs `docker compose restart caddy`. The caddy service starts through a
 small `sh -c` in docker-compose.yml that says in Dutch what is wrong with
 TLS_MODUS or the files, and then execs Caddy (which fails on them anyway,
 the whole site then being down: a wrong certificate is not hidden by a
-fallback on purpose). The web image carries docker-compose.yml, Caddyfile and
+fallback on purpose). The web image carries docker-compose.yml and
 docs/installatie-it.md in /app/installatie (Dockerfile), the very ones of
 that version: the IT department extracts them with `docker run ... tar`
 (the doc says how), so installing needs nothing from GitHub but the image.
@@ -201,4 +210,4 @@ otherwise make two names look the same.
 
 **Networking:**
 - All services on internal bridge network
-- Only `caddy` exposes the app port (default 8010) to host
+- Only `caddy` exposes the app port (default 443) to host

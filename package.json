@@ -1,6 +1,6 @@
 {
   "name": "dienstrooster",
-  "version": "0.112.0",
+  "version": "0.800.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -39,7 +39,7 @@
     "tsx": "^4.7.0",
     "typescript": "^5.5.0",
     "uuid": "^14.0.2",
-    "zod": "^3.22.4"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

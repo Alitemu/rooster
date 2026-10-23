@@ -5,14 +5,35 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 /**
- * The hard rule: a server with the organisation's own certificate needs
- * nothing but the three files and .env. These checks keep the Caddyfile, the
- * compose file and .env.example saying the same thing: the choice of
- * certificate (TLS_MODUS), where the files are read from, and the http port.
+ * The hard rule: a server needs nothing but docker-compose.yml (and .env for
+ * what differs): the Caddyfile is part of the caddy service in it, written
+ * out when the container starts (0.800.0). These checks keep that Caddyfile,
+ * the compose file and .env.example saying the same thing: the choice of
+ * certificate (TLS_MODUS), where the files are read from, and the ports.
  */
 
-const caddyfile = readFileSync('Caddyfile', 'utf8');
 const compose = readFileSync('docker-compose.yml', 'utf8');
+
+/** The script of the caddy service as a shell gets it: the indent gone and `$$` unescaped. */
+function caddyScript(): string {
+  const block = compose.match(/command:\n\s+- sh\n\s+- -c\n\s+- \|\n((?:        .*\n|\n)+)/);
+  if (!block) throw new Error('geen start-check in docker-compose.yml');
+  return block[1]
+    .split('\n')
+    .map((line) => line.slice(8))
+    .join('\n')
+    .replace(/\$\$/g, '$');
+}
+
+/** The Caddyfile the caddy service writes before it starts Caddy. */
+function caddyfileUitCompose(): string {
+  const m = caddyScript().match(/cat > \/tmp\/Caddyfile <<'CADDYFILE'\n([\s\S]*?)\nCADDYFILE\n/);
+  if (!m) throw new Error('geen Caddyfile in docker-compose.yml');
+  return m[1];
+}
+
+const caddyfile = caddyfileUitCompose();
+
 const envExample = readFileSync('.env.example', 'utf8');
 
 describe('certificate choice (TLS_MODUS)', () => {
@@ -37,6 +58,47 @@ describe('certificate choice (TLS_MODUS)', () => {
   });
 });
 
+describe('one file is the installation (0.800.0)', () => {
+  it('the compose file mounts no Caddyfile and no file of the repository but its folders', () => {
+    const mounts = [...compose.matchAll(/^\s+- (\.[^\s:]*|\$\{DATA_DIR[^}]*\}):/gm)].map((m) => m[1]);
+    expect([...mounts].sort()).toEqual(['./certs', '${DATA_DIR:-./data}'].sort());
+    expect(compose).not.toMatch(/Caddyfile:\/etc\/caddy/);
+  });
+
+  it('listens on 443 unless APP_PORT says otherwise: published, handed to caddy, and in the site address', () => {
+    expect(compose).toContain('- "${APP_PORT:-443}:${APP_PORT:-443}"');
+    expect(compose).toContain('APP_PORT: "${APP_PORT:-443}"');
+    expect(caddyfile).toContain('https://:{$APP_PORT:443} {');
+    expect(caddyfile).toContain('redir https://{host}:{$APP_PORT:443}{uri} 308');
+    expect(compose).not.toContain('8010}');
+  });
+
+  it('.env.example gives a NAS that uses 443 itself the way out', () => {
+    expect(envExample).toMatch(/^# APP_PORT=8010$/m);
+  });
+
+  // The real thing, when a Caddy binary is at hand (CADDY_BIN, or caddy on the PATH): the file it writes is one Caddy accepts.
+  const caddy = process.env.CADDY_BIN || 'caddy';
+  const heeftCaddy = spawnSync(caddy, ['version'], { encoding: 'utf8' }).status === 0;
+  it.skipIf(!heeftCaddy)('the Caddyfile in the compose file is valid for Caddy, with and without the own certificate', () => {
+    const map = mkdtempSync(join(tmpdir(), 'caddyfile-'));
+    const bestand = join(map, 'Caddyfile');
+    writeFileSync(bestand, caddyfile);
+    const sleutels = spawnSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=rooster.test', '-keyout', join(map, 'rooster.key'), '-out', join(map, 'rooster.pem')], { encoding: 'utf8' });
+    expect(sleutels.status).toBe(0);
+    for (const tlsModus of ['intern', 'bestand']) {
+      const r = spawnSync(caddy, ['validate', '--config', bestand, '--adapter', 'caddyfile'], {
+        encoding: 'utf8',
+        env: { ...process.env, TLS_MODUS: tlsModus, APP_PORT: '443', BASE_PATH: '/achterwacht', XDG_DATA_HOME: map, XDG_CONFIG_HOME: map },
+      });
+      // The certificate is read from /certs, which a test machine does not have: only that may be what fails.
+      const fout = `${r.stdout}${r.stderr}`;
+      if (tlsModus === 'intern') expect(r.status, fout).toBe(0);
+      else if (r.status !== 0) expect(fout).toContain('/certs/rooster');
+    }
+  });
+});
+
 describe('port 80 (HTTP_PORT)', () => {
   it('is published on every interface only when HTTP_PORT is set, on the loopback otherwise', () => {
     expect(compose).toContain('"${HTTP_PORT:+0.0.0.0:}${HTTP_PORT:-127.0.0.1:}:80"');
@@ -55,13 +117,8 @@ describe('port 80 (HTTP_PORT)', () => {
  * check never keeps Caddy from starting.
  */
 function startCheck(): string {
-  const block = compose.match(/command:\n\s+- sh\n\s+- -c\n\s+- \|\n((?:        .*\n|\n)+)/);
-  if (!block) throw new Error('geen start-check in docker-compose.yml');
-  return block[1]
-    .split('\n')
-    .map((line) => line.slice(8))
-    .join('\n')
-    .replace(/\$\$/g, '$')
+  return caddyScript()
+    .replace(/cat > \/tmp\/Caddyfile <<'CADDYFILE'\n[\s\S]*?\nCADDYFILE\n/, '')
     .replace(/exec caddy run .*/, 'echo CADDY-GESTART');
 }
 
@@ -104,14 +161,14 @@ describe('start check of caddy', () => {
 });
 
 describe('the installation files in the image', () => {
-  it('the Dockerfile puts compose file, Caddyfile and the IT guide in /app/installatie', () => {
+  it('the Dockerfile puts the compose file and the IT guide in /app/installatie', () => {
     const dockerfile = readFileSync('Dockerfile', 'utf8');
-    expect(dockerfile).toContain('COPY docker-compose.yml Caddyfile docs/installatie-it.md /app/installatie/');
+    expect(dockerfile).toContain('COPY docker-compose.yml docs/installatie-it.md /app/installatie/');
   });
 
   it('those files exist and the build context does not leave them out', () => {
     const dockerignore = readFileSync('.dockerignore', 'utf8').split('\n').map((l) => l.trim());
-    for (const file of ['docker-compose.yml', 'Caddyfile', 'docs/installatie-it.md']) {
+    for (const file of ['docker-compose.yml', 'docs/installatie-it.md']) {
       expect(existsSync(file)).toBe(true);
       expect(dockerignore).not.toContain(file);
       expect(dockerignore).not.toContain(file.split('/')[0]);

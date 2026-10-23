@@ -702,9 +702,30 @@ const MUTATIONS = [
   },
   {
     name: 'deployment: the certificate of the organisation is never chosen',
-    file: 'Caddyfile',
-    find: 'import tls_{$TLS_MODUS:intern}',
+    file: 'docker-compose.yml',
+    find: 'import tls_{$$TLS_MODUS:intern}',
     replace: 'import tls_intern',
+    tests: ['deployConfig'],
+  },
+  {
+    name: 'deployment: the app is published on 8010 again by default',
+    file: 'docker-compose.yml',
+    find: '- "${APP_PORT:-443}:${APP_PORT:-443}"',
+    replace: '- "${APP_PORT:-8010}:${APP_PORT:-8010}"',
+    tests: ['deployConfig'],
+  },
+  {
+    name: 'deployment: caddy listens on 8010 when APP_PORT is left out',
+    file: 'docker-compose.yml',
+    find: 'https://:{$$APP_PORT:443} {',
+    replace: 'https://:{$$APP_PORT:8010} {',
+    tests: ['deployConfig'],
+  },
+  {
+    name: 'deployment: the Caddyfile is a file next to the compose file again',
+    file: 'docker-compose.yml',
+    find: '      - ./certs:/certs:ro\n',
+    replace: '      - ./certs:/certs:ro\n      - ./Caddyfile:/etc/caddy/Caddyfile\n',
     tests: ['deployConfig'],
   },
   {
@@ -731,8 +752,8 @@ const MUTATIONS = [
   {
     name: 'deployment: the IT guide is left out of the image',
     file: 'Dockerfile',
-    find: 'COPY docker-compose.yml Caddyfile docs/installatie-it.md /app/installatie/',
-    replace: 'COPY docker-compose.yml Caddyfile /app/installatie/',
+    find: 'COPY docker-compose.yml docs/installatie-it.md /app/installatie/',
+    replace: 'COPY docker-compose.yml /app/installatie/',
     tests: ['deployConfig'],
   },
   {

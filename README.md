@@ -45,9 +45,10 @@ npm run test
 
 ### Toegang
 
-- **Web:** https://localhost:8010 (via Caddy, interne TLS-certificaten; de
-  poort is `APP_PORT` in `.env`)
-- **Health check:** https://localhost:8010/health
+- **Web:** https://localhost (via Caddy op poort 443, interne TLS-certificaten;
+  de poort is `APP_PORT` in `.env`, bijvoorbeeld `APP_PORT=8010` als 443 bezet
+  is, en het adres wordt dan https://localhost:8010)
+- **Health check:** https://localhost/health
 - **Solver:** http://localhost:8000 (alleen intern netwerk, geen publieke poort)
 
 ### Testgebruikers
@@ -285,7 +286,7 @@ Voor deze fase gebouwd:
 Drie containers met intern netwerk:
 
 ```
-caddy:8010 ──→ web:3000 ──→ solver:8000
+caddy:443 ──→ web:3000 ──→ solver:8000
   (TLS)        (Next.js)    (Python/FastAPI)
 ```
 
@@ -538,6 +539,8 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 0.800.0:** `docker-compose.yml` is de hele installatie. De Caddyfile zit er nu in, dus er hoeft niets naast het bestand te staan behalve `.env` en eventueel de map `certs`. De app luistert standaard op https, poort 443. Draait de NAS zelf al iets op 443, zet dan `APP_PORT=8010` in `.env`, zoals bij een installatie die tot nu toe op de standaardwaarde draaide. Een installatie die `APP_PORT` al in `.env` heeft staan, merkt niets. Ook zijn drie dingen die nog geen eigen test hadden nu gedekt: het stoppen van de AIOS-solver als de aanvrager ophangt, de regelnummers in meldingen van de voorkeurenimport en de grootte van de AIOS-dialogen op een telefoon.
 
 **Vanaf versie 0.112.0:** een tweede audit, nu vanuit andere hoeken: gelijktijdigheid, de solvers onder vijandige invoer, data en tijdzones, beveiliging, import en export, toegankelijkheid en taal, herstel en prestaties, en de kwaliteit van de tests zelf. Wat bleek is hersteld.
 
@@ -797,17 +800,25 @@ Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 
 ##### Op poort 443 met een eigen naam
 
-Op een server met een eigen DNS-naam, bijvoorbeeld
-`https://rooster.voorbeeld.nl`, zet je in `.env`:
+De app luistert standaard op poort 443. Op een server met een eigen
+DNS-naam, bijvoorbeeld `https://rooster.voorbeeld.nl`, is dus niets in
+`.env` nodig, behalve dat je `BASE_URL` leeg laat. Het bestand
+`docker-compose.yml` is de hele installatie: ook de Caddyfile zit erin en er
+hoeft niets naast te staan.
+
+Bezet de NAS poort 443 zelf (een Synology doet dat vaak voor DSM), zet dan
+in `.env`:
 
 ```bash
-APP_PORT=443
+APP_PORT=8010
 ```
 
-en laat je `BASE_URL` leeg. De app bepaalt dan zelf zijn adres: uit de naam
+Het adres wordt dan `https://<nas>:8010`.
+
+De app bepaalt zelf zijn adres: uit de naam
 waarmee de planner de app opent. Caddy maakt een certificaat voor elke naam
 waarmee de server wordt aangesproken. Een nieuwe naam vraagt dus geen
-aanpassing in `.env` of `Caddyfile`. Na een naamswijziging gebruiken
+aanpassing in `.env` of `docker-compose.yml`. Na een naamswijziging gebruiken
 automatische herinneringen en ruilmails het nieuwe adres zodra de planner
 via die naam iets verstuurt (uitnodigingen, een herinnering). Links in mails
 die al verstuurd zijn, bevatten de oude naam. Laat die oude naam daarom nog
@@ -830,7 +841,7 @@ de app zijn eigen adres niet.
 ##### Draaien in een submap
 
 De app kan onder een submap draaien, bijvoorbeeld
-`https://<nas>/achterwacht` in plaats van `https://<nas>:8010`. Handig als
+`https://<nas>/achterwacht` in plaats van een adres met poortnummer. Handig als
 het adres al door een andere website wordt gebruikt.
 
 - De submap wordt bij het bouwen vastgelegd. Bij **Bouwen (test)** vul je
@@ -848,8 +859,9 @@ het adres al door een andere website wordt gebruikt.
   `BASE_PATH` weg uit `.env` en zet `BASE_URL` terug op het adres zonder
   submap. Links in mails die al verstuurd zijn, bevatten nog de submap en
   werken dan niet meer; stuur zo nodig de uitnodigingen opnieuw.
-- De poort staat hier los van: `APP_PORT=443` werkt alleen als de NAS die
-  poort zelf niet al gebruikt (een Synology doet dat vaak voor DSM).
+- De poort staat hier los van: 443 werkt alleen als de NAS die poort zelf
+  niet al gebruikt (een Synology doet dat vaak voor DSM). Zet anders
+  `APP_PORT=8010` in `.env`.
 
 Komt de app later achter de webserver van een andere site, onder een
 submap van diens adres, dan moet die server alles onder de submap
@@ -893,7 +905,7 @@ Zelf bouwen vanuit de broncode kan nog steeds, met
 #### TLS-certificaat vertrouwen (de browserwaarschuwing oplossen)
 
 Caddy geeft zelf certificaten uit vanuit een eigen, interne CA
-(`pki { ca internal ... }` in `Caddyfile`) - bewust, want deze installatie
+(`pki { ca internal ... }` in de Caddyfile die in `docker-compose.yml` zit) - bewust, want deze installatie
 heeft geen vaste domeinnaam en is alleen bedoeld voor het interne
 netwerk (alleen `caddy` publiceert een poort, zie `docker-compose.yml`).
 Browsers kennen die CA nog niet, vandaar de "niet veilig"-waarschuwing.
@@ -943,8 +955,8 @@ Let op een paar dingen:
 **Optie 2 - een echt, publiek vertrouwd certificaat (Let's Encrypt).**
 Alleen mogelijk met een eigen domeinnaam die vanaf het publieke internet
 bereikbaar is op poort 80/443 - wat haaks staat op het huidige
-"alleen intern netwerk"-ontwerp. Vervang in dat geval in `Caddyfile` de
-regel `https://:{$APP_PORT:8010}` door `https://jouw-domein.voorbeeld.nl`
+"alleen intern netwerk"-ontwerp. Vervang in dat geval in `docker-compose.yml`, in het stuk Caddyfile van de
+service `caddy`, de regel `https://:{$$APP_PORT:443}` door `https://jouw-domein.voorbeeld.nl`
 en verwijder het blok `tls internal { on_demand }`; Caddy vraagt dan zelf
 automatisch een Let's Encrypt-certificaat aan en vernieuwt dat ook zelf.
 Voordeel: geen enkel apparaat hoeft dan nog iets te installeren.

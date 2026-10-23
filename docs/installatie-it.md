@@ -40,8 +40,9 @@ docker pull $IMAGE
 docker run --rm --entrypoint tar $IMAGE -cf - -C /app/installatie . | tar -xf -
 ```
 
-Daarna staan hier `docker-compose.yml`, `Caddyfile` en deze handleiding
-(`installatie-it.md`). Wil je een vaste versie in plaats van de vrijgegeven
+Daarna staan hier `docker-compose.yml` en deze handleiding
+(`installatie-it.md`). De Caddyfile zit in `docker-compose.yml`: dat ene
+bestand is de installatie. Wil je een vaste versie in plaats van de vrijgegeven
 versie, vervang dan `stable` door het versienummer, bijvoorbeeld `0.88.1`.
 
 **2. Zet het certificaat klaar** in een map `certs` naast `docker-compose.yml`:
@@ -52,15 +53,15 @@ versie, vervang dan `stable` door het versienummer, bijvoorbeeld `0.88.1`.
 Het certificaat moet de DNS-naam van de server bevatten (als SAN). Heb je een
 `.pfx`, zet het dan eerst om naar twee PEM-bestanden.
 
-**3. Maak `.env`** naast `docker-compose.yml` met deze drie regels:
+**3. Maak `.env`** naast `docker-compose.yml` met deze twee regels:
 
 ```bash
-APP_PORT=443
 HTTP_PORT=80
 TLS_MODUS=bestand
 ```
 
-Meer is niet nodig. `HTTP_PORT=80` stuurt `http://` door naar `https://`. Laat
+Meer is niet nodig. De app luistert standaard op poort 443, dus `APP_PORT`
+hoeft er niet in. `HTTP_PORT=80` stuurt `http://` door naar `https://`. Laat
 `BASE_URL` leeg: de app bepaalt zijn adres dan zelf uit de naam waarmee hij
 wordt geopend.
 
@@ -107,20 +108,18 @@ De app zelf hoeft niet te stoppen en er gaan geen gegevens verloren.
 
 ## Bijwerken naar een nieuwe versie
 
-`docker compose pull` haalt alleen de images op, niet `docker-compose.yml` en
-`Caddyfile`. Die twee kunnen met een versie meeveranderen (een nieuwe
-container, een nieuwe instelling). Haal ze daarom bij elke nieuwe versie uit
-de nieuwe image:
+`docker compose pull` haalt alleen de images op, niet `docker-compose.yml`.
+Dat bestand kan met een versie meeveranderen (een nieuwe container, een
+nieuwe instelling, de Caddyfile die erin zit). Haal het daarom bij elke
+nieuwe versie uit de nieuwe image:
 
 ```bash
 cd /opt/dienstrooster
 IMAGE=ghcr.io/alitemu/rooster-web:stable
 docker pull $IMAGE
 cp docker-compose.yml docker-compose.yml.oud
-cp Caddyfile Caddyfile.oud
 docker run --rm --entrypoint tar $IMAGE -cf - -C /app/installatie . | tar -xf -
 diff docker-compose.yml.oud docker-compose.yml
-diff Caddyfile.oud Caddyfile
 docker compose pull
 docker compose up -d
 docker compose ps
