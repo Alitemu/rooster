@@ -343,7 +343,7 @@ export default function PoolStaffPage() {
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig vanaf</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig tot</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Deelnamefactor</th>
-                  <th className="px-4 py-2 text-left text-sm font-medium"><span className="sr-only">Acties</span></th>
+                  <th className="relative px-4 py-2 text-left text-sm font-medium"><span className="sr-only">Acties</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y">

@@ -567,7 +567,7 @@ export default function PlannerHomePage() {
                 <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
                 <th className="px-4 py-2 text-left text-sm font-medium">Data</th>
                 <th className="px-4 py-2 text-left text-sm font-medium">Status</th>
-                <th className="px-4 py-2 text-left text-sm font-medium"><span className="sr-only">Acties</span></th>
+                <th className="relative px-4 py-2 text-left text-sm font-medium"><span className="sr-only">Acties</span></th>
               </tr>
             </thead>
             <tbody className="divide-y">

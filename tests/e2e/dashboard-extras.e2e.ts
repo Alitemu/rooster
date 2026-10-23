@@ -34,7 +34,7 @@ test.describe('Periodepagina', () => {
   });
 
   const section = (page: import('@playwright/test').Page, title: string) =>
-    page.locator('div.card', { has: page.locator('[role="button"]', { hasText: title }) }).first();
+    page.locator('div.card', { has: page.getByRole('heading', { name: title }) }).first();
 
   test('"Ongedaan maken" is for the acute moment: on the page where the change is made, gone after a reload and not on the dashboard', async ({ page }) => {
     await loginAsPlanner(page);
@@ -59,7 +59,7 @@ test.describe('Periodepagina', () => {
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
     const vooraf = section(page, 'Rooster vooraf invullen');
-    await vooraf.locator('[role="button"]').first().click();
+    await vooraf.getByRole('heading').getByRole('button').click();
     await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
     await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toHaveCount(0);
   });
@@ -89,7 +89,7 @@ test.describe('Periodepagina', () => {
     await page.waitForLoadState('networkidle');
     const exportSection = section(page, 'Exporteren & communicatie');
     const button = exportSection.getByRole('button', { name: /Mailinstellingen/ });
-    if (!(await button.isVisible())) await exportSection.locator('[role="button"]').first().click();
+    if (!(await button.isVisible())) await exportSection.getByRole('heading').getByRole('button').click();
     await button.click();
 
     const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
@@ -141,7 +141,7 @@ test.describe('Periodepagina', () => {
     await page.waitForLoadState('networkidle');
     const exportSection = section(page, 'Exporteren & communicatie');
     const status = exportSection.getByTestId('mail-status');
-    if (!(await status.isVisible())) await exportSection.locator('[role="button"]').first().click();
+    if (!(await status.isVisible())) await exportSection.getByRole('heading').getByRole('button').click();
     await expect(status).toContainText('Alleen de beheerder stelt de mail in.');
     await expect(exportSection.getByRole('button', { name: /Mailinstellingen/ })).toHaveCount(0);
   });
