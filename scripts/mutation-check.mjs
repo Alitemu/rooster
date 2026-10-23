@@ -80,6 +80,20 @@ const MUTATIONS = [
     tests: ['app/api/aios/aiosVoorkeurImport'],
   },
   {
+    name: 'import: the messages count the rows of the file, not the rows of Excel',
+    file: 'lib/aiosVoorkeurImport.ts',
+    find: 'const regel = regels?.[r] ?? r + 1;',
+    replace: 'const regel = r + 1;',
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
+  {
+    name: 'import: the Excel row numbers are not passed on to the reading',
+    file: 'lib/aiosVoorkeurImport.ts',
+    find: 'const gelezen = lees(period, rows, regels);',
+    replace: 'const gelezen = lees(period, rows);',
+    tests: ['app/api/aios/aiosVoorkeurImport'],
+  },
+  {
     name: 'import: an empty cell of a request leaves the request on',
     file: 'lib/aiosVoorkeurImport.ts',
     find: "verzoeken.push({ personId: id, codenaam, regel, veld: rijInfo.veld, waarde: ruw !== '' });",
@@ -1521,6 +1535,25 @@ const MUTATIONS = [
     find: "      if (pool && personHasOtherDienst(payload.person_id, pool.type)) return 'ANDERE_DIENST';",
     replace: "",
     tests: ["app/api/planner/pool/[id]/members/undo-last"],
+  },
+  // 0.112.0: a caller who hangs up stops the AIOS's search.
+  {
+    name: "aios-solver: a caller who hangs up does not stop the search",
+    file: "aios-solver/main.py",
+    find: "            if await raw_request.is_disconnected():\n                stop.vraag()",
+    replace: "            if await raw_request.is_disconnected():\n                pass",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_regels.py", "-k", "hangs_up"],
+  },
+  {
+    name: "aios-solver: the solver stays busy after the search was stopped",
+    file: "aios-solver/main.py",
+    find: "        global _loopt\n        _loopt = False\n\n    try:",
+    replace: "        global _loopt\n\n    try:",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_regels.py", "-k", "hangs_up or stays"],
   },
   // 0.107.0: the nights have a saldo of their own.
   {

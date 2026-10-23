@@ -545,3 +545,47 @@ def test_the_time_limit_is_for_the_whole_job_including_the_model_building():
     main.los_op(request)
     # Building the model took part of the 3 seconds: the whole stays near the limit, not building plus the limit.
     assert time.monotonic() - begin < 3 + 12
+
+
+class _Verbinding:
+    """A request whose caller hangs up after a while: what main.solve polls."""
+
+    def __init__(self, na_seconden: float | None) -> None:
+        self.begin = time.monotonic()
+        self.na = na_seconden
+        self.gevraagd = 0
+
+    async def is_disconnected(self) -> bool:
+        self.gevraagd += 1
+        return self.na is not None and time.monotonic() - self.begin >= self.na
+
+
+def test_a_caller_who_hangs_up_stops_the_search_and_frees_the_solver():
+    import asyncio
+
+    inp = weken(13)
+    for i in range(30):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 120
+    request = main.SolveInput(**inp)
+    verbinding = _Verbinding(na_seconden=2)
+    begin = time.monotonic()
+    uit = asyncio.run(main.solve(request, verbinding))
+    duur = time.monotonic() - begin
+    # Far under the 120 seconds the search was allowed: it stopped within a poll or two of the hang-up.
+    assert duur < 20
+    assert verbinding.gevraagd >= 2
+    assert uit.status in ('HAALBAAR', 'GEEN_OPLOSSING')
+    # The next request is not turned away with a 429.
+    assert main._loopt is False
+
+
+def test_a_caller_who_stays_gets_the_whole_search():
+    import asyncio
+
+    inp = weken(1)
+    aios(inp, 'x')
+    inp['tijdslimiet_seconden'] = 20
+    uit = asyncio.run(main.solve(main.SolveInput(**inp), _Verbinding(na_seconden=None)))
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+    assert main._loopt is False

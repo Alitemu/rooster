@@ -237,6 +237,9 @@ search stops as soon as the caller has hung up (model.Stop, polled once a
 second in main.py), the way the achterwacht's solver does it: the app
 forgets a running generation when it restarts, and the planner pressing
 "maken" again used to start a second solve beside the first.
+test_regels.py proves it with a request that hangs up after two seconds
+(`_Verbinding`): a 120 second search ends within 20 seconds and the next
+solve is not turned away with a 429.
 
 ## The model
 

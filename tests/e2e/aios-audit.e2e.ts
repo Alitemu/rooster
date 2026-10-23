@@ -499,3 +499,50 @@ test('the planner of the AIOS: Exporteren & communicatie without the beheerder\'
   expect((await download.text()).includes(TEKST_B)).toBe(false);
   await ctx2.close();
 });
+
+test('the dialogs of the AIOS period fit a phone: inside the screen, scrolling inside themselves, the page not sideways', async ({ browser }) => {
+  // A small, narrow screen: the tallest content has to scroll in the dialog, never past the edge.
+  const BREEDTE = 375;
+  const HOOGTE = 480;
+  const ctx = await browser.newContext({ viewport: { width: BREEDTE, height: HOOGTE } });
+  const page = await ctx.newPage();
+  try {
+    await loginAsBeheerder(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
+    await openAiosSectie(page, 'Exporteren & communicatie');
+
+    const binnenScherm = async (kaart: ReturnType<Page['locator']>) => {
+      const box = (await kaart.boundingBox())!;
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.y).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(BREEDTE);
+      expect(box.y + box.height).toBeLessThanOrEqual(HOOGTE);
+      // The dialog itself does not scroll sideways, and the page behind it does not either.
+      expect(await kaart.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(1);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+    };
+
+    await page.getByRole('button', { name: /Uitnodigingen en herinneringen/ }).click();
+    const exporteren = page.getByRole('dialog', { name: 'Exporteren' });
+    await expect(exporteren).toBeVisible();
+    await binnenScherm(exporteren.locator('> div'));
+    // Whatever does not fit is reached by scrolling inside the dialog.
+    const sluiten = exporteren.getByRole('button', { name: 'Sluiten' });
+    await sluiten.scrollIntoViewIfNeeded();
+    await expect(sluiten).toBeInViewport();
+    await sluiten.click();
+    await expect(exporteren).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Voorkeuren importeren \(test\)/ }).click();
+    const importeren = page.getByRole('dialog', { name: 'Voorkeuren van de AIOS importeren' });
+    await expect(importeren).toBeVisible();
+    await binnenScherm(importeren.locator('> div'));
+    const annuleren = importeren.getByRole('button', { name: 'Annuleren' });
+    await annuleren.scrollIntoViewIfNeeded();
+    await expect(annuleren).toBeInViewport();
+    await annuleren.click();
+    await expect(importeren).toHaveCount(0);
+  } finally {
+    await ctx.close();
+  }
+});

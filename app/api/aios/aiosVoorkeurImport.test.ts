@@ -56,6 +56,11 @@ const kopieer = (rows: string[][]) => rows.map((r) => [...r]);
 const kolom = (rows: string[][], n: string) => rows[0].indexOf(cn(n));
 const rijen = (rows: string[][], datum: string, code: string) =>
   rows.filter((r, i) => i > 0 && excelSerialToDate(Number(r[0])) === datum && r[3].startsWith(`${code} `));
+const verzoekRij = (rows: string[][], label: string) => {
+const rij = rows.find((r) => r[3] === label)!;
+  for (let i = 0; i < rows[0].length; i++) rij[i] ??= '';
+  return rij;
+};
 const niveau = (wie: string, datum: string, code: string) =>
   (
     db
@@ -389,11 +394,6 @@ describe('what the import used to pass over in silence', () => {
 describe('the requests of the AIOS at the top of the overview', () => {
   const nl = (iso: string) => `${iso.slice(8)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
   // A cell past the end of a row is not in it (the reader leaves out the empty ones at the end): filled before it is set.
-  const verzoekRij = (rows: string[][], label: string) => {
-    const rij = rows.find((r) => r[3] === label)!;
-    for (let i = 0; i < rows[0].length; i++) rij[i] ??= '';
-    return rij;
-  };
 
   it('are in the file, one row each, and such a file reads back unchanged', async () => {
     const periode = loadAiosPeriode(w.period)!;
@@ -460,6 +460,32 @@ describe('the requests of the AIOS at the top of the overview', () => {
     expect(problemen.some((p) => p.includes('binnen het kwartaal'))).toBe(true);
     expect(problemen.some((p) => p.includes('"Verzoek: iets anders" is geen verzoek dat bekend is'))).toBe(true);
     expect((await importeer(rows, true)).status).toBe(400);
+  });
+});
+
+describe('the row numbers in the messages', () => {
+  // Excel leaves empty rows out of the file but keeps their numbers: "Regel 12" has to be the row the user sees.
+  it('are the Excel numbers, empty rows in between counted, in a request, a mark and a double dienst', async () => {
+    const rows = kopieer(await gelezen());
+    verzoekRij(rows, 'Verzoek: 4 nachten (wo t/m za)')[kolom(rows, 'y')] = 'misschien';
+    rijen(rows, ANDERE_UD, 'UD')[0][kolom(rows, 'z')] = 'misschien';
+    const dubbel = [...rijen(rows, UD_DAG, 'UD')[0]];
+    rows.push(dubbel);
+    const metGaten: string[][] = [];
+    const nummer = new Map<string[], number>();
+    rows.forEach((rij, i) => {
+      if (i > 0 && i % 2 === 0) metGaten.push([], []);
+      metGaten.push(rij);
+      nummer.set(rij, metGaten.length);
+    });
+    expect(nummer.get(rows[rows.length - 1])).toBeGreaterThan(rows.length + 1);
+    const check = await importeer(metGaten, false);
+    const problemen: string[] = check.json.data.problemen;
+    const regelVan = (rij: string[]) => nummer.get(rij)!;
+    expect(problemen).toContain(`Regel ${regelVan(verzoekRij(rows, 'Verzoek: 4 nachten (wo t/m za)'))}, ${cn('y')}: "misschien" is geen ja. Laat de cel leeg als de AIOS dit niet vraagt.`);
+    expect(problemen.some((p) => p.startsWith(`Regel ${regelVan(rijen(rows, ANDERE_UD, 'UD')[0])}, ${cn('z')}: "misschien"`))).toBe(true);
+    const oorspronkelijk = rijen(rows, UD_DAG, 'UD')[0];
+    expect(problemen.some((p) => p.startsWith(`Regel ${regelVan(dubbel)}:`) && p.endsWith(`staat ook op regel ${regelVan(oorspronkelijk)}.`))).toBe(true);
   });
 });
 
