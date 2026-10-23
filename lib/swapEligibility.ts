@@ -1,3 +1,4 @@
+import { localIsoDate } from './localDate';
 /**
  * Shared "may these two shifts still be swapped" check.
  *
@@ -27,11 +28,8 @@ export interface SwapEligibilityResult {
   message?: string;
 }
 
-/** Local calendar date (YYYY-MM-DD) - slot dates are stored the same way. */
-function todayISO(now: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
+/** The ward's calendar date (YYYY-MM-DD, lib/localDate.ts) - slot dates are stored the same way. */
+const todayISO = (now: Date): string => localIsoDate(now);
 
 export function checkSwapAllowed(
   params: { periodStatus: string; definitiefOp: string | null | undefined; slotDates: Array<string | null | undefined> },

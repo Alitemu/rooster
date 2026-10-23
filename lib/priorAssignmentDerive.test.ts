@@ -241,6 +241,14 @@ describe('Prior Assignment Derivation', () => {
   });
 
   describe('doRangesOverlap', () => {
+    // 24 hours added to a local midnight is 23:00 of the same day on the 25 hour day the clocks go back.
+    it('sees ranges that touch across the day the clocks go back, and the day they go forward', () => {
+      expect(doRangesOverlap('2026-10-19', '2026-10-25', '2026-10-26', '2026-11-01')).toBe(true);
+      expect(doRangesOverlap('2026-10-26', '2026-11-01', '2026-10-19', '2026-10-25')).toBe(true);
+      expect(doRangesOverlap('2027-03-22', '2027-03-28', '2027-03-29', '2027-04-04')).toBe(true);
+      expect(doRangesOverlap('2026-10-19', '2026-10-24', '2026-10-26', '2026-11-01')).toBe(false);
+    });
+
     it('detects overlapping ranges', () => {
       const result = doRangesOverlap(
         '2027-08-28',

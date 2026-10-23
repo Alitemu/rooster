@@ -132,6 +132,6 @@ const TELLER_LABEL: Record<string, string> = {
 
 /** "ma 4 jan · avonddienst" - the shared shape every assignment undo label uses. */
 export function assignmentSlotLabel(datum: string, teller: string): string {
-  const formatted = new Date(datum).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
+  const formatted = new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
   return `${formatted} · ${TELLER_LABEL[teller] || teller}`;
 }

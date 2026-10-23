@@ -46,6 +46,7 @@ import { aiosSolverInvoer, type AiosSolverInvoer } from '@/lib/aiosSolverInvoer'
 import { nieuweOvertredingen, regelZin, type Regel } from '@/lib/aiosRegels';
 import { BLOK_VORM_LABELS, type BlokSoort, type BlokVorm } from '@/lib/aiosDiensten';
 import { writeAuditLog } from '@/lib/auditLog';
+import { localIsoDate } from '@/lib/localDate';
 
 export const RUIL_MAX_TOELICHTING = 200;
 
@@ -150,11 +151,8 @@ export function aiosEenheden(slots: readonly Slot[], rooster: ReadonlyMap<string
   return uit.sort((a, b) => a.van.localeCompare(b.van) || a.naam.localeCompare(b.naam));
 }
 
-/** Local calendar date, as the slots' dates are stored. */
-function vandaag(now: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
+/** The ward's calendar date (lib/localDate.ts), as the slots' dates are stored. */
+const vandaag = (now: Date): string => localIsoDate(now);
 
 interface Stand {
   slots: Slot[];

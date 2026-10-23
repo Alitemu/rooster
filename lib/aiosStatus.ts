@@ -13,6 +13,7 @@ import { EERST_VERWIJDEREN, periodStatusLabel } from '@/lib/aiosTeksten';
 import { haalTweedeNachtWeg } from '@/lib/aiosFeestdagBlokken';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { isDeadlineTekst } from '@/lib/aiosInvoer';
 
 export type StatusUitkomst = { ok: true } | { ok: false; status: number; code: string; message: string };
 
@@ -23,8 +24,10 @@ export function zetAiosDeadline(period: AiosUitnodigPeriode, gevraagd: unknown, 
     return nee(400, 'INVALID_STATUS', `Deadline kan niet aangepast worden in status "${periodStatusLabel(period.status)}"`);
   }
   if (typeof gevraagd !== 'string' || gevraagd.trim() === '') return nee(400, 'MISSING_DEADLINE', 'Deadline is verplicht');
+  // The shape the forms write ("2026-11-05T17:00"): "2026", "12/01/2026" or a date alone are read by Date as
+  // something else (the first of December, UTC midnight) and would be stored as they came.
   const moment = new Date(gevraagd);
-  if (isNaN(moment.getTime())) return nee(400, 'INVALID_DEADLINE', 'Ongeldige deadline');
+  if (!isDeadlineTekst(gevraagd) || isNaN(moment.getTime())) return nee(400, 'INVALID_DEADLINE', 'Ongeldige deadline');
   if (moment < now) return nee(400, 'INVALID_DEADLINE', 'Deadline mag niet in het verleden liggen');
   if (moment >= parseISO(period.start_datum)) return nee(400, 'INVALID_DEADLINE', 'Deadline moet vóór de startdatum liggen');
   db.transaction(() => {

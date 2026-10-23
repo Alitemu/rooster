@@ -66,7 +66,7 @@ interface Props {
 // Rest of the app formats dates via toLocaleDateString('nl-NL') rather than
 // showing the raw YYYY-MM-DD - kept consistent here too.
 function formatDatum(datum: string): string {
-  return new Date(datum).toLocaleDateString('nl-NL');
+  return new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL');
 }
 
 export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSuccess }: Props) {

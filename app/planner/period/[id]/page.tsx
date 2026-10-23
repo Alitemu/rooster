@@ -227,8 +227,8 @@ export default function PlannerPeriodPage() {
           <div>
             <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{period.naam}</h1>
             <p className="text-neutral-600 mb-2">
-              {new Date(period.start_datum).toLocaleDateString('nl-NL')} t/m{' '}
-              {new Date(period.eind_datum).toLocaleDateString('nl-NL')}
+              {new Date(`${period.start_datum}T12:00:00`).toLocaleDateString('nl-NL')} t/m{' '}
+              {new Date(`${period.eind_datum}T12:00:00`).toLocaleDateString('nl-NL')}
             </p>
             {editingDeadline ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">

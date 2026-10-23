@@ -16,7 +16,6 @@ import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
 import { MailSettingsDialog } from '@/components/MailSettingsDialog';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
-import { dateToISO } from '@/lib/holidays';
 import {
   aiosPreferenceDeadline,
   aiosQuarterName,
@@ -25,6 +24,7 @@ import {
   type AiosQuarter,
 } from '@/lib/aiosQuarter';
 import { foutTekst } from '@/lib/foutTekst';
+import { localIsoDate, localIsoMinute } from '@/lib/localDate';
 
 interface Period {
   id: string;
@@ -76,7 +76,7 @@ const datumLang = (datum: string) =>
   new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 /** The quarters a new AIOS period can be made for (lib/aiosQuarter.ts). */
-const aiosKwartalen = () => aiosQuartersToOffer(dateToISO(new Date()));
+const aiosKwartalen = () => aiosQuartersToOffer(localIsoDate());
 
 /** The new-period form on an AIOS quarter: its name, dates and deadline. */
 function aiosFormulier(poolId: string, q: AiosQuarter) {
@@ -92,7 +92,8 @@ function aiosFormulier(poolId: string, q: AiosQuarter) {
 /** The preferences deadline as datetime-local; empty when that moment has passed. */
 function aiosDeadline(q: AiosQuarter): string {
   const datum = aiosPreferenceDeadline(q);
-  return new Date(`${datum}T17:00:00`) > new Date() ? `${datum}T17:00` : '';
+  // The deadline is a time on the ward's clock, whatever clock the browser has.
+  return `${datum}T17:00` > localIsoMinute() ? `${datum}T17:00` : '';
 }
 
 // The stakes of deleting a period differ a lot by status - a CONCEPT

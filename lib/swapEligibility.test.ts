@@ -71,4 +71,20 @@ describe('checkSwapAllowed', () => {
       checkSwapAllowed({ periodStatus: 'GEPUBLICEERD', definitiefOp: DEFINITIEF, slotDates: [FUTURE, undefined] }).allowed
     ).toBe(false);
   });
+
+  // "Today" is the ward's date, not the date of the machine the server runs on.
+  it('counts the day by the ward clock, also on a server that runs in UTC', () => {
+    const bewaard = process.env.TZ;
+    process.env.TZ = 'UTC';
+    try {
+      // 23:30 UTC on the 24th of October 2026 is 01:30 on the 25th in the Netherlands: a shift of the 24th is over.
+      const nu = new Date('2026-10-24T23:30:00Z');
+      const gisteren = checkSwapAllowed({ periodStatus: 'GEPUBLICEERD', definitiefOp: DEFINITIEF, slotDates: ['2026-10-24', '2026-11-02'] }, nu);
+      expect(gisteren).toMatchObject({ allowed: false, code: 'SHIFT_IN_PAST' });
+      const vandaag = checkSwapAllowed({ periodStatus: 'GEPUBLICEERD', definitiefOp: DEFINITIEF, slotDates: ['2026-10-25', '2026-11-02'] }, nu);
+      expect(vandaag.allowed).toBe(true);
+    } finally {
+      process.env.TZ = bewaard;
+    }
+  });
 });

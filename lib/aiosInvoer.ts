@@ -10,6 +10,7 @@
  */
 
 import { periodStatusLabel } from '@/lib/aiosTeksten';
+import { isValidIsoDate } from '@/lib/isoDate';
 
 export interface PeriodForInputGate {
   status: string;
@@ -44,6 +45,8 @@ export function isDeadlineTekst(value: unknown): value is string {
   return (
     typeof value === 'string' &&
     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/.test(value) &&
+    // The 30th of February passes Date, which rolls it to the 2nd of March: the day has to exist.
+    isValidIsoDate(value.slice(0, 10)) &&
     !isNaN(new Date(value).getTime())
   );
 }

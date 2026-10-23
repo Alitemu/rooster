@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach, beforeAll, afterAll } from 'vitest';
 import { db } from '@/db/client';
 import {
+  assignmentSlotLabel,
   clearPendingUndoVan,
   getPendingUndo,
   ruimVerlopenUndoOp,
@@ -84,5 +85,20 @@ describe('pending undo window', () => {
     clearPendingUndoVan(plannerId);
     expect(getPendingUndo(eigen)).toBeUndefined();
     expect(getPendingUndo(ander)).toBeDefined();
+  });
+});
+
+describe('assignmentSlotLabel on a machine west of UTC', () => {
+  // `new Date('2027-01-06')` is UTC midnight, which is still the 5th in Los Angeles.
+  it('names the day it was given, whatever the clock of the machine', () => {
+    const bewaard = process.env.TZ;
+    try {
+      for (const tz of ['America/Los_Angeles', 'UTC', 'Pacific/Kiritimati', 'Europe/Amsterdam']) {
+        process.env.TZ = tz;
+        expect(assignmentSlotLabel('2027-01-06', 'AVOND'), tz).toMatch(/^wo 6 jan/);
+      }
+    } finally {
+      process.env.TZ = bewaard;
+    }
   });
 });

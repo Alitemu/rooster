@@ -25,6 +25,7 @@ import { insertNotification } from '@/lib/notifications';
 import { mailMelding } from '@/lib/meldingMail';
 import { swapMailDetails, type SwapShift } from '@/lib/swapMailDetails';
 import { writeAuditLog } from '@/lib/auditLog';
+import { localIsoDate } from './localDate';
 
 const UUR_MS = 60 * 60 * 1000;
 const DAG_MS = 24 * UUR_MS;
@@ -151,8 +152,7 @@ function meld(r: RuilRij, door: HerinneringDoor): void {
 
 /** A shift still to come: a request about one that has been is no reason for a reminder. */
 function inHetVerleden(r: RuilRij, now: Date): boolean {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const vandaag = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const vandaag = localIsoDate(now);
   return r.aangeboden_datum < vandaag || r.gevraagd_datum < vandaag;
 }
 

@@ -41,10 +41,10 @@ describe('checkPeriodAcceptsInput', () => {
 
 describe('isDeadlineText and a deadline that cannot be read', () => {
   it('takes what the forms write and nothing else', () => {
-    for (const ok of ['2027-01-15T17:00', '2027-01-15T17:00:00', '2027-01-15T17:00:00Z', '2027-01-15T17:00:00.000+01:00']) {
+    for (const ok of ['2028-02-29T17:00', '2027-01-15T17:00', '2027-01-15T17:00:00', '2027-01-15T17:00:00Z', '2027-01-15T17:00:00.000+01:00']) {
       expect(isDeadlineText(ok), ok).toBe(true);
     }
-    for (const kapot of [1893456000000, null, undefined, {}, '', 'morgen', '2027-01-15', '15-01-2027', '2027-13-45T17:00']) {
+    for (const kapot of [1893456000000, null, undefined, {}, '', 'morgen', '2027-01-15', '15-01-2027', '2027-13-45T17:00', '2027-02-30T17:00', '2027-02-29T17:00', '2027-04-31T17:00']) {
       expect(isDeadlineText(kapot), String(kapot)).toBe(false);
     }
   });

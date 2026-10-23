@@ -14,17 +14,15 @@
 import fs from 'fs';
 import path from 'path';
 import { db, dbFilePath } from '@/db/client';
+import { localIsoDate } from '@/lib/localDate';
 
 export const DB_BACKUP_DIR = path.join(path.dirname(dbFilePath), 'backups', 'database');
 export const BACKUPS_KEPT = 14;
 
 const NAME = /^rooster-(\d{4}-\d{2}-\d{2})\.db$/;
 
-/** Local calendar date, so the file name matches the day on the ward (TZ). */
-function day(now: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
-}
+/** The ward's calendar date (lib/localDate.ts), so the file name matches the day on the ward whatever TZ the machine has. */
+const day = (now: Date): string => localIsoDate(now);
 
 function vrijeBytes(map: string): number {
   const s = fs.statfsSync(map);

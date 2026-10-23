@@ -26,6 +26,7 @@ import { readUploadedRows } from '@/lib/sheetUpload';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { periodRangeProblem } from '@/lib/isoDate';
+import { parseISO } from '@/lib/holidays';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
@@ -924,8 +925,9 @@ export function SetupWizard({ period, onComplete }: Props) {
       return 'Startdatum, einddatum en deadline zijn verplicht';
     }
 
-    const start = new Date(periodData.start_datum);
-    const end = new Date(periodData.eind_datum);
+    // Local midnight, as the server compares (a date alone is UTC midnight, an hour off on the ward's clock).
+    const start = parseISO(periodData.start_datum);
+    const end = parseISO(periodData.eind_datum);
     const deadline = new Date(periodData.deadline);
 
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || isNaN(deadline.getTime())) {

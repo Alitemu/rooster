@@ -338,7 +338,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
       } catch (err) {
         const slot = slots?.find((s) => s.slot_id === slotId);
         const label = slot
-          ? `${new Date(slot.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} (${TELLER_LABELS[slot.teller] || slot.teller})`
+          ? `${new Date(`${slot.datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} (${TELLER_LABELS[slot.teller] || slot.teller})`
           : slotId;
         failures.push(`${label}: ${foutTekst(err, 'Toewijzen mislukt')}`);
       }
@@ -442,7 +442,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
             >
               <div className="min-w-0">
                 <p className="text-sm font-medium text-neutral-900">
-                  {new Date(slot.datum).toLocaleDateString('nl-NL', {
+                  {new Date(`${slot.datum}T12:00:00`).toLocaleDateString('nl-NL', {
                     weekday: 'short',
                     day: 'numeric',
                     month: 'short',
