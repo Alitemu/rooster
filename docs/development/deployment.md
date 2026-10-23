@@ -102,6 +102,18 @@ holiday history), no period (the
 production start and compose's default; true adds the demo data); a rerun
 on a seeded database only upgrades the schema.
 
+**Start and stop (0.112.0):** docker-entrypoint.sh ends with `exec
+node_modules/.bin/next start`, not `npm start`: npm stays as a parent that
+passes no SIGTERM on (reproduced), so `docker stop` ended npm and left the
+server to be killed in the middle of its requests. `/data` is re-owned with
+`chown -R -h`, a link the app user left there is not followed. The build
+context leaves out `certs/`, `*.pem`, `*.key`, `*.crt` and `*.p12`: with
+TLS_MODUS=bestand the private key sits next to the compose file, and a build
+from the source would copy it into the image. The daily backup removes a
+`.db.bezig` left by a stop, and makes no copy when the disk has room for
+less than two of them (a copy that fills the disk makes the next save fail
+with "database or disk is full").
+
 **Container hardening:** the web image is built in two stages (no
 compiler, Python or dev dependencies in the one that runs, no .next/cache),
 code owned by root with only /data and .next/cache writable for `node`,

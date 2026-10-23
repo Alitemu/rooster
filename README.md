@@ -539,6 +539,17 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.112.0:** een tweede audit, nu vanuit andere hoeken: gelijktijdigheid, de solvers onder vijandige invoer, data en tijdzones, beveiliging, import en export, toegankelijkheid en taal, herstel en prestaties, en de kwaliteit van de tests zelf. Wat bleek is hersteld.
+
+- Een Excel-bestand van 59 kB liet de server crashen. De lezer weigert nu meer dan 20 000 rijen of een miljoen celplaatsen. Een melding bij een import noemt de rij zoals Excel hem telt, ook als er lege rijen tussen zitten. De import van de achterwacht laat een deeltijd- of afwezigheidsblokkade staan als het bestand hetzelfde woord herhaalt, meldt een kolom zonder kop die wel gegevens heeft en weigert tijdens een generatie.
+- Beveiliging: een verzoek dat iets wijzigt en van een pagina van een andere site komt, wordt geweigerd. Dat gold niet voor een pagina op hetzelfde adres met een andere poort of naam. Een personal link logt alleen in als de pagina hem zelf opent. Een staf-account telt niet als deelnemer voor de personenroutes en een ondertekend token dat geen sessie is, wordt niet als sessie gelezen.
+- Gelijktijdigheid: een rooster dat klaar komt nadat de periode in de prullenbak ging, wordt er niet meer in geschreven, en verwijderen kan niet tijdens een generatie. De deelnamefactoren die een generatie vastlegt, gaan terug als hij zonder rooster eindigt. Uitnodigingen en herinneringen gaan niet dubbel bij een dubbelklik. Een beginsaldo-bestand dat twee keer wordt verstuurd telt een keer.
+- Op de schermen staat geen Engelse foutmelding van de browser meer ("Failed to fetch"), "1 dienst" en "2 diensten" worden goed geschreven, de dagknoppen van de voorkeurenkalender hebben een naam met datum, de speld bij de onderdelen werkt met het toetsenbord, velden hebben een label en elke pagina een eigen titel.
+- De AIOS-solver weigert onzinnige getallen, tijden en perioden. Een grote overloop is een groot verschil en geen onmogelijk model. De solver begint met het lege rooster als eerste oplossing, telt de bouwtijd mee in de tijdslimiet, stopt als de aanvrager weg is en maakt een rooster tegelijk. Een solver die niet bereikbaar is, geeft de planner een duidelijke melding.
+- Data en tijd: de AIOS-deadline moet in de notatie van het formulier staan en een echte datum zijn. Vandaag is de datum op de afdelingsklok, niet die van de machine. Dagen zonder tijd worden niet meer een dag te vroeg getoond.
+- De checks zijn bestand tegen de kalender: seed, e2e, full-check en ui-check schuiven mee met de echte datum (`scripts/demoKalender.mjs`) en het scenario zoekt zelf het eerstvolgende jaar met ISO-week 53. Zonder dat waren ze vanaf eind 2026 mislukt.
+- De container start Next zelf zodat een stopsein aankomt, certificaten komen niet in een image, de back-up slaat over bij te weinig ruimte en ruimt een halve kopie op.
+
 **Vanaf versie 0.111.0:** een audit van het hele systeem, met herstel van wat bleek.
 
 - De regels over rust en compensatiedagen lopen nu door over de grens van een kwartaal. Wie in het vorige kwartaal het laatste nachtblok deed, heeft de eerste dagen van het nieuwe kwartaal vrij en 46 uur rust. De solver, de controle en de waarschuwingen bij handmatig wijzigen en ruilen houden er rekening mee.

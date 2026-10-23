@@ -1,5 +1,13 @@
 # Checks: browser checks, mutations, schema drift
 
+The mutation runner puts the source back when it is stopped (SIGINT, SIGTERM,
+SIGHUP, a crash) and keeps a copy of each file it mutates in
+`.mutation-backup/` (not in git) for a kill it cannot catch: the next run
+restores from it first. `--droog` also checks that every test filter names
+a file. The replacement text is passed as a function, so `$'` in it is not
+a JavaScript replacement pattern (a mutation with one broke the file it
+meant to break differently).
+
 Moved out of CLAUDE.md to keep the context of every session small; the rules
 themselves stay there. Read this when working on what it covers. Code comments
 that say "CLAUDE.md, ..." point to a section that now lives in docs/development/.
@@ -26,9 +34,18 @@ opens a "choose a new password" session (see Authentication):
   ABSOLUUT violation, nobody twice in one ISO week, nobody's window rule
   broken, nobody past their streefbereik).
 - `node scripts/ui-check.mjs` - the two screens people use most.
+- The calendar of the seed, the e2e fixtures, full-check and ui-check
+  moves with the real date (scripts/demoKalender.mjs): they were written
+  for Monday 4 January 2027 and a period, deadline or shift in the past
+  fails them on the calendar alone. Nothing moves while that period starts
+  at least six weeks ahead, then whole weeks (the weekday stays).
+  `DEMO_SHIFT_WEEKS=60` forces a shift, to try them before the date makes
+  it necessary. scripts/demoKalender.test.ts holds the rule and bans a fixed
+  2026 or 2027 date in these files.
 - `node scripts/scenario-check.mjs` - the planner's own case end to end:
-  15 people, a fellow with a part-time Monday, 2026-12-28 to 2027-09-05
-  (ISO week 53 and the year boundary), opened with the wizard's
+  15 people, a fellow with a part-time Monday, 36 weeks from the Monday of
+  ISO week 53 of the next year that has one, at least four weeks ahead (28
+  December 2026, then 27 December 2032, found with lib/holidays.ts), opened with the wizard's
   suggested streefbereik, generated with all four methods at windows 0-2
   (SCENARIO_MODES, SCENARIO_WINDOWS, SCENARIO_TIME, default the dialog's
   120 s): nothing empty, no rule broken, then "Rooster verwijderen" and

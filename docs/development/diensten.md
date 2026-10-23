@@ -159,6 +159,11 @@ Gmail account of Mailinstellingen. The AIOS's solver is its own container
 (aios-solver/, 0.74.0, docs/development/aios-solver.md); the achterwacht's
 solver stays as it is.
 
+(0.112.0: lib/aiosFoutTekst.ts and lib/aiosTelwoord.ts are copies of
+lib/foutTekst.ts and lib/telwoord.ts, the Dutch text of a caught error and
+"1 dienst" against "2 diensten". The sweeps in lib/foutTekst.test.ts and
+lib/telwoord.test.ts hold the copies apart: an AIOS file imports its own.)
+
 Since 0.71.0 the achterwacht's code is unchanged but for what refuses
 the AIOS and a few lines where both meet, each named in
 app/dienstImports.test.ts: the guards (lib/aiosPeriod.ts, any file), the

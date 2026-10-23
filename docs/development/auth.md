@@ -18,6 +18,23 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
      request (lib/auth-context.ts), but no flow sets it - revoking is a
      deliberate manual act, not a side effect of exporting.
 
+**Writes from another page (0.112.0):** the session cookie is SameSite=Lax,
+which stops a page on another site, but "same site" ignores the port and
+the sub-domain: another web app on the same address (a different port on the
+NAS) still sends the cookie, and a form or a `text/plain` fetch needs no
+preflight. proxy.ts therefore refuses, for every /api route that is not
+GET, HEAD or OPTIONS, a request with Sec-Fetch-Site other than same-origin or
+none (403 CROSS_SITE), or, for a browser without Fetch Metadata, with an
+Origin that is not the Host or X-Forwarded-Host (lib/crossSite.ts), and a
+body of a form type (text/plain, urlencoded, multipart: 415). A request
+with neither header comes from no browser page (curl, the checks, a
+server) and is let through. GET /api/auth/verify-link sets a cookie, so it
+refuses a request from another site too: a link in a mail opens the page,
+which calls it itself. Do not run other web apps on the hostname of this one:
+the cookie is not scoped to a port (docs/installatie-it.md).
+A signed token that is not a session (the setup token, the TOTP enrolment)
+is not read as one: verifySessionToken accepts only kind staff and person.
+
 2. **Password + TOTP** (planner/admin)
    - bcrypt (the native binding) for password hashing; a password needs 8+
      characters with lower case, upper case, a digit and a special

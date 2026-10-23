@@ -135,6 +135,15 @@ Welke versie draait, staat in de koptekst van de app, rechts van de titel. Zonde
 vrijgegeven (`stable`). Wil je een versie vastzetten, zet dan
 `ROOSTER_VERSION=0.88.1` in `.env`.
 
+## Andere webtoepassingen op dezelfde servernaam
+
+Zet geen andere webtoepassing op dezelfde servernaam als het dienstrooster, ook
+niet op een andere poort. Een browser stuurt de inlogcookie van een naam naar
+elke poort van die naam mee. De app weigert verzoeken die van een pagina van een
+andere site komen, maar een pagina op dezelfde naam met een andere poort valt
+daar niet onder als de toepassing daar kwaadaardig of gekraakt is. Geef de
+andere toepassing een eigen servernaam.
+
 ## Als er iets misgaat
 
 | Symptoom | Oorzaak en oplossing |

@@ -221,6 +221,23 @@ boven_de_helft}]. Malformed input answers 422 (unknown block or dienst,
 duplicate ids, a dienst outside the period, fte outside (0, 1], a negative
 erboven, an unknown counter).
 
+Since 0.112.0 (the audit of what the solver accepts): a time must be a real
+one (`99:99` and `24:60` are 422, not a 500), `saldo_punten` lies within
+-500 and 500 and `feestdag_achterstand` within -200 and 200 and neither is
+infinite or NaN, the period is at most 400 days, a block id comes once, an
+AIOS's earlier diensten have distinct ids and fall before the period. The
+model's bounds on how far an AIOS may be from their target grow with the
+size of that target, so a large carry-over (a saldo of 100 points on a small
+quarter) is a large difference and no longer "ONMOGELIJK" with every dienst
+empty. The empty roster is the hint, so a short time or a large quarter ends
+in HAALBAAR and not in GEEN_OPLOSSING. The time limit is for the whole job,
+building the model included. One solve runs at a time (a second answers
+429, which the app tells as "nog bezig met een eerder rooster"), and a
+search stops as soon as the caller has hung up (model.Stop, polled once a
+second in main.py), the way the achterwacht's solver does it: the app
+forgets a running generation when it restarts, and the planner pressing
+"maken" again used to start a second solve beside the first.
+
 ## The model
 
 One decision per option, not per day: a whole block (zo t/m di, wo t/m vr,

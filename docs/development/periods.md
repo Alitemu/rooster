@@ -81,6 +81,14 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   (audit 13). Restoring refuses days another period took meanwhile (409
   PERIOD_OVERLAP, lib/periodOverlap.ts); a draft comes back whatever its
   dates.
+- **A generation and the prullenbak (0.112.0):** a period is not put in the
+  prullenbak while a generation runs for it (409 GENERATION_RUNNING), and a
+  roster that comes back from the solver after it went there by another way
+  is not written (the apply transaction asks verwijderd_op too, for the
+  achterwacht and the AIOS: the prullenbak bumps no row_version). The factors
+  a generation holds (dienstrooster_period_factor) go back to what they
+  were when it ends without a roster: failed, no solution, a conflict, a
+  lost connection to the solver.
 - **Nothing changes in the prullenbak** (lib/periodTrash.ts
   trashedPeriodDenial, the full audit, 0.86.0): every changing
   achterwacht route under a period's path answers 409 PERIOD_TRASHED
