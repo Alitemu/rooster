@@ -226,8 +226,18 @@ describe('the roster stays as it is while a generation runs', () => {
   // A roster that is ready after the period went to the prullenbak must not be written into it, and the
   // factors the run held for a roster that never came must be put back (the carry-over reads them).
   it('does not write into a period that went to the prullenbak meanwhile, and leaves the held factors as they were', async () => {
-    db.prepare('UPDATE dienstrooster_pool_membership SET deelnamefactor = 0.5 WHERE person_id = ?').run(ids.A);
+    // The factor of somebody is worked out from their part-time days: a Friday off every week is 0,8 for this week.
+    ids.pattern = insert('dienstrooster_parttime_pattern', {
+      person_id: ids.A,
+      weekdag: 'VR',
+      frequentie: 'ELKE_WEEK',
+      geldig_vanaf: '2031-05-05',
+      geldig_tot: '2031-05-11',
+      aangemaakt_door: ids.A,
+      aangemaakt_op: new Date().toISOString(),
+    });
     const factorenVoor = factoren();
+    expect(factorenVoor.every((f: any) => f.factor === 1)).toBe(true);
     const roosterVoor = rooster();
     const statusVoor = db.prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period);
     answer = [{ person_id: ids.B, slot_id: ids.slot2 }];
@@ -267,7 +277,8 @@ describe('the roster stays as it is while a generation runs', () => {
   it('does not touch the held factors when a second generation is refused', async () => {
     answer = [{ person_id: ids.B, slot_id: ids.slot4 }];
     const jobId = await start();
-    db.prepare('UPDATE dienstrooster_pool_membership SET deelnamefactor = 1 WHERE person_id = ?').run(ids.A);
+    // The part-time day goes while the generation runs: the factor of now would be 1,0, the one held 0,8.
+    db.prepare('DELETE FROM dienstrooster_parttime_pattern WHERE id = ?').run(ids.pattern);
     const factorenVoor = factoren();
     const second = await generateRoster(request(`/api/planner/period/${ids.period}/generate-roster`, 'POST'), {
       params: Promise.resolve({ id: ids.period }),

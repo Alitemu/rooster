@@ -1071,14 +1071,14 @@ const MUTATIONS = [
     file: 'lib/periodAccess.ts',
     find: '  if (isAiosPeriod(period.id)) return false;',
     replace: '',
-    tests: ['app/api/aiosNotYet'],
+    tests: ['lib/periodAccessAios', 'app/api/aiosNotYet'],
   },
   {
     name: "aios: a swap of an AIOS period handled by the achterwacht's swap routes",
     file: 'lib/periodAccess.ts',
     find: "WHERE sr.id = ? AND p.verwijderd_op IS NULL AND pl.type <> 'AIOS'`;",
     replace: 'WHERE sr.id = ? AND p.verwijderd_op IS NULL`;',
-    tests: ['app/api/aiosNotYet'],
+    tests: ['lib/periodAccessAios', 'app/api/aiosNotYet'],
   },
   {
     name: 'aios: a mark covers one day of a block',
@@ -4638,7 +4638,7 @@ for (const m of chosen) {
   fs.mkdirSync(backupDir, { recursive: true });
   fs.writeFileSync(backupNaam(file), src);
   try {
-    fs.writeFileSync(file, m.alles ? src.split(m.find).join(m.replace) : src.replace(m.find, m.replace));
+    fs.writeFileSync(file, m.alles ? src.split(m.find).join(m.replace) : src.replace(m.find, () => m.replace));
     // A solver mutation runs the solver's own tests (pytest in ./solver,
     // SOLVER_PYTHON or python3 with OR-Tools and pytest installed).
     const pytest = m.runner === 'pytest';

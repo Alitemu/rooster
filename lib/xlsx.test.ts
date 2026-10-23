@@ -58,6 +58,22 @@ describe('readFirstSheet', () => {
 });
 
 describe('readFirstSheetMetRegels', () => {
+  // Excel leaves empty rows out of the file altogether: the number is in the row's r attribute, not in its place.
+  it('takes the number from the file when rows are left out of it', () => {
+    const rij = (n: number, tekst: string) => `<row r="${n}"><c r="A${n}" t="inlineStr"><is><t>${tekst}</t></is></c></row>`;
+    const sheet = `<worksheet><sheetData>${rij(1, 'kop')}${rij(4, 'vier')}${rij(9, 'negen')}</sheetData></worksheet>`;
+    const file = buildXlsx([['x']], { sheetOverride: { packed: zlib.deflateRawSync(Buffer.from(sheet)), size: sheet.length } });
+    const { rijen, regels } = readFirstSheetMetRegels(file);
+    expect(rijen.map((r) => r[0])).toEqual(['kop', 'vier', 'negen']);
+    expect(regels).toEqual([1, 4, 9]);
+  });
+
+  it('counts on from the last when a row has no number', () => {
+    const sheet = '<worksheet><sheetData><row><c t="inlineStr"><is><t>a</t></is></c></row><row r="5"><c r="A5" t="inlineStr"><is><t>b</t></is></c></row><row><c t="inlineStr"><is><t>c</t></is></c></row></sheetData></worksheet>';
+    const file = buildXlsx([['x']], { sheetOverride: { packed: zlib.deflateRawSync(Buffer.from(sheet)), size: sheet.length } });
+    expect(readFirstSheetMetRegels(file).regels).toEqual([1, 5, 6]);
+  });
+
   it('gives each row the number it has in Excel, empty rows counted', () => {
     const rows = [['Datum', 'Dienst'], [], ['2027-01-04', 'avonddienst'], [], [], ['2027-01-05', 'avonddienst']];
     const { rijen, regels } = readFirstSheetMetRegels(buildXlsx(rows));
