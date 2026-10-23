@@ -37,6 +37,8 @@ const basePath = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').trim().replace(/\/+$/
 
 const nextConfig = {
   reactStrictMode: true,
+  // No "X-Powered-By: Next.js": it only tells a visitor which software to look up.
+  poweredByHeader: false,
   ...(basePath ? { basePath } : {}),
   experimental: {
     optimizePackageImports: ['@radix-ui'],

@@ -160,3 +160,9 @@ describe('the workflows', () => {
     }
   });
 });
+
+describe('the web server', () => {
+  it('does not announce itself with an X-Powered-By header', () => {
+    expect(readFileSync('next.config.js', 'utf8')).toMatch(/poweredByHeader:\s*false/);
+  });
+});

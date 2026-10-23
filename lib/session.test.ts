@@ -182,6 +182,21 @@ describe('session tokens', () => {
   });
 });
 
+describe('a signed token that is not a session', () => {
+  // The enrolment and setup tokens are signed with the same key. Only their kind tells them from a session, so
+  // verifySessionToken must say null to every signed payload that is not one.
+  it('is not taken for a session', () => {
+    for (const payload of [
+      { purpose: 'totp-enrollment', personId: PERSON_ID },
+      { kind: 'setup', personId: PERSON_ID },
+      { kind: 'admin', personId: PERSON_ID, sessionVersion: 1 },
+      { personId: PERSON_ID, sessionVersion: 1 },
+    ]) {
+      expect(verifySessionToken(signPayload(payload, 600)), JSON.stringify(payload)).toBeNull();
+    }
+  });
+});
+
 describe('the session cookie itself', () => {
   function cookieOf(response: NextResponse): string {
     return response.headers.getSetCookie().find((c) => c.startsWith(`${SESSION_COOKIE_NAME}=`))!;

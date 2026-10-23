@@ -200,7 +200,11 @@ export function createSessionToken(payload: SessionPayload, maxAgeSeconds: numbe
  * tampered with, or expired.
  */
 export function verifySessionToken(token: string | undefined | null): SessionPayload | null {
-  return verifyPayload<SessionPayload>(token);
+  const payload = verifyPayload<SessionPayload>(token);
+  // Other signed tokens (the setup token) share the key and are told apart by their kind only: one that
+  // is not a session must never be taken for one.
+  if (!payload || (payload.kind !== 'staff' && payload.kind !== 'person')) return null;
+  return payload;
 }
 
 export function setSessionCookie(

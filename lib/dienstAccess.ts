@@ -117,6 +117,10 @@ export function dienstenVan(personId: string): Set<string> {
  * pools or periods, at any time (also with every membership removed).
  */
 export function staffMayAccessPerson(auth: AuthContext, personId: string): boolean {
+  // A staff account is nobody's participant: it has no footprint in either dienst, so the check below would let
+  // a planner of one dienst write absences for, or read the notifications of, an account of the other.
+  const rol = db.prepare('SELECT rol FROM dienstrooster_person WHERE id = ?').get(personId) as { rol: string } | undefined;
+  if (rol && rol.rol !== 'DEELNEMER') return false;
   const dienst = visibleDienst(auth);
   if (dienst === null) return true;
   return !personHasOtherDienst(personId, dienst);

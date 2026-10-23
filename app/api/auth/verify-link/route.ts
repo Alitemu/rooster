@@ -10,6 +10,7 @@ import { hashToken } from '@/lib/auth';
 import { setSessionCookie, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { internalErrorResponse } from '@/lib/api-errors';
+import { isCrossSiteRequest } from '@/lib/crossSite';
 import { checkRateLimit, getClientIp, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -39,6 +40,15 @@ interface VerifyLinkResponse {
  */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
+    // This GET logs somebody in (a cookie is set), so a page of another site must not be able to send a
+    // browser here: it would replace the session of a planner, or log a participant in as somebody else.
+    // The pages call it themselves with a fetch, which is same-origin (lib/crossSite.ts).
+    if (isCrossSiteRequest(req.headers)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'CROSS_SITE', message: 'Open je persoonlijke link zelf in je browser.' } },
+        { status: 403 }
+      );
+    }
     const rateLimitKey = `verify-link:${getClientIp(req)}`;
     const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
     if (!rateLimit.allowed) {

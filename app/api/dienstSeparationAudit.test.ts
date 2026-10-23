@@ -141,6 +141,17 @@ describe('a person is of the dienst they have anything in', () => {
     }
   });
 
+  // A staff account has nothing in either dienst, so the footprint check lets everyone through: the rol says it is nobody's participant.
+  it('is never a staff account, for a planner of either dienst or the beheerder', () => {
+    for (const rol of ['ADMIN', 'PLANNER'] as const) {
+      const account = insert('dienstrooster_person', { codenaam: `account-${rol}-${tag}`, rol, actief: 1, aangemaakt_op: now });
+      for (const dienst of ['ACHTERWACHT', 'AIOS'] as const) {
+        expect(staffMayAccessPerson(auth(dienst), account), `${dienst}'s planner, a ${rol} account`).toBe(false);
+        expect(staffMayAccessPerson(auth(dienst, 'ADMIN'), account), `${dienst}'s beheerder, a ${rol} account`).toBe(false);
+      }
+    }
+  });
+
   it('is nobody yet when nothing of theirs exists', () => {
     const nieuw = insert('dienstrooster_person', { codenaam: `nieuw-${tag}`, rol: 'DEELNEMER', actief: 1, aangemaakt_op: now });
     expect(staffMayAccessPerson(auth('ACHTERWACHT'), nieuw)).toBe(true);
