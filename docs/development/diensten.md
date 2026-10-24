@@ -149,6 +149,13 @@ lib/aiosVoorkeurImport.ts (voorkeuren-import; checking is applying in a
 transaction that is rolled back), and the dialog hooks lib/aiosDialoog.ts, a
 copy of useBodyScrollLock and useDialogDismiss.)
 
+(0.802.0: "Persoonlijke links", the beheerder's list of the links of a
+period and revoking one, is a copy as well: lib/aiosToegangslinks.ts,
+components/AiosToegangslinks.tsx and app/api/aios/periode/[id]/toegangslinks
+next to lib/toegangslinks.ts, components/ToegangslinksBeheer.tsx and
+app/api/planner/period/[id]/toegangslinks. Not shared; app/api/toegangslinks.test.ts
+runs the same cases on both.)
+
 The planner's rule (October 2026): after the login page, the AIOS goes its
 own way. Code that works for the achterwacht is not changed for the AIOS;
 what the AIOS needs is copied into files of its own, so the achterwacht

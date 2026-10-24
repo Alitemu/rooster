@@ -189,6 +189,10 @@ describe('every API route refuses who may not use it', () => {
     'DELETE planner/mail-settings',
     'PUT planner/mail-settings/contact',
     'POST aios/periode/[id]/voorkeuren-import',
+    'GET aios/periode/[id]/toegangslinks',
+    'POST aios/periode/[id]/toegangslinks/[linkId]/intrekken',
+    'GET planner/period/[id]/toegangslinks',
+    'POST planner/period/[id]/toegangslinks/[linkId]/intrekken',
   ];
 
   it('lists every beheerder route outside admin/ that the source says is the beheerder\'s', () => {

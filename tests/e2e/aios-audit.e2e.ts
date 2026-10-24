@@ -465,6 +465,10 @@ test('the planner of the AIOS: Exporteren & communicatie without the beheerder\'
   // The beheerder's: the mail settings and the import.
   await expect(p.getByRole('button', { name: /Mailinstellingen/ })).toHaveCount(0);
   await expect(p.getByRole('button', { name: /Voorkeuren importeren/ })).toHaveCount(0);
+  // The links of the period and revoking them are the beheerder's too (0.802.0).
+  await expect(p.getByRole('heading', { name: 'Persoonlijke links' })).toHaveCount(0);
+  const linksLijst = await p.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/toegangslinks`);
+  expect([401, 403]).toContain(linksLijst.status());
   const import_ = await p.request.post(`${getBaseUrl()}/api/aios/periode/${ids.period}/voorkeuren-import`, { data: { bestand: '', toepassen: false } });
   expect([401, 403]).toContain(import_.status());
 
@@ -545,4 +549,26 @@ test('the dialogs of the AIOS period fit a phone: inside the screen, scrolling i
   } finally {
     await ctx.close();
   }
+});
+
+test('Persoonlijke links: the beheerder sees the links of the period, revokes one, and that link no longer logs in', async ({ page }) => {
+  const [A, B] = ids.mensen;
+  await loginAsBeheerder(page);
+  await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
+  await openAiosSectie(page, 'Persoonlijke links');
+  const sectie = page.getByTestId('toegangslinks');
+  const rijA = sectie.getByTestId('toegangslink').filter({ hasText: A.codenaam });
+  const rijB = sectie.getByTestId('toegangslink').filter({ hasText: B.codenaam });
+  await expect(rijA).toContainText('Werkt');
+  await expect(rijB).toContainText('Werkt');
+  expect(await page.content()).not.toContain(ids.tokenA);
+
+  await rijA.getByRole('button', { name: 'Intrekken' }).click();
+  await expect(rijA.getByRole('alertdialog')).toContainText('Weet je zeker');
+  await rijA.getByRole('button', { name: 'Ja, intrekken' }).click();
+  await expect(sectie.getByRole('status')).toContainText(`De link van ${A.codenaam} is ingetrokken`);
+  await expect(rijA).toContainText('Ingetrokken op');
+  expect((await page.request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenA}`)).status()).toBe(401);
+  expect((await page.request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenB}`)).status()).toBe(200);
+  await expect(rijB).toContainText('Werkt');
 });

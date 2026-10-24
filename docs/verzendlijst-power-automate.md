@@ -23,7 +23,9 @@ bestand van die dienst. Zo gaat het:
    persoon het eigen bericht.
 
 Eerder verstuurde links blijven werken. Elke verzending maakt alleen een
-extra link aan.
+extra link aan. Alle links van een medewerker openen dezelfde pagina met
+dezelfde gegevens. Is een link bij de verkeerde persoon terechtgekomen, dan
+trekt de beheerder hem in bij *Persoonlijke links* op de periodepagina.
 
 ### Ruilverzoeken
 

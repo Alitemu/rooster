@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
 import { AiosExporteren } from '@/components/AiosExporteren';
+import { AiosToegangslinksSectie } from '@/components/AiosToegangslinks';
 import { AiosDienstpercentage, AiosRoosterMaken } from '@/components/AiosRoosterMaken';
 import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
 import { AiosDienstrooster } from '@/components/AiosDienstrooster';
@@ -381,6 +382,7 @@ function Pagina({ period: begin }: { period: Period }) {
         <StatusVoorkeuren periodId={period.id} refreshKey={`${period.status}|${period.deadline}`} />
       )}
       {period.status !== 'CONCEPT' && <AiosExporteren period={period} stand={stand} onChanged={herlaad} />}
+      {period.status !== 'CONCEPT' && <AiosToegangslinksSectie periodId={period.id} />}
       <AiosDienstpercentage periodId={period.id} status={period.status} versie={roosterVersie + handmatigVersie + toetsVersie} />
 
       {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}

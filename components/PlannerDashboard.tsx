@@ -23,6 +23,7 @@ import { RosterGenerationDialog } from './RosterGenerationDialog';
 import { AssignmentGrid } from './AssignmentGrid';
 import { AssignmentCalendar } from './AssignmentCalendar';
 import { StaffingOverview } from './StaffingOverview';
+import { ToegangslinksBeheer } from './ToegangslinksBeheer';
 import { RosterPublicationDialog } from './RosterPublicationDialog';
 import { RebalanceSuggestions } from './RebalanceSuggestions';
 import { FillGapsSummary } from './FillGapsSummary';
@@ -195,7 +196,7 @@ function Section({
 /** Why a button that sends is off (0.87.0). */
 const GEEN_MAIL = 'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.';
 
-type SectionKey = 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'voorstellen' | 'rooster';
+type SectionKey = 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'links' | 'voorstellen' | 'rooster';
 
 interface Props {
   periodId: string;
@@ -1286,6 +1287,20 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           />
         </div>
       </Section>
+
+      {/* The beheerder only: the personal links of this period and revoking one (lib/toegangslinks.ts). */}
+      {beheerder && (
+        <Section
+          title="Persoonlijke links"
+          hint="uitgegeven links en intrekken"
+          isOpen={openSections.has('links')}
+          pinned={pinnedSections.has('links')}
+          onToggleOpen={() => toggleSectionOpen('links')}
+          onTogglePin={() => toggleSectionPin('links')}
+        >
+          <ToegangslinksBeheer periodId={periodId} />
+        </Section>
+      )}
 
       {/* Only meaningful once there's an actual roster to rebalance -
           suggestions need existing assignments to move around. Also hidden

@@ -53,6 +53,8 @@ export interface World {
   swap: string;
   // An AIOS swap (lib/aiosRuilen.ts), x asking y.
   ruil: string;
+  // A personal link of x for the period (the beheerder's list of links).
+  link: string;
   absence: string;
   pattern: string;
   notice: string;
@@ -124,6 +126,12 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
   };
   const x = participant('x');
   const y = participant('y');
+  const link = insert('dienstrooster_person_access_link', {
+    person_id: x,
+    token_hash: crypto.randomBytes(32).toString('hex'),
+    geldt_voor_periode_id: period,
+    aangemaakt_op: now,
+  });
   const membership = insert('dienstrooster_pool_membership', { person_id: x, pool_id: pool, deelnamefactor: 1, geldig_vanaf: '2098-01-01', geldig_tot: '2098-12-31' });
   insert('dienstrooster_pool_membership', { person_id: y, pool_id: pool, deelnamefactor: 1, geldig_vanaf: '2098-01-01', geldig_tot: '2098-12-31' });
   // Monday 3 March for x, Monday 10 March for y: 7 days apart, so the window of 1 holds.
@@ -202,6 +210,7 @@ export function buildWorld(dienst: 'ACHTERWACHT' | 'AIOS'): World {
     assignment,
     swap,
     ruil,
+    link,
     absence,
     pattern,
     notice,
@@ -236,6 +245,8 @@ export function fill(path: string, w: World): { url: string; params: Record<stri
         return w.swap;
       case 'ruilId':
         return w.ruil;
+      case 'linkId':
+        return w.link;
       case 'absenceId':
         return w.absence;
       case 'patternId':

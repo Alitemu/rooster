@@ -540,6 +540,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.802.0:** de beheerder kan persoonlijke links intrekken. Op de pagina van een periode (achterwacht en AIOS) staat een nieuwe sectie *Persoonlijke links*, alleen zichtbaar voor de beheerder. Daar staat per link voor wie hij is, wanneer hij gemaakt en voor het laatst gebruikt is, en of hij nog werkt. De link zelf is niet te zien. *Intrekken* vraagt eerst om bevestiging. Daarna werkt die link niet meer en is de medewerker overal uitgelogd. Heeft de medewerker nog een andere werkende link, dan komt hij daar weer mee binnen. Was het de enige, dan staat dat in de vraag en komt de medewerker er pas weer in met een nieuwe link (Link kwijt? of de volgende uitnodiging). Het intrekken staat in het logboek.
+
 **Vanaf versie 0.801.0:** poort 80 staat standaard open en stuurt `http://` door naar `https://`, zonder `.env`. Is poort 80 bezet, zet dan `HTTP_PORT=8080` in `.env`.
 
 **Vanaf versie 0.800.0:** `docker-compose.yml` is de hele installatie. De Caddyfile zit er nu in, dus er hoeft niets naast het bestand te staan behalve `.env` en eventueel de map `certs`. De app luistert standaard op https, poort 443. Draait de NAS zelf al iets op 443, zet dan `APP_PORT=8010` in `.env`, zoals bij een installatie die tot nu toe op de standaardwaarde draaide. Een installatie die `APP_PORT` al in `.env` heeft staan, merkt niets. Ook zijn drie dingen die nog geen eigen test hadden nu gedekt: het stoppen van de AIOS-solver als de aanvrager ophangt, de regelnummers in meldingen van de voorkeurenimport en de grootte van de AIOS-dialogen op een telefoon.

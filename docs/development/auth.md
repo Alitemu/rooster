@@ -126,6 +126,23 @@ is not read as one: verifySessionToken accepts only kind staff and person.
      call it, not an edge case. All three routes, plus `/api/auth/me`'s
      `totp_enrolled` flag the dialog reads its own state from.
 
+**Revoking a personal link (0.802.0)**
+
+The beheerder, and only the beheerder, sees the section "Persoonlijke links"
+on a period page (the achterwacht's and the AIOS's each have their own): the
+links issued for that period with when each was made, last used and
+revoked, never the link itself (only its hash is stored). "Intrekken" asks
+first, then sets `ingetrokken_op` (verify-link refuses the link from then on)
+and ends the sessions of that person (`revokeAllSessions`). The second step
+is needed because lib/auth-context.ts only asks for *a* valid link of the
+person: without it, whoever came in through the revoked link would stay in
+while the person has another one. The person gets back in with a link that
+is still valid, or a new one ("Link kwijt?" or the next invitation). Revoking
+is audit-logged (person_access_link), twice answers 409, a link of another
+period 404, and the achterwacht's route refuses an AIOS period. Revoking
+the last link of a person locks them out until a new one; the question says so.
+There is no way to revoke all of a person's links at once yet.
+
 **Session revocation**
 
 Session cookies are self-contained signed tokens, so nothing server-side

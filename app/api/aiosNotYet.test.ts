@@ -112,6 +112,8 @@ function fill(routePath: string, person: string): { url: string; params: Record<
         return ids.membership;
       case 'swap-id':
         return person === ids.staf ? ids.stafSwap : ids.swap;
+      case 'linkId':
+        return ids.link;
       case 'absenceId':
         return ids.absence;
       case 'patternId':
@@ -225,6 +227,7 @@ beforeAll(() => {
   ids.assignment = insert('dienstrooster_assignment', { schedule_version_id: ids.period, person_id: ids.x, slot_id: ids.slot, bron: 'SOLVER', aangemaakt_op: now });
   insert('dienstrooster_availability', { person_id: ids.x, slot_id: slots[5].id, blocking_level: 'ABSOLUUT', source: 'MANUAL', aangemaakt_op: now });
   ids.absence = insert('dienstrooster_absence', { person_id: ids.x, van_datum: '2097-02-01', tot_datum: '2097-02-02', soort: 'VAKANTIE', aangemaakt_door: ids.x, aangemaakt_op: now });
+  ids.link = insert('dienstrooster_person_access_link', { person_id: ids.x, token_hash: crypto.randomBytes(32).toString('hex'), geldt_voor_periode_id: ids.period, aangemaakt_op: now });
   ids.pattern = insert('dienstrooster_parttime_pattern', { person_id: ids.x, weekdag: 'VR', frequentie: 'ELKE_WEEK', geldig_vanaf: '2096-01-01', geldig_tot: '2098-12-31', aangemaakt_door: ids.x, aangemaakt_op: now });
   ids.swap = insert('dienstrooster_swap_request', {
     periode_id: ids.period,
