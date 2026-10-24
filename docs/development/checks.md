@@ -1,5 +1,8 @@
 # Checks: browser checks, mutations, schema drift
 
+Which of these to run for which change, and in what order, is in
+docs/teststrategie.md (Dutch, for the planner and the operator).
+
 The mutation runner puts the source back when it is stopped (SIGINT, SIGTERM,
 SIGHUP, a crash) and keeps a copy of each file it mutates in
 `.mutation-backup/` (not in git) for a kill it cannot catch: the next run
