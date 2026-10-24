@@ -193,6 +193,8 @@ describe('every API route refuses who may not use it', () => {
     'POST aios/periode/[id]/toegangslinks/[linkId]/intrekken',
     'GET planner/period/[id]/toegangslinks',
     'POST planner/period/[id]/toegangslinks/[linkId]/intrekken',
+    'POST aios/periode/[id]/toegangslinks/alles-intrekken',
+    'POST planner/period/[id]/toegangslinks/alles-intrekken',
   ];
 
   it('lists every beheerder route outside admin/ that the source says is the beheerder\'s', () => {

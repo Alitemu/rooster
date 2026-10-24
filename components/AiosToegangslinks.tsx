@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { telwoord } from '@/lib/aiosTelwoord';
 import { foutTekst } from '@/lib/aiosFoutTekst';
 import { AiosSectie } from '@/components/AiosSectie';
 
@@ -36,6 +37,8 @@ export function AiosToegangslinks({ periodId }: { periodId: string }) {
   // The link that asks "weet je het zeker?", and the one being revoked.
   const [vraagOp, setVraagOp] = useState<string | null>(null);
   const [bezig, setBezig] = useState<string | null>(null);
+  // "Alles intrekken" asks first as well.
+  const [vraagAlles, setVraagAlles] = useState(false);
 
   const laad = useCallback(async () => {
     try {
@@ -74,8 +77,70 @@ export function AiosToegangslinks({ periodId }: { periodId: string }) {
     }
   };
 
+  const werkend = (links ?? []).filter((l) => l.ingetrokken_op === null);
+  const werkendePersonen = new Set(werkend.map((l) => l.person_id)).size;
+
+  const trekAllesIn = async () => {
+    setBezig('alles');
+    setMelding(null);
+    try {
+      const res = await fetch(withBasePath(`/api/aios/periode/${periodId}/toegangslinks/alles-intrekken`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) throw new Error(data?.error?.message ?? 'Intrekken is mislukt');
+      const { aantal, personen } = data.data as { aantal: number; personen: number };
+      setMelding(`${aantal === 1 ? '1 link is' : `${aantal} links zijn`} ingetrokken. ${telwoord(personen, 'medewerker is', 'medewerkers zijn')} overal uitgelogd.`);
+      setVraagAlles(false);
+      await laad();
+    } catch (err) {
+      setFout(foutTekst(err, 'Intrekken is mislukt'));
+    } finally {
+      setBezig(null);
+    }
+  };
+
   return (
     <div data-testid="toegangslinks">
+      {werkend.length > 0 && !vraagAlles && (
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setVraagAlles(true)}
+            className="px-4 py-2 rounded font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+          >
+            Alles intrekken
+          </button>
+        </div>
+      )}
+      {vraagAlles && (
+        <div role="alertdialog" aria-label="Alle links intrekken" className="mb-3 p-3 rounded border border-amber-300 bg-amber-50 text-sm">
+          <p className="mb-2 text-amber-900">
+            Weet je zeker dat je alle {werkend.length} werkende links van deze periode wilt intrekken? {telwoord(werkendePersonen, 'medewerker wordt', 'medewerkers worden')} overal uitgelogd.
+            Wie geen andere werkende link heeft, komt er pas weer in met een nieuwe link.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={trekAllesIn}
+              disabled={bezig === 'alles'}
+              className="px-3 py-2 rounded font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              Ja, alles intrekken
+            </button>
+            <button
+              type="button"
+              onClick={() => setVraagAlles(false)}
+              disabled={bezig === 'alles'}
+              className="px-3 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
+            >
+              Annuleren
+            </button>
+          </div>
+        </div>
+      )}
       <p className="text-sm text-neutral-600 mb-3">
         Dit zijn de persoonlijke links die voor deze periode zijn uitgegeven. De link zelf is hier niet te zien. Een
         ingetrokken link werkt niet meer en wie er via binnenkwam, is meteen uitgelogd. Alleen de beheerder ziet dit.

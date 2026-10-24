@@ -141,7 +141,11 @@ is still valid, or a new one ("Link kwijt?" or the next invitation). Revoking
 is audit-logged (person_access_link), twice answers 409, a link of another
 period 404, and the achterwacht's route refuses an AIOS period. Revoking
 the last link of a person locks them out until a new one; the question says so.
-There is no way to revoke all of a person's links at once yet.
+"Alles intrekken" (0.803.0, POST .../toegangslinks/alles-intrekken, one audit
+entry on the period with the numbers) revokes every working link of the period
+and ends the sessions of each of those people once; links of other periods
+stay, so a person who has one is back in with a fresh session. The question
+says how many links and people it is about.
 
 **Session revocation**
 

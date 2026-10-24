@@ -571,4 +571,18 @@ test('Persoonlijke links: the beheerder sees the links of the period, revokes on
   expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenA}`)).status()).toBe(401);
   expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenB}`)).status()).toBe(200);
   await expect(rijB).toContainText('Werkt');
+
+  // Alles intrekken: asks first, then every working link of the period is revoked (B's was the last one at work).
+  await sectie.getByRole('button', { name: 'Alles intrekken' }).click();
+  await expect(sectie.getByRole('alertdialog', { name: 'Alle links intrekken' })).toBeVisible();
+  await sectie.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(sectie.getByRole('alertdialog')).toHaveCount(0);
+  expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenB}`)).status()).toBe(200);
+  await sectie.getByRole('button', { name: 'Alles intrekken' }).click();
+  await sectie.getByRole('button', { name: 'Ja, alles intrekken' }).click();
+  await expect(sectie.getByRole('status')).toContainText(/link(s zijn| is) ingetrokken/);
+  await expect(sectie.getByTestId('toegangslink').filter({ hasText: 'Werkt' })).toHaveCount(0);
+  await expect(sectie.getByRole('button', { name: 'Alles intrekken' })).toHaveCount(0);
+  expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenB}`)).status()).toBe(401);
 });
+

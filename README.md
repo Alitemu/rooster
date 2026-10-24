@@ -540,6 +540,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.803.0:** bovenaan de sectie *Persoonlijke links* (achterwacht en AIOS) staat de knop *Alles intrekken*. Die trekt alle werkende links van de periode in, na een vraag die zegt om hoeveel links en medewerkers het gaat. Alle betrokken medewerkers zijn dan overal uitgelogd en komen er pas weer in met een nieuwe link (Link kwijt? of een nieuwe uitnodiging). Links van andere periodes blijven werken. Het staat in het logboek.
+
 **Vanaf versie 0.802.0:** de beheerder kan persoonlijke links intrekken. Op de pagina van een periode (achterwacht en AIOS) staat een nieuwe sectie *Persoonlijke links*, alleen zichtbaar voor de beheerder. Daar staat per link voor wie hij is, wanneer hij gemaakt en voor het laatst gebruikt is, en of hij nog werkt. De link zelf is niet te zien. *Intrekken* vraagt eerst om bevestiging. Daarna werkt die link niet meer en is de medewerker overal uitgelogd. Heeft de medewerker nog een andere werkende link, dan komt hij daar weer mee binnen. Was het de enige, dan staat dat in de vraag en komt de medewerker er pas weer in met een nieuwe link (Link kwijt? of de volgende uitnodiging). Het intrekken staat in het logboek.
 
 **Vanaf versie 0.801.0:** poort 80 staat standaard open en stuurt `http://` door naar `https://`, zonder `.env`. Is poort 80 bezet, zet dan `HTTP_PORT=8080` in `.env`.

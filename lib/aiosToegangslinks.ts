@@ -63,3 +63,17 @@ export function trekAiosToegangslinkIn(periodId: string, linkId: string, nu: str
     return { uitkomst: 'ingetrokken', person_id: link.person_id, codenaam: link.codenaam };
   })();
 }
+
+/** Revokes every link of this period that still works, and ends the sessions of those people, in one step. */
+export function trekAlleAiosToegangslinksIn(periodId: string, nu: string = new Date().toISOString()): { aantal: number; personen: number } {
+  return db.transaction(() => {
+    const werkend = db
+      .prepare('SELECT id, person_id FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ? AND ingetrokken_op IS NULL')
+      .all(periodId) as Array<{ id: string; person_id: string }>;
+    const intrekken = db.prepare('UPDATE dienstrooster_person_access_link SET ingetrokken_op = ? WHERE id = ?');
+    for (const link of werkend) intrekken.run(nu, link.id);
+    const personen = new Set(werkend.map((l) => l.person_id));
+    for (const personId of personen) revokeAllSessions(personId);
+    return { aantal: werkend.length, personen: personen.size };
+  })();
+}

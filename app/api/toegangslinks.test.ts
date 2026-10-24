@@ -8,6 +8,8 @@ import { GET as lijstAchterwacht } from './planner/period/[id]/toegangslinks/rou
 import { POST as trekInAchterwacht } from './planner/period/[id]/toegangslinks/[linkId]/intrekken/route';
 import { GET as lijstAios } from './aios/periode/[id]/toegangslinks/route';
 import { POST as trekInAios } from './aios/periode/[id]/toegangslinks/[linkId]/intrekken/route';
+import { POST as trekAllesAchterwacht } from './planner/period/[id]/toegangslinks/alles-intrekken/route';
+import { POST as trekAllesAios } from './aios/periode/[id]/toegangslinks/alles-intrekken/route';
 import {
   buildWorld,
   deleteRowsAfter,
@@ -34,8 +36,8 @@ import {
 type Handler = (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>;
 
 const diensten = [
-  { dienst: 'ACHTERWACHT' as const, lijst: lijstAchterwacht as unknown as Handler, trekIn: trekInAchterwacht as unknown as Handler, pad: (p: string) => `planner/period/${p}/toegangslinks`, anderPeriode: 409 },
-  { dienst: 'AIOS' as const, lijst: lijstAios as unknown as Handler, trekIn: trekInAios as unknown as Handler, pad: (p: string) => `aios/periode/${p}/toegangslinks`, anderPeriode: 404 },
+  { dienst: 'ACHTERWACHT' as const, lijst: lijstAchterwacht as unknown as Handler, trekIn: trekInAchterwacht as unknown as Handler, trekAlles: trekAllesAchterwacht as unknown as Handler, pad: (p: string) => `planner/period/${p}/toegangslinks`, anderPeriode: 409 },
+  { dienst: 'AIOS' as const, lijst: lijstAios as unknown as Handler, trekIn: trekInAios as unknown as Handler, trekAlles: trekAllesAios as unknown as Handler, pad: (p: string) => `aios/periode/${p}/toegangslinks`, anderPeriode: 404 },
 ];
 
 let snapshot: Map<string, number>;
@@ -72,7 +74,7 @@ const ingetrokken = (id: string) => (db.prepare('SELECT ingetrokken_op AS t FROM
 const sessieVersie = (persoon: string) => (db.prepare('SELECT sessie_versie AS v FROM dienstrooster_person WHERE id = ?').get(persoon) as { v: number }).v;
 const auditRijen = (id: string) => db.prepare("SELECT * FROM dienstrooster_audit_log WHERE entiteit = 'person_access_link' AND entiteit_id = ?").all(id) as Array<{ actor_id: string; nieuw_json: string }>;
 
-describe.each(diensten)('toegangslinks van de $dienst', ({ dienst, lijst, trekIn, pad, anderPeriode }) => {
+describe.each(diensten)('toegangslinks van de $dienst', ({ dienst, lijst, trekIn, trekAlles, pad, anderPeriode }) => {
   const w = () => werelden[dienst];
 
   it('lists the links of the period for the beheerder, with no link and no hash in it', async () => {
@@ -180,5 +182,80 @@ describe.each(diensten)('toegangslinks van de $dienst', ({ dienst, lijst, trekIn
     expect(res.status).toBe(anderPeriode);
     expect(ingetrokken(id)).toBeNull();
     expect((await vraag(lijst, pad('onbekend'), staffCookie(beheerder), 'onbekend')).status).toBe(404);
+  });
+
+  describe('alles intrekken', () => {
+    const werkend = (periodId: string) =>
+      (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ? AND ingetrokken_op IS NULL').get(periodId) as { n: number }).n;
+    const auditAlles = (periodId: string) =>
+      db.prepare("SELECT actor_id, nieuw_json FROM dienstrooster_audit_log WHERE entiteit = 'schedule_period' AND entiteit_id = ? AND nieuw_json LIKE '%alle persoonlijke links ingetrokken%'").all(periodId) as Array<{
+        actor_id: string;
+        nieuw_json: string;
+      }>;
+    const alles = (cookie: string, periodId = w().period) => vraag(trekAlles, `${pad(periodId)}/alles-intrekken`, cookie, periodId, undefined, 'POST');
+
+    it('is for the beheerder only, and changes nothing for anyone else', async () => {
+      const { id } = linkMetToken(w());
+      const voor = werkend(w().period);
+      for (const cookie of [staffCookie(w().planner), personCookie(w().x)]) {
+        expect([401, 403]).toContain((await alles(cookie)).status);
+      }
+      expect(werkend(w().period)).toBe(voor);
+      expect(ingetrokken(id)).toBeNull();
+    });
+
+    it("revokes every working link of the period, ends each person's sessions once, writes one audit entry and leaves other periods alone", async () => {
+      const x1 = linkMetToken(w());
+      const x2 = linkMetToken(w());
+      const y1 = linkMetToken(w(), w().y);
+      const andere = insert('dienstrooster_schedule_period', {
+        pool_id: w().pool,
+        naam: `Alles-${dienst}`,
+        start_datum: '2099-05-03',
+        eind_datum: '2099-05-30',
+        deadline: '2099-04-25T17:00',
+        status: 'OPEN',
+        aangemaakt_op: now,
+      });
+      const vanAnder = insert('dienstrooster_person_access_link', { person_id: w().x, token_hash: hashToken(generateAccessToken()), geldt_voor_periode_id: andere, aangemaakt_op: now });
+      const verwacht = werkend(w().period);
+      const personen = new Set(
+        (db.prepare('SELECT person_id FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ? AND ingetrokken_op IS NULL').all(w().period) as Array<{ person_id: string }>).map((r) => r.person_id)
+      );
+      const versies = new Map([...personen].map((p) => [p, sessieVersie(p)]));
+      const sessie = personCookie(w().x);
+
+      const res = await alles(staffCookie(beheerder));
+      expect(res.status).toBe(200);
+      expect((await res.json()).data).toEqual({ aantal: verwacht, personen: personen.size });
+      expect(werkend(w().period)).toBe(0);
+      for (const l of [x1, x2, y1]) expect(ingetrokken(l.id)).not.toBeNull();
+      expect(ingetrokken(vanAnder)).toBeNull();
+      for (const [p, v] of versies) expect(sessieVersie(p), `sessies van ${p}`).toBe(v + 1);
+      expect(getAuthContextFromRequest(new NextRequest('http://localhost/api/x', { headers: { cookie: sessie } }))).toBeNull();
+      for (const l of [x1, y1]) {
+        const probeer = await verifyLink(new NextRequest(`http://localhost/api/auth/verify-link?token=${l.token}`));
+        expect(probeer.status).toBe(401);
+        expect((await probeer.json()).error.code).toBe('TOKEN_REVOKED');
+      }
+      const rijen = auditAlles(w().period);
+      expect(rijen).toHaveLength(1);
+      expect(rijen[0].actor_id).toBe(beheerder);
+      expect(JSON.parse(rijen[0].nieuw_json)).toMatchObject({ aantal: verwacht, personen: personen.size });
+
+      // Nothing left to revoke: 200 with nothing done, no second entry, no more sessions ended.
+      const nogmaals = await alles(staffCookie(beheerder));
+      expect(nogmaals.status).toBe(200);
+      expect((await nogmaals.json()).data).toEqual({ aantal: 0, personen: 0 });
+      expect(auditAlles(w().period)).toHaveLength(1);
+      for (const [p, v] of versies) expect(sessieVersie(p)).toBe(v + 1);
+    });
+
+    it("refuses the other dienst's period and revokes nothing there", async () => {
+      const ander = werelden[dienst === 'AIOS' ? 'ACHTERWACHT' : 'AIOS'];
+      const { id } = linkMetToken(ander);
+      expect((await alles(staffCookie(beheerder), ander.period)).status).toBe(anderPeriode);
+      expect(ingetrokken(id)).toBeNull();
+    });
   });
 });

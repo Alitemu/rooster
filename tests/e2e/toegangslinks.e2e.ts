@@ -73,3 +73,29 @@ test.describe('at 375px', () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   });
 });
+
+test('Alles intrekken asks first, then revokes every working link of the period', async ({ page, request }) => {
+  await loginAsBeheerder(page);
+  await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+  await sectie(page).getByRole('heading').getByRole('button').click();
+  await expect(sectie(page).getByTestId('toegangslink').first()).toBeVisible();
+  const werkend = await sectie(page).getByTestId('toegangslink').filter({ hasText: 'Werkt' }).count();
+  expect(werkend).toBeGreaterThan(1);
+
+  // Asking is not revoking.
+  await sectie(page).getByRole('button', { name: 'Alles intrekken' }).click();
+  await expect(sectie(page).getByRole('alertdialog', { name: 'Alle links intrekken' })).toContainText(`alle ${werkend} werkende links`);
+  await sectie(page).getByRole('button', { name: 'Annuleren' }).click();
+  await expect(sectie(page).getByRole('alertdialog')).toHaveCount(0);
+  expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${testData.users[2].token}`)).status()).toBe(200);
+
+  await sectie(page).getByRole('button', { name: 'Alles intrekken' }).click();
+  await sectie(page).getByRole('button', { name: 'Ja, alles intrekken' }).click();
+  await expect(sectie(page).getByRole('status')).toContainText(`${werkend} links zijn ingetrokken`);
+  await expect(sectie(page).getByTestId('toegangslink').filter({ hasText: 'Werkt' })).toHaveCount(0);
+  // Nothing left to revoke: the button is gone.
+  await expect(sectie(page).getByRole('button', { name: 'Alles intrekken' })).toHaveCount(0);
+  for (const user of testData.users.slice(1)) {
+    expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${user.token}`)).status()).toBe(401);
+  }
+});
