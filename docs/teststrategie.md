@@ -4,6 +4,8 @@ Wat je wanneer test, van snel naar zwaar. De uitleg per controle staat in
 `docs/development/checks.md`. Het handmatige draaiboek voor de AIOS staat in
 `docs/aios-testdraaiboek.md`.
 
+Zelf testen met een lijst om af te vinken: `docs/stappenplan-testen.md`.
+
 ## Welke lagen bij welke wijziging
 
 | Wijziging | Lagen |

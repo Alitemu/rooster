@@ -253,7 +253,7 @@ How to run them and what each one covers: docs/development/checks.md.
 | Links, passwords, TOTP, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
 | Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |
 | Images, workflows, compose, sub-folder, backups, uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts |
-| Operator guides (Dutch) | README.md, docs/installatie-it.md (for the IT department), docs/verzendlijst-power-automate.md, docs/teststrategie.md (what to test when) | - |
+| Operator guides (Dutch) | README.md, docs/installatie-it.md (for the IT department), docs/verzendlijst-power-automate.md, docs/teststrategie.md (what to test when), docs/stappenplan-testen.md (the checklist for the user) | - |
 
 Traps that cost a day each time:
 - **The seed builds the schema with its own SQL.** A new column needs the
