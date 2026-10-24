@@ -28,7 +28,8 @@ test('the planner has no section Persoonlijke links, and no way to the list', as
   expect([401, 403]).toContain(res.status());
 });
 
-test('the beheerder sees the links, revokes one after the question, and that link no longer logs in', async ({ page }) => {
+// `request`, not page.request: trying a link sets a participant session cookie, which would replace the beheerder's.
+test('the beheerder sees the links, revokes one after the question, and that link no longer logs in', async ({ page, request }) => {
   const user = testData.users[0];
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
@@ -46,17 +47,17 @@ test('the beheerder sees the links, revokes one after the question, and that lin
   await expect(rij.getByRole('alertdialog')).toContainText('Weet je zeker');
   await rij.getByRole('button', { name: 'Annuleren' }).click();
   await expect(rij).toContainText('Werkt');
-  expect((await page.request.get(`${getBaseUrl()}/api/auth/verify-link?token=${user.token}`)).status()).toBe(200);
+  expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${user.token}`)).status()).toBe(200);
 
   await rij.getByRole('button', { name: 'Intrekken' }).click();
   await rij.getByRole('button', { name: 'Ja, intrekken' }).click();
   await expect(sectie(page).getByRole('status')).toContainText(`De link van ${user.codenaam} is ingetrokken`);
   await expect(rij).toContainText('Ingetrokken op');
   await expect(rij.getByRole('button', { name: 'Intrekken' })).toHaveCount(0);
-  const nu = await page.request.get(`${getBaseUrl()}/api/auth/verify-link?token=${user.token}`);
+  const nu = await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${user.token}`);
   expect(nu.status()).toBe(401);
   // The others still work.
-  expect((await page.request.get(`${getBaseUrl()}/api/auth/verify-link?token=${testData.users[1].token}`)).status()).toBe(200);
+  expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${testData.users[1].token}`)).status()).toBe(200);
 });
 
 test.describe('at 375px', () => {

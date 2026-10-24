@@ -551,7 +551,7 @@ test('the dialogs of the AIOS period fit a phone: inside the screen, scrolling i
   }
 });
 
-test('Persoonlijke links: the beheerder sees the links of the period, revokes one, and that link no longer logs in', async ({ page }) => {
+test('Persoonlijke links: the beheerder sees the links of the period, revokes one, and that link no longer logs in', async ({ page, request }) => {
   const [A, B] = ids.mensen;
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
@@ -568,7 +568,7 @@ test('Persoonlijke links: the beheerder sees the links of the period, revokes on
   await rijA.getByRole('button', { name: 'Ja, intrekken' }).click();
   await expect(sectie.getByRole('status')).toContainText(`De link van ${A.codenaam} is ingetrokken`);
   await expect(rijA).toContainText('Ingetrokken op');
-  expect((await page.request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenA}`)).status()).toBe(401);
-  expect((await page.request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenB}`)).status()).toBe(200);
+  expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenA}`)).status()).toBe(401);
+  expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenB}`)).status()).toBe(200);
   await expect(rijB).toContainText('Werkt');
 });
