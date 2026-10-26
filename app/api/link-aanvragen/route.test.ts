@@ -219,6 +219,8 @@ describe('POST /api/link-aanvragen', () => {
 
     expect(res.status).toBe(429);
     expect(res.body.error.message).toContain('Te veel pogingen');
+    // One caller waits an hour, not the quarter of an hour of the total.
+    expect(res.body.error.message).toContain('60 minuten');
   });
 
   it('says so when sending is not set up', async () => {

@@ -247,6 +247,6 @@ list marks it "Actief".
 must send nothing rather than mail everyone. The flow looks the address
 up in its sheet and sends only that codenaam's bericht, to the sheet's
 address. The answer is the same for any address; rate-limited per caller
-(3) and in total (10) per 15 minutes, because every request mints a link
+(3 an hour) and in total (10 per 15 minutes), because every request mints a link
 for every participant and costs a Gmail send. The address is never
 stored or logged.

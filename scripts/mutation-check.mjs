@@ -462,6 +462,20 @@ const MUTATIONS = [
     tests: ['lib/autoReminders'],
   },
   {
+    name: 'link-aanvragen: a caller waits a quarter of an hour, not an hour',
+    file: 'app/api/link-aanvragen/route.ts',
+    find: 'recordAttempt(callerKey, CALLER_WINDOW_MS);',
+    replace: 'recordAttempt(callerKey);',
+    tests: ['app/api/link-aanvragen'],
+  },
+  {
+    name: 'rateLimit: an own window is ignored',
+    file: 'lib/rateLimit.ts',
+    find: 'resetAt: now + windowMs',
+    replace: 'resetAt: now + WINDOW_MS',
+    tests: ['lib/rateLimit'],
+  },
+  {
     name: 'generate-roster: days outside the membership open to the solver',
     file: 'app/api/planner/period/[id]/generate-roster/route.ts',
     find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',

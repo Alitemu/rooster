@@ -62,15 +62,16 @@ export function checkRateLimit(
  * than a guess (e.g. a password reset request) call it for every attempt.
  *
  * The window starts at the first counted attempt and is not extended by
- * later ones, so a blocked key always frees itself within WINDOW_MS.
+ * later ones, so a blocked key always frees itself within the window
+ * (WINDOW_MS unless the caller asks for another).
  */
-export function recordAttempt(key: string): void {
+export function recordAttempt(key: string, windowMs: number = WINDOW_MS): void {
   const now = Date.now();
   if (buckets.size > 10000) sweepExpired(now);
 
   const bucket = buckets.get(key);
   if (!bucket || bucket.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + WINDOW_MS });
+    buckets.set(key, { count: 1, resetAt: now + windowMs });
     return;
   }
 

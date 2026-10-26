@@ -24,6 +24,7 @@ import { actieveAiosPeriodes, aiosDeelnemers, aiosMailBasisUrl, aiosPersoonlijke
 import { db } from '@/db/client';
 
 const MAX_PER_CALLER = 3;
+const CALLER_WINDOW_MS = 60 * 60 * 1000;
 const MAX_TOTAL = 10;
 
 const bodySchema = z.object({ email: z.string().trim().toLowerCase().max(254).email() });
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!aiosMailIngesteld()) {
       return fail(503, 'NOT_CONFIGURED', 'Een link aanvragen kan nu niet. Neem contact op met de roosteraar.');
     }
-    recordAttempt(callerKey);
+    recordAttempt(callerKey, CALLER_WINDOW_MS);
     recordAttempt(totalKey);
 
     const now = new Date();

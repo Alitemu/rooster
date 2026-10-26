@@ -24,8 +24,9 @@ import { buildVerzendlijst } from '@/lib/verzendlijst';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { linkAanvraagKandidaten } from '@/lib/linkAanvraag';
 
-/** Per caller and in total, per 15 minutes (lib/rateLimit.ts). */
+/** Per caller 3 an hour, in total 10 per 15 minutes (lib/rateLimit.ts). */
 const MAX_PER_CALLER = 3;
+const CALLER_WINDOW_MS = 60 * 60 * 1000;
 const MAX_TOTAL = 10;
 
 const bodySchema = z.object({ email: z.string().trim().toLowerCase().max(254).email() });
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return fail(503, 'NOT_CONFIGURED', 'Een link aanvragen kan nu niet. Neem contact op met de roosteraar.');
     }
 
-    recordAttempt(callerKey);
+    recordAttempt(callerKey, CALLER_WINDOW_MS);
     recordAttempt(totalKey);
 
     const now = new Date();
