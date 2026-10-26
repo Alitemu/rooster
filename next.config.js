@@ -20,8 +20,8 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   scriptSrc,
   "style-src 'self' 'unsafe-inline'",
-  // data:/blob: cover the QR code shown during TOTP enrollment and the
-  // client-built CSV/JSON download blobs (see ExportDialog.tsx).
+  // blob: covers the client-built CSV/JSON download blobs (see
+  // ExportDialog.tsx); data: is kept for inline images and CSS.
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
   "connect-src 'self'",

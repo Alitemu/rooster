@@ -206,7 +206,7 @@ const routes = Object.entries(routeModules)
   })
   // Logging in and claiming a fresh install are covered by their own tests
   // and lock accounts or rate-limit on repeated tries.
-  .filter((r) => !/^auth\/(staff-login|first-run-setup|verify-link|logout|change-password|totp)/.test(r.route) && r.route !== 'link-aanvragen' && r.route !== 'aios/link-aanvragen')
+  .filter((r) => !/^auth\/(staff-login|first-run-setup|verify-link|logout|change-password)/.test(r.route) && r.route !== 'link-aanvragen' && r.route !== 'aios/link-aanvragen')
   .sort((a, b) => Number(LAST.test(`${a.method} ${a.route}`)) - Number(LAST.test(`${b.method} ${b.route}`)));
 
 // Audit 6 found eleven routes answering 500 to a field of the wrong type

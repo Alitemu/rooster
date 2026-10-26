@@ -21,7 +21,6 @@ const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 /** Changes no data of its own, or is recorded elsewhere. */
 const EXEMPT: Record<string, string> = {
-  'auth/totp/setup': 'nothing is stored until totp/confirm',
   'planner/period/[id]/generate-roster/cancel': 'stops a running job, changes no data',
   'notifications/send-test': 'a test mail, no data',
   'exports/invitations/[period-id]/send': 'every send is in notification_log',

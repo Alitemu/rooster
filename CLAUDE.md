@@ -53,7 +53,7 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
 | Styling | Tailwind CSS + shadcn/ui | 3.4+ (build only, devDependencies) |
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |
 | ORM | Drizzle | 0.45+ |
-| Auth | Custom (tokens + TOTP) | bcrypt, speakeasy |
+| Auth | Custom (tokens + passwords) | bcrypt |
 | Solver | Python + FastAPI + OR-Tools (./solver; the AIOS's own ./aios-solver) | 3.11, 0.141, 9.8 |
 | Testing | Vitest + fast-check + Playwright | 4.1+, 3.14+, 1.62+ |
 | Container | Docker Compose | - |
@@ -250,7 +250,7 @@ How to run them and what each one covers: docs/development/checks.md.
 | Achterwacht and AIOS apart, the AIOS's copies | docs/development/diensten.md | lib/dienstAccess.ts, lib/activePeriod.ts, lib/aios*.ts, app/api/aios |
 | The AIOS roster (design, steps) | docs/aios-rooster.md | lib/aiosQuarter.ts, lib/aiosDiensten.ts, lib/aiosSlots.ts, lib/aiosPool.ts, lib/aiosPeriod.ts |
 | The AIOS's solver (contract, model, tests) | docs/development/aios-solver.md | aios-solver/ |
-| Links, passwords, TOTP, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
+| Links, passwords, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
 | Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |
 | Images, workflows, compose, sub-folder, backups, uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts |
 | Operator guides (Dutch) | README.md, docs/installatie-it.md (for the IT department), docs/verzendlijst-power-automate.md, docs/teststrategie.md (what to test when), docs/stappenplan-testen.md (the checklist for the user) | - |

@@ -32,10 +32,12 @@ server) and is let through. GET /api/auth/verify-link sets a cookie, so it
 refuses a request from another site too: a link in a mail opens the page,
 which calls it itself. Do not run other web apps on the hostname of this one:
 the cookie is not scoped to a port (docs/installatie-it.md).
-A signed token that is not a session (the setup token, the TOTP enrolment)
+A signed token that is not a session (the setup token, the password-reset link)
 is not read as one: verifySessionToken accepts only kind staff and person.
 
-2. **Password + TOTP** (planner/admin)
+2. **Password** (planner/admin). Two-step verification (TOTP) was removed in 0.805.0: the
+   routes, the dialog and the check at login are gone, `person.totp_secret` stays in the
+   table unused, and a leftover value never blocks a login.
    - bcrypt (the native binding) for password hashing; a password needs 8+
      characters with lower case, upper case, a digit and a special
      character (validatePasswordStrength)
@@ -47,13 +49,12 @@ is not read as one: verifySessionToken accepts only kind staff and person.
      check while the password was hashed, audit 10).
    - Ten wrong guesses per account (and per client) per quarter of an
      hour, also when they arrive at the same moment: staff-login,
-     change-password, totp/disable, totp/confirm and first-run-setup take
+     change-password and first-run-setup take
      an attempt with lib/rateLimit.ts `takeAttempt` before bcrypt or the
      code check runs and give it back (`releaseAttempt`) once the secret
      matched. Checking first and counting after the asynchronous compare
      let a burst of thirty all through (audit 8,
      app/api/auth/rateLimitConcurrency.test.ts).
-   - Speakeasy for TOTP generation
    - No email required (pseudonymous)
    - The password is changed through POST /api/auth/change-password
      ("Wachtwoord wijzigen" on the period list), which requires the
@@ -69,11 +70,6 @@ is not read as one: verifySessionToken accepts only kind staff and person.
      first; the seed password itself is refused as the new one.
      ALLOW_SEED_PASSWORD=true lifts this for local test runs only;
      docker-compose.yml does not pass it through.
-   - The TOTP secret is stored encrypted like the mail password
-     (lib/totpSecret.ts, "v1:"; a plain-text one from before is re-saved
-     encrypted at the next login). Unreadable after a key change: the
-     login says so, and `scripts/reset-totp.ts <codenaam>` on the server
-     turns two-step verification off for that account.
    - A forgotten password: `scripts/reset-password.ts <codenaam>` on the
      server (`docker compose exec -u node web ...`) asks for a new one twice
      without echo (NIEUW_WACHTWOORD without a terminal, never an argument),
@@ -88,7 +84,7 @@ is not read as one: verifySessionToken accepts only kind staff and person.
      een beheerder kan accounts beheren", no list and no form, and a list
      that fails to load says so instead of "Accounts laden..." for good,
      tests/e2e/accounts-access.e2e.ts, audit 16): add a PLANNER/ADMIN with a temporary password,
-     give an account a temporary password, turn off its TOTP, switch it
+     give an account a temporary password, switch it
      off or change its role. A temporary password sets
      `person.wachtwoord_moet_wijzigen` (migration 0021): the login session
      is flagged wachtwoordWijzigen like a seed-password login (login says
@@ -115,16 +111,6 @@ is not read as one: verifySessionToken accepts only kind staff and person.
    - The login page's `redirect` only goes to a /planner path on this site
      (lib/safeRedirect.ts, checked with the URL parser: "/\\host" leaves
      the site in a browser).
-   - TOTP is self-service, mirroring the password: "Tweestapsverificatie"
-     on the period list opens `TotpSettingsDialog`, which calls
-     `/api/auth/totp/setup` (a fresh secret + a server-rendered QR PNG,
-     `qrcode` renders the `otpauth://` URI - nothing is persisted yet) and
-     `/api/auth/totp/confirm` (a live code from that secret is what
-     actually writes `totp_secret`). `/api/auth/totp/disable` is the way
-     back - current password only, deliberately never a fresh TOTP code,
-     since "I no longer have a code to give" is the ordinary reason to
-     call it, not an edge case. All three routes, plus `/api/auth/me`'s
-     `totp_enrolled` flag the dialog reads its own state from.
 
 **Revoking a personal link (0.802.0)**
 

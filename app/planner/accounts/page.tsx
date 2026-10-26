@@ -2,10 +2,9 @@
 
 /**
  * Accounts beheren: the staff accounts, for an ADMIN (lib/staffAccounts.ts).
- * Add a planner or beheerder, give an account a temporary password, turn
- * off two-step verification, switch an account off or change its role.
- * One's own account is shown but managed with "Wachtwoord wijzigen" and
- * "Tweestapsverificatie" on the period list.
+ * Add a planner or beheerder, give an account a temporary password,
+ * switch an account off or change its role. One's own account is shown but
+ * managed with "Wachtwoord wijzigen" on the period list.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -17,7 +16,6 @@ interface Account {
   codenaam: string;
   rol: 'ADMIN' | 'PLANNER';
   actief: boolean;
-  tweestapsverificatie: boolean;
   wachtwoord_ingesteld: boolean;
   wachtwoord_moet_wijzigen: boolean;
   dienst_type: 'ACHTERWACHT' | 'AIOS' | null;
@@ -157,7 +155,7 @@ export default function AccountsPage() {
           Planners en beheerders van Dienstrooster. Een beheerder kan alles wat een planner kan en
           beheert daarnaast deze accounts. Een nieuw account of een gereset wachtwoord krijgt een
           tijdelijk wachtwoord. Bij de eerste keer inloggen kiest die persoon zelf een nieuw
-          wachtwoord. Je eigen account beheer je met Wachtwoord wijzigen en Tweestapsverificatie.
+          wachtwoord. Je eigen account beheer je met Wachtwoord wijzigen.
           Elk account hoort bij een dienst. Voorlopig is alleen de achterwacht in productie.
         </p>
       </div>
@@ -198,7 +196,6 @@ export default function AccountsPage() {
                 <th className="px-3 py-2 text-left">Rol</th>
                 <th className="px-3 py-2 text-left">Dienst</th>
                 <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-left">Tweestapsverificatie</th>
                 <th className="px-3 py-2 text-left">Acties</th>
               </tr>
             </thead>
@@ -242,7 +239,6 @@ export default function AccountsPage() {
                             ? 'Tijdelijk wachtwoord'
                             : 'Actief'}
                     </td>
-                    <td className="px-3 py-2">{a.tweestapsverificatie ? 'Aan' : 'Uit'}</td>
                     <td className="px-3 py-2">
                       {eigen ? (
                         <span className="text-xs text-neutral-500">Via Wachtwoord wijzigen</span>
@@ -271,20 +267,6 @@ export default function AccountsPage() {
                           >
                             Wachtwoord resetten
                           </button>
-                          {a.tweestapsverificatie && (
-                            <button
-                              className="text-xs font-medium text-blue-700 hover:underline"
-                              disabled={busy}
-                              onClick={() =>
-                                run(
-                                  () => send(`/api/admin/accounts/${a.id}/totp-disable`, 'POST'),
-                                  `Tweestapsverificatie van ${a.codenaam} staat uit. ${a.codenaam} logt nu in met alleen het wachtwoord.`
-                                )
-                              }
-                            >
-                              Tweestapsverificatie uitzetten
-                            </button>
-                          )}
                           <button
                             className="text-xs font-medium text-red-700 hover:underline"
                             disabled={busy}

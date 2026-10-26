@@ -174,9 +174,9 @@ describe('session tokens', () => {
   });
 
   it('signs arbitrary payloads too, which one-off tokens rely on', () => {
-    const token = signPayload({ purpose: 'totp-enrollment', personId: PERSON_ID }, 600);
+    const token = signPayload({ purpose: 'wachtwoord-herstel', personId: PERSON_ID }, 600);
     expect(verifyPayload<{ purpose: string }>(token)).toEqual({
-      purpose: 'totp-enrollment',
+      purpose: 'wachtwoord-herstel',
       personId: PERSON_ID,
     });
   });
@@ -187,7 +187,7 @@ describe('a signed token that is not a session', () => {
   // verifySessionToken must say null to every signed payload that is not one.
   it('is not taken for a session', () => {
     for (const payload of [
-      { purpose: 'totp-enrollment', personId: PERSON_ID },
+      { purpose: 'wachtwoord-herstel', personId: PERSON_ID },
       { kind: 'setup', personId: PERSON_ID },
       { kind: 'admin', personId: PERSON_ID, sessionVersion: 1 },
       { personId: PERSON_ID, sessionVersion: 1 },

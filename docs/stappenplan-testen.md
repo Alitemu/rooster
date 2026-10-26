@@ -39,8 +39,6 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   van de AIOS, en andersom.
 - [ ] **B5.** Wachtwoord wijzigen werkt. Uitloggen werkt, ook in een tweede
   browser (die is dan ook uitgelogd).
-- [ ] **B6.** Tweestapsverificatie instellen en weer uitzetten (alleen als je
-  die gebruikt).
 
 ## Blok C. Achterwacht: een periode van begin tot eind
 

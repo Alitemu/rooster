@@ -8,7 +8,6 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { GET, POST } from './route';
 import { PATCH } from './[id]/route';
 import { POST as resetPassword } from './[id]/reset-password/route';
-import { POST as disableTotp } from './[id]/totp-disable/route';
 import { POST as login } from '../../auth/staff-login/route';
 import { POST as changePassword } from '../../auth/change-password/route';
 
@@ -167,14 +166,6 @@ describe('/api/admin/accounts', () => {
       resetPassword(req(`/api/admin/accounts/${target}/reset-password`, admin.id, 'POST', { wachtwoord: TIJDELIJK }), params(target));
     expect((await reset(other.id)).status).toBe(200);
     expect((await reset(admin.id)).status).toBe(409);
-  });
-
-  it('turns off someone else\'s two-step verification', async () => {
-    const admin = await account('ADMIN');
-    const planner = await account('PLANNER', { totp: 'v1:iets' });
-    const res = await disableTotp(req(`/api/admin/accounts/${planner.id}/totp-disable`, admin.id, 'POST'), params(planner.id));
-    expect(res.status).toBe(200);
-    expect(row(planner.id).totp_secret).toBeNull();
   });
 
   it('switches an account off, which then can\'t log in', async () => {

@@ -9,7 +9,7 @@
  * one, only its owner should know the one the account goes on with.
  *
  * An admin never manages their own account here (that is "Wachtwoord
- * wijzigen" and "Tweestapsverificatie"), so nobody can lock themselves out,
+ * wijzigen"), so nobody can lock themselves out,
  * and the last active admin can't be switched off or made planner.
  * Every change ends the account's sessions and goes into the audit log,
  * without any password material.
@@ -36,7 +36,6 @@ export interface StaffAccount {
   codenaam: string;
   rol: StaffRol;
   actief: boolean;
-  tweestapsverificatie: boolean;
   wachtwoord_ingesteld: boolean;
   wachtwoord_moet_wijzigen: boolean;
   dienst_type: DienstType | null;
@@ -50,7 +49,7 @@ export function listStaffAccounts(): StaffAccount[] {
   return (
     db
       .prepare(
-        `SELECT id, codenaam, rol, actief, totp_secret, wachtwoord_hash, wachtwoord_moet_wijzigen, dienst_type
+        `SELECT id, codenaam, rol, actief, wachtwoord_hash, wachtwoord_moet_wijzigen, dienst_type
          FROM dienstrooster_person WHERE rol IN ('ADMIN', 'PLANNER') ORDER BY rol, codenaam`
       )
       .all() as Array<{
@@ -58,7 +57,6 @@ export function listStaffAccounts(): StaffAccount[] {
       codenaam: string;
       rol: StaffRol;
       actief: number;
-      totp_secret: string | null;
       wachtwoord_hash: string | null;
       wachtwoord_moet_wijzigen: number;
       dienst_type: DienstType | null;
@@ -68,7 +66,6 @@ export function listStaffAccounts(): StaffAccount[] {
     codenaam: r.codenaam,
     rol: r.rol,
     actief: Boolean(r.actief),
-    tweestapsverificatie: Boolean(r.totp_secret),
     wachtwoord_ingesteld: Boolean(r.wachtwoord_hash),
     wachtwoord_moet_wijzigen: Boolean(r.wachtwoord_moet_wijzigen),
     dienst_type: r.dienst_type,
@@ -99,7 +96,7 @@ function staffTarget(
       ok: false,
       status: 409,
       code: 'OWN_ACCOUNT',
-      message: 'Je eigen account beheer je met Wachtwoord wijzigen en Tweestapsverificatie.',
+      message: 'Je eigen account beheer je met Wachtwoord wijzigen.',
     };
   }
   const row = db
@@ -163,17 +160,6 @@ export async function resetStaffPassword(actorId: string, targetId: string, wach
     );
     revokeAllSessions(targetId);
     audit(actorId, targetId, { wijziging: 'tijdelijk wachtwoord ingesteld door beheerder', sessies_ingetrokken: true });
-  })();
-  return { ok: true };
-}
-
-export function disableStaffTotp(actorId: string, targetId: string): AccountResult {
-  const target = staffTarget(actorId, targetId);
-  if (isFailure(target)) return target;
-  db.transaction(() => {
-    db.prepare('UPDATE dienstrooster_person SET totp_secret = NULL WHERE id = ?').run(targetId);
-    revokeAllSessions(targetId);
-    audit(actorId, targetId, { wijziging: 'tweestapsverificatie uitgezet door beheerder', sessies_ingetrokken: true });
   })();
   return { ok: true };
 }

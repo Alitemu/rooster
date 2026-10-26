@@ -1,28 +1,26 @@
 /**
  * Staff Login Route
  *
- * POST /api/auth/staff-login - Password (+TOTP if enrolled) login for ADMIN/PLANNER
+ * POST /api/auth/staff-login - Password login for ADMIN/PLANNER
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { verifyPassword, isValidTOTPFormat, verifyTOTPCode, DUMMY_PASSWORD_HASH } from '@/lib/auth';
+import { verifyPassword, DUMMY_PASSWORD_HASH } from '@/lib/auth';
 import { setSessionCookie, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { seedPasswordMustBeChanged } from '@/lib/seedPassword';
-import { encryptTotpSecret, readTotpSecret } from '@/lib/totpSecret';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { takeAttempt, releaseAttempt, getClientIp, clearRateLimit, rateLimitedResponseBody } from '@/lib/rateLimit';
 
 interface StaffLoginRequest {
   codenaam: string;
   password: string;
-  totpCode?: string;
 }
 
 // 10 FAILED attempts per 15 minutes per account - enough for a human who
-// fumbles a password or TOTP code a few times, tight enough that
-// brute-forcing either is impractical. Successful logins deliberately
+// fumbles a password a few times, tight enough that
+// brute-forcing it is impractical. Successful logins deliberately
 // don't count: every staff member shares one hospital NAT address, so
 // counting them meant the 11th ordinary login of the afternoon was
 // refused (see lib/rateLimit.ts).
@@ -39,7 +37,7 @@ const MAX_ATTEMPTS_PER_CLIENT = 50;
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const body = await parseJsonBody<StaffLoginRequest>(req);
-    const { codenaam, password, totpCode } = body;
+    const { codenaam, password } = body;
 
     if (typeof codenaam !== 'string' || typeof password !== 'string' || !codenaam || !password) {
       return NextResponse.json(
@@ -52,7 +50,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const clientKey = `staff-login-client:${clientIp}`;
     const rateLimitKey = `staff-login:${clientIp}:${codenaam.toLowerCase()}`;
     // Counted now, before the password is compared (lib/rateLimit.ts
-    // takeAttempt); given back below when it was not a failed guess.
+    // takeAttempt); given back below after a successful login.
     const rateLimit = takeAttempt([
       [rateLimitKey, MAX_ATTEMPTS],
       [clientKey, MAX_ATTEMPTS_PER_CLIENT],
@@ -60,11 +58,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!rateLimit.allowed) {
       return NextResponse.json(rateLimitedResponseBody(rateLimit.retryAfterSeconds), { status: 429 });
     }
-    const notAGuess = () => {
-      releaseAttempt(rateLimitKey);
-      releaseAttempt(clientKey);
-    };
-
     const invalidCredentials = () => {
       return NextResponse.json(
         { success: false, error: { code: 'INVALID_CREDENTIALS', message: 'Ongeldige inloggegevens' } },
@@ -74,7 +67,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const person = db
       .prepare(
-        `SELECT id, codenaam, rol, actief, wachtwoord_hash, totp_secret, wachtwoord_moet_wijzigen
+        `SELECT id, codenaam, rol, actief, wachtwoord_hash, wachtwoord_moet_wijzigen
          FROM dienstrooster_person
          WHERE codenaam = ? COLLATE NOCASE AND rol IN ('ADMIN', 'PLANNER')
          ORDER BY codenaam = ? DESC LIMIT 1`
@@ -86,7 +79,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           rol: 'ADMIN' | 'PLANNER';
           actief: number;
           wachtwoord_hash: string | null;
-          totp_secret: string | null;
           wachtwoord_moet_wijzigen: number;
         }
       | undefined;
@@ -102,47 +94,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const passwordOk = await verifyPassword(password, person.wachtwoord_hash);
     if (!passwordOk) {
       return invalidCredentials();
-    }
-
-    if (person.totp_secret) {
-      if (typeof totpCode !== 'string' || !isValidTOTPFormat(totpCode)) {
-        // Not counted: the password was right, this is the normal first
-        // half of a two-step login, not a failed guess.
-        notAGuess();
-        return NextResponse.json(
-          { success: false, error: { code: 'TOTP_REQUIRED', message: 'Authenticatiecode is verplicht' } },
-          { status: 401 }
-        );
-      }
-      const totp = readTotpSecret(person.totp_secret);
-      if (!totp.secret) {
-        // Only ever said after the right password: the secret is stored
-        // encrypted and the server's key changed since (lib/totpSecret.ts).
-        notAGuess();
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: 'TOTP_UNREADABLE',
-              message:
-                'Je authenticatiecode kan niet gecontroleerd worden, omdat de sleutel op de server is veranderd. ' +
-                'Vraag de beheerder van de server om tweestapsverificatie voor je uit te zetten ' +
-                '(scripts/reset-totp.ts). Daarna log je in met alleen je wachtwoord.',
-            },
-          },
-          { status: 401 }
-        );
-      }
-      if (!verifyTOTPCode(totp.secret, totpCode)) {
-        return invalidCredentials();
-      }
-      // Saved before secrets were encrypted: encrypt it now.
-      if (totp.legacy) {
-        db.prepare('UPDATE dienstrooster_person SET totp_secret = ? WHERE id = ?').run(
-          encryptTotpSecret(totp.secret),
-          person.id
-        );
-      }
     }
 
     clearRateLimit(rateLimitKey);
@@ -162,7 +113,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         person_id: person.id,
         codenaam: person.codenaam,
         role: person.rol,
-        totp_enrolled: Boolean(person.totp_secret),
         wachtwoord_wijzigen: wachtwoordWijzigen,
         tijdelijk_wachtwoord: tijdelijkWachtwoord,
       },

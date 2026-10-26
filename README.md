@@ -13,7 +13,7 @@ solver voor roostergeneratie, publicatie, ruilverzoeken en correcties.
 - **Frontend/Backend:** Next.js 16 + TypeScript (App Router, strict mode)
 - **Styling:** Tailwind CSS + shadcn/ui
 - **Database:** SQLite (WAL-mode) + Drizzle ORM
-- **Auth:** eigen implementatie (persoonlijke links, bcrypt-wachtwoorden, TOTP)
+- **Auth:** eigen implementatie (persoonlijke links, bcrypt-wachtwoorden)
 - **Solver:** Python + FastAPI + OR-Tools CP-SAT
 - **Testen:** Vitest + fast-check (unit/integratie), Playwright (e2e)
 - **Container:** Docker Compose (4 services: caddy, web, solver, aios-solver)
@@ -188,7 +188,7 @@ npm start
 ### Databaseschema
 
 Belangrijkste tabellen:
-- `person` - medewerkers (codenaam, rol, wachtwoord_hash, totp_secret, sessie_versie)
+- `person` - medewerkers (codenaam, rol, wachtwoord_hash, sessie_versie)
 - `pool` / `pool_membership` - dienstenpool en wie daar wanneer in zit
 - `schedule_period` - periodes (CONCEPT, OPEN, CLOSED, GEGENEREERD, GEPUBLICEERD)
 - `shift_slot` / `assignment` - te vullen diensten en de uiteindelijke toewijzingen
@@ -224,7 +224,7 @@ bij de eerste periode in de app.
 - Alleen-lezen toegang na de deadline
 
 **Voor planner/beheerder:**
-- Wachtwoord (bcrypt) + optionele TOTP-tweestapsverificatie (speakeasy)
+- Wachtwoord (bcrypt)
 - Geen e-mailadres vereist
 - Sessies zijn ondertekende tokens; `person.sessie_versie` maakt het
   mogelijk om alle sessies van een account in één keer ongeldig te maken
@@ -266,7 +266,7 @@ Zie CLAUDE.md voor de bijgehouden conventies en ontwerpbeslissingen.
 Voor deze fase gebouwd:
 - Projectopzet en Docker Compose-configuratie
 - Datamodel (Drizzle ORM + SQLite)
-- Authenticatie (persoonlijke links + wachtwoord + TOTP)
+- Authenticatie (persoonlijke links + wachtwoord)
 - Feestdagberekening voor alle Nederlandse feestdagen
 - Capaciteitscontrole
 - Periodebeheer (venster openen/sluiten, ruleset bevriezen bij openen)
@@ -541,6 +541,8 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 0.805.0:** tweestapsverificatie (de authenticatiecode) is uit de app gehaald. De knop, het scherm, de controle bij het inloggen en de bibliotheken zijn weg, voor planners en beheerders van beide diensten. Inloggen kan met alleen het wachtwoord, ook als een account nog een oude instelling had.
 
 **Vanaf versie 0.804.0:** een nieuwe audit, met nieuwe tests en mutatietests.
 - *Toetsenbord in dialogen:* een dialoog neemt de focus bij het openen, Tab en Shift+Tab blijven erin, en met Escape komt de focus terug op de knop die hem opende. Tab liep eerder zo de dialoog uit, de pagina erachter in.
@@ -998,8 +1000,8 @@ image, zodat een installatie niets van GitHub nodig heeft behalve de image.
    kunnen dan nog in `rooster.db-wal` staan. Neem de map
    `data/backups/database/` mee in de back-up van de NAS zelf (bijvoorbeeld
    Hyper Backup), zodat er ook een kopie buiten de NAS is.
-   **Bewaar ook de sleutel.** Het Gmail-app-wachtwoord en de geheimen voor
-   tweestapsverificatie staan versleuteld in de database. De sleutel
+   **Bewaar ook de sleutel.** Het Gmail-app-wachtwoord staat versleuteld in
+   de database. De sleutel
    daarvoor staat in `data/.session_secret` (of in `SESSION_SECRET` in
    `.env`, als je die zelf hebt ingesteld). Dat bestand zit niet in de
    dagelijkse kopie. Omdat de naam met een punt begint, is het in
@@ -1007,9 +1009,8 @@ image, zodat een installatie niets van GitHub nodig heeft behalve de image.
    een kopie op een veilige plek, niet in dezelfde map als de back-ups:
    wie de database en de sleutel samen heeft, kan het app-wachtwoord
    ontsleutelen. Zonder de sleutel werkt een teruggezette database wel,
-   maar moet iedereen opnieuw inloggen, moet het app-wachtwoord opnieuw in
-   Mailinstellingen en moet tweestapsverificatie per account worden
-   uitgezet met `scripts/reset-totp.ts` (zie Beveiliging).
+   maar moet iedereen opnieuw inloggen en moet het app-wachtwoord opnieuw in
+   Mailinstellingen.
 4. **Terugzetten:** `docker compose down`, verwijder `data/rooster.db`,
    `data/rooster.db-wal` en `data/rooster.db-shm`, kopieer de gewenste
    back-up naar `data/rooster.db` en start weer met `docker compose up -d`.
@@ -1038,13 +1039,6 @@ de stroom al gebouwd?".
 - **Startwachtwoord:** het wachtwoord dat de seed voor `admin` instelt,
   staat openbaar in deze repository. Wie ermee inlogt, moet eerst een eigen
   wachtwoord kiezen en kan daarvoor niets anders.
-- **TOTP-tweestapsverificatie** voor planner/beheerder, zelf te beheren.
-  Zet dit aan: het is de beste bescherming tegen iemand die wachtwoorden
-  probeert te raden vanaf veel adressen tegelijk. De sleutel staat
-  versleuteld in de database. Kan iemand niet meer inloggen omdat de
-  telefoon weg is of de sleutel op de server is veranderd, dan zet de
-  beheerder het uit met
-  `docker compose exec -u node web npx tsx scripts/reset-totp.ts <codenaam>`.
 - **Wachtwoord vergeten:** er is bewust geen "wachtwoord vergeten" op de
   inlogpagina. De app kent geen e-mailadres om een link naar te sturen, en
   een herstel dat iedereen op de inlogpagina kan starten, is ook een weg
@@ -1053,14 +1047,11 @@ de stroom al gebouwd?".
   Het script vraagt het nieuwe wachtwoord twee keer, zonder het te tonen.
   Daarvoor gelden dezelfde regels als in de app. Het account wordt overal
   uitgelogd en de wijziging staat in de wijzigingsgeschiedenis.
-  Tweestapsverificatie blijft aan. Is ook de telefoon weg, draai dan daarna
-  ook `reset-totp.ts`. Is er een beheerder, dan kan die dit ook in de app
-  doen (zie hieronder).
+  Is er een beheerder, dan kan die dit ook in de app doen (zie hieronder).
 - **Beheerder:** een beheerder kan alles wat een planner kan en beheert
   daarnaast de accounts, bij *Accounts beheren* op de lijst met periodes:
   een planner of beheerder toevoegen, iemand een tijdelijk wachtwoord geven,
-  tweestapsverificatie uitzetten, een account uitschakelen of de rol
-  wijzigen. Bij een nieuw account kies je ook de dienst: Achterwacht of
+  een account uitschakelen of de rol wijzigen. Bij een nieuw account kies je ook de dienst: Achterwacht of
   AIOS.
   Een planner ziet alleen de pools, periodes, roosters en voorkeuren van de
   eigen dienst. De planner van de achterwacht en die van de AIOS zien dus
@@ -1069,7 +1060,7 @@ de stroom al gebouwd?".
   AIOS. De mailinstellingen gelden voor beide diensten samen. Alleen de
   beheerder kan ze wijzigen, een planner ziet ze alleen. Een tijdelijk wachtwoord moet bij de eerste keer inloggen worden
   vervangen, en de sessies van dat account worden beëindigd. Je eigen
-  account beheer je met *Wachtwoord wijzigen* en *Tweestapsverificatie*.
+  account beheer je met *Wachtwoord wijzigen*.
   Een nieuwe installatie begint met één account: de beheerder `admin`, met
   het startwachtwoord. Log meteen na de eerste start in en kies een eigen
   wachtwoord: tot dan kan iedereen die de inlogpagina bereikt het account
@@ -1109,7 +1100,7 @@ Kritieke testgebieden:
 1. Feestdagberekening (2024-2035, inclusief schrikkeljaren)
 2. ISO-weekafronding en periodegrenzen
 3. Capaciteitsformules
-4. Authenticatie: tokenhashing, sessieversies, TOTP-verificatie
+4. Authenticatie: tokenhashing, sessieversies
 5. Harde solver-regels: ABSOLUUT, vensterregel, streefbereik, geen dubbele
    week
 

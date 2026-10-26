@@ -2367,27 +2367,6 @@ const MUTATIONS = [
     tests: ["app/api/person/[id]/onBehalfAudit"],
   },
   {
-    name: "auth: a second authenticator replaces the first",
-    file: "app/api/auth/totp/confirm/route.ts",
-    find: "    if (heeft?.totp_secret) {",
-    replace: "    if (false) {",
-    tests: ["app/api/auth/totp/confirm"],
-  },
-  {
-    name: "auth: totp confirm crashes on a code that is not text",
-    file: "app/api/auth/totp/confirm/route.ts",
-    find: "typeof setupToken !== 'string' || typeof code !== 'string' || ",
-    replace: "",
-    tests: ["app/api/auth/totp/confirm"],
-  },
-  {
-    name: "auth: totp disable crashes on a password that is not text",
-    file: "app/api/auth/totp/disable/route.ts",
-    find: "typeof wachtwoord !== 'string' || ",
-    replace: "",
-    tests: ["app/api/auth/totp/disable"],
-  },
-  {
     name: "auth: change-password crashes on a password that is not text",
     file: "app/api/auth/change-password/route.ts",
     find: "typeof huidig_wachtwoord !== 'string' || typeof nieuw_wachtwoord !== 'string' || ",

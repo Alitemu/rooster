@@ -59,7 +59,7 @@ export function checkRateLimit(
 /**
  * Count one attempt against this key. Auth routes call this only when an
  * attempt actually failed; routes that limit a costly operation rather
- * than a guess (e.g. TOTP enrollment) call it for every attempt.
+ * than a guess (e.g. a password reset request) call it for every attempt.
  *
  * The window starts at the first counted attempt and is not extended by
  * later ones, so a blocked key always frees itself within WINDOW_MS.

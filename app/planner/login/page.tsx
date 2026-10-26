@@ -1,7 +1,7 @@
 /**
  * Staff Login Page
  *
- * Password (+TOTP if enrolled) login for ADMIN/PLANNER accounts.
+ * Password login for ADMIN/PLANNER accounts.
  */
 
 'use client';
@@ -189,8 +189,6 @@ function PlannerLoginForm() {
 
   const [codenaam, setCodenaam] = useState('');
   const [password, setPassword] = useState('');
-  const [totpCode, setTotpCode] = useState('');
-  const [totpRequired, setTotpRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Logged in with the public seed password: a new one comes first.
@@ -222,18 +220,13 @@ function PlannerLoginForm() {
       const res = await fetch(withBasePath('/api/auth/staff-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codenaam, password, totpCode: totpCode || undefined }),
+        body: JSON.stringify({ codenaam, password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.error?.code === 'TOTP_REQUIRED') {
-          setTotpRequired(true);
-          setError('Vul je authenticatiecode in');
-        } else {
-          setError(data.error?.message || 'Inloggen mislukt');
-        }
+        setError(data.error?.message || 'Inloggen mislukt');
         setLoading(false);
         return;
       }
@@ -321,25 +314,6 @@ function PlannerLoginForm() {
                 required
               />
             </div>
-
-            {totpRequired && (
-              <div className="form-group">
-                <label className="label" htmlFor="totp">
-                  Authenticatiecode
-                </label>
-                <input
-                  id="totp"
-                  className="input w-full"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value)}
-                  required
-                />
-              </div>
-            )}
 
             {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
 

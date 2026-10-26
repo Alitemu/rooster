@@ -12,7 +12,6 @@ import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
-import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
 import { MailSettingsDialog } from '@/components/MailSettingsDialog';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
@@ -150,7 +149,6 @@ export default function PlannerHomePage() {
 
   const [showTrash, setShowTrash] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showTotpSettings, setShowTotpSettings] = useState(false);
   // Only an ADMIN sees "Accounts beheren" (the API checks it too).
   const [isAdmin, setIsAdmin] = useState(false);
   const [showMailSettings, setShowMailSettings] = useState(false);
@@ -381,9 +379,6 @@ export default function PlannerHomePage() {
           </button>
           <button onClick={() => setShowChangePassword(true)} className="btn-secondary">
             Wachtwoord wijzigen
-          </button>
-          <button onClick={() => setShowTotpSettings(true)} className="btn-secondary">
-            Tweestapsverificatie
           </button>
           {isAdmin && (
             <Link href="/planner/accounts" className="btn-secondary">
@@ -806,10 +801,6 @@ export default function PlannerHomePage() {
       <ChangePasswordDialog
         isOpen={showChangePassword}
         onClose={() => setShowChangePassword(false)}
-      />
-      <TotpSettingsDialog
-        isOpen={showTotpSettings}
-        onClose={() => setShowTotpSettings(false)}
       />
       <MailSettingsDialog isOpen={isAdmin && showMailSettings} onClose={() => setShowMailSettings(false)} />
     </div>

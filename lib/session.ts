@@ -4,7 +4,7 @@
  * Lightweight signed-cookie sessions (HMAC-SHA256, no external deps).
  * Two kinds of session:
  * - person: issued from a verified personal access link, scoped to that person only
- * - staff: issued from password(+TOTP) login, scoped to an ADMIN/PLANNER person
+ * - staff: issued from password login, scoped to an ADMIN/PLANNER person
  */
 
 import crypto from 'crypto';
@@ -149,8 +149,8 @@ function sign(value: string): string {
 
 /**
  * Sign an arbitrary JSON-serializable payload with an expiry. Generic
- * building block behind createSessionToken and one-off tokens like
- * TOTP-enrollment tokens.
+ * building block behind createSessionToken and one-off tokens such as the
+ * password-reset link.
  */
 export function signPayload<T extends object>(payload: T, maxAgeSeconds: number): string {
   const expiresAt = Date.now() + maxAgeSeconds * 1000;

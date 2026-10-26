@@ -7,7 +7,7 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 ## Datamodel Overview
 
 **Core Tables:**
-- `person` - staff members (codenaam, role, password_hash, totp_secret, sessie_versie)
+- `person` - staff members (codenaam, role, password_hash, sessie_versie; the column totp_secret is no longer used since 0.805.0)
 - `person_access_link` - personal links for participants
 - `pool` - shift pool (name, type, settings reference)
 - `pool_membership` - who's in which pool when (its `deelnamefactor` column is no longer read or written since 0.93.0: the factor follows from the part-time days, docs/development/roster-rules.md)

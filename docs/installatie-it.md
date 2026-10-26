@@ -93,8 +93,8 @@ volledige kopie van de database in `data/backups/database/` (de laatste 14).
 
 Bewaar ook het bestand `data/.session_secret` op een veilige plek, niet in
 dezelfde map als de back-ups. Het begint met een punt, dus een back-up slaat
-het soms over. Dit is de sleutel waarmee het Gmail-wachtwoord en de
-geheimen voor tweestapsverificatie in de database zijn versleuteld.
+het soms over. Dit is de sleutel waarmee het Gmail-wachtwoord in de database
+is versleuteld.
 
 ## Het certificaat vervangen
 

@@ -4,7 +4,7 @@
  * Extracts the authenticated identity from the signed session cookie
  * (see lib/session.ts). There are two kinds of session:
  * - person: issued when a personal access link token is verified
- * - staff: issued when an ADMIN/PLANNER logs in with password(+TOTP)
+ * - staff: issued when an ADMIN/PLANNER logs in with a password
  */
 
 import { NextRequest, NextResponse } from 'next/server';
