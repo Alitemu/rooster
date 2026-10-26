@@ -382,7 +382,10 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
         continue;
       }
       const delta = deltas.get(`${member.id}|${teller}`) || 0;
-      byTeller[teller] = { min: scaled[0] + delta, max: scaled[1] + delta, fellow: false };
+      // A credit bigger than the bereik pulls the ceiling below zero: nobody
+      // has fewer than none, so zero shifts is then exactly right (the solver
+      // lets such a person end on zero as well, solver/constraints.py).
+      byTeller[teller] = { min: Math.max(0, scaled[0] + delta), max: Math.max(0, scaled[1] + delta), fellow: false };
     }
     result.set(member.id, byTeller);
   }

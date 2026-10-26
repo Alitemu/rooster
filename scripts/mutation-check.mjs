@@ -350,6 +350,13 @@ const MUTATIONS = [
     tests: ['app/api/planner/period/[id]/import-balances'],
   },
   {
+    name: 'rosterBands: a credit bigger than the bereik gives a ceiling below zero',
+    file: 'lib/rosterBands.ts',
+    find: 'max: Math.max(0, scaled[1] + delta), fellow: false',
+    replace: 'max: scaled[1] + delta, fellow: false',
+    tests: ['lib/fellows'],
+  },
+  {
     name: 'generate-roster: days outside the membership open to the solver',
     file: 'app/api/planner/period/[id]/generate-roster/route.ts',
     find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',
