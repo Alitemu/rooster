@@ -46,7 +46,7 @@ export function vorigePeriodeDenial(periodId: string): NextResponse | null {
   return NextResponse.json(
     {
       success: false,
-      error: `Publiceer eerst de vorige periode "${vorige.naam}" (nu ${periodStatusLabel(vorige.status)}), of zet die in de prullenbak. Anders klopt het saldo van deze periode niet.`,
+      error: `Publiceer eerst de vorige periode "${vorige.naam}" (nu ${periodStatusLabel(vorige.status)}) of zet die in de prullenbak. Anders klopt het saldo van deze periode niet.`,
       code: VORIGE_PERIODE_CODE,
     },
     { status: 409 }

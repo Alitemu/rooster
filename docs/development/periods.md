@@ -59,8 +59,23 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   start. Not from GEPUBLICEERD (409, unpublish first), nor without a
   generated roster or while a generation runs (409). Audit-logged. Swap
   requests play no part: they only exist on a published roster.
+- **Order of periods** (lib/periodVolgorde.ts): a period is generated and
+  published only after the latest period of its pool before it is
+  published (409 VORIGE_PERIODE_NIET_GEPUBLICEERD, with the name and the
+  state of that one). A period in the prullenbak does not count. Its saldo
+  comes from that one (lib/previousPeriod.ts), so skipping it books the
+  difference twice or not at all. Generating needs GESLOTEN (or
+  GEGENEREERD, to go again), so preferences and absences are fixed.
+  Reopening (back to OPEN) catches up the part-time and absence blocks
+  that only follow changes while a period is OPEN, wipes the frozen
+  deelnamefactoren and is refused (409) once the period has started.
+- **Membership and a roster**: changing or removing a membership on days
+  that fall in a GEGENEREERD or GEPUBLICEERD period answers 409
+  LIDMAATSCHAP_RAAKT_ROOSTER until the planner confirms (`bevestigd: true`,
+  `?bevestigd=1` for DELETE; lib/membershipRooster.ts). The roster does not
+  change with it.
 - **Rename** (`PATCH /api/periods/[id]` `{naam}`, "Naam wijzigen" in the
-  period list's row): any status, checked like a new period's name
+  period list's row): any status but not in the prullenbak (404 there), checked like a new period's name
   (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),
   audit-logged. Mails already sent keep the old name.
 - **The prullenbak** (lib/periodTrash.ts): any status may go in, a
