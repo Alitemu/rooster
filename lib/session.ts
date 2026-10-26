@@ -75,6 +75,9 @@ function loadOrCreatePersistedSecret(): string {
   try {
     const existing = fs.readFileSync(file, 'utf8').trim();
     if (existing.length >= 32) return existing;
+    // An empty or cut-off file (a crash while it was being written, a full disk): without this it stayed
+    // in the way of the `wx` below for good, and every request failed until someone deleted it by hand.
+    fs.unlinkSync(file);
   } catch {
     // not created yet - fall through
   }

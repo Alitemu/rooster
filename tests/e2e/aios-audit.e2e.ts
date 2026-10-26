@@ -586,3 +586,25 @@ test('Persoonlijke links: the beheerder sees the links of the period, revokes on
   expect((await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${ids.tokenB}`)).status()).toBe(401);
 });
 
+test('the AIOS dialogs keep focus: Tab and Shift+Tab stay inside, Escape gives focus back to the button', async ({ page }) => {
+  await loginAsBeheerder(page);
+  await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
+  await openAiosSectie(page, 'Exporteren & communicatie');
+  const opener = page.getByRole('button', { name: /Uitnodigingen en herinneringen/ });
+  await opener.click();
+  const dialoog = page.getByRole('dialog', { name: 'Exporteren' });
+  const binnen = () => page.evaluate(() => Boolean(document.activeElement?.closest('[role="dialog"], [role="alertdialog"]')));
+  await expect.poll(binnen).toBe(true);
+  for (let i = 0; i < 14; i++) {
+    await page.keyboard.press('Tab');
+    expect(await binnen(), `Tab ${i + 1}`).toBe(true);
+  }
+  for (let i = 0; i < 14; i++) {
+    await page.keyboard.press('Shift+Tab');
+    expect(await binnen(), `Shift+Tab ${i + 1}`).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  await expect(dialoog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
+

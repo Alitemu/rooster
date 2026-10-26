@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import type { MouseEvent } from 'react';
+import { useDialogFocus } from '@/lib/dialogFocus';
 
 /**
  * Escape-to-close and click-outside-to-close for a modal dialog.
@@ -10,6 +11,8 @@ import type { MouseEvent } from 'react';
  * Sluiten button for that reason; `canDismiss` should mirror that same
  * condition so Escape/backdrop-click can't cut across it, e.g. leaving a
  * roster generation running with no dialog left open to show the result.
+ *
+ * It also keeps focus in the dialog (lib/dialogFocus.ts).
  *
  * Call unconditionally, like any hook - it's a no-op while `open` is false.
  * Returns the backdrop's onClick handler; wire it onto the same element
@@ -22,6 +25,7 @@ export function useDialogDismiss(
   onClose: () => void,
   canDismiss: boolean = true
 ): (e: MouseEvent<HTMLElement>) => void {
+  useDialogFocus(open);
   useEffect(() => {
     if (!open || !canDismiss) return;
     const handleKeyDown = (e: KeyboardEvent) => {

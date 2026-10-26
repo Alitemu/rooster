@@ -16,7 +16,7 @@ solver voor roostergeneratie, publicatie, ruilverzoeken en correcties.
 - **Auth:** eigen implementatie (persoonlijke links, bcrypt-wachtwoorden, TOTP)
 - **Solver:** Python + FastAPI + OR-Tools CP-SAT
 - **Testen:** Vitest + fast-check (unit/integratie), Playwright (e2e)
-- **Container:** Docker Compose (3 services: caddy, web, solver)
+- **Container:** Docker Compose (4 services: caddy, web, solver, aios-solver)
 
 ## Snel starten
 
