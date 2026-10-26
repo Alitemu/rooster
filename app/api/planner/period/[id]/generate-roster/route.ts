@@ -45,6 +45,7 @@ import { feestdagTargets } from '@/lib/feestdagHistory';
 import { computeBandShortfall, fellowBandOverrides } from '@/lib/bandShortfall';
 import { writeAuditLog } from '@/lib/auditLog';
 import { isBetterRoster, isPerfectRoster } from '@/lib/rosterVergelijk';
+import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -109,22 +110,30 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
-    // CONCEPT is deliberately excluded: only /api/periods/[id]/open
-    // transitions CONCEPT -> OPEN, and that's also the only place that
-    // rounds dates to Monday/Sunday, checks for active staff, and applies
-    // carry-over from the previous published period - generating straight
-    // from CONCEPT would silently skip all three. GEGENEREERD is included
+    // Only a closed period generates: until it is closed, preferences and
+    // absences can still change under the solver. CONCEPT is excluded as
+    // well: only /api/periods/[id]/open transitions CONCEPT -> OPEN, and
+    // that's also the only place that rounds dates to Monday/Sunday,
+    // checks for active staff, and applies carry-over from the previous
+    // published period. GEGENEREERD is included
     // so a planner can regenerate - e.g. after manually filling some gaps
     // and wanting the solver to take another pass at the rest, or after a
     // preference changed. GEPUBLICEERD stays excluded: regenerating after
     // publish would silently invalidate a roster staff have already been
     // told about.
-    if (!['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
+    if (!['GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Rooster kan niet gegenereerd worden vanuit status "${periodStatusLabel(period.status)}"` },
+        {
+          success: false,
+          error: `Rooster kan niet gegenereerd worden vanuit status "${periodStatusLabel(period.status)}". Sluit de periode eerst, zodat voorkeuren en afwezigheid vaststaan.`,
+        },
         { status: 400 }
       );
     }
+
+    // The saldo carried over comes from the period before: it has to be published first (lib/periodVolgorde.ts).
+    const vorige = vorigePeriodeDenial(periodId);
+    if (vorige) return vorige;
 
     // Only require overloop confirmation when there's actually a previous
     // published period to carry over from - a pool's first-ever period has

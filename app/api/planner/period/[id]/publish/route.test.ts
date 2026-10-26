@@ -168,6 +168,27 @@ afterEach(() => {
 });
 
 describe('POST /api/planner/period/[id]/publish', () => {
+  it('waits for the period before it: that one is published first (409), and goes through once it is', async () => {
+    const ctx = createPool(1);
+    const planner = createPlanner();
+    const vorige = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, status, aangemaakt_op)
+       VALUES (?, ?, 'Vorige', '2026-12-07', '2027-01-03', '2099-01-01T00:00:00Z', 'GEGENEREERD', datetime('now'))`
+    ).run(vorige, ctx.poolId);
+    createdPeriodIds.push(vorige);
+    const { periodId, slotIds } = createPeriod(ctx, { bandAvond: [7, 7] });
+    fillAllWith(periodId, ctx.personIds[0], slotIds);
+
+    const res = await post(periodId, planner);
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('VORIGE_PERIODE_NIET_GEPUBLICEERD');
+    expect(periodStatus(periodId)).toBe('GEGENEREERD');
+
+    db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD' WHERE id = ?`).run(vorige);
+    expect((await post(periodId, planner)).status).toBe(200);
+  });
+
   it('publishes a clean roster without needing confirmOverrides at all', async () => {
     const ctx = createPool(1);
     const planner = createPlanner();

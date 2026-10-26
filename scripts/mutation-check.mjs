@@ -287,6 +287,27 @@ const MUTATIONS = [
     tests: ['lib/fellows', 'lib/rosterBands', 'lib/calendarRules'],
   },
   {
+    name: 'periodVolgorde: a period before that is not published does not block',
+    file: 'lib/periodVolgorde.ts',
+    find: "vorige.status !== 'GEPUBLICEERD' ? vorige : null",
+    replace: 'null',
+    tests: ['lib/periodVolgorde'],
+  },
+  {
+    name: 'periodVolgorde: a period in the prullenbak blocks',
+    file: 'lib/periodVolgorde.ts',
+    find: 'AND eind_datum < ? AND verwijderd_op IS NULL AND id <> ?',
+    replace: 'AND eind_datum < ? AND id <> ?',
+    tests: ['lib/periodVolgorde'],
+  },
+  {
+    name: 'publish: the period before is not asked to be published first',
+    file: 'app/api/planner/period/[id]/publish/route.ts',
+    find: 'if (vorige) return vorige;',
+    replace: '',
+    tests: ['app/api/planner/period/[id]/publish'],
+  },
+  {
     name: 'generate-roster: days outside the membership open to the solver',
     file: 'app/api/planner/period/[id]/generate-roster/route.ts',
     find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',

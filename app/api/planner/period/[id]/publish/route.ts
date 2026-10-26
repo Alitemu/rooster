@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
 import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { v4 as uuid } from 'uuid';
@@ -80,6 +81,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         { status: 400 }
       );
     }
+
+    // The saldo this period hands on is worked out from the one before it: that one goes first (lib/periodVolgorde.ts).
+    const vorige = vorigePeriodeDenial(periodId);
+    if (vorige) return vorige;
 
     // Enforce the same validation the planner saw, rather than assuming the
     // dialog ran it. Publishing freezes the roster and tells every pool

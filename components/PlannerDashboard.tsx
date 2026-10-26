@@ -778,11 +778,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setRosterDialogOpen(true);
               }
             }}
-            disabled={dashboard.status === 'GEPUBLICEERD'}
+            disabled={!['GESLOTEN', 'GEGENEREERD'].includes(dashboard.status)}
             title={
               dashboard.status === 'GEPUBLICEERD'
                 ? 'Een gepubliceerd rooster is bevroren en kan niet meer opnieuw gegenereerd worden'
-                : undefined
+                : !['GESLOTEN', 'GEGENEREERD'].includes(dashboard.status)
+                  ? 'Sluit de periode eerst. Dan staan voorkeuren en afwezigheid vast.'
+                  : undefined
             }
             className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
           >
