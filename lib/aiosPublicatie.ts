@@ -260,6 +260,33 @@ async function mail(period: AiosUitnodigPeriode, soort: 'ROOSTER_VOORLOPIG' | 'R
   return uit.ok ? { verstuurd: true, aantal: uit.aantal } : { verstuurd: false, melding: `De e-mail is niet verstuurd: ${uit.message}` };
 }
 
+/**
+ * The mail of the publication once more, for when it failed: the voorlopige
+ * mail while the roster is voorlopig, the definitieve one when it is
+ * definitief. Everyone gets it again; nothing else changes but the audit row.
+ */
+export async function mailAiosRoosterOpnieuw(period: AiosUitnodigPeriode, actorId: string): Promise<AiosPublicatieUitkomst> {
+  const s = stand(period.id);
+  if (s.status !== 'GEPUBLICEERD') {
+    return nee(409, 'INVALID_STATUS', 'Alleen van een gepubliceerd rooster kan de mail opnieuw verstuurd worden.');
+  }
+  const definitief = Boolean(s.definitief_op);
+  const uitslag = await mail(period, definitief ? 'ROOSTER_DEFINITIEF' : 'ROOSTER_VOORLOPIG', definitief ? leesMomentopname(s.voorlopig_rooster_json) : []);
+  writeAuditLog({
+    actorId,
+    entiteit: 'period',
+    entiteitId: period.id,
+    actie: 'UPDATE',
+    nieuw: {
+      wijziging: 'roostermail AIOS opnieuw verstuurd',
+      soort: definitief ? 'definitief' : 'voorlopig',
+      verstuurd: uitslag.verstuurd,
+      ...(uitslag.verstuurd ? { aantal: uitslag.aantal } : {}),
+    },
+  });
+  return { ok: true, mail: uitslag };
+}
+
 /** Voorlopig publiceren: from gegenereerd, the check passed or its warnings confirmed. */
 export async function publiceerAiosRooster(period: AiosUitnodigPeriode, bevestigd: boolean, actorId: string): Promise<AiosPublicatieUitkomst> {
   if (period.status !== 'GEGENEREERD') {

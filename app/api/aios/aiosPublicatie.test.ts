@@ -12,6 +12,8 @@ import { GET as publicatie } from './periode/[id]/publicatie/route';
 import { POST as publiceren } from './periode/[id]/publiceren/route';
 import { POST as definitief } from './periode/[id]/definitief-maken/route';
 import { POST as intrekken } from './periode/[id]/publicatie-intrekken/route';
+import { POST as roosterMail } from './periode/[id]/rooster-mail/route';
+import { claimAiosVerzending } from '@/lib/aiosInFlight';
 import { GET as downloadRooster } from './periode/[id]/download-rooster/route';
 import { GET as downloadPerAios } from './periode/[id]/download-per-aios/route';
 import { POST as wijzigen } from './periode/[id]/rooster/wijzigen/route';
@@ -296,6 +298,43 @@ describe('definitief', () => {
   });
 });
 
+describe('rooster opnieuw mailen', () => {
+  it('sends the definitieve mail again to every AIOS, leaving the roster as it is, and writes an audit row', async () => {
+    const voor = stand();
+    const r = await doe(roosterMail, 'rooster-mail');
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect(r.json.data.mail).toEqual({ verstuurd: true, aantal: 2 });
+    expect(verzendlijstPayload(sink.received[0].raw).soort).toBe('ROOSTER_DEFINITIEF');
+    expect(stand()).toEqual(voor);
+    const rij = db
+      .prepare(`SELECT nieuw_json FROM dienstrooster_audit_log WHERE entiteit_id = ? AND nieuw_json LIKE '%roostermail AIOS opnieuw verstuurd%'`)
+      .get(w.period) as { nieuw_json: string };
+    expect(JSON.parse(rij.nieuw_json)).toMatchObject({ soort: 'definitief', verstuurd: true, aantal: 2 });
+  });
+
+  it('is told to wait while the same send runs (409 BEZIG)', async () => {
+    const release = claimAiosVerzending(`rooster-mail:${w.period}`)!;
+    try {
+      const r = await doe(roosterMail, 'rooster-mail');
+      expect(r.status).toBe(409);
+      expect(r.json.error.code).toBe('BEZIG');
+      expect(sink.received).toHaveLength(0);
+    } finally {
+      release();
+    }
+  });
+
+  it('only for a published roster', async () => {
+    db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(w.period);
+    try {
+      expect((await doe(roosterMail, 'rooster-mail')).status).toBe(409);
+      expect(sink.received).toHaveLength(0);
+    } finally {
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD' WHERE id = ?`).run(w.period);
+    }
+  });
+});
+
 describe('the roster as Excel', () => {
   it('per dag: who has each dienst', async () => {
     const [kop, ...rijen] = await blad(downloadRooster);
@@ -344,6 +383,7 @@ describe('access', () => {
       [publiceren, 'publiceren'],
       [definitief, 'definitief-maken'],
       [intrekken, 'publicatie-intrekken'],
+      [roosterMail, 'rooster-mail'],
     ] as const) {
       expect((await route(req(`${w.period}/${pad}`, 'POST', { bevestigd: true }, stafCookie), ctx(w.period))).status).toBe(404);
       expect((await route(req(`${staf.period}/${pad}`, 'POST', { bevestigd: true }), ctx(staf.period))).status).toBe(404);

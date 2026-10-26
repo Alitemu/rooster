@@ -15,8 +15,8 @@ import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const moment = (iso: string) => new Date(iso).toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
 
-type Actie = 'publiceren' | 'definitief' | 'intrekken';
-const ROUTE: Record<Actie, string> = { publiceren: 'publiceren', definitief: 'definitief-maken', intrekken: 'publicatie-intrekken' };
+type Actie = 'publiceren' | 'definitief' | 'intrekken' | 'opnieuw';
+const ROUTE: Record<Actie, string> = { publiceren: 'publiceren', definitief: 'definitief-maken', intrekken: 'publicatie-intrekken', opnieuw: 'rooster-mail' };
 
 export function AiosPubliceren({ periodId, status, onChanged }: { periodId: string; status: string; onChanged: () => void }) {
   const [stand, setStand] = useState<AiosPublicatieStand | null>(null);
@@ -52,7 +52,14 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
         throw new Error(data?.error?.message || 'Dat is mislukt');
       }
       const mail = data.data.mail as { verstuurd: boolean; aantal?: number; melding?: string };
-      const wat = actie === 'publiceren' ? 'Voorlopig gepubliceerd.' : actie === 'definitief' ? 'Het rooster is definitief.' : 'De publicatie is ingetrokken.';
+      const wat =
+        actie === 'publiceren'
+          ? 'Voorlopig gepubliceerd.'
+          : actie === 'definitief'
+            ? 'Het rooster is definitief.'
+            : actie === 'opnieuw'
+              ? 'De mail is opnieuw verstuurd.'
+              : 'De publicatie is ingetrokken.';
       setMelding({
         fout: !mail.verstuurd,
         tekst: actie === 'intrekken' ? wat : mail.verstuurd ? `${wat} De mail aan ${mail.aantal} AIOS is verstuurd.` : `${wat} ${mail.melding}`,
@@ -134,12 +141,21 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
           <p>
             {zeker === 'publiceren' && 'Alle AIOS krijgen nu tegelijk een mail met hun voorlopige diensten.'}
             {zeker === 'definitief' && 'Alle AIOS krijgen nu tegelijk een mail met hun definitieve diensten.'}
+            {zeker === 'opnieuw' && 'Alle AIOS krijgen de mail met hun diensten nog een keer, ook wie hem al had.'}
             {zeker === 'intrekken' && 'Het rooster gaat terug naar gemaakt. De AIOS zien het niet meer, maar er gaat geen mail. Alle diensten blijven staan.'}
-            {zeker !== 'intrekken' && metWaarschuwing && ' Het rooster heeft waarschuwingen.'}
+            {(zeker === 'publiceren' || zeker === 'definitief') && metWaarschuwing && ' Het rooster heeft waarschuwingen.'}
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => doe(zeker, metWaarschuwing)}>
-              {zeker === 'publiceren' ? (metWaarschuwing ? 'Ja, toch publiceren' : 'Ja, publiceren') : zeker === 'definitief' ? 'Ja, definitief maken' : 'Ja, intrekken'}
+              {zeker === 'publiceren'
+                ? metWaarschuwing
+                  ? 'Ja, toch publiceren'
+                  : 'Ja, publiceren'
+                : zeker === 'definitief'
+                  ? 'Ja, definitief maken'
+                  : zeker === 'opnieuw'
+                    ? 'Ja, opnieuw mailen'
+                    : 'Ja, intrekken'}
             </button>
             <button type="button" className={knop} disabled={bezig} onClick={() => setZeker(null)}>
               Annuleren
@@ -162,6 +178,11 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
           {gepubliceerd && (
             <button type="button" className={knop} disabled={bezig} onClick={() => setZeker('intrekken')}>
               Publicatie intrekken
+            </button>
+          )}
+          {gepubliceerd && (
+            <button type="button" className={knop} disabled={bezig} onClick={() => setZeker('opnieuw')}>
+              Rooster opnieuw mailen
             </button>
           )}
         </div>

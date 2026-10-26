@@ -532,6 +532,27 @@ const MUTATIONS = [
     tests: ['app/api/planner/period/[id]/rooster-mail'],
   },
   {
+    name: 'aios rooster-mail: two sends at once',
+    file: 'app/api/aios/periode/[id]/rooster-mail/route.ts',
+    find: "if (!release) return aiosFout(409, 'BEZIG', AIOS_VERZENDING_BEZIG);",
+    replace: '',
+    tests: ['app/api/aios/aiosPublicatie'],
+  },
+  {
+    name: 'aios rooster-mail: an unpublished roster is mailed',
+    file: 'lib/aiosPublicatie.ts',
+    find: "if (s.status !== 'GEPUBLICEERD') {\n    return nee(409, 'INVALID_STATUS', 'Alleen van een gepubliceerd rooster",
+    replace: "if (false) {\n    return nee(409, 'INVALID_STATUS', 'Alleen van een gepubliceerd rooster",
+    tests: ['app/api/aios/aiosPublicatie'],
+  },
+  {
+    name: 'aios rooster-mail: always the voorlopige mail',
+    file: 'lib/aiosPublicatie.ts',
+    find: "definitief ? 'ROOSTER_DEFINITIEF' : 'ROOSTER_VOORLOPIG', definitief ? leesMomentopname",
+    replace: "'ROOSTER_VOORLOPIG', definitief ? leesMomentopname",
+    tests: ['app/api/aios/aiosPublicatie'],
+  },
+  {
     name: 'generate-roster: days outside the membership open to the solver',
     file: 'app/api/planner/period/[id]/generate-roster/route.ts',
     find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',
