@@ -114,4 +114,13 @@ describe('a period is at most two years long', () => {
     expect((await check('?start_datum=2031-01-06&eind_datum=2031-06-29')).status).toBe(200);
     expect((await check('')).status).toBe(200);
   });
+
+  it('answers 400 and not 500 for a pool_id that is not text', async () => {
+    for (const pool_id of [{ id: 1 }, 7, ['a']]) {
+      const res = await createPeriod(
+        request('/api/planner/periods', 'POST', { naam: 'Pool', pool_id, start_datum: '2031-01-06', eind_datum: '2031-02-02', deadline: '2030-12-01T12:00' })
+      );
+      expect(res.status).toBe(400);
+    }
+  });
 });

@@ -47,6 +47,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const body = await parseJsonBody<CreatePeriodRequest>(req);
 
+    if (body.pool_id && typeof body.pool_id !== 'string') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'pool_id moet een tekst zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
     if (!body.naam || !body.pool_id || !body.start_datum || !body.eind_datum || !body.deadline) {
       const response: ApiErrorResponse = {
         success: false,

@@ -357,6 +357,20 @@ const MUTATIONS = [
     tests: ['lib/fellows'],
   },
   {
+    name: 'open: the name of the period is not checked',
+    file: 'app/api/periods/[id]/open/route.ts',
+    find: 'if (!naamCheck.valid) {',
+    replace: 'if (false) {',
+    tests: ['app/api/periods/[id]/open'],
+  },
+  {
+    name: 'planner/periods: a pool_id that is not text reaches the database',
+    file: 'app/api/planner/periods/route.ts',
+    find: "if (body.pool_id && typeof body.pool_id !== 'string') {",
+    replace: 'if (false) {',
+    tests: ['app/api/periods/periodLength'],
+  },
+  {
     name: 'generate-roster: days outside the membership open to the solver',
     file: 'app/api/planner/period/[id]/generate-roster/route.ts',
     find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',

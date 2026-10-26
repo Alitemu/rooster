@@ -272,4 +272,27 @@ describe('POST /api/periods/[id]/open — date validation', () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe('INVALID_DATE');
   });
+
+  it.each([
+    ['a name of only spaces', '   '],
+    ['a name with a line break', 'Periode\nTwee'],
+    ['a name that is not text', 42],
+    ['a name that is far too long', 'x'.repeat(500)],
+  ])('refuses %s (400) and leaves the period a concept', async (_label, naam) => {
+    const poolId = createPool();
+    createMembers(poolId, 20);
+    const periodId = createConceptPeriod(poolId);
+    const res = await openWithBody(periodId, createStaff(), { naam, start_datum: START, eind_datum: END, ruleset: VALID_RULESET });
+    expect(res.status).toBe(400);
+    expect((db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(periodId) as { status: string }).status).toBe('CONCEPT');
+  });
+
+  it('saves the name trimmed', async () => {
+    const poolId = createPool();
+    createMembers(poolId, 20);
+    const periodId = createConceptPeriod(poolId);
+    const res = await openWithBody(periodId, createStaff(), { naam: '  Mijn periode  ', start_datum: START, eind_datum: END, ruleset: VALID_RULESET });
+    expect(res.status).toBe(200);
+    expect((db.prepare('SELECT naam FROM dienstrooster_schedule_period WHERE id = ?').get(periodId) as { naam: string }).naam).toBe('Mijn periode');
+  });
 });

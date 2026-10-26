@@ -23,6 +23,7 @@ import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/li
 import { writeAuditLog } from '@/lib/auditLog';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import { isValidIsoDate, periodRangeProblem } from '@/lib/isoDate';
+import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { overlappingPeriod, overlapMessage } from '@/lib/periodOverlap';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
@@ -91,10 +92,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     const { id } = params;
     const body = await parseJsonBody<OpenPeriodRequest>(req);
-    const { naam, deadline, ruleset } = body;
+    const { deadline, ruleset } = body;
     let { start_datum, eind_datum } = body;
+    const naamBody = body.naam;
 
-    if (!naam || !start_datum || !eind_datum || !deadline || !ruleset) {
+    if (!naamBody || !start_datum || !eind_datum || !deadline || !ruleset) {
       const response: ApiErrorResponse = {
         success: false,
         error: {
@@ -104,6 +106,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       };
       return NextResponse.json(response, { status: 400 });
     }
+
+    // The name ends up on every screen and mail: one line, within the same
+    // limits as when the period was created (planner/periods).
+    const naamCheck = validateSingleLine(naamBody, 'Naam', PERIODE_NAAM_MAX_LENGTH);
+    if (!naamCheck.valid) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: naamCheck.message },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
+    const naam = naamCheck.value;
 
     // Before anything touches these: parseISO doesn't reject a bad string,
     // it produces an Invalid Date, and every downstream step trusted it
