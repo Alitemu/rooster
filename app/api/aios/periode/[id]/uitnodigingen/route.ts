@@ -15,6 +15,7 @@ import { writeAuditLog } from '@/lib/auditLog';
 import { buildVerzendlijst } from '@/lib/aiosVerzendlijst';
 import { aiosFout, laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosMailIngesteld, verstuurAiosVerzendlijst } from '@/lib/aiosMail';
+import { claimAiosVerzending, AIOS_VERZENDING_BEZIG } from '@/lib/aiosInFlight';
 import {
   aiosAnderePeriodeActief,
   aiosDeelnemers,
@@ -27,6 +28,7 @@ import { db } from '@/db/client';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
+  let release: (() => void) | null = null;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) return unauthorizedResponse();
@@ -49,6 +51,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const deelnemers = aiosDeelnemers(period);
     if (deelnemers.length === 0) return aiosFout(400, 'EMPTY', 'Er doet nog geen AIOS mee in dit kwartaal.');
 
+    // One send at a time (lib/aiosInFlight.ts): taken before the first await.
+    release = claimAiosVerzending(`uitnodigen:${period.id}`);
+    if (!release) return aiosFout(409, 'BEZIG', AIOS_VERZENDING_BEZIG);
+
     const baseUrl = resolveBaseUrl(req);
     const berichten = db.transaction(() =>
       deelnemers.map((d) => aiosUitnodiging(period, d.codenaam, aiosPersoonlijkeLink(d.id, period.id, baseUrl)))
@@ -68,5 +74,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ success: true, data: { aantal: result.aantal } });
   } catch (error) {
     return internalErrorResponse('aios-uitnodigingen', error);
+  } finally {
+    release?.();
   }
 }

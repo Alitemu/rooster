@@ -309,6 +309,22 @@ describe("the AIOS's mail goes to their own flow", () => {
     expect((await opnieuw.json()).data.aantal).toBe(1);
   });
 
+  it.each([
+    ['herinneringen', herinneringen, { opnieuw: true }],
+    ['uitnodigingen', uitnodigingen, {}],
+  ] as const)('sends %s once when two clicks arrive together, the second is told to wait', async (naam, route, body) => {
+    const voor = sink.received.length;
+    const [a, b] = await Promise.all([bij(route, naam, 'POST', body), bij(route, naam, 'POST', body)]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const geweigerd = a.status === 409 ? a : b;
+    expect((await geweigerd.json()).error.code).toBe('BEZIG');
+    await waitForMails(sink, voor + 1);
+    await new Promise((r) => setTimeout(r, 300));
+    expect(sink.received.length).toBe(voor + 1);
+    // The claim is given back: a click afterwards works again.
+    expect((await bij(route, naam, 'POST', body)).status).toBe(200);
+  });
+
   it('downloads the links to the AIOS page', async () => {
     const res = await bij(links, 'links', 'POST');
     expect(res.status).toBe(200);

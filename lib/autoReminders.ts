@@ -35,6 +35,7 @@ import { getActiveReminderMilestones } from './reminderSchedule';
 import { deadlinePassed } from './periodInputGate';
 import { issuePersonLink } from './periodInvitations';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
+import { claimVerzending } from './inFlight';
 import {
   buildVerzendlijst,
   deadlineTekst,
@@ -294,61 +295,68 @@ export async function runAutoReminders(
       continue;
     }
 
-    const claimId = crypto.randomUUID();
-    const claimed = claimStmt().run(
-      claimId,
-      period.id,
-      send.dagen,
-      period.deadline,
-      send.moment.toISOString(),
-      'VERSTUURD',
-      now.toISOString()
-    );
-    if (claimed.changes === 0) continue; // another tick got there first
+    // Not next to a send by hand (lib/inFlight.ts): left unclaimed, the next tick tries again.
+    const release = claimVerzending(`remind:${period.id}`);
+    if (!release) continue;
+    try {
+      const claimId = crypto.randomUUID();
+      const claimed = claimStmt().run(
+        claimId,
+        period.id,
+        send.dagen,
+        period.deadline,
+        send.moment.toISOString(),
+        'VERSTUURD',
+        now.toISOString()
+      );
+      if (claimed.changes === 0) continue; // another tick got there first
 
-    const laatste = send.dagen === laatsteDagen;
-    const ontvangers = reminderRecipients(period, now);
-    const nietBegonnen = ontvangers.filter((o) => o.groep === 'NIET_BEGONNEN');
-    const bezig = ontvangers.filter((o) => o.groep === 'BEZIG');
-    db.prepare('UPDATE dienstrooster_reminder_run SET aantal_niet_begonnen = ?, aantal_bezig = ? WHERE id = ?').run(
-      nietBegonnen.length,
-      bezig.length,
-      claimId
-    );
-    if (ontvangers.length === 0) {
-      results.push({ periodId: period.id, dagen: send.dagen, uitkomst: 'VERSTUURD', aantal: 0 });
-      continue;
-    }
+      const laatste = send.dagen === laatsteDagen;
+      const ontvangers = reminderRecipients(period, now);
+      const nietBegonnen = ontvangers.filter((o) => o.groep === 'NIET_BEGONNEN');
+      const bezig = ontvangers.filter((o) => o.groep === 'BEZIG');
+      db.prepare('UPDATE dienstrooster_reminder_run SET aantal_niet_begonnen = ?, aantal_bezig = ? WHERE id = ?').run(
+        nietBegonnen.length,
+        bezig.length,
+        claimId
+      );
+      if (ontvangers.length === 0) {
+        results.push({ periodId: period.id, dagen: send.dagen, uitkomst: 'VERSTUURD', aantal: 0 });
+        continue;
+      }
 
-    const berichten = ontvangers.map((o) =>
-      reminderBericht(period, o, issuePersonLink(o.person_id, period.id, baseUrl), laatste)
-    );
-    const sent = await sendVerzendlijst(
-      buildVerzendlijst(
-        {
-          soort: laatste ? 'LAATSTE_HERINNERING' : 'HERINNERING',
-          automatisch: true,
-          periode: period.naam,
-          deadline: period.deadline,
-          groepen: { nog_niets_ingevuld: nietBegonnen.length, nog_niet_ingediend: bezig.length },
-        },
-        berichten,
+      const berichten = ontvangers.map((o) =>
+        reminderBericht(period, o, issuePersonLink(o.person_id, period.id, baseUrl), laatste)
+      );
+      const sent = await sendVerzendlijst(
+        buildVerzendlijst(
+          {
+            soort: laatste ? 'LAATSTE_HERINNERING' : 'HERINNERING',
+            automatisch: true,
+            periode: period.naam,
+            deadline: period.deadline,
+            groepen: { nog_niets_ingevuld: nietBegonnen.length, nog_niet_ingediend: bezig.length },
+          },
+          berichten,
+          now
+        )
+      );
+      if (!sent.ok) {
+        db.prepare('DELETE FROM dienstrooster_reminder_run WHERE id = ?').run(claimId);
+        console.error(`[auto-herinneringen] ${period.naam}: niet verstuurd, volgende keer opnieuw: ${sent.message}`);
+        results.push({ periodId: period.id, dagen: send.dagen, uitkomst: 'MISLUKT', message: sent.message });
+        continue;
+      }
+      logRemindersSent(
+        ontvangers.map((o) => o.person_id),
+        period.id,
+        laatste,
         now
-      )
-    );
-    if (!sent.ok) {
-      db.prepare('DELETE FROM dienstrooster_reminder_run WHERE id = ?').run(claimId);
-      console.error(`[auto-herinneringen] ${period.naam}: niet verstuurd, volgende keer opnieuw: ${sent.message}`);
-      results.push({ periodId: period.id, dagen: send.dagen, uitkomst: 'MISLUKT', message: sent.message });
-      continue;
+      );
+      results.push({ periodId: period.id, dagen: send.dagen, uitkomst: 'VERSTUURD', aantal: ontvangers.length });
+    } finally {
+      release();
     }
-    logRemindersSent(
-      ontvangers.map((o) => o.person_id),
-      period.id,
-      laatste,
-      now
-    );
-    results.push({ periodId: period.id, dagen: send.dagen, uitkomst: 'VERSTUURD', aantal: ontvangers.length });
 
   }
   return results;

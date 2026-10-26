@@ -114,7 +114,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ 'period-
       }
     }
     // One send at a time (lib/inFlight.ts): taken before the first await.
-    release = claimVerzending(`reminders:${period.id}`);
+    release = claimVerzending(`remind:${period.id}`);
     if (!release) return fail(409, 'BEZIG', VERZENDING_BEZIG);
 
     const result = await sendVerzendlijst(
