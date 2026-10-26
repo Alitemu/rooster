@@ -14,6 +14,7 @@
  */
 
 import { db } from '@/db/client';
+import { localIsoDate } from '@/lib/localDate';
 import { revokeAllSessions } from '@/lib/sessionVersion';
 
 export interface Toegangslink {
@@ -32,13 +33,15 @@ export function lijstToegangslinks(periodId: string): Toegangslink[] {
     .prepare(
       `SELECT pal.id, pal.person_id, p.codenaam, pal.aangemaakt_op, pal.laatst_gebruikt_op, pal.ingetrokken_op,
               (SELECT COUNT(*) FROM dienstrooster_person_access_link w
-                WHERE w.person_id = pal.person_id AND w.ingetrokken_op IS NULL) AS werkende_links
+                WHERE w.person_id = pal.person_id AND w.ingetrokken_op IS NULL
+                  AND (w.geldt_voor_periode_id IS NULL OR EXISTS (
+                    SELECT 1 FROM dienstrooster_schedule_period lp WHERE lp.id = w.geldt_voor_periode_id AND lp.eind_datum >= ?))) AS werkende_links
        FROM dienstrooster_person_access_link pal
        JOIN dienstrooster_person p ON p.id = pal.person_id
        WHERE pal.geldt_voor_periode_id = ?
        ORDER BY p.codenaam ASC, pal.aangemaakt_op DESC`
     )
-    .all(periodId) as Toegangslink[];
+    .all(localIsoDate(), periodId) as Toegangslink[];
 }
 
 export type IntrekUitkomst =

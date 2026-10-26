@@ -11,6 +11,7 @@ import { setSessionCookie, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session'
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { isCrossSiteRequest } from '@/lib/crossSite';
+import { linkVerlopen } from '@/lib/linkGeldigheid';
 import { checkRateLimit, getClientIp, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -129,7 +130,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (link.geldt_voor_periode_id) {
       period = db
         .prepare(
-          `SELECT id, pool_id, verwijderd_op FROM dienstrooster_schedule_period
+          `SELECT id, pool_id, eind_datum, verwijderd_op FROM dienstrooster_schedule_period
            WHERE id = ?`
         )
         .get(link.geldt_voor_periode_id);
@@ -139,6 +140,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           error: { code: 'PERIOD_DELETED', message: 'Deze periode is verwijderd' },
         };
         return NextResponse.json(response, { status: 410 });
+      }
+      // A link is never good for longer than its period (lib/linkGeldigheid.ts).
+      if (linkVerlopen(period?.eind_datum)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'TOKEN_EXPIRED',
+            message: 'Deze toegangslink is verlopen, want de periode is voorbij',
+          },
+        };
+        return NextResponse.json(response, { status: 401 });
       }
     } else {
       // A general link with no period of its own only auto-detects within

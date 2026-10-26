@@ -13,6 +13,8 @@ import { unauthorizedResponse, forbiddenResponse } from '@/lib/api-errors';
 import { db } from '@/db/client';
 import type { DienstType } from '@/lib/staffAccounts';
 import { notThisDienstResponse, staffMayAccessPerson } from '@/lib/dienstAccess';
+import { LINK_NIET_VERLOPEN_SQL } from '@/lib/linkGeldigheid';
+import { localIsoDate } from '@/lib/localDate';
 
 export interface AuthContext {
   userId: string;
@@ -106,9 +108,10 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
     .prepare(
       `SELECT p.sessie_versie FROM dienstrooster_person_access_link pal
        JOIN dienstrooster_person p ON p.id = pal.person_id
-       WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1 LIMIT 1`
+       WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1
+         AND ${LINK_NIET_VERLOPEN_SQL} LIMIT 1`
     )
-    .get(session.personId) as { sessie_versie: number } | undefined;
+    .get(session.personId, localIsoDate()) as { sessie_versie: number } | undefined;
   if (!stillValid) return null;
   if (!sessionVersionMatches(session, stillValid.sessie_versie)) return null;
 
