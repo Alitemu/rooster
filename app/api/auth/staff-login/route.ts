@@ -4,6 +4,8 @@
  * POST /api/auth/staff-login - Password login for ADMIN/PLANNER
  */
 
+import { onthoudBeheerderAdres } from '@/lib/wachtwoordHerstel';
+import { resolveBaseUrl } from '@/lib/baseUrl';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { verifyPassword, DUMMY_PASSWORD_HASH } from '@/lib/auth';
@@ -98,6 +100,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     clearRateLimit(rateLimitKey);
     releaseAttempt(clientKey);
+
+    // The address a beheerder reaches the app on: where a password reset link
+    // points when nothing else is known (lib/wachtwoordHerstel.ts). Only after
+    // a correct password, so a stranger cannot put an address of their own here.
+    if (person.rol === 'ADMIN') onthoudBeheerderAdres(resolveBaseUrl(req));
 
     // The seed password is public with the code: a session opened with it
     // can only change the password (lib/auth-context.ts).

@@ -1,8 +1,10 @@
 /**
  * Sets a new password for one staff account, for when the planner has
- * forgotten theirs. There is no "forgot password" on the login page: the
- * app keeps no e-mail address to send a reset link to, and a way back
- * that anyone at the login screen could start would be a way in.
+ * forgotten theirs. The login page has no "forgot password" for planners:
+ * the app keeps no e-mail address to send a reset link to. The one way back
+ * from the start page is for the beheerder, with the Gmail address of
+ * Mailinstellingen typed in "Link kwijt?" (lib/wachtwoordHerstel.ts); this
+ * script stays the way back when that mail is not set up.
  *
  * Needs access to the server: it is the way back for whoever runs the
  * installation. It asks for the new password

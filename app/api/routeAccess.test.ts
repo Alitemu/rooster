@@ -35,6 +35,7 @@ const PUBLIC = new Set([
   'auth/first-run-status',
   'auth/verify-link',
   'auth/logout',
+  'auth/wachtwoord-herstel',
   'auth/me',
   'link-aanvragen',
   'aios/link-aanvragen',

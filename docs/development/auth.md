@@ -74,9 +74,26 @@ is not read as one: verifySessionToken accepts only kind staff and person.
      server (`docker compose exec -u node web ...`) asks for a new one twice
      without echo (NIEUW_WACHTWOORD without a terminal, never an argument),
      applies validatePasswordStrength, refuses the seed password, raises
-     sessie_versie and writes the audit log. Deliberately no reset on the
-     login page: no e-mail address to send to, and a reset anyone can
-     start is a way in.
+     sessie_versie and writes the audit log. Deliberately no reset for
+     planners on the login page: no e-mail address to send to.
+   - The beheerder's way back from the start page (lib/wachtwoordHerstel.ts):
+     the Gmail address of Mailinstellingen typed in "Link kwijt?"
+     (POST /api/link-aanvragen, the achterwacht's route only: the form asks
+     the AIOS's too, which does not know the address) mails that account one
+     link per active ADMIN. The link is `<base>/wachtwoord-herstel#token=...`:
+     a signed token (signPayload, kind `wachtwoordherstel`, 30 minutes) bound
+     to the account and a fingerprint of its current wachtwoord_hash, so it
+     works once and a new password kills the older links; the token is in the
+     fragment, never in a server log. `<base>` is BASE_URL, else a period's
+     basis_url, else the address a beheerder last logged in on (stored
+     after a correct password in app setting `herstel.basis_url`), never the
+     Host header of the asker. The answer is the same for any address
+     (the mail is awaited like a participant's, so the time says little too)
+     and the caller's limit is the Link kwijt limit (3 an hour). POST
+     /api/auth/wachtwoord-herstel { token, wachtwoord } sets it (same rules as
+     every password, the seed password refused), ends every session and
+     writes the audit log; ten wrong tokens per 15 minutes stop the
+     caller. Mail off (MAIL_UITGESCHAKELD) or not set up: nothing goes.
    - ADMIN ("beheerder") = everything a planner can (requirePlannerAccess)
      plus the staff accounts (requireAdminAccess, lib/staffAccounts.ts,
      /api/admin/accounts, page /planner/accounts linked from the period

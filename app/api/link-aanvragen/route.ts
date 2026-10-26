@@ -10,6 +10,9 @@
  * addresses belong to the ward. Only a malformed address, too many
  * requests or mail not being set up get their own answer.
  *
+ * The one address that is not a participant's is the Gmail account of
+ * Mailinstellingen: that starts a password reset for the beheerder (lib/wachtwoordHerstel.ts).
+ *
  * Rate-limited per address of the caller and in total: every request
  * issues a fresh link for every participant (see lib/linkAanvraag.ts) and
  * costs one mail from the planner's Gmail account, whose daily limit is
@@ -23,6 +26,7 @@ import { checkRateLimit, getClientIp, rateLimitedResponseBody, recordAttempt } f
 import { buildVerzendlijst } from '@/lib/verzendlijst';
 import { sendVerzendlijst, verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { linkAanvraagKandidaten } from '@/lib/linkAanvraag';
+import { isHerstelAdres, stuurHerstelMail } from '@/lib/wachtwoordHerstel';
 
 /** Per caller 3 an hour, in total 10 per 15 minutes (lib/rateLimit.ts). */
 const MAX_PER_CALLER = 3;
@@ -56,6 +60,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     recordAttempt(callerKey, CALLER_WINDOW_MS);
     recordAttempt(totalKey);
+
+    // The Gmail account of Mailinstellingen is nobody's participant address:
+    // it starts a password reset for the beheerder instead, answered the same
+    // (lib/wachtwoordHerstel.ts). The form also asks the AIOS's route, which
+    // does not know this address.
+    if (isHerstelAdres(parsed.data.email)) {
+      await stuurHerstelMail();
+      return NextResponse.json({ success: true });
+    }
 
     const now = new Date();
     const { periode, kandidaten } = linkAanvraagKandidaten(now);

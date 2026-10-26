@@ -194,6 +194,26 @@ async function sendJsonMail(mail: {
   }
 }
 
+/**
+ * A plain mail from the Gmail account to the Gmail account itself: for the
+ * password reset (lib/wachtwoordHerstel.ts), which must reach the beheerder
+ * and not the flow's mailbox. The address is never taken from a request.
+ */
+export async function sendDirectMail(mail: { to: string; subject: string; text: string }): Promise<{ ok: true } | { ok: false; message: string }> {
+  const config = readConfig();
+  if (!config) return { ok: false, message: 'Versturen is niet ingesteld.' };
+  const transport = createTransport(config);
+  try {
+    await transport.sendMail({ from: config.from, to: mail.to, subject: mail.subject, text: mail.text });
+    return { ok: true };
+  } catch (error) {
+    console.error(`[verzendlijst-mail] ${mail.subject} failed`, error);
+    return { ok: false, message: explainSmtpError(error) };
+  } finally {
+    transport.close();
+  }
+}
+
 export async function sendVerzendlijst(lijst: Verzendlijst): Promise<VerzendlijstMailResult> {
   const result = await sendJsonMail({
     subject: VERZENDLIJST_SUBJECT,

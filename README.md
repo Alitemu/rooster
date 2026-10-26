@@ -1039,10 +1039,15 @@ de stroom al gebouwd?".
 - **Startwachtwoord:** het wachtwoord dat de seed voor `admin` instelt,
   staat openbaar in deze repository. Wie ermee inlogt, moet eerst een eigen
   wachtwoord kiezen en kan daarvoor niets anders.
-- **Wachtwoord vergeten:** er is bewust geen "wachtwoord vergeten" op de
-  inlogpagina. De app kent geen e-mailadres om een link naar te sturen, en
-  een herstel dat iedereen op de inlogpagina kan starten, is ook een weg
-  naar binnen. Wie bij de NAS kan, zet een nieuw wachtwoord met
+- **Wachtwoord vergeten:** voor planners is er bewust geen "wachtwoord
+  vergeten" op de inlogpagina. De app kent hun e-mailadres niet. Voor de
+  beheerder is er een noodweg: vul op de startpagina bij *Link kwijt* het
+  Gmail-adres van de Mailinstellingen in. De app mailt dan dat account een
+  link om een nieuw wachtwoord te kiezen voor elke beheerder. De link werkt
+  30 minuten en één keer. Wie het adres niet kent of de mail niet kan
+  lezen, kan niets bereiken: het antwoord op de pagina is voor elk adres
+  hetzelfde. Zonder ingestelde mail werkt dit niet. Wie bij de NAS kan, zet
+  een nieuw wachtwoord met
   `docker compose exec -u node web npx tsx scripts/reset-password.ts <codenaam>`.
   Het script vraagt het nieuwe wachtwoord twee keer, zonder het te tonen.
   Daarvoor gelden dezelfde regels als in de app. Het account wordt overal
