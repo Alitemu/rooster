@@ -74,6 +74,8 @@ export default function PoolStaffPage() {
   const [rowError, setRowError] = useState<{ membershipId: string; message: string } | null>(null);
   const addErrorRef = useRef<HTMLDivElement>(null);
   const rowErrorRef = useRef<HTMLDivElement>(null);
+  // A change that reaches a period with a roster asks first (lib/membershipRooster.ts).
+  const [bevestigVraag, setBevestigVraag] = useState<{ membershipId: string; message: string; actie: 'opslaan' | 'verwijderen' } | null>(null);
   // Scrolled into sight when it appears: with the button at the bottom of
   // the screen, the line under it is just out of view.
   useEffect(() => {
@@ -229,16 +231,21 @@ export default function PoolStaffPage() {
     setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot });
   };
 
-  const handleSaveMembership = async (membershipId: string) => {
+  const handleSaveMembership = async (membershipId: string, bevestigd = false) => {
     setSavingMembership(true);
     setRowError(null);
+    setBevestigVraag(null);
     try {
       const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/${membershipId}`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editDates),
+        body: JSON.stringify(bevestigd ? { ...editDates, bevestigd: true } : editDates),
       });
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId, message: data.error.message, actie: 'opslaan' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Opslaan mislukt');
 
       setEditingMembershipId(null);
@@ -250,16 +257,23 @@ export default function PoolStaffPage() {
     }
   };
 
-  const handleRemoveMembership = async (membershipId: string) => {
-    if (removingMembershipId !== membershipId) {
+  const handleRemoveMembership = async (membershipId: string, bevestigd = false) => {
+    if (removingMembershipId !== membershipId && !bevestigd) {
       // First click arms the confirmation instead of deleting immediately.
       setRemovingMembershipId(membershipId);
       return;
     }
     setRowError(null);
+    setBevestigVraag(null);
     try {
-      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/${membershipId}`), { method: 'DELETE' });
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/${membershipId}${bevestigd ? '?bevestigd=1' : ''}`), {
+        method: 'DELETE',
+      });
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId, message: data.error.message, actie: 'verwijderen' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
 
       await loadStaff({ silent: true });
@@ -433,6 +447,31 @@ export default function PoolStaffPage() {
                           )}
                         </td>
                       </tr>
+                      {bevestigVraag?.membershipId === member.id && (
+                        <tr>
+                          <td colSpan={6} className="px-4 pb-3">
+                            <div role="alert" data-testid="rooster-bevestiging" className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2">
+                              <p>{bevestigVraag.message}</p>
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    bevestigVraag.actie === 'opslaan'
+                                      ? handleSaveMembership(member.id, true)
+                                      : handleRemoveMembership(member.id, true)
+                                  }
+                                  className="px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700"
+                                >
+                                  Toch doorgaan
+                                </button>
+                                <button type="button" onClick={() => setBevestigVraag(null)} className="px-3 py-1 rounded border border-neutral-300 hover:bg-neutral-50">
+                                  Annuleren
+                                </button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {error && (
                         <tr>
                           <td colSpan={6} className="px-4 pb-3">

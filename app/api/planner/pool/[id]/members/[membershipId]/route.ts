@@ -19,11 +19,14 @@ import { setPendingUndo } from '@/lib/pendingUndo';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { syncAiosPersoon } from '@/lib/aiosSync';
+import { lidmaatschapRoosterDenial } from '@/lib/membershipRooster';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateMembershipRequest {
   geldig_vanaf?: string;
   geldig_tot?: string;
+  /** Yes, even though a roster that already exists does not change with it (lib/membershipRooster.ts). */
+  bevestigd?: boolean;
 }
 
 function getMembership(poolId: string, membershipId: string) {
@@ -120,6 +123,9 @@ export async function PATCH(
       return NextResponse.json(response, { status: 409 });
     }
 
+    const raaktRooster = lidmaatschapRoosterDenial(poolId, membership, { geldig_vanaf, geldig_tot }, body.bevestigd === true);
+    if (raaktRooster) return raaktRooster;
+
     db.prepare(
       `UPDATE dienstrooster_pool_membership SET geldig_vanaf = ?, geldig_tot = ? WHERE id = ?`
     ).run(geldig_vanaf, geldig_tot, membershipId);
@@ -172,6 +178,14 @@ export async function DELETE(
       };
       return NextResponse.json(response, { status: 404 });
     }
+
+    const raaktRooster = lidmaatschapRoosterDenial(
+      poolId,
+      membership,
+      null,
+      new URL(req.url).searchParams.get('bevestigd') === '1'
+    );
+    if (raaktRooster) return raaktRooster;
 
     const person = db
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
