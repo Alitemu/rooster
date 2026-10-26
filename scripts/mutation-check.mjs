@@ -343,6 +343,13 @@ const MUTATIONS = [
     tests: ['app/api/planner/period/[id]/generate-roster/previousRoster'],
   },
   {
+    name: 'import-balances: the earlier saldo goes before the row is checked',
+    file: 'app/api/planner/period/[id]/import-balances/route.ts',
+    find: 'if (!rowOk) continue;',
+    replace: '',
+    tests: ['app/api/planner/period/[id]/import-balances'],
+  },
+  {
     name: 'generate-roster: days outside the membership open to the solver',
     file: 'app/api/planner/period/[id]/generate-roster/route.ts',
     find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',

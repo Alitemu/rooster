@@ -141,11 +141,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           continue;
         }
 
-        if (!replacedFor.has(person.id)) {
-          deleteEarlier.run(person.id, periodId);
-          replacedFor.add(person.id);
-        }
-
+        // Check every number of the row first: a row with one bad number is
+        // skipped as a whole, so the person keeps the saldo an earlier
+        // import gave them instead of losing it to a half-written row.
+        const entries: Array<{ counter: (typeof COUNTERS)[number]; delta: number }> = [];
+        let rowOk = true;
         for (const counter of COUNTERS) {
           const delta = row[`${counter}_delta` as keyof BalanceRow] as number | undefined;
           if (!delta) continue;
@@ -161,9 +161,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           const deltaCheck = validateLedgerDelta(delta, `${row.codenaam} (${counter})`);
           if (!deltaCheck.valid) {
             errors.push(deltaCheck.message);
+            rowOk = false;
             continue;
           }
+          entries.push({ counter, delta });
+        }
+        if (!rowOk) continue;
 
+        if (!replacedFor.has(person.id)) {
+          deleteEarlier.run(person.id, periodId);
+          replacedFor.add(person.id);
+        }
+        for (const { counter, delta } of entries) {
           insertLedger.run(
             crypto.randomUUID(),
             person.id,

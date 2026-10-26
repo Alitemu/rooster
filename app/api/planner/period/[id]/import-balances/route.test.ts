@@ -118,6 +118,21 @@ describe('POST /api/planner/period/[id]/import-balances', () => {
     expect(saldo(w, b.id, 'AVOND')).toBe(3);
   });
 
+  it('keeps the earlier saldo of a person whose new row has a bad number, and writes nothing of that row', async () => {
+    const w = setup();
+    const [a, b] = w.members;
+    await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 2, WEEKEND_delta: 1 }]);
+    const res = await importeer(w, [
+      { codenaam: a.codenaam, AVOND_delta: 7, WEEKEND_delta: 1.5 },
+      { codenaam: b.codenaam, AVOND_delta: 3 },
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.data.errors).toHaveLength(1);
+    expect(saldo(w, a.id, 'AVOND')).toBe(2);
+    expect(saldo(w, a.id, 'WEEKEND')).toBe(1);
+    expect(saldo(w, b.id, 'AVOND')).toBe(3);
+  });
+
   it('still adds up two rows of one person in the same file', async () => {
     const w = setup();
     const [a] = w.members;
