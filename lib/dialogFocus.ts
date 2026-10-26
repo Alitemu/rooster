@@ -60,7 +60,22 @@ export function useDialogFocus(open: boolean): void {
       (sprong ?? dialoog).focus();
     };
     document.addEventListener('keydown', bijToets, true);
+
+    // Focus that falls out of the dialog (the button that had it was replaced when the content loaded, or a
+    // click landed on text) goes back to the dialog, or the dialog would be a place to tab out of again.
+    const herstel = () => {
+      if (!dialoog.isConnected || alle().pop() !== dialoog) return;
+      if (!dialoog.contains(document.activeElement)) (focusbaar()[0] ?? dialoog).focus();
+    };
+    const waarnemer = new MutationObserver(herstel);
+    waarnemer.observe(dialoog, { childList: true, subtree: true });
+    document.addEventListener('focusout', herstelStraks, true);
+    function herstelStraks() {
+      setTimeout(herstel, 0);
+    }
     return () => {
+      waarnemer.disconnect();
+      document.removeEventListener('focusout', herstelStraks, true);
       document.removeEventListener('keydown', bijToets, true);
       if (vorige && vorige.isConnected) vorige.focus();
     };

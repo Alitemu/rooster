@@ -147,7 +147,12 @@ wijzigingsgeschiedenis: lib/aiosWijzigingen.ts, download-wijzigingen), the
 beheerder's import components/AiosVoorkeurenImport.tsx with
 lib/aiosVoorkeurImport.ts (voorkeuren-import; checking is applying in a
 transaction that is rolled back), and the dialog hooks lib/aiosDialoog.ts, a
-copy of useBodyScrollLock and useDialogDismiss.)
+copy of useBodyScrollLock and useDialogDismiss; since 0.804.0 also of
+lib/dialogFocus.ts: a modal dialog takes focus, Tab stays inside, focus goes
+back to the button on closing, and focus that falls out of it (its button was
+replaced while the content loaded) is pulled back. The rule is
+focusSprong, tested in lib/dialogFocus.test.ts for both copies; the DOM side in
+tests/e2e/dialog-focus.e2e.ts and tests/e2e/aios-audit.e2e.ts.)
 
 (0.802.0: "Persoonlijke links", the beheerder's list of the links of a
 period and revoking one, is a copy as well: lib/aiosToegangslinks.ts,

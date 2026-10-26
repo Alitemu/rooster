@@ -542,6 +542,13 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.804.0:** een nieuwe audit, met nieuwe tests en mutatietests.
+- *Toetsenbord in dialogen:* een dialoog neemt de focus bij het openen, Tab en Shift+Tab blijven erin, en met Escape komt de focus terug op de knop die hem opende. Tab liep eerder zo de dialoog uit, de pagina erachter in.
+- *Sessiesleutel:* een leeg of afgebroken sleutelbestand naast de database (door een crash tijdens het schrijven) blokkeerde de hele app tot iemand het met de hand verwijderde. Het wordt nu vervangen door een nieuwe sleutel. Iedereen moet dan eenmalig opnieuw inloggen.
+- *Herhaalplanner:* een uitkomst zonder lijst van lege diensten telde als perfect en stopte de pogingen. Dat is nu niet meer zo.
+- *Adres bij een onbruikbare Host-header:* het terugvaladres is nu `https://localhost` (poort 443), in plaats van een adres met poort 8010.
+- *Tests:* de eerste installatie van een account, de sessiesleutel, de oproep naar een solver, de keuze van het beste rooster en het adres uit de Host-header hebben nu eigen tests, elk met mutaties.
+
 **Vanaf versie 0.803.0:** bovenaan de sectie *Persoonlijke links* (achterwacht en AIOS) staat de knop *Alles intrekken*. Die trekt alle werkende links van de periode in, na een vraag die zegt om hoeveel links en medewerkers het gaat. Alle betrokken medewerkers zijn dan overal uitgelogd en komen er pas weer in met een nieuwe link (Link kwijt? of een nieuwe uitnodiging). Links van andere periodes blijven werken. Het staat in het logboek.
 
 **Vanaf versie 0.802.0:** de beheerder kan persoonlijke links intrekken. Op de pagina van een periode (achterwacht en AIOS) staat een nieuwe sectie *Persoonlijke links*, alleen zichtbaar voor de beheerder. Daar staat per link voor wie hij is, wanneer hij gemaakt en voor het laatst gebruikt is, en of hij nog werkt. De link zelf is niet te zien. *Intrekken* vraagt eerst om bevestiging. Daarna werkt die link niet meer en is de medewerker overal uitgelogd. Heeft de medewerker nog een andere werkende link, dan komt hij daar weer mee binnen. Was het de enige, dan staat dat in de vraag en komt de medewerker er pas weer in met een nieuwe link (Link kwijt? of de volgende uitnodiging). Het intrekken staat in het logboek.

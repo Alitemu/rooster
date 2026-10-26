@@ -37,7 +37,10 @@ test('Mailinstellingen: focus in the dialog through Tab and Shift+Tab, and back 
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await page.getByRole('heading', { name: 'Exporteren & communicatie' }).getByRole('button').click();
-  const opener = page.getByRole('button', { name: /Mailinstellingen/ });
+  const opener = page
+    .locator('div.card', { has: page.getByRole('heading', { name: 'Exporteren & communicatie' }) })
+    .first()
+    .getByRole('button', { name: /Mailinstellingen/ });
   await opener.click();
   await houdtFocusVast(page, page.getByRole('dialog', { name: 'Mailinstellingen' }), opener);
 });
