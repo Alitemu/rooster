@@ -12,7 +12,7 @@
  * says why not.
  */
 
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosRuilHerinnering } from '@/components/AiosRuilHerinnering';
 import type { EenheidUit, Kandidaat, RuilStatus, RuilUit } from '@/lib/aiosRuilen';
@@ -118,15 +118,19 @@ export function AiosRuilen({
   }, [personId, periodId]);
   useEffect(() => laad(), [laad]);
 
+  // The unit chosen last: a slower answer for an earlier choice must not show its candidates under the new one.
+  const laatsteKeuze = useRef<string | null>(null);
   const kies = async (e: EenheidUit) => {
+    laatsteKeuze.current = e.id;
     setGekozen(e);
     setKandidaten(null);
     setMelding(null);
     try {
       const res = await fetch(withBasePath(`/api/aios/deelnemer/${personId}/periode/${periodId}/ruilen/kandidaten?eenheid=${encodeURIComponent(e.id)}`));
-      setKandidaten(await json(res, 'Laden is mislukt.'));
+      const lijst = await json(res, 'Laden is mislukt.');
+      if (laatsteKeuze.current === e.id) setKandidaten(lijst);
     } catch (err) {
-      setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt.') });
+      if (laatsteKeuze.current === e.id) setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt.') });
     }
   };
 
@@ -155,7 +159,18 @@ export function AiosRuilen({
     }
   };
 
-  if (!overzicht) return null;
+  if (!overzicht) {
+    // Still loading: nothing to say yet. Failed: say so, with a way to try again (the message was set but never shown).
+    if (!melding) return null;
+    return (
+      <div role="alert" className="text-sm text-red-700 space-y-2">
+        <p>{melding.tekst}</p>
+        <button type="button" onClick={() => { setMelding(null); laad(); }} className="px-3 py-1 rounded border border-red-300 bg-white text-red-700 font-medium hover:bg-red-100">
+          Opnieuw proberen
+        </button>
+      </div>
+    );
+  }
   const knop = 'px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
 
   const stempel = (r: RuilUit) => (

@@ -169,9 +169,13 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
         }
         lastSignature.current = signature;
         setSwapRequests(data.data.swap_requests);
+        // A load that works again takes an earlier failure away.
+        setError(null);
       } catch (err) {
         if (!current) return;
-        setError(foutTekst(err, 'Laden van ruilverzoeken mislukt'));
+        // A background refresh that fails (a moment without signal) keeps the list that is on screen: only
+        // the first load, or one the person asked for, replaces the panel by an error.
+        if (!silent) setError(foutTekst(err, 'Laden van ruilverzoeken mislukt'));
       } finally {
         if (current) setLoading(false);
       }
@@ -203,9 +207,19 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
     if (refreshKey > 0) setFilterVerzonden('PENDING');
   }, [refreshKey]);
 
+  // One approve, reject or withdraw at a time: a double click used to send two, and the second one answered
+  // with an error next to the success of the first.
+  const [bezig, setBezig] = useState(false);
+  const meldingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (meldingTimer.current) clearTimeout(meldingTimer.current);
+  }, []);
+
   const showSuccess = (message: string) => {
     setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(null), 5000);
+    // A newer message gets its full five seconds: the timer of an earlier one must not clear it early.
+    if (meldingTimer.current) clearTimeout(meldingTimer.current);
+    meldingTimer.current = setTimeout(() => setSuccessMessage(null), 5000);
   };
 
   // Updates the swap's status in place: the lists filter on it themselves,
@@ -216,6 +230,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   };
 
   const handleApprove = async (swapId: string) => {
+    if (bezig) return;
+    setBezig(true);
     setActionError(null);
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/approve`), {
@@ -247,10 +263,14 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       onSwapsChanged?.();
     } catch (err) {
       setActionError(foutTekst(err, 'Goedkeuren van ruil mislukt'));
+    } finally {
+      setBezig(false);
     }
   };
 
   const handleReject = async (swapId: string, reason?: string) => {
+    if (bezig) return;
+    setBezig(true);
     setActionError(null);
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/reject`), {
@@ -270,10 +290,14 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       showSuccess('Ruil afgewezen');
     } catch (err) {
       setActionError(foutTekst(err, 'Afwijzen van ruil mislukt'));
+    } finally {
+      setBezig(false);
     }
   };
 
   const handleCancel = async (swapId: string) => {
+    if (bezig) return;
+    setBezig(true);
     setActionError(null);
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/cancel`), {
@@ -289,6 +313,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       showSuccess('Ruilverzoek ingetrokken');
     } catch (err) {
       setActionError(foutTekst(err, 'Intrekken van ruilverzoek mislukt'));
+    } finally {
+      setBezig(false);
     }
   };
 
@@ -405,7 +431,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleApprove(swap.id)}
-                      className="px-3 py-1 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
                     >
                       Goedkeuren
                     </button>
@@ -424,7 +451,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleCancel(swap.id)}
-                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
                     >
                       Intrekken
                     </button>
@@ -434,10 +462,11 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
 
               {isPending && isRespondent && rejectingId === swap.id && (
                 <div className="mt-3 pt-3 border-t space-y-2">
-                  <label className="block text-xs font-medium text-neutral-700">
+                  <label htmlFor={`reden-${swap.id}`} className="block text-xs font-medium text-neutral-700">
                     Reden (optioneel)
                   </label>
                   <textarea
+                    id={`reden-${swap.id}`}
                     name="rejection-reason"
                     maxLength={1000}
                     value={rejectionReason}
@@ -448,7 +477,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleReject(swap.id, rejectionReason)}
-                      className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
                     >
                       Afwijzen
                     </button>

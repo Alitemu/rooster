@@ -353,8 +353,12 @@ export default function PlannerHomePage() {
   };
 
   const handleLogout = async () => {
-    await fetch(withBasePath('/api/auth/logout'), { method: 'POST' });
-    router.push('/');
+    // Also when the request fails (no signal): the person still leaves this page, as on the participant pages.
+    try {
+      await fetch(withBasePath('/api/auth/logout'), { method: 'POST' });
+    } finally {
+      router.push('/');
+    }
   };
 
   return (

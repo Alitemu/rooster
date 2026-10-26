@@ -231,7 +231,10 @@ function StatusVoorkeuren({ periodId, refreshKey }: { periodId: string; refreshK
   const laad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${periodId}/voorkeuren`))
       .then((res) => antwoord(res, 'Laden van de voorkeuren is mislukt'))
-      .then((data) => setDeelnemers(data.deelnemers))
+      .then((data) => {
+        setDeelnemers(data.deelnemers);
+        setFout(null);
+      })
       .catch((err) => setFout(foutTekst(err, 'Laden van de voorkeuren is mislukt')));
   }, [periodId]);
   useEffect(() => {

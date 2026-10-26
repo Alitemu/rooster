@@ -67,7 +67,18 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
     }
   };
 
-  if (!stand) return null;
+  if (!stand) {
+    // Still loading: nothing to say yet. Failed: say so, with a way to try again (the message was set but never shown).
+    if (!melding) return null;
+    return (
+      <div role="alert" className="text-sm text-red-700 space-y-2">
+        <p>{melding.tekst}</p>
+        <button type="button" onClick={() => { setMelding(null); laad(); }} className="px-3 py-1 rounded border border-red-300 bg-white text-red-700 font-medium hover:bg-red-100">
+          Opnieuw proberen
+        </button>
+      </div>
+    );
+  }
   const knop = 'px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
   const gepubliceerd = stand.status === 'GEPUBLICEERD';
   const c = controle ?? stand.controle;

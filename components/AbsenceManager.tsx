@@ -11,7 +11,7 @@
  * ABSOLUUT blocks on the relevant shifts) had nothing to sync.
  */
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
@@ -68,6 +68,7 @@ export function AbsenceManager({
   readOnly = false,
   onAbsencesChange,
 }: Props) {
+  const veldId = useId();
   const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -233,8 +234,8 @@ export function AbsenceManager({
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
-              <select
+              <label htmlFor={`${veldId}-0`} className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
+              <select id={`${veldId}-0`}
                 value={form.soort}
                 onChange={(e) => setForm({ ...form, soort: e.target.value })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -245,8 +246,8 @@ export function AbsenceManager({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
-              <input
+              <label htmlFor={`${veldId}-1`} className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
+              <input id={`${veldId}-1`}
                 type="date"
                 value={form.van_datum}
                 onChange={(e) => {
@@ -266,8 +267,8 @@ export function AbsenceManager({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-              <input
+              <label htmlFor={`${veldId}-2`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
+              <input id={`${veldId}-2`}
                 type="date"
                 value={form.tot_datum}
                 onChange={(e) => setForm({ ...form, tot_datum: e.target.value })}
@@ -275,8 +276,8 @@ export function AbsenceManager({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
-              <input
+              <label htmlFor={`${veldId}-3`} className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
+              <input id={`${veldId}-3`}
                 type="text"
                 value={form.notitie}
                 onChange={(e) => setForm({ ...form, notitie: e.target.value })}

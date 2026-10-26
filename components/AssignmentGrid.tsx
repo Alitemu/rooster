@@ -7,7 +7,7 @@
  * Supports filtering and pagination.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getHolidayInfo } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
@@ -101,6 +101,11 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   // required for a published period") isn't a reason to hide everything
   // else the planner was looking at.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The placeholder replaces the whole component only for the very first load. Later loads (a filter, a page)
+  // keep the filters on screen: the codenaam field used to be unmounted while typing and lost its focus.
+  const [heeftGeladen, setHeeftGeladen] = useState(false);
+  // Counts the loads: of two answers that cross, only the last one asked is shown.
+  const laadNummer = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -133,6 +138,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   // as AssignmentCalendar's loadSlots: swapping it for the "Toewijzingen
   // laden..." placeholder after every change made the page jump to the top.
   const loadAssignments = useCallback(async (silent = false) => {
+    const nummer = ++laadNummer.current;
     if (!silent) setLoading(true);
     setLoadError(null);
 
@@ -145,12 +151,17 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       if (!res.ok) throw new Error('Laden van toewijzingen mislukt');
 
       const data = await res.json();
+      if (nummer !== laadNummer.current) return;
       setAssignments(data.data.assignments);
       setTotalPages(data.data.pagination.total_pages);
     } catch (err) {
+      if (nummer !== laadNummer.current) return;
       setLoadError(foutTekst(err, 'Laden van toewijzingen mislukt'));
     } finally {
-      setLoading(false);
+      if (nummer === laadNummer.current) {
+        setLoading(false);
+        setHeeftGeladen(true);
+      }
     }
   }, [periodId, page, debouncedFilterPerson, filterShiftType]);
 
@@ -275,18 +286,10 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     return 'hover:bg-neutral-50';
   };
 
-  if (loading) {
+  if (loading && !heeftGeladen) {
     return (
       <div className="card p-8 text-center">
         <p className="text-lg text-neutral-600">Toewijzingen laden...</p>
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="card p-8 bg-red-50 border border-red-200">
-        <p className="text-red-700">{loadError}</p>
       </div>
     );
   }
@@ -310,6 +313,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         <div className="grid grid-cols-2 gap-4">
           <input
             type="text"
+            aria-label="Filter op codenaam"
             placeholder="Filter op codenaam"
             value={filterPerson}
             onChange={(e) => {
@@ -319,6 +323,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             className="px-3 py-2 border rounded text-sm"
           />
           <select
+            aria-label="Filter op diensttype"
             value={filterShiftType}
             onChange={(e) => {
               setFilterShiftType(e.target.value);
@@ -333,6 +338,19 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
           </select>
         </div>
       </div>
+
+      {loadError && (
+        <div className="card p-3 bg-red-50 border border-red-200 flex items-start justify-between gap-3" role="alert">
+          <p className="text-red-700 text-sm">{loadError}</p>
+          <button
+            onClick={() => loadAssignments()}
+            className="shrink-0 px-3 py-1 rounded border border-red-300 bg-white text-red-700 text-sm font-medium hover:bg-red-100"
+          >
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading && heeftGeladen && <p className="text-sm text-neutral-600">Toewijzingen laden...</p>}
 
       {warning && (
         <div className="card p-3 bg-orange-50 border border-orange-300 text-sm text-orange-900">
@@ -373,6 +391,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                       <div className="flex items-center justify-end gap-2">
                         <input
                           type="text"
+                          aria-label="Reden voor het verwijderen"
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
                           placeholder={isPublished ? 'Reden (verplicht)' : 'Reden (optioneel)'}
@@ -414,6 +433,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                               // the pick waits for "Bevestigen".
                               if (personId && !isPublished) handleReassign(a.id, personId);
                             }}
+                            aria-label="Kies iemand voor deze dienst"
                             className="text-xs border border-neutral-300 rounded px-2 py-1"
                           >
                             <option value="">Kies iemand…</option>
@@ -438,6 +458,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           <>
                             <input
                               type="text"
+                              aria-label="Reden voor het wijzigen"
                               value={reassignReason}
                               onChange={(e) => setReassignReason(e.target.value)}
                               placeholder="Reden (verplicht)"

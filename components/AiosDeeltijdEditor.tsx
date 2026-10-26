@@ -8,7 +8,7 @@
  * changed").
  */
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/aiosFoutTekst';
 
@@ -67,6 +67,7 @@ export function AiosDeeltijdEditor({
   readOnly = false,
   onPatternsChange,
 }: Props) {
+  const veldId = useId();
   const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -221,8 +222,8 @@ export function AiosDeeltijdEditor({
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Dag</label>
-            <select
+            <label htmlFor={`${veldId}-0`} className="block text-xs font-medium text-neutral-600 mb-1">Dag</label>
+            <select id={`${veldId}-0`}
               value={form.weekdag}
               onChange={(e) => setForm({ ...form, weekdag: e.target.value })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -233,8 +234,8 @@ export function AiosDeeltijdEditor({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Frequentie</label>
-            <select
+            <label htmlFor={`${veldId}-1`} className="block text-xs font-medium text-neutral-600 mb-1">Frequentie</label>
+            <select id={`${veldId}-1`}
               value={form.frequentie}
               onChange={(e) => setForm({ ...form, frequentie: e.target.value })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -245,8 +246,8 @@ export function AiosDeeltijdEditor({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Vanaf</label>
-            <input
+            <label htmlFor={`${veldId}-2`} className="block text-xs font-medium text-neutral-600 mb-1">Vanaf</label>
+            <input id={`${veldId}-2`}
               type="date"
               value={form.geldig_vanaf}
               onChange={(e) => setForm({ ...form, geldig_vanaf: e.target.value })}
@@ -254,8 +255,8 @@ export function AiosDeeltijdEditor({
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-            <input
+            <label htmlFor={`${veldId}-3`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
+            <input id={`${veldId}-3`}
               type="date"
               value={form.geldig_tot}
               onChange={(e) => setForm({ ...form, geldig_tot: e.target.value })}
