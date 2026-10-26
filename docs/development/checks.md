@@ -15,6 +15,11 @@ Moved out of CLAUDE.md to keep the context of every session small; the rules
 themselves stay there. Read this when working on what it covers. Code comments
 that say "CLAUDE.md, ..." point to a section that now lives in docs/development/.
 
+**The Caddy check** (deployConfig.test.ts) validates the Caddyfile inside
+docker-compose.yml with a real Caddy (`CADDY_BIN`, or caddy on the PATH). Without
+one it skips and prints a warning; a release run sets `REQUIRE_CADDY=true`, so
+a missing Caddy fails instead of passing unseen.
+
 **Browser-level checks** need a seeded database, both solvers and the app
 already running (`npm run seed`, `uvicorn main:app --port 8000` from
 `./solver`, `uvicorn main:app --port 8001` from `./aios-solver`, then

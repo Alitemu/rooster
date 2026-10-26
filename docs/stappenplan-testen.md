@@ -39,6 +39,11 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   van de AIOS, en andersom.
 - [ ] **B5.** Wachtwoord wijzigen werkt. Uitloggen werkt, ook in een tweede
   browser (die is dan ook uitgelogd).
+- [ ] **B6.** Noodweg voor de beheerder (de mail moet ingesteld zijn): vul op de
+  startpagina bij *Link kwijt* het Gmail-adres van de Mailinstellingen in. Je
+  ziet dezelfde melding als bij elk adres. In dat Gmail-account komt een mail
+  met een link. Kies daarmee een nieuw wachtwoord. Daarna werkt de link niet
+  meer, je bent overal uitgelogd en je logt in met het nieuwe wachtwoord.
 
 ## Blok C. Achterwacht: een periode van begin tot eind
 
@@ -112,6 +117,10 @@ overslaan:
   Je ziet: weer toegang.
 - [ ] **F7.** Links van een andere periode blijven werken na *Alles
   intrekken*.
+- [ ] **F8.** Een link werkt tot en met de laatste dag van zijn periode. De dag
+  erna krijg je de melding dat de link verlopen is. Vraag dan een nieuwe aan.
+- [ ] **F9.** *Link kwijt?* drie keer achter elkaar met hetzelfde adres werkt.
+  De vierde keer binnen een uur geeft de melding dat je een uur moet wachten.
 
 ## Blok G. Mail en verzendlijst
 
@@ -120,6 +129,12 @@ overslaan:
   verkeerd wachtwoord wordt geweigerd met een duidelijke melding.
 - [ ] **G2.** Zonder instellingen staat bij de knoppen die versturen waarom
   het niet kan.
+- [ ] **G4.** Bij een gepubliceerd rooster (achterwacht en AIOS) staat de knop
+  *Rooster opnieuw mailen*. Hij vraagt eerst om bevestiging. Daarna gaat de
+  mail van de publicatie (voorlopig of definitief) nog een keer naar iedereen.
+- [ ] **G5.** Twee keer snel achter elkaar op *Herinneringen versturen*
+  klikken stuurt één verzendlijst. De tweede klik krijgt de melding dat er al
+  verstuurd wordt.
 - [ ] **G3.** Op de echte stroom (niet op test): één uitnodiging, één
   herinnering en één ruilmail komen binnen met de juiste tekst en link.
 

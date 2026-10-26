@@ -80,6 +80,11 @@ describe('one file is the installation (0.800.0)', () => {
   // The real thing, when a Caddy binary is at hand (CADDY_BIN, or caddy on the PATH): the file it writes is one Caddy accepts.
   const caddy = process.env.CADDY_BIN || 'caddy';
   const heeftCaddy = spawnSync(caddy, ['version'], { encoding: 'utf8' }).status === 0;
+  // A skipped check looks like a passing one: say so, and let a release run insist on it (REQUIRE_CADDY=true).
+  if (!heeftCaddy) console.warn('[deployConfig] geen Caddy gevonden (CADDY_BIN of caddy op het PATH): de Caddyfile in het compose-bestand is niet gevalideerd');
+  it('has a Caddy to validate the compose file with when a release asks for it (REQUIRE_CADDY=true)', () => {
+    if (process.env.REQUIRE_CADDY === 'true') expect(heeftCaddy).toBe(true);
+  });
   it.skipIf(!heeftCaddy)('the Caddyfile in the compose file is valid for Caddy, with and without the own certificate', () => {
     const map = mkdtempSync(join(tmpdir(), 'caddyfile-'));
     const bestand = join(map, 'Caddyfile');

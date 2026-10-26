@@ -542,7 +542,21 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
-**Vanaf versie 0.805.0:** tweestapsverificatie (de authenticatiecode) is uit de app gehaald. De knop, het scherm, de controle bij het inloggen en de bibliotheken zijn weg, voor planners en beheerders van beide diensten. Inloggen kan met alleen het wachtwoord, ook als een account nog een oude instelling had.
+**Vanaf versie 0.805.0:** een audit met 8 invalshoeken, de bevindingen die we samen bespraken zijn opgelost.
+- *Tweestapsverificatie weg:* de knop, het scherm, de controle bij het inloggen en de bibliotheken zijn uit de app gehaald, voor planners en beheerders van beide diensten. Inloggen kan met alleen het wachtwoord.
+- *Volgorde van periodes:* een periode kan pas een rooster krijgen of gepubliceerd worden als de periode ervoor gepubliceerd is (of in de prullenbak staat). Anders klopt het saldo niet. Genereren kan alleen vanuit gesloten (of opnieuw vanuit gegenereerd).
+- *Terug naar open:* haalt de afwezigheid en de parttimedagen bij die in de tussentijd zijn veranderd, wist de vastgezette deelnamefactoren en kan niet meer als de periode al begonnen is.
+- *Saldo:* een beginsaldo-import verliest het eerdere saldo van iemand niet meer als er één getal in hun rij fout is. Een tegoed groter dan het bereik geeft doel nul en geen valse waarschuwing bij het publiceren.
+- *Periode openen* controleert de naam, het aanmaken het type van de pool.
+- *Lidmaatschap:* wijzigen of verwijderen op dagen die in een periode met een rooster (gegenereerd of gepubliceerd) vallen, vraagt eerst om bevestiging. Het rooster verandert er niet mee.
+- *Deadline* wijzigen stuurt de versie van de periode mee. Heeft iemand anders hem net gewijzigd, dan krijg je een melding in plaats van dat zijn wijziging overschreven wordt.
+- *Dubbele mail:* een verzending tegelijk per periode, ook voor de AIOS en naast de automatische herinnering.
+- *Link kwijt:* drie keer per uur per adres in plaats van per kwartier.
+- *Links verlopen* na de laatste dag van hun periode.
+- *Rooster opnieuw mailen:* een knop bij een gepubliceerd rooster (achterwacht en AIOS) voor als de mail van de publicatie mislukte. Iedereen krijgt de mail dan opnieuw.
+- *Wachtwoord van de beheerder:* vul op de startpagina bij Link kwijt het Gmail-adres van de Mailinstellingen in. Dat account krijgt een link om een nieuw wachtwoord te kiezen. Een noodweg: voor elk ander adres verandert er niets.
+- *AIOS:* ruilen en wijzigen met de hand kijken ook acht dagen vooruit, als het rooster van het volgende kwartaal al bestaat.
+- *Voorkant:* het ruilpaneel houdt zijn lijst bij een mislukte verversing, dubbel klikken op goedkeuren stuurt één verzoek, meldingen blijven gelezen, de filter op codenaam houdt de focus, de AIOS-pagina's Ruilen en Publiceren tonen een laadfout met Opnieuw proberen, en labels horen bij hun veld.
 
 **Vanaf versie 0.804.0:** een nieuwe audit, met nieuwe tests en mutatietests.
 - *Toetsenbord in dialogen:* een dialoog neemt de focus bij het openen, Tab en Shift+Tab blijven erin, en met Escape komt de focus terug op de knop die hem opende. Tab liep eerder zo de dialoog uit, de pagina erachter in.

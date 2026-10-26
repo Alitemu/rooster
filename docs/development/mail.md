@@ -250,3 +250,25 @@ address. The answer is the same for any address; rate-limited per caller
 (3 an hour) and in total (10 per 15 minutes), because every request mints a link
 for every participant and costs a Gmail send. The address is never
 stored or logged.
+
+## One send at a time, and sending a roster again (0.805.0)
+
+A send that goes to everyone is claimed per period and kind before its first
+await (lib/inFlight.ts for the achterwacht, its copy lib/aiosInFlight.ts for
+the AIOS): a second click or tab is told `BEZIG` (409). The reminder by hand
+and the automatic reminder share one key per period (`remind:<id>`, AIOS
+`herinneren:<id>`): the automatic one then leaves its moment unclaimed and goes
+on the next tick. Invitations (`invitations:`, AIOS `uitnodigen:`) and the
+roster mail (`rooster-mail:`) have their own.
+
+`POST /api/planner/period/[id]/rooster-mail` and
+`POST /api/aios/periode/[id]/rooster-mail` send the mail of the publication
+again (voorlopig while voorlopig, definitief when definitief) to everyone, for
+when it failed. Nothing about the roster changes; the audit log notes it. The
+buttons ask first ("Rooster opnieuw mailen").
+
+## The beheerder's password mail (0.805.0)
+
+The one mail that does not go to the flow's mailbox: lib/wachtwoordHerstel.ts
+sends it from the Gmail account to that same account
+(`sendDirectMail`, lib/verzendlijstMail.ts). See docs/development/auth.md.
