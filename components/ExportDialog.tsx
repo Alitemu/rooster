@@ -6,7 +6,7 @@
  * Interface for downloading invitations/reminders and sending emails
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
@@ -129,6 +129,24 @@ export function ExportDialog({
     setSendState({ kind: 'idle' });
   }, [deadline]);
 
+  // The version of the period as it was when the dialog opened: a deadline
+  // moved by somebody else in the meantime is refused, not overwritten.
+  const periodeVersie = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isOpen) return;
+    periodeVersie.current = undefined;
+    let vervallen = false;
+    fetch(withBasePath(`/api/periods/${periodId}`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!vervallen && typeof data?.data?.row_version === 'number') periodeVersie.current = data.data.row_version;
+      })
+      .catch(() => {});
+    return () => {
+      vervallen = true;
+    };
+  }, [isOpen, periodId, deadline]);
+
   const [newDeadline, setNewDeadline] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
@@ -152,7 +170,7 @@ export function ExportDialog({
       const res = await fetch(withBasePath(`/api/periods/${periodId}/deadline`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deadline: newDeadline }),
+        body: JSON.stringify({ deadline: newDeadline, rowVersion: periodeVersie.current }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {

@@ -117,3 +117,30 @@ test('the codenaam filter keeps focus while the list reloads', async ({ page }) 
   await expect(filter).toHaveValue('E2ETest');
   await expect(filter).toBeFocused();
 });
+
+test.describe('the deadline of a period', () => {
+  let open: ReturnType<typeof createTestPeriod>;
+  test.beforeAll(() => {
+    open = createTestPeriod('OPEN');
+  });
+  test.afterAll(() => {
+    cleanupTestData(open.period.id, open.users.map((u) => u.id));
+  });
+
+  test('is saved with the version of the period the page showed, and refused when somebody else was first', async ({ page }) => {
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${open.period.id}`);
+    await page.getByRole('button', { name: 'Aanpassen' }).first().click();
+    const verzonden: Array<Record<string, unknown>> = [];
+    await page.route(/\/api\/periods\/[^/]+\/deadline$/, (route) => {
+      verzonden.push(route.request().postDataJSON());
+      return route.continue();
+    });
+
+    // Somebody else changes the period after this page loaded it.
+    db.prepare('UPDATE dienstrooster_schedule_period SET row_version = row_version + 1 WHERE id = ?').run(open.period.id);
+    await page.getByRole('button', { name: 'Opslaan' }).first().click();
+    await expect(page.getByText(/intussen door iemand anders aangepast/)).toBeVisible();
+    expect(typeof verzonden[0].rowVersion).toBe('number');
+  });
+});

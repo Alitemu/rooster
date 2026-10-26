@@ -29,6 +29,7 @@ interface Period {
   bevroren_ruleset_json?: string | null;
   pool_type?: string;
   verwijderd_op?: string | null;
+  row_version?: number;
 }
 
 export default function PlannerPeriodPage() {
@@ -92,7 +93,7 @@ export default function PlannerPeriodPage() {
       const res = await fetch(withBasePath(`/api/periods/${periodId}/deadline`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deadline: deadlineInput }),
+        body: JSON.stringify({ deadline: deadlineInput, rowVersion: period?.row_version }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Aanpassen van deadline mislukt');
