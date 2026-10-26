@@ -56,16 +56,25 @@ export interface AiosSolverAios {
   saldo_weekendavonden: number;
   feestdag_achterstand: number;
   /** What they did in the last days of the quarter before (0.111.0): their rest and compensation days run on. */
-  eerdere_diensten: Array<{
-    id: string;
-    datum: string;
-    code: 'UD' | 'DD' | 'AD' | 'ADW' | 'ND';
-    start_tijd: string;
-    eind_tijd: string;
-    blok_id: string | null;
-    blok_soort: 'AVOND' | 'NACHT' | null;
-    blok_vorm: 'ZO_DI' | 'WO_VR' | 'ZA' | 'LOS' | null;
-  }>;
+  eerdere_diensten: AiosGrensDienst[];
+  /**
+   * What they have in the first days of the quarter after, when that roster already exists (0.805.0): a swap or a
+   * change by hand at the end of this quarter must not break rules 7, 8 and 9 over there either. For the app's own
+   * check only (lib/aiosRegels.ts): the solver is never sent it, because it makes the roster of one quarter at a time.
+   */
+  latere_diensten?: AiosGrensDienst[];
+}
+
+/** A dienst of the neighbouring quarter, as far as the rules over the boundary need it. */
+export interface AiosGrensDienst {
+  id: string;
+  datum: string;
+  code: 'UD' | 'DD' | 'AD' | 'ADW' | 'ND';
+  start_tijd: string;
+  eind_tijd: string;
+  blok_id: string | null;
+  blok_soort: 'AVOND' | 'NACHT' | null;
+  blok_vorm: 'ZO_DI' | 'WO_VR' | 'ZA' | 'LOS' | null;
 }
 
 export interface AiosSolverInvoer {
@@ -133,6 +142,22 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
      ORDER BY sl.datum, st.start_tijd`
   );
 
+  // The quarter right after this one, when its roster exists already: what each AIOS has there in the first eight days.
+  // Not for the generation (`vers`): the solver makes one quarter at a time and is never sent it.
+  const volgende = opties.vers
+    ? undefined
+    : (db
+        .prepare(
+          `SELECT id, status FROM dienstrooster_schedule_period
+           WHERE pool_id = ? AND id != ? AND verwijderd_op IS NULL AND start_datum > ?
+           ORDER BY start_datum ASC LIMIT 1`
+        )
+        .get(period.pool_id, period.id, tot) as { id: string; status: string } | undefined);
+  // Only the one right after, and only once it has a roster: a quarter still being prepared has nothing to look at,
+  // and the one after that is no neighbour.
+  const latere = volgende && ['GEGENEREERD', 'GEPUBLICEERD'].includes(volgende.status) ? volgende : undefined;
+  const latereOpgeknipt = latere ? opgeknipteBlokken(latere.id) : new Set<string>();
+
   const dagen: Array<{ datum: string; week: number }> = [];
   for (let d = van; d <= tot; d = addDays(d, 1)) dagen.push({ datum: d, week: getISOWeek(parseISO(d))[1] });
 
@@ -178,6 +203,14 @@ export function aiosSolverInvoer(period: AiosUitnodigPeriode, tijdslimiet: numbe
             blok_vorm: d.blok_id && vorigOpgeknipt.has(d.blok_id) ? ('LOS' as const) : d.blok_vorm,
           }))
         : [],
+      ...(latere
+        ? {
+            latere_diensten: (eerdere.all(latere.id, p.id, addDays(tot, 1), addDays(tot, 9)) as AiosGrensDienst[]).map((d) => ({
+              ...d,
+              blok_vorm: d.blok_id && latereOpgeknipt.has(d.blok_id) ? ('LOS' as const) : d.blok_vorm,
+            })),
+          }
+        : {}),
     };
   });
 

@@ -201,6 +201,16 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   dagdiensten kept whole, and forbids what breaks the rest or a compensation
   day of theirs (the reason KWARTAALGRENS); controle.py and lib/aiosRegels.ts
   take them along and judge only the diensten of this quarter)}.
+  `latere_diensten` (0.805.0, optional, same shape) is the other way round:
+  what they have in the first eight days of the quarter after, when that
+  roster exists. It is for the app's own check only (lib/aiosRegels.ts, for a
+  swap, a change by hand and the roster page): lib/aiosSolverInvoer.ts leaves
+  it out of the generation (`vers`), the solver and controle.py never see it,
+  so it is not part of the three copies of the rules or of
+  tests/fixtures/aios-regels.json. The nearest quarter after it in the pool
+  counts, not in the prullenbak, and only with a roster (GEGENEREERD or
+  GEPUBLICEERD). A streak of nights wholly in the next quarter is that
+  roster's to judge.
   The answer's per_aios holds doel_nachten, doel_dagen and doel_weekendavonden:
   the fair number of each this quarter, the saldo of the years before
   included (a debt stays a debt).

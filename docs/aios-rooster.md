@@ -325,6 +325,13 @@ solver.
    dinsdag voor de start deed, heeft de woensdag en donderdag vrij en 46 uur
    rust. De app geeft de solver per AIOS de diensten van de laatste acht dagen
    van het vorige kwartaal van de pool mee.
+   Ook vooruit (sinds 0.805.0): bestaat het rooster van het volgende kwartaal
+   al (gegenereerd of gepubliceerd), dan kijkt de controle van de app ook naar
+   de eerste acht dagen daarvan. Een ruil of een wijziging met de hand in de
+   laatste dagen van dit kwartaal mag de rust of de compensatiedagen daar niet
+   breken. De solver krijgt dit niet mee: die maakt één kwartaal tegelijk.
+   Maak je een kwartaal opnieuw nadat het volgende al bestaat, dan toont de
+   roosterpagina wat er over de grens niet klopt.
 
 Het gemiddelde van 46 uur per week over een jaar (F5) bewaakt het roosterbureau
 met de compensatiedagen; de app kent de uren overdag niet (F9).
