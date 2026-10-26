@@ -3084,8 +3084,8 @@ const MUTATIONS = [
   {
     name: "auth: a participant whose link was revoked keeps their session",
     file: "lib/auth-context.ts",
-    find: "WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1 LIMIT 1",
-    replace: "WHERE pal.person_id = ? AND p.actief = 1 LIMIT 1",
+    find: "WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1\n",
+    replace: "WHERE pal.person_id = ? AND p.actief = 1\n",
     tests: ["lib/auth-context", "lib/sessionVersion", "lib/session", "app/api/routeAccess", "app/api/auth"],
   },
   {
@@ -3178,8 +3178,8 @@ const MUTATIONS = [
   {
     name: "aios: the app's check forgets the quarter before",
     file: "lib/aiosRegels.ts",
-    find: "      lijst.push(...(eerderPerAios.get(aiosId) ?? []));",
-    replace: "      lijst.push(...[]);",
+    find: "      lijst.push(...(eerderPerAios.get(aiosId) ?? []), ...(laterPerAios.get(aiosId) ?? []));",
+    replace: "      lijst.push(...(laterPerAios.get(aiosId) ?? []));",
     tests: ["lib/aiosRegels"],
   },
   {
