@@ -66,7 +66,7 @@ export default function WachtwoordHerstelPage() {
               </Link>
             </div>
           ) : token === '' ? (
-            <div role="alert">
+            <div role="alert" data-testid="herstel-geen-link">
               <p className="text-sm text-neutral-700 mb-4">
                 Deze pagina werkt alleen met de link uit de e-mail. Vraag op de startpagina onder Link kwijt een nieuwe aan met het Gmail-adres.
               </p>
@@ -108,7 +108,7 @@ export default function WachtwoordHerstelPage() {
                 />
               </div>
               {fout && (
-                <p role="alert" className="text-sm text-red-700 mb-4">
+                <p role="alert" data-testid="herstel-fout" className="text-sm text-red-700 mb-4">
                   {fout}
                 </p>
               )}

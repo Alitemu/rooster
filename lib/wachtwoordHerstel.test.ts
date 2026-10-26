@@ -56,7 +56,6 @@ async function maakAdmin(rol: 'ADMIN' | 'PLANNER' = 'ADMIN', extra: Record<strin
 }
 
 const hash = (id: string) => (db.prepare('SELECT wachtwoord_hash FROM dienstrooster_person WHERE id = ?').get(id) as { wachtwoord_hash: string }).wachtwoord_hash;
-const rij = (id: string) => db.prepare('SELECT wachtwoord_hash, actief, rol FROM dienstrooster_person WHERE id = ?').get(id) as { wachtwoord_hash: string; actief: number; rol: string };
 const token = (id: string) => maakHerstelToken({ id, wachtwoord_hash: hash(id) });
 
 beforeAll(async () => {
