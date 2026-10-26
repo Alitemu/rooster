@@ -511,6 +511,27 @@ const MUTATIONS = [
     tests: ['app/api/auth/verifyLinkVerlopen'],
   },
   {
+    name: 'rooster-mail: an unpublished roster is mailed',
+    file: 'app/api/planner/period/[id]/rooster-mail/route.ts',
+    find: "if (period.status !== 'GEPUBLICEERD') {",
+    replace: 'if (false) {',
+    tests: ['app/api/planner/period/[id]/rooster-mail'],
+  },
+  {
+    name: 'rooster-mail: two sends at once',
+    file: 'app/api/planner/period/[id]/rooster-mail/route.ts',
+    find: "if (!release) return fail(409, 'BEZIG', VERZENDING_BEZIG);",
+    replace: '',
+    tests: ['app/api/planner/period/[id]/rooster-mail'],
+  },
+  {
+    name: 'rooster-mail: always the voorlopige mail',
+    file: 'app/api/planner/period/[id]/rooster-mail/route.ts',
+    find: "const soort = period.definitief_op ? 'ROOSTER_DEFINITIEF' : 'ROOSTER_VOORLOPIG';",
+    replace: "const soort = 'ROOSTER_VOORLOPIG';",
+    tests: ['app/api/planner/period/[id]/rooster-mail'],
+  },
+  {
     name: 'generate-roster: days outside the membership open to the solver',
     file: 'app/api/planner/period/[id]/generate-roster/route.ts',
     find: 'Object.assign(personPreferences, blockOutsideMembership(personPreferences, slots, windows));',

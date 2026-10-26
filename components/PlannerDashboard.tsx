@@ -260,6 +260,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   const [showUnpublishConfirm, setShowUnpublishConfirm] = useState(false);
   const [unpublishing, setUnpublishing] = useState(false);
   const [unpublishError, setUnpublishError] = useState<string | null>(null);
+  // "Rooster opnieuw mailen": the first click asks, the second sends.
+  const [roosterMailVraag, setRoosterMailVraag] = useState(false);
+  const [roosterMailBezig, setRoosterMailBezig] = useState(false);
+  const [roosterMailMelding, setRoosterMailMelding] = useState<{ fout: boolean; tekst: string } | null>(null);
   // Accordion state for the four collapsible sections below (Personeel &
   // voortgang / Exporteren & communicatie / Voorstellen voor herverdeling /
   // Dienstrooster). At most one unpinned section is open at a time - opening
@@ -710,6 +714,27 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   // possible source is a planner's own manual pre-fill (see
   // generate-roster/route.ts's manual_assignments handling for why doing
   // that before generating is safe: the solver respects it).
+  const verstuurRoosterMail = async () => {
+    setRoosterMailBezig(true);
+    setRoosterMailMelding(null);
+    try {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/rooster-mail`), { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setRoosterMailMelding({ fout: true, tekst: data?.error?.message ?? 'Opnieuw mailen is mislukt.' });
+      } else if (data.data.mail.verstuurd) {
+        setRoosterMailMelding({ fout: false, tekst: `De mail met het ${data.data.soort === 'definitief' ? 'definitieve' : 'voorlopige'} rooster is opnieuw verstuurd (${data.data.mail.aantal} personen).` });
+      } else {
+        setRoosterMailMelding({ fout: true, tekst: data.data.mail.melding });
+      }
+    } catch {
+      setRoosterMailMelding({ fout: true, tekst: 'Geen verbinding met de server. Controleer je netwerk.' });
+    } finally {
+      setRoosterMailBezig(false);
+      setRoosterMailVraag(false);
+    }
+  };
+
   const isGenerated = dashboard.status === 'GEGENEREERD' || dashboard.status === 'GEPUBLICEERD';
   const rosterFillState: 'LEEG' | 'HANDMATIG_DEELS' | 'AUTOMATISCH' = isGenerated
     ? 'AUTOMATISCH'
@@ -823,7 +848,21 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               ↩️ Publicatie intrekken
             </button>
           )}
+          {dashboard.status === 'GEPUBLICEERD' && (
+            <button
+              disabled={roosterMailBezig}
+              onClick={() => (roosterMailVraag ? verstuurRoosterMail() : setRoosterMailVraag(true))}
+              className="px-4 py-2 rounded font-medium bg-white border border-neutral-300 text-neutral-800 hover:bg-neutral-50 disabled:opacity-50 transition-colors"
+            >
+              {roosterMailBezig ? 'Bezig…' : roosterMailVraag ? 'Zeker weten? Iedereen krijgt de mail opnieuw' : '✉️ Rooster opnieuw mailen'}
+            </button>
+          )}
         </div>
+        {roosterMailMelding && (
+          <p role="status" className={`text-sm mt-2 ${roosterMailMelding.fout ? 'text-red-700' : 'text-emerald-800'}`}>
+            {roosterMailMelding.tekst}
+          </p>
+        )}
         <p className="text-xs text-neutral-500 mt-2">
           Status: <span className="font-semibold">
             {dashboard.status === 'GEPUBLICEERD'
