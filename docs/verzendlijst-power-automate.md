@@ -450,23 +450,28 @@ de stroom is voor beide diensten hetzelfde.
       - *Geval* `AIOS`: hetzelfde, met het bestand van de AIOS. Noem de stap
         `Adressen AIOS`. Kies bij het bestand de eigen plek van dat bestand:
         dan kiest de stap ook de bijbehorende schijf en tabel.
-      - *Standaard*: een **E-mail verzenden (V2)** aan jezelf ("Onbekende
-        dienst in de verzendlijst, niets verstuurd") en daarna
-        **Beëindigen** met de status *Mislukt*. Zo gaat er nooit een mail uit
-        op basis van de verkeerde lijst.
+      - *Standaard*: laat leeg. Een onbekende of ontbrekende `dienst` laat
+        `adressen` dan leeg, en de controle hieronder vangt dat op.
 
       Zet daarna een **Voorwaarde**, noem hem `Adressen controle`, die ook
       loopt als het lezen mislukte of is overgeslagen (*Uitvoeren na*:
       geslaagd, mislukt, overgeslagen en time-out van `Bestand van dienst`,
       en geslaagd van het leegmaken van `adressen`). De voorwaarde is
-      `length(variables('adressen'))` is gelijk aan `0`. In de *Ja*-tak: een
-      **E-mail verzenden (V2)** aan jezelf ("Het adressenbestand van deze
-      dienst is leeg of niet te lezen, verzendlijst niet verstuurd") en dan
-      **Beëindigen** met de status *Mislukt*. Zo verdwijnt er nooit stil een
-      verzendlijst als een bestand niet bereikbaar is, bijvoorbeeld omdat de
-      eigenaar het verplaatste of het account van de stroom geen rechten meer
-      heeft. Laat de *Nee*-tak leeg. Alle volgende stappen lopen pas na deze
-      voorwaarde (*Uitvoeren na*: geslaagd).
+      `length(variables('adressen'))` is gelijk aan `0`.
+      - In de *Ja*-tak: alleen een **E-mail verzenden (V2)** aan jezelf ("Let
+        op: verzendlijst niet verstuurd, het adressenbestand is leeg of niet
+        te lezen of de dienst is onbekend"), met de dienst, de soort en de
+        periode in de tekst. Er gebeurt verder niets. Zo verdwijnt er nooit
+        stil een verzendlijst als een bestand niet bereikbaar is, bijvoorbeeld
+        omdat de eigenaar het verplaatste of het account van de stroom geen
+        rechten meer heeft.
+      - In de *Nee*-tak: **alles uit de stappen c tot en met f hieronder**.
+        Zet de lus `Berichten`, de voorwaarde `Link aanvraag`, het rapport
+        en het opruimen dus binnen deze tak.
+
+      Gebruik hier bewust geen **Beëindigen**: Power Automate staat die stap
+      niet toe binnen een lus en weigert dan de hele stroom bij het opslaan
+      of importeren.
 
       Omdat de lijst nu in één variabele staat, hoeft de rest van de stroom
       niet meer naar Excel te kijken. Dat is sneller en maakt elke stap
