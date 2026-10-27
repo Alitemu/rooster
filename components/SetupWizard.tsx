@@ -311,6 +311,9 @@ export function SetupWizard({ period, onComplete }: Props) {
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [balanceParseWarnings, setBalanceParseWarnings] = useState<string[]>([]);
+  // A beginsaldo that is there already is replaced by the file: asked first (the rows wait here until the planner says yes).
+  const [balanceVraag, setBalanceVraag] = useState<{ namen: string[]; rows: BalanceRow[]; warnings: string[] } | null>(null);
+  const [balanceBevestigd, setBalanceBevestigd] = useState(false);
   const [corrections, setCorrections] = useState<Correction[]>([]);
   const [correctionFormOpen, setCorrectionFormOpen] = useState(false);
   const [correctionForm, setCorrectionForm] = useState({
@@ -700,6 +703,26 @@ export function SetupWizard({ period, onComplete }: Props) {
       }
       rows.push({ codenaam, AVOND_delta: avondParsed.value, WEEKEND_delta: weekendParsed.value });
     });
+    // What this period has from an earlier import: those people's saldo is replaced, a blank cell included.
+    setBalanceVraag(null);
+    setBalanceBevestigd(false);
+    let bestaand: string[] = [];
+    if (period?.id) {
+      try {
+        const res = await fetch(withBasePath(`/api/planner/period/${period.id}/import-balances`));
+        const data = await res.json();
+        if (res.ok) bestaand = (data.data.personen as Array<{ codenaam: string }>).map((p) => p.codenaam);
+      } catch {
+        // Not known: the server asks at the import itself.
+      }
+    }
+    const teVervangen = [...new Set(rows.map((r) => r.codenaam))].filter((c) => bestaand.includes(c));
+    if (teVervangen.length > 0) {
+      setBalanceRows([]);
+      setBalanceParseWarnings([]);
+      setBalanceVraag({ namen: teVervangen, rows, warnings });
+      return;
+    }
     setBalanceRows(rows);
     setBalanceParseWarnings(warnings);
   };
@@ -865,9 +888,14 @@ export function SetupWizard({ period, onComplete }: Props) {
         const balancesRes = await fetch(withBasePath(`/api/planner/period/${period.id}/import-balances`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: balanceRows }),
+          body: JSON.stringify({ rows: balanceRows, ...(balanceBevestigd ? { bevestigd: true } : {}) }),
         }).catch(() => null);
-        if (!balancesRes || !balancesRes.ok) {
+        if (balancesRes && balancesRes.status === 409) {
+          const conflict = await balancesRes.json().catch(() => null);
+          importWarnings.push(
+            `Het beginsaldo is niet geïmporteerd. ${conflict?.error?.message ?? ''} Kies het bestand opnieuw bij stap Saldi en bevestig het overschrijven.`.replace('  ', ' ')
+          );
+        } else if (!balancesRes || !balancesRes.ok) {
           importWarnings.push('Importeren van beginsaldi is volledig mislukt.');
         } else {
           const balancesData = await balancesRes.json().catch(() => null);
@@ -1596,6 +1624,39 @@ export function SetupWizard({ period, onComplete }: Props) {
                 onChange={(e) => e.target.files?.[0] && handleBalancesFile(e.target.files[0])}
               />
             </div>
+
+            {balanceVraag && (
+              <div role="alert" data-testid="saldo-overschrijven" className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2">
+                <p className="font-medium">
+                  {balanceVraag.namen.length === 1 ? 'Voor 1 persoon staat' : `Voor ${balanceVraag.namen.length} personen staat`} al een beginsaldo.
+                </p>
+                <p>
+                  Importeren overschrijft die waarden, ook als een vakje in het bestand leeg is: dat wordt 0. Wie niet in het
+                  bestand staat, houdt het eigen saldo. Weet je het zeker?
+                </p>
+                <p className="text-xs">
+                  {balanceVraag.namen.slice(0, 8).join(', ')}
+                  {balanceVraag.namen.length > 8 && ` en ${balanceVraag.namen.length - 8} anderen`}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBalanceRows(balanceVraag.rows);
+                      setBalanceParseWarnings(balanceVraag.warnings);
+                      setBalanceBevestigd(true);
+                      setBalanceVraag(null);
+                    }}
+                    className="px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700"
+                  >
+                    Ja, overschrijven
+                  </button>
+                  <button type="button" onClick={() => setBalanceVraag(null)} className="px-3 py-1 rounded border border-neutral-300 hover:bg-neutral-50">
+                    Annuleren
+                  </button>
+                </div>
+              </div>
+            )}
 
             {balanceRows.length > 0 && (
               <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">

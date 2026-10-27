@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
-import { POST } from './route';
+import { GET, POST } from './route';
 
 /**
  * The rule: a beginsaldo file sent twice (a lost response, a second click)
@@ -44,7 +44,7 @@ function setup() {
   return { pool, period, members, planner: person('PLANNER').id };
 }
 
-async function importeer(w: ReturnType<typeof setup>, rows: unknown[]) {
+async function importeer(w: ReturnType<typeof setup>, rows: unknown[], bevestigd?: boolean) {
   const token = createSessionToken(
     { kind: 'staff', personId: w.planner, sessionVersion: getSessionVersion(w.planner)! },
     STAFF_SESSION_MAX_AGE_SECONDS
@@ -53,7 +53,7 @@ async function importeer(w: ReturnType<typeof setup>, rows: unknown[]) {
     new NextRequest(`http://localhost/api/planner/period/${w.period}/import-balances`, {
       method: 'POST',
       headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ rows }),
+      body: JSON.stringify({ rows, ...(bevestigd === undefined ? {} : { bevestigd }) }),
     }),
     { params: Promise.resolve({ id: w.period }) }
   );
@@ -91,7 +91,7 @@ describe('POST /api/planner/period/[id]/import-balances', () => {
     const [a] = w.members;
     const rows = [{ codenaam: a.codenaam, AVOND_delta: 2, WEEKEND_delta: -1 }];
     expect((await importeer(w, rows)).status).toBe(200);
-    expect((await importeer(w, rows)).status).toBe(200);
+    expect((await importeer(w, rows, true)).status).toBe(200);
     expect(saldo(w, a.id, 'AVOND')).toBe(2);
     expect(saldo(w, a.id, 'WEEKEND')).toBe(-1);
   });
@@ -100,7 +100,7 @@ describe('POST /api/planner/period/[id]/import-balances', () => {
     const w = setup();
     const [a] = w.members;
     await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 2, WEEKEND_delta: -1 }]);
-    await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 5 }]);
+    await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 5 }], true);
     expect(saldo(w, a.id, 'AVOND')).toBe(5);
     expect(saldo(w, a.id, 'WEEKEND')).toBe(0);
   });
@@ -113,7 +113,7 @@ describe('POST /api/planner/period/[id]/import-balances', () => {
       `INSERT INTO dienstrooster_ledger_entry (id, person_id, pool_id, teller, geldt_voor_periode_id, delta, reden, categorie, aangemaakt_door, aangemaakt_op)
        VALUES (?, ?, ?, 'AVOND', ?, 4, 'Handmatig', 'CORRECTIE', ?, datetime('now'))`
     ).run(crypto.randomUUID(), a.id, w.pool, w.period, w.planner);
-    await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 2 }]);
+    await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 2 }], true);
     expect(saldo(w, a.id, 'AVOND')).toBe(2 + 4);
     expect(saldo(w, b.id, 'AVOND')).toBe(3);
   });
@@ -122,10 +122,14 @@ describe('POST /api/planner/period/[id]/import-balances', () => {
     const w = setup();
     const [a, b] = w.members;
     await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 2, WEEKEND_delta: 1 }]);
-    const res = await importeer(w, [
-      { codenaam: a.codenaam, AVOND_delta: 7, WEEKEND_delta: 1.5 },
-      { codenaam: b.codenaam, AVOND_delta: 3 },
-    ]);
+    const res = await importeer(
+      w,
+      [
+        { codenaam: a.codenaam, AVOND_delta: 7, WEEKEND_delta: 1.5 },
+        { codenaam: b.codenaam, AVOND_delta: 3 },
+      ],
+      true
+    );
     expect(res.status).toBe(200);
     expect(res.body.data.errors).toHaveLength(1);
     expect(saldo(w, a.id, 'AVOND')).toBe(2);
@@ -139,5 +143,57 @@ describe('POST /api/planner/period/[id]/import-balances', () => {
     const res = await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 1 }, { codenaam: a.codenaam, AVOND_delta: 2 }]);
     expect(res.status).toBe(200);
     expect(saldo(w, a.id, 'AVOND')).toBe(3);
+  });
+
+  it('asks before replacing a beginsaldo that is there: 409, nothing changed, the names named; yes goes through', async () => {
+    const w = setup();
+    const [a, b] = w.members;
+    expect((await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 2, WEEKEND_delta: 1 }])).status).toBe(200);
+    // The new file leaves WEEKEND blank: that is 0, and replaces the 1.
+    const vraag = await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 5 }, { codenaam: b.codenaam, AVOND_delta: 3 }]);
+    expect(vraag.status).toBe(409);
+    expect(vraag.body.error.code).toBe('SALDO_BESTAAT');
+    expect(vraag.body.error.message).toContain('Voor 1 persoon staat al een beginsaldo');
+    expect(vraag.body.error.message).toContain('Importeren overschrijft die waarden');
+    expect(vraag.body.data.codenamen).toEqual([a.codenaam]);
+    expect(saldo(w, a.id, 'AVOND')).toBe(2);
+    expect(saldo(w, a.id, 'WEEKEND')).toBe(1);
+    // b was not asked about and nothing of the file went in.
+    expect(saldo(w, b.id, 'AVOND')).toBe(0);
+    expect((await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 5 }, { codenaam: b.codenaam, AVOND_delta: 3 }], true)).status).toBe(200);
+    expect(saldo(w, a.id, 'AVOND')).toBe(5);
+    expect(saldo(w, a.id, 'WEEKEND')).toBe(0);
+    expect(saldo(w, b.id, 'AVOND')).toBe(3);
+  });
+
+  it('does not ask for someone who has nothing yet, nor for a correction made by hand, and only a literal true confirms', async () => {
+    const w = setup();
+    const [a, b] = w.members;
+    await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 1 }]);
+    db.prepare(
+      `INSERT INTO dienstrooster_ledger_entry (id, person_id, pool_id, teller, geldt_voor_periode_id, delta, reden, categorie, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, ?, 'AVOND', ?, 4, 'Handmatig', 'CORRECTIE', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), b.id, w.pool, w.period, w.planner);
+    // b has only a correction, a is not in this file: no question.
+    expect((await importeer(w, [{ codenaam: b.codenaam, AVOND_delta: 2 }])).status).toBe(200);
+    expect((await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: 9 }], 'ja' as unknown as boolean)).status).toBe(409);
+  });
+
+  it('GET lists what the imports gave so far, codenaam and both numbers, and nothing for a period without', async () => {
+    const w = setup();
+    const [a] = w.members;
+    const lees = async () => {
+      const token = createSessionToken({ kind: 'staff', personId: w.planner, sessionVersion: getSessionVersion(w.planner)! }, STAFF_SESSION_MAX_AGE_SECONDS);
+      const res = await GET(
+        new NextRequest(`http://localhost/api/planner/period/${w.period}/import-balances`, { headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` } }),
+        { params: Promise.resolve({ id: w.period }) }
+      );
+      return { status: res.status, body: await res.json() };
+    };
+    expect((await lees()).body.data.personen).toEqual([]);
+    await importeer(w, [{ codenaam: a.codenaam, AVOND_delta: -2 }]);
+    const r = await lees();
+    expect(r.status).toBe(200);
+    expect(r.body.data.personen).toEqual([{ codenaam: a.codenaam, avond: -2, weekend: 0 }]);
   });
 });

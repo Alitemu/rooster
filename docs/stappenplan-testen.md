@@ -60,6 +60,10 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   met andere kolommen wordt geweigerd met een Nederlandse melding die de goede
   kolommen noemt. Het gedownloade rooster (Excel) kan bij *Eerdere toewijzingen*
   terug.
+- [ ] **C3b.** Importeer een beginsaldo en kies daarna in stap *Saldi* een tweede
+  bestand met dezelfde codenaam. Je ziet: een waarschuwing met de naam, die zegt
+  dat de waarden worden overschreven en dat een leeg vakje 0 wordt. *Annuleren*
+  neemt niets mee, *Ja, overschrijven* wel.
 - [ ] **C4.** *Exporteren & communicatie* en dan *Uitnodigingen en
   herinneringen*: download de uitnodigingen. Je ziet: een bestand met per
   persoon een link.

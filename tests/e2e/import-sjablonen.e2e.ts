@@ -15,7 +15,9 @@ const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 let periodId = '';
 
 test.afterAll(() => {
-  if (periodId) db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
+  if (!periodId) return;
+  db.prepare('DELETE FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ?').run(periodId);
+  db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
 });
 
 test.beforeEach(async ({ page }) => {
@@ -58,6 +60,48 @@ test('beginsaldo: the sjabloon is there, a CSV and a wrong layout are refused, t
   await kies.setInputFiles(xlsxBestand([[...SALDO_KOP], ['Persoon-01', -1, 0], ['Persoon-02', null, 2]]));
   await expect(page.getByText('2 records klaar om te importeren')).toBeVisible();
   await expect(page.getByText(/niet de kolommen/)).toHaveCount(0);
+});
+
+test('beginsaldo: a saldo that is there already is said first, and only replaced after a yes', async ({ page }) => {
+  const lid = db
+    .prepare(
+      `SELECT p.codenaam FROM dienstrooster_person p JOIN dienstrooster_pool_membership pm ON pm.person_id = p.id
+       JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+       WHERE sp.id = ? AND p.actief = 1 AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum ORDER BY p.codenaam LIMIT 1`
+    )
+    .get(periodId) as { codenaam: string };
+  const eerste = await page.request.post(`${getBaseUrl()}/api/planner/period/${periodId}/import-balances`, {
+    data: { rows: [{ codenaam: lid.codenaam, AVOND_delta: 2, WEEKEND_delta: 1 }] },
+  });
+  expect(eerste.status()).toBe(200);
+
+  await page.goto(`${getBaseUrl()}/planner/setup/${periodId}`);
+  await page.getByRole('button', { name: '5. Saldi' }).click();
+  const kies = page.getByLabel('Beginsaldo als Excel-bestand');
+  await kies.setInputFiles(xlsxBestand([[...SALDO_KOP], [lid.codenaam, 5, null]]));
+
+  // Said first; nothing waits to be imported yet.
+  const vraag = page.getByTestId('saldo-overschrijven');
+  await expect(vraag).toContainText('Voor 1 persoon staat al een beginsaldo');
+  await expect(vraag).toContainText('ook als een vakje in het bestand leeg is');
+  await expect(vraag).toContainText(lid.codenaam);
+  await expect(page.getByText(/records klaar om te importeren/)).toHaveCount(0);
+
+  // No: nothing is taken along.
+  await vraag.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(vraag).toHaveCount(0);
+  await expect(page.getByText(/records klaar om te importeren/)).toHaveCount(0);
+
+  // Yes: the rows are ready.
+  await kies.setInputFiles(xlsxBestand([[...SALDO_KOP], [lid.codenaam, 5, null]]));
+  await page.getByTestId('saldo-overschrijven').getByRole('button', { name: 'Ja, overschrijven' }).click();
+  await expect(page.getByText('1 records klaar om te importeren')).toBeVisible();
+  await expect(page.getByTestId('saldo-overschrijven')).toHaveCount(0);
+
+  // A person with nothing yet is not asked about.
+  await kies.setInputFiles(xlsxBestand([[...SALDO_KOP], ['Niemand-heeft-deze-naam', 1, 1]]));
+  await expect(page.getByText('1 records klaar om te importeren')).toBeVisible();
+  await expect(page.getByTestId('saldo-overschrijven')).toHaveCount(0);
 });
 
 test('eerdere toewijzingen: the sjabloon is there, a CSV and a wrong layout are refused, rows without a codenaam are left out', async ({ page }) => {

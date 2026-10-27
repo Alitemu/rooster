@@ -28,6 +28,28 @@ export function laadSjabloonPeriode(periodId: string): Periode | undefined {
     .get(periodId) as Periode | undefined;
 }
 
+/**
+ * What the imports of a period gave each person so far (AVOND, WEEKEND; a
+ * person with only an entry in one has 0 in the other). A correction made by
+ * hand is another category and not in it.
+ */
+export function bestaandBeginsaldo(periodId: string): Array<{ person_id: string; codenaam: string; AVOND: number; WEEKEND: number }> {
+  const uit = new Map<string, { person_id: string; codenaam: string; AVOND: number; WEEKEND: number }>();
+  for (const r of db
+    .prepare(
+      `SELECT le.person_id, p.codenaam, le.teller, SUM(le.delta) AS totaal FROM dienstrooster_ledger_entry le
+       JOIN dienstrooster_person p ON p.id = le.person_id
+       WHERE le.geldt_voor_periode_id = ? AND le.categorie = 'BEGINSALDO' AND le.reden = 'Geïmporteerd beginsaldo'
+       GROUP BY le.person_id, le.teller ORDER BY p.codenaam COLLATE NOCASE`
+    )
+    .all(periodId) as Array<{ person_id: string; codenaam: string; teller: string; totaal: number }>) {
+    const b = uit.get(r.person_id) ?? { person_id: r.person_id, codenaam: r.codenaam, AVOND: 0, WEEKEND: 0 };
+    if (r.teller === 'AVOND' || r.teller === 'WEEKEND') b[r.teller] = r.totaal;
+    uit.set(r.person_id, b);
+  }
+  return [...uit.values()];
+}
+
 /** Same people as the import accepts: an active member whose membership overlaps the period. */
 export function saldoSjabloon(period: Periode): XlsxSheet {
   const leden = db
@@ -40,14 +62,9 @@ export function saldoSjabloon(period: Periode): XlsxSheet {
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<{ id: string; codenaam: string }>;
   // What an earlier import of this period gave them: a new import replaces it.
   const eerder = new Map<string, number>();
-  for (const r of db
-    .prepare(
-      `SELECT person_id, teller, SUM(delta) AS totaal FROM dienstrooster_ledger_entry
-       WHERE geldt_voor_periode_id = ? AND categorie = 'BEGINSALDO' AND reden = 'Geïmporteerd beginsaldo'
-       GROUP BY person_id, teller`
-    )
-    .all(period.id) as Array<{ person_id: string; teller: string; totaal: number }>) {
-    eerder.set(`${r.person_id}|${r.teller}`, r.totaal);
+  for (const b of bestaandBeginsaldo(period.id)) {
+    eerder.set(`${b.person_id}|AVOND`, b.AVOND);
+    eerder.set(`${b.person_id}|WEEKEND`, b.WEEKEND);
   }
   return {
     name: 'Beginsaldo',

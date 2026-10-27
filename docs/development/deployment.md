@@ -148,7 +148,10 @@ sjabloon's before a row is read. The roster download has the same four
 columns as the "Eerdere toewijzingen" sjabloon, so it goes in as it is; an
 empty codenaam there is a row nobody filled in and is left out silently
 (priorRowsInWindow). The AIOS has its own sjabloon for its history
-(lib/aiosGeschiedenis.ts). A workbook is read by the server,
+(lib/aiosGeschiedenis.ts). The beginsaldo import asks before it replaces one that
+is there (0.807.0): GET .../import-balances lists what the period has, the wizard
+warns when the file names someone on that list and holds the rows until a yes;
+the route answers 409 SALDO_BESTAAT without `bevestigd: true`. A workbook is read by the server,
 POST /api/planner/read-workbook (planner only, the same reader as the
 preferences import, writes nothing), and the rows come back to the page;
 "Eerdere toewijzingen" previews them with lib/priorAssignmentUpload.ts
