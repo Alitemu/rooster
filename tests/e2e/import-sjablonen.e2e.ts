@@ -13,11 +13,17 @@ import { getBaseUrl, loginAsPlanner } from './setup';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 let periodId = '';
+let lidId = '';
 
 test.afterAll(() => {
   if (!periodId) return;
   db.prepare('DELETE FROM dienstrooster_ledger_entry WHERE geldt_voor_periode_id = ?').run(periodId);
   db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
+  if (lidId) {
+    db.prepare('DELETE FROM dienstrooster_audit_log WHERE entiteit_id = ?').run(lidId);
+    db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(lidId);
+    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(lidId);
+  }
 });
 
 test.beforeEach(async ({ page }) => {
@@ -63,13 +69,14 @@ test('beginsaldo: the sjabloon is there, a CSV and a wrong layout are refused, t
 });
 
 test('beginsaldo: a saldo that is there already is said first, and only replaced after a yes', async ({ page }) => {
-  const lid = db
-    .prepare(
-      `SELECT p.codenaam FROM dienstrooster_person p JOIN dienstrooster_pool_membership pm ON pm.person_id = p.id
-       JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
-       WHERE sp.id = ? AND p.actief = 1 AND pm.geldig_vanaf <= sp.eind_datum AND pm.geldig_tot >= sp.start_datum ORDER BY p.codenaam LIMIT 1`
-    )
-    .get(periodId) as { codenaam: string };
+  // A member of the pool whose membership covers the period (the seed's end earlier).
+  const poolId = (db.prepare('SELECT pool_id FROM dienstrooster_schedule_period WHERE id = ?').get(periodId) as { pool_id: string }).pool_id;
+  const lid = { id: crypto.randomUUID(), codenaam: `Saldo-lid-${Date.now()}` };
+  db.prepare(`INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`).run(lid.id, lid.codenaam);
+  db.prepare(
+    `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot) VALUES (?, ?, ?, 1, '2020-01-01', '2100-12-31')`
+  ).run(crypto.randomUUID(), lid.id, poolId);
+  lidId = lid.id;
   const eerste = await page.request.post(`${getBaseUrl()}/api/planner/period/${periodId}/import-balances`, {
     data: { rows: [{ codenaam: lid.codenaam, AVOND_delta: 2, WEEKEND_delta: 1 }] },
   });
