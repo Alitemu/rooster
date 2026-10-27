@@ -77,7 +77,8 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
 
   // A new absence starts empty, not on the whole quarter; a "van" sets "tot en met" to the next day; onderwijs is a soort.
   const vanVeld = page.getByLabel('Van', { exact: true });
-  const totVeld = page.getByLabel('Tot en met');
+  // The deeltijd form has a "Tot en met" of its own: this is the absence form's.
+  const totVeld = page.locator('input[id$="-tot"]');
   await expect(vanVeld).toHaveValue('');
   await expect(totVeld).toHaveValue('');
   await expect(page.getByLabel('Soort').getByRole('option', { name: 'Onderwijs' })).toHaveCount(1);

@@ -479,6 +479,11 @@ await page.click('button:has-text("Verwijderen")');
 await page.waitForTimeout(300);
 await page.click('button:has-text("Zeker weten?")');
 await page.waitForTimeout(800);
+// A membership that reaches a period with a roster asks once more (lib/membershipRooster.ts).
+if (await page.locator('[data-testid="rooster-bevestiging"]').isVisible().catch(() => false)) {
+  await page.click('button:has-text("Toch doorgaan")');
+  await page.waitForTimeout(800);
+}
 const membershipCountAfter = db
   .prepare('SELECT COUNT(*) c FROM dienstrooster_pool_membership WHERE pool_id = ?')
   .get(wizardPoolId).c;
