@@ -297,10 +297,46 @@ describe('the history from before the app', () => {
     expect(laadAiosRooster(aiosUitnodigPeriode(w.b)!).per_aios.find((a) => a.person_id === w.z)!.saldo_bron).toBe('BEGINSTAND');
   });
 
-  it('a new file replaces what was', async () => {
-    await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: bestand([KOP, [cn('y'), 4, 0, 0, 0, 0, 0, 1, 6]]), toepassen: true }), ctx(w.b));
-    const stand = (await (await geschiedenis(req(`${w.b}/geschiedenis`), ctx(w.b))).json()).data;
-    expect(stand.rijen.map((r: any) => [r.codenaam, r.gevolg])).toEqual([[cn('y'), 'niets in te halen']]);
+  it('a new file replaces what was, but only after a yes: the check names who is left without', async () => {
+    const nieuw = bestand([KOP, [cn('y'), 4, 0, 0, 0, 0, 0, 1, 6]]);
+    const stand = async () => (await (await geschiedenis(req(`${w.b}/geschiedenis`), ctx(w.b))).json()).data.rijen.map((r: any) => r.codenaam).sort();
+    const voor = await stand();
+    expect(voor.length).toBeGreaterThan(1);
+
+    // The check already says who would have none.
+    const check = (await (await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: false }), ctx(w.b))).json()).data.plan;
+    expect(check.vervalt.sort()).toEqual(voor.filter((n: string) => n !== cn('y')));
+
+    // Saving asks first: 409, nothing changed, the question names them.
+    const vraag = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: true }), ctx(w.b));
+    expect(vraag.status).toBe(409);
+    const fout = (await vraag.json()).error;
+    expect(fout.code).toBe('GESCHIEDENIS_BESTAAT');
+    expect(fout.message).toContain(`Er staat al een geschiedenis voor ${voor.length} AIOS. Bewaren vervangt die.`);
+    expect(fout.message).toContain('daarna geen geschiedenis meer');
+    expect(fout.message).toContain(voor.find((n: string) => n !== cn('y')));
+    expect([...fout.plan.vervalt].sort()).toEqual(voor.filter((n: string) => n !== cn('y')));
+    expect(await stand()).toEqual(voor);
+    // Only a literal true counts.
+    expect((await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: true, bevestigd: 'ja' }), ctx(w.b))).status).toBe(409);
+    expect(await stand()).toEqual(voor);
+
+    // Yes: replaced.
+    const ja = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: true, bevestigd: true }), ctx(w.b));
+    expect(ja.status).toBe(200);
+    const na = (await (await geschiedenis(req(`${w.b}/geschiedenis`), ctx(w.b))).json()).data;
+    expect(na.rijen.map((r: any) => [r.codenaam, r.gevolg])).toEqual([[cn('y'), 'niets in te halen']]);
+  });
+
+  it('asks nothing when there is no history yet, and a file with problems is refused before the question', async () => {
+    db.prepare('DELETE FROM dienstrooster_aios_beginstand WHERE pool_id = ?').run(w.pool);
+    const goed = bestand([KOP, [cn('y'), 4, 0, 0, 0, 0, 0, 1, 6]]);
+    expect((await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: goed, toepassen: true }), ctx(w.b))).status).toBe(200);
+    // Now there is one: a file with a mistake answers 400 with the problems, not the question.
+    const fout = bestand([KOP, [cn('y'), -1, 0, 0, 0, 0, 0, 1, 6]]);
+    const res = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: fout, toepassen: true }), ctx(w.b));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('IMPORT_PROBLEMS');
   });
 
   it("is the AIOS's planner's: the achterwacht's planner gets nothing, nor an achterwacht period", async () => {

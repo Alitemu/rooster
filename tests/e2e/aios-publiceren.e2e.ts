@@ -106,6 +106,23 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   await geschiedenis.getByRole('button', { name: 'Bewaren' }).click();
   await expect(geschiedenis.getByText(/^Bewaard\./)).toBeVisible();
   await expect(geschiedenis.getByText('Ingelezen voor 2 AIOS.')).toBeVisible();
+
+  // A second file with only one of them: saving asks first and names who is left without; no keeps all.
+  await geschiedenis.getByLabel('Excel-bestand met de geschiedenis').setInputFiles({
+    name: 'geschiedenis2.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: buildXlsx([kop, [`ap0-${stamp % 100000}`, 20, 0, 0, 0, 0, 0, 1, 12]]),
+  });
+  await geschiedenis.getByRole('button', { name: 'Controleren' }).click();
+  await geschiedenis.getByRole('button', { name: 'Bewaren' }).click();
+  const vervangen = geschiedenis.getByTestId('aios-geschiedenis-vervangen');
+  await expect(vervangen).toContainText('Er staat al een geschiedenis voor 2 AIOS. Bewaren vervangt die.');
+  await expect(vervangen).toContainText(`ap1-${stamp % 100000}`);
+  await expect(vervangen).toContainText('daarna geen geschiedenis meer');
+  await vervangen.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(vervangen).toHaveCount(0);
+  await geschiedenis.getByLabel('Excel-bestand met de geschiedenis').setInputFiles([]);
+  await expect(geschiedenis.getByText('Ingelezen voor 2 AIOS.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
   const paneel = page.getByTestId('aios-publiceren');

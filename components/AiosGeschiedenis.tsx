@@ -63,6 +63,8 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
   const [plan, setPlan] = useState<GeschiedenisPlan | null>(null);
   const [bezig, setBezig] = useState(false);
   const [melding, setMelding] = useState<{ fout: boolean; tekst: string } | null>(null);
+  // Saving replaces the whole history: asked first when there is one (the server asks too).
+  const [vervangVraag, setVervangVraag] = useState<string | null>(null);
 
   const laad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${periodId}/geschiedenis`))
@@ -77,6 +79,7 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
 
   const kies = async (file: File | undefined) => {
     setPlan(null);
+    setVervangVraag(null);
     setMelding(null);
     if (!file) return;
     if (!/\.xlsx$/i.test(file.name)) {
@@ -92,17 +95,23 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
     setBestand({ naam: file.name, data: toBase64(await file.arrayBuffer()) });
   };
 
-  const stuur = async (toepassen: boolean) => {
+  const stuur = async (toepassen: boolean, bevestigd = false) => {
     if (!bestand) return;
     setBezig(true);
     setMelding(null);
+    setVervangVraag(null);
     try {
       const res = await fetch(withBasePath(`/api/aios/periode/${periodId}/geschiedenis`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bestand: bestand.data, toepassen }),
+        body: JSON.stringify({ bestand: bestand.data, toepassen, ...(bevestigd ? { bevestigd: true } : {}) }),
       });
       const data = await res.json().catch(() => null);
+      if (res.status === 409 && data?.error?.code === 'GESCHIEDENIS_BESTAAT') {
+        setPlan(data.error.plan);
+        setVervangVraag(data.error.message);
+        return;
+      }
       if (!res.ok || !data?.success) {
         if (data?.error?.plan) setPlan(data.error.plan);
         throw new Error(data?.error?.message || 'Inlezen is mislukt');
@@ -157,10 +166,29 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
               Controleren
             </button>
             {plan && plan.problemen.length === 0 && (
-              <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => stuur(true)}>
+              <button
+                type="button"
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={bezig}
+                onClick={() => stuur(true)}
+              >
                 Bewaren
               </button>
             )}
+          </div>
+        )}
+        {vervangVraag && (
+          <div className="rounded border-2 border-dashed border-neutral-900 p-3 text-sm space-y-2" role="alert" data-testid="aios-geschiedenis-vervangen">
+            <p className="font-medium">⚠ {vervangVraag}</p>
+            <p>Weet je het zeker?</p>
+            <div className="flex gap-2">
+              <button type="button" className="btn-primary disabled:opacity-50" disabled={bezig} onClick={() => stuur(true, true)}>
+                Ja, vervangen
+              </button>
+              <button type="button" className={knop} disabled={bezig} onClick={() => setVervangVraag(null)}>
+                Annuleren
+              </button>
+            </div>
           </div>
         )}
         {plan && plan.problemen.length > 0 && (

@@ -101,7 +101,8 @@ Volg hiervoor `docs/aios-testdraaiboek.md`. Dit zijn de punten die je niet mag
 overslaan:
 
 - [ ] **E1.** Geschiedenis van vóór de app inlezen en het kwartaal ervandaan
-  laten starten.
+  laten starten. Lees daarna een tweede bestand in met maar één AIOS. *Bewaren*
+  vraagt eerst om bevestiging en noemt wie daarna geen geschiedenis meer heeft.
 - [ ] **E2.** Voorkeuren van een AIOS op de eigen pagina (375 px breed), met
   blokken van nachten en een toelichting per dag.
 - [ ] **E3.** Voorkeurenoverzicht downloaden, aanpassen en terug importeren

@@ -71,6 +71,8 @@ export interface GeschiedenisRij {
 export interface GeschiedenisPlan {
   rijen: GeschiedenisRij[];
   problemen: string[];
+  /** Who has a history now and would have none after this file: not in it, or only a codenaam. */
+  vervalt: string[];
 }
 
 const getal = (cel: string | undefined): number | null => {
@@ -86,7 +88,7 @@ function plan(poolId: string, rows: string[][], regels?: number[]): { plan: Gesc
   const [kop, ...data] = rows;
   if (!kop || kop.length < KOLOMMEN.length || KOLOMMEN.some((k, i) => (kop[i] ?? '').trim() !== k.kop)) {
     return {
-      plan: { rijen: [], problemen: ['De kolommen kloppen niet. Gebruik het sjabloon van "Sjabloon downloaden" en laat de eerste rij staan.'] },
+      plan: { rijen: [], vervalt: [], problemen: ['De kolommen kloppen niet. Gebruik het sjabloon van "Sjabloon downloaden" en laat de eerste rij staan.'] },
       rijen: [],
     };
   }
@@ -140,6 +142,7 @@ function plan(poolId: string, rows: string[][], regels?: number[]): { plan: Gesc
   return {
     plan: {
       problemen,
+      vervalt: [],
       rijen: rijen.map((b) => ({
         codenaam: codenaam.get(b.person_id)!,
         punten: Math.round(beginstandPunten(b) * 10) / 10,
@@ -158,7 +161,12 @@ export type GeschiedenisUitkomst =
   | { ok: false; status: number; code: string; message: string; plan?: GeschiedenisPlan };
 
 /** `bestand`: the .xlsx as base64, as the panel sends it. */
-export function importeerAiosGeschiedenis(period: AiosUitnodigPeriode, bestand: unknown, toepassen: boolean): GeschiedenisUitkomst {
+export function importeerAiosGeschiedenis(
+  period: AiosUitnodigPeriode,
+  bestand: unknown,
+  toepassen: boolean,
+  bevestigd = false
+): GeschiedenisUitkomst {
   if (typeof bestand !== 'string' || bestand.trim() === '') {
     return { ok: false, status: 400, code: 'NO_FILE', message: 'Kies eerst een Excel-bestand.' };
   }
@@ -171,6 +179,11 @@ export function importeerAiosGeschiedenis(period: AiosUitnodigPeriode, bestand: 
     throw error;
   }
   const { plan: uitkomst, rijen } = plan(period.pool_id, rows, regels);
+  // Saving replaces the whole history of the pool: who has one now and is not (fully) in the file loses it.
+  const bestaand = laadBeginstand(period.pool_id);
+  const inBestand = new Set(rijen.map((b) => b.person_id));
+  const naamVan = new Map(poolLeden(period.pool_id).map((p) => [p.id, p.codenaam]));
+  uitkomst.vervalt = bestaand.filter((b) => !inBestand.has(b.person_id)).map((b) => naamVan.get(b.person_id) ?? b.person_id);
   if (!toepassen) return { ok: true, plan: uitkomst, toegepast: false };
   if (uitkomst.problemen.length > 0) {
     return {
@@ -178,6 +191,22 @@ export function importeerAiosGeschiedenis(period: AiosUitnodigPeriode, bestand: 
       status: 400,
       code: 'IMPORT_PROBLEMS',
       message: 'Het bestand heeft nog problemen. Er is niets veranderd. Los ze eerst op en controleer opnieuw.',
+      plan: uitkomst,
+    };
+  }
+  if (!bevestigd && bestaand.length > 0) {
+    const n = bestaand.length === 1 ? '1 AIOS' : `${bestaand.length} AIOS`;
+    const weg = uitkomst.vervalt.length;
+    return {
+      ok: false,
+      status: 409,
+      code: 'GESCHIEDENIS_BESTAAT',
+      message:
+        `Er staat al een geschiedenis voor ${n}. Bewaren vervangt die. ` +
+        (weg > 0
+          ? `${weg === 1 ? '1 AIOS staat' : `${weg} AIOS staan`} niet met cijfers in het bestand (${uitkomst.vervalt.slice(0, 5).join(', ')}${weg > 5 ? ' en anderen' : ''}) en ${weg === 1 ? 'heeft' : 'hebben'} daarna geen geschiedenis meer. `
+          : '') +
+        'Bevestig om door te gaan.',
       plan: uitkomst,
     };
   }
