@@ -617,10 +617,12 @@ for (const f of failedRequests) console.log('   ' + f);
 // and every 404 by message text - which also covered the favicon 404 this
 // project once had, and would have hidden any genuine failing request
 // behind the same two patterns.
-const unexpected = consoleErrors.filter((e) => !/\/api\/auth\/change-password/.test(e));
+// The second expected entry: removing a member that reaches a roster is answered 409 once (lib/membershipRooster.ts), then confirmed.
+const verwacht = (e) => /\/api\/auth\/change-password/.test(e) || /409.*\/api\/planner\/pool\/[^/]+\/members\/|\/api\/planner\/pool\/[^/]+\/members\/.*status of 409/.test(e);
+const unexpected = consoleErrors.filter((e) => !verwacht(e));
 rec('No unexpected page errors', unexpected.length === 0, unexpected.slice(0, 2).join(' | '));
 rec('The only >=400 is this script\'s own weak-password test',
-    failedRequests.every((f) => /change-password/.test(f)),
+    failedRequests.every((f) => /change-password/.test(f) || /409 DELETE \/api\/planner\/pool\/[^/]+\/members\//.test(f)),
     failedRequests.join(' | ') || 'none');
 
 // app/tab-icon/route.tsx generates the browser-tab icon, so the
