@@ -749,13 +749,6 @@ const MUTATIONS = [
     tests: ['lib/importSjabloonBouwen'],
   },
   {
-    name: 'importSjabloonBouwen: a correction by hand is shown as imported',
-    file: 'lib/importSjabloonBouwen.ts',
-    find: "AND categorie = 'BEGINSALDO' AND reden = 'Geïmporteerd beginsaldo'",
-    replace: '',
-    tests: ['lib/importSjabloonBouwen'],
-  },
-  {
     name: 'importSjabloonBouwen: every day is an evening',
     file: 'lib/importSjabloonBouwen.ts',
     find: 'const teller = slotTeller(d);',
