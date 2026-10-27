@@ -4,7 +4,7 @@
  * prior-assignments/page.tsx; POST .../import-csv checks them again).
  *
  * The header row is Datum, Week, Diensttype, Codenaam, as the roster
- * download writes it (/api/exports/assignments/[period-id]); only Datum,
+ * download and the sjabloon write it (/api/exports/assignments/[period-id]); only Datum,
  * Diensttype and Codenaam matter here, the week follows from the date.
  * Rows outside the carry-over window are counted and left out, so the
  * planner never has to cut the right week out of the file.
@@ -52,6 +52,8 @@ export function priorRowsInWindow(fileRows: string[][], range: [string, string])
       outOfRange++;
       return;
     }
+    // A row of the sjabloon nobody filled in is no assignment, and no mistake either.
+    if (!(codenaam ?? '').trim()) return;
     // A codenaam the CSV download guarded against formulas ('-Anna).
     rows.push({ datum, teller, codenaam: withoutFormulaGuard((codenaam || '').trim()) });
   });

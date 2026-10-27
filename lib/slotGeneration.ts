@@ -51,6 +51,11 @@ function getWeekendId(dateStr: string): string {
   return `${isoYear}-W${weekStr}-${dayOfWeek}`;
 }
 
+/** The counter a day's one slot belongs to: a feestdag first, then the weekend, else an evening. */
+export function slotTeller(slot: Pick<GeneratedSlot, 'is_feestdag' | 'weekend_id'>): 'FEESTDAG' | 'WEEKEND' | 'AVOND' {
+  return slot.is_feestdag ? 'FEESTDAG' : slot.weekend_id ? 'WEEKEND' : 'AVOND';
+}
+
 /**
  * Check if a date falls on Saturday or Sunday
  */

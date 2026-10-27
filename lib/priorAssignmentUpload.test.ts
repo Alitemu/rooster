@@ -33,8 +33,17 @@ describe('priorRowsInWindow', () => {
     expect(result.rows).toEqual([
       { datum: '2026-12-29', teller: 'AVOND', codenaam: '-Anna' },
       { datum: '2026-12-30', teller: 'FEESTDAG', codenaam: 'Bert' },
-      { datum: '2026-12-31', teller: 'AVOND', codenaam: '' },
     ]);
+  });
+
+  it('leaves the rows of the sjabloon nobody filled in, silently, and keeps the ones that are', () => {
+    const result = priorRowsInWindow(
+      [HEADER, ['2026-12-29', '53', 'Avond', ''], ['2026-12-30', '53', 'Avond', '   '], ['2026-12-31', '53', 'Avond'], ['2027-01-01', '53', 'Feestdag', 'A']],
+      RANGE
+    );
+    expect(result.rows).toEqual([{ datum: '2027-01-01', teller: 'FEESTDAG', codenaam: 'A' }]);
+    expect(result.warnings).toEqual([]);
+    expect(result.outOfRange).toBe(0);
   });
 
   it('names each row it leaves out and why', () => {

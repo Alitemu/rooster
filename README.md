@@ -542,6 +542,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.806.0:** de import van een oud saldo (stap *Saldi* van de wizard) en van *Eerdere toewijzingen* neemt alleen nog een Excel-bestand (.xlsx), in de opmaak van een sjabloon. Naast het bestandsveld staat de knop *Sjabloon downloaden (Excel)*. Het sjabloon van het saldo heeft een rij per medewerker die meedoet, het sjabloon van de eerdere toewijzingen een rij per dag van het overloopvenster met het diensttype erbij. Wat al ingevuld is, staat er al in. Een CSV of een Excel-bestand met andere kolommen wordt geweigerd voordat er een rij gelezen wordt, met een melding die de kolommen noemt. Het gedownloade rooster (Excel) kan nog steeds bij *Eerdere toewijzingen* terug. Voor de AIOS was dit al zo.
+
 **Vanaf versie 0.805.0:** een audit met 8 invalshoeken, de bevindingen die we samen bespraken zijn opgelost.
 - *Tweestapsverificatie weg:* de knop, het scherm, de controle bij het inloggen en de bibliotheken zijn uit de app gehaald, voor planners en beheerders van beide diensten. Inloggen kan met alleen het wachtwoord.
 - *Volgorde van periodes:* een periode kan pas een rooster krijgen of gepubliceerd worden als de periode ervoor gepubliceerd is (of in de prullenbak staat). Anders klopt het saldo niet. Genereren kan alleen vanuit gesloten (of opnieuw vanuit gegenereerd).

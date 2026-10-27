@@ -14,6 +14,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { priorRowsInWindow } from '@/lib/priorAssignmentUpload';
 import { readUploadedRows } from '@/lib/sheetUpload';
+import { EERDERE_KOP, kopFout } from '@/lib/importSjablonen';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { foutTekst } from '@/lib/foutTekst';
@@ -172,7 +173,7 @@ export default function PriorAssignmentsPage() {
     }
   };
 
-  // The roster download itself (.xlsx since 0.20.0) or a CSV, read as
+  // The sjabloon or the roster download (.xlsx), read as
   // lib/priorAssignmentUpload.ts describes.
   const handleCsvFile = async (file: File) => {
     if (!data) return;
@@ -181,6 +182,12 @@ export default function PriorAssignmentsPage() {
       rows = await readUploadedRows(file);
     } catch (err) {
       setError(foutTekst(err, 'Het bestand kon niet worden gelezen.'));
+      return;
+    }
+    const kopProbleem = kopFout(rows, EERDERE_KOP);
+    if (kopProbleem) {
+      setCsvRows(null);
+      setError(kopProbleem);
       return;
     }
     setError(null);
@@ -305,15 +312,22 @@ export default function PriorAssignmentsPage() {
       <div className="card p-4">
         <p className="text-sm font-medium mb-1">Of: een bestand uploaden</p>
         <p className="text-xs text-neutral-500 mb-3">
-          Gebruik idealiter een eerder gedownload &quot;Rooster downloaden (Excel)&quot;-bestand
-          (kolommen Datum, Week, Diensttype, Codenaam). Een CSV met dezelfde kolommen kan ook. Regels buiten het overloopvenster
+          Download het sjabloon (Excel), vul bij elke dag de codenaam in van wie die dienst deed en upload het bestand weer.
+          Een eerder gedownload &quot;Rooster downloaden (Excel)&quot;-bestand kan ook: dat heeft dezelfde kolommen (Datum,
+          Week, Diensttype, Codenaam). Rijen zonder codenaam worden overgeslagen. Regels buiten het overloopvenster
           hierboven ({data.date_range[0]} t/m {data.date_range[1]}) worden automatisch genegeerd.
-          Je hoeft dus niet zelf de juiste week eruit te knippen.
         </p>
+        <a
+          href={withBasePath(`/api/periods/${periodId}/prior-assignments/sjabloon`)}
+          className="inline-block mb-3 px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 text-sm"
+        >
+          Sjabloon downloaden (Excel)
+        </a>
+        <br />
         <input
           type="file"
-          accept=".xlsx,.csv"
-          aria-label="Rooster als Excel- of CSV-bestand"
+          accept=".xlsx"
+          aria-label="Rooster als Excel-bestand"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleCsvFile(file);

@@ -54,6 +54,12 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   toewijzen.
 - [ ] **C3.** Vooraf invullen en eerdere toewijzingen: vul een paar in en kijk
   of ze in het rooster terugkomen.
+- [ ] **C3a.** Oud saldo (wizard, stap *Saldi*) en *Eerdere toewijzingen*:
+  klik op *Sjabloon downloaden (Excel)*, vul het in en upload het weer. Je ziet:
+  een samenvatting van wat er geïmporteerd wordt. Een CSV of een Excel-bestand
+  met andere kolommen wordt geweigerd met een Nederlandse melding die de goede
+  kolommen noemt. Het gedownloade rooster (Excel) kan bij *Eerdere toewijzingen*
+  terug.
 - [ ] **C4.** *Exporteren & communicatie* en dan *Uitnodigingen en
   herinneringen*: download de uitnodigingen. Je ziet: een bestand met per
   persoon een link.

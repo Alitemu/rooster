@@ -21,6 +21,7 @@ import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
 import { verschuifDagen, verschuif } from './demoKalender.mjs';
+import { buildXlsx } from './buildXlsx.mjs';
 
 // The seeded calendar moves along with the real date (scripts/demoKalender.mjs).
 const SHIFT = verschuifDagen();
@@ -301,20 +302,26 @@ rec(
   `type=${rosterDownload.type} toewijzingen=${assignmentTotal}`
 );
 
-const csvContent = [
-  'Datum,Week,Diensttype,Codenaam',
-  `"${rangeStart}",1,"Avond","Persoon-01"`,
-  `"1999-01-01",1,"Avond","Persoon-02"`, // well before the window - must be ignored
-].join('\n');
+// The file field takes a workbook only (lib/sheetUpload.ts), in the layout of the sjabloon.
+const sjabloonRows = [
+  ['Datum', 'Week', 'Diensttype', 'Codenaam'],
+  [rangeStart, 1, 'Avond', 'Persoon-01'],
+  ['1999-01-01', 1, 'Avond', 'Persoon-02'], // well before the window - must be ignored
+  [rangeStart, 1, 'Avond', ''], // a row of the sjabloon nobody filled in - left out without a word
+];
 const priorCountBefore = db.prepare('SELECT COUNT(*) c FROM dienstrooster_prior_assignment WHERE period_id = ?').get(period.id).c;
 await page.setInputFiles('input[type="file"]', {
   name: 'overloop.csv',
   mimeType: 'text/csv',
-  buffer: Buffer.from(csvContent),
+  buffer: Buffer.from('Datum,Week,Diensttype,Codenaam\n2000-01-01,1,Avond,A'),
 });
+await page.waitForTimeout(400);
+rec('A CSV is refused with the way to the sjabloon', await page.locator('text=Alleen Excel-bestanden (.xlsx) kunnen worden ingelezen').isVisible().catch(() => false));
+rec('The sjabloon to download is there', await page.locator('a:has-text("Sjabloon downloaden (Excel)")').isVisible().catch(() => false));
+await page.setInputFiles('input[type="file"]', { name: 'overloop.xlsx', mimeType: XLSX_TYPE, buffer: buildXlsx(sjabloonRows) });
 await page.waitForTimeout(500);
 rec(
-  'Uploading a CSV previews only the row(s) inside the carry-over window',
+  'Uploading a workbook of the sjabloon\'s layout previews only the row(s) inside the carry-over window',
   await page.locator('text=1 regel binnen het overloopvenster gevonden, 1 daarbuiten genegeerd').isVisible().catch(() => false)
 );
 await page.click('button:has-text("regel importeren")');

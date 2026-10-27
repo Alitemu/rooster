@@ -136,20 +136,26 @@ web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
 to commit SHAs.
 
 **Uploads** (the wizard's beginsaldi, "Eerdere toewijzingen"): an .xlsx
-or a CSV (lib/sheetUpload.ts readUploadedRows). A workbook is read by the
-server, POST /api/planner/read-workbook (planner only, the same reader as
-the preferences import, writes nothing), and the rows come back to the
-page; "Eerdere toewijzingen" previews them with
-lib/priorAssignmentUpload.ts priorRowsInWindow. The roster download is a
-workbook since 0.20.0, and the import that reads it back took CSV only
-(read-workbook/route.test.ts: download, upload, import). A date cell
-arrives as Excel's day number (lib/isoDate.ts parseSheetDate, also text
-dates). lib/csv.ts parseCsv takes commas or semicolons, whichever the
-header line uses, and drops a byte order mark - a Dutch Excel saves "CSV"
-with semicolons, and every line became one cell (audit 12). The "Eerdere
-toewijzingen" import also reads d-m-yyyy dates and a codenaam with the
-formula-guard apostrophe (withoutFormulaGuard): the old CSV roster export
-saved again by a Dutch Excel.
+only since 0.806.0 (lib/sheetUpload.ts readUploadedRows refuses anything
+else in Dutch, ONLY_XLSX), in the layout of a sjabloon that the page offers
+to download next to the file field: GET /api/planner/period/[id]/import-
+balances/sjabloon (a row per person who takes part, an earlier import
+filled in) and GET /api/periods/[id]/prior-assignments/sjabloon (a row per
+day of the carry-over window with its diensttype, who is entered already
+filled in); lib/importSjabloonBouwen.ts builds them, lib/importSjablonen.ts
+holds their columns and `kopFout`, which refuses a first row that is not the
+sjabloon's before a row is read. The roster download has the same four
+columns as the "Eerdere toewijzingen" sjabloon, so it goes in as it is; an
+empty codenaam there is a row nobody filled in and is left out silently
+(priorRowsInWindow). The AIOS has its own sjabloon for its history
+(lib/aiosGeschiedenis.ts). A workbook is read by the server,
+POST /api/planner/read-workbook (planner only, the same reader as the
+preferences import, writes nothing), and the rows come back to the page;
+"Eerdere toewijzingen" previews them with lib/priorAssignmentUpload.ts
+priorRowsInWindow. A date cell arrives as Excel's day number
+(lib/isoDate.ts parseSheetDate, also text dates). lib/csv.ts parseCsv stays
+for the other CSV readers; these two imports no longer take a CSV (a re-saved
+CSV's separator and encoding depend on the machine).
 
 **Downloads:** every download is a one-sheet workbook (.xlsx, 0.20.0):
 rooster, statusrapport, voorkeurenoverzicht, uitnodigingen,

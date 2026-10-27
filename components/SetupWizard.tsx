@@ -23,6 +23,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { readUploadedRows } from '@/lib/sheetUpload';
+import { kopFout, SALDO_KOP } from '@/lib/importSjablonen';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { periodRangeProblem } from '@/lib/isoDate';
@@ -665,11 +666,17 @@ export function SetupWizard({ period, onComplete }: Props) {
   const handleBalancesFile = async (file: File) => {
     let fileRows: string[][];
     try {
-      // An Excel workbook or a CSV (lib/sheetUpload.ts).
+      // An Excel workbook (lib/sheetUpload.ts), in the layout of the sjabloon.
       fileRows = await readUploadedRows(file);
     } catch (err) {
       setBalanceRows([]);
       setBalanceParseWarnings([foutTekst(err, 'Het bestand kon niet worden gelezen.')]);
+      return;
+    }
+    const kopProbleem = kopFout(fileRows, SALDO_KOP);
+    if (kopProbleem) {
+      setBalanceRows([]);
+      setBalanceParseWarnings([kopProbleem]);
       return;
     }
     const [, ...dataLines] = fileRows; // skip header row
@@ -1552,9 +1559,19 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'balances' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Upload een Excel- of CSV-bestand met beginsaldi uit de vorige periode: hoeveel diensten iemand
-              per diensttype meer of minder heeft gedraaid dan het eigen streefaantal. Formaat:
+              Beginsaldi uit de vorige periode: hoeveel diensten iemand per diensttype meer of minder moet krijgen dan het
+              eigen streefaantal. Download het sjabloon, vul de twee kolommen in en upload het Excel-bestand weer. Er staat
+              een rij voor iedereen die meedoet. Een getal met min-teken (-1) betekent 1 dienst minder in deze periode, een
+              getal zonder teken (2) betekent 2 diensten extra. Een leeg vakje telt als 0.
             </p>
+            {period?.id && (
+              <a
+                href={withBasePath(`/api/planner/period/${period.id}/import-balances/sjabloon`)}
+                className="inline-block px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+              >
+                Sjabloon downloaden (Excel)
+              </a>
+            )}
             {/* Audit 10: a planner importing the saldo of a period the app
                 rostered itself counted it twice, once by hand and once
                 through the automatic overloop. */}
@@ -1562,13 +1579,6 @@ export function SetupWizard({ period, onComplete }: Props) {
               Alleen nodig voor de eerste periode die je in deze app roostert. Is de vorige periode hier
               gepubliceerd, dan neemt de app het saldo daaruit bij het openen vanzelf mee. Een import telt
               daar nog eens bij op.
-            </div>
-            <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
-              codenaam,AVOND_delta,WEEKEND_delta
-              <br />
-              Persoon-01,-1,0
-              <br />
-              Persoon-02,0,+2
             </div>
             <p className="text-xs text-neutral-500 italic">
               Feestdagdiensten horen hier niet bij. Hoeveel iemand er naar verhouding heeft gehad,
@@ -1580,7 +1590,8 @@ export function SetupWizard({ period, onComplete }: Props) {
               <p className="text-sm text-neutral-600 mb-2">Sleep een bestand hierheen of klik om te selecteren</p>
               <input
                 type="file"
-                accept=".xlsx,.csv"
+                accept=".xlsx"
+                aria-label="Beginsaldo als Excel-bestand"
                 className="w-full"
                 onChange={(e) => e.target.files?.[0] && handleBalancesFile(e.target.files[0])}
               />
