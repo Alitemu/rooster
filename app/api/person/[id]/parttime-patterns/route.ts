@@ -60,7 +60,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!person) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

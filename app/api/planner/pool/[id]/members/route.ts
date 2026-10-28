@@ -159,7 +159,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!pool) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'POOL_NOT_FOUND', message: `Pool ${poolId} niet gevonden` },
+        error: { code: 'POOL_NOT_FOUND', message: 'Pool niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

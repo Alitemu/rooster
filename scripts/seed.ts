@@ -1700,9 +1700,9 @@ async function seed() {
     if (adminAdded) logAdminAdded();
     if (setupToken) {
       console.log(
-        `  - Setup-token voor /planner/login's eerste-keer-formulier: ${setupToken}\n` +
-          `    (nodig om via de interactieve login-pagina zelf een wachtwoord in te stellen -\n` +
-          `    alleen hier in de log zichtbaar, nooit over HTTP. Voorkomt dat iemand anders dan\n` +
+        `  - Installatiecode voor het eerste-keer-formulier op /planner/login: ${setupToken}\n` +
+          `    (nodig om via de inlogpagina zelf een wachtwoord in te stellen. Alleen\n` +
+          `    hier in de log zichtbaar, nooit over HTTP. Voorkomt dat iemand anders dan\n` +
           `    jij het beheerdersaccount claimt voordat jij dat doet.)`
       );
     }

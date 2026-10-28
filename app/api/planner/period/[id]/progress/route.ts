@@ -36,7 +36,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
     // period is gone". Same 404 the other planner views give.
     if (!db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(periodId)) {
       return NextResponse.json(
-        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` } },
+        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' } },
         { status: 404 }
       );
     }

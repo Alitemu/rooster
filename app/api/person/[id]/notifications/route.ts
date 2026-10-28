@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 
     if (!person) {
       return NextResponse.json(
-        { success: false, error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${personId} niet gevonden` } },
+        { success: false, error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' } },
         { status: 404 }
       );
     }

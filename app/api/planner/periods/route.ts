@@ -164,7 +164,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!poolExists || !staffMayAccessPool(auth!, body.pool_id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'POOL_NOT_FOUND', message: `Pool ${body.pool_id} niet gevonden` },
+        error: { code: 'POOL_NOT_FOUND', message: 'Pool niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

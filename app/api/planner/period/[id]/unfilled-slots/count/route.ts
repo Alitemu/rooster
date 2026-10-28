@@ -38,7 +38,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

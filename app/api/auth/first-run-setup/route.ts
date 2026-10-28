@@ -59,7 +59,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!verifySetupToken(setup_token)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_SETUP_TOKEN', message: 'Ongeldige of ontbrekende setup-token' },
+        error: { code: 'INVALID_SETUP_TOKEN', message: 'Ongeldige of ontbrekende installatiecode' },
       };
       return NextResponse.json(response, { status: 403 });
     }

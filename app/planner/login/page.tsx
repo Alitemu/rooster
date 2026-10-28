@@ -116,7 +116,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
           <form onSubmit={handleSubmit}>
             <div className="form-group mb-4">
               <label className="label" htmlFor="setup-token">
-                Setup-token
+                Installatiecode
               </label>
               <input
                 id="setup-token"

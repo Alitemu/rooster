@@ -49,7 +49,7 @@ export async function PATCH(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -64,7 +64,7 @@ export async function PATCH(
     if (!absence) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'ABSENCE_NOT_FOUND', message: `Afwezigheid ${absenceId} niet gevonden` },
+        error: { code: 'ABSENCE_NOT_FOUND', message: 'Afwezigheid niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -203,7 +203,7 @@ export async function DELETE(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -219,7 +219,7 @@ export async function DELETE(
     if (!absence) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'ABSENCE_NOT_FOUND', message: `Afwezigheid ${absenceId} niet gevonden` },
+        error: { code: 'ABSENCE_NOT_FOUND', message: 'Afwezigheid niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

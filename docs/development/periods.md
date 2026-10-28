@@ -45,6 +45,10 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   which no code did.
 - **Freeze ruleset** when period opens (no retroactive rule changes)
 - **Row versioning** for optimistic concurrency on mutable periods
+- **The AIOS's deadline** (0.809.0) is guarded by the deadline the planner saw (`was`), not by row_version: its pages
+  never carry the row_version, and the deadline is what two people overwrite. A different `was` answers 409
+  `DEADLINE_CONFLICT`; the UPDATE itself checks the deadline it read, so a change in between is caught too
+  (lib/aiosStatus.ts, app/api/aios/aiosApart.test.ts).
 - **Back to OPEN** (`POST /api/periods/[id]/reopen`, "Terug naar open" in
   the period header, two clicks): from GESLOTEN or GEGENEREERD. From
   GEGENEREERD the SOLVER rows and the pending undo go; MANUAL/OVERRIDE rows

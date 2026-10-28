@@ -44,7 +44,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     // swap requests" rather than "no such person".
     if (!db.prepare('SELECT 1 FROM dienstrooster_person WHERE id = ?').get(personId)) {
       return NextResponse.json(
-        { success: false, error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${personId} niet gevonden` } },
+        { success: false, error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' } },
         { status: 404 }
       );
     }

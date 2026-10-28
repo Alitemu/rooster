@@ -154,7 +154,7 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
             <button
               type="button"
               disabled={bezig || !deadline || deadline === alsInvoer(period.deadline)}
-              onClick={() => doe(withBasePath(`/api/aios/periode/${period.id}/deadline`), 'PATCH', { deadline }, 'Aanpassen van de deadline is mislukt', () => 'De deadline is aangepast.')}
+              onClick={() => doe(withBasePath(`/api/aios/periode/${period.id}/deadline`), 'PATCH', { deadline, was: period.deadline }, 'Aanpassen van de deadline is mislukt', () => 'De deadline is aangepast.')}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50"
             >
               Opslaan

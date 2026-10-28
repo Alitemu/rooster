@@ -221,7 +221,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
       const res = await fetch(withBasePath(`/api/aios/periode/${periodId}/deadline`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deadline: nieuweDeadline }),
+        body: JSON.stringify({ deadline: nieuweDeadline, was: deadline }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {

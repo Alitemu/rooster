@@ -99,6 +99,8 @@ describe('first-run-setup', () => {
     clearSetupToken();
     const res = await claim({ codenaam: `claim-${tag}-d`, password: STERK, setup_token: 'wat-dan-ook' });
     expect(res.status).toBe(403);
+    // In Dutch, with the word on the login page (not "setup-token").
+    expect((await res.json()).error.message).toBe('Ongeldige of ontbrekende installatiecode');
     expect(hashVan(id)).toBeNull();
   });
 

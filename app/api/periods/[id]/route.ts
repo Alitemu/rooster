@@ -102,7 +102,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         success: false,
         error: {
           code: 'PERIOD_NOT_FOUND',
-          message: `Periode met ID ${id} niet gevonden`,
+          message: 'Periode niet gevonden',
         },
       };
       return NextResponse.json(response, { status: 404 });
@@ -120,7 +120,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
           success: false,
           error: {
             code: 'PERIOD_NOT_FOUND',
-            message: `Periode met ID ${id} niet gevonden`,
+            message: 'Periode niet gevonden',
           },
         };
         return NextResponse.json(response, { status: 404 });
