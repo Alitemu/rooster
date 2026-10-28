@@ -1,3 +1,5 @@
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
@@ -15,7 +17,6 @@ import { POST as intrekken } from './periode/[id]/publicatie-intrekken/route';
 import { POST as roosterMail } from './periode/[id]/rooster-mail/route';
 import { claimAiosVerzending } from '@/lib/aiosInFlight';
 import { GET as downloadRooster } from './periode/[id]/download-rooster/route';
-import { GET as downloadPerAios } from './periode/[id]/download-per-aios/route';
 import { POST as wijzigen } from './periode/[id]/rooster/wijzigen/route';
 import { POST as genereren } from './periode/[id]/genereren/route';
 import { GET as mijnRooster } from './deelnemer/[id]/periode/[periodId]/rooster/route';
@@ -181,15 +182,10 @@ describe('before publishing', () => {
   it('no workbook before there is a roster', async () => {
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN' WHERE id = ?`).run(w.period);
     try {
-      for (const [route, pad] of [
-        [downloadRooster, 'download-rooster'],
-        [downloadPerAios, 'download-per-aios'],
-      ] as const) {
-        const res = await route(req(`${w.period}/${pad}`), ctx(w.period));
-        expect(res.status).toBe(409);
-        // Not "nog niet definitief": there is no roster to be definitief.
-        expect((await res.json()).error.code).toBe('INVALID_STATUS');
-      }
+      const res = await downloadRooster(req(`${w.period}/download-rooster`), ctx(w.period));
+      expect(res.status).toBe(409);
+      // Not "nog niet definitief": there is no roster to be definitief.
+      expect((await res.json()).error.code).toBe('INVALID_STATUS');
       const r = await doe(publiceren, 'publiceren', { bevestigd: true });
       expect(r.status).toBe(409);
       expect(r.json.error.message).toMatch(/^Publiceren kan als het rooster gemaakt is/);
@@ -244,14 +240,9 @@ describe('voorlopig', () => {
   });
 
   it('the Excel for the roosterbureau is refused: a voorlopig roster goes nowhere outside the planner\'s page', async () => {
-    for (const [route, pad] of [
-      [downloadRooster, 'download-rooster'],
-      [downloadPerAios, 'download-per-aios'],
-    ] as const) {
-      const res = await route(req(`${w.period}/${pad}`), ctx(w.period));
-      expect(res.status).toBe(409);
-      expect((await res.json()).error.code).toBe('NOT_DEFINITIEF');
-    }
+    const res = await downloadRooster(req(`${w.period}/download-rooster`), ctx(w.period));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('NOT_DEFINITIEF');
   });
 
   it('a change by hand needs a reason now, and no new roster', async () => {
@@ -347,13 +338,8 @@ describe('the roster as Excel', () => {
     expect(eerste[6]).toBe(`aiospub-y-${tag}`);
   });
 
-  it('per AIOS: the points and the compensation days', async () => {
-    const [kop, ...rijen] = await blad(downloadPerAios);
-    expect(kop[0]).toBe('AIOS');
-    expect(kop[kop.length - 1]).toBe('Compensatiedagen');
-    const x = rijen.find((r) => r[0] === `aiospub-x-${tag}`)!;
-    // The night block wo t/m vr: Saturday and Sunday off.
-    expect(x[x.length - 1]).toBe('za 10 jul, zo 11 jul');
+  it('has no download of compensation days: the roosterbureau picks those itself, before or after a dienst', () => {
+    expect(existsSync(join(process.cwd(), 'app/api/aios/periode/[id]/download-per-aios'))).toBe(false);
   });
 });
 

@@ -145,8 +145,8 @@ Reken op ongeveer een uur. Het rooster maken duurt zelf een paar minuten.
       ruil onder het tabblad *Ruilverzoeken* als goedgekeurd.
 20. **Definitief maken.** Klik bij de planner op *Definitief maken* en daarna
     op *Ja, definitief maken*.
-    - Download *Rooster per dag* (met *Fellow* op de nacht voor de toets) en
-      *Per AIOS met compensatiedagen*.
+    - Download *Rooster per dag* (met *Fellow* op de nacht voor de toets).
+      Er is geen lijst met compensatiedagen: het roosterbureau kiest die zelf.
     - De voortgangstoets ligt nu vast: wijzigen kan niet meer.
 
 ## Afronden

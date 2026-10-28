@@ -447,7 +447,7 @@ eigen pagina. Pas daarna aan wat de AIOS melden: met de hand, met een reden.
 Met *Definitief maken* krijgt iedereen de definitieve diensten met wat er
 veranderde. *Publicatie intrekken* zet het rooster terug, zonder mail. Voor
 het roosterbureau, de opleider en de afdeling download je *Rooster per dag*
-en *Per AIOS met compensatiedagen* als Excelbestand.
+als Excelbestand.
 
 **Vanaf versie 0.79.0** schuift een tekort of overschot van een AIOS door naar
 het volgende kwartaal, zoals bij de achterwacht: wie minder punten deed dan het
@@ -541,6 +541,8 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 0.808.0:** de knop *Per AIOS met compensatiedagen* is weg, en met hem het Excelbestand met een kolom compensatiedagen. Het roosterbureau kiest die dagen zelf, voor of na een dienst, aan de hand van de drukte en wie er die dag nog meer afwezig is. Een lijst met compensatiedagen uit de app paste daar niet bij. *Rooster per dag* blijft. Het aantal diensten, de punten en het dienstpercentage per AIOS staan op de pagina van de planner, in de tabel *Dienstdoende*. De regels voor rust en compensatiedagen in de solver zijn niet veranderd.
 
 **Vanaf versie 0.807.0:** staat er voor iemand al een beginsaldo, dan waarschuwt de wizard (stap *Saldi*) eerst voordat een nieuw bestand het overschrijft. De melding noemt de namen en zegt dat ook een leeg vakje telt (als 0) en dat wie niet in het bestand staat zijn saldo houdt. Pas na *Ja, overschrijven* wordt het bestand meegenomen. De server vraagt hetzelfde als iemand de import buiten de wizard aanroept. Bij de AIOS (*Geschiedenis van vóór de app*) vervangt Bewaren de hele geschiedenis van de pool. Staat er al een geschiedenis, dan vraagt Bewaren eerst om bevestiging en noemt de AIOS die daarna geen geschiedenis meer hebben (wie niet met cijfers in het bestand staat).
 
@@ -725,7 +727,7 @@ het met de punaise vastzet.
   zonder tekst achter een keuze gaat de toelichting van die dag weg.
 - *Voorlopig en definitief:* de statusbalk van de AIOS zegt *Voorlopig
   gepubliceerd* of *Definitief*. De Excel voor het roosterbureau (*Rooster per
-  dag* en *Per AIOS*) bestaat pas bij een definitief rooster, en het
+  dag*) bestaat pas bij een definitief rooster, en het
   roosterbureau krijgt alleen een bericht over een ruil in een definitief
   rooster. Bij een voorlopig rooster krijgt alleen de planner dat bericht.
 

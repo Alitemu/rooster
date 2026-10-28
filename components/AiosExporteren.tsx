@@ -87,14 +87,9 @@ export function AiosExporteren({ period, stand, onChanged }: Props) {
         <AiosVoorkeurenImportButton periodId={period.id} periodStatus={period.status} onImported={() => { setSleutel((k) => k + 1); onChanged(); }} />
         {/* Only meaningful once there is a roster. */}
         {heeftRooster && (
-          <>
-            <a href={link('download-rooster')} className={KNOP}>
-              📅 Rooster downloaden (Excel)
-            </a>
-            <a href={link('download-per-aios')} className={KNOP}>
-              📅 Per AIOS downloaden (Excel)
-            </a>
-          </>
+          <a href={link('download-rooster')} className={KNOP}>
+            📅 Rooster downloaden (Excel)
+          </a>
         )}
       </div>
       {stand && !stand.mail_ingesteld && (

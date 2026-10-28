@@ -200,9 +200,6 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
               <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-rooster`)}>
                 Rooster per dag
               </a>
-              <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-per-aios`)}>
-                Per AIOS met compensatiedagen
-              </a>
             </div>
           </>
         ) : (

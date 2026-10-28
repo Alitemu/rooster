@@ -4,14 +4,14 @@ import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
-import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
+import { aiosPersoonlijkeLink, aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { laadAiosRooster } from '@/lib/aiosRooster';
 import { readFirstSheet } from '@/lib/xlsx';
 import { excelSerialToDate } from '@/lib/isoDate';
 import { startSmtpSink, configureSmtp, clearSmtpConfig, verzendlijstPayload, type SmtpSink } from '@/tests/smtpSink';
 import { POST as publiceren } from './periode/[id]/publiceren/route';
 import { POST as definitief } from './periode/[id]/definitief-maken/route';
 import { GET as downloadRooster } from './periode/[id]/download-rooster/route';
-import { GET as downloadPerAios } from './periode/[id]/download-per-aios/route';
 import { POST as wijzigen } from './periode/[id]/rooster/wijzigen/route';
 import { GET as mijnRooster } from './deelnemer/[id]/periode/[periodId]/rooster/route';
 import { buildWorld, deleteRowsAfter, insert, now, personCookie, rowidSnapshot, staff, staffCookie, tag } from '../../../tests/fixtures/dienstWorlds';
@@ -136,15 +136,15 @@ async function controleerExcel() {
     const datum = excelSerialToDate(Number(r[0]));
     for (const k of [4, 5, 6, 7]) expect(r[k] || undefined, `${datum} kolom ${k}`).toBe(verwacht.get(`${datum}|${k}`));
   }
-  const perAios = await downloadPerAios(req(`${w.period}/download`), ctx(w.period));
-  const [kop, ...aios] = readFirstSheet(Buffer.from(await perAios.arrayBuffer()));
+  // The counts on the planner's page (what the table "Dienstdoende" shows) follow a change by hand too.
+  const perAios = laadAiosRooster(aiosUitnodigPeriode(w.period)!).per_aios;
   for (const n of ['x', 'y', 'z']) {
-    const rij = aios.find((r) => r[0] === naam(n))!;
+    const rij = perAios.find((r) => r.codenaam === naam(n))!;
     const mijnDiensten = eigen(naam(n));
-    const tel = (...codes: string[]) => String(mijnDiensten.filter((d) => codes.includes(d[1])).length);
-    expect(String(rij[kop.indexOf('Nachten')]), `nachten van ${n}`).toBe(tel('ND'));
-    expect(String(rij[kop.indexOf('Avonden')]), `avonden van ${n}`).toBe(tel('AD', 'ADW'));
-    expect(String(rij[kop.indexOf('Uitloopdiensten')]), `uitloopdiensten van ${n}`).toBe(tel('UD'));
+    const tel = (...codes: string[]) => mijnDiensten.filter((d) => codes.includes(d[1])).length;
+    expect(rij.nachten, `nachten van ${n}`).toBe(tel('ND'));
+    expect(rij.avonden, `avonden van ${n}`).toBe(tel('AD', 'ADW'));
+    expect(rij.uitloopdiensten, `uitloopdiensten van ${n}`).toBe(tel('UD'));
   }
 }
 

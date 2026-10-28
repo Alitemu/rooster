@@ -5083,13 +5083,6 @@ const MUTATIONS = [
     tests: ["app/api/aios/aiosPublicatie"],
   },
   {
-    name: "aios definitief: the roosterbureau's Excel per AIOS of a voorlopig roster",
-    file: "app/api/aios/periode/[id]/download-per-aios/route.ts",
-    find: "    if (!aiosIsDefinitief(period.id)) return aiosFout(409, 'NOT_DEFINITIEF', NOG_NIET_DEFINITIEF);\n",
-    replace: "",
-    tests: ["app/api/aios/aiosPublicatie"],
-  },
-  {
     name: "aios import: a column without a name but with data passed over",
     file: "lib/aiosVoorkeurImport.ts",
     find: "if (rows.slice(1).some((rij) => (rij[kol] ?? '').trim() !== '')) {",

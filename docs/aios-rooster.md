@@ -48,9 +48,10 @@ Codenamen: aios01, aios02 enzovoort.
   pagina met de melding dat het voorlopig is. De planner corrigeert daarna met
   de hand, met een reden, en maakt het rooster definitief: iedereen krijgt de
   definitieve diensten met wat er voor hen veranderde. *Publicatie intrekken*
-  zet het rooster terug naar gemaakt, zonder mail. Twee Excelbestanden: het
-  rooster per dag, en per AIOS de punten, het dienstpercentage, de diensten
-  per soort en de compensatiedagen die het roosterbureau inplant.
+  zet het rooster terug naar gemaakt, zonder mail. Eén Excelbestand: het
+  rooster per dag. Een bestand per AIOS met de compensatiedagen was er tot
+  0.807.1 ook, en is in 0.808.0 weggehaald: het roosterbureau kiest die dagen
+  zelf, voor of na een dienst, naar de drukte en de afwezigheid van anderen.
 
 ## Diensten
 

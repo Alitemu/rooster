@@ -266,8 +266,10 @@ function eerdereDiensten(
 
 /**
  * Per AIOS the days their diensten give them off (rule 7's table, moved off
- * a feestdag by rule 8), by date: for the roosterbureau, which plans them
- * (lib/aiosRoosterDownloads.ts).
+ * a feestdag by rule 8), by date. The app shows these nowhere: the
+ * roosterbureau plans the compensation days itself, before or after a
+ * dienst (there is no download of them any more). The tests read rule 7's
+ * table through this.
  */
 export function aiosCompensatiedagen(invoer: Invoer, toewijzingen: ReadonlyMap<string, string>): Map<string, string[]> {
   const feestdagen = new Set(invoer.feestdagen);
