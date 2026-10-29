@@ -542,6 +542,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.809.1:** onderhoud zonder zichtbare wijziging. Het genereren van het rooster van de achterwacht gebruikt in de code nu overal echte types in plaats van `any`, zodat de controle vooraf een tikfout of een gewijzigde kolom voortaan vangt. Vergeleken is dat de JavaScript die draait voor en na precies gelijk is.
+
 **Vanaf versie 0.809.0:** vier punten uit de audit. Wijzigen twee mensen tegelijk de deadline van een AIOS-periode (de planner en de beheerder), dan overschrijft de laatste de eerste niet meer stil: wie een verouderde deadline op het scherm had, krijgt de melding dat de deadline intussen is aangepast en laadt de pagina opnieuw. Foutmeldingen noemen geen interne nummers meer ("Persoon niet gevonden" in plaats van een lange code). Op de inlogpagina heet de code voor de eerste installatie nu *Installatiecode*. Twee oude testbestanden die alleen hun eigen tabellen testten zijn weg.
 
 **Vanaf versie 0.808.0:** de knop *Per AIOS met compensatiedagen* is weg, en met hem het Excelbestand met een kolom compensatiedagen. Het roosterbureau kiest die dagen zelf, voor of na een dienst, aan de hand van de drukte en wie er die dag nog meer afwezig is. Een lijst met compensatiedagen uit de app paste daar niet bij. *Rooster per dag* blijft. Het aantal diensten, de punten en het dienstpercentage per AIOS staan op de pagina van de planner, in de tabel *Dienstdoende*. De regels voor rust en compensatiedagen in de solver zijn niet veranderd.
