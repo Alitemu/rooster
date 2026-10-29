@@ -29,6 +29,7 @@ const EXEMPT: Record<string, string> = {
   'planner/period/[id]/ledger-corrections': 'each ledger row carries aangemaakt_door and reden',
   'planner/period/[id]/import-balances': 'each ledger row carries aangemaakt_door and reden',
   'planner/read-workbook': 'reads an uploaded workbook and returns its rows, writes nothing',
+  'admin/back-up/versturen': 'mails a backup; what went out is kept next to the backups, not in the database',
 };
 
 const apiRoot = path.join(process.cwd(), 'app/api');

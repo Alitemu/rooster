@@ -111,6 +111,42 @@ holiday history), no period (the
 production start and compose's default; true adds the demo data); a rerun
 on a seeded database only upgrades the schema.
 
+**Backup by mail and restore (0.900.0):** the daily copy dies with the
+server, and IT backs nothing up. So lib/dbBackupMail.ts mails an encrypted
+copy once a day (hourly scheduler, `back-up-mail`) to the beheerder's
+address, when the database changed or HARTSLAG_DAGEN (7) passed; a flow puts
+it in OneDrive (docs/back-up-power-automate.md). Details that cost time:
+- The file (lib/dbBackupBestand.ts): gzip, then AES-256-GCM under scrypt
+  (2^15) of the beheerder's backup password, the JSON header as additional
+  data. Not the session secret: a backup must open on a new server. The
+  header's scrypt cost is capped before any work (a crafted file must not tie
+  up the server). Gmail's Sent folder keeps every one, hence the encryption.
+- "Changed" is the sha256 of a `VACUUM INTO` copy: unchanged data gives the
+  same bytes (tried). What went out is kept in `backups/mail-status.json`, not
+  in the database: a status row would change the database every day.
+- Restore (lib/dbBackupTerugzetten.ts) while the app runs: SQLite's backup API
+  from the decrypted file into the live file (`backup(..., progress: () =>
+  2^31-1)`, one step, the destination locked throughout). Every open
+  connection sees the restored data, WAL stays (tried before building it).
+  Refused while a generation runs (either dienst), from a newer version, when
+  integrity_check fails, without the tables, or without an active ADMIN with
+  a password (a restore must not lock everyone out). The live database is
+  copied to `voor-terugzetten-*.db` first. An older backup gets
+  `seed.ts --schema-only` afterwards.
+- The upload is the file as base64 in JSON, larger than any other body:
+  parseJsonBody takes `maxBytes` (MAX_BACKUP_UPLOAD_BYTES, 32 MB) for that one
+  route; Caddy allows 32 MB on that path only (two matchers that exclude each
+  other: two request_body limits on one request both apply, the smaller wins);
+  and next.config.js sets proxyClientMaxBodySize: proxy.ts makes Next buffer
+  every /api body and cut it off at 10 MB by default, without an error (the
+  restore then said "Kies eerst een back-upbestand"). deployConfig.test.ts runs
+  a real Caddy against the compose file's site block; tests/e2e/back-up.e2e.ts
+  restores a 12 MB backup through the browser.
+- Names: `.gitignore` has `*backup*` (lower case) against real backup files in
+  the public repository, so the code is lib/dbBackup*.ts, app/api/admin/back-up
+  and scripts/back-up-openen.ts (the way to open a backup when the app does not
+  start).
+
 **Start and stop (0.112.0):** docker-entrypoint.sh ends with `exec
 node_modules/.bin/next start`, not `npm start`: npm stays as a parent that
 passes no SIGTERM on (reproduced), so `docker stop` ended npm and left the

@@ -149,6 +149,12 @@ export function hasRunningJobForPeriod(periodId: string): boolean {
   return false;
 }
 
+/** True while any generation runs: a restore of the database (lib/dbBackupTerugzetten.ts) waits for it. */
+export function hasAnyRunningJob(): boolean {
+  for (const job of jobs.values()) if (job.status === 'RUNNING') return true;
+  return false;
+}
+
 /**
  * What a hand-made change to the roster answers (409) while a generation
  * for its period runs: the solver's answer, written when it comes, was

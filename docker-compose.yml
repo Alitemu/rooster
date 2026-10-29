@@ -81,8 +81,16 @@ services:
         }
         https://:{$$APP_PORT:443} {
           import tls_{$$TLS_MODUS:intern}
-          request_body {
+          # 1 MB for every request, but the restore of a backup (lib/dbBackupTerugzetten.ts): that
+          # one carries the backup file itself. The two matchers exclude each other: two limits on
+          # one request would both apply, and the smaller one win.
+          @terugzetten path */api/admin/back-up/terugzetten
+          @nietTerugzetten not path */api/admin/back-up/terugzetten
+          request_body @nietTerugzetten {
             max_size 1MB
+          }
+          request_body @terugzetten {
+            max_size 32MB
           }
           @buitenSubmap not path {$$BASE_PATH:/}*
           redir @buitenSubmap {$$BASE_PATH:/} 302

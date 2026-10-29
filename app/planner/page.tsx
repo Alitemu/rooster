@@ -13,6 +13,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { MailSettingsDialog } from '@/components/MailSettingsDialog';
+import { BackupDialog } from '@/components/BackupDialog';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import {
@@ -152,6 +153,7 @@ export default function PlannerHomePage() {
   // Only an ADMIN sees "Accounts beheren" (the API checks it too).
   const [isAdmin, setIsAdmin] = useState(false);
   const [showMailSettings, setShowMailSettings] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
@@ -393,6 +395,12 @@ export default function PlannerHomePage() {
           {isAdmin && (
             <button onClick={() => setShowMailSettings(true)} className="btn-secondary">
               Mailinstellingen
+            </button>
+          )}
+          {/* The backup by mail and its restore (lib/dbBackupMail.ts, lib/dbBackupTerugzetten.ts): the whole database, both diensten. */}
+          {isAdmin && (
+            <button onClick={() => setShowBackup(true)} className="btn-secondary">
+              Back-up
             </button>
           )}
           <button onClick={handleLogout} className="btn-secondary">
@@ -807,6 +815,7 @@ export default function PlannerHomePage() {
         onClose={() => setShowChangePassword(false)}
       />
       <MailSettingsDialog isOpen={isAdmin && showMailSettings} onClose={() => setShowMailSettings(false)} />
+      <BackupDialog isOpen={isAdmin && showBackup} onClose={() => setShowBackup(false)} />
     </div>
   );
 }

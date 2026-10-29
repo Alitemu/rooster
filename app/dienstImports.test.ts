@@ -83,6 +83,8 @@ const ACHTERWACHT_USES_AIOS: Record<string, string[]> = {
   'app/api/planner/pool/[id]/members/undo-last/route.ts': ['lib/aiosSync.ts'],
   // The hourly check runs the AIOS's reminders (for the voorkeuren, and for swap requests that wait) and its swap mail queue, each task on its own (lib/taakUitvoerder.ts).
   'instrumentation-node.ts': ['lib/aiosAutoHerinneringen.ts', 'lib/aiosRuilen.ts', 'lib/aiosRuilMail.ts'],
+  // Restoring a backup replaces the whole database, so it waits for any generation, the AIOS's included.
+  'lib/dbBackupTerugzetten.ts': ['lib/aiosGenereren.ts'],
   // Every start makes sure the AIOS pool exists.
   'scripts/seed.ts': ['lib/aiosPool.ts'],
 };

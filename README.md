@@ -1035,11 +1035,39 @@ image, zodat een installatie niets van GitHub nodig heeft behalve de image.
    ontsleutelen. Zonder de sleutel werkt een teruggezette database wel,
    maar moet iedereen opnieuw inloggen en moet het app-wachtwoord opnieuw in
    Mailinstellingen.
-4. **Terugzetten:** `docker compose down`, verwijder `data/rooster.db`,
-   `data/rooster.db-wal` en `data/rooster.db-shm`, kopieer de gewenste
-   back-up naar `data/rooster.db` en start weer met `docker compose up -d`.
-   Op een nieuwe NAS zet je eerst ook `data/.session_secret` terug.
-   Probeer dit één keer uit voordat de installatie echt in gebruik gaat.
+   **Back-up buiten de server (vanaf 0.900.0).** De kopie in `data/` gaat
+   verloren als de server verloren gaat. Daarom stuurt de app elke nacht
+   ook een versleutelde kopie per mail naar een adres dat de beheerder
+   kiest, als er iets veranderd is (en minstens één keer per week). Een
+   stroom in Power Automate zet die in OneDrive en bewaart de laatste 90.
+   Instellen doet de beheerder in de app bij *Back-up* op de lijst met
+   periodes: het adres en een **back-upwachtwoord**. Zonder dat wachtwoord
+   kan niemand de back-ups openen, ook de beheerder niet: bewaar het apart,
+   bijvoorbeeld in de kluis van de afdeling. Het bestand (`.drbackup`) is
+   versleuteld met AES-256; Gmail, Outlook en OneDrive kunnen het niet
+   lezen. De stromen staan in
+   [docs/back-up-power-automate.md](docs/back-up-power-automate.md).
+4. **Terugzetten in de app:** de beheerder kiest bij *Back-up* een
+   `.drbackup`-bestand, vult het back-upwachtwoord in en typt
+   `TERUGZETTEN`. De app draait gewoon door. Hij controleert eerst of het
+   bestand heel is, van Dienstrooster is en een beheerder heeft die kan
+   inloggen. Daarna bewaart hij de huidige database als
+   `data/backups/database/voor-terugzetten-....db` en zet hij de back-up
+   terug. Alles wat sinds de back-up is veranderd, is dan weg, voor de
+   achterwacht en de AIOS samen. Een back-up van een nieuwere versie van de
+   app weigert hij: werk de app dan eerst bij.
+   **Terugzetten zonder de app** (de app start niet meer, of een nieuwe
+   server): open de back-up met
+   `npx tsx scripts/back-up-openen.ts <bestand.drbackup> <uit.db>` (vraagt
+   het back-upwachtwoord), of zet een dagelijkse kopie uit
+   `data/backups/database/` terug. Dan `docker compose down`, verwijder
+   `data/rooster.db`, `data/rooster.db-wal` en `data/rooster.db-shm`,
+   kopieer de database naar `data/rooster.db` en start weer met
+   `docker compose up -d`. Op een nieuwe server zet je eerst ook
+   `data/.session_secret` terug; zonder die sleutel vul je het
+   Gmail-app-wachtwoord en het back-upwachtwoord opnieuw in.
+   Probeer het terugzetten één keer uit voordat de installatie echt in
+   gebruik gaat.
 5. **Grenzen:** de solver mag hooguit 2 GB geheugen gebruiken, de app 1 GB
    (`SOLVER_MEM_LIMIT`, `WEB_MEM_LIMIT` in `.env`). Logbestanden van elke
    container blijven onder de 30 MB.

@@ -78,6 +78,12 @@ export function aiosGeneratieLoopt(periodId: string): boolean {
   return false;
 }
 
+/** True while any AIOS generation runs: a restore of the database (lib/dbBackupTerugzetten.ts) waits for it. */
+export function aiosGeneratieLooptErgens(): boolean {
+  for (const j of jobs.values()) if (j.status === 'BEZIG') return true;
+  return false;
+}
+
 export function aiosGeneratieJob(jobId: string, periodId: string): Job | undefined {
   const j = jobs.get(jobId);
   return j && j.periodId === periodId ? j : undefined;

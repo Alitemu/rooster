@@ -1,6 +1,7 @@
 /**
  * Asking for a new password on the server's terminal without showing it
- * (scripts/reset-password.ts, scripts/create-account.ts). With no terminal
+ * (scripts/reset-password.ts, scripts/create-account.ts), or the password of
+ * a backup (scripts/back-up-openen.ts). With no terminal
  * it reads NIEUW_WACHTWOORD from the environment instead - never a
  * command-line argument, which every process on the host could read.
  */
@@ -55,3 +56,16 @@ export async function readNewPassword(): Promise<string> {
   return first;
 }
 
+
+/** The password of a backup: from the terminal, or with no terminal from BACKUP_WACHTWOORD. */
+export async function readBackupPassword(): Promise<string> {
+  if (!process.stdin.isTTY) {
+    const fromEnv = process.env.BACKUP_WACHTWOORD;
+    if (!fromEnv) {
+      console.error('Geen terminal: zet het back-upwachtwoord in BACKUP_WACHTWOORD.');
+      process.exit(1);
+    }
+    return fromEnv;
+  }
+  return askHidden('Back-upwachtwoord: ');
+}

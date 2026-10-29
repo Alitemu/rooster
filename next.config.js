@@ -42,6 +42,9 @@ const nextConfig = {
   ...(basePath ? { basePath } : {}),
   experimental: {
     optimizePackageImports: ['@radix-ui'],
+    // proxy.ts makes Next buffer every /api body, 10 MB by default, and quietly cut off past that. The restore of
+    // a backup carries the file (lib/api-errors.ts MAX_BACKUP_UPLOAD_BYTES); every other route still reads 1 MB at most.
+    proxyClientMaxBodySize: '32mb',
   },
   headers: async () => [
     {

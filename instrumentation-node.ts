@@ -252,6 +252,16 @@ export function startAutoReminderScheduler(): void {
         },
       },
       {
+        // The encrypted copy that leaves the server, by mail (lib/dbBackupMail.ts): once a day, when something changed.
+        naam: 'back-up-mail',
+        doe: async () => {
+          const { runBackupMail } = await import('./lib/dbBackupMail');
+          const uit = await runBackupMail();
+          if (uit.uitkomst === 'VERSTUURD') console.warn(`[back-up-mail] verstuurd: ${uit.bestand}`);
+          if (uit.uitkomst === 'MISLUKT') console.warn(`[back-up-mail] mislukt: ${uit.melding}`);
+        },
+      },
+      {
         // Swap mails that could not go out earlier (lib/meldingMail.ts).
         naam: 'ruilmails',
         doe: async () => {

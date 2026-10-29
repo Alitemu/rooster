@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdtempSync, writeFileSync, existsSync } from 'fs';
-import { spawnSync } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
+import http from 'http';
+import type { AddressInfo } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -102,6 +104,57 @@ describe('one file is the installation (0.800.0)', () => {
       else if (r.status !== 0) expect(fout).toContain('/certs/rooster');
     }
   });
+
+  // The limits on a request body, run for real: 1 MB for everything, 32 MB for the restore of a backup, which
+  // carries the backup file (lib/dbBackupTerugzetten.ts). The site is the compose file's, over plain HTTP to a
+  // stand-in for the app that answers 200 to whatever reaches it.
+  it.skipIf(!heeftCaddy)('lets a backup of a few MB through to the restore only, and keeps every other request at 1 MB', async () => {
+    const app = http.createServer((req, res) => {
+      req.resume();
+      req.on('end', () => res.end('ok'));
+    });
+    await new Promise<void>((r) => app.listen(0, '127.0.0.1', r));
+    const appPoort = (app.address() as AddressInfo).port;
+    const vrij = http.createServer();
+    await new Promise<void>((r) => vrij.listen(0, '127.0.0.1', r));
+    const poort = (vrij.address() as AddressInfo).port;
+    await new Promise<void>((r) => vrij.close(() => r()));
+
+    const site = caddyfile.match(/https:\/\/:\{\$APP_PORT:443\} \{\n([\s\S]*?)\n\}\n?$/);
+    expect(site, 'het blok van de site in de Caddyfile').toBeTruthy();
+    const blok = site![1]
+      .split('\n')
+      .filter((l) => !/import tls_|redir @buitenSubmap|@buitenSubmap/.test(l))
+      .join('\n')
+      .replace(/reverse_proxy web:3000/, `reverse_proxy 127.0.0.1:${appPoort}`);
+    const map = mkdtempSync(join(tmpdir(), 'caddy-body-'));
+    const bestand = join(map, 'Caddyfile');
+    writeFileSync(bestand, `{\n  admin off\n  auto_https off\n}\nhttp://127.0.0.1:${poort} {\n${blok}\n}\n`);
+    const proces = spawn(caddy, ['run', '--config', bestand, '--adapter', 'caddyfile'], { env: { ...process.env, XDG_DATA_HOME: map, XDG_CONFIG_HOME: map } });
+    const stuur = (pad: string, bytes: number) =>
+      new Promise<number>((resolve) => {
+        const req = http.request({ host: '127.0.0.1', port: poort, path: pad, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': bytes } }, (res) => {
+          res.resume();
+          resolve(res.statusCode ?? 0);
+        });
+        req.on('error', () => resolve(0));
+        req.end(Buffer.alloc(bytes, 0x61));
+      });
+    try {
+      // Until Caddy listens.
+      for (let i = 0; i < 50 && (await stuur('/', 10)) !== 200; i++) await new Promise((r) => setTimeout(r, 100));
+      const vijfMB = 5 * 1024 * 1024;
+      expect(await stuur('/api/admin/back-up/terugzetten', vijfMB)).toBe(200);
+      expect(await stuur('/achterwacht/api/admin/back-up/terugzetten', vijfMB)).toBe(200);
+      expect(await stuur('/api/planner/periods', vijfMB)).toBe(413);
+      expect(await stuur('/api/admin/back-up/terugzetten/x', vijfMB)).toBe(413);
+      expect(await stuur('/api/admin/back-up/terugzetten', 40 * 1024 * 1024)).toBe(413);
+      expect(await stuur('/api/planner/periods', 900 * 1024)).toBe(200);
+    } finally {
+      proces.kill();
+      await new Promise<void>((r) => app.close(() => r()));
+    }
+  }, 30_000);
 });
 
 describe('port 80 (HTTP_PORT)', () => {
@@ -221,6 +274,18 @@ describe('the workflows', () => {
       expect(checkouts.length).toBeGreaterThan(0);
       for (const c of checkouts) expect(c).toContain('persist-credentials: false');
     }
+  });
+});
+
+describe('the size of a request body', () => {
+  // proxy.ts makes Next buffer every /api body and cut it off past proxyClientMaxBodySize, 10 MB unless set: the
+  // restore of a backup would arrive cut off. tests/e2e/back-up.e2e.ts sends one of more than 10 MB through the app.
+  it('Next buffers at least what the restore of a backup may carry', async () => {
+    const { MAX_BACKUP_UPLOAD_BYTES } = await import('./lib/api-errors');
+    const config = readFileSync('next.config.js', 'utf8');
+    const m = config.match(/proxyClientMaxBodySize:\s*'(\d+)mb'/);
+    expect(m, 'proxyClientMaxBodySize in next.config.js').toBeTruthy();
+    expect(Number(m![1]) * 1024 * 1024).toBeGreaterThanOrEqual(MAX_BACKUP_UPLOAD_BYTES);
   });
 });
 
