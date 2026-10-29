@@ -517,7 +517,12 @@ de stroom is voor beide diensten hetzelfde.
          dan hoef je geen aparte tak te bouwen:
          - **Variabele instellen** `ccadressen` = lege tekst. Dit moet voor
            elk bericht opnieuw, anders neemt het volgende bericht de CC van
-           het vorige mee.
+           het vorige mee. De ontwerper weigert een leeg veld. Zet daarom
+           via het tabblad *Expressie* `string('')` in het veld. Typ je
+           `string('')` als gewone tekst, dan krijgt elke mail die tekst als
+           CC-adres en weigert Outlook de mail. In de code van de stroom zie
+           je het verschil aan het apenstaartje: `@string('')` is goed,
+           `string('')` zonder apenstaartje is fout.
          - **Toepassen op elk** over
            `coalesce(items('Berichten')?['cc'], json('[]'))`. Noem de lus
            `Cc adressen`, parallelle uitvoering 1. Binnenin een **Matrix
@@ -724,6 +729,42 @@ Dienstrooster installeert:
 
 De stappen binnen de lus (rij ophalen, mail versturen, echte namen) blijven
 gewoon werken.
+
+## Een gedeeld postvak gebruiken
+
+Wil je dat de stroom let op een gedeeld postvak en ook vanuit dat postvak
+verstuurt, dan verandert er op vier plekken iets. De rest van de stroom blijft
+hetzelfde.
+
+1. **Rechten.** Het account van de stroom heeft *Volledige toegang* en
+   *Verzenden als* nodig op het gedeelde postvak. Dat regelt de beheerder van
+   Exchange.
+2. **Trigger.** Gebruik **Wanneer een nieuwe e-mail binnenkomt in een gedeeld
+   postvak (V2)** met hetzelfde Van-filter, onderwerpfilter en dezelfde
+   instellingen voor bijlagen als in stap 4. Vul bij *Oorspronkelijk
+   postvakadres* het adres van het gedeelde postvak in.
+3. **Eén variabele met het adres.** Zet onder de andere variabelen een
+   **Variabele initialiseren** `postvak` (*Tekenreeks*) met het adres van het
+   gedeelde postvak. Gebruik `variables('postvak')` overal waar hieronder
+   het postvak gevraagd wordt.
+4. **Verplaatsen, ophalen en verzenden.**
+   - Zet bij **E-mail verplaatsen (V2)** (stap 2) en bij de stappen van 4f
+     *Oorspronkelijk postvakadres* op `variables('postvak')`. Kies daarna de
+     mappen opnieuw: de mappen van het gedeelde postvak hebben andere id's
+     dan die van je eigen postvak. Maak `Dienstrooster verwerkt` en
+     `Dienstrooster verstuurd` eerst aan in het gedeelde postvak.
+   - Vervang elke **Een e-mail verzenden (V2)** door **Een e-mail verzenden
+     vanuit een gedeeld postvak (V2)**, met `variables('postvak')` als
+     postvak en verder dezelfde velden.
+   - Zet bij **Bericht-id** van stap 2 de expressie
+     `triggerOutputs()?['body/id']`. De ontwerper haalt het veld weg als je
+     de trigger vervangt, maar de nieuwe trigger levert het id op dezelfde
+     plek.
+
+Zet in Dienstrooster bij Mailinstellingen het adres van de stroom op het
+gedeelde postvak, voor beide diensten. Iedereen met toegang tot het gedeelde
+postvak kan de verzendlijsten lezen en de mappen veranderen. Houd die groep
+dus klein.
 
 ## Veiligheid
 
