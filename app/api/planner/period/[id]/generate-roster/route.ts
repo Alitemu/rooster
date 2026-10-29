@@ -47,6 +47,53 @@ import { writeAuditLog } from '@/lib/auditLog';
 import { isBetterRoster, isPerfectRoster } from '@/lib/rosterVergelijk';
 import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
 
+/** The period as this route reads it (SELECT *): the columns it uses. */
+interface PeriodeRij {
+  id: string;
+  status: string;
+  row_version: number;
+  pool_id: string;
+  start_datum: string;
+  eind_datum: string;
+  overloop_bevestigd_op: string | null;
+  bevroren_ruleset_json: string | null;
+}
+
+/** A dienst of the period with its counter (SELECT s.*, st.teller): the columns sent to the solver. */
+interface DienstRij {
+  id: string;
+  datum: string;
+  iso_jaar: number;
+  iso_week: number;
+  shift_type_id: string;
+  teller: string;
+  benodigd_aantal_personen: number;
+  // SQLite has no boolean: 0 or 1.
+  is_feestdag: number;
+  feestdag_groep: string | null;
+}
+
+/** What POST /solve and /solve-greedy answer (solver/main.py, SolverOutput and SolverDiagnostics). */
+interface SolverUitvoer {
+  success: boolean;
+  assignments: Array<{ person_id: string; slot_id: string }>;
+  diagnostics: {
+    unfilled_slots: Array<{ slot_id: string; shortfall: number }>;
+    total_cost: number;
+    time_seconds: number;
+    solver_status: string;
+    violations: Record<string, number>;
+    max_band_deviation?: number;
+    total_band_deviation?: number;
+    soft_block_violations?: number;
+    preference_matches?: number;
+  };
+  message?: string;
+}
+
+/** The solver's input as runMultiStart passes it on, with a random_seed added to the rules each attempt. */
+type SolverInvoer = { rules: Record<string, unknown> } & Record<string, unknown>;
+
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   try {
@@ -101,7 +148,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Fetch period
     const period = db
       .prepare('SELECT * FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(periodId) as any;
+      .get(periodId) as PeriodeRij | undefined;
 
     if (!period) {
       return NextResponse.json(
@@ -161,7 +208,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
          JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
          WHERE s.period_id = ?`
       )
-      .all(periodId) as any[];
+      .all(periodId) as DienstRij[];
 
     if (allSlots.length === 0) {
       return NextResponse.json(
@@ -292,9 +339,9 @@ async function runGeneration(args: {
   actorId: string;
   now: string;
   timeLimitSeconds: number | undefined;
-  period: any;
-  slots: any[];
-  allSlots: any[];
+  period: PeriodeRij;
+  slots: DienstRij[];
+  allSlots: DienstRij[];
   poolMembers: PeriodMember[];
   people: string[];
   /** The factors held before this run replaced them: put back when it ends without a roster. */
@@ -329,7 +376,7 @@ async function runGeneration(args: {
         `SELECT * FROM dienstrooster_availability
          WHERE person_id IN (${personPlaceholders}) AND slot_id IN (${slotPlaceholders})`
       )
-      .all(...people, ...slotIdList) as any[];
+      .all(...people, ...slotIdList) as Array<{ person_id: string; slot_id: string; blocking_level: string | null }>;
 
     // Build person preferences map
     const personPreferences: Record<string, Array<{ slot_id: string; blocking_level: string }>> = {};
@@ -358,7 +405,7 @@ async function runGeneration(args: {
          WHERE geldt_voor_periode_id = ? AND person_id IN (${personPlaceholders})
          GROUP BY person_id, teller`
       )
-      .all(periodId, ...people) as any[];
+      .all(periodId, ...people) as Array<{ person_id: string; teller: string; total: number | null }>;
 
     const balances: Record<string, Record<string, number>> = {};
     for (const person of people) {
@@ -605,7 +652,7 @@ async function runGeneration(args: {
     const solverUrl = process.env.SOLVER_URL || 'http://solver:8000';
     const solverTimeoutMs = (timeLimitSeconds ?? 120) * 1000 + 300_000;
 
-    let solverOutput: any;
+    let solverOutput: SolverUitvoer;
     let attemptsTried: number | undefined;
     let stoppedReason: RosterGenerationStoppedReason | undefined;
 
@@ -817,7 +864,7 @@ async function runGeneration(args: {
 // "Gerandomiseerde planner")
 // ============================================================================
 
-type SolverCallResult = { ok: true; output: any } | { ok: false; message: string; status: number };
+type SolverCallResult = { ok: true; output: SolverUitvoer } | { ok: false; message: string; status: number };
 
 /**
  * One POST to the solver (path is '/solve' for the CP-SAT models,
@@ -858,7 +905,7 @@ async function callSolver(
     };
   }
 
-  const output = await solverResponse.json();
+  const output: SolverUitvoer = await solverResponse.json();
 
   if (!output.success) {
     // Capacity and band limits are soft constraints (see solver/constraints.py),
@@ -885,7 +932,7 @@ async function callSolver(
 }
 
 type MultiStartResult =
-  | { ok: true; output: any; attemptsTried: number; stoppedReason: RosterGenerationStoppedReason }
+  | { ok: true; output: SolverUitvoer; attemptsTried: number; stoppedReason: RosterGenerationStoppedReason }
   | { ok: false; message: string; status: number };
 
 /**
@@ -907,7 +954,7 @@ async function runMultiStart(args: {
   jobId: string;
   solverUrl: string;
   endpointPath: '/solve' | '/solve-greedy';
-  solverInput: any;
+  solverInput: SolverInvoer;
   // Merged onto the top-level request body for every attempt - e.g.
   // { variant: 'dagen' } for the greedy endpoint. Undefined for
   // "Herhaalplanner", which needs nothing beyond the per-attempt
@@ -918,7 +965,7 @@ async function runMultiStart(args: {
 }): Promise<MultiStartResult> {
   const { jobId, solverUrl, endpointPath, solverInput, extraAttemptFields, timeoutMs, maxAttempts } = args;
 
-  let best: any = null;
+  let best: SolverUitvoer | null = null;
   let attemptsTried = 0;
   let stoppedReason: RosterGenerationStoppedReason = 'max_attempts';
 
