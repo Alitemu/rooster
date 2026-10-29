@@ -402,7 +402,7 @@ export function ExportDialog({
       <button
         onClick={saveDeadline}
         disabled={!newDeadline || savingDeadline}
-        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+        className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors"
       >
         {savingDeadline ? 'Bezig met opslaan...' : 'Deadline opslaan'}
       </button>
@@ -536,7 +536,7 @@ export function ExportDialog({
             <div className="flex gap-3">
               <button
                 onClick={downloadInvitations}
-                className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                className="flex-1 py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
               >
                 📥 Excel downloaden
               </button>
@@ -565,7 +565,7 @@ export function ExportDialog({
             <div className="flex gap-3">
               <button
                 onClick={downloadAuditTrail}
-                className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                className="flex-1 py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
               >
                 📥 Excel downloaden
               </button>
@@ -608,7 +608,7 @@ export function ExportDialog({
                 </div>
                 <button
                   onClick={loadReminders}
-                  className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors mb-3"
+                  className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors mb-3"
                 >
                   Herinneringen genereren
                 </button>
@@ -699,7 +699,7 @@ export function ExportDialog({
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => sendReminders(recentVraag.list, recentVraag.alle, true)}
-                        className="py-1.5 px-3 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700"
+                        className="py-1.5 px-3 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800"
                       >
                         Toch versturen
                       </button>
@@ -752,7 +752,7 @@ export function ExportDialog({
                               onClick={() => sendReminders([reminder], false)}
                               disabled={!linkPlaceholderIntact || anyReminderSending}
                               aria-label={`Herinnering versturen aan ${reminder.codenaam}`}
-                              className="py-1.5 px-3 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors whitespace-nowrap"
+                              className="py-1.5 px-3 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors whitespace-nowrap"
                             >
                               {state.kind === 'sending' ? 'Bezig...' : '✉️ Versturen'}
                             </button>
@@ -802,7 +802,7 @@ function SendButton({
       <button
         onClick={onClick}
         disabled={disabled || done || state.kind === 'sending'}
-        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+        className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors"
       >
         {state.kind === 'sending' ? 'Bezig met versturen...' : label}
       </button>

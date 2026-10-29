@@ -99,7 +99,7 @@ export function FillGapsSummary({ periodId, onCountChange, refreshKey }: Props) 
       </div>
       <Link
         href={`/planner/period/${periodId}/fill-gaps`}
-        className="shrink-0 px-4 py-2 rounded font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+        className="shrink-0 px-4 py-2 rounded font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors"
       >
         📝 Rooster vooraf invullen
       </Link>

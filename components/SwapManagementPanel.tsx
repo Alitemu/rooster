@@ -432,7 +432,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                     <button
                       onClick={() => handleApprove(swap.id)}
                       disabled={bezig}
-                      className="px-3 py-1 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:opacity-50 transition-colors"
+                      className="px-3 py-1 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
                     >
                       Goedkeuren
                     </button>

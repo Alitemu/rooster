@@ -57,7 +57,7 @@ export function AiosExporteren({ period, stand, onChanged }: Props) {
         <button
           type="button"
           onClick={() => setDialoog({ open: true, type: null })}
-          className="px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+          className="px-4 py-2 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
         >
           📧 Uitnodigingen en herinneringen
         </button>

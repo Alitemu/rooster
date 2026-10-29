@@ -821,7 +821,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setPublicationStap('voorlopig');
                 setPublicationDialogOpen(true);
               }}
-              className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+              className="px-4 py-2 rounded font-medium bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
             >
               ✅ Voorlopig publiceren
             </button>
@@ -832,7 +832,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setPublicationStap('definitief');
                 setPublicationDialogOpen(true);
               }}
-              className="px-4 py-2 rounded font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
+              className="px-4 py-2 rounded font-medium bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
             >
               🔏 Definitief maken
             </button>
@@ -1258,7 +1258,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               setExportInitialType(null);
               setExportDialogOpen(true);
             }}
-            className="px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+            className="px-4 py-2 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
           >
             📧 Uitnodigingen en herinneringen
           </button>
@@ -1592,7 +1592,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
             <div className="flex gap-3">
               <Link
                 href={`/planner/period/${periodId}/fill-gaps`}
-                className="flex-1 py-2 px-4 rounded font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors text-center"
+                className="flex-1 py-2 px-4 rounded font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors text-center"
               >
                 📝 Ga naar Rooster vooraf invullen
               </Link>

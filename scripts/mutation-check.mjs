@@ -5692,6 +5692,13 @@ const MUTATIONS = [
     replace: "",
     tests: ["app/api/dienstSeparation.test"],
   },
+  {
+    name: "contrast: white text on a button background below 4.5 to 1",
+    file: "components/FillGapsSummary.tsx",
+    find: "bg-amber-700 text-white hover:bg-amber-800",
+    replace: "bg-amber-600 text-white hover:bg-amber-700",
+    tests: ["app/buttonContrast"],
+  },
 ];
 
 const args = process.argv.slice(2);

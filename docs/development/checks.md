@@ -115,10 +115,13 @@ of its mutations.
 The solver the browser checks talk to should run the OR-Tools version
 of solver/requirements.txt (9.8, the image's): another version searches
 differently: in the planner's scenario at window 2 and 120 seconds
-lexicographic left 1 shift empty on 9.12 and 8 on 9.8 (audit 14). Two sweeps run with npm
+lexicographic left 1 shift empty on 9.12 and 8 on 9.8 (audit 14). Three sweeps run with npm
 test: app/api/auditCoverage.test.ts (every planner route that changes data
-writes the audit log or states why not) and app/dutchStyle.test.ts (no
-joining dash, no comma before en/of in user-facing text).
+writes the audit log or states why not), app/dutchStyle.test.ts (no
+joining dash, no comma before en/of in user-facing text) and
+app/buttonContrast.test.ts (white text on a `bg-` or `hover:bg-` colour
+reaches 4.5 to 1, measured with the palette of tailwind.config.ts; take
+the 700 of green, amber or emerald, not the 600, and the 800 on hover).
 
 `node scripts/schema-drift.mjs` needs nothing running. It builds one
 database from the seed and one from the migrations and compares them

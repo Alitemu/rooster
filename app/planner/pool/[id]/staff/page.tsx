@@ -460,7 +460,7 @@ export default function PoolStaffPage() {
                                       ? handleSaveMembership(member.id, true)
                                       : handleRemoveMembership(member.id, true)
                                   }
-                                  className="px-3 py-1 rounded bg-amber-600 text-white hover:bg-amber-700"
+                                  className="px-3 py-1 rounded bg-amber-700 text-white hover:bg-amber-800"
                                 >
                                   Toch doorgaan
                                 </button>

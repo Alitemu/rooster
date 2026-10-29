@@ -804,7 +804,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                           <button
                             type="button"
                             onClick={applySuggestedBands}
-                            className="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                            className="px-3 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors"
                           >
                             Bereik voor de huidige leden
                           </button>

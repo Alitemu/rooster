@@ -80,7 +80,7 @@ function VerstuurKnop({ label, state, onClick, disabled }: { label: string; stat
       <button
         onClick={onClick}
         disabled={disabled || state.kind === 'sending'}
-        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+        className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors"
       >
         {state.kind === 'sending' ? 'Bezig met versturen...' : label}
       </button>
@@ -261,7 +261,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
       <button
         onClick={slaDeadlineOp}
         disabled={!nieuweDeadline || deadlineOpslaan}
-        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+        className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors"
       >
         {deadlineOpslaan ? 'Bezig met opslaan...' : 'Deadline opslaan'}
       </button>
@@ -380,7 +380,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
             <div className="flex gap-3">
               <button
                 onClick={downloadUitnodigingen}
-                className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                className="flex-1 py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
               >
                 📥 Excel downloaden
               </button>
@@ -405,7 +405,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
             <div className="flex gap-3">
               <button
                 onClick={downloadWijzigingen}
-                className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                className="flex-1 py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
               >
                 📥 Excel downloaden
               </button>

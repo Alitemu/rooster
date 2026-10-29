@@ -197,6 +197,7 @@ Every route keeps these, and a sweep test fails when one doesn't:
 - **Sub-folder:** every client fetch and plain link through `withBasePath`
   (app/basePathSweep.test.ts).
 - **Dutch style** in user-facing text (app/dutchStyle.test.ts).
+- **Contrast:** white text on a button reaches 4.5 to 1 (app/buttonContrast.test.ts).
 
 ### Testing
 

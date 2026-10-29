@@ -363,7 +363,7 @@ export function RosterPublicationDialog({ periodId, stap = 'voorlopig', isOpen, 
             <button
               onClick={handlePublish}
               disabled={publishing || validating || !canPublish}
-              className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
+              className="flex-1 px-4 py-2 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-neutral-400 transition-colors"
             >
               {publishing
                 ? 'Bezig...'
