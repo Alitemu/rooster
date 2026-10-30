@@ -78,7 +78,8 @@ const ACHTERWACHT_USES_AIOS: Record<string, string[]> = {
   // The period page shows an AIOS period with the AIOS's own overview.
   'app/planner/period/[id]/page.tsx': ['components/AiosPeriodOverview.tsx'],
   // A member added or changed: the AIOS's sync after the achterwacht's (audit of the separation).
-  'app/api/planner/pool/[id]/members/route.ts': ['lib/aiosSync.ts'],
+  // Adding one or a reeks, and new dates for a selection, go through lib/poolLeden.ts (0.901.0).
+  'lib/poolLeden.ts': ['lib/aiosSync.ts'],
   'app/api/planner/pool/[id]/members/[membershipId]/route.ts': ['lib/aiosSync.ts'],
   'app/api/planner/pool/[id]/members/undo-last/route.ts': ['lib/aiosSync.ts'],
   // The hourly check runs the AIOS's reminders (for the voorkeuren, and for swap requests that wait) and its swap mail queue, each task on its own (lib/taakUitvoerder.ts).

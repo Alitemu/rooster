@@ -77,12 +77,29 @@ existing "Persoon-01" made a second person, and the first one's
 carry-over, feestdagdiensten over the years and the flow's row for their
 mail stayed behind (audit 13).
 
-Adding someone on "Personeel beheren" starts with the dates of the pool's
-one period being rostered (OPEN, GESLOTEN or GEGENEREERD), like the setup
-wizard's own step, and says so under the form; with none, or two at once,
-today until 2029-12-31 (lib/membershipDefaults.ts). It used to start at
-today and an empty Geldig tot, and a planner who typed an end date short
-of the period got shifts nobody could take.
+Adding someone on "Personeel beheren" starts Geldig vanaf at the pool's
+one period being rostered (OPEN, GESLOTEN or GEGENEREERD), and says so
+under the form; with none, or two at once, today. Geldig tot is always the
+open end 2099-12-31 (lib/membershipDefaults.ts OPEN_EINDE, 0.901.0). It was
+the period's own end: an AIOS quarter, so all 30 AIOS were extended by hand
+every quarter. Without a period it was 2029-12-31, which would have dropped
+everyone added that way at once at the end of 2029. Before that it was
+empty, and an end date typed short of the period gave shifts nobody could
+take.
+
+Several at once (0.901.0), all through lib/poolLeden.ts, so a reeks adds
+nobody the single form would refuse (capitals, an account, the other
+dienst, an overlap):
+- *Een reeks toevoegen*: aios01 tot en met aios30 (lib/codenaamReeks.ts:
+  one beginning, the width of the first number, at most 100), with the dates
+  of the single form. Who can't be added is skipped and named, the rest is
+  added (POST .../members/reeks).
+- *Selecteren en zetten*: a tick per row and "Iedereen selecteren", then a
+  new Geldig vanaf and/or tot for the selection (PATCH .../members/selectie).
+  All or none: one that would end before it starts, overlap another of the
+  same person or be of another pool stops the lot, naming who. A date left
+  out keeps each one's own. Reaching a period whose roster exists asks once
+  for the lot (lib/membershipRooster.ts). Each change is an audit row.
 
 A mistake on Personeel beheren is told where it was made
 (app/planner/pool/[id]/staff/page.tsx): under Toevoegen for a new member,

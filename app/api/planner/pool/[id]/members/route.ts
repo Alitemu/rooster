@@ -13,17 +13,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { syncAbsencesForPerson } from '@/lib/absenceSync';
-import { syncPatternsForPerson } from '@/lib/parttimeSync';
-import { syncAiosPersoon } from '@/lib/aiosSync';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
-import { personHasOtherDienst, poolDienstDenial } from '@/lib/dienstAccess';
+import { poolDienstDenial } from '@/lib/dienstAccess';
 import { localIsoDate } from '@/lib/localDate';
-import { unauthorizedResponse, internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
-import { writeAuditLog } from '@/lib/auditLog';
+import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { validateCodenaam } from '@/lib/codenaam';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { deelnamefactorVoorLijst, periodeMetDatums } from '@/lib/deelnamefactor';
+import { synchroniseer, voegLidToe } from '@/lib/poolLeden';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PoolMember {
@@ -164,160 +161,13 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       return NextResponse.json(response, { status: 404 });
     }
 
-    const addMember = db.transaction(() => {
-      // Reuse an existing person by codenaam (e.g. someone moving between
-      // pools, or rejoining after their previous membership ended) rather
-      // than creating a duplicate - codenaam is globally unique.
-      // Looked up without regard to capitals, the exact spelling first:
-      // "persoon-01" for an existing "Persoon-01" made a second person, and
-      // the first one's carry-over, feestdagdiensten over the years and the
-      // flow's row for their mail stayed behind (audit 13).
-      const found = db
-        .prepare(
-          `SELECT id, rol, codenaam FROM dienstrooster_person WHERE codenaam = ? COLLATE NOCASE
-           ORDER BY codenaam = ? DESC LIMIT 1`
-        )
-        .get(codenaam, codenaam) as { id: string; rol: string; codenaam: string } | undefined;
-
-      // Only participants take shifts. Reusing by codenaam without this
-      // check let the planner's own login ("planner") be added as a pool
-      // member - it then showed up in the solver's headcount and bands
-      // like anyone else.
-      if (found && found.rol !== 'DEELNEMER') {
-        return { conflict: 'STAFF_ACCOUNT' as const };
-      }
-      // The achterwacht's and the AIOS's pools share nobody (lib/dienstAccess.ts):
-      // someone of the other dienst would bring their rosters and
-      // preferences into this one's sight, also once removed from its pools.
-      if (found && personHasOtherDienst(found.id, pool.type)) {
-        return { conflict: 'ANDERE_DIENST' as const };
-      }
-      if (found && found.codenaam !== codenaam) {
-        return { conflict: 'CODENAAM_HOOFDLETTERS' as const, bestaand: found.codenaam };
-      }
-      let person: { id: string; rol: string } | undefined = found;
-
-      if (!person) {
-        const personId = crypto.randomUUID();
-        db.prepare(
-          `INSERT INTO dienstrooster_person (id, codenaam, rol, aangemaakt_op)
-           VALUES (?, ?, 'DEELNEMER', ?)`
-        ).run(personId, codenaam, new Date().toISOString());
-        person = { id: personId, rol: 'DEELNEMER' };
-      }
-
-      // A person can only be one row in this pool at any given date - two
-      // overlapping memberships would make generate-roster count them
-      // twice (inflating headcount/bands) with a non-deterministic
-      // deelnamefactor, since nothing else de-duplicates by person_id.
-      const overlapping = db
-        .prepare(
-          `SELECT id FROM dienstrooster_pool_membership
-           WHERE pool_id = ? AND person_id = ? AND geldig_vanaf <= ? AND geldig_tot >= ?`
-        )
-        .get(poolId, person.id, body.geldig_tot, body.geldig_vanaf);
-      if (overlapping) {
-        return { conflict: 'OVERLAP' as const };
-      }
-
-      const membershipId = crypto.randomUUID();
-      db.prepare(
-        `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, deelnamefactor, geldig_vanaf, geldig_tot)
-         VALUES (?, ?, ?, 1.0, ?, ?)`
-      ).run(membershipId, person.id, poolId, body.geldig_vanaf, body.geldig_tot);
-      writeAuditLog({
-        actorId: auth!.userId,
-        entiteit: 'pool_membership',
-        entiteitId: membershipId,
-        actie: 'CREATE',
-        nieuw: {
-          wijziging: 'lid toegevoegd',
-          pool_id: poolId,
-          person_id: person.id,
-          codenaam,
-          geldig_vanaf: body.geldig_vanaf,
-          geldig_tot: body.geldig_tot,
-        },
-      });
-
-      return { conflict: null, membershipId, personId: person.id };
-    });
-
-    let result:
-      | { conflict: null; membershipId: string; personId: string }
-      | { conflict: 'OVERLAP' }
-      | { conflict: 'STAFF_ACCOUNT' }
-      | { conflict: 'ANDERE_DIENST' }
-      | { conflict: 'CODENAAM_HOOFDLETTERS'; bestaand: string };
-    try {
-      result = addMember();
-    } catch (error) {
-      if (isUniqueViolation(error)) {
-        const response: ApiErrorResponse = {
-          success: false,
-          error: {
-            code: 'MEMBERSHIP_EXISTS',
-            message: 'Deze persoon heeft al precies zo\'n lidmaatschap (zelfde periode) in deze pool',
-          },
-        };
-        return NextResponse.json(response, { status: 409 });
-      }
-      throw error;
+    const result = voegLidToe(pool, codenaam, body.geldig_vanaf, body.geldig_tot, auth!.userId);
+    if (!result.ok) {
+      const response: ApiErrorResponse = { success: false, error: { code: result.code, message: result.message } };
+      return NextResponse.json(response, { status: result.status });
     }
-
-    if (result.conflict === 'STAFF_ACCOUNT') {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: {
-          code: 'STAFF_ACCOUNT',
-          message: 'Deze codenaam hoort bij een planner- of beheerdersaccount en kan geen diensten draaien. Kies een andere codenaam.',
-        },
-      };
-      return NextResponse.json(response, { status: 409 });
-    }
-
-    if (result.conflict === 'ANDERE_DIENST') {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: {
-          code: 'ANDERE_DIENST',
-          message: 'Deze codenaam is al in gebruik bij een andere dienst. Kies een andere codenaam.',
-        },
-      };
-      return NextResponse.json(response, { status: 409 });
-    }
-
-    if (result.conflict === 'CODENAAM_HOOFDLETTERS') {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: {
-          code: 'CODENAAM_HOOFDLETTERS',
-          message: `Er is al iemand met de codenaam "${result.bestaand}". Bedoel je die persoon, schrijf de codenaam dan precies zo. Anders kies je een andere codenaam.`,
-        },
-      };
-      return NextResponse.json(response, { status: 409 });
-    }
-
-    if (result.conflict === 'OVERLAP') {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: {
-          code: 'MEMBERSHIP_OVERLAP',
-          message: 'Deze persoon heeft in deze pool al een lidmaatschap dat deze periode overlapt',
-        },
-      };
-      return NextResponse.json(response, { status: 409 });
-    }
-
-    // Someone joining (or rejoining) while a period is already open: their
-    // existing absences and part-time patterns only ever reach a period
-    // through a sync, and the period's own backfill ran when it opened -
-    // before this membership existed. Without this their vacation would
-    // not block anything in that period until they happened to edit it.
-    syncAbsencesForPerson(result.personId);
-    syncPatternsForPerson(result.personId);
-    // The AIOS's own sync for an AIOS pool (lib/aiosSync.ts): the two above leave its periods alone.
-    syncAiosPersoon(result.personId);
+    // Someone joining while a period is already open (lib/poolLeden.ts synchroniseer).
+    synchroniseer(result.personId);
 
     const response: ApiSuccessResponse<{ id: string; person_id: string; codenaam: string }> = {
       success: true,

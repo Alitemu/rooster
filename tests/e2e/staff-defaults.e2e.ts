@@ -5,11 +5,9 @@ import { localIsoDate } from '@/lib/localDate';
 import { getBaseUrl, loginAsPlanner } from './setup';
 
 /**
- * "Nieuw personeelslid toevoegen" on Personeel beheren starts with the dates
- * of the pool's period being rostered, or today until 31 December 2029
- * without one (lib/membershipDefaults.ts). It started at today and an
- * empty Geldig tot: a planner who typed an end date that stopped short of
- * the period had shifts nobody could take.
+ * "Nieuw personeelslid toevoegen" on Personeel beheren starts at the start
+ * of the pool's period being rostered, or today without one, and always
+ * with an open end, 31 December 2099 (lib/membershipDefaults.ts, 0.901.0).
  *
  * Two pools of its own, so periods other test files make in the seeded
  * pool don't decide the outcome.
@@ -52,22 +50,22 @@ async function newMemberDates(page: import('@playwright/test').Page, poolId: str
   return { vanaf: dates.nth(0), tot: dates.nth(1), uitleg: page.getByTestId('geldig-uitleg') };
 }
 
-test('a new member starts with the dates of the period being rostered', async ({ page }) => {
+test('a new member starts at the period being rostered, with an open end', async ({ page }) => {
   const id = pool('E2E-Standaard');
   period(id, 'Vorige periode', 'GEPUBLICEERD', '2099-01-05', '2099-03-01');
   period(id, 'Winter 2099', 'OPEN', '2099-03-02', '2099-08-30');
   const { vanaf, tot, uitleg } = await newMemberDates(page, id);
   await expect(vanaf).toHaveValue('2099-03-02');
-  await expect(tot).toHaveValue('2099-08-30');
-  await expect(uitleg).toContainText('staan op de periode Winter 2099');
+  await expect(tot).toHaveValue('2099-12-31');
+  await expect(uitleg).toContainText('staat op het begin van de periode Winter 2099');
 });
 
-test('without a period being rostered: today until 31 December 2029', async ({ page }) => {
+test('without a period being rostered: today, with an open end', async ({ page }) => {
   const id = pool('E2E-Geen-periode');
   const { vanaf, tot, uitleg } = await newMemberDates(page, id);
   // The Dutch date, like the page: in UTC it is still yesterday until 01:00
   // or 02:00 (audit 10 caught this test failing at 00:47).
   await expect(vanaf).toHaveValue(localIsoDate());
-  await expect(tot).toHaveValue('2029-12-31');
-  await expect(uitleg).toHaveText('Geldig vanaf staat op vandaag en Geldig tot op 31 december 2029.');
+  await expect(tot).toHaveValue('2099-12-31');
+  await expect(uitleg).toHaveText('Geldig vanaf staat op vandaag. Geldig tot staat op 31 december 2099: deze persoon doet mee tot je een einddatum zet.');
 });

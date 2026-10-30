@@ -115,10 +115,21 @@ test.describe('Periodepagina', () => {
     await expect(dialog.getByLabel('Contactadres van de planner van de AIOS')).toBeVisible();
     // Nothing waits on a test server without mail: both say so.
     await expect(dialog.getByText('Er wacht geen mail.')).toHaveCount(2);
-    // A contact address that is no address is refused for the AIOS, and saves nothing.
+    // One Opslaan for all of it (0.901.0): there is no button of the AIOS's own any more, and with the Gmail part
+    // untouched it saves without logging in to Gmail. A contact address that is no address is refused for the AIOS.
+    await expect(dialog.getByRole('button', { name: 'Opslaan voor de AIOS' })).toHaveCount(0);
     await dialog.getByLabel('Contactadres van de planner van de AIOS').fill('geen adres');
-    await dialog.getByRole('button', { name: 'Opslaan voor de AIOS' }).click();
+    await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('de AIOS niet');
     await expect(dialog.getByRole('alert')).toContainText('geen geldig e-mailadres');
+    // A real address for the AIOS is saved by the same button and is there when the dialog opens again.
+    const adres = `aios-contact-${Date.now()}@example.test`;
+    await dialog.getByLabel('Contactadres van de planner van de AIOS').fill(adres);
+    await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
+    await expect(dialog.getByText('Opgeslagen.', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Sluiten' }).click();
+    await page.getByRole('button', { name: 'Mailinstellingen' }).click();
+    await expect(page.getByRole('dialog', { name: 'Mailinstellingen' }).getByLabel('Contactadres van de planner van de AIOS')).toHaveValue(adres);
   });
 
   test('the beheerder reaches Mailinstellingen from the overview too, a planner does not', async ({ page }) => {

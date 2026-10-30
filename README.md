@@ -480,6 +480,11 @@ eerst op de testinstallatie. Zo begin je:
 2. De planner logt in en kiest een eigen wachtwoord. Daarna ziet de planner
    alleen de pool AIOS en niets van de achterwacht.
 3. Bij *Personeel beheren* voeg je de AIOS toe: aios01, aios02 enzovoort.
+   Met *Een reeks toevoegen* doe je aios01 tot en met aios30 in één keer.
+   *Geldig tot* staat standaard op 31 december 2099: wie meedoet, blijft
+   meedoen tot je een einddatum zet. Wie eerder stopt, geef je een einddatum.
+   Meerdere mensen tegelijk een andere datum geven doe je met de vinkjes in
+   de lijst en *Toepassen op selectie*.
 4. Maak bij *+ Nieuwe periode* het kwartaal. De beheerder vult op de pagina
    van die periode bij *Mail naar de AIOS* het adres van de stroom van de
    AIOS in (zie 0.72.0).

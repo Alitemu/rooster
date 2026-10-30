@@ -22,6 +22,7 @@ import { withBasePath } from '@/lib/basePath';
 import { localIsoDate } from '@/lib/localDate';
 import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults } from '@/lib/membershipDefaults';
 import { foutTekst } from '@/lib/foutTekst';
+import { codenaamReeks } from '@/lib/codenaamReeks';
 
 interface Pool {
   id: string;
@@ -102,6 +103,20 @@ export default function PoolStaffPage() {
   const undoBasis = useRef<string | null | undefined>(undefined);
   const [undoing, setUndoing] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
+
+  // Several at once (0.901.0): the memberships ticked in the list get the same new dates (lib/poolLeden.ts).
+  const [selectie, setSelectie] = useState<Set<string>>(new Set());
+  const [groepDatums, setGroepDatums] = useState({ geldig_vanaf: '', geldig_tot: '' });
+  const [groepBezig, setGroepBezig] = useState(false);
+  const [groepFout, setGroepFout] = useState<string | null>(null);
+  const [groepVraag, setGroepVraag] = useState<string | null>(null);
+  const [groepMelding, setGroepMelding] = useState<string | null>(null);
+
+  // A reeks of codenamen at once (lib/codenaamReeks.ts), with the same dates as one new member.
+  const [reeks, setReeks] = useState({ van: '', tot: '' });
+  const [reeksBezig, setReeksBezig] = useState(false);
+  const [reeksFout, setReeksFout] = useState<string | null>(null);
+  const [reeksUitkomst, setReeksUitkomst] = useState<{ toegevoegd: string[]; overgeslagen: Array<{ codenaam: string; reden: string }> } | null>(null);
 
   // No GET /api/planner/pools/[id] exists (only PATCH) - the list endpoint
   // already carries naam for every pool, so find this one in it rather
@@ -225,6 +240,65 @@ export default function PoolStaffPage() {
     }
   };
 
+  const handleReeks = async () => {
+    setReeksBezig(true);
+    setReeksFout(null);
+    setReeksUitkomst(null);
+    try {
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/reeks`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...reeks, geldig_vanaf: newMember.geldig_vanaf, geldig_tot: newMember.geldig_tot }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
+      setReeksUitkomst(data.data);
+      if (data.data.toegevoegd.length > 0) setReeks({ van: '', tot: '' });
+      await loadStaff({ silent: true });
+    } catch (err) {
+      setReeksFout(foutTekst(err, 'Toevoegen mislukt'));
+    } finally {
+      setReeksBezig(false);
+    }
+  };
+
+  const wisselSelectie = (id: string) =>
+    setSelectie((oud) => {
+      const nieuw = new Set(oud);
+      if (nieuw.has(id)) nieuw.delete(id);
+      else nieuw.add(id);
+      return nieuw;
+    });
+
+  const handleGroep = async (bevestigd = false) => {
+    setGroepBezig(true);
+    setGroepFout(null);
+    setGroepVraag(null);
+    setGroepMelding(null);
+    try {
+      const res = await fetch(withBasePath(`/api/planner/pool/${poolId}/members/selectie`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectie], ...groepDatums, ...(bevestigd ? { bevestigd: true } : {}) }),
+      });
+      const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setGroepVraag(data.error.message);
+        return;
+      }
+      if (!res.ok) throw new Error(data.error?.message || 'Opslaan mislukt');
+      const n = data.data.gewijzigd as number;
+      setGroepMelding(n === 1 ? '1 lidmaatschap gewijzigd.' : `${n} lidmaatschappen gewijzigd.`);
+      setSelectie(new Set());
+      setGroepDatums({ geldig_vanaf: '', geldig_tot: '' });
+      await loadStaff({ silent: true });
+    } catch (err) {
+      setGroepFout(foutTekst(err, 'Opslaan mislukt'));
+    } finally {
+      setGroepBezig(false);
+    }
+  };
+
   const startEditMembership = (member: StaffMember) => {
     setRowError(null);
     setEditingMembershipId(member.id);
@@ -345,6 +419,79 @@ export default function PoolStaffPage() {
           <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
         )}
 
+        {groepMelding && (
+          <div role="status" className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-900">{groepMelding}</div>
+        )}
+        {selectie.size > 0 && (
+          <div className="border border-blue-200 bg-blue-50 rounded p-3 space-y-3" data-testid="selectie-balk">
+            <p className="text-sm font-medium text-blue-900">
+              {selectie.size === 1 ? '1 persoon geselecteerd' : `${selectie.size} personen geselecteerd`}. Vul in wat je voor
+              allemaal wilt veranderen. Wat je leeg laat, blijft per persoon zoals het is.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+              <div>
+                <label htmlFor="groep-vanaf" className="block text-xs font-medium text-neutral-700 mb-1">Nieuwe Geldig vanaf</label>
+                <input
+                  id="groep-vanaf"
+                  type="date"
+                  value={groepDatums.geldig_vanaf}
+                  onChange={(e) => setGroepDatums({ ...groepDatums, geldig_vanaf: e.target.value })}
+                  className="w-full px-2 py-2 border rounded text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="groep-tot" className="block text-xs font-medium text-neutral-700 mb-1">Nieuwe Geldig tot</label>
+                <input
+                  id="groep-tot"
+                  type="date"
+                  value={groepDatums.geldig_tot}
+                  onChange={(e) => setGroepDatums({ ...groepDatums, geldig_tot: e.target.value })}
+                  className="w-full px-2 py-2 border rounded text-sm"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => handleGroep()}
+                  disabled={groepBezig || (!groepDatums.geldig_vanaf && !groepDatums.geldig_tot)}
+                  className="w-full px-3 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
+                >
+                  {groepBezig ? 'Bezig…' : 'Toepassen op selectie'}
+                </button>
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectie(new Set());
+                    setGroepFout(null);
+                    setGroepVraag(null);
+                  }}
+                  className="w-full px-3 py-2 rounded text-sm font-medium border border-neutral-300 bg-white hover:bg-neutral-50"
+                >
+                  Selectie wissen
+                </button>
+              </div>
+            </div>
+            {groepVraag && (
+              <div role="alert" className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2">
+                <p>{groepVraag}</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => handleGroep(true)} className="px-3 py-1 rounded bg-amber-700 text-white hover:bg-amber-800">
+                    Toch doorgaan
+                  </button>
+                  <button type="button" onClick={() => setGroepVraag(null)} className="px-3 py-1 rounded border border-neutral-300 hover:bg-neutral-50">
+                    Annuleren
+                  </button>
+                </div>
+              </div>
+            )}
+            {groepFout && (
+              <div role="alert" className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">{groepFout}</div>
+            )}
+          </div>
+        )}
+
         {staffLoading ? (
           <div className="border rounded p-4 text-sm text-neutral-600 text-center">Personeel laden...</div>
         ) : (
@@ -352,6 +499,15 @@ export default function PoolStaffPage() {
             <table className="w-full">
               <thead className="bg-neutral-100">
                 <tr>
+                  <th className="pl-4 py-2 text-left text-sm font-medium w-8">
+                    <input
+                      type="checkbox"
+                      aria-label="Iedereen selecteren"
+                      checked={members.length > 0 && selectie.size === members.length}
+                      onChange={(e) => setSelectie(e.target.checked ? new Set(members.map((m) => m.id)) : new Set())}
+                      className="h-4 w-4"
+                    />
+                  </th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Actief</th>
                   <th className="px-4 py-2 text-left text-sm font-medium">Geldig vanaf</th>
@@ -366,7 +522,16 @@ export default function PoolStaffPage() {
                   const error = rowError?.membershipId === member.id ? rowError.message : null;
                   return (
                     <Fragment key={member.id}>
-                      <tr className="hover:bg-neutral-50">
+                      <tr className={selectie.has(member.id) ? 'bg-blue-50' : 'hover:bg-neutral-50'}>
+                        <td className="pl-4 py-2">
+                          <input
+                            type="checkbox"
+                            aria-label={`${member.codenaam} selecteren`}
+                            checked={selectie.has(member.id)}
+                            onChange={() => wisselSelectie(member.id)}
+                            className="h-4 w-4"
+                          />
+                        </td>
                         <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
                         <td className="px-4 py-2 text-sm">
                           <span className={member.is_active ? 'text-green-600 font-medium' : 'text-neutral-500'}>
@@ -449,7 +614,7 @@ export default function PoolStaffPage() {
                       </tr>
                       {bevestigVraag?.membershipId === member.id && (
                         <tr>
-                          <td colSpan={6} className="px-4 pb-3">
+                          <td colSpan={7} className="px-4 pb-3">
                             <div role="alert" data-testid="rooster-bevestiging" className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2">
                               <p>{bevestigVraag.message}</p>
                               <div className="flex gap-2">
@@ -474,7 +639,7 @@ export default function PoolStaffPage() {
                       )}
                       {error && (
                         <tr>
-                          <td colSpan={6} className="px-4 pb-3">
+                          <td colSpan={7} className="px-4 pb-3">
                             <div ref={rowErrorRef} role="alert" data-testid="rij-fout" className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700">
                               {error}
                             </div>
@@ -486,7 +651,7 @@ export default function PoolStaffPage() {
                 })}
                 {members.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-6 text-center text-sm text-neutral-500">
+                    <td colSpan={7} className="px-4 py-6 text-center text-sm text-neutral-500">
                       Nog niemand in deze pool. Voeg hieronder iemand toe.
                     </td>
                   </tr>
@@ -558,13 +723,87 @@ export default function PoolStaffPage() {
           )}
           <p className="text-xs text-neutral-600" data-testid="geldig-uitleg">
             {defaults.periode
-              ? `Geldig vanaf en Geldig tot staan op de periode ${defaults.periode}. Doet deze persoon daarna ook mee? Zet Geldig tot dan later.`
-              : 'Geldig vanaf staat op vandaag en Geldig tot op 31 december 2029.'}
+              ? `Geldig vanaf staat op het begin van de periode ${defaults.periode}. Geldig tot staat op 31 december 2099: deze persoon doet mee tot je een einddatum zet.`
+              : 'Geldig vanaf staat op vandaag. Geldig tot staat op 31 december 2099: deze persoon doet mee tot je een einddatum zet.'}
           </p>
           <p className="text-xs text-neutral-500">
             Bestaat de codenaam al (bijv. iemand die eerder in een andere pool zat), dan wordt die
             persoon hergebruikt in plaats van dubbel aangemaakt.
           </p>
+
+          <div className="border-t border-neutral-200 pt-4 space-y-3" data-testid="reeks">
+            <p className="text-sm font-medium text-neutral-800">Een reeks toevoegen</p>
+            <p className="text-xs text-neutral-600">
+              Meerdere mensen tegelijk, met de Geldig vanaf en Geldig tot van hierboven. Wie al in de pool staat, wordt overgeslagen.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div>
+                <label htmlFor="reeks-van" className="block text-xs font-medium text-neutral-600 mb-1">Van codenaam</label>
+                <input
+                  id="reeks-van"
+                  type="text"
+                  value={reeks.van}
+                  onChange={(e) => setReeks({ ...reeks, van: e.target.value })}
+                  placeholder={pool?.type === 'AIOS' ? 'bijv. aios01' : 'bijv. staf31'}
+                  className="w-full px-2 py-2 border rounded text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="reeks-tot" className="block text-xs font-medium text-neutral-600 mb-1">Tot en met codenaam</label>
+                <input
+                  id="reeks-tot"
+                  type="text"
+                  value={reeks.tot}
+                  onChange={(e) => setReeks({ ...reeks, tot: e.target.value })}
+                  placeholder={pool?.type === 'AIOS' ? 'bijv. aios30' : 'bijv. staf40'}
+                  className="w-full px-2 py-2 border rounded text-sm"
+                />
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={handleReeks}
+                  disabled={reeksBezig || !reeks.van.trim() || !reeks.tot.trim() || !codenaamReeks(reeks.van, reeks.tot).ok}
+                  className="w-full px-3 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
+                >
+                  {reeksBezig ? 'Bezig…' : 'Reeks toevoegen'}
+                </button>
+              </div>
+            </div>
+            {reeks.van.trim() && reeks.tot.trim() && (() => {
+              const r = codenaamReeks(reeks.van, reeks.tot);
+              if (!r.ok) return <p className="text-xs text-red-700" data-testid="reeks-voorbeeld">{r.message}</p>;
+              const n = r.codenamen.length;
+              const voorbeeld = n <= 4 ? r.codenamen.join(', ') : `${r.codenamen.slice(0, 2).join(', ')} … ${r.codenamen.slice(-2).join(', ')}`;
+              return (
+                <p className="text-xs text-neutral-700" data-testid="reeks-voorbeeld">
+                  {n === 1 ? '1 codenaam' : `${n} codenamen`}: {voorbeeld}, van {newMember.geldig_vanaf} tot {newMember.geldig_tot}.
+                </p>
+              );
+            })()}
+            {reeksFout && (
+              <div role="alert" className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{reeksFout}</div>
+            )}
+            {reeksUitkomst && (
+              <div role="status" data-testid="reeks-uitkomst" className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-900 space-y-1">
+                <p>
+                  {reeksUitkomst.toegevoegd.length === 1 ? '1 persoon toegevoegd' : `${reeksUitkomst.toegevoegd.length} personen toegevoegd`}.
+                </p>
+                {reeksUitkomst.overgeslagen.length > 0 && (
+                  <>
+                    <p>Overgeslagen:</p>
+                    <ul className="list-disc pl-5">
+                      {reeksUitkomst.overgeslagen.map((o) => (
+                        <li key={o.codenaam}>
+                          {o.codenaam}: {o.reden}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

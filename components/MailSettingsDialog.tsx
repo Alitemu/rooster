@@ -144,18 +144,29 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
   // Also when the password can no longer be read: then there is still something to remove.
   const opgeslagen = Boolean(status?.gebruiker);
 
+  // One Opslaan for everything (0.901.0): the Gmail account, the achterwacht's addresses and the AIOS's. The AIOS's
+  // had a button of its own, and what was typed there went unsaved by this one without a word.
+  const gmailGewijzigd =
+    gebruiker.trim() !== (status?.gebruiker ?? '') || aan.trim() !== (status?.verzendlijst_aan ?? '') || wachtwoord.trim() !== '';
+
   const save = async () => {
     setBusy(true);
     setError(null);
     setMelding(null);
     try {
-      const res = await fetch(withBasePath('/api/planner/mail-settings'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
+      // Logging in to Gmail again only when its part changed: a new address for the AIOS saves without it (also
+      // while Google is unreachable, or before the account is set up at all).
+      let gmail = status;
+      if (gmailGewijzigd) {
+        const res = await fetch(withBasePath('/api/planner/mail-settings'), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ gebruiker, wachtwoord, verzendlijst_aan: aan }),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
+        gmail = data.data;
+      }
       const contactRes = await fetch(withBasePath('/api/planner/mail-settings/contact'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -163,30 +174,22 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
       });
       const contactData = await contactRes.json().catch(() => null);
       if (!contactRes.ok || !contactData?.success) throw new Error(contactData?.error?.message || 'Het contactadres opslaan is mislukt.');
-      apply({ ...data.data, contact_planner: contactData.data.contact_planner });
-      setMelding('Opgeslagen. De inlog bij Gmail is gelukt.');
-      onChanged?.();
-    } catch (err) {
-      setError(foutTekst(err, 'Opslaan is mislukt.'));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveAios = async () => {
-    setBusy(true);
-    setError(null);
-    setMelding(null);
-    try {
-      const res = await fetch(withBasePath('/api/aios/mail-instellingen'), {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ verzendlijst_aan: aiosAan, contact_planner: aiosContact }),
-      });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Opslaan is mislukt.');
-      applyAios({ ...data.data, wachtrij_items: aios?.wachtrij_items ?? [] });
-      setMelding('De instellingen van de AIOS zijn opgeslagen.');
+      if (gmail) apply({ ...gmail, contact_planner: contactData.data.contact_planner });
+      if (aios) {
+        const aiosRes = await fetch(withBasePath('/api/aios/mail-instellingen'), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ verzendlijst_aan: aiosAan, contact_planner: aiosContact }),
+        });
+        const aiosData = await aiosRes.json().catch(() => null);
+        if (!aiosRes.ok || !aiosData?.success) {
+          throw new Error(
+            `De achterwacht is opgeslagen, de AIOS niet: ${aiosData?.error?.message || 'opslaan is mislukt.'}`
+          );
+        }
+        applyAios({ ...aiosData.data, wachtrij_items: aios.wachtrij_items });
+      }
+      setMelding(gmailGewijzigd ? 'Opgeslagen. De inlog bij Gmail is gelukt.' : 'Opgeslagen.');
       onChanged?.();
     } catch (err) {
       setError(foutTekst(err, 'Opslaan is mislukt.'));
@@ -214,7 +217,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
     }
   };
 
-  const canSave = !busy && gebruiker.trim() !== '' && aan.trim() !== '' && (wachtwoord.trim() !== '' || ingesteld);
+  const canSave = !busy && (!gmailGewijzigd || (gebruiker.trim() !== '' && aan.trim() !== '' && (wachtwoord.trim() !== '' || ingesteld)));
 
   return (
     <div
@@ -354,11 +357,6 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
                 <p className="text-xs text-neutral-500 mt-1">
                   Dat adres zien de AIOS bij een voorlopig rooster. Laat leeg om geen adres te tonen.
                 </p>
-                <div className="mt-2 flex justify-end">
-                  <button type="button" onClick={saveAios} disabled={busy} className="btn-secondary">
-                    Opslaan voor de AIOS
-                  </button>
-                </div>
                 <div className="mt-2"><Wachtrij items={aios.wachtrij_items} aantal={aios.wachtrij} /></div>
               </>
             ) : (
@@ -415,7 +413,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
               Sluiten
             </button>
             <button onClick={save} disabled={!canSave} className="btn-primary">
-              {busy && !confirmDelete ? 'Inloggen bij Gmail...' : 'Opslaan'}
+              {busy && !confirmDelete ? (gmailGewijzigd ? 'Inloggen bij Gmail...' : 'Opslaan...') : 'Opslaan'}
             </button>
           </div>
         </div>
