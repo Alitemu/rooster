@@ -6022,10 +6022,11 @@ const MUTATIONS = [
     tests: ["app/api/aios/aiosGenereren"],
   },
   {
-    name: "aios tijd: less than a minute is taken",
+    // Without the lower bound (>= 1 instead of >= 60 would be equivalent: whole minutes already refuse 1 to 59).
+    name: "aios tijd: zero or less is taken",
     file: "lib/aiosGenereren.ts",
     find: "waarde >= 60 &&",
-    replace: "waarde >= 1 &&",
+    replace: "",
     tests: ["app/api/aios/aiosGenereren"],
   },
   {
