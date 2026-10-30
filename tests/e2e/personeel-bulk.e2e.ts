@@ -60,7 +60,7 @@ test('a reeks adds everyone but who is there already, and a selection gets one n
   await reeks.getByLabel('Van codenaam').fill(`b${tag}01`);
   await reeks.getByLabel('Tot en met codenaam').fill(`b${tag}05`);
   await expect(reeks.getByTestId('reeks-voorbeeld')).toContainText(`5 codenamen: b${tag}01, b${tag}02 … b${tag}04, b${tag}05`);
-  await reeks.getByRole('button', { name: 'Reeks toevoegen' }).click();
+  await reeks.getByRole('button', { name: 'Voeg de reeks toe' }).click();
   const uitkomst = reeks.getByTestId('reeks-uitkomst');
   await expect(uitkomst).toContainText('4 personen toegevoegd.');
   await expect(uitkomst).toContainText(`b${tag}03: Deze persoon heeft in deze pool al een lidmaatschap dat deze periode overlapt`);
@@ -70,7 +70,7 @@ test('a reeks adds everyone but who is there already, and a selection gets one n
   await reeks.getByLabel('Van codenaam').fill(`b${tag}09`);
   await reeks.getByLabel('Tot en met codenaam').fill(`b${tag}06`);
   await expect(reeks.getByTestId('reeks-voorbeeld')).toHaveText('Het tweede nummer is lager dan het eerste. Draai ze om.');
-  await expect(reeks.getByRole('button', { name: 'Reeks toevoegen' })).toBeDisabled();
+  await expect(reeks.getByRole('button', { name: 'Voeg de reeks toe' })).toBeDisabled();
 
   // Everyone selected, then two taken off again: the other three get the new Geldig tot.
   await page.getByLabel('Iedereen selecteren').check();

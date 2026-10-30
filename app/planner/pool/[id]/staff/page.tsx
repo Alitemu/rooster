@@ -766,7 +766,7 @@ export default function PoolStaffPage() {
                   disabled={reeksBezig || !reeks.van.trim() || !reeks.tot.trim() || !codenaamReeks(reeks.van, reeks.tot).ok}
                   className="w-full px-3 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
                 >
-                  {reeksBezig ? 'Bezig…' : 'Reeks toevoegen'}
+                  {reeksBezig ? 'Bezig…' : 'Voeg de reeks toe'}
                 </button>
               </div>
             </div>
