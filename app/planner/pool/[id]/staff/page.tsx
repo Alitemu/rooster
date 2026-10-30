@@ -744,7 +744,7 @@ export default function PoolStaffPage() {
                   type="text"
                   value={reeks.van}
                   onChange={(e) => setReeks({ ...reeks, van: e.target.value })}
-                  placeholder={pool?.type === 'AIOS' ? 'eerste, bijv. aios31' : 'eerste, bijv. staf31'}
+                  placeholder={pool?.type === 'AIOS' ? 'eerste van de reeks, zoals aios31' : 'eerste van de reeks, zoals staf31'}
                   className="w-full px-2 py-2 border rounded text-sm"
                 />
               </div>
@@ -755,7 +755,7 @@ export default function PoolStaffPage() {
                   type="text"
                   value={reeks.tot}
                   onChange={(e) => setReeks({ ...reeks, tot: e.target.value })}
-                  placeholder={pool?.type === 'AIOS' ? 'laatste, bijv. aios40' : 'laatste, bijv. staf40'}
+                  placeholder={pool?.type === 'AIOS' ? 'laatste van de reeks, zoals aios40' : 'laatste van de reeks, zoals staf40'}
                   className="w-full px-2 py-2 border rounded text-sm"
                 />
               </div>
