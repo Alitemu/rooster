@@ -409,7 +409,11 @@ lang de solver mag zoeken en klik op *Rooster maken*. Je ziet daarna het
 rooster per week, met een blok als één vak, en per AIOS de punten en het
 dienstpercentage: groen tot 25%, rood daarboven. Een dienst die leeg bleef,
 staat erbij met de reden. *Opnieuw maken* maakt het hele rooster opnieuw.
-*Rooster verwijderen* maakt alles weer leeg.
+*Rooster verwijderen* maakt alles weer leeg. Dit heeft de container
+`aios-solver` nodig: neem bij deze versie het nieuwe `docker-compose.yml`
+over (zie 0.74.0). Met de hand aanpassen en publiceren komen in een
+volgende versie.
+
 **Vanaf 0.902.0** zoekt de solver standaard 10 minuten. Je kiest 10, 15 of
 30 minuten, of vult zelf een aantal minuten in tot een uur. Kort zoeken
 geeft een rooster dat er klaar uitziet maar niet eerlijk is: met 30 AIOS
@@ -417,10 +421,18 @@ gaf 2 minuten een dienstpercentage van 5,6% tot 17,6%, 10 minuten van
 10,0% tot 11,7%. Na het maken staat erbij of de solver klaar was. Staat
 er dat de tijd op was, maak het rooster dan opnieuw met meer tijd. Je kunt
 de pagina intussen sluiten. In het tabblad *Dienstdoende* staan nu ook de
-punten en het percentage per AIOS. Dit heeft de container
-`aios-solver` nodig: neem bij deze versie het nieuwe `docker-compose.yml`
-over (zie 0.74.0). Met de hand aanpassen en publiceren komen in een
-volgende versie.
+punten en het percentage per AIOS.
+
+**Vanaf 0.903.0** laat *Dienstdoende* per AIOS en per soort zien wat eerlijk
+was: een gestippeld vak achter het balkje. Eindigt het balkje in het vak,
+dan is het eerlijk. ▲ is meer dan eerlijk en ▼ is minder. Het eerlijke
+aantal rekent de solver zelf uit, naar fte en werkdagen, met het inwerken en
+het saldo van vorige kwartalen. Een aandeel van 4,6 nachten is eerlijk bij 4
+of 5. Boven de tabel staat wie van een soort meer of minder heeft dan
+eerlijk. De avonden staan nu apart: in het weekend en door de week, zoals de
+solver ze ook apart verdeelt. Een rooster dat vóór deze versie gemaakt is,
+heeft voor de avonden door de week en de uitloopdiensten nog geen vak: maak
+het opnieuw als je dat wilt zien.
 
 **Vanaf versie 0.76.0** vraagt de app eerst wat er gebeurt met de blokken
 rond feestdagen. Bij *Rooster* staat dan het kader *Blokken rond
@@ -671,7 +683,7 @@ het met de punaise vastzet.
   diensten als legenda. Daaronder vier tabbladen: *Lijst* (alle diensten met wie
   ze doet), *Kalender* (de weken, met het ingevulde rooster zodra dat er is),
   *Dienstdoende* (per AIOS het aantal nachten, avonden, dagdiensten en
-  uitloopdiensten met een balkje) en *Ruilverzoeken* (leeg tot het rooster
+  uitloopdiensten met een balkje; vanaf 0.903.0 met het eerlijke aantal erachter) en *Ruilverzoeken* (leeg tot het rooster
   gepubliceerd is). Wijzigen met de hand kan in de lijst en in de kalender.
 - *Dienstpercentage en saldo:* de tabel *Per AIOS* heet nu zo.
 - *Volgorde:* *Geschiedenis van vóór de app* is de eerste sectie van de

@@ -163,6 +163,14 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(dienstdoende.getByRole('columnheader', { name: 'Punten' })).toBeVisible();
   await expect(dienstdoende.getByRole('columnheader', { name: 'Percentage' })).toBeVisible();
   await expect(dienstdoende.getByTestId('dienstdoende-punten')).toHaveCount(8);
+  // The fair range of every soort behind each bar (0.903.0): 8 AIOS, 6 soorten, the solver's own share. The summary
+  // names exactly the cells with an arrow, and a screen reader hears the cell in words.
+  await expect(dienstdoende.getByTestId('eerlijk-vlak')).toHaveCount(8 * 6);
+  const samenvatting = dienstdoende.getByTestId('eerlijk-samenvatting');
+  await expect(samenvatting).toHaveText(/^(Iedereen heeft van elke soort een eerlijk aantal diensten\.|\d+ AIOS (heeft|hebben) van een soort meer of minder diensten dan eerlijk:.*)$/s);
+  const verschillen = (await samenvatting.locator('li').allTextContents()).reduce((n, r) => n + r.split('; ').length, 0);
+  await expect(dienstdoende.getByTestId('eerlijk-pijl')).toHaveCount(verschillen);
+  await expect(dienstdoende.getByTestId('dienstdoende-nachten').first()).toContainText(/\d+ (nacht|nachten), eerlijk is \d+( of \d+)?\./);
   await sectie.getByRole('tab', { name: /Ruilverzoeken/ }).click();
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Er zijn nog geen ruilverzoeken gedaan.');
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster definitief is.');

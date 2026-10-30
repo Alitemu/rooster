@@ -6045,6 +6045,58 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py", "-k", "hour"],
   },
+  // 0.903.0: the fair range per soort in Dienstdoende.
+  {
+    name: "aios eerlijk: the range rounds the share instead of taking both sides",
+    file: "lib/aiosEerlijk.ts",
+    find: "return { van: Math.max(0, Math.floor(d)), tot: Math.max(0, Math.ceil(d)) };",
+    replace: "return { van: Math.max(0, Math.round(d)), tot: Math.max(0, Math.round(d)) };",
+    tests: ["lib/aiosEerlijk"],
+  },
+  {
+    name: "aios eerlijk: a debt from before is a range below none",
+    file: "lib/aiosEerlijk.ts",
+    find: "return { van: Math.max(0, Math.floor(d)), tot: Math.max(0, Math.ceil(d)) };",
+    replace: "return { van: Math.floor(d), tot: Math.ceil(d) };",
+    tests: ["lib/aiosEerlijk"],
+  },
+  {
+    name: "aios eerlijk: more than fair is measured from the low end",
+    file: "lib/aiosEerlijk.ts",
+    find: "if (aantal > bereik.tot) return aantal - bereik.tot;",
+    replace: "if (aantal > bereik.tot) return aantal - bereik.van;",
+    tests: ["lib/aiosEerlijk"],
+  },
+  {
+    name: "aios eerlijk: the summary leaves out who is outside",
+    file: "lib/aiosEerlijk.ts",
+    find: "return verschillen.length > 0 ? [{ codenaam: r.codenaam, verschillen }] : [];",
+    replace: "return verschillen.length > 1 ? [{ codenaam: r.codenaam, verschillen }] : [];",
+    tests: ["lib/aiosEerlijk"],
+  },
+  {
+    name: "aios eerlijk: the week evenings get the weekend's range",
+    file: "lib/aiosRooster.ts",
+    find: "weekavonden: bereik(d?.doel_weekavonden),",
+    replace: "weekavonden: bereik(d?.doel_weekendavonden),",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "aios eerlijk: the uitloop share is not stored",
+    file: "lib/aiosGenereren.ts",
+    find: "a.doel_weekavonden ?? null, a.doel_uitloopdiensten ?? null);",
+    replace: "a.doel_weekavonden ?? null, null);",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "aios-solver: the uitloop share is the week evenings'",
+    file: "aios-solver/main.py",
+    find: "doel_uitloopdiensten=round(u.doel_soort[a.id]['UITLOOP'], 2),",
+    replace: "doel_uitloopdiensten=round(u.doel_soort[a.id]['AVOND'], 2),",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_eerlijkheid.py", "-k", "week_evenings"],
+  },
 ];
 
 const args = process.argv.slice(2);

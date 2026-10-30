@@ -144,7 +144,7 @@ const solverUrl = () => process.env.AIOS_SOLVER_URL || 'http://aios-solver:8000'
 interface SolverUit {
   status: string;
   toewijzingen: Array<{ dienst_id: string; aios_id: string }>;
-  per_aios: Array<{ aios_id: string; doel_punten: number; doel_feestdagdiensten: number; doel_nachten?: number; doel_dagen?: number; doel_weekendavonden?: number }>;
+  per_aios: Array<{ aios_id: string; doel_punten: number; doel_feestdagdiensten: number; doel_nachten?: number; doel_dagen?: number; doel_weekendavonden?: number; doel_weekavonden?: number; doel_uitloopdiensten?: number }>;
   leeg: Array<{ dienst_id: string; redenen: Record<string, number> }>;
   tijd_seconden: number;
 }
@@ -215,10 +215,10 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
       legAiosFteVast(period.id, invoer.aios);
       db.prepare('DELETE FROM dienstrooster_aios_doel WHERE period_id = ?').run(period.id);
       const doel = db.prepare(
-        'INSERT INTO dienstrooster_aios_doel (id, period_id, person_id, doel_punten, doel_feestdagen, doel_nachten, doel_dagen, doel_weekendavonden) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO dienstrooster_aios_doel (id, period_id, person_id, doel_punten, doel_feestdagen, doel_nachten, doel_dagen, doel_weekendavonden, doel_weekavonden, doel_uitloopdiensten) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
       // An older solver image does not send the nights target: NULL, and the nights saldo of the quarter after is none.
-      for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten, a.doel_nachten ?? null, a.doel_dagen ?? null, a.doel_weekendavonden ?? null);
+      for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten, a.doel_nachten ?? null, a.doel_dagen ?? null, a.doel_weekendavonden ?? null, a.doel_weekavonden ?? null, a.doel_uitloopdiensten ?? null);
       // What the planner is told about the empty diensten stays with the roster.
       db.prepare('DELETE FROM dienstrooster_aios_generatie WHERE period_id = ?').run(period.id);
       db.prepare(

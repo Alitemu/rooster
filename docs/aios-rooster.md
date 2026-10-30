@@ -384,6 +384,13 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   10 minuten 10,0% tot 11,7%. Na het maken staat erbij of de solver klaar was
   of dat de tijd op was. In *Dienstdoende* staan de punten en het percentage
   naast het aantal diensten: eerlijk is op punten naar fte.
+- Ook elke soort apart is eerlijk verdeeld (0.103.0): nachten, dagdiensten,
+  avonden in het weekend, avonden door de week en uitloopdiensten. Sinds
+  0.903.0 toont *Dienstdoende* per AIOS en per soort het eerlijke bereik als
+  een gestippeld vak achter het balkje: de hele getallen rond het aandeel dat
+  de solver uitrekent (4,6 nachten is 4 of 5, een schuld van vroeger is 0).
+  Buiten het vak staat ▲ of ▼ en boven de tabel wie meer of minder heeft dan
+  eerlijk, in woorden.
 - De planner ziet vóór het genereren hoeveel punten het kwartaal heeft: Q3 2026
   heeft 195 punten (nachten 91, avonden 65, dagdiensten 26, uitloopdiensten 13),
   dus de AIOS hebben samen minstens 12 fte nodig om onder gemiddeld 25% te

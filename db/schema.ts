@@ -692,7 +692,7 @@ export const aiosBlokkeuze = sqliteTable(
 
 /**
  * The solver's fair share per AIOS of a quarter it made (aios-solver
- * per_aios: doel_punten, doel_feestdagdiensten), the years before included
+ * per_aios: doel_punten, doel_feestdagdiensten and per soort), the years before included
  * (lib/aiosSaldo.ts): the next quarter's saldo is this minus what the AIOS
  * did, as the roster is then. Written with the roster, gone with it.
  */
@@ -710,6 +710,10 @@ export const aiosDoel = sqliteTable(
     // The same for the dagdiensten and the avonddiensten in the weekend (0.108.0); NULL for a quarter made before.
     doel_dagen: real('doel_dagen'),
     doel_weekendavonden: real('doel_weekendavonden'),
+    // The avonddiensten in the week and the uitloopdiensten (0.903.0), for the fair range in Dienstdoende; these carry
+    // no saldo. NULL for a quarter made before: it shows no range for them.
+    doel_weekavonden: real('doel_weekavonden'),
+    doel_uitloopdiensten: real('doel_uitloopdiensten'),
   },
   (table) => ({
     uniq: uniqueIndex('aios_doel_uniq').on(table.period_id, table.person_id),

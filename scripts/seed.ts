@@ -495,7 +495,9 @@ async function createTables() {
       doel_feestdagen REAL NOT NULL,
       doel_nachten REAL,
       doel_dagen REAL,
-      doel_weekendavonden REAL
+      doel_weekendavonden REAL,
+      doel_weekavonden REAL,
+      doel_uitloopdiensten REAL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS aios_doel_uniq
       ON dienstrooster_aios_doel(period_id, person_id);
@@ -741,6 +743,8 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
     doel_nachten: 'REAL',
     doel_dagen: 'REAL',
     doel_weekendavonden: 'REAL',
+    doel_weekavonden: 'REAL',
+    doel_uitloopdiensten: 'REAL',
   },
   dienstrooster_aios_ruil: {
     gezien_op: 'TEXT',

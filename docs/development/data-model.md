@@ -57,7 +57,9 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   solver's fair share (doel_punten, doel_feestdagen, and since 0.107.0,
   migration 0034, doel_nachten: NULL for a quarter made before, whose nights
   saldo is then none, and since 0.108.0, migration 0035, doel_dagen and
-  doel_weekendavonden, the same for the dagdiensten and the weekend evenings),
+  doel_weekendavonden, the same for the dagdiensten and the weekend evenings,
+  and since 0.903.0, migration 0038, doel_weekavonden and
+  doel_uitloopdiensten, for the fair range in Dienstdoende only: no saldo),
   written with the roster, removed with it; the next
   quarter's saldo is measured against it (lib/aiosSaldo.ts). Cascades with
   the period and the person.

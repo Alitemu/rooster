@@ -213,7 +213,13 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   roster's to judge.
   The answer's per_aios holds doel_nachten, doel_dagen and doel_weekendavonden:
   the fair number of each this quarter, the saldo of the years before
-  included (a debt stays a debt).
+  included (a debt stays a debt). Since 0.903.0 also doel_weekavonden and
+  doel_uitloopdiensten (no saldo): the app stores all five and shows each
+  as a fair range in Dienstdoende (lib/aiosEerlijk.ts: the whole numbers
+  either side of the share, none below none). An older solver image sends
+  neither: NULL, no range for those two. test_eerlijkheid.py checks they
+  add up to every such dienst and that inwerken lowers the evenings' share
+  but not the uitloopdiensten'.
 - `tijdslimiet_seconden` (1 to 3600, default 600; 0.902.0), `seed`. The app
   offers 10, 15 and 30 minutes and whole minutes up to 60 typed in
   (lib/aiosGenereren.ts). Measured on one quarter with 30 AIOS (October 2026):

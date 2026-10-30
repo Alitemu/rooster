@@ -219,3 +219,27 @@ def test_one_weekend_saldo_leaves_the_other_alone():
     assert x.doel_dagen == pytest.approx(3.8, abs=0.05)
     assert x.doel_weekendavonden == pytest.approx(0.8, abs=0.05)
     assert x.doel_nachten == pytest.approx(2.8, abs=0.05)
+
+
+def test_the_week_evenings_and_uitloopdiensten_have_their_share_too():
+    """0.903.0: the app shows a fair range per soort, so the solver tells the share of these two as well. They carry
+    no saldo: a saldo of nights moves nothing here, and together the shares are every such dienst."""
+    inp = weken(4)
+    aios(inp, 'x', fte=1.0, saldo_nachten=3)
+    aios(inp, 'y', fte=0.5)
+    aios(inp, 'z', inwerken={'van': dag(0).isoformat(), 'tot': dag(6).isoformat()})
+    _meer(inp, 7)
+    uit, _ = los_op(inp)
+    x, y = _per(uit, 'x'), _per(uit, 'y')
+    for veld, code in (('doel_weekavonden', 'AD'), ('doel_uitloopdiensten', 'UD')):
+        n = sum(1 for d in inp['diensten'] if d['id'].startswith(f'{code}-'))
+        assert n > 0
+        assert sum(getattr(p, veld) for p in uit.per_aios) == pytest.approx(n, abs=0.1), veld
+        # Half the fte, half the share; the night saldo leaves it as anyone else's.
+        assert getattr(y, veld) == pytest.approx(getattr(x, veld) / 2, abs=0.02), veld
+        assert getattr(x, veld) * 0.8 == pytest.approx(getattr(_per(uit, 'a00'), veld), abs=0.02), veld  # a00: 0,8 fte
+    # Who inwerkt has no evenings in the first week, but uitloopdiensten from the start: a smaller share of the one,
+    # the same share of the other as anyone of their fte.
+    z, a00 = _per(uit, 'z'), _per(uit, 'a00')
+    assert z.doel_weekavonden < a00.doel_weekavonden - 0.1
+    assert z.doel_uitloopdiensten == pytest.approx(a00.doel_uitloopdiensten, abs=0.02)

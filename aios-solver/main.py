@@ -232,6 +232,10 @@ class PerAios(BaseModel):
     # Likewise the fair number of dagdiensten and of avonddiensten in the weekend (0.108.0).
     doel_dagen: float
     doel_weekendavonden: float
+    # And of the avonddiensten in the week and the uitloopdiensten, which carry no saldo (0.903.0): the app shows
+    # each soort's fair range beside what the AIOS got.
+    doel_weekavonden: float
+    doel_uitloopdiensten: float
     blokken: int
     liever_niet: int
     voorkeur: int
@@ -350,6 +354,8 @@ def los_op(inp: SolveInput, stop: Optional[model.Stop] = None) -> SolveOutput:
                 doel_nachten=round(u.doel_soort[a.id]['NACHT'], 2),
                 doel_dagen=round(u.doel_soort[a.id]['DAG'], 2),
                 doel_weekendavonden=round(u.doel_soort[a.id]['AVOND_WEEKEND'], 2),
+                doel_weekavonden=round(u.doel_soort[a.id]['AVOND'], 2),
+                doel_uitloopdiensten=round(u.doel_soort[a.id]['UITLOOP'], 2),
                 blokken=sum(1 for o in gekregen if o.is_blok),
                 liever_niet=sum(1 for o in gekregen if niveau(o, 'LIEVER_NIET')),
                 voorkeur=sum(1 for o in gekregen if niveau(o, 'VOORKEUR')),

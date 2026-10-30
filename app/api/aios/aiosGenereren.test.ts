@@ -327,6 +327,48 @@ describe('making the AIOS roster', () => {
     expect(data.leeg).toBe(slotsVan(w.period).length - toewijzingen().length);
   });
 
+  it('stores the share of every soort and shows each as a fair range; an older solver without the new two shows none for them (0.903.0)', async () => {
+    const doelen = { doel_punten: 5, doel_feestdagdiensten: 0.4, doel_nachten: 2.6, doel_dagen: 0, doel_weekendavonden: -0.3, doel_weekavonden: 1.5, doel_uitloopdiensten: 4 };
+    antwoordVan = (invoer) => {
+      const g = gewoon(invoer);
+      (g.body as any).per_aios = [{ aios_id: w.x, ...doelen }];
+      return g;
+    };
+    await klaar(await maak());
+    expect(
+      db.prepare('SELECT doel_weekavonden, doel_uitloopdiensten FROM dienstrooster_aios_doel WHERE period_id = ? AND person_id = ?').get(w.period, w.x)
+    ).toEqual({ doel_weekavonden: 1.5, doel_uitloopdiensten: 4 });
+    const lees = async () => (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.per_aios;
+    const eerst = await lees();
+    let x = eerst.find((a: any) => a.person_id === w.x);
+    const y = eerst.find((a: any) => a.person_id === w.y);
+    expect(x.eerlijk).toEqual({
+      nachten: { van: 2, tot: 3 },
+      dagdiensten: { van: 0, tot: 0 },
+      weekendavonden: { van: 0, tot: 0 },
+      weekavonden: { van: 1, tot: 2 },
+      uitloopdiensten: { van: 4, tot: 4 },
+      feestdagdiensten: { van: 0, tot: 1 },
+    });
+    expect(x.nachten).toBe(3);
+    expect(x.weekavonden + x.weekendavonden).toBe(x.avonden);
+    // y got no share from the solver: no range, not a range of none.
+    expect(Object.values(y.eerlijk).every((b) => b === null)).toBe(true);
+    expect(y.dagdiensten).toBeGreaterThan(0);
+
+    antwoordVan = (invoer) => {
+      const g = gewoon(invoer);
+      const { doel_weekavonden: _a, doel_uitloopdiensten: _u, ...ouder } = doelen;
+      (g.body as any).per_aios = [{ aios_id: w.x, ...ouder }];
+      return g;
+    };
+    await klaar(await maak());
+    x = (await lees()).find((a: any) => a.person_id === w.x);
+    expect(x.eerlijk.weekavonden).toBeNull();
+    expect(x.eerlijk.uitloopdiensten).toBeNull();
+    expect(x.eerlijk.nachten).toEqual({ van: 2, tot: 3 });
+  });
+
   it('one generation at a time, and the roster stays as it is meanwhile', async () => {
     antwoordVan = (i) => ({ ...gewoon(i), vertraging: 300 });
     const job = await maak();

@@ -20,6 +20,7 @@ import { controleerAiosRooster, regelZin, type Regel } from '@/lib/aiosRegels';
 import { aiosSaldi, aiosSaldoWoorden, type SaldoBron } from '@/lib/aiosSaldo';
 import { fellowNacht } from '@/lib/aiosToetsNacht';
 import { aiosJaarPercentages } from '@/lib/aiosJaarPercentage';
+import { eerlijkBereik, type Bereik, type EerlijkSoort } from '@/lib/aiosEerlijk';
 
 export interface AiosRoosterDienst {
   slot_id: string;
@@ -55,6 +56,12 @@ export interface AiosRoosterPerAios {
   dagdiensten: number;
   uitloopdiensten: number;
   feestdagdiensten: number;
+  // `avonden` split in the two soorten the solver shares apart (0.903.0).
+  weekavonden: number;
+  weekendavonden: number;
+  // The fair range per soort, from the solver's share (lib/aiosEerlijk.ts); null before the roster is made, and for
+  // a soort whose share a quarter made by an older version does not have.
+  eerlijk: Record<EerlijkSoort, Bereik | null>;
   blokken: number;
   liever_niet: number;
   voorkeur: number;
@@ -155,13 +162,26 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
   const feestdagen = new Set(invoer.feestdagen);
   const bron = aiosSaldi(period, invoer.aios.map((a) => a.id));
   const doel = new Map(
-    (db.prepare('SELECT person_id, doel_punten FROM dienstrooster_aios_doel WHERE period_id = ?').all(period.id) as Array<{
+    (db
+      .prepare(
+        `SELECT person_id, doel_punten, doel_feestdagen, doel_nachten, doel_dagen, doel_weekendavonden, doel_weekavonden, doel_uitloopdiensten
+         FROM dienstrooster_aios_doel WHERE period_id = ?`
+      )
+      .all(period.id) as Array<{
       person_id: string;
       doel_punten: number;
-    }>).map((d) => [d.person_id, d.doel_punten])
+      doel_feestdagen: number;
+      doel_nachten: number | null;
+      doel_dagen: number | null;
+      doel_weekendavonden: number | null;
+      doel_weekavonden: number | null;
+      doel_uitloopdiensten: number | null;
+    }>).map((d) => [d.person_id, d])
   );
+  const bereik = (waarde: number | null | undefined) => (waarde === null || waarde === undefined ? null : eerlijkBereik(waarde));
   const per_aios = invoer.aios.map((a): AiosRoosterPerAios => {
     const mijn = rows.filter((r) => r.person_id === a.id);
+    const d = doel.get(a.id);
     const tiende = Math.round(mijn.reduce((som, r) => som + r.punten, 0) * 10) / 10;
     const werkdagen = aiosWerkdagen(a, period.start_datum, period.eind_datum, feestdagen);
     const vakken = (niveau: string) =>
@@ -178,13 +198,23 @@ export function laadAiosRooster(period: AiosUitnodigPeriode): AiosRooster {
       dagdiensten: mijn.filter((r) => r.code === 'DD').length,
       uitloopdiensten: mijn.filter((r) => r.code === 'UD').length,
       feestdagdiensten: mijn.filter((r) => r.is_feestdag).length,
+      weekavonden: mijn.filter((r) => r.code === 'AD').length,
+      weekendavonden: mijn.filter((r) => r.code === 'ADW').length,
+      eerlijk: {
+        nachten: bereik(d?.doel_nachten),
+        dagdiensten: bereik(d?.doel_dagen),
+        weekendavonden: bereik(d?.doel_weekendavonden),
+        weekavonden: bereik(d?.doel_weekavonden),
+        uitloopdiensten: bereik(d?.doel_uitloopdiensten),
+        feestdagdiensten: bereik(d?.doel_feestdagen),
+      },
       blokken: new Set(mijn.filter((r) => r.blok_id).map((r) => (r.blok_vorm === 'LOS' ? r.slot_id : r.blok_id))).size,
       liever_niet: vakken('LIEVER_NIET'),
       voorkeur: vakken('VOORKEUR'),
       geblokkeerd: vakken('ABSOLUUT'),
       saldo: aiosSaldoWoorden(a),
       saldo_bron: bron.get(a.id)!.bron,
-      doel_punten: doel.get(a.id) ?? null,
+      doel_punten: d?.doel_punten ?? null,
       jaar_percentage: null,
       jaar_kwartalen: 1,
     };
