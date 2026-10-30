@@ -15,6 +15,8 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
 import { APP_TIME_ZONE } from '@/lib/localDate';
+import { backupFoutmelding } from '@/lib/backupAntwoord';
+import { WachtwoordVeld } from '@/components/WachtwoordVeld';
 
 interface Status {
   ingesteld: boolean;
@@ -75,6 +77,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
     setMelding(null);
     setConfirmStop(false);
     setTeruggezet(null);
+    setTerugWachtwoord('');
     fetch(withBasePath('/api/admin/back-up'))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
@@ -93,7 +96,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       body: body === undefined ? undefined : JSON.stringify(body),
     });
     const data = await res.json().catch(() => null);
-    if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Dat is niet gelukt.');
+    if (!res.ok || !data?.success) throw new Error(backupFoutmelding(res.status, data));
     return data.data;
   };
 
@@ -231,20 +234,18 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                   <label htmlFor="backup-wachtwoord" className="block text-sm font-semibold text-neutral-900 mb-1">
                     Back-upwachtwoord
                   </label>
-                  <input
+                  <WachtwoordVeld
                     id="backup-wachtwoord"
-                    type="password"
-                    autoComplete="new-password"
                     placeholder={status?.wachtwoord_leesbaar ? 'Opgeslagen. Laat leeg om het te houden.' : `minstens ${MIN_WACHTWOORD} tekens`}
                     value={wachtwoord}
-                    onChange={(e) => setWachtwoord(e.target.value)}
-                    aria-describedby="backup-wachtwoord-uitleg"
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    onChange={setWachtwoord}
+                    beschrijving="backup-wachtwoord-uitleg"
                   />
                   {nieuwWachtwoordTeKort && <p className="text-xs text-red-800 mt-1">Minstens {MIN_WACHTWOORD} tekens.</p>}
                   <p id="backup-wachtwoord-uitleg" className="text-xs text-neutral-600 mt-1">
                     Bewaar dit wachtwoord apart, bijvoorbeeld in de kluis van de afdeling. Zonder dit wachtwoord kan niemand de
-                    back-ups openen, ook de beheerder niet. Een nieuw wachtwoord geldt voor de back-ups die daarna uitgaan.
+                    back-ups openen, ook de beheerder niet. Een nieuw wachtwoord geldt voor de back-ups die daarna uitgaan. Hoofdletters
+                    tellen mee: kijk met Toon wachtwoord of je het goed getypt hebt.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 justify-end">
@@ -283,14 +284,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                   <label htmlFor="backup-terug-wachtwoord" className="block text-sm font-semibold text-neutral-900 mb-1">
                     Back-upwachtwoord van dat bestand
                   </label>
-                  <input
-                    id="backup-terug-wachtwoord"
-                    type="password"
-                    autoComplete="off"
-                    value={terugWachtwoord}
-                    onChange={(e) => setTerugWachtwoord(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                  />
+                  <WachtwoordVeld id="backup-terug-wachtwoord" value={terugWachtwoord} onChange={setTerugWachtwoord} />
                 </div>
                 <div>
                   <label htmlFor="backup-bevestiging" className="block text-sm font-semibold text-neutral-900 mb-1">

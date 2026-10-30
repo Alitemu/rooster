@@ -123,7 +123,7 @@ describe('restoring a backup', () => {
 
   it('refuses a wrong password', async () => {
     const fout = await weigertZonderIetsTeVeranderen(backupVan(database('b')), 'ander wachtwoord');
-    expect(fout).toEqual({ status: 400, message: 'Het wachtwoord klopt niet of het bestand is beschadigd.' });
+    expect(fout).toEqual({ status: 400, message: 'Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.' });
   });
 
   it('refuses a backup from a newer version of the app', async () => {

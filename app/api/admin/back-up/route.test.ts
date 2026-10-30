@@ -147,7 +147,7 @@ describe('/api/admin/back-up/terugzetten', () => {
     expect(await fout({})).toBe('Kies eerst een back-upbestand.');
     expect(await fout({ bestand: 'eHg=' })).toBe('Vul het back-upwachtwoord in.');
     expect(await fout({ bestand: 'eHg=', wachtwoord: WACHTWOORD, bevestiging: 'ja' })).toBe('Typ TERUGZETTEN om te bevestigen dat je de huidige gegevens wilt vervangen.');
-    expect(await fout({ bestand: await bestand(), wachtwoord: 'verkeerd wachtwoord', bevestiging: 'TERUGZETTEN' })).toBe('Het wachtwoord klopt niet of het bestand is beschadigd.');
+    expect(await fout({ bestand: await bestand(), wachtwoord: 'verkeerd wachtwoord', bevestiging: 'TERUGZETTEN' })).toBe('Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.');
   });
 
   it('reads a body larger than the 1 MB every other route takes', async () => {

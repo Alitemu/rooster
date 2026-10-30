@@ -567,6 +567,12 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.904.0:**
+- *Neem het nieuwe `docker-compose.yml` over als je dat sinds 0.800.0 niet gedaan hebt.* `docker compose pull` haalt alleen de nieuwe app op, niet dit bestand. Sinds 0.800.0 staan de regels van Caddy erin en wordt een los `Caddyfile` niet meer gebruikt. Sinds 0.900.0 mag een back-up die je terugzet groter zijn dan 1 MB. Met het oude bestand weigert de server elke back-up boven ongeveer 750 KB, en de app zegt dat nu ook ("De server weigert dit bestand, omdat het te groot is"). Je ziet het oude bestand aan de regel `./Caddyfile:/etc/caddy/Caddyfile` bij `caddy`. Bewaar je eigen `.env`, `data/` en `certs/`, vervang alleen `docker-compose.yml` en voer `docker compose up -d` uit.
+- *Synology:* daar maakt Docker een ontbrekende map niet zelf aan. Maak bij een nieuwe installatie eerst `mkdir certs data` naast `docker-compose.yml`, anders stopt `docker compose up` met `Bind mount failed: ... certs does not exist`.
+- *Back-upwachtwoord:* naast elk wachtwoordveld bij *Back-up* staat *Toon wachtwoord*, zodat je ziet wat je getypt hebt. Staat Caps Lock aan, dan zegt de app dat. Het veld bij *Back-up terugzetten* vult de browser niet meer zelf in met je inlogwachtwoord. Klopt het wachtwoord niet, dan zegt de melding erbij: let op hoofdletters en kleine letters.
+- *Rooster genereren (achterwacht):* de knop na een rooster dat nog niet bewezen het beste is, heet nu *Opnieuw maken met 5 minuten zoektijd* (daarna 10 minuten), in plaats van *5 minuten langer proberen*. De solver zoekt dan niet verder vanaf het rooster dat je ziet, maar begint helemaal opnieuw. Het nieuwe rooster vervangt het oude, ook als het niet beter is. Diensten die je met de hand hebt ingevuld, blijven staan.
+
 **Vanaf versie 0.809.1:** onderhoud zonder zichtbare wijziging. Het genereren van het rooster van de achterwacht gebruikt in de code nu overal echte types in plaats van `any`, zodat de controle vooraf een tikfout of een gewijzigde kolom voortaan vangt. Vergeleken is dat de JavaScript die draait voor en na precies gelijk is.
 
 **Vanaf versie 0.809.0:** vier punten uit de audit. Wijzigen twee mensen tegelijk de deadline van een AIOS-periode (de planner en de beheerder), dan overschrijft de laatste de eerste niet meer stil: wie een verouderde deadline op het scherm had, krijgt de melding dat de deadline intussen is aangepast en laadt de pagina opnieuw. Foutmeldingen noemen geen interne nummers meer ("Persoon niet gevonden" in plaats van een lange code). Op de inlogpagina heet de code voor de eerste installatie nu *Installatiecode*. Twee oude testbestanden die alleen hun eigen tabellen testten zijn weg.
@@ -606,7 +612,7 @@ het met de punaise vastzet.
 
 **Vanaf versie 0.801.0:** poort 80 staat standaard open en stuurt `http://` door naar `https://`, zonder `.env`. Is poort 80 bezet, zet dan `HTTP_PORT=8080` in `.env`.
 
-**Vanaf versie 0.800.0:** `docker-compose.yml` is de hele installatie. De Caddyfile zit er nu in, dus er hoeft niets naast het bestand te staan behalve `.env` en eventueel de map `certs`. De app luistert standaard op https, poort 443. Draait de NAS zelf al iets op 443, zet dan `APP_PORT=8010` in `.env`, zoals bij een installatie die tot nu toe op de standaardwaarde draaide. Een installatie die `APP_PORT` al in `.env` heeft staan, merkt niets. Ook zijn drie dingen die nog geen eigen test hadden nu gedekt: het stoppen van de AIOS-solver als de aanvrager ophangt, de regelnummers in meldingen van de voorkeurenimport en de grootte van de AIOS-dialogen op een telefoon.
+**Vanaf versie 0.800.0:** `docker-compose.yml` is de hele installatie. **Neem bij deze versie het nieuwe `docker-compose.yml` over:** `docker compose pull` doet dat niet. De Caddyfile zit er nu in, dus er hoeft niets naast het bestand te staan behalve `.env` en eventueel de map `certs`. De app luistert standaard op https, poort 443. Draait de NAS zelf al iets op 443, zet dan `APP_PORT=8010` in `.env`, zoals bij een installatie die tot nu toe op de standaardwaarde draaide. Een installatie die `APP_PORT` al in `.env` heeft staan, merkt niets. Ook zijn drie dingen die nog geen eigen test hadden nu gedekt: het stoppen van de AIOS-solver als de aanvrager ophangt, de regelnummers in meldingen van de voorkeurenimport en de grootte van de AIOS-dialogen op een telefoon.
 
 **Vanaf versie 0.112.0:** een tweede audit, nu vanuit andere hoeken: gelijktijdigheid, de solvers onder vijandige invoer, data en tijdzones, beveiliging, import en export, toegankelijkheid en taal, herstel en prestaties, en de kwaliteit van de tests zelf. Wat bleek is hersteld.
 
@@ -1035,6 +1041,11 @@ image, zodat een installatie niets van GitHub nodig heeft behalve de image.
 #### Productie
 
 1. `docker compose up` op eigen hardware (geen cloud/Kubernetes vereist).
+   Naast `docker-compose.yml` is verder niets nodig. Op een Synology maak je
+   eerst de mappen `certs` en `data` aan (`mkdir certs data`): daar maakt
+   Docker ze niet zelf. Bij een nieuwe versie haalt `docker compose pull` de
+   app op. Zegt de README bij die versie dat `docker-compose.yml` veranderd
+   is, vervang dan ook dat bestand.
 2. **Een schone start:** dat is de standaard (`SEED_ON_START=planner`).
    De app maakt het beheerdersaccount `admin`, de pool, de soorten
    diensten, de berichtteksten en 30 deelnemers (staf01 tot en met

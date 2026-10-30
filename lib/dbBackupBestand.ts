@@ -34,6 +34,10 @@ const MAX_DATABASE_BYTES = 1024 * 1024 * 1024;
 
 export const MIN_WACHTWOORD_LENGTE = 12;
 
+/** A wrong password and a changed byte fail alike. The case of a letter is what went wrong in practice (0.904.0). */
+export const WACHTWOORD_KLOPT_NIET =
+  'Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.';
+
 export interface BackupKop {
   formaat: number;
   /** package.json's version of the app that made it. */
@@ -115,7 +119,7 @@ export function openBackupBestand(bestand: Buffer, wachtwoord: string): { kop: B
     gzip = Buffer.concat([decipher.update(bestand.subarray(voorwerk.length, bestand.length - TAG_LENGTE)), decipher.final()]);
   } catch {
     // GCM cannot tell a wrong password from a changed byte, and neither can we.
-    throw new BackupBestandFout('Het wachtwoord klopt niet of het bestand is beschadigd.');
+    throw new BackupBestandFout(WACHTWOORD_KLOPT_NIET);
   }
   try {
     return { kop, database: zlib.gunzipSync(gzip, { maxOutputLength: MAX_DATABASE_BYTES }) };

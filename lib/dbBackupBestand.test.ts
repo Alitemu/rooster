@@ -40,8 +40,8 @@ describe('backup file', () => {
 
   it('does not open with another password', () => {
     const bestand = maakBackupBestand(Buffer.from('database'), WACHTWOORD, META);
-    expect(fout(() => openBackupBestand(bestand, 'correct paard batterij!'))).toBe('Het wachtwoord klopt niet of het bestand is beschadigd.');
-    expect(fout(() => openBackupBestand(bestand, ''))).toBe('Het wachtwoord klopt niet of het bestand is beschadigd.');
+    expect(fout(() => openBackupBestand(bestand, 'correct paard batterij!'))).toBe('Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.');
+    expect(fout(() => openBackupBestand(bestand, ''))).toBe('Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.');
   });
 
   it('refuses a file with any one byte changed, in the header as well as in the data', () => {

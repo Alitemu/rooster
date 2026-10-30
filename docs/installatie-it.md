@@ -147,6 +147,7 @@ andere toepassing een eigen servernaam.
 
 | Symptoom | Oorzaak en oplossing |
 |---|---|
+| `docker compose up` stopt met `Bind mount failed: ... certs does not exist` (Synology) | Daar maakt Docker een ontbrekende map niet zelf aan. Voer naast `docker-compose.yml` `mkdir certs data` uit en start opnieuw. |
 | `docker compose up` meldt dat poort 443 of 80 bezet is | Een andere dienst gebruikt de poort. Controleer met `ss -tlnp \| grep ':443 '`. Zet in `.env` een andere poort: `APP_PORT=8010` voor https, `HTTP_PORT=8080` voor de doorverwijzing van http. |
 | De browser geeft een certificaatwaarschuwing | `TLS_MODUS=bestand` ontbreekt in `.env` (dan gebruikt Caddy zijn eigen CA). Of het certificaat bevat de DNS-naam niet of is verlopen. Zie `docker compose logs caddy --tail 50`. |
 | `caddy` start niet en `docker compose logs caddy` begint met `[dienstrooster] FOUT: certs/rooster.pem ontbreekt of is niet leesbaar` (daarna Caddy's eigen melding `loading certificates`) | Met `TLS_MODUS=bestand` moeten `certs/rooster.pem` en `certs/rooster.key` bestaan en leesbaar zijn. De sleutel mag geen wachtwoord hebben. Zolang `caddy` niet start, is de hele site onbereikbaar. |

@@ -81,8 +81,33 @@ test('the beheerder restores a backup of more than 10 MB in the browser, and a w
     await expect(knop).toBeDisabled();
     await dialoog.getByLabel('Typ TERUGZETTEN om te bevestigen').fill('TERUGZETTEN');
     await knop.click();
-    await expect(dialoog.getByRole('alert')).toHaveText('Het wachtwoord klopt niet of het bestand is beschadigd.');
+    await expect(dialoog.getByRole('alert')).toHaveText('Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.');
     expect(markerWaarde(later)).toBe('na-de-backup');
+
+    // 0.904.0: what was typed can be shown, and a field the browser could fill starts empty.
+    const veld = dialoog.getByLabel('Back-upwachtwoord van dat bestand');
+    await expect(veld).toHaveAttribute('type', 'password');
+    await expect(veld).toHaveAttribute('autocomplete', 'new-password');
+    await dialoog.getByRole('button', { name: 'Toon wachtwoord' }).nth(1).click();
+    await expect(veld).toHaveAttribute('type', 'text');
+    await expect(veld).toHaveValue('niet het goede wachtwoord');
+    await dialoog.getByRole('button', { name: 'Verberg wachtwoord' }).click();
+    await expect(veld).toHaveAttribute('type', 'password');
+    // Caps Lock on: said beside the field. Headless Chromium does not toggle it on a key press, so the key event
+    // carries it as a real keyboard's does.
+    await veld.dispatchEvent('keydown', { key: 'A', modifierCapsLock: true });
+    await expect(dialoog.getByText('Caps Lock staat aan. Let op hoofdletters en kleine letters.')).toBeVisible();
+    await veld.dispatchEvent('keydown', { key: 'a', modifierCapsLock: false });
+    await expect(dialoog.getByText('Caps Lock staat aan. Let op hoofdletters en kleine letters.')).toHaveCount(0);
+
+    // Something in front of the app refuses the size with an empty 413 (an old docker-compose.yml): said so, not
+    // "Dat is niet gelukt.".
+    await page.route('**/api/admin/back-up/terugzetten', (route) => route.fulfill({ status: 413, body: '' }));
+    await knop.click();
+    await expect(dialoog.getByRole('alert')).toHaveText(
+      'De server weigert dit bestand, omdat het te groot is. Neem het nieuwe docker-compose.yml over (README, bij versie 0.904.0) en probeer het opnieuw.'
+    );
+    await page.unroute('**/api/admin/back-up/terugzetten');
 
     await dialoog.getByLabel('Back-upwachtwoord van dat bestand').fill(WACHTWOORD);
     await knop.click();

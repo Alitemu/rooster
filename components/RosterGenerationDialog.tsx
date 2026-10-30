@@ -15,6 +15,7 @@ import { withBasePath } from '@/lib/basePath';
 import { explainBereikTekort, explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
+import { opnieuwKnopTekst, opnieuwUitleg, STANDAARD_ZOEKTIJD_SECONDEN, volgendeZoektijd, zoektijdWoorden } from '@/lib/solverZoektijd';
 
 const POLL_INTERVAL_MS = 2000;
 // A dropped poll just means "ask again in a moment" - the generation itself
@@ -93,11 +94,6 @@ const DEFAULT_MAX_ATTEMPTS = 100;
 // Matches solver/greedy.py's own RuleSet-equivalent variant default.
 const DEFAULT_RANDOMIZED_VARIANT: 'medewerker' | 'dagen' = 'medewerker';
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds} seconden`;
-  const minutes = Math.round(seconds / 60);
-  return `${minutes} ${minutes === 1 ? 'minuut' : 'minuten'}`;
-}
 
 const COUNTER_LABEL: Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', string> = {
   AVOND: 'Avond',
@@ -584,10 +580,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // The step-up offered after a FEASIBLE result: 120s (the default, tracked
   // as null) -> 300s -> 600s -> no further offer. Matches the two extra
   // steps the planner asked for (5, then 10 minutes) rather than an
-  // open-ended doubling that would eventually make "langer proberen" itself
-  // an unbounded wait.
-  const nextTimeLimitSeconds =
-    lastTimeLimitSeconds === null ? 300 : lastTimeLimitSeconds === 300 ? 600 : null;
+  // open-ended doubling that would eventually make it an unbounded wait.
+  // Each is a new run from the start (lib/solverZoektijd.ts).
+  const nextTimeLimitSeconds = volgendeZoektijd(lastTimeLimitSeconds);
 
   // Catches the mistake client-side before a round trip - the server
   // rejects the same thing (ruleset/route.ts's isValidBand), but with the
@@ -1084,9 +1079,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <li>Niemand twee diensten binnen het venster geven</li>
               </ul>
               <p className="text-xs text-neutral-500 pt-2">
-                De solver draait maximaal 2 minuten. Bij het bereiken van de tijdslimiet kan een
-                suboptimale oplossing worden teruggegeven. Je kunt daarna alsnog langer laten
-                doorzoeken.
+                De solver zoekt hoogstens 2 minuten. Is hij dan nog niet klaar, dan krijg je het
+                beste rooster dat hij tot dan vond. Daarna kun je het rooster opnieuw laten maken
+                met 5 of 10 minuten zoektijd. De solver begint dan helemaal opnieuw.
               </p>
             </div>
           )}
@@ -1156,7 +1151,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 </p>
               ) : (
                 <p className="text-xs text-center text-neutral-500">
-                  Dit kan tot {formatDuration(pendingTimeLimitSeconds ?? 120)} duren. Je kunt dit
+                  Dit kan tot {zoektijdWoorden(pendingTimeLimitSeconds ?? STANDAARD_ZOEKTIJD_SECONDEN)} duren. Je kunt dit
                   scherm open laten staan of later terugkomen.
                 </p>
               )}
@@ -1246,17 +1241,16 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 nextTimeLimitSeconds !== null &&
                 result.attempts_tried === undefined && (
                 <div className="bg-blue-50 border border-blue-200 rounded p-4">
-                  <p className="text-sm text-blue-900">
-                    De solver had nog niet bewezen dat dit de best mogelijke oplossing is toen de
-                    tijd om was. Langer laten zoeken kan een rooster opleveren dat beter verdeeld of
-                    vollediger is, maar dat is geen garantie.
+                  <p className="text-sm text-blue-900" data-testid="opnieuw-uitleg">
+                    {opnieuwUitleg(lastTimeLimitSeconds, nextTimeLimitSeconds)} Langer zoeken kan een
+                    rooster opleveren dat beter verdeeld of vollediger is, maar dat is geen garantie.
                   </p>
                   <button
                     onClick={() => handleGenerate(nextTimeLimitSeconds)}
                     disabled={loading}
                     className="mt-3 w-full px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
                   >
-                    {formatDuration(nextTimeLimitSeconds)} langer proberen
+                    {opnieuwKnopTekst(nextTimeLimitSeconds)}
                   </button>
                 </div>
               )}

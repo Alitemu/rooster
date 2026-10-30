@@ -6097,6 +6097,49 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_eerlijkheid.py", "-k", "week_evenings"],
   },
+  // 0.904.0: the backup dialog's messages and the achterwacht's longer search.
+  {
+    name: "backup antwoord: an empty 413 says only that it failed",
+    file: "lib/backupAntwoord.ts",
+    find: "  if (status === 413) return TE_GROOT_VOOR_SERVER;\n",
+    replace: "",
+    tests: ["lib/backupAntwoord"],
+  },
+  {
+    name: "backup antwoord: the app's own message is passed over",
+    file: "lib/backupAntwoord.ts",
+    find: "if (typeof melding === 'string' && melding !== '') return melding;",
+    replace: "if (typeof melding === 'string' && melding === 'x') return melding;",
+    tests: ["lib/backupAntwoord"],
+  },
+  {
+    name: "backup wachtwoord: the message says nothing of capital letters",
+    file: "lib/dbBackupBestand.ts",
+    find: "'Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.'",
+    replace: "'Het wachtwoord klopt niet of het bestand is beschadigd.'",
+    tests: ["lib/dbBackupBestand"],
+  },
+  {
+    name: "solver zoektijd: the button says longer again",
+    file: "lib/solverZoektijd.ts",
+    find: "return `Opnieuw maken met ${zoektijdWoorden(volgende)} zoektijd`;",
+    replace: "return `${zoektijdWoorden(volgende)} langer proberen`;",
+    tests: ["lib/solverZoektijd"],
+  },
+  {
+    name: "solver zoektijd: the text no longer says it starts over",
+    file: "lib/solverZoektijd.ts",
+    find: "zoektijd begint de solver helemaal opnieuw: hij zoekt niet verder vanaf dit rooster. ",
+    replace: "zoektijd zoekt de solver verder. ",
+    tests: ["lib/solverZoektijd"],
+  },
+  {
+    name: "solver zoektijd: no 10 minutes after 5",
+    file: "lib/solverZoektijd.ts",
+    find: "vorige === 300 ? 600 : null",
+    replace: "vorige === 300 ? null : null",
+    tests: ["lib/solverZoektijd"],
+  },
 ];
 
 const args = process.argv.slice(2);

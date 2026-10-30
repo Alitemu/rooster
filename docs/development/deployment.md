@@ -55,7 +55,7 @@ server needs no config change. `http://:80` in the Caddyfile redirects to
 https on APP_PORT; port 80 is published on every interface by default,
 so a server needs no .env for that. A NAS that has it taken sets
 HTTP_PORT (8080, say) in .env.
-**Certificate:** TLS_MODUS in .env picks the snippet the Caddyfile imports (./certs is created empty by Docker when missing, which `intern` does not mind).
+**Certificate:** TLS_MODUS in .env picks the snippet the Caddyfile imports (./certs is created empty by Docker when missing, which `intern` does not mind; not on a Synology, whose Docker refuses a missing bind-mount folder: there `mkdir certs data` first, README and installatie-it.md).
 `intern` (the default) is Caddy's own CA, on demand per name. `bestand` is
 the organisation's own certificate: ./certs/rooster.pem and rooster.key,
 mounted read-only at /certs. Caddy does not renew it; replacing the files
@@ -256,3 +256,13 @@ otherwise make two names look the same.
 **Networking:**
 - All services on internal bridge network
 - Only `caddy` exposes the app port (default 443) to host
+
+**A changed docker-compose.yml needs a line in the README (0.904.0).** `docker
+compose pull` brings new images, never a new docker-compose.yml. 0.800.0 moved
+the Caddyfile into it and 0.900.0 gave the restore of a backup 32 MB in Caddy;
+neither release note said to take the new file over, and an installation kept
+the 0.7x one with its own Caddyfile and 1 MB for every request: every backup
+above about 750 KB failed with an empty 413, which the dialog told as "Dat is
+niet gelukt." (now lib/backupAntwoord.ts says what it is). Every release that
+changes docker-compose.yml says in its README note, in so many words, to
+replace the file.
