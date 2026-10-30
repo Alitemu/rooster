@@ -2844,8 +2844,8 @@ const MUTATIONS = [
   {
     name: "aios: the weekend targets of the solver are not kept with the roster",
     file: "lib/aiosGenereren.ts",
-    find: "a.doel_dagen ?? null, a.doel_weekendavonden ?? null)",
-    replace: "null, null)",
+    find: "a.doel_dagen ?? null, a.doel_weekendavonden ?? null, a.doel_weekavonden",
+    replace: "null, null, a.doel_weekavonden",
     tests: ["app/api/aios/aiosSaldo"],
   },
   // 0.109.0: onderwijs is a soort of absence for the AIOS.
@@ -4077,7 +4077,7 @@ const MUTATIONS = [
   {
     name: "aios saldo: the solver's share not kept",
     file: "lib/aiosGenereren.ts",
-    find: "      for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten, a.doel_nachten ?? null, a.doel_dagen ?? null, a.doel_weekendavonden ?? null);\n",
+    find: "      for (const a of uit.per_aios ?? []) doel.run(randomUUID(), period.id, a.aios_id, a.doel_punten, a.doel_feestdagdiensten, a.doel_nachten ?? null, a.doel_dagen ?? null, a.doel_weekendavonden ?? null, a.doel_weekavonden ?? null, a.doel_uitloopdiensten ?? null);\n",
     replace: "",
     tests: ["app/api/aios/aiosSaldo"],
   },
