@@ -409,7 +409,15 @@ lang de solver mag zoeken en klik op *Rooster maken*. Je ziet daarna het
 rooster per week, met een blok als één vak, en per AIOS de punten en het
 dienstpercentage: groen tot 25%, rood daarboven. Een dienst die leeg bleef,
 staat erbij met de reden. *Opnieuw maken* maakt het hele rooster opnieuw.
-*Rooster verwijderen* maakt alles weer leeg. Dit heeft de container
+*Rooster verwijderen* maakt alles weer leeg.
+**Vanaf 0.902.0** zoekt de solver standaard 10 minuten. Je kiest 10, 15 of
+30 minuten, of vult zelf een aantal minuten in tot een uur. Kort zoeken
+geeft een rooster dat er klaar uitziet maar niet eerlijk is: met 30 AIOS
+gaf 2 minuten een dienstpercentage van 5,6% tot 17,6%, 10 minuten van
+10,0% tot 11,7%. Na het maken staat erbij of de solver klaar was. Staat
+er dat de tijd op was, maak het rooster dan opnieuw met meer tijd. Je kunt
+de pagina intussen sluiten. In het tabblad *Dienstdoende* staan nu ook de
+punten en het percentage per AIOS. Dit heeft de container
 `aios-solver` nodig: neem bij deze versie het nieuwe `docker-compose.yml`
 over (zie 0.74.0). Met de hand aanpassen en publiceren komen in een
 volgende versie.

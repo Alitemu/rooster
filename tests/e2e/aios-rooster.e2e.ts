@@ -88,8 +88,18 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   // Making, publishing and withdrawing sit at the top as a card, not in sections of their own.
   await expect(page.getByRole('heading', { name: 'Rooster', exact: true })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Publiceren', exact: true })).toHaveCount(0);
+  // Ten minutes unless chosen otherwise (0.902.0); a test quarter of 8 AIOS takes one, typed in.
+  await expect(paneel.getByLabel('Hoe lang zoeken')).toHaveValue('600');
+  await expect(paneel.getByTestId('aios-tijd-uitleg')).toContainText('Hoe langer de solver zoekt, hoe eerlijker de verdeling.');
+  await paneel.getByLabel('Hoe lang zoeken').selectOption('eigen');
+  await paneel.getByLabel(/Aantal minuten/).fill('61');
+  await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeDisabled();
+  await expect(paneel.getByTestId('aios-tijd-uitleg')).toContainText('Vul een heel aantal minuten in, van 1 tot 60.');
+  await paneel.getByLabel(/Aantal minuten/).fill('1');
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
+  // Whether the solver finished is said, either way.
+  await expect(paneel.getByTestId('aios-solver-klaar')).toHaveText(/^(De solver is klaar: dit is de eerlijkste verdeling binnen de regels\.|De tijd was op voordat de solver klaar was.*)$/);
 
   await expect(page.getByRole('heading', { name: 'Dienstpercentage en saldo' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Dienstrooster (automatisch ingevuld)', exact: true })).toBeVisible();
@@ -149,6 +159,10 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   const dienstdoende = sectie.getByTestId('aios-dienstdoende');
   await expect(dienstdoende.locator('tbody tr')).toHaveCount(8);
   await expect(dienstdoende.getByRole('row', { name: /^Samen/ })).toBeVisible();
+  // Fairness is in points per fte, not in the number of diensten: both are there (0.902.0).
+  await expect(dienstdoende.getByRole('columnheader', { name: 'Punten' })).toBeVisible();
+  await expect(dienstdoende.getByRole('columnheader', { name: 'Percentage' })).toBeVisible();
+  await expect(dienstdoende.getByTestId('dienstdoende-punten')).toHaveCount(8);
   await sectie.getByRole('tab', { name: /Ruilverzoeken/ }).click();
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Er zijn nog geen ruilverzoeken gedaan.');
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster definitief is.');
@@ -188,6 +202,8 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
   await expect(vragen.getByText('Bewaard.')).toBeVisible();
   await expect(vragen.getByText('(nog kiezen)')).toHaveCount(0);
 
+  await paneel.getByLabel('Hoe lang zoeken').selectOption('eigen');
+  await paneel.getByLabel(/Aantal minuten/).fill('1');
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
   await openDienstrooster(page);

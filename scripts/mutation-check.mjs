@@ -6007,6 +6007,43 @@ const MUTATIONS = [
     replace: "  const omgedraaid = plan.slice(1).filter((p) => p.vanaf > p.tot)",
     tests: ["app/api/planner/pool/[id]/members/meerdere"],
   },
+  {
+    name: "aios tijd: more than an hour is taken",
+    file: "lib/aiosGenereren.ts",
+    find: "waarde <= AIOS_MAX_MINUTEN * 60",
+    replace: "waarde <= 7200",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "aios tijd: part of a minute is taken",
+    file: "lib/aiosGenereren.ts",
+    find: "waarde % 60 === 0 && ",
+    replace: "",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "aios tijd: less than a minute is taken",
+    file: "lib/aiosGenereren.ts",
+    find: "waarde >= 60 &&",
+    replace: "waarde >= 1 &&",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "aios tijd: the default is short again",
+    file: "lib/aiosGenereren.ts",
+    find: "export const AIOS_STANDAARD_TIJDSLIMIET = 600;",
+    replace: "export const AIOS_STANDAARD_TIJDSLIMIET = 60;",
+    tests: ["app/api/aios/aiosGenereren"],
+  },
+  {
+    name: "aios-solver: an hour of search refused",
+    file: "aios-solver/main.py",
+    find: "tijdslimiet_seconden: float = Field(default=600, ge=1, le=3600)",
+    replace: "tijdslimiet_seconden: float = Field(default=600, ge=1, le=600)",
+    runner: 'pytest',
+    cwd: 'aios-solver',
+    tests: ["test_contract.py", "-k", "hour"],
+  },
 ];
 
 const args = process.argv.slice(2);

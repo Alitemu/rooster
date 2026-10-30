@@ -378,6 +378,12 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   na de inwerkperiode.
 - Feestdagdiensten eerlijk over de jaren, zoals bij de achterwacht: het aantal,
   niet welke feestdag (J2).
+- Hoe lang de solver zoekt, kiest de planner: 10, 15 of 30 minuten of zelf
+  een aantal minuten tot een uur, standaard 10 (0.902.0). Gemeten in oktober
+  2026 met 30 AIOS: 2 minuten gaf 5,6% tot 17,6%, 5 minuten 9,1% tot 15,6%,
+  10 minuten 10,0% tot 11,7%. Na het maken staat erbij of de solver klaar was
+  of dat de tijd op was. In *Dienstdoende* staan de punten en het percentage
+  naast het aantal diensten: eerlijk is op punten naar fte.
 - De planner ziet vóór het genereren hoeveel punten het kwartaal heeft: Q3 2026
   heeft 195 punten (nachten 91, avonden 65, dagdiensten 26, uitloopdiensten 13),
   dus de AIOS hebben samen minstens 12 fte nodig om onder gemiddeld 25% te

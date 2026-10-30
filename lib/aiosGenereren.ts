@@ -25,8 +25,22 @@ import { aiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 import { legAiosFteVast, wisAiosFteVast } from '@/lib/aiosFteVast';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 
-export const AIOS_TIJDSLIMIETEN = [60, 120, 300, 600] as const;
-export type AiosTijdslimiet = (typeof AIOS_TIJDSLIMIETEN)[number];
+/**
+ * How long the solver may look, in seconds (0.902.0). With 30 AIOS, measured in October 2026 on one quarter:
+ * 2 minutes left the dienstpercentage between 5,6% and 17,6%, 5 minutes between 9,1% and 15,6%, 10 minutes
+ * between 10,0% and 11,7%. A short search ends in the best roster found so far, which looks just as finished.
+ * So ten minutes is the least on offer and the default; the planner may also type whole minutes, up to an hour
+ * (aios-solver/main.py takes up to 3600).
+ */
+export const AIOS_TIJDSLIMIETEN = [600, 900, 1800] as const;
+export const AIOS_STANDAARD_TIJDSLIMIET = 600;
+export const AIOS_MAX_MINUTEN = 60;
+export type AiosTijdslimiet = number;
+
+/** Whole minutes, from 1 up to AIOS_MAX_MINUTEN. */
+export function isAiosTijdslimiet(waarde: unknown): waarde is AiosTijdslimiet {
+  return typeof waarde === 'number' && Number.isInteger(waarde) && waarde % 60 === 0 && waarde >= 60 && waarde <= AIOS_MAX_MINUTEN * 60;
+}
 
 export const AIOS_GENERATIE_LOOPT =
   'Er wordt een rooster voor deze periode gemaakt. Wacht tot dat klaar is en probeer het dan opnieuw.';

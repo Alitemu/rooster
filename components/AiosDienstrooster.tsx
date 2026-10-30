@@ -445,10 +445,11 @@ function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
     <div className="space-y-2" data-testid="aios-dienstdoende">
       <p className="text-sm text-neutral-600">
         Iedereen die dit kwartaal meedoet, met hoeveel diensten van elke soort. De balk is naar de hoogste in die kolom. Een feestdagdienst telt ook
-        bij zijn soort mee.
+        bij zijn soort mee. Eerlijk verdeeld wordt op punten naar fte, niet op het aantal diensten: een uitloopdienst is 0,2 punt en een nacht 1
+        punt. Daarom staan de punten en het percentage erbij.
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[40rem] text-sm">
+        <table className="w-full min-w-[48rem] text-sm">
           <thead>
             <tr className="text-left text-neutral-600">
               <th className="py-1 pr-2 font-medium">AIOS</th>
@@ -457,7 +458,9 @@ function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
                   {s.kop}
                 </th>
               ))}
-              <th className="py-1 font-medium text-right">Totaal</th>
+              <th className="py-1 pr-2 font-medium text-right">Diensten</th>
+              <th className="py-1 pr-2 font-medium text-right">Punten</th>
+              <th className="py-1 font-medium text-right">Percentage</th>
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -469,7 +472,12 @@ function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
                     <Telling waarde={a[s.sleutel]} max={max[s.sleutel]} kleur={s.kleur} />
                   </td>
                 ))}
-                <td className="py-1 text-right tabular-nums">{totaal(a)}</td>
+                <td className="py-1 pr-2 text-right tabular-nums">{totaal(a)}</td>
+                <td className="py-1 pr-2 text-right tabular-nums" data-testid="dienstdoende-punten">{getal(a.punten)}</td>
+                <td className="py-1 text-right tabular-nums whitespace-nowrap">
+                  {a.dienstpercentage === null ? '-' : `${getal(a.dienstpercentage * 100)}%`}
+                  {a.fte < 1 && <span className="block text-xs text-neutral-500">fte {getal(a.fte)}</span>}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -481,7 +489,9 @@ function Dienstdoende({ perAios }: { perAios: AiosRoosterPerAios[] }) {
                   {perAios.reduce((som, a) => som + a[s.sleutel], 0)}
                 </td>
               ))}
-              <td className="py-1 text-right tabular-nums">{perAios.reduce((som, a) => som + totaal(a), 0)}</td>
+              <td className="py-1 pr-2 text-right tabular-nums">{perAios.reduce((som, a) => som + totaal(a), 0)}</td>
+              <td className="py-1 pr-2 text-right tabular-nums">{getal(perAios.reduce((som, a) => som + a.punten, 0))}</td>
+              <td className="py-1" />
             </tr>
           </tfoot>
         </table>

@@ -39,6 +39,7 @@ def test_a_valid_request_is_taken():
         lambda i: i['diensten'][0].update(start_tijd='8:30'),
         lambda i: i.update(periode={'van': dag(6).isoformat(), 'tot': dag(0).isoformat()}),
         lambda i: i.update(tijdslimiet_seconden=0),
+        lambda i: i.update(tijdslimiet_seconden=3601),
         lambda i: i.update(aios=[]),
         lambda i: i['aios'][0].update(markeringen=[{'dienst_id': i['diensten'][0]['id'], 'niveau': 'ABSOLUUT', 'bron': 'ANDERS'}]),
         # 0.112.0: numbers and times the model could only answer with "impossible", an overflow or a 500.
@@ -100,3 +101,15 @@ def test_a_second_solve_beside_the_first_is_told_to_wait():
     inp['tijdslimiet_seconden'] = 5
     assert client.post('/solve', json=inp).status_code == 200
     assert main._loopt is False
+
+
+def test_an_hour_is_the_longest_search():
+    """0.902.0: the planner may let the solver look up to an hour; more is refused before anything is built."""
+    from main import SolveInput
+
+    inp = _invoer()
+    inp['tijdslimiet_seconden'] = 3600
+    assert SolveInput(**inp).tijdslimiet_seconden == 3600
+    inp['tijdslimiet_seconden'] = 3601
+    with pytest.raises(Exception):
+        SolveInput(**inp)

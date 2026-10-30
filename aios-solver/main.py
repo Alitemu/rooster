@@ -167,7 +167,9 @@ class SolveInput(BaseModel):
     diensten: list[Dienst] = Field(min_length=1, max_length=2000)
     blokken: list[Blok] = Field(default_factory=list, max_length=1000)
     aios: list[Aios] = Field(min_length=1, max_length=150)
-    tijdslimiet_seconden: float = Field(default=60, ge=1, le=600)
+    # Up to an hour (0.902.0): with 30 AIOS ten minutes is the least that gives a fair roster (measured in October
+    # 2026: 2 minutes left 5,6% to 17,6%, 10 minutes 10,0% to 11,7%), and the planner may give it longer.
+    tijdslimiet_seconden: float = Field(default=600, ge=1, le=3600)
     seed: int = Field(default=0, ge=0, le=2**31 - 1)
 
     _check = field_validator('feestdagen')(classmethod(lambda cls, v: [_iso(d) for d in v]))

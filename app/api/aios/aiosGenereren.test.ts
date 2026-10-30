@@ -183,6 +183,20 @@ describe('making the AIOS roster', () => {
     expect(opgevangen).toHaveLength(0);
   });
 
+  it('looks ten minutes unless told otherwise, and takes whole minutes up to an hour only (0.902.0)', async () => {
+    await klaar(await maak());
+    expect(opgevangen.at(-1)!.tijdslimiet_seconden).toBe(600);
+    await klaar(await maak(3600));
+    expect(opgevangen.at(-1)!.tijdslimiet_seconden).toBe(3600);
+    const aantal = opgevangen.length;
+    for (const fout of [0, 30, 90, 3660, 7200, '600', 600.5, -60]) {
+      const res = await genereren(req(`${w.period}/genereren`, staffCookie(w.planner), 'POST', { tijdslimiet_seconden: fout }), ctx(w.period));
+      expect(res.status, String(fout)).toBe(400);
+      expect((await res.json()).error.message).toBe('Kies een tijd van 1 tot 60 minuten, in hele minuten.');
+    }
+    expect(opgevangen).toHaveLength(aantal);
+  });
+
   it('sends the quarter as the contract says', async () => {
     await klaar(await maak(120));
     expect(opgevangen).toHaveLength(1);

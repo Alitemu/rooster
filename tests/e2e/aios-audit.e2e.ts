@@ -315,6 +315,8 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
   let leeg = 0;
   await test.step('making the roster; what is still empty is told, and told again after a refresh and a new login', async () => {
     const paneel = page.getByTestId('aios-rooster-maken');
+    await paneel.getByLabel('Hoe lang zoeken').selectOption('eigen');
+    await paneel.getByLabel(/Aantal minuten/).fill('1');
     await paneel.getByRole('button', { name: 'Rooster maken' }).click();
     const melding = paneel.getByTestId('aios-lege-diensten');
     await expect(melding.getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 250_000 });

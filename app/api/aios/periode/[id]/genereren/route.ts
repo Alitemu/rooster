@@ -18,7 +18,7 @@ import { writeAuditLog } from '@/lib/auditLog';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { aiosFout, laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosFeestdagVragen, zorgVoorOudjaar } from '@/lib/aiosFeestdagBlokken';
-import { AIOS_GENERATIE_LOOPT, AIOS_TIJDSLIMIETEN, aiosGeneratieLoopt, startAiosGeneratie, type AiosTijdslimiet } from '@/lib/aiosGenereren';
+import { AIOS_GENERATIE_LOOPT, AIOS_MAX_MINUTEN, AIOS_STANDAARD_TIJDSLIMIET, aiosGeneratieLoopt, isAiosTijdslimiet, startAiosGeneratie } from '@/lib/aiosGenereren';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
@@ -31,9 +31,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (period instanceof NextResponse) return period;
 
     const body = await parseJsonBody<{ tijdslimiet_seconden: unknown }>(req);
-    const tijdslimiet = body.tijdslimiet_seconden ?? 60;
-    if (!AIOS_TIJDSLIMIETEN.includes(tijdslimiet as AiosTijdslimiet)) {
-      return aiosFout(400, 'VALIDATION_ERROR', 'Kies 1, 2, 5 of 10 minuten.');
+    const tijdslimiet = body.tijdslimiet_seconden ?? AIOS_STANDAARD_TIJDSLIMIET;
+    if (!isAiosTijdslimiet(tijdslimiet)) {
+      return aiosFout(400, 'VALIDATION_ERROR', `Kies een tijd van 1 tot ${AIOS_MAX_MINUTEN} minuten, in hele minuten.`);
     }
     if (period.status !== 'GESLOTEN' && period.status !== 'GEGENEREERD') {
       return aiosFout(
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     const { row_version } = db.prepare('SELECT row_version FROM dienstrooster_schedule_period WHERE id = ?').get(period.id) as {
       row_version: number;
     };
-    const jobId = startAiosGeneratie({ ...period, row_version }, tijdslimiet as AiosTijdslimiet);
+    const jobId = startAiosGeneratie({ ...period, row_version }, tijdslimiet);
     writeAuditLog({
       actorId: auth!.userId,
       entiteit: 'period',

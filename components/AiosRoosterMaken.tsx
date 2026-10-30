@@ -43,12 +43,17 @@ const CODE_NAAM: Record<string, string> = {
   ND: 'Nachtdienst',
 };
 
+// Mirrors lib/aiosGenereren.ts AIOS_TIJDSLIMIETEN, AIOS_STANDAARD_TIJDSLIMIET and AIOS_MAX_MINUTEN (that module reads
+// the database, so it can't be imported here). Ten minutes is the least on offer: shorter gave 30 AIOS a roster
+// that looked finished and was not fair (0.902.0).
 const TIJDEN = [
-  { s: 60, label: '1 minuut' },
-  { s: 120, label: '2 minuten' },
-  { s: 300, label: '5 minuten' },
   { s: 600, label: '10 minuten' },
+  { s: 900, label: '15 minuten' },
+  { s: 1800, label: '30 minuten' },
 ];
+const STANDAARD_TIJD = 600;
+const MAX_MINUTEN = 60;
+const EIGEN = 'eigen';
 
 const datumKort = (datum: string) =>
   new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -99,8 +104,18 @@ function LegeDiensten({ generatie, kanOpnieuw }: { generatie: AiosLaatsteGenerat
         Gemaakt op {gemaakt}: {telwoord(generatie.gevuld, 'dienst', 'diensten')} ingedeeld
         {bij === 0 ? ', niets leeg.' : `. ${bij} ${bij === 1 ? 'dienst bleef' : 'diensten bleven'} leeg.`}
       </p>
-      {generatie.status !== 'OPTIMAAL' && bij > 0 && nog.length > 0 && kanOpnieuw && (
-        <p className="text-neutral-700">Misschien vindt de solver meer met meer tijd. Kies een langere tijd en maak het opnieuw.</p>
+      {/* Whether the solver finished (0.902.0): a search cut short by the time looks just as finished, and with 30 AIOS
+          two minutes gave one 5,6% and another 17,6%. */}
+      {generatie.status === 'OPTIMAAL' ? (
+        <p className="text-neutral-700" data-testid="aios-solver-klaar">
+          De solver is klaar: dit is de eerlijkste verdeling binnen de regels.
+        </p>
+      ) : (
+        <p className="font-medium text-amber-900" data-testid="aios-solver-klaar">
+          De tijd was op voordat de solver klaar was{generatie.tijd_seconden >= 60 ? `, na ${Math.round(generatie.tijd_seconden / 60)} minuten` : ''}. Er kan
+          een eerlijkere verdeling zijn
+          {kanOpnieuw ? '. Maak het rooster opnieuw met meer tijd, bijvoorbeeld 30 minuten.' : '.'}
+        </p>
       )}
       {(bij > 0 || nog.length > 0) && (
         <p className="font-medium" data-testid="aios-nog-leeg">
@@ -143,7 +158,8 @@ export function AiosRoosterMaken({
 }) {
   // `generatie`: what the last generation told, kept by the server (a refresh or another login shows it again).
   const [rooster, setRooster] = useState<(AiosRooster & { loopt: boolean; generatie: AiosLaatsteGeneratie | null }) | null>(null);
-  const [tijd, setTijd] = useState(60);
+  const [tijdKeuze, setTijdKeuze] = useState<string>(String(STANDAARD_TIJD));
+  const [eigenMinuten, setEigenMinuten] = useState('');
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
   const [zeker, setZeker] = useState<'opnieuw' | 'verwijderen' | null>(null);
@@ -163,6 +179,9 @@ export function AiosRoosterMaken({
       actief.current = false;
     };
   }, [laad, status, versie]);
+
+  const eigenGeldig = /^\d+$/.test(eigenMinuten) && Number(eigenMinuten) >= 1 && Number(eigenMinuten) <= MAX_MINUTEN;
+  const tijd = tijdKeuze === EIGEN ? (eigenGeldig ? Number(eigenMinuten) * 60 : null) : Number(tijdKeuze);
 
   const maken = async () => {
     setBezig(true);
@@ -255,20 +274,37 @@ export function AiosRoosterMaken({
             <div className="flex flex-wrap items-end gap-3">
               <label className="text-sm text-neutral-800">
                 <span className="block text-xs font-medium text-neutral-600 mb-1">Hoe lang zoeken</span>
-                <select value={tijd} onChange={(e) => setTijd(Number(e.target.value))} disabled={bezig} className="px-2 py-1 border rounded text-sm">
+                <select value={tijdKeuze} onChange={(e) => setTijdKeuze(e.target.value)} disabled={bezig} className="px-2 py-1 border rounded text-sm">
                   {TIJDEN.map((t) => (
-                    <option key={t.s} value={t.s}>
+                    <option key={t.s} value={String(t.s)}>
                       {t.label}
                     </option>
                   ))}
+                  <option value={EIGEN}>Zelf kiezen</option>
                 </select>
               </label>
+              {tijdKeuze === EIGEN && (
+                <label className="text-sm text-neutral-800">
+                  <span className="block text-xs font-medium text-neutral-600 mb-1">Aantal minuten (1 tot {MAX_MINUTEN})</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    max={MAX_MINUTEN}
+                    step={1}
+                    value={eigenMinuten}
+                    onChange={(e) => setEigenMinuten(e.target.value)}
+                    disabled={bezig}
+                    className="w-24 px-2 py-1 border rounded text-sm"
+                  />
+                </label>
+              )}
               {gemaakt && zeker !== 'opnieuw' ? (
                 <button type="button" className={knop} disabled={bezig || rooster?.loopt || nietKlaar} onClick={() => setZeker('opnieuw')}>
                   Opnieuw maken
                 </button>
               ) : (
-                <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig || rooster?.loopt || nietKlaar} onClick={maken}>
+                <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig || rooster?.loopt || nietKlaar || tijd === null} onClick={maken}>
                   {bezig ? 'Bezig met maken...' : gemaakt ? 'Ja, opnieuw maken' : 'Rooster maken'}
                 </button>
               )}
@@ -283,10 +319,20 @@ export function AiosRoosterMaken({
                   </button>
                 ))}
             </div>
+            <p className="text-xs text-neutral-600" data-testid="aios-tijd-uitleg">
+              Hoe langer de solver zoekt, hoe eerlijker de verdeling. Met een groep van 30 AIOS is 10 minuten het minimum, 30 minuten is beter.
+              Je kunt de pagina intussen sluiten: het rooster wordt gewoon gemaakt.
+              {tijdKeuze === EIGEN && !eigenGeldig ? ` Vul een heel aantal minuten in, van 1 tot ${MAX_MINUTEN}.` : ''}
+            </p>
             {zeker === 'verwijderen' && (
               <p className="text-sm text-neutral-700">Alle diensten worden weer leeg en de periode gaat terug naar gesloten.</p>
             )}
-            {bezig && <p className="text-sm text-neutral-700">De solver is bezig. Dat duurt hoogstens zo lang als je hebt gekozen, plus een paar minuten.</p>}
+            {bezig && (
+              <p className="text-sm text-neutral-700">
+                De solver is bezig. Dat duurt hoogstens zo lang als je hebt gekozen, plus een paar minuten. Je kunt de pagina sluiten en later
+                terugkomen.
+              </p>
+            )}
           </>
         )}
         {fout && (

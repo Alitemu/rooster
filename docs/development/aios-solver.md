@@ -214,7 +214,14 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   The answer's per_aios holds doel_nachten, doel_dagen and doel_weekendavonden:
   the fair number of each this quarter, the saldo of the years before
   included (a debt stays a debt).
-- `tijdslimiet_seconden` (1 to 600, default 60), `seed`.
+- `tijdslimiet_seconden` (1 to 3600, default 600; 0.902.0), `seed`. The app
+  offers 10, 15 and 30 minutes and whole minutes up to 60 typed in
+  (lib/aiosGenereren.ts). Measured on one quarter with 30 AIOS (October 2026):
+  2 minutes left the dienstpercentage between 5,6% and 17,6%, 5 minutes
+  between 9,1% and 15,6%, 10 minutes between 10,0% and 11,7%. A search the
+  time cut short ends in HAALBAAR with the best roster found, which looks as
+  finished as an OPTIMAAL one; the page says which it was
+  (components/AiosRoosterMaken.tsx, from dienstrooster_aios_generatie.solver_status).
 
 `erboven` comes from the app's own counters (lib/aiosVoorkeur.ts
 blokkadeTellers), so the solver takes exactly what the AIOS's screen
