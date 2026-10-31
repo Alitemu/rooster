@@ -263,6 +263,11 @@ Traps that cost a day each time:
   here and the build on GitHub fails on a missing module (0.900.0, 0.904.0).
   Name it dbBackup*, terugzet*, BackupDialog; app/genegeerdeBron.test.ts
   fails when a source file is ignored.
+- **A test that runs a tool (git, a shell) runs on GitHub too**, in a
+  container whose checkout belongs to another user: git refuses it there
+  ("dubious ownership") and the build fails while everything passed here
+  (0.905.0). Call git with `-c safe.directory=*`, as
+  app/genegeerdeBron.test.ts does.
 - **The seed builds the schema with its own SQL.** A new column needs the
   schema (db/schema.ts), a migration (db/migrations) and the seed (its
   CREATE TABLE and `LATER_COLUMNS`); then schema-drift and upgrade-drift.
