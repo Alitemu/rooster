@@ -14,6 +14,7 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
 import { MailSettingsDialog } from '@/components/MailSettingsDialog';
 import { BackupDialog } from '@/components/BackupDialog';
+import { backupWaarschuwing } from '@/lib/dbBackupWaarschuwing';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import {
@@ -222,6 +223,17 @@ export default function PlannerHomePage() {
       .catch(() => {});
   }, []);
 
+  // The beheerder sees here when no backup goes out, not only inside the Back-up dialog (lib/dbBackupWaarschuwing.ts).
+  const [backupMelding, setBackupMelding] = useState<string | null>(null);
+  const laadBackupStand = () =>
+    fetch(withBasePath('/api/admin/back-up'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setBackupMelding(data?.success ? backupWaarschuwing(data.data, new Date()) : null))
+      .catch(() => {});
+  useEffect(() => {
+    if (isAdmin) laadBackupStand();
+  }, [isAdmin]);
+
   const loadTrash = async () => {
     setTrashLoading(true);
     try {
@@ -408,6 +420,18 @@ export default function PlannerHomePage() {
           </button>
         </div>
       </div>
+
+      {isAdmin && backupMelding && (
+        <div role="alert" data-testid="backup-waarschuwing" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-2">
+          <p>
+            <span className="font-semibold">Back-up: </span>
+            {backupMelding}
+          </p>
+          <button type="button" onClick={() => setShowBackup(true)} className="btn-secondary">
+            Back-up openen
+          </button>
+        </div>
+      )}
 
       {/* Staff/pool membership is its own thing, independent of any period
           (add/remove someone, change their dates or deelnamefactor) - this
@@ -815,7 +839,13 @@ export default function PlannerHomePage() {
         onClose={() => setShowChangePassword(false)}
       />
       <MailSettingsDialog isOpen={isAdmin && showMailSettings} onClose={() => setShowMailSettings(false)} />
-      <BackupDialog isOpen={isAdmin && showBackup} onClose={() => setShowBackup(false)} />
+      <BackupDialog
+        isOpen={isAdmin && showBackup}
+        onClose={() => {
+          setShowBackup(false);
+          laadBackupStand();
+        }}
+      />
     </div>
   );
 }

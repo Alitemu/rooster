@@ -6177,6 +6177,35 @@ const MUTATIONS = [
     runner: 'pytest',
     tests: ["test_main_validation.py", "-k", "half_an_hour"],
   },
+  // 0.905.0: the beheerder's warning when no backup goes out.
+  {
+    name: "backup waarschuwing: an unreadable backup password is not said",
+    file: "lib/dbBackupWaarschuwing.ts",
+    find: "if (stand.wachtwoord_leesbaar === false) {",
+    replace: "if (stand.wachtwoord_leesbaar === null) {",
+    tests: ["lib/dbBackupWaarschuwing"],
+  },
+  {
+    name: "backup waarschuwing: a failure before the last backup still warns",
+    file: "lib/dbBackupWaarschuwing.ts",
+    find: "stand.fout.op > stand.verstuurd_op",
+    replace: "stand.fout.op !== stand.verstuurd_op",
+    tests: ["lib/dbBackupWaarschuwing"],
+  },
+  {
+    name: "backup waarschuwing: a backup weeks old is fine",
+    file: "lib/dbBackupWaarschuwing.ts",
+    find: "if (dagen >= WAARSCHUW_NA_DAGEN) {",
+    replace: "if (dagen >= 10 * WAARSCHUW_NA_DAGEN) {",
+    tests: ["lib/dbBackupWaarschuwing"],
+  },
+  {
+    name: "backup waarschuwing: Gmail not set up is not said",
+    file: "lib/dbBackupWaarschuwing.ts",
+    find: "if (!stand.mail_ingesteld) {",
+    replace: "if (stand.mail_ingesteld === null) {",
+    tests: ["lib/dbBackupWaarschuwing"],
+  },
 ];
 
 const args = process.argv.slice(2);

@@ -57,6 +57,7 @@ test('a planner has no Back-up button', async ({ page }) => {
   await page.goto(`${getBaseUrl()}/planner`);
   await expect(page.getByRole('heading', { name: 'Periodes' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Back-up', exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('backup-waarschuwing')).toHaveCount(0);
 });
 
 test('the beheerder restores a backup of more than 10 MB in the browser, and a wrong password changes nothing', async ({ page }) => {
@@ -127,7 +128,13 @@ test('the beheerder restores a backup of more than 10 MB in the browser, and a w
 
 test('the beheerder sets up the backup and sees how it stands', async ({ page }) => {
   await loginAsBeheerder(page);
-  const dialoog = await openBackup(page);
+  // 0.905.0: not set up is said above the period list, not only in the dialog, and the button opens it.
+  db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN ('backup.aan', 'backup.wachtwoord')`).run();
+  await page.goto(`${getBaseUrl()}/planner`);
+  const waarschuwing = page.getByTestId('backup-waarschuwing');
+  await expect(waarschuwing).toContainText('Back-up: Er gaan nog geen back-ups buiten de server.');
+  await waarschuwing.getByRole('button', { name: 'Back-up openen' }).click();
+  const dialoog = page.getByRole('dialog', { name: 'Back-up' });
   try {
     await dialoog.getByLabel('Back-up sturen naar').fill('beheerder@example.test');
     await dialoog.getByLabel('Back-upwachtwoord', { exact: true }).fill('te kort');
@@ -138,6 +145,9 @@ test('the beheerder sets up the backup and sees how it stands', async ({ page })
     await expect(dialoog.getByText('Opgeslagen. Vanaf nu gaat er elke nacht een back-up uit als er iets veranderd is.')).toBeVisible();
     await expect(dialoog.getByLabel('Back-upwachtwoord', { exact: true })).toHaveAttribute('placeholder', 'Opgeslagen. Laat leeg om het te houden.');
     await expect(dialoog.getByRole('button', { name: 'Nu een back-up versturen' })).toBeVisible();
+    // Set up now: closing the dialog reads the state again, and "not set up" is gone.
+    await dialoog.getByRole('button', { name: 'Sluiten' }).click();
+    await expect(page.getByText('Er gaan nog geen back-ups buiten de server.')).toHaveCount(0);
   } finally {
     db.prepare(`DELETE FROM dienstrooster_app_setting WHERE sleutel IN ('backup.aan', 'backup.wachtwoord')`).run();
   }
