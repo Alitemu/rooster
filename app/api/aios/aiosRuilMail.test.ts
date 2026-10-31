@@ -175,6 +175,22 @@ describe('what no longer applies', () => {
     expect(b.tekst).toContain('Reden: dan ben ik weg');
   });
 
+  it('a mail for a period in the prullenbak waits, its link would not open; it goes once the period is back (0.905.1)', async () => {
+    weiger = true;
+    vraag(0);
+    await stil();
+    expect(aiosMailWachtrijAantal()).toBe(2);
+    weiger = false;
+    db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = ? WHERE id = ?').run(new Date().toISOString(), w.period);
+    try {
+      expect(await flushAiosMailWachtrij()).toMatchObject({ verstuurd: 0, vervallen: 0, over: 2 });
+      expect(sink.received).toHaveLength(0);
+    } finally {
+      db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = NULL WHERE id = ?').run(w.period);
+    }
+    expect(await flushAiosMailWachtrij()).toMatchObject({ verstuurd: 2, over: 0 });
+  });
+
   it('everything after 7 days', async () => {
     weiger = true;
     const r = vraag(0);

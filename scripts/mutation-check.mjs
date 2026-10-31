@@ -6206,6 +6206,21 @@ const MUTATIONS = [
     replace: "if (stand.mail_ingesteld === null) {",
     tests: ["lib/dbBackupWaarschuwing"],
   },
+  // 0.905.1: a queued swap mail for a period in the prullenbak waits until the period is back.
+  {
+    name: "melding mail: a mail for a period in the prullenbak goes out anyway",
+    file: "lib/meldingMail.ts",
+    find: "      if (inPrullenbak(current.period_id)) continue;\n",
+    replace: "",
+    tests: ["lib/meldingMail"],
+  },
+  {
+    name: "aios ruilmail: a mail for a period in the prullenbak goes out anyway",
+    file: "lib/aiosRuilMail.ts",
+    find: "      if (inPrullenbak(nu.period_id)) continue;\n",
+    replace: "",
+    tests: ["app/api/aios/aiosRuilMail"],
+  },
 ];
 
 const args = process.argv.slice(2);

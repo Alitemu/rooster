@@ -133,6 +133,10 @@ async function verstuurOfWacht(mail: AiosRuilMail): Promise<void> {
   }
 }
 
+function inPrullenbak(periodId: string): boolean {
+  return Boolean(db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NOT NULL').get(periodId));
+}
+
 function nogRelevant(soort: string, ruilId: string | null): boolean {
   if (!ALLEEN_BIJ_OPEN_RUIL.has(soort as VerzendlijstSoort) || !ruilId) return true;
   const ruil = db.prepare('SELECT status FROM dienstrooster_aios_ruil WHERE id = ?').get(ruilId) as { status: string } | undefined;
@@ -207,8 +211,8 @@ async function voerFlushUit(now: Date): Promise<{ verstuurd: number; vervallen: 
     const weg = db.prepare('DELETE FROM dienstrooster_aios_mail_queue WHERE id = ?');
     for (const r of rijen) {
       // Checked again per mail: an answer given while this run was sending the ones before makes a request mail pointless.
-      const nu = db.prepare('SELECT ruil_id, soort FROM dienstrooster_aios_mail_queue WHERE id = ?').get(r.id) as
-        | { ruil_id: string | null; soort: string }
+      const nu = db.prepare('SELECT ruil_id, soort, period_id FROM dienstrooster_aios_mail_queue WHERE id = ?').get(r.id) as
+        | { ruil_id: string | null; soort: string; period_id: string }
         | undefined;
       if (!nu) continue;
       if (!nogRelevant(nu.soort, nu.ruil_id)) {
@@ -216,6 +220,9 @@ async function voerFlushUit(now: Date): Promise<{ verstuurd: number; vervallen: 
         uitkomst.vervallen++;
         continue;
       }
+      // A period in the prullenbak is closed to its AIOS, the link in the mail too: the mail waits until the period
+      // is back, and goes with it when it is purged (0.905.1, as the achterwacht's lib/meldingMail.ts).
+      if (inPrullenbak(nu.period_id)) continue;
       db.prepare('UPDATE dienstrooster_aios_mail_queue SET pogingen = pogingen + 1, laatste_poging_op = ? WHERE id = ?').run(now.toISOString(), r.id);
       const aflevering = await lever(JSON.parse(r.melding_json) as AiosRuilMail);
       if (aflevering === 'MISLUKT') break;

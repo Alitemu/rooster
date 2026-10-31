@@ -74,6 +74,8 @@ test('the beheerder restores a backup of more than 10 MB in the browser, and a w
     await loginAsBeheerder(page);
     const dialoog = await openBackup(page);
     await expect(dialoog.getByRole('heading', { name: 'Back-up terugzetten' })).toBeVisible();
+    // 0.905.1: the restored database holds the mail queue and reminder runs of its own moment.
+    await expect(dialoog.getByText('Een ruilmail of herinnering die na de back-up al verstuurd is, kan nog een keer uitgaan.')).toBeVisible();
     await dialoog.getByLabel('Back-upbestand (.drbackup)').setInputFiles({ name: 'dienstrooster-backup.drbackup', mimeType: 'application/octet-stream', buffer: bestand });
 
     // The button waits for the typed word.

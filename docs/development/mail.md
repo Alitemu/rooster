@@ -279,3 +279,13 @@ buttons ask first ("Rooster opnieuw mailen").
 The one mail that does not go to the flow's mailbox: lib/wachtwoordHerstel.ts
 sends it from the Gmail account to that same account
 (`sendDirectMail`, lib/verzendlijstMail.ts). See docs/development/auth.md.
+
+**A queued swap mail for a period in the prullenbak waits (0.905.1).** The
+mail carries a fresh personal link, and a period in the prullenbak is closed
+to its people (lib/periodAccess.ts): sent anyway, the link would not open.
+flushMailQueue (lib/meldingMail.ts) and its AIOS copy flushAiosMailWachtrij
+(lib/aiosRuilMail.ts) skip such a mail and keep it; it goes once the period
+is restored, the 7-day limit still applies, and a purge removes it with the
+period (lib/periodTrash.ts). A restored backup brings back the queue and the
+reminder claims of its own moment, so a mail sent after that moment can go
+again: the restore warning says so (components/BackupDialog.tsx).

@@ -266,7 +266,8 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                 </h3>
                 <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
                   Alles wat sinds de back-up veranderd is, gaat verloren. Dat geldt voor de achterwacht en de AIOS samen. De
-                  gegevens zoals ze nu zijn, bewaart de app eerst apart op de server.
+                  gegevens zoals ze nu zijn, bewaart de app eerst apart op de server. Een ruilmail of herinnering die na de
+                  back-up al verstuurd is, kan nog een keer uitgaan.
                 </div>
                 <div>
                   <label htmlFor="backup-bestand" className="block text-sm font-semibold text-neutral-900 mb-1">

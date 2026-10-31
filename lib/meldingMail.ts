@@ -258,6 +258,10 @@ export function queuedMailCount(): number {
   return (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_mail_queue').get() as { n: number }).n;
 }
 
+function inPrullenbak(periodId: string): boolean {
+  return Boolean(db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NOT NULL').get(periodId));
+}
+
 function stillRelevant(soort: string, swapId: string | null): boolean {
   if (!ONLY_WHILE_PENDING.has(soort as VerzendlijstSoort) || !swapId) return true;
   const swap = db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(swapId) as
@@ -323,14 +327,17 @@ async function runFlush(now: Date): Promise<{ verstuurd: number; vervallen: numb
       // Checked again per mail: an answer given while this run was sending
       // the ones before it makes a request mail pointless.
       const current = db
-        .prepare('SELECT swap_id, soort FROM dienstrooster_mail_queue WHERE id = ?')
-        .get(row.id) as { swap_id: string | null; soort: string } | undefined;
+        .prepare('SELECT swap_id, soort, period_id FROM dienstrooster_mail_queue WHERE id = ?')
+        .get(row.id) as { swap_id: string | null; soort: string; period_id: string } | undefined;
       if (!current) continue;
       if (!stillRelevant(current.soort, current.swap_id)) {
         remove.run(row.id);
         result.vervallen++;
         continue;
       }
+      // A period in the prullenbak is closed to its people, the link in the mail too: the mail waits until the
+      // period is back, and goes with it when it is purged (0.905.1).
+      if (inPrullenbak(current.period_id)) continue;
       db.prepare(
         'UPDATE dienstrooster_mail_queue SET pogingen = pogingen + 1, laatste_poging_op = ? WHERE id = ?'
       ).run(now.toISOString(), row.id);

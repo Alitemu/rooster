@@ -906,6 +906,18 @@ describe('ruilmails die niet meteen weg konden', () => {
     expect(queued(f)).toEqual([]);
   });
 
+  it('holds a mail for a period in the prullenbak, whose link would not open, and sends it once the period is back (0.905.1)', async () => {
+    const f = createFixture();
+    await requestSwap(f);
+    db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = ? WHERE id = ?').run(new Date().toISOString(), f.periodId);
+    configureSmtp(sink);
+    expect(await flushMailQueue()).toMatchObject({ verstuurd: 0, vervallen: 0, over: 2 });
+    expect(sink.received).toHaveLength(0);
+    db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = NULL WHERE id = ?').run(f.periodId);
+    expect(await flushMailQueue()).toMatchObject({ verstuurd: 2, vervallen: 0 });
+    expect(queued(f)).toEqual([]);
+  });
+
   it('drops a mail that waited longer than 7 days', async () => {
     const f = createFixture();
     await requestSwap(f);
