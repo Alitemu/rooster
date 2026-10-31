@@ -6100,17 +6100,17 @@ const MUTATIONS = [
   // 0.904.0: the backup dialog's messages and the achterwacht's longer search.
   {
     name: "backup antwoord: an empty 413 says only that it failed",
-    file: "lib/backupAntwoord.ts",
+    file: "lib/terugzetAntwoord.ts",
     find: "  if (status === 413) return TE_GROOT_VOOR_SERVER;\n",
     replace: "",
-    tests: ["lib/backupAntwoord"],
+    tests: ["lib/terugzetAntwoord"],
   },
   {
     name: "backup antwoord: the app's own message is passed over",
-    file: "lib/backupAntwoord.ts",
+    file: "lib/terugzetAntwoord.ts",
     find: "if (typeof melding === 'string' && melding !== '') return melding;",
     replace: "if (typeof melding === 'string' && melding === 'x') return melding;",
-    tests: ["lib/backupAntwoord"],
+    tests: ["lib/terugzetAntwoord"],
   },
   {
     name: "backup wachtwoord: the message says nothing of capital letters",

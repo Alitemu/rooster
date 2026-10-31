@@ -15,7 +15,7 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
 import { APP_TIME_ZONE } from '@/lib/localDate';
-import { backupFoutmelding } from '@/lib/backupAntwoord';
+import { backupFoutmelding } from '@/lib/terugzetAntwoord';
 import { WachtwoordVeld } from '@/components/WachtwoordVeld';
 
 interface Status {

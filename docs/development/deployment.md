@@ -263,6 +263,6 @@ the Caddyfile into it and 0.900.0 gave the restore of a backup 32 MB in Caddy;
 neither release note said to take the new file over, and an installation kept
 the 0.7x one with its own Caddyfile and 1 MB for every request: every backup
 above about 750 KB failed with an empty 413, which the dialog told as "Dat is
-niet gelukt." (now lib/backupAntwoord.ts says what it is). Every release that
+niet gelukt." (now lib/terugzetAntwoord.ts says what it is). Every release that
 changes docker-compose.yml says in its README note, in so many words, to
 replace the file.
