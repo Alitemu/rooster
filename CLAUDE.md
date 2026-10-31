@@ -27,7 +27,8 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
   app/api/aios, app/aios, components/Aios*), docs/development/diensten.md
   "Copied, not changed". Shared: the login, the database, the Gmail
   account. The AIOS gets its own solver in its own container; the
-  achterwacht's solver is not changed.
+  achterwacht's solver is not changed without the user's say (0.905.0:
+  only its time bound, 10 to 30 minutes, their choice).
 - The repository is public: no organisation names, domains, e-mail
   addresses, IP addresses, internal paths or real names of people anywhere
   in it (code, docs, tests, commit messages). Files the user shares
@@ -257,6 +258,11 @@ How to run them and what each one covers: docs/development/checks.md.
 | Operator guides (Dutch) | README.md, docs/installatie-it.md (for the IT department), docs/verzendlijst-power-automate.md, docs/back-up-power-automate.md, docs/teststrategie.md (what to test when), docs/stappenplan-testen.md (the checklist for the user) | - |
 
 Traps that cost a day each time:
+- **`.gitignore` has `*backup*`** (database copies). A source file with
+  "backup" in lowercase in its name is never committed: everything passes
+  here and the build on GitHub fails on a missing module (0.900.0, 0.904.0).
+  Name it dbBackup*, terugzet*, BackupDialog; app/genegeerdeBron.test.ts
+  fails when a source file is ignored.
 - **The seed builds the schema with its own SQL.** A new column needs the
   schema (db/schema.ts), a migration (db/migrations) and the seed (its
   CREATE TABLE and `LATER_COLUMNS`); then schema-drift and upgrade-drift.

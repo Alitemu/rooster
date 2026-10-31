@@ -567,7 +567,8 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
-**Vanaf versie 0.905.0:**
+**Vanaf versie 0.905.0:** (0.904.0 is niet uitgebracht: de build faalde. Wat bij 0.904.0 staat, zit in deze versie.)
+- *Back-up:* de beheerder ziet boven de lijst met periodes een melding als er geen back-up uitgaat: niet ingesteld, het back-upwachtwoord of het Gmail-wachtwoord moet opnieuw ingevuld worden, de laatste poging mislukte of de laatste back-up is 8 dagen of ouder. Met de knop *Back-up openen* ga je er meteen heen. Tot nu toe stond dit alleen in het venster *Back-up*.
 - *Rooster genereren (achterwacht):* de solver zoekt nu standaard 5 minuten in plaats van 2. Op een echte periode liet 2 minuten één dienst leeg en vulde 5 minuten alles. Is de solver na 5 minuten nog niet klaar, dan kun je het rooster opnieuw laten maken met 10 minuten zoektijd en daarna met 30 minuten. Elke keer begint de solver opnieuw en vervangt het nieuwe rooster het oude. De Herhaalplanner en de willekeurige methode werken zoals ze deden. Hiervoor gaat de bovengrens in de solver van de achterwacht van 10 naar 30 minuten. Aan de manier van rekenen verandert niets. `docker-compose.yml` verandert niet.
 - *Link kwijt? (issue #1):* de startpagina zegt nu dat de e-mail met de link tot een kwartier onderweg kan zijn en dat je hem maar één keer moet aanvragen. Een tweede aanvraag geeft alleen een tweede e-mail. Aan de werking verandert niets.
 
