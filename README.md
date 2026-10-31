@@ -567,6 +567,10 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 0.905.0:**
+- *Rooster genereren (achterwacht):* de solver zoekt nu standaard 5 minuten in plaats van 2. Op een echte periode liet 2 minuten één dienst leeg en vulde 5 minuten alles. Is de solver na 5 minuten nog niet klaar, dan kun je het rooster opnieuw laten maken met 10 minuten zoektijd en daarna met 30 minuten. Elke keer begint de solver opnieuw en vervangt het nieuwe rooster het oude. De Herhaalplanner en de willekeurige methode werken zoals ze deden. Hiervoor gaat de bovengrens in de solver van de achterwacht van 10 naar 30 minuten. Aan de manier van rekenen verandert niets. `docker-compose.yml` verandert niet.
+- *Link kwijt? (issue #1):* de startpagina zegt nu dat de e-mail met de link tot een kwartier onderweg kan zijn en dat je hem maar één keer moet aanvragen. Een tweede aanvraag geeft alleen een tweede e-mail. Aan de werking verandert niets.
+
 **Vanaf versie 0.904.0:**
 - *Neem het nieuwe `docker-compose.yml` over als je dat sinds 0.800.0 niet gedaan hebt.* `docker compose pull` haalt alleen de nieuwe app op, niet dit bestand. Sinds 0.800.0 staan de regels van Caddy erin en wordt een los `Caddyfile` niet meer gebruikt. Sinds 0.900.0 mag een back-up die je terugzet groter zijn dan 1 MB. Met het oude bestand weigert de server elke back-up boven ongeveer 750 KB, en de app zegt dat nu ook ("De server weigert dit bestand, omdat het te groot is"). Je ziet het oude bestand aan de regel `./Caddyfile:/etc/caddy/Caddyfile` bij `caddy`. Bewaar je eigen `.env`, `data/` en `certs/`, vervang alleen `docker-compose.yml` en voer `docker compose up -d` uit.
 - *Synology:* daar maakt Docker een ontbrekende map niet zelf aan. Maak bij een nieuwe installatie eerst `mkdir certs data` naast `docker-compose.yml`, anders stopt `docker compose up` met `Bind mount failed: ... certs does not exist`.

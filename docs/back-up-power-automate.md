@@ -70,6 +70,27 @@ Open daarna elke stroom en kijk na:
 
 Sla beide stromen op en zet ze aan.
 
+### Liever SharePoint dan OneDrive voor Bedrijven
+
+Werkt de connector *OneDrive voor Bedrijven* bij jou niet, gebruik dan de acties
+van **SharePoint**. Je OneDrive is een persoonlijke SharePoint-site. Let op drie
+dingen:
+
+- **Siteadres:** `https://<organisatie>-my.sharepoint.com/personal/<jouw_naam_organisatie_nl>`.
+  Niet het adres waarmee je OneDrive opent (met `?login_hint=` of `/my?id=`).
+  Je ziet het goede adres als je in OneDrive op *Mijn bestanden* klikt: de
+  adresbalk begint ermee.
+- **Mappad:** begint met `/Documents/`, ook als OneDrive de bibliotheek "Mijn
+  bestanden" noemt. Bijvoorbeeld `/Documents/Dienstrooster/Back-ups`. Met "Mijn
+  bestanden" in het pad zegt SharePoint `Root folder is not found`.
+- **De lijst met bestanden:** de SharePoint-actie geeft een lijst terug, geen
+  object met `value`. Zet bij *Back-ups* (*Matrix filteren*) bij **Van** alleen
+  **body** van de actie die de map leest. Een expressie met `?['value']` geeft
+  anders `property 'value' cannot be selected`.
+
+Doe dit in **beide** stromen. Alleen de eerste aanpassen laat de controle
+onterecht alarm slaan ("Nieuwste back-up: 1970-01-01").
+
 ## Stap 4. Testen
 
 1. Kies in Dienstrooster bij *Back-up* de knop *Nu een back-up versturen*.

@@ -577,11 +577,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // and leave the generate call's result with nowhere to land.
   const dismissBackdrop = useDialogDismiss(isOpen, handleClose, !loading);
 
-  // The step-up offered after a FEASIBLE result: 120s (the default, tracked
-  // as null) -> 300s -> 600s -> no further offer. Matches the two extra
-  // steps the planner asked for (5, then 10 minutes) rather than an
-  // open-ended doubling that would eventually make it an unbounded wait.
-  // Each is a new run from the start (lib/solverZoektijd.ts).
+  // The step-up offered after a FEASIBLE result: 300s (the default, tracked
+  // as null) -> 600s -> 1800s -> no further offer, the steps the planner
+  // asked for. Each is a new run from the start (lib/solverZoektijd.ts).
   const nextTimeLimitSeconds = volgendeZoektijd(lastTimeLimitSeconds);
 
   // Catches the mistake client-side before a round trip - the server
@@ -1079,9 +1077,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <li>Niemand twee diensten binnen het venster geven</li>
               </ul>
               <p className="text-xs text-neutral-500 pt-2">
-                De solver zoekt hoogstens 2 minuten. Is hij dan nog niet klaar, dan krijg je het
+                De solver zoekt hoogstens 5 minuten. Is hij dan nog niet klaar, dan krijg je het
                 beste rooster dat hij tot dan vond. Daarna kun je het rooster opnieuw laten maken
-                met 5 of 10 minuten zoektijd. De solver begint dan helemaal opnieuw.
+                met 10 of 30 minuten zoektijd. De solver begint dan helemaal opnieuw.
               </p>
             </div>
           )}

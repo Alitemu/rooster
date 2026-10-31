@@ -6134,11 +6134,48 @@ const MUTATIONS = [
     tests: ["lib/solverZoektijd"],
   },
   {
-    name: "solver zoektijd: no 10 minutes after 5",
+    name: "solver zoektijd: no 30 minutes after 10",
     file: "lib/solverZoektijd.ts",
-    find: "vorige === 300 ? 600 : null",
-    replace: "vorige === 300 ? null : null",
+    find: "was < MAX_ZOEKTIJD_SECONDEN ? MAX_ZOEKTIJD_SECONDEN : null",
+    replace: "was < MAX_ZOEKTIJD_SECONDEN ? null : null",
     tests: ["lib/solverZoektijd"],
+  },
+  // 0.905.0: a first run of the achterwacht's CP-SAT searches 5 minutes; 30 minutes is the most.
+  {
+    name: "solver zoektijd: a first run gets the solver's 2 minutes again",
+    file: "lib/solverZoektijd.ts",
+    find: "return modus === 'weighted' || modus === 'lexicographic' ? STANDAARD_ZOEKTIJD_SECONDEN : undefined;",
+    replace: "return undefined;",
+    tests: ["lib/solverZoektijd", "app/api/planner/period/[id]/generate-roster/zoektijd"],
+  },
+  {
+    name: "solver zoektijd: Herhaalplanner gets 5 minutes per attempt",
+    file: "lib/solverZoektijd.ts",
+    find: "return modus === 'weighted' || modus === 'lexicographic' ? STANDAARD_ZOEKTIJD_SECONDEN : undefined;",
+    replace: "return STANDAARD_ZOEKTIJD_SECONDEN;",
+    tests: ["lib/solverZoektijd", "app/api/planner/period/[id]/generate-roster/zoektijd"],
+  },
+  {
+    name: "generate-roster: the planner's chosen time is not sent",
+    file: "app/api/planner/period/[id]/generate-roster/route.ts",
+    find: "const zoektijd = zoektijdVoorGeneratie(timeLimitSeconds, objectiveModeConfig);",
+    replace: "const zoektijd = zoektijdVoorGeneratie(undefined, objectiveModeConfig);",
+    tests: ["app/api/planner/period/[id]/generate-roster/zoektijd"],
+  },
+  {
+    name: "generate-roster: more than 30 minutes is taken",
+    file: "app/api/planner/period/[id]/generate-roster/route.ts",
+    find: "candidate < 1 || candidate > MAX_ZOEKTIJD_SECONDEN",
+    replace: "candidate < 1 || candidate > 2 * MAX_ZOEKTIJD_SECONDEN",
+    tests: ["app/api/planner/period/[id]/generate-roster/zoektijd"],
+  },
+  {
+    name: "solver: half an hour of search refused",
+    file: "solver/main.py",
+    find: "time_limit_seconds: int = Field(default=120, ge=1, le=1800)",
+    replace: "time_limit_seconds: int = Field(default=120, ge=1, le=600)",
+    runner: 'pytest',
+    tests: ["test_main_validation.py", "-k", "half_an_hour"],
   },
 ];
 

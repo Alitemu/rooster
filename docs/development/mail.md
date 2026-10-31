@@ -251,6 +251,13 @@ address. The answer is the same for any address; rate-limited per caller
 for every participant and costs a Gmail send. The address is never
 stored or logged.
 
+The page says the mail can take up to a quarter of an hour, before and after
+asking, and to ask once (issue #1, 0.905.0): the operator's flow triggers on a
+shared mailbox, which Power Automate polls every 5 to 10 minutes whatever the
+flow says (measured: a mail of 12:45 started the flow at 12:50, one of 12:56 at
+13:05). A second request only sends a second mail. Text only: the limit of three
+per hour per address stays (tests/e2e/link-kwijt.e2e.ts).
+
 ## One send at a time, and sending a roster again (0.805.0)
 
 A send that goes to everyone is claimed per period and kind before its first

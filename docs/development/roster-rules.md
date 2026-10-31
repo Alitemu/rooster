@@ -317,6 +317,18 @@ Audit 0.94.0 on top of that:
   even. Lexicographic is what the wizard opens every new period with
   (objectiveMode in the frozen ruleset); weighted is the default only for
   a period frozen before that field existed.
+- **Search time (0.905.0, lib/solverZoektijd.ts):** a first run of CP-SAT
+  (weighted, lexicographic) searches 5 minutes, sent by the route when the
+  dialog asks for none. On the planner's own period (October 2026) 2
+  minutes left one shift empty and 5 filled them all. After a FEASIBLE
+  result the dialog offers 10, then 30 minutes; each is a new run from the
+  start whose roster replaces the one on screen, hand-filled shifts kept
+  (the button says so since 0.904.0). solver/main.py takes up to 1800
+  seconds: the one change to the achterwacht's solver, the planner's
+  choice; its model is as it was. Herhaalplanner sends no time (the
+  solver's own 120 s per attempt, up to 100 attempts) and Willekeurig does
+  not search. scripts/scenario-check.mjs keeps 120 s for a first run: a
+  stricter test than the app's, and a full run would take hours longer.
 
 ## Absences and part-time over what someone marked by hand
 

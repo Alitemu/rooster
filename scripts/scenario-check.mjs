@@ -67,7 +67,8 @@ const addDagen = (iso, n) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86400
 // seconds; window 2 needs "langer proberen" (audit 14).
 const MODES = (process.env.SCENARIO_MODES || (KORT ? 'weighted' : 'weighted,lexicographic,multi_start,randomized')).split(',');
 const WINDOWS = (process.env.SCENARIO_WINDOWS || (KORT ? '1' : '0,1,2')).split(',').map(Number);
-// The dialog's own default (solver/main.py SolverInput.time_limit_seconds).
+// 120 s, the dialog's first run until 0.905.0 (now 300, lib/solverZoektijd.ts): kept as
+// the stricter first try (300 would make the full run hours longer); the steps after it are the app's.
 const TIME_LIMIT = Number(process.env.SCENARIO_TIME || 120);
 
 function resolveDbPath() {
@@ -107,10 +108,13 @@ async function req(method, path, { jar, body } = {}) {
   } catch {}
   return { status: res.status, json };
 }
-// "Langer proberen", as the dialog offers it (RosterGenerationDialog
-// nextTimeLimitSeconds: 300 s, then 600 s after its own 120 s), scaled to
-// SCENARIO_TIME.
-const LONGER = [TIME_LIMIT * 2.5, TIME_LIMIT * 5];
+// "Opnieuw maken met meer zoektijd", as the dialog offers it since 0.905.0
+// (lib/solverZoektijd.ts: 10 minutes, then 30), scaled to SCENARIO_TIME. Until
+// 0.905.0 the steps were 5 and 10 minutes, and lexicographic at window 2 left
+// 2 shifts empty after both in two runs in a row (the 0.904.0 gate), where the
+// same code had filled them all at 0.901.0: this case sits on the edge of what
+// 10 minutes finds.
+const LONGER = [TIME_LIMIT * 5, TIME_LIMIT * 15];
 async function generateOnce(periodId, jar, timeLimit) {
   const start = await req('POST', `/api/planner/period/${periodId}/generate-roster`, { jar, body: { time_limit_seconds: timeLimit } });
   if (start.status !== 200) return { ok: false, detail: `start ${start.status} ${JSON.stringify(start.json)}` };

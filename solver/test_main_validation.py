@@ -140,3 +140,12 @@ def test_band_override_must_be_ordered_and_nonnegative():
     with pytest.raises(ValidationError):
         _input(band_overrides={'a': {'WEEKEND': (-1, 1)}})
     _input(band_overrides={'a': {'WEEKEND': (0, 1)}})  # must not raise
+
+
+def test_half_an_hour_is_the_longest_search():
+    """0.905.0: the app offers 5, 10 and 30 minutes; more than 30 is refused."""
+    assert _input(time_limit_seconds=1800).time_limit_seconds == 1800
+    with pytest.raises(ValidationError):
+        _input(time_limit_seconds=1801)
+    with pytest.raises(ValidationError):
+        _input(time_limit_seconds=0)

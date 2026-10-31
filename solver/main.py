@@ -348,14 +348,12 @@ class SolverInput(BaseModel):
                     raise ValueError('band override min must be <= max')
         return value
     # How long CP-SAT may search before returning its best-so-far solution.
-    # Default matches the "standaard" duration offered in the roster
-    # generation dialog; a planner can ask for a longer search (5, then 10
-    # minutes) when a first attempt comes back FEASIBLE rather than
-    # OPTIMAL. Capped at 600s (10 minutes) - beyond that the dialog itself
-    # has no further "try longer" option, and an unbounded value would let
-    # a single request pin the solver indefinitely (see generate-roster
-    # route/RosterGenerationDialog for the rest of that design tradeoff).
-    time_limit_seconds: int = Field(default=120, ge=1, le=600)
+    # The app sends 300 for a first run and 600, then 1800 when a run comes
+    # back FEASIBLE rather than OPTIMAL (lib/solverZoektijd.ts, 0.905.0, the
+    # planner's choice; only this bound changed). Capped at 1800s (30
+    # minutes) - beyond that the dialog itself has no further option, and an
+    # unbounded value would let a single request pin the solver indefinitely.
+    time_limit_seconds: int = Field(default=120, ge=1, le=1800)
 
     @field_validator('slots')
     @classmethod

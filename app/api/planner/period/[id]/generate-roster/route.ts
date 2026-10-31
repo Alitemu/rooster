@@ -46,6 +46,7 @@ import { computeBandShortfall, fellowBandOverrides } from '@/lib/bandShortfall';
 import { writeAuditLog } from '@/lib/auditLog';
 import { isBetterRoster, isPerfectRoster } from '@/lib/rosterVergelijk';
 import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
+import { MAX_ZOEKTIJD_SECONDEN, zoektijdVoorGeneratie } from '@/lib/solverZoektijd';
 
 /** The period as this route reads it (SELECT *): the columns it uses. */
 interface PeriodeRij {
@@ -117,8 +118,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Optional body: { time_limit_seconds } lets the planner ask for a
     // longer CP-SAT search after a first attempt comes back FEASIBLE
     // rather than OPTIMAL (see RosterGenerationDialog's "langer proberen"
-    // option). No body at all (the common case) falls back to the
-    // solver's own default. Clamped to the same [1, 600] range the solver
+    // option). No body at all (the common case) is the first run's 5
+    // minutes (lib/solverZoektijd.ts). Clamped to the same [1, 1800] range the solver
     // enforces so an out-of-range value fails fast here with a clear
     // message instead of a generic solver error.
     let timeLimitSeconds: number | undefined;
@@ -135,9 +136,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       }
       const candidate = (parsedBody as { time_limit_seconds?: unknown })?.time_limit_seconds;
       if (candidate !== undefined) {
-        if (typeof candidate !== 'number' || !Number.isInteger(candidate) || candidate < 1 || candidate > 600) {
+        if (typeof candidate !== 'number' || !Number.isInteger(candidate) || candidate < 1 || candidate > MAX_ZOEKTIJD_SECONDEN) {
           return NextResponse.json(
-            { success: false, error: 'Tijdslimiet moet een geheel getal tussen 1 en 600 seconden zijn' },
+            { success: false, error: `Tijdslimiet moet een geheel getal tussen 1 en ${MAX_ZOEKTIJD_SECONDEN} seconden zijn` },
             { status: 400 }
           );
         }
@@ -526,6 +527,8 @@ async function runGeneration(args: {
       config.objectiveMode === 'randomized'
         ? config.objectiveMode
         : 'weighted';
+    // The planner's search time, else the first run's 5 minutes (0.905.0, lib/solverZoektijd.ts).
+    const zoektijd = zoektijdVoorGeneratie(timeLimitSeconds, objectiveModeConfig);
 
     // Which greedy day-fill order to use - only consulted when
     // objectiveModeConfig is 'randomized'. See solver/greedy.py's module
@@ -631,7 +634,7 @@ async function runGeneration(args: {
       feestdag_targets: feestdagTargets(periodId),
       coverage_factors: coverageFactors,
       band_overrides: bandOverrides,
-      ...(timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}),
+      ...(zoektijd !== undefined ? { time_limit_seconds: zoektijd } : {}),
     };
 
     // Call solver service. Not fetch(): see lib/solverClient.ts for why -
@@ -650,7 +653,7 @@ async function runGeneration(args: {
     // actually finished and answered successfully - a slow-but-legitimate
     // solve must never be mistaken for a dead connection.
     const solverUrl = process.env.SOLVER_URL || 'http://solver:8000';
-    const solverTimeoutMs = (timeLimitSeconds ?? 120) * 1000 + 300_000;
+    const solverTimeoutMs = (zoektijd ?? 120) * 1000 + 300_000;
 
     let solverOutput: SolverUitvoer;
     let attemptsTried: number | undefined;
