@@ -16,12 +16,19 @@ def _per(uit, aios_id):
     return next(p for p in uit.per_aios if p.aios_id == aios_id)
 
 
-def _meer(inp, n):
+def _meer(inp, n, tijd=8):
     """Enough AIOS to fill everything, so fairness and the wishes have room."""
     for i in range(n):
         aios(inp, f'a{i:02d}')
     # Not proven best within this, but good: the tests check what matters.
-    inp['tijdslimiet_seconden'] = 8
+    inp['tijdslimiet_seconden'] = tijd
+
+
+# A saldo test checks who gets more of a soort, which the search has to find within its time. With the machine busy
+# (the release gate runs the tests one after the other, a build or another solve beside them) 8 seconds left the AIOS
+# with the debt more dagdiensten than the one owed them, 2 times in 3; 30 seconds held 6 times in 6 (October 2026,
+# all 4 cores loaded). The share itself is not searched for: the doel_* numbers hold at any time.
+SALDO_TIJD = 30
 
 
 def test_everyone_the_same_percentage_to_their_fte():
@@ -169,7 +176,7 @@ def test_a_night_saldo_moves_nights_to_who_had_fewer():
     inp = weken(4)
     aios(inp, 'x', saldo_nachten=3)
     aios(inp, 'y', saldo_nachten=-3)
-    _meer(inp, 8)
+    _meer(inp, 8, SALDO_TIJD)
     uit, toegewezen = los_op(inp)
     assert not uit.leeg
     nachten = _soort_aantallen(inp, toegewezen, 'ND')
@@ -198,7 +205,7 @@ def test_a_weekend_saldo_moves_those_diensten_to_who_had_fewer(veld, code, doel)
     inp = weken(4)
     aios(inp, 'x', **{veld: 3})
     aios(inp, 'y', **{veld: -3})
-    _meer(inp, 8)
+    _meer(inp, 8, SALDO_TIJD)
     uit, toegewezen = los_op(inp)
     assert not uit.leeg
     aantallen = _soort_aantallen(inp, toegewezen, code)
