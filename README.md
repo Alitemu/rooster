@@ -567,7 +567,7 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
-**Vanaf versie 0.905.1:**
+**Vanaf versie 0.905.1:** (0.905.0 is niet uitgebracht: de build op GitHub faalde op een nieuwe test. Wat bij 0.905.0 en 0.904.0 staat, zit in deze versie.)
 - *Ruilmails en de prullenbak:* een ruilmail die in de wachtrij stond (de mail was even niet te versturen) voor een periode die daarna in de prullenbak ging, ging later toch uit, met een link die niet meer werkte. Nu wacht zo'n mail tot de periode terug is uit de prullenbak. Wordt de periode definitief verwijderd, dan gaat de mail mee. Voor de achterwacht en de AIOS.
 - *Terugzetten:* de waarschuwing vóór het terugzetten zegt nu ook dat een ruilmail of herinnering die na de back-up al verstuurd is, nog een keer kan uitgaan. De teruggezette database heeft de wachtrij en de herinneringen van het moment van de back-up.
 
