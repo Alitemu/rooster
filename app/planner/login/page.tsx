@@ -279,7 +279,7 @@ function PlannerLoginForm() {
     <div className="container-main">
       <div className="max-w-sm mx-auto">
         <div className="card card-padding">
-          <h1 className="text-xl font-bold text-neutral-900 mb-6">Roosteraar inloggen</h1>
+          <h1 className="text-xl font-bold text-neutral-900 mb-6">Planner inloggen</h1>
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">

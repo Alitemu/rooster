@@ -551,7 +551,7 @@ function PersonalLinkPageContent() {
           <p className="text-sm text-amber-900">
             {deadlinePassed
               ? '⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'
-              : '🔒 De roosteraar heeft deze periode gesloten. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer. Neem contact op met de roosteraar als er nog iets aangepast moet worden.'}
+              : '🔒 De planner heeft deze periode gesloten. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer. Neem contact op met de planner als er nog iets aangepast moet worden.'}
           </p>
         </div>
       )}
@@ -609,7 +609,7 @@ function PersonalLinkPageContent() {
         <div className="mb-4 rounded border-2 border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-950" data-testid="voorlopig-rooster">
           <p className="font-semibold">Dit is het voorlopige rooster.</p>
           <p className="mt-1">
-            Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten.
+            Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten.
             Zonder reactie wordt het rooster over ongeveer twee weken definitief. Je krijgt dan nog een bericht.
           </p>
         </div>

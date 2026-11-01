@@ -123,7 +123,7 @@ export function voorlopigBericht(
 
 Het voorlopige rooster voor ${period.naam} staat klaar. ${dienstenBlok(eigen)}
 
-Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten. Zonder reactie wordt dit rooster over ongeveer twee weken definitief. Je krijgt dan nog een bericht.
+Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten. Zonder reactie wordt dit rooster over ongeveer twee weken definitief. Je krijgt dan nog een bericht.
 ${personalLink ? `\nJe rooster in de app:\n${personalLink}\n` : ''}
 Deze link is alleen voor jou. Stuur hem niet door.`,
   };

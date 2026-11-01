@@ -47,7 +47,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       if (!limit.allowed) return NextResponse.json(rateLimitedResponseBody(limit.retryAfterSeconds), { status: 429 });
     }
     if (!aiosMailIngesteld()) {
-      return fail(503, 'NOT_CONFIGURED', 'Een link aanvragen kan nu niet. Neem contact op met de roosteraar.');
+      return fail(503, 'NOT_CONFIGURED', 'Een link aanvragen kan nu niet. Neem contact op met de planner.');
     }
     recordAttempt(callerKey, CALLER_WINDOW_MS);
     recordAttempt(totalKey);
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             `Beste ${d.codenaam},\n\nJe hebt je persoonlijke link voor het dienstrooster aangevraagd.\n\n` +
             `${uitleg}\n\n${aiosPersoonlijkeLink(d.id, period.id, baseUrl)}\n\n` +
             'Heb je dit niet zelf aangevraagd? Dan kun je deze e-mail negeren.\n\n' +
-            'Heb je vragen? Neem dan contact op met de roosteraar.',
+            'Heb je vragen? Neem dan contact op met de planner.',
         }));
       })
     )();

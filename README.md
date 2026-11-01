@@ -567,6 +567,9 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 1.0.0:**
+- *Teksten:* de app noemt de rol overal planner, ook op de startpagina, bij het inloggen, in het scherm van de deelnemers en in de mails. Mailteksten die al in de database stonden, krijgen bij de eerste start het nieuwe woord, behalve als iemand ze met de hand heeft aangepast. Aan de werking verandert niets.
+
 **Vanaf versie 0.905.2:**
 - *Teksten:* de back-up noemt nu OneDrive of SharePoint als plek waar je stroom de bijlage neerzet, in het venster en in de mail. De pagina *Accounts* zegt niet meer dat alleen de achterwacht in productie is. Er staat nu dat elk account bij een dienst hoort en dat een planner alleen de eigen dienst ziet. Aan de werking verandert niets.
 

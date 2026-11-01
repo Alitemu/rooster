@@ -324,7 +324,7 @@ test.describe('Input gate - E2E', () => {
     // Not one of them may be pressable.
     expect(await page.locator('button[title*="rechtsklik voor opties"]:not([disabled])').count()).toBe(0);
 
-    await expect(page.getByText(/De roosteraar heeft deze periode gesloten/)).toBeVisible();
+    await expect(page.getByText(/De planner heeft deze periode gesloten/)).toBeVisible();
 
     // Deeltijd and afwezigheid are closed too: nothing to add, only to look at.
     await page.getByRole('button', { name: /Deeltijd/ }).first().click();
@@ -353,7 +353,7 @@ test.describe('Input gate - E2E', () => {
     const editable = page.locator('button[title*="rechtsklik voor opties"]:not([disabled])');
     await expect(editable.first()).toBeVisible();
     expect(await editable.count()).toBeGreaterThan(0);
-    await expect(page.getByText(/De roosteraar heeft deze periode gesloten/)).toHaveCount(0);
+    await expect(page.getByText(/De planner heeft deze periode gesloten/)).toHaveCount(0);
 
     await page.getByRole('button', { name: /Deeltijd/ }).first().click();
     await expect(page.getByText('Nieuw patroon toevoegen')).toBeVisible();

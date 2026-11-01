@@ -47,7 +47,7 @@ export function AiosMijnRooster({ personId, periodId, inSectie = false }: { pers
       {rooster.voorlopig ? (
         <div className="rounded border-2 border-dashed border-neutral-800 p-3 text-sm" data-testid="aios-voorlopig">
           <p className="font-semibold">Dit is het voorlopige rooster.</p>
-          <p>Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten. Daarna wordt het rooster definitief.</p>
+          <p>Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten. Daarna wordt het rooster definitief.</p>
         </div>
       ) : (
         <p className="text-sm font-medium">Dit rooster is definitief.</p>

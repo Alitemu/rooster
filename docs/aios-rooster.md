@@ -490,7 +490,7 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   als dat van de achterwacht: elke bijlage zegt in het veld `dienst` van wie ze is,
   zodat één stroom beide bedient. Dat stelt de beheerder in op de pagina van een periode
   van de AIOS. Ook de mails over ruilen gaan via die stroom (0.80.0). De lijst met adressen van de AIOS staat bij de
-  roosteraar (N2). Geen kopie voor de opleider (N4). Herinneringen gaan ook
+  planner (N2). Geen kopie voor de opleider (N4). Herinneringen gaan ook
   vanzelf, een week en een dag voor de deadline, net als bij de achterwacht
   (0.73.0). De planner kan ze per periode pauzeren.
 - Het AIOS-rooster houdt geen rekening met de achterwacht en andersom (M1 tot en

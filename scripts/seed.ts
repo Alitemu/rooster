@@ -946,7 +946,23 @@ const REWORDED_TEMPLATES: Array<{ sleutel: string; oud: string; nieuw: string }>
     // Publishing makes a roster voorlopig first (lib/publication.ts).
     sleutel: 'SCHEDULE_PUBLISHED',
     oud: 'Het rooster voor **{{periode}}** is definitief.',
-    nieuw: 'Het voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.',
+    nieuw: 'Het voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de planner weten als er iets niet klopt.',
+  },
+  // 0.905.3: one word for the role everywhere, "planner" (the user's choice).
+  {
+    sleutel: 'SCHEDULE_PUBLISHED',
+    oud: 'laat het de roosteraar weten als er iets niet klopt.',
+    nieuw: 'laat het de planner weten als er iets niet klopt.',
+  },
+  {
+    sleutel: 'DEADLINE_PASSED',
+    oud: 'Neem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
+    nieuw: 'Neem rechtstreeks contact op met de planner als er iets moet veranderen.',
+  },
+  {
+    sleutel: 'BLOCK_OVERRIDDEN',
+    oud: 'Neem contact op met de roosteraar als dit een probleem is.',
+    nieuw: 'Neem contact op met de planner als dit een probleem is.',
   },
 ];
 
@@ -964,12 +980,14 @@ function refreshRewordedTemplates() {
     .prepare('SELECT id, sleutel, body_md FROM dienstrooster_notification_template')
     .all() as Array<{ id: string; sleutel: string; body_md: string }>;
   for (const row of rows) {
+    // One body through every change in order, so a later change can follow an earlier one.
+    let body = row.body_md;
     for (const change of REWORDED_TEMPLATES) {
-      if (row.sleutel === change.sleutel && row.body_md.includes(change.oud)) {
-        const body = row.body_md.replace(change.oud, change.nieuw);
-        db.prepare('UPDATE dienstrooster_notification_template SET body_md = ? WHERE id = ?').run(body, row.id);
-        console.log(`  Updated notification template text ${row.sleutel}`);
-      }
+      if (row.sleutel === change.sleutel && body.includes(change.oud)) body = body.replace(change.oud, change.nieuw);
+    }
+    if (body !== row.body_md) {
+      db.prepare('UPDATE dienstrooster_notification_template SET body_md = ? WHERE id = ?').run(body, row.id);
+      console.log(`  Updated notification template text ${row.sleutel}`);
     }
   }
 }
@@ -1113,17 +1131,17 @@ function createNotificationTemplates() {
     [
       'DEADLINE_PASSED',
       '{{periode}}: de deadline is verstreken',
-      'Beste {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
+      'Beste {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de planner als er iets moet veranderen.',
     ],
     [
       'BLOCK_OVERRIDDEN',
       '{{periode}}: een van je voorkeuren kon niet worden gehonoreerd',
-      'Beste {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de roosteraar als dit een probleem is.',
+      'Beste {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de planner als dit een probleem is.',
     ],
     [
       'SCHEDULE_PUBLISHED',
       '{{periode}}: het rooster is gepubliceerd',
-      'Beste {{codenaam}},\n\nHet voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
+      'Beste {{codenaam}},\n\nHet voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de planner weten als er iets niet klopt.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
     ],
     [
       'SWAP_REQUESTED',

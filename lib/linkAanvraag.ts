@@ -83,7 +83,7 @@ export function linkAanvraagKandidaten(now: Date = new Date()): { periode: strin
           `Beste ${m.codenaam},\n\nJe hebt je persoonlijke link voor het dienstrooster aangevraagd.\n\n` +
           `${uitleg}\n\n${issuePersonLink(m.id, period.id, baseUrl)}\n\n` +
           'Heb je dit niet zelf aangevraagd? Dan kun je deze e-mail negeren.\n\n' +
-          'Heb je vragen? Neem dan contact op met de roosteraar.',
+          'Heb je vragen? Neem dan contact op met de planner.',
       });
     }
   }

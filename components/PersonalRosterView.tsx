@@ -199,8 +199,8 @@ export function PersonalRosterView({
                 Ingedeeld op een dag die je had geblokkeerd
               </p>
               <p className="text-sm text-red-800 mt-1">
-                De roosteraar heeft je bewust ingedeeld op{' '}
-                {telwoord(blockedOverrideViolations.length, 'dag', 'dagen')} die je had geblokkeerd. Neem contact op met de roosteraar als dit niet
+                De planner heeft je bewust ingedeeld op{' '}
+                {telwoord(blockedOverrideViolations.length, 'dag', 'dagen')} die je had geblokkeerd. Neem contact op met de planner als dit niet
                 klopt.
               </p>
               <ul className="text-sm text-red-800 mt-2 space-y-1">
@@ -303,7 +303,7 @@ export function PersonalRosterView({
           <strong>F</strong> = Feestdagdienst
         </p>
         <p>
-          Vragen over je rooster? Neem contact op met de roosteraar.
+          Vragen over je rooster? Neem contact op met de planner.
         </p>
       </div>
     </div>

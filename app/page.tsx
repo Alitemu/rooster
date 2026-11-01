@@ -26,14 +26,14 @@ export default function Home() {
           </h3>
           <p className="text-neutral-600 text-sm">
             Voer je voorkeuren in, blokkeer je dagen en bekijk je toegewezen diensten via je
-            persoonlijke link, ontvangen van de roosteraar.
+            persoonlijke link, ontvangen van de planner.
           </p>
           <LinkAanvraagForm />
         </div>
 
         <div className="card card-padding">
           <h3 className="text-lg font-semibold text-neutral-900 mb-2">
-            Voor roosteraar
+            Voor planners
           </h3>
           <p className="text-neutral-600 text-sm mb-4">
             Beheer periodes, genereer roosters en publiceer diensten.

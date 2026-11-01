@@ -55,7 +55,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     if (!verzendlijstMailConfigured()) {
-      return fail(503, 'NOT_CONFIGURED', 'Een link aanvragen kan nu niet. Neem contact op met de roosteraar.');
+      return fail(503, 'NOT_CONFIGURED', 'Een link aanvragen kan nu niet. Neem contact op met de planner.');
     }
 
     recordAttempt(callerKey, CALLER_WINDOW_MS);

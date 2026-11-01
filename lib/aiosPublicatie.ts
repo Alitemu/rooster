@@ -184,7 +184,7 @@ export function aiosVoorlopigBericht(
 
 Het voorlopige rooster van de AIOS voor ${period.naam} staat klaar. ${dienstenTekst(eigen, percentage)}
 
-Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten. Daarna wordt het rooster definitief. Je krijgt dan nog een bericht.
+Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten. Daarna wordt het rooster definitief. Je krijgt dan nog een bericht.
 ${linkTekst(link)}
 Deze link is alleen voor jou. Stuur hem niet door.`,
   };

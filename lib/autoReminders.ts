@@ -202,7 +202,7 @@ export function reminderBericht(
     onderwerp,
     tekst:
       `Beste ${ontvanger.codenaam},\n\n${kern}\n\n${slot}` +
-      `Ga naar je persoonlijke link:\n${link}\n\nHeb je vragen? Neem dan contact op met de roosteraar.`,
+      `Ga naar je persoonlijke link:\n${link}\n\nHeb je vragen? Neem dan contact op met de planner.`,
   };
 }
 

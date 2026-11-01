@@ -139,6 +139,6 @@ Werk je vaste dagen niet? Of heb je vakantie of ander verlof? Geef dat op bij de
 
 Deze link is alleen voor jou. Stuur hem niet door. Ben je hem kwijt? Op ${startpagina(personalLink)} vraag je bij "Link kwijt?" een nieuwe aan met je werk-e-mailadres.
 
-Heb je vragen? Neem dan contact op met de roosteraar.`,
+Heb je vragen? Neem dan contact op met de planner.`,
   };
 }
