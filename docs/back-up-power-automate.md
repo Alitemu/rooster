@@ -91,6 +91,45 @@ dingen:
 Doe dit in **beide** stromen. Alleen de eerste aanpassen laat de controle
 onterecht alarm slaan ("Nieuwste back-up: 1970-01-01").
 
+### In een Teams-kanaal
+
+De bestanden van een Teams-kanaal staan in de SharePoint-site van het team. De
+back-ups kunnen daar ook staan, met dezelfde SharePoint-acties als hierboven.
+Dat heeft een voordeel boven je eigen OneDrive: een persoonlijke OneDrive
+verdwijnt een tijd nadat iemand uit dienst gaat, en de back-ups gaan dan mee.
+Een teamsite blijft bestaan.
+
+1. Maak in het kanaal, op het tabblad *Bestanden*, een map voor de back-ups,
+   bijvoorbeeld `Roosterapplicatie/Backup`.
+2. Open de map met *Openen in SharePoint*. Het **siteadres** is het begin van
+   de adresbalk tot en met de naam van de site:
+   `https://<organisatie>.sharepoint.com/sites/<teamsite>`. Zonder `-my`: een
+   adres met `-my.sharepoint.com` en `/shared?id=` is de weergave in je eigen
+   OneDrive, niet de site.
+3. Het **mappad** begint met de naam van de bibliotheek zoals die in het adres
+   staat, daarna het kanaal en je map. Bijvoorbeeld
+   `/Gedeelde documenten/General/Roosterapplicatie/Backup`. Of de bibliotheek
+   `Gedeelde documenten` of `Shared Documents` heet, hangt af van de taal waarin
+   het team is gemaakt: neem over wat in het adres staat. Kies de map het liefst
+   met het mapicoontje in de actie, dan vult Power Automate het pad zelf in.
+4. Vervang in **beide** stromen de OneDrive-acties door de SharePoint-acties,
+   met dit siteadres en dit mappad, en zet bij *Back-ups* (*Matrix filteren*)
+   bij **Van** alleen **body** (zie hierboven).
+5. Het account waarmee de stromen draaien, moet lid zijn van het team.
+
+Een privékanaal heeft een eigen site, met een eigen adres. Kijk dus altijd via
+*Openen in SharePoint* welk adres hoort bij de map die je kiest. Bestanden uit
+een chat zijn niet geschikt: die staan in de OneDrive van wie ze stuurde.
+
+**Wie de back-ups kan weggooien.** Iedereen die lid is van het team, kan de
+bestanden in een standaardkanaal verplaatsen of verwijderen. Lezen kan niemand
+zonder het back-upwachtwoord, weggooien wel. Zet de back-ups daarom alleen in
+een team met een kleine, vaste groep, zoals alleen de planners, of beperk de
+rechten op de map tot de beheerder en een vervanger. Dat geldt voor beide
+diensten samen: de back-up bevat de achterwacht en de AIOS. De controlestroom
+mailt je als de nieuwste back-up ouder dan 8 dagen is, ook als iemand de map
+heeft leeggemaakt.
+
 ## Stap 4. Testen
 
 1. Kies in Dienstrooster bij *Back-up* de knop *Nu een back-up versturen*.
