@@ -156,7 +156,8 @@ export default function AccountsPage() {
           beheert daarnaast deze accounts. Een nieuw account of een gereset wachtwoord krijgt een
           tijdelijk wachtwoord. Bij de eerste keer inloggen kiest die persoon zelf een nieuw
           wachtwoord. Je eigen account beheer je met Wachtwoord wijzigen.
-          Elk account hoort bij een dienst. Voorlopig is alleen de achterwacht in productie.
+          Elk account hoort bij een dienst: de achterwacht of de AIOS. Een planner ziet alleen de eigen
+          dienst. Een beheerder ziet ze allebei.
         </p>
       </div>
 

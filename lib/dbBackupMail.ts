@@ -193,7 +193,7 @@ export async function runBackupMail(
     text:
       `In de bijlage staat een versleutelde back-up van Dienstrooster van ${vandaag}.\n\n` +
       'Je opent hem alleen met het back-upwachtwoord. Terugzetten doe je in de app, als beheerder, bij Back-up.\n\n' +
-      'Dit bericht is automatisch verstuurd. De stroom in Power Automate zet de bijlage in OneDrive.',
+      'Dit bericht is automatisch verstuurd. De stroom in Power Automate zet de bijlage in OneDrive of SharePoint.',
     attachments: [{ filename: naam, content: bestand, contentType: 'application/octet-stream' }],
   });
   if (!verstuurd.ok) return mislukt(verstuurd.message);

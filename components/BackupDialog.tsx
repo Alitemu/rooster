@@ -122,14 +122,14 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const nuVersturen = () =>
     run(async () => {
       apply(await call(withBasePath('/api/admin/back-up/versturen'), 'POST', {}));
-      setMelding('De back-up is verstuurd. Kijk over een paar minuten in OneDrive of hij is aangekomen.');
+      setMelding('De back-up is verstuurd. Kijk over een paar minuten of hij in OneDrive of SharePoint is aangekomen.');
     });
 
   const stop = () =>
     run(async () => {
       apply(await call(withBasePath('/api/admin/back-up'), 'DELETE'));
       setConfirmStop(false);
-      setMelding('Er gaan geen back-ups meer uit. De back-ups die al in OneDrive staan, blijven daar.');
+      setMelding('Er gaan geen back-ups meer uit. De back-ups die al in OneDrive of SharePoint staan, blijven daar.');
     });
 
   const terugzetten = () =>
@@ -167,7 +167,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           <h2 className="text-xl font-bold">Back-up</h2>
           <p className="text-sm text-neutral-600 mt-1">
             Elke nacht gaat er een versleutelde kopie van de hele database per mail naar jouw adres, als er iets veranderd is.
-            Je stroom in Power Automate zet hem in OneDrive.
+            Je stroom in Power Automate zet hem in OneDrive of SharePoint.
           </p>
         </div>
 
