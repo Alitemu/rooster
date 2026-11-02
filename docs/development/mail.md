@@ -112,7 +112,18 @@ mails, lib/meldingMail.ts) use lib/baseUrl.ts `mailBaseUrl`: BASE_URL or
 the period's `basis_url` from the planner's export, never the Host header
 of the participant's request (anyone can forge it, and the colleague's
 fresh personal link would go to that host); with neither known the mail
-has no link. resolveBaseUrl (Host header) is for planner exports only. Swap requests use the same channel (lib/meldingMail.ts):
+has no link and says to use the link from the invitation. Under a link
+stands "Deze link is alleen voor jou. Stuur hem niet door." (1.0.1, as in
+the AIOS's). The AIOS keep their own address in
+dienstrooster_aios_periode.basis_url: sending the invitations,
+publishing, making definitief and mailing the roster again all keep it
+(lib/aiosUitnodigen.ts onthoudAiosBasisUrl; before 1.0.1 only the
+invitations did, and a swap mail in a period whose invitations never went
+out had no link). resolveBaseUrl (Host header) is for planner requests only.
+A request withdrawn because the planner took the publication back gives
+"Het rooster is weer voorlopig. Ruilen kan weer als het definitief is."
+(ROOSTER_VOORLOPIG_REDEN, in lib/swapLifecycle.ts and lib/aiosRuilen.ts
+each); "Het rooster is aangepast." stays for a dienst changed by hand. Swap requests use the same channel (lib/meldingMail.ts):
 a new request mails the colleague (SWAP_REQUESTED) and confirms to the
 requester, and approve/reject mails the requester (SWAP_RESULT), each a
 one-bericht verzendlijst with a fresh personal link and the swap spelled

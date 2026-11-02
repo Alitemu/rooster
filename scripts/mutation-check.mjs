@@ -6221,6 +6221,63 @@ const MUTATIONS = [
     replace: "",
     tests: ["app/api/aios/aiosRuilMail"],
   },
+  // 1.0.1
+  {
+    name: "kalender: the legend leaves out a letter the cells show",
+    file: "lib/calendarLegend.ts",
+    find: "  return counters.map((counter) => ({",
+    replace: "  return counters.filter((c) => c !== 'FEESTDAG').map((counter) => ({",
+    tests: ["lib/calendarLegend"],
+  },
+  {
+    name: "ruilverzoek: the label touches the date on a phone",
+    file: "components/SwapManagementPanel.tsx",
+    find: '                    <div className="flex flex-wrap justify-between gap-x-2">\n                      <span className="text-neutral-600">Aangeboden:</span>',
+    replace: '                    <div className="flex justify-between">\n                      <span className="text-neutral-600">Aangeboden:</span>',
+    tests: ["components/swapCardSpacing"],
+  },
+  {
+    name: "aios ruilmail: publishing does not keep the address for later links",
+    file: "app/api/aios/periode/[id]/publiceren/route.ts",
+    find: "    onthoudAiosBasisUrl(period.id, resolveBaseUrl(req));\n",
+    replace: "",
+    tests: ["app/api/aios/aiosRuilMail"],
+  },
+  {
+    name: "aios ruilmail: making definitief does not keep the address for later links",
+    file: "app/api/aios/periode/[id]/definitief-maken/route.ts",
+    find: "    onthoudAiosBasisUrl(period.id, resolveBaseUrl(req));\n",
+    replace: "",
+    tests: ["app/api/aios/aiosRuilMail"],
+  },
+  {
+    name: "aios ruilmail: no address known, the mail says nothing about the link",
+    file: "lib/aiosRuilMail.ts",
+    find: "      tekst += `\\n\\n${AIOS_GEEN_LINK_TEKST}`;\n",
+    replace: "",
+    tests: ["app/api/aios/aiosRuilMail"],
+  },
+  {
+    name: "unpublish: the requests withdrawn say the roster was changed",
+    file: "lib/swapLifecycle.ts",
+    find: "  const reden = opties.alle ? ROOSTER_VOORLOPIG_REDEN : ROOSTER_AANGEPAST_REDEN;",
+    replace: "  const reden = ROOSTER_AANGEPAST_REDEN;",
+    tests: ["lib/ruilHerinnering"],
+  },
+  {
+    name: "aios publicatie intrekken: the requests withdrawn say the roster was changed",
+    file: "lib/aiosRuilen.ts",
+    find: "  return zetIngetrokken(open, now, () => ({ reden: ROOSTER_VOORLOPIG_REDEN, aanvragerOok: true }));",
+    replace: "  return zetIngetrokken(open, now, () => ({ reden: ROOSTER_AANGEPAST_REDEN, aanvragerOok: true }));",
+    tests: ["app/api/aios/aiosRuilen"],
+  },
+  {
+    name: "melding mail: no warning under the personal link",
+    file: "lib/meldingMail.ts",
+    find: "}\\n\\n${LINK_WAARSCHUWING}`",
+    replace: "}`",
+    tests: ["lib/ruilHerinnering"],
+  },
 ];
 
 const args = process.argv.slice(2);

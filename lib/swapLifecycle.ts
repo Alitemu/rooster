@@ -26,8 +26,10 @@ import { mailMelding } from './meldingMail';
 import { swapMailDetails, type SwapShift } from './swapMailDetails';
 
 export const VERVALLEN_REDEN = 'Een van de diensten is intussen al met iemand anders geruild.';
-/** Why a request is withdrawn when the planner changed the roster or took it back to voorlopig. */
+/** Why a request is withdrawn when the planner changed the roster by hand. */
 export const ROOSTER_AANGEPAST_REDEN = 'Het rooster is aangepast.';
+/** Why a request is withdrawn when the planner took the publication back: nothing changed in the roster, it is voorlopig again. */
+export const ROOSTER_VOORLOPIG_REDEN = 'Het rooster is weer voorlopig. Ruilen kan weer als het definitief is.';
 
 interface SwapRow {
   id: string;
@@ -241,7 +243,9 @@ export function closeLapsedSwaps(
  * taken back): open requests whose two shifts are no longer held by the two
  * people they are about can never be approved, so they are withdrawn
  * (INGETROKKEN, ROOSTER_AANGEPAST_REDEN). With `alle`, every open request
- * of the period goes, for the roster that stops being definitief.
+ * of the period goes, for the roster that stops being definitief
+ * (ROOSTER_VOORLOPIG_REDEN: the roster did not change, so "aangepast"
+ * sent people looking for a change that was not there).
  * Both the requester and the colleague are told, without naming the other.
  *
  * Call inside the transaction that changed the roster; call `.send()` on
@@ -265,11 +269,12 @@ export function closeSwapsAfterRosterChange(periodId: string, now: string, optie
      SET status = 'INGETROKKEN', beantwoord_op = ?, reden_afwijzing = ?
      WHERE id = ? AND status = 'PENDING'`
   );
+  const reden = opties.alle ? ROOSTER_VOORLOPIG_REDEN : ROOSTER_AANGEPAST_REDEN;
   const meldingen: Melding[] = [];
   for (const swap of weg) {
-    trekIn.run(now, ROOSTER_AANGEPAST_REDEN, swap.id);
-    meldingen.push(noticeToRequester(swap, ROOSTER_AANGEPAST_REDEN));
-    meldingen.push(noticeToColleague(swap, 'ingetrokken', ROOSTER_AANGEPAST_REDEN));
+    trekIn.run(now, reden, swap.id);
+    meldingen.push(noticeToRequester(swap, reden));
+    meldingen.push(noticeToColleague(swap, 'ingetrokken', reden));
   }
   return { meldingen, aantal: weg.length };
 }

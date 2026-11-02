@@ -386,6 +386,11 @@ describe('withdrawn', () => {
     expect(status(r.json.data.id)).toBe('INGETROKKEN');
     await waitForMails(sink, 2);
     expect(sink.received.map((m) => verzendlijstPayload(m.raw).berichten[0].codenaam).sort()).toEqual([cn('v'), cn('z')].sort());
+    for (const m of sink.received) {
+      const tekst = verzendlijstPayload(m.raw).berichten[0].tekst as string;
+      expect(tekst).toContain('Het rooster is weer voorlopig. Ruilen kan weer als het definitief is.');
+      expect(tekst).not.toContain('Het rooster is aangepast.');
+    }
     expect((await overzicht(preq(w.z, ''), pctx(w.z))).status).toBe(404);
     expect((await vraag(w.z, `dienst:${slot('DD', '2094-08-08').id}`, `dienst:${slot('DD', '2094-07-24').id}`)).json.error.code).toBe('NOT_DEFINITIEF');
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD', definitief_op = ? WHERE id = ?`).run(now, w.period);

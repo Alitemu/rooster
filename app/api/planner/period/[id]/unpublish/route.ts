@@ -25,11 +25,12 @@
  *     Those are a historical record of what happened and stay exactly
  *     that; a new notification tells people the roster was withdrawn
  *     instead.
- *   - Touch pending swap requests. checkSwapAllowed already refuses to
- *     act on one outside GEPUBLICEERD, and the approve route separately
- *     re-checks that the assignments it names still match what the
- *     request was actually about - so a stale request from before the
- *     withdrawal can't silently apply to a roster that has since changed.
+ *
+ * Pending swap requests do go: every open one is withdrawn (INGETROKKEN,
+ * ROOSTER_VOORLOPIG_REDEN) and both sides are told, in the same
+ * transaction (lib/swapLifecycle.ts closeSwapsAfterRosterChange with
+ * `alle`). Swapping needs a definitief roster, so none of them could go
+ * through any more.
  */
 
 import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';

@@ -376,13 +376,13 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   </div>
 
                   <div className="bg-neutral-50 rounded p-3 text-sm space-y-1 mb-2">
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-x-2">
                       <span className="text-neutral-600">Aangeboden:</span>
                       <span className="font-medium">
                         {datumTekst(swap.aangeboden_datum)} ({shiftTypeNames[swap.aangeboden_type]})
                       </span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex flex-wrap justify-between gap-x-2">
                       <span className="text-neutral-600">Gevraagd:</span>
                       <span className="font-medium">
                         {datumTekst(swap.gevraagde_datum)} ({shiftTypeNames[swap.gevraagde_type]})

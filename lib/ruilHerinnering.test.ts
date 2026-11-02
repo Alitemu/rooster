@@ -158,6 +158,8 @@ describe('automatic', () => {
     expect(collega.tekst).not.toContain(w.xCodenaam);
     expect(collega.tekst).toContain('Toelichting: ik heb een cursus');
     expect(collega.tekst).toMatch(/\/person\//);
+    // Under the link, as in the AIOS's mails (1.0.1).
+    expect(collega.tekst).toMatch(/\/person\/\S+\n\nDeze link is alleen voor jou\. Stuur hem niet door\./);
     const aanvrager = berichten(w.xCodenaam).find((b) => b.soort === 'RUIL_HERINNERING_BEVESTIGING')!;
     expect(aanvrager.tekst).toContain('Daarom is er automatisch een herinnering gestuurd.');
     expect(aanvrager.tekst).toContain('Overweeg de dienst ook te ruilen met een andere dag of collega.');
@@ -404,14 +406,16 @@ describe('withdrawn when the roster changes', () => {
     );
     expect(res.status).toBe(200);
     expect(statusOf(id)).toBe('INGETROKKEN');
-    expect((db.prepare('SELECT reden_afwijzing FROM dienstrooster_swap_request WHERE id = ?').get(id) as { reden_afwijzing: string }).reden_afwijzing).toBe('Het rooster is aangepast.');
+    expect((db.prepare('SELECT reden_afwijzing FROM dienstrooster_swap_request WHERE id = ?').get(id) as { reden_afwijzing: string }).reden_afwijzing).toBe('Het rooster is weer voorlopig. Ruilen kan weer als het definitief is.');
     await waitForMails(sink, 2);
     const aanColl = berichten(w.yCodenaam).find((b) => b.soort === 'RUIL_INGETROKKEN')!;
-    expect(aanColl.tekst).toContain('Het rooster is aangepast.');
+    expect(aanColl.tekst).toContain('Het rooster is weer voorlopig. Ruilen kan weer als het definitief is.');
     expect(aanColl.personen).toEqual([w.yCodenaam]);
     const aanAanvrager = berichten(w.xCodenaam).find((b) => b.soort === 'RUIL_UITKOMST')!;
-    expect(aanAanvrager.tekst).toContain('Het rooster is aangepast.');
+    expect(aanAanvrager.tekst).toContain('Het rooster is weer voorlopig. Ruilen kan weer als het definitief is.');
     expect(aanAanvrager.tekst).not.toContain(w.yCodenaam);
+    // Nothing in the roster changed: "aangepast" sent people looking for a change.
+    expect(aanColl.tekst).not.toContain('Het rooster is aangepast.');
     await stil();
   });
 
@@ -428,6 +432,7 @@ describe('withdrawn when the roster changes', () => {
     gesloten.meldingen.forEach((m) => m.send());
     expect(gesloten.aantal).toBe(1);
     expect(statusOf(een)).toBe('INGETROKKEN');
+    expect((db.prepare('SELECT reden_afwijzing FROM dienstrooster_swap_request WHERE id = ?').get(een) as { reden_afwijzing: string }).reden_afwijzing).toBe('Het rooster is aangepast.');
     await waitForMails(sink, 2);
     db.prepare('UPDATE dienstrooster_assignment SET person_id = ? WHERE id = ?').run(w.x, x.id);
     await stil();

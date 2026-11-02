@@ -46,6 +46,9 @@ type Aflevering = 'VERSTUURD' | 'MISLUKT' | 'WEG';
 const codenaamVan = (personId: string) =>
   (db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(personId) as { codenaam: string } | undefined)?.codenaam;
 
+/** In a swap mail when no address for a link is known (BASE_URL unset, nothing published or sent yet). */
+export const AIOS_GEEN_LINK_TEKST = 'Open Dienstrooster via de persoonlijke link uit je uitnodiging.';
+
 async function lever(mail: AiosRuilMail): Promise<Aflevering> {
   const periode = db.prepare('SELECT naam FROM dienstrooster_schedule_period WHERE id = ?').get(mail.periodId) as { naam: string } | undefined;
   if (!periode) return 'WEG';
@@ -58,6 +61,8 @@ async function lever(mail: AiosRuilMail): Promise<Aflevering> {
     const basis = aiosMailBasisUrl(mail.periodId);
     if (basis) {
       tekst += `\n\nJe pagina:\n${aiosPersoonlijkeLink(mail.aan.personId, mail.periodId, basis)}\n\nDeze link is alleen voor jou. Stuur hem niet door.`;
+    } else {
+      tekst += `\n\n${AIOS_GEEN_LINK_TEKST}`;
     }
   } else {
     codenaam = mail.aan.codenaam;

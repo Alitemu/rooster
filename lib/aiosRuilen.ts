@@ -242,6 +242,8 @@ export type HerinneringDoor = 'AUTOMATISCH' | 'AANVRAGER' | 'PLANNER';
 const lijstVan = (json: string) => JSON.parse(json) as string[];
 
 export const ROOSTER_AANGEPAST_REDEN = 'Het rooster is aangepast.';
+/** The publication was taken back: the roster did not change, it is voorlopig again. */
+export const ROOSTER_VOORLOPIG_REDEN = 'Het rooster is weer voorlopig. Ruilen kan weer als het definitief is.';
 export const AL_GERUILD_REDEN = 'De dienst is al met een andere collega geruild.';
 export const AL_ONDERLING_GERUILD_REDEN = 'Jullie hebben die dienst intussen via een ander ruilverzoek al met elkaar geruild.';
 export const DERDE_REDEN = 'Een van de diensten is intussen al met iemand anders geruild.';
@@ -277,7 +279,7 @@ export function trekOnmogelijkeAiosRuilenIn(
 /** The roster stops being definitief (the publication is taken back): nothing open can go through any more. */
 export function trekAlleOpenAiosRuilenIn(periodId: string, now = new Date()): IngetrokkenRuil[] {
   const open = db.prepare(`SELECT * FROM dienstrooster_aios_ruil WHERE period_id = ? AND status = 'IN_BEHANDELING'`).all(periodId) as RuilRij[];
-  return zetIngetrokken(open, now, () => ({ reden: ROOSTER_AANGEPAST_REDEN, aanvragerOok: true }));
+  return zetIngetrokken(open, now, () => ({ reden: ROOSTER_VOORLOPIG_REDEN, aanvragerOok: true }));
 }
 
 function zetIngetrokken(rijen: RuilRij[], now: Date, kies: (r: RuilRij) => { reden: string; aanvragerOok: boolean }): IngetrokkenRuil[] {

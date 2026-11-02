@@ -66,6 +66,9 @@ const ONLY_WHILE_PENDING = new Set<VerzendlijstSoort>(['RUILVERZOEK', 'RUIL_BEVE
 
 type Delivery = 'SENT' | 'FAILED' | 'GONE';
 
+/** Under the link in a swap mail, as in the AIOS's: whoever has the link can do what that person can. */
+export const LINK_WAARSCHUWING = 'Deze link is alleen voor jou. Stuur hem niet door.';
+
 /** Builds the mail (with a fresh personal link) and sends it. GONE: the person, period or template no longer exists. */
 async function deliver(mail: Mail): Promise<Delivery> {
   if ('doorgeven' in mail) return deliverDoorgeven(mail);
@@ -83,7 +86,7 @@ async function deliver(mail: Mail): Promise<Delivery> {
   // which older versions stored it in.
   const baseUrl = mailBaseUrl(melding.periodId);
   const link = baseUrl
-    ? `${melding.linkIntro}\n${issuePersonLink(melding.personId, melding.periodId, baseUrl)}`
+    ? `${melding.linkIntro}\n${issuePersonLink(melding.personId, melding.periodId, baseUrl)}\n\n${LINK_WAARSCHUWING}`
     : 'Open Dienstrooster via de persoonlijke link uit je uitnodiging.';
   const placeholders = { ...melding.placeholders, link };
   const rendered =

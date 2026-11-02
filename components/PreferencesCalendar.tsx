@@ -29,6 +29,7 @@ import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
+import { dienstLegenda, dienstLetter } from '@/lib/calendarLegend';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
 
@@ -516,14 +517,12 @@ export function PreferencesCalendar({
           <i className="calendar-cell-absence inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AF</i>
           Afwezigheid
         </span>
-        <span className="flex items-center gap-1.5">
-          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">A</i>
-          Avonddienst
-        </span>
-        <span className="flex items-center gap-1.5">
-          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">W</i>
-          Weekenddienst
-        </span>
+        {dienstLegenda(shiftCounters).map(({ counter, letter, naam }) => (
+          <span key={counter} className="flex items-center gap-1.5">
+            <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">{letter}</i>
+            {naam}
+          </span>
+        ))}
         <span className="flex items-center gap-1.5">
           <i className="weekend-slot inline-block w-5 h-4 rounded" />
           Weekend
@@ -708,7 +707,7 @@ export function PreferencesCalendar({
                                           : `${COUNTER_LABEL[counter] || counter}: ${level ? LEVEL_LABEL[level].toLowerCase() : 'beschikbaar'} (rechtsklik voor opties)`
                                       }
                                     >
-                                      {counter[0]}{level ? GLYPH[level] : AVAILABLE_GLYPH}
+                                      {dienstLetter(counter)}{level ? GLYPH[level] : AVAILABLE_GLYPH}
                                     </button>
                                   );
                                 })}

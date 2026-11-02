@@ -3,11 +3,15 @@ import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
-import { aiosPersoonlijkeLink, aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { NextRequest } from 'next/server';
+import { aiosPeriodeStand, aiosPersoonlijkeLink, aiosUitnodigPeriode, onthoudAiosBasisUrl } from '@/lib/aiosUitnodigen';
+import { POST as publiceren } from './periode/[id]/publiceren/route';
+import { POST as definitiefMaken } from './periode/[id]/definitief-maken/route';
+import { POST as roosterMail } from './periode/[id]/rooster-mail/route';
 import { vraagAiosRuilAan, wijsAiosRuilAf, trekAiosRuilIn } from '@/lib/aiosRuilen';
-import { aiosMailWachtrij, aiosMailWachtrijAantal, flushAiosMailWachtrij, AIOS_MAIL_WACHTRIJ_MAX_MS } from '@/lib/aiosRuilMail';
+import { aiosMailWachtrij, aiosMailWachtrijAantal, flushAiosMailWachtrij, AIOS_MAIL_WACHTRIJ_MAX_MS, AIOS_GEEN_LINK_TEKST } from '@/lib/aiosRuilMail';
 import { startSmtpSink, configureSmtp, clearSmtpConfig, verzendlijstPayload, type SmtpSink } from '@/tests/smtpSink';
-import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, staff, tag } from '../../../tests/fixtures/dienstWorlds';
+import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, staff, staffCookie, tag } from '../../../tests/fixtures/dienstWorlds';
 
 /**
  * The AIOS's swap mails wait in a queue of their own when they can't go out
@@ -245,4 +249,69 @@ describe('a run', () => {
     expect(aiosMailWachtrijAantal()).toBe(0);
     expect(sink.received).toHaveLength(4);
   });
+});
+
+/**
+ * 1.0.1: a swap mail had no link when no invitations had gone out for the
+ * period, because only sending them kept the address. Publishing, making
+ * definitief and mailing the roster again keep it too now, as the
+ * achterwacht's do; with no address at all the mail says where the link is.
+ */
+describe('the link in a swap mail', () => {
+  const zonderAdres = () => db.prepare('DELETE FROM dienstrooster_aios_periode WHERE period_id = ?').run(w.period);
+  const verzoekTekst = async () => {
+    vraag(3);
+    await stil();
+    return sink.received.map((m) => verzendlijstPayload(m.raw).berichten[0]).find((b) => b.soort === 'RUILVERZOEK')!.tekst as string;
+  };
+
+  it('no address known: the mail says to use the link from the invitation, and has no link', async () => {
+    delete process.env.BASE_URL;
+    zonderAdres();
+    try {
+      const tekst = await verzoekTekst();
+      expect(tekst).toContain(AIOS_GEEN_LINK_TEKST);
+      expect(tekst).not.toMatch(/\/aios\//);
+    } finally {
+      process.env.BASE_URL = 'http://localhost:3000';
+    }
+  });
+
+  it('the address kept at publishing is the one in the link', async () => {
+    delete process.env.BASE_URL;
+    zonderAdres();
+    onthoudAiosBasisUrl(w.period, 'https://rooster.test:8443');
+    try {
+      const tekst = await verzoekTekst();
+      expect(tekst).toMatch(/https:\/\/rooster\.test:8443\/aios\/[A-Za-z0-9_-]+/);
+      expect(tekst).not.toContain(AIOS_GEEN_LINK_TEKST);
+    } finally {
+      process.env.BASE_URL = 'http://localhost:3000';
+      zonderAdres();
+    }
+  });
+
+  for (const [naam, route, pad] of [
+    ['publiceren', publiceren, 'publiceren'],
+    ['definitief maken', definitiefMaken, 'definitief-maken'],
+    ['het rooster opnieuw mailen', roosterMail, 'rooster-mail'],
+  ] as const) {
+    it(`${naam} keeps the address the planner uses, the moment of the invitations stays empty`, async () => {
+      zonderAdres();
+      delete process.env.BASE_URL;
+      try {
+        const req = new NextRequest(`http://localhost/api/aios/periode/${w.period}/${pad}`, {
+          method: 'POST',
+          headers: { cookie: staffCookie(w.planner), host: 'rooster.test:8443', 'content-type': 'application/json' },
+          body: '{}',
+        });
+        await route(req, { params: Promise.resolve({ id: w.period }) });
+        await stil();
+        expect(aiosPeriodeStand(w.period)).toEqual({ uitgenodigd_op: null, basis_url: 'https://rooster.test:8443' });
+      } finally {
+        process.env.BASE_URL = 'http://localhost:3000';
+        zonderAdres();
+      }
+    });
+  }
 });

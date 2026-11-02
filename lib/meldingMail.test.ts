@@ -457,6 +457,8 @@ describe('the link in a swap mail', () => {
     expect(naarCollega.tekst).not.toContain('evil.example');
     expect(naarCollega.tekst).not.toContain('/person/');
     expect(naarCollega.tekst).toContain('persoonlijke link uit je uitnodiging');
+    // No link, no warning about one.
+    expect(naarCollega.tekst).not.toContain('Deze link is alleen voor jou');
   });
 });
 

@@ -81,6 +81,19 @@ export function markeerAiosUitgenodigd(periodId: string, baseUrl: string, now: D
   ).run(periodId, now.toISOString(), baseUrl);
 }
 
+/**
+ * The planner published, made definitief or mailed the roster again under
+ * this address: later mails take their links from it, also when no
+ * invitations went out for the period (a swap mail had no link then).
+ * The invitation moment stays as it was.
+ */
+export function onthoudAiosBasisUrl(periodId: string, baseUrl: string): void {
+  db.prepare(
+    `INSERT INTO dienstrooster_aios_periode (period_id, basis_url) VALUES (?, ?)
+     ON CONFLICT(period_id) DO UPDATE SET basis_url = excluded.basis_url`
+  ).run(periodId, baseUrl);
+}
+
 /** The address for links in a mail no planner request is behind: BASE_URL, or the invitations' address. */
 export function aiosMailBasisUrl(periodId: string): string | null {
   return process.env.BASE_URL || aiosPeriodeStand(periodId).basis_url;
