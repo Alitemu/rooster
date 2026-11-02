@@ -280,6 +280,9 @@ In het bestand van de AIOS staan aios01, aios02 enzovoort.
 - **E-mail** is het adres. Hoofdletters maken niet uit. De stroom begrijpt
   ook de kolomnaam `Email`.
 - **Voornaam** is alleen nodig als je stap 5 volgt. Laat de cel anders leeg.
+- **Tussenvoegsel en achternaam** mag erbij, als extra kolom met precies die
+  naam. De stroom zet die achter de voornaam in de bevestiging aan het
+  roosterbureau (stap 5).
 - Zet er in elk bestand twee rijen in, precies zo gespeld: `Planner` (adres van
   de planner van die dienst, bijvoorbeeld een gedeeld postvak) en
   `Roosterbureau` (adres van het roosterbureau). Die zijn nodig voor de
@@ -498,15 +501,22 @@ de stroom is voor beide diensten hetzelfde.
            `variables('adressen')`. Voorwaarde:
            `@equals(item()?['Codenaam'], items('Personen'))`.
          - **Opstellen**, noem de stap `Naam`, met de expressie
-           `if(empty(body('Naam_ophalen')), items('Personen'), if(empty(coalesce(first(body('Naam_ophalen'))?['Voornaam'], '')), items('Personen'), first(body('Naam_ophalen'))?['Voornaam']))`.
+           `if(empty(body('Naam_ophalen')), items('Personen'), if(empty(coalesce(first(body('Naam_ophalen'))?['Voornaam'], '')), items('Personen'), if(equals(items('Berichten')?['soort'], 'RUIL_DOORGEVEN'), trim(concat(string(first(body('Naam_ophalen'))?['Voornaam']), ' ', string(coalesce(first(body('Naam_ophalen'))?['Tussenvoegsel en achternaam'], '')))), first(body('Naam_ophalen'))?['Voornaam'])))`.
            Is er geen voornaam, dan blijft de codenaam staan. Met `coalesce`
-           alleen zou een lege cel de codenaam door niets vervangen.
+           alleen zou een lege cel de codenaam door niets vervangen. In de
+           bevestiging aan het roosterbureau (`RUIL_DOORGEVEN`) staat de
+           voornaam met de achternaam, in alle andere mails alleen de
+           voornaam.
          - **Opstellen** `Nieuw onderwerp` met
            `replace(variables('onderwerp'), items('Personen'), outputs('Naam'))`,
            daarna **Variabele instellen** `onderwerp` = uitvoer daarvan.
          - Hetzelfde voor de tekst: **Opstellen** `Nieuwe tekst` met
-           `replace(variables('tekst'), items('Personen'), outputs('Naam'))`,
-           daarna **Variabele instellen** `tekst` = uitvoer daarvan.
+           `concat(replace(first(split(variables('tekst'), 'http')), items('Personen'), outputs('Naam')), if(contains(variables('tekst'), 'http'), concat('http', join(skip(split(variables('tekst'), 'http'), 1), 'http')), ''))`,
+           daarna **Variabele instellen** `tekst` = uitvoer daarvan. Dit
+           vervangt de codenaam alleen in de tekst vóór de persoonlijke link.
+           Een link bestaat uit cijfers en de letters a tot en met f. Een
+           codenaam als `04` kan daarin voorkomen, en een gewone `replace`
+           zou de link dan kapotmaken.
 
          Het tussenstuk met *Opstellen* is nodig, omdat Power Automate niet
          toestaat dat een variabele in één stap naar zichzelf verwijst. Zie
@@ -659,6 +669,10 @@ over van Bram." Dienstrooster zelf kent die namen nooit.
    je ook een voornaam invullen, bijvoorbeeld de naam van het bureau. In de
    tekst van de bevestiging van een goedgekeurde ruil staat die dan in
    plaats van de codenaam.
+3. Wil je dat het roosterbureau de volledige namen ziet, vul dan ook de
+   kolom `Tussenvoegsel en achternaam` in. In de bevestiging van een
+   goedgekeurde ruil staat dan "Anna van den Berg neemt de avonddienst over
+   van Bram de Vries". De andere mails blijven bij de voornaam.
 
 Gebruik in de kolom `Voornaam` gewone namen, zonder tekens als `<` of `>`: de
 naam komt zo in de HTML-tekst.
