@@ -86,7 +86,11 @@ async function generateRoster(periodId, jar, body) {
   }
 
   const jobId = start.json.data.job_id;
-  const deadline = Date.now() + 5 * 60 * 1000;
+  // The solver's first search takes up to 5 minutes (lib/solverZoektijd.ts
+  // STANDAARD_ZOEKTIJD_SECONDEN), all of it when it cannot prove the roster
+  // best: waiting exactly 5 minutes timed out on a solve of 301 seconds.
+  const WACHT_MINUTEN = 8;
+  const deadline = Date.now() + WACHT_MINUTEN * 60 * 1000;
   while (Date.now() < deadline) {
     const poll = await req(
       'GET',
@@ -109,7 +113,7 @@ async function generateRoster(periodId, jar, body) {
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  return { ok: false, detail: 'timed out after 5 minutes', startStatus: 200 };
+  return { ok: false, detail: `timed out after ${WACHT_MINUTEN} minutes`, startStatus: 200 };
 }
 
 /**
