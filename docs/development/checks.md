@@ -17,8 +17,12 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 
 **The Caddy check** (deployConfig.test.ts) validates the Caddyfile inside
 docker-compose.yml with a real Caddy (`CADDY_BIN`, or caddy on the PATH). Without
-one it skips and prints a warning; a release run sets `REQUIRE_CADDY=true`, so
-a missing Caddy fails instead of passing unseen.
+one it skips and prints a warning. Until 1.1.1 nothing set `REQUIRE_CADDY=true`,
+so it skipped everywhere, GitHub included. Since then the test-app job of
+"Bouwen (test)" (.github/workflows/images.yml) downloads a pinned Caddy, checks
+its sha512 and runs vitest with `REQUIRE_CADDY=true`: a missing Caddy or a
+Caddyfile Caddy refuses fails the build. Locally it still skips without a Caddy;
+deployConfig.test.ts holds that the workflow keeps doing it.
 
 **Browser-level checks** need a seeded database, both solvers and the app
 already running (`npm run seed`, `uvicorn main:app --port 8000` from

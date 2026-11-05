@@ -12,6 +12,7 @@ import { CORRECTION_REASONS_BY_TOP_LEVEL, correctieRegels } from '@/lib/correcti
 import { POST as importBalances } from './route';
 import { GET as listCorrections, POST as addCorrections } from '../ledger-corrections/route';
 import { POST as generateRoster } from '../generate-roster/route';
+import { zetTerugzettenBezig } from '@/lib/terugzetBezig';
 
 /**
  * The rule (1.1.0): a beginsaldo imported or a correctie entered after the
@@ -310,5 +311,20 @@ describe('a beginsaldo or correctie added after the opening', () => {
       { c: codenaam.ruil, teller: 'AVOND', delta: 1, reden: 'Ruil avond- voor weekenddienst' },
       { c: codenaam.ruil, teller: 'WEEKEND', delta: -1, reden: 'Ruil weekend- voor avonddienst' },
     ]);
+  });
+
+  // 1.1.1 (lib/terugzetBezig.ts): a roster written while a backup is restored would land in the restored database.
+  it('no generation starts while a backup is being restored', async () => {
+    setStatus('GESLOTEN');
+    zetTerugzettenBezig(true);
+    try {
+      received = [];
+      const res = await generateRoster(request(`/api/planner/period/${ids.period}/generate-roster`, 'POST', {}), params());
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toBe('Er wordt een back-up teruggezet. Wacht tot dat klaar is en probeer het dan opnieuw.');
+      expect(received).toHaveLength(0);
+    } finally {
+      zetTerugzettenBezig(false);
+    }
   });
 });

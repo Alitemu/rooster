@@ -71,8 +71,10 @@ adding one would change the contract with both flows.
 What follows is the achterwacht's, unchanged for the AIOS
 (docs/development/diensten.md, "Copied, not changed").
 
-The app never stores e-mail addresses, so it never mails participants
-itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
+The app never stores a participant's e-mail address, so it never mails
+participants itself. (It does keep the operator's own: the Gmail account it
+sends from, the contactadres per dienst and the backup address, all entered
+by the beheerder.) It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
 `DIENSTROOSTER-VERZENDLIJST` + a JSON attachment: summary fields plus
 `berichten`, each `{soort, codenaam, personen, onderwerp, tekst}`; `personen` = every codenaam
 the text names, longest first, so a flow can swap in real names from its

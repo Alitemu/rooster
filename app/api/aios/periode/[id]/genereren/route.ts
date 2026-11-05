@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { terugzettenBezig, TERUGZETTEN_BEZIG } from '@/lib/terugzetBezig';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
@@ -43,6 +44,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       );
     }
     if (aiosGeneratieLoopt(period.id)) return aiosFout(409, 'GENERATION_RUNNING', AIOS_GENERATIE_LOOPT);
+    // A backup being restored replaces the database under any roster written now (lib/terugzetBezig.ts, 1.1.1).
+    if (terugzettenBezig()) return aiosFout(409, 'TERUGZETTEN_BEZIG', TERUGZETTEN_BEZIG);
     const { open } = aiosFeestdagVragen(period);
     if (open > 0) {
       return aiosFout(

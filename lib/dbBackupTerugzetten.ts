@@ -33,6 +33,7 @@ import { BACKUP_MAIL_STATUS_PAD, vergeetLaatsteBackup } from './dbBackupMail';
 import { localIsoMinute } from './localDate';
 import { hasAnyRunningJob } from './rosterGenerationJobs';
 import { aiosGeneratieLooptErgens } from './aiosGenereren';
+import { terugzettenBezig, zetTerugzettenBezig, TERUGZETTEN_BEZIG } from './terugzetBezig';
 
 /** The word the beheerder types to confirm (the route and the dialog). */
 export const BEVESTIGING = 'TERUGZETTEN';
@@ -122,6 +123,29 @@ export async function zetBackupTerug(
   if (hasAnyRunningJob() || aiosGeneratieLooptErgens()) {
     throw new TerugzetFout('Er wordt nu een rooster gemaakt. Wacht tot dat klaar is en probeer het dan opnieuw.', 409);
   }
+  if (terugzettenBezig()) throw new TerugzetFout(TERUGZETTEN_BEZIG, 409);
+  // From the check above to the end no generation may start (lib/terugzetBezig.ts): nothing awaits in between.
+  zetTerugzettenBezig(true);
+  try {
+    return await zetTerug(bestand, wachtwoord, { doelDb, doelPad, kopieMap, appVersie, statusPad: opties.statusPad, schemaBijwerken: opties.schemaBijwerken });
+  } finally {
+    zetTerugzettenBezig(false);
+  }
+}
+
+async function zetTerug(
+  bestand: Buffer,
+  wachtwoord: string,
+  opties: {
+    doelDb: Database.Database;
+    doelPad: string;
+    kopieMap: string;
+    appVersie: string;
+    statusPad?: string;
+    schemaBijwerken?: () => Promise<boolean>;
+  }
+): Promise<TerugzetUitkomst> {
+  const { doelDb, doelPad, kopieMap, appVersie } = opties;
 
   let kop: BackupKop;
   let database: Buffer;

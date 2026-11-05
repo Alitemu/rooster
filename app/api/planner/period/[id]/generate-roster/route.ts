@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { terugzettenBezig, TERUGZETTEN_BEZIG } from '@/lib/terugzetBezig';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -244,6 +245,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
+    // A backup being restored replaces the database under any roster written now (lib/terugzetBezig.ts, 1.1.1).
+    if (terugzettenBezig()) {
+      return NextResponse.json({ success: false, error: TERUGZETTEN_BEZIG }, { status: 409 });
+    }
     // Two generations for the same period would both wipe and rewrite its
     // assignments; the second to finish dies on the assignment table's
     // UNIQUE(schedule_version_id, slot_id), after having already cleared

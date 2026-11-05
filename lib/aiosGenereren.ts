@@ -77,6 +77,8 @@ interface Job {
   periodId: string;
   status: 'BEZIG' | 'KLAAR' | 'FOUT';
   gestart: number;
+  /** When it finished: kept BEWAAR_MS from here, not from the start (1.1.1, a search may take an hour). */
+  klaar?: number;
   uitkomst?: AiosGeneratieUitkomst;
   fout?: string;
 }
@@ -86,6 +88,11 @@ const jobs = opslag.__aiosGeneratieJobs ?? new Map<string, Job>();
 opslag.__aiosGeneratieJobs = jobs;
 
 const BEWAAR_MS = 30 * 60 * 1000;
+
+/** Finished jobs older than BEWAAR_MS, counted from when they finished. */
+export function ruimAiosJobsOp(now: number = Date.now()): void {
+  for (const [id, j] of jobs) if (j.status !== 'BEZIG' && (j.klaar ?? j.gestart) < now - BEWAAR_MS) jobs.delete(id);
+}
 
 export function aiosGeneratieLoopt(periodId: string): boolean {
   for (const j of jobs.values()) if (j.periodId === periodId && j.status === 'BEZIG') return true;
@@ -169,7 +176,7 @@ interface SolverUit {
  * generated (GESLOTEN or GEGENEREERD, nothing running).
  */
 export function startAiosGeneratie(period: AiosUitnodigPeriode & { row_version: number }, tijdslimiet: AiosTijdslimiet): string {
-  for (const [id, j] of jobs) if (j.status !== 'BEZIG' && j.gestart < Date.now() - BEWAAR_MS) jobs.delete(id);
+  ruimAiosJobsOp();
   const job: Job = { id: randomUUID(), periodId: period.id, status: 'BEZIG', gestart: Date.now() };
   jobs.set(job.id, job);
   void voerUit(job, period, tijdslimiet);
@@ -254,6 +261,8 @@ async function voerUit(job: Job, period: AiosUitnodigPeriode & { row_version: nu
   } catch (error) {
     job.status = 'FOUT';
     job.fout = aiosGeneratieFoutTekst(error);
+  } finally {
+    job.klaar = Date.now();
   }
 }
 

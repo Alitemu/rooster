@@ -8,6 +8,7 @@ import { maakBackupBestand } from './dbBackupBestand';
 import { leesBackupMailStatus } from './dbBackupMail';
 import { TerugzetFout, vergelijkVersies, zetBackupTerug } from './dbBackupTerugzetten';
 import { completeRosterGenerationJob, createRosterGenerationJob } from './rosterGenerationJobs';
+import { terugzettenBezig, zetTerugzettenBezig } from './terugzetBezig';
 
 /**
  * The rules:
@@ -187,6 +188,38 @@ describe('restoring a backup', () => {
       expect((await weigertZonderIetsTeVeranderen(bestand)).status).toBe(409);
     } finally {
       aiosJobs.delete(id);
+    }
+  });
+
+  // 1.1.1: the check above is only at the start; while the copy runs no generation may begin either.
+  it('says it is busy from the check to the end, also when it fails, and a second restore meanwhile waits', async () => {
+    const doelPad = database('doel-bezig');
+    const doel = new Database(doelPad);
+    try {
+      let tijdens: boolean | null = null;
+      let tweede: { status: number; message: string } | null = null;
+      const bestand = backupVan(database('b-bezig'), { ...META, app_versie: '0.809.2' });
+      await zetBackupTerug(bestand, WACHTWOORD, {
+        doelDb: doel,
+        doelPad,
+        kopieMap,
+        statusPad,
+        appVersie: '0.900.0',
+        schemaBijwerken: async () => {
+          tijdens = terugzettenBezig();
+          tweede = await weigering(zetBackupTerug(bestand, WACHTWOORD, { doelDb: doel, doelPad, kopieMap, statusPad, appVersie: '0.900.0' }));
+          return true;
+        },
+      });
+      expect(tijdens).toBe(true);
+      expect(tweede).toEqual({ status: 409, message: 'Er wordt een back-up teruggezet. Wacht tot dat klaar is en probeer het dan opnieuw.' });
+      expect(terugzettenBezig()).toBe(false);
+      // Refused (a wrong password): not busy afterwards either.
+      await weigering(zetBackupTerug(bestand, 'fout wachtwoord 12', { doelDb: doel, doelPad, kopieMap, statusPad, appVersie: '0.900.0' }));
+      expect(terugzettenBezig()).toBe(false);
+    } finally {
+      zetTerugzettenBezig(false);
+      doel.close();
     }
   });
 

@@ -26,8 +26,13 @@ const TAG_LENGTE = 16;
 
 /** scrypt at 2^15: about 0.1 s and 32 MB per try, which makes guessing a password expensive. */
 const SCRYPT = { N: 1 << 15, r: 8, p: 1 };
-/** A header may ask for more work than this, but it isn't done: a crafted file must not tie up the server. */
-const SCRYPT_N_MAX = 1 << 17;
+/**
+ * A header may ask for more work than this, but it isn't done: a crafted file must not tie up the server.
+ * scrypt needs 128 x N x r bytes, synchronously: at most twice what the app itself asks (64 MB, 1.1.1;
+ * N 2^17 with r 16 was 256 MB, a quarter of the web container's memory).
+ */
+const SCRYPT_N_MAX = 1 << 16;
+const SCRYPT_R_MAX = 8;
 
 /** A database larger than this after decompressing is not ours (a zip bomb, or something else entirely). */
 const MAX_DATABASE_BYTES = 1024 * 1024 * 1024;
@@ -96,7 +101,7 @@ export function leesBackupKop(bestand: Buffer): { kop: BackupKop; voorwerk: Buff
   if (
     kdf?.naam !== 'scrypt' ||
     !Number.isInteger(kdf.N) || kdf.N < 2 || kdf.N > SCRYPT_N_MAX || (kdf.N & (kdf.N - 1)) !== 0 ||
-    !Number.isInteger(kdf.r) || kdf.r < 1 || kdf.r > 16 ||
+    !Number.isInteger(kdf.r) || kdf.r < 1 || kdf.r > SCRYPT_R_MAX ||
     !Number.isInteger(kdf.p) || kdf.p < 1 || kdf.p > 4 ||
     typeof kdf.zout !== 'string' || typeof kop.iv !== 'string' ||
     typeof kop.app_versie !== 'string' || typeof kop.gemaakt_op !== 'string'

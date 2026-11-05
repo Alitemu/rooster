@@ -258,6 +258,18 @@ describe('the workflows', () => {
     expect(release.slice(controle, stable)).toContain('Tag $tag bestaat niet');
   });
 
+  // 1.1.1: the Caddy checks above skipped themselves everywhere, GitHub included, so a broken Caddyfile shipped unseen.
+  it('the app tests on GitHub run with a Caddy, checked by its sha512, and insist on it', () => {
+    const job = images.slice(images.indexOf('\n  test-app:'), images.indexOf('\n  test-solver:'));
+    const caddy = job.indexOf('name: Caddy voor de controle van de Caddyfile');
+    const vitest = job.indexOf('- run: npx vitest run');
+    expect(caddy).toBeGreaterThan(-1);
+    expect(vitest).toBeGreaterThan(caddy);
+    expect(job.slice(caddy, vitest)).toMatch(/sha512sum -c -/);
+    expect(job.slice(caddy, vitest)).toMatch(/caddy_\d+\.\d+\.\d+_linux_amd64\.tar\.gz/);
+    expect(job.slice(vitest)).toMatch(/REQUIRE_CADDY: 'true'/);
+  });
+
   it('only a job that pushes an image may write packages; the workflow itself writes nothing', () => {
     const werk = images.slice(images.indexOf('\npermissions:'), images.indexOf('\nconcurrency:'));
     expect(werk).toContain('contents: read');

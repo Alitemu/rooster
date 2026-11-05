@@ -89,6 +89,8 @@ interface RosterGenerationJob {
   periodId: string;
   status: RosterGenerationJobStatus;
   startedAt: number;
+  /** When it finished (DONE or ERROR): the retention counts from here (1.1.1). */
+  finishedAt?: number;
   result?: RosterGenerationJobResult;
   error?: { message: string; status: number };
   progress?: RosterGenerationJobProgress;
@@ -116,10 +118,13 @@ globalForJobs.__rosterGenerationJobs = jobs;
 // of the server process, and nothing here needs to persist beyond that.
 const JOB_RETENTION_MS = 30 * 60 * 1000;
 
-function sweepFinishedJobs() {
-  const cutoff = Date.now() - JOB_RETENTION_MS;
+// Counted from when the job finished, not when it started (1.1.1): a search may take 30 minutes
+// (lib/solverZoektijd.ts), and counted from the start its result was already due for the sweep the
+// moment it came in.
+export function sweepFinishedJobs(now: number = Date.now()) {
+  const cutoff = now - JOB_RETENTION_MS;
   for (const [id, job] of jobs) {
-    if (job.status !== 'RUNNING' && job.startedAt < cutoff) {
+    if (job.status !== 'RUNNING' && (job.finishedAt ?? job.startedAt) < cutoff) {
       jobs.delete(id);
     }
   }
@@ -170,6 +175,7 @@ export function completeRosterGenerationJob(jobId: string, result: RosterGenerat
   if (job) {
     job.status = 'DONE';
     job.result = result;
+    job.finishedAt = Date.now();
   }
 }
 
@@ -178,6 +184,7 @@ export function failRosterGenerationJob(jobId: string, message: string, status =
   if (job) {
     job.status = 'ERROR';
     job.error = { message, status };
+    job.finishedAt = Date.now();
   }
 }
 

@@ -90,6 +90,24 @@ describe('backup file', () => {
     expect(Date.now() - start).toBeLessThan(1000);
   });
 
+  // 1.1.1: scrypt needs 128 x N x r bytes, synchronously; at most twice what the app asks itself (64 MB).
+  it('refuses any header asking more than 64 MB of scrypt memory, and opens what the app makes itself', () => {
+    const bestand = maakBackupBestand(Buffer.from('x'), WACHTWOORD, META);
+    const { kop, voorwerk } = leesBackupKop(bestand);
+    const met = (kdf: Record<string, number>) => {
+      const k = Buffer.from(JSON.stringify({ ...kop, kdf: { ...kop.kdf, ...kdf } }));
+      const lengte = Buffer.alloc(4);
+      lengte.writeUInt32BE(k.length);
+      return Buffer.concat([BACKUP_MAGIC, lengte, k, bestand.subarray(voorwerk.length)]);
+    };
+    for (const kdf of [{ N: 1 << 17, r: 8 }, { N: 1 << 15, r: 16 }, { N: 1 << 16, r: 9 }]) {
+      expect(fout(() => leesBackupKop(met(kdf)))).toBe('Dit is geen back-upbestand van Dienstrooster.');
+    }
+    // N 2^16 with r 8 is 64 MB: still read (the password check then fails, the header changed).
+    expect(() => leesBackupKop(met({ N: 1 << 16, r: 8 }))).not.toThrow();
+    expect(openBackupBestand(bestand, WACHTWOORD).database.toString()).toBe('x');
+  });
+
   it('says a file from a newer format needs a newer app', () => {
     const bestand = maakBackupBestand(Buffer.from('x'), WACHTWOORD, META);
     const { kop, voorwerk } = leesBackupKop(bestand);

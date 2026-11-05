@@ -275,9 +275,11 @@ Traps that cost a day each time:
   (SEED_ON_START=planner), not with the migrations.
 - **Periods:** one period per day per pool; the ruleset is frozen when a
   period opens; while a generation runs, changes to the roster answer 409.
-- **Mail:** the app never stores e-mail addresses and never mails
-  participants itself; everything goes as a verzendlijst to the
-  operator's flow.
+- **Mail:** the app never stores a participant's e-mail address and never
+  mails participants itself; everything goes as a verzendlijst to the
+  operator's flow. It does keep the operator's own addresses, which the
+  beheerder enters: the Gmail account, the contactadres per dienst and the
+  address the backup goes to.
 - **The AIOS's hard rules live in three places:** aios-solver/model.py
   (the solver), aios-solver/controle.py (its independent check) and
   lib/aiosRegels.ts (the app's copy, the user's choice). A rule changed in

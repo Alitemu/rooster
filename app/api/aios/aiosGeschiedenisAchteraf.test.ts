@@ -6,6 +6,7 @@ import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosGeneratieJob } from '@/lib/aiosGenereren';
+import { zetTerugzettenBezig } from '@/lib/terugzetBezig';
 import { buildXlsx } from '../../../tests/fixtures/buildXlsx';
 import { POST as genereren } from './periode/[id]/genereren/route';
 import { POST as inlezen } from './periode/[id]/geschiedenis/route';
@@ -197,5 +198,20 @@ describe('the history from before the app, read in after the opening', () => {
     // Done: saving works again.
     const res = await inlezen(req(`${w.a}/geschiedenis`, 'POST', { bestand: bestand(15, 15), toepassen: true, bevestigd: true }), ctx(w.a));
     expect(res.status).toBe(200);
+  });
+
+  // 1.1.1 (lib/terugzetBezig.ts): a roster written while a backup is restored would land in the restored database.
+  it('no AIOS roster is made while a backup is being restored', async () => {
+    zetStatus(w.b, 'GESLOTEN');
+    zetTerugzettenBezig(true);
+    try {
+      opgevangen.length = 0;
+      const res = await genereren(req(`${w.b}/genereren`, 'POST', {}), ctx(w.b));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error).toEqual({ code: 'TERUGZETTEN_BEZIG', message: 'Er wordt een back-up teruggezet. Wacht tot dat klaar is en probeer het dan opnieuw.' });
+      expect(opgevangen).toHaveLength(0);
+    } finally {
+      zetTerugzettenBezig(false);
+    }
   });
 });

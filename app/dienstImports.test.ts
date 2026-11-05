@@ -60,6 +60,7 @@ const SHARED = new Set([
   'lib/settingsCrypto.ts',
   'lib/solverClient.ts',
   'lib/staffAccounts.ts',
+  'lib/terugzetBezig.ts',
   'lib/vrijeTekst.ts',
   'lib/xlsx.ts',
   'lib/xlsxWrite.ts',

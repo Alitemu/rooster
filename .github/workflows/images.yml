@@ -91,7 +91,17 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm run lint
+      # Caddy itself checks the Caddyfile in docker-compose.yml (deployConfig.test.ts): a pinned release,
+      # checked against its sha512 before it runs. Without it those tests skipped themselves, here too (1.1.1).
+      - name: Caddy voor de controle van de Caddyfile
+        run: |
+          curl -fsSL -o /tmp/caddy.tgz https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_linux_amd64.tar.gz
+          echo "747df7ee74de188485157a383633a1a963fd9233b71fbb4a69ddcbcc589ce4e2cc82dacf5dbbe136cb51d17e14c59daeb5d9bc92487610b0f3b93680b2646546  /tmp/caddy.tgz" | sha512sum -c -
+          tar -xzf /tmp/caddy.tgz -C /usr/local/bin caddy
+          caddy version
       - run: npx vitest run
+        env:
+          REQUIRE_CADDY: 'true'
 
   test-solver:
     runs-on: ubuntu-latest

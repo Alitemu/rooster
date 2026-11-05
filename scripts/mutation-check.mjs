@@ -6221,6 +6221,63 @@ const MUTATIONS = [
     replace: "",
     tests: ["app/api/aios/aiosRuilMail"],
   },
+  // 1.1.1 audit
+  {
+    name: "generatie: a finished job is swept 30 minutes after its start, not its end",
+    file: "lib/rosterGenerationJobs.ts",
+    find: "    if (job.status !== 'RUNNING' && (job.finishedAt ?? job.startedAt) < cutoff) {",
+    replace: "    if (job.status !== 'RUNNING' && job.startedAt < cutoff) {",
+    tests: ["lib/generatieJobsOpruimen"],
+  },
+  {
+    name: "aios generatie: a finished job is swept 30 minutes after its start, not its end",
+    file: "lib/aiosGenereren.ts",
+    find: "  for (const [id, j] of jobs) if (j.status !== 'BEZIG' && (j.klaar ?? j.gestart) < now - BEWAAR_MS) jobs.delete(id);",
+    replace: "  for (const [id, j] of jobs) if (j.status !== 'BEZIG' && j.gestart < now - BEWAAR_MS) jobs.delete(id);",
+    tests: ["lib/generatieJobsOpruimen"],
+  },
+  {
+    name: "terugzetten: not marked busy, a generation may start during the copy",
+    file: "lib/dbBackupTerugzetten.ts",
+    find: "  zetTerugzettenBezig(true);\n",
+    replace: "",
+    tests: ["lib/dbBackupTerugzetten"],
+  },
+  {
+    name: "terugzetten: stays busy after a refusal, every later generation refused",
+    file: "lib/dbBackupTerugzetten.ts",
+    find: "  } finally {\n    zetTerugzettenBezig(false);\n  }",
+    replace: "  } finally {\n  }",
+    tests: ["lib/dbBackupTerugzetten"],
+  },
+  {
+    name: "generatie: starts while a backup is being restored",
+    file: "app/api/planner/period/[id]/generate-roster/route.ts",
+    find: "    if (terugzettenBezig()) {",
+    replace: "    if (false && terugzettenBezig()) {",
+    tests: ["app/api/planner/period/[id]/import-balances/achteraf"],
+  },
+  {
+    name: "aios generatie: starts while a backup is being restored",
+    file: "app/api/aios/periode/[id]/genereren/route.ts",
+    find: "    if (terugzettenBezig()) return aiosFout(409, 'TERUGZETTEN_BEZIG', TERUGZETTEN_BEZIG);",
+    replace: "",
+    tests: ["app/api/aios/aiosGeschiedenisAchteraf"],
+  },
+  {
+    name: "back-up: a header may ask 256 MB of scrypt memory again",
+    file: "lib/dbBackupBestand.ts",
+    find: "const SCRYPT_R_MAX = 8;",
+    replace: "const SCRYPT_R_MAX = 16;",
+    tests: ["lib/dbBackupBestand"],
+  },
+  {
+    name: "ci: the Caddy checks skip themselves on GitHub again",
+    file: ".github/workflows/images.yml",
+    find: "        env:\n          REQUIRE_CADDY: 'true'\n",
+    replace: "",
+    tests: ["deployConfig"],
+  },
   // 1.1.1
   {
     name: "aios geschiedenis: saved while a roster of the pool is being made",
