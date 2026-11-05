@@ -39,6 +39,8 @@ import { withBasePath } from '@/lib/basePath';
 import { herinnerdOpTekst, isRecentHerinnerd } from '@/lib/herinnerdOp';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
+import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
+import { kanSaldoWijzigen } from '@/lib/saldoWijzigen';
 
 interface PersonProgress {
   person_id: string;
@@ -196,7 +198,7 @@ function Section({
 /** Why a button that sends is off (0.87.0). */
 const GEEN_MAIL = 'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.';
 
-type SectionKey = 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'links' | 'voorstellen' | 'rooster';
+type SectionKey = 'importcorrecties' | 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'links' | 'voorstellen' | 'rooster';
 
 interface Props {
   periodId: string;
@@ -880,6 +882,26 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           </p>
         )}
       </div>
+
+      {/* The first section (1.1.0): a beginsaldo or correctie forgotten in the
+          wizard can still go in until the roster is generated. */}
+      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
+        <Section
+          title="Import en correcties"
+          hint={kanSaldoWijzigen(dashboard.status) ? 'kan tot het genereren' : 'alleen vóór het genereren'}
+          isOpen={openSections.has('importcorrecties')}
+          pinned={pinnedSections.has('importcorrecties')}
+          onToggleOpen={() => toggleSectionOpen('importcorrecties')}
+          onTogglePin={() => toggleSectionPin('importcorrecties')}
+        >
+          <ImportEnCorrecties
+            periodId={periodId}
+            status={dashboard.status}
+            mensen={progress.map((p) => ({ person_id: p.person_id, codenaam: p.codenaam }))}
+            onGewijzigd={() => loadData(false)}
+          />
+        </Section>
+      )}
 
       {/* Same status gate as the page's old link used ("niet CONCEPT") -
           equivalent to Dienstrooster's own gate below, since a CONCEPT

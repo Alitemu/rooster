@@ -13,6 +13,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { trashedPeriodDenial } from '@/lib/periodTrash';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { objectRows, badRequest } from '@/lib/requestFields';
 import { validateLedgerDelta } from '@/lib/ledgerDelta';
@@ -65,6 +66,14 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // Nothing changes in the prullenbak (lib/periodTrash.ts).
     const inTrash = trashedPeriodDenial(params.id);
     if (inTrash) return inTrash;
+    // A generation that runs has read the saldo already: a change landing now would be in the
+    // ledger but not in the roster it writes, and the period is GEGENEREERD when it is done.
+    if (hasRunningJobForPeriod(params.id)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'GENERATIE_LOOPT', message: GENERATION_RUNNING_MESSAGE } },
+        { status: 409 }
+      );
+    }
 
     const periodId = params.id;
     const body = await parseJsonBody<{ rows?: unknown; bevestigd?: unknown }>(req);
@@ -237,9 +246,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     importAll(rows);
 
-    const response: ApiSuccessResponse<{ imported: number; errors: string[] }> = {
+    // personen: how many people the file gave a beginsaldo (a row of zeros included), for the planner to check.
+    const response: ApiSuccessResponse<{ imported: number; personen: number; errors: string[] }> = {
       success: true,
-      data: { imported, errors },
+      data: { imported, personen: replacedFor.size, errors },
     };
 
     return NextResponse.json(response);

@@ -64,6 +64,12 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   bestand met dezelfde codenaam. Je ziet: een waarschuwing met de naam, die zegt
   dat de waarden worden overschreven en dat een leeg vakje 0 wordt. *Annuleren*
   neemt niets mee, *Ja, overschrijven* wel.
+- [ ] **C3c.** Open een periode die al open is en klap de eerste sectie
+  *Import en correcties* open. Download het sjabloon, upload een beginsaldo en
+  voeg een correctie toe. Je ziet: een melding dat het is opgeslagen en de
+  correctie in de lijst, in woorden ("1 avonddienst minder"). Na het genereren
+  heeft die persoon zoveel diensten meer of minder. Is het rooster al
+  gegenereerd, dan zegt de sectie dat het niet meer kan en waarom.
 - [ ] **C4.** *Exporteren & communicatie* en dan *Uitnodigingen en
   herinneringen*: download de uitnodigingen. Je ziet: een bestand met per
   persoon een link.

@@ -107,6 +107,21 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   BEGINSALDO (the wizard's "Beginsaldi importeren") is for a pool's first
   period in the app only; after a period published here the carry-over is
   booked by itself, and the wizard warns that an import counts on top.
+  Since 1.1.0 a beginsaldo and a CORRECTIE can also be added after the
+  opening, in the section "Import en correcties", the first section of the
+  achterwacht's period page (components/ImportEnCorrecties.tsx): the wizard
+  only sends both when the period opens, and a planner who forgot it there
+  had no way back. Both routes take them while the period is OPEN or
+  GESLOTEN and refuse once a roster is generated (400) and while a
+  generation runs (409, GENERATIE_LOOPT): generate-roster reads the ledger
+  when it starts, so a row landing during the run would be in the saldo but
+  not in the roster. The wizard and the section share the reading of the
+  file (lib/saldoBestand.ts), the correction reasons and the split of an
+  ongelijke ruil (lib/correctieRedenen.ts) and the form
+  (components/CorrectieFormulier.tsx). GET ledger-corrections lists the
+  period's own CORRECTIE rows. The proof that it lands per person:
+  import-balances/achteraf.test.ts (the band the solver is told) and
+  tests/e2e/import-correcties.e2e.ts (the real solver gives 3, 1, 2 and 2).
 - `audit_log` - all actions by admins/planners (lib/auditLog.ts
   `writeAuditLog`; never passwords, tokens or link hashes). Since audit 6
   also creating, opening and closing a period, its deadline, rules,

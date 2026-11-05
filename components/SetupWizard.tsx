@@ -23,7 +23,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
 import { readUploadedRows } from '@/lib/sheetUpload';
-import { kopFout, SALDO_KOP } from '@/lib/importSjablonen';
+import { leesSaldoBestand, type SaldoRegel } from '@/lib/saldoBestand';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { periodRangeProblem } from '@/lib/isoDate';
@@ -31,6 +31,8 @@ import { parseISO } from '@/lib/holidays';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
+import { CorrectieFormulier } from '@/components/CorrectieFormulier';
+import { CORRECTION_TYPE_LABELS, type Correction } from '@/lib/correctieRedenen';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -105,125 +107,13 @@ interface BlockBudgetConfig {
   parttimeExempt: boolean;
 }
 
-interface BalanceRow {
-  codenaam: string;
-  AVOND_delta: number;
-  WEEKEND_delta: number;
-}
-
-type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG' | 'RUIL_AVOND_VOOR_WEEKEND' | 'RUIL_WEEKEND_VOOR_AVOND';
-// What the planner picks first - "Ongelijke ruil" then expands into a
-// reden dropdown covering both RUIL_* correction types at once.
-type CorrectionTopLevel = 'RUIL' | 'AVOND' | 'WEEKEND' | 'FEESTDAG';
-
-interface Correction {
-  id: string; // local, for the pending list - not a database id
-  personId: string;
-  codenaam: string;
-  type: CorrectionType;
-  reden: string;
-  aantal: number;
-}
-
-interface CorrectionReasonOption {
-  type: CorrectionType;
-  label: string;
-  // null = the planner must fill in their own value; the field starts empty.
-  defaultAantal: number | null;
-  explain: (aantal: number) => string;
-}
-
-// Every predefined reden defaults to +-1 or +-2 (see defaultAantal above) -
-// anything at or beyond this magnitude is far more likely a typo (5 instead
-// of 2) than a real correction, so it gets flagged without blocking entry.
-const CORRECTION_AANTAL_WARNING_THRESHOLD = 3;
+type BalanceRow = SaldoRegel;
 
 const DISTRIBUTION_MODE_LABELS: Record<string, string> = {
   GELIJK: 'Gelijk',
   NAAR_RATO: 'Naar rato',
 };
 
-const CORRECTION_TOP_LEVEL_LABELS: Record<CorrectionTopLevel, string> = {
-  RUIL: 'Ongelijke ruil',
-  AVOND: 'Avonddienst',
-  WEEKEND: 'Weekenddienst',
-  FEESTDAG: 'Feestdag',
-};
-
-// Per-teller label for the pending-corrections table - distinct from
-// CORRECTION_TOP_LEVEL_LABELS because the two RUIL_* types need their own
-// text (they touch two tellers at once), not just the 4-way top-level group.
-const CORRECTION_TYPE_LABELS: Record<CorrectionType, string> = {
-  AVOND: 'Avonddienst',
-  WEEKEND: 'Weekenddienst',
-  FEESTDAG: 'Feestdag',
-  RUIL_AVOND_VOOR_WEEKEND: 'Ruil avond → weekend',
-  RUIL_WEEKEND_VOOR_AVOND: 'Ruil weekend → avond',
-};
-
-const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReasonOption[]> = {
-  AVOND: [
-    {
-      type: 'AVOND',
-      label: 'Last minute avonddienst overgenomen',
-      defaultAantal: -2,
-      explain: (n) =>
-        `Heeft vorige periode last minute een avonddienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} avonddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
-    },
-    {
-      type: 'AVOND',
-      label: 'Overig',
-      defaultAantal: null,
-      explain: (n) => `Handmatige correctie: avonddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
-    },
-  ],
-  WEEKEND: [
-    {
-      type: 'WEEKEND',
-      label: 'Last minute weekenddienst overgenomen',
-      defaultAantal: -2,
-      explain: (n) =>
-        `Heeft vorige periode last minute een weekenddienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} weekenddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
-    },
-    {
-      type: 'WEEKEND',
-      label: 'Overig',
-      defaultAantal: null,
-      explain: (n) => `Handmatige correctie: weekenddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
-    },
-  ],
-  FEESTDAG: [
-    {
-      type: 'FEESTDAG',
-      label: 'Last minute feestdag overgenomen',
-      defaultAantal: -2,
-      explain: (n) =>
-        `Heeft vorige periode last minute een feestdagdienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} feestdagdienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
-    },
-    {
-      type: 'FEESTDAG',
-      label: 'Overig',
-      defaultAantal: null,
-      explain: (n) => `Handmatige correctie: feestdag wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
-    },
-  ],
-  RUIL: [
-    {
-      type: 'RUIL_AVOND_VOOR_WEEKEND',
-      label: 'Ruil avond- voor weekenddienst',
-      defaultAantal: 1,
-      explain: (n) =>
-        `Heeft een avonddienst geruild voor een weekenddienst: avonddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}, weekenddienst wordt ${n >= 0 ? n + ' minder' : Math.abs(n) + ' meer'}.`,
-    },
-    {
-      type: 'RUIL_WEEKEND_VOOR_AVOND',
-      label: 'Ruil weekend- voor avonddienst',
-      defaultAantal: 1,
-      explain: (n) =>
-        `Heeft een weekenddienst geruild voor een avonddienst: weekenddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}, avonddienst wordt ${n >= 0 ? n + ' minder' : Math.abs(n) + ' meer'}.`,
-    },
-  ],
-};
 
 interface Props {
   period?: any;
@@ -315,20 +205,6 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [balanceVraag, setBalanceVraag] = useState<{ namen: string[]; rows: BalanceRow[]; warnings: string[] } | null>(null);
   const [balanceBevestigd, setBalanceBevestigd] = useState(false);
   const [corrections, setCorrections] = useState<Correction[]>([]);
-  const [correctionFormOpen, setCorrectionFormOpen] = useState(false);
-  const [correctionForm, setCorrectionForm] = useState({
-    personId: '',
-    topLevel: 'AVOND' as CorrectionTopLevel,
-    reasonIndex: 0,
-    aantal: (CORRECTION_REASONS_BY_TOP_LEVEL.AVOND[0].defaultAantal ?? '') as number | '',
-  });
-  // Sign is a separate toggle rather than typed into the number field: most
-  // mobile on-screen numeric keypads (including iOS/Android for
-  // type="number") have no minus key, making a negative "aantal" impossible
-  // to enter on a phone otherwise.
-  const [correctionAantalSign, setCorrectionAantalSign] = useState<1 | -1>(
-    (CORRECTION_REASONS_BY_TOP_LEVEL.AVOND[0].defaultAantal ?? 0) < 0 ? -1 : 1
-  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openResult, setOpenResult] = useState<string | null>(null);
@@ -652,20 +528,6 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
   };
 
-  // A missing cell means "no delta" (0) - intentional and silent. A cell
-  // that's present but not a whole number (a typo like "N/A" or "1O") used
-  // to fall into the exact same `|| 0` bucket as a real, deliberate zero,
-  // with no way to tell them apart. This keeps the same fallback but
-  // reports which rows hit it, so a typo is visible instead of silently
-  // importing as nothing happened.
-  const parseOptionalInt = (cell: string | undefined): { value: number; invalid: boolean } => {
-    const trimmed = (cell ?? '').trim();
-    if (trimmed === '') return { value: 0, invalid: false };
-    const parsed = Number(trimmed);
-    if (!Number.isInteger(parsed)) return { value: 0, invalid: true };
-    return { value: parsed, invalid: false };
-  };
-
   const handleBalancesFile = async (file: File) => {
     let fileRows: string[][];
     try {
@@ -676,33 +538,13 @@ export function SetupWizard({ period, onComplete }: Props) {
       setBalanceParseWarnings([foutTekst(err, 'Het bestand kon niet worden gelezen.')]);
       return;
     }
-    const kopProbleem = kopFout(fileRows, SALDO_KOP);
-    if (kopProbleem) {
+    const gelezen = leesSaldoBestand(fileRows);
+    if ('fout' in gelezen) {
       setBalanceRows([]);
-      setBalanceParseWarnings([kopProbleem]);
+      setBalanceParseWarnings([gelezen.fout]);
       return;
     }
-    const [, ...dataLines] = fileRows; // skip header row
-    const warnings: string[] = [];
-    const seenCodenamen = new Set<string>();
-    const rows: BalanceRow[] = [];
-    dataLines.forEach(([codenaam, avond, weekend], i) => {
-      const rowNum = i + 2; // header is row 1
-      if (!codenaam) return;
-      if (seenCodenamen.has(codenaam)) {
-        warnings.push(`Rij ${rowNum}: codenaam "${codenaam}" komt meerdere keren voor. Beide rijen worden bij elkaar opgeteld.`);
-      }
-      seenCodenamen.add(codenaam);
-      const avondParsed = parseOptionalInt(avond);
-      const weekendParsed = parseOptionalInt(weekend);
-      if (avondParsed.invalid) {
-        warnings.push(`Rij ${rowNum} (${codenaam}): avondwaarde "${avond}" is geen geheel getal, als 0 verwerkt`);
-      }
-      if (weekendParsed.invalid) {
-        warnings.push(`Rij ${rowNum} (${codenaam}): weekendwaarde "${weekend}" is geen geheel getal, als 0 verwerkt`);
-      }
-      rows.push({ codenaam, AVOND_delta: avondParsed.value, WEEKEND_delta: weekendParsed.value });
-    });
+    const { rows, warnings } = gelezen;
     // What this period has from an earlier import: those people's saldo is replaced, a blank cell included.
     setBalanceVraag(null);
     setBalanceBevestigd(false);
@@ -725,79 +567,6 @@ export function SetupWizard({ period, onComplete }: Props) {
     }
     setBalanceRows(rows);
     setBalanceParseWarnings(warnings);
-  };
-
-  const correctionReasonOptions = CORRECTION_REASONS_BY_TOP_LEVEL[correctionForm.topLevel];
-  const correctionSelectedReason = correctionReasonOptions[correctionForm.reasonIndex] ?? correctionReasonOptions[0];
-
-  const applyReasonDefault = (topLevel: CorrectionTopLevel, reasonIndex: number) => {
-    const reason = CORRECTION_REASONS_BY_TOP_LEVEL[topLevel][reasonIndex];
-    if (reason.defaultAantal !== null) {
-      setCorrectionAantalSign(reason.defaultAantal < 0 ? -1 : 1);
-    }
-    setCorrectionForm((f) => ({
-      ...f,
-      topLevel,
-      reasonIndex,
-      aantal: reason.defaultAantal ?? '',
-    }));
-  };
-
-  const handleAddCorrection = () => {
-    if (
-      !correctionForm.personId ||
-      correctionForm.aantal === '' ||
-      !Number.isFinite(correctionForm.aantal) ||
-      correctionForm.aantal === 0
-    ) {
-      setError('Kies een medewerker en vul een aantal (ongelijk aan 0) in');
-      return;
-    }
-    const member = staffMembers.find((m) => m.person_id === correctionForm.personId);
-    if (!member) return;
-    const aantal = correctionForm.aantal as number;
-
-    // An ongelijke ruil touches two counters at once - show it as its two
-    // halves right away, each with the mirrored reden and the opposite
-    // counter/aantal, instead of one row that hides the second half.
-    if (correctionSelectedReason.type === 'RUIL_AVOND_VOOR_WEEKEND' || correctionSelectedReason.type === 'RUIL_WEEKEND_VOOR_AVOND') {
-      const mirror = CORRECTION_REASONS_BY_TOP_LEVEL.RUIL.find((r) => r.type !== correctionSelectedReason.type)!;
-      const eersteType: CorrectionType = correctionSelectedReason.type === 'RUIL_AVOND_VOOR_WEEKEND' ? 'AVOND' : 'WEEKEND';
-      const tweedeType: CorrectionType = eersteType === 'AVOND' ? 'WEEKEND' : 'AVOND';
-      setCorrections((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          personId: correctionForm.personId,
-          codenaam: member.codenaam,
-          type: eersteType,
-          reden: correctionSelectedReason.label,
-          aantal,
-        },
-        {
-          id: crypto.randomUUID(),
-          personId: correctionForm.personId,
-          codenaam: member.codenaam,
-          type: tweedeType,
-          reden: mirror.label,
-          aantal: -aantal,
-        },
-      ]);
-    } else {
-      setCorrections((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          personId: correctionForm.personId,
-          codenaam: member.codenaam,
-          type: correctionSelectedReason.type,
-          reden: correctionSelectedReason.label,
-          aantal,
-        },
-      ]);
-    }
-    setError(null);
-    applyReasonDefault(correctionForm.topLevel, correctionForm.reasonIndex);
   };
 
   const handleRemoveCorrection = (id: string) => {
@@ -1697,144 +1466,17 @@ export function SetupWizard({ period, onComplete }: Props) {
               tussen periodes gebeurt al automatisch en hoeft hier niet.
             </p>
 
-            <button
-              onClick={() => setCorrectionFormOpen((v) => !v)}
-              className="flex items-center gap-2 px-4 py-2 rounded font-medium bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors"
-            >
-              Correctie toepassen
-            </button>
-
-            {correctionFormOpen && (
-              <div className="border rounded p-4 space-y-3 bg-neutral-50">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Persoon</label>
-                    <select
-                      value={correctionForm.personId}
-                      onChange={(e) => setCorrectionForm((f) => ({ ...f, personId: e.target.value }))}
-                      className="w-full px-2 py-2 border rounded text-sm"
-                    >
-                      <option value="">Kies een medewerker...</option>
-                      {staffMembers.map((m) => (
-                        <option key={m.person_id} value={m.person_id}>
-                          {m.codenaam}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Type</label>
-                    <select
-                      value={correctionForm.topLevel}
-                      onChange={(e) => applyReasonDefault(e.target.value as CorrectionTopLevel, 0)}
-                      className="w-full px-2 py-2 border rounded text-sm"
-                    >
-                      {(Object.keys(CORRECTION_TOP_LEVEL_LABELS) as CorrectionTopLevel[]).map((tl) => (
-                        <option key={tl} value={tl}>
-                          {CORRECTION_TOP_LEVEL_LABELS[tl]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Reden</label>
-                    <select
-                      value={correctionForm.reasonIndex}
-                      onChange={(e) => applyReasonDefault(correctionForm.topLevel, parseInt(e.target.value))}
-                      className="w-full px-2 py-2 border rounded text-sm"
-                    >
-                      {correctionReasonOptions.map((r, i) => (
-                        <option key={i} value={i}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Aantal</label>
-                    <div className="flex gap-2">
-                      <div className="flex rounded border overflow-hidden shrink-0" role="group" aria-label="Meer of minder diensten">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCorrectionAantalSign(-1);
-                            setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : -Math.abs(f.aantal) }));
-                          }}
-                          aria-pressed={correctionAantalSign === -1}
-                          aria-label="Minder diensten"
-                          className={`w-12 py-2 text-lg font-bold transition-colors ${
-                            correctionAantalSign === -1
-                              ? 'bg-red-600 text-white'
-                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                          }`}
-                        >
-                          −
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCorrectionAantalSign(1);
-                            setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : Math.abs(f.aantal) }));
-                          }}
-                          aria-pressed={correctionAantalSign === 1}
-                          aria-label="Meer diensten"
-                          className={`w-12 py-2 text-lg font-bold border-l transition-colors ${
-                            correctionAantalSign === 1
-                              ? 'bg-green-700 text-white'
-                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                          }`}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
-                        value={correctionForm.aantal === '' ? '' : Math.abs(correctionForm.aantal)}
-                        onChange={(e) => {
-                          if (e.target.value === '') {
-                            setCorrectionForm((f) => ({ ...f, aantal: '' }));
-                            return;
-                          }
-                          const magnitude = Math.abs(parseInt(e.target.value, 10));
-                          setCorrectionForm((f) => ({
-                            ...f,
-                            aantal: Number.isNaN(magnitude) ? '' : correctionAantalSign * magnitude,
-                          }));
-                        }}
-                        placeholder={correctionSelectedReason.defaultAantal === null ? 'Zelf invullen' : undefined}
-                        className="w-full px-2 py-2 border rounded text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-neutral-500 italic">
-                  {correctionSelectedReason.explain(
-                    correctionForm.aantal === '' ? 0 : correctionForm.aantal
-                  )}
-                </p>
-
-                {typeof correctionForm.aantal === 'number' && Math.abs(correctionForm.aantal) >= CORRECTION_AANTAL_WARNING_THRESHOLD && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                    Ongebruikelijk groot aantal ({correctionForm.aantal}). Weet je zeker dat dit geen typefout is?
-                  </p>
-                )}
-
-                <button
-                  onClick={handleAddCorrection}
-                  className="px-4 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                >
-                  Toevoegen
-                </button>
-              </div>
-            )}
+            <CorrectieFormulier
+              mensen={staffMembers}
+              knopTekst="Toevoegen"
+              onToevoegen={(persoon, regels) => {
+                setCorrections((prev) => [
+                  ...prev,
+                  ...regels.map((r) => ({ id: crypto.randomUUID(), personId: persoon.person_id, codenaam: persoon.codenaam, ...r })),
+                ]);
+                return true;
+              }}
+            />
 
             {corrections.length > 0 && (
               <div className="border rounded overflow-hidden">
