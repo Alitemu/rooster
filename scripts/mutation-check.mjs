@@ -6221,6 +6221,42 @@ const MUTATIONS = [
     replace: "",
     tests: ["app/api/aios/aiosRuilMail"],
   },
+  // 1.1.1
+  {
+    name: "aios geschiedenis: saved while a roster of the pool is being made",
+    file: "lib/aiosGeschiedenis.ts",
+    find: "  if (aiosGeneratieLooptInPool(period.pool_id)) {",
+    replace: "  if (false && aiosGeneratieLooptInPool(period.pool_id)) {",
+    tests: ["app/api/aios/aiosGeschiedenisAchteraf"],
+  },
+  {
+    name: "aios geschiedenis: a generation of another quarter of the pool does not count",
+    file: "lib/aiosGenereren.ts",
+    find: "  return inPool.n > 0;",
+    replace: "  return false;",
+    tests: ["app/api/aios/aiosGeschiedenisAchteraf"],
+  },
+  {
+    name: "aios geschiedenis: no word that a made roster does not have it",
+    file: "lib/aiosGeschiedenis.ts",
+    find: "  uitkomst.waarschuwingen = geschiedenisWaarschuwingen(period);",
+    replace: "  uitkomst.waarschuwingen = [];",
+    tests: ["app/api/aios/aiosGeschiedenisAchteraf"],
+  },
+  {
+    name: "aios geschiedenis: a published roster said nothing about",
+    file: "lib/aiosGeschiedenis.ts",
+    find: "  if (period.status === 'GEPUBLICEERD') {",
+    replace: "  if (period.status === 'GEPUBLICEERD' && false) {",
+    tests: ["app/api/aios/aiosGeschiedenisAchteraf"],
+  },
+  {
+    name: "aios geschiedenis: the warning is gone after saving",
+    file: "components/AiosGeschiedenis.tsx",
+    find: "          tekst: ['Bewaard. Het telt mee vanaf de volgende keer dat je een rooster maakt.', ...waarschuwingen].join(' '),",
+    replace: "          tekst: 'Bewaard. Het telt mee vanaf de volgende keer dat je een rooster maakt.',",
+    tests: ["components/aiosGeschiedenisWaarschuwing"],
+  },
   // 1.1.0
   {
     name: "saldo achteraf: an import lands while a generation runs",

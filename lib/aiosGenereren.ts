@@ -92,6 +92,20 @@ export function aiosGeneratieLoopt(periodId: string): boolean {
   return false;
 }
 
+/**
+ * True while a generation runs for any quarter of this pool (1.1.1): the history from before the app
+ * (lib/aiosGeschiedenis.ts) is the pool's, read by every quarter's generation when it starts, so a
+ * history saved during the run would be in the pool but not in the roster that run writes.
+ */
+export function aiosGeneratieLooptInPool(poolId: string): boolean {
+  const lopend = [...jobs.values()].filter((j) => j.status === 'BEZIG').map((j) => j.periodId);
+  if (lopend.length === 0) return false;
+  const inPool = db
+    .prepare(`SELECT COUNT(*) AS n FROM dienstrooster_schedule_period WHERE pool_id = ? AND id IN (${lopend.map(() => '?').join(', ')})`)
+    .get(poolId, ...lopend) as { n: number };
+  return inPool.n > 0;
+}
+
 /** True while any AIOS generation runs: a restore of the database (lib/dbBackupTerugzetten.ts) waits for it. */
 export function aiosGeneratieLooptErgens(): boolean {
   for (const j of jobs.values()) if (j.status === 'BEZIG') return true;

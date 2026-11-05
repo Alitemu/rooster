@@ -118,7 +118,12 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
       }
       setPlan(data.data.plan);
       if (data.data.toegepast) {
-        setMelding({ fout: false, tekst: 'Bewaard. Het telt mee vanaf de volgende keer dat je een rooster maakt.' });
+        // A roster already made does not have it (1.1.1): said again here, the check's box goes with the plan.
+        const waarschuwingen: string[] = data.data.plan?.waarschuwingen ?? [];
+        setMelding({
+          fout: false,
+          tekst: ['Bewaard. Het telt mee vanaf de volgende keer dat je een rooster maakt.', ...waarschuwingen].join(' '),
+        });
         setBestand(null);
         setPlan(null);
         laad();
@@ -175,6 +180,13 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
                 Bewaren
               </button>
             )}
+          </div>
+        )}
+        {plan && plan.waarschuwingen.length > 0 && (
+          <div className="rounded border-2 border-neutral-900 p-3 text-sm space-y-1" role="alert" data-testid="aios-geschiedenis-waarschuwing">
+            {plan.waarschuwingen.map((w) => (
+              <p key={w}>{w}</p>
+            ))}
           </div>
         )}
         {vervangVraag && (

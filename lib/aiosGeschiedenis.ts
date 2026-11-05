@@ -19,6 +19,7 @@ import { readFirstSheetMetRegels, XlsxError } from '@/lib/xlsx';
 import { beginstandPunten, beginstandSaldi, aiosSaldoWoorden, laadBeginstand, type Beginstand } from '@/lib/aiosSaldo';
 import type { XlsxSheet } from '@/lib/xlsxWrite';
 import type { AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
+import { AIOS_GENERATIE_LOOPT, aiosGeneratieLooptInPool } from '@/lib/aiosGenereren';
 
 const KOLOMMEN = [
   { kop: 'Codenaam', veld: null },
@@ -73,6 +74,12 @@ export interface GeschiedenisPlan {
   problemen: string[];
   /** Who has a history now and would have none after this file: not in it, or only a codenaam. */
   vervalt: string[];
+  /**
+   * A roster already made that this history is not in (1.1.1): a quarter of the pool with a made roster
+   * reads it only when that roster is made again, and a published one not at all. Said at the check and
+   * after saving, so nobody takes the roster there for one that counts it.
+   */
+  waarschuwingen: string[];
 }
 
 const getal = (cel: string | undefined): number | null => {
@@ -88,7 +95,7 @@ function plan(poolId: string, rows: string[][], regels?: number[]): { plan: Gesc
   const [kop, ...data] = rows;
   if (!kop || kop.length < KOLOMMEN.length || KOLOMMEN.some((k, i) => (kop[i] ?? '').trim() !== k.kop)) {
     return {
-      plan: { rijen: [], vervalt: [], problemen: ['De kolommen kloppen niet. Gebruik het sjabloon van "Sjabloon downloaden" en laat de eerste rij staan.'] },
+      plan: { rijen: [], vervalt: [], waarschuwingen: [], problemen: ['De kolommen kloppen niet. Gebruik het sjabloon van "Sjabloon downloaden" en laat de eerste rij staan.'] },
       rijen: [],
     };
   }
@@ -143,6 +150,7 @@ function plan(poolId: string, rows: string[][], regels?: number[]): { plan: Gesc
     plan: {
       problemen,
       vervalt: [],
+      waarschuwingen: [],
       rijen: rijen.map((b) => ({
         codenaam: codenaam.get(b.person_id)!,
         punten: Math.round(beginstandPunten(b) * 10) / 10,
@@ -159,6 +167,23 @@ function plan(poolId: string, rows: string[][], regels?: number[]): { plan: Gesc
 export type GeschiedenisUitkomst =
   | { ok: true; plan: GeschiedenisPlan; toegepast: boolean }
   | { ok: false; status: number; code: string; message: string; plan?: GeschiedenisPlan };
+
+/** What GeschiedenisPlan.waarschuwingen says for this pool and quarter. */
+export function geschiedenisWaarschuwingen(period: AiosUitnodigPeriode): string[] {
+  const gemaakt = db
+    .prepare(
+      `SELECT naam FROM dienstrooster_schedule_period
+       WHERE pool_id = ? AND status = 'GEGENEREERD' AND verwijderd_op IS NULL ORDER BY start_datum`
+    )
+    .all(period.pool_id) as Array<{ naam: string }>;
+  const uit: string[] = gemaakt.map(
+    (p) => `Voor ${p.naam} is al een rooster gemaakt. Wat je nu inleest, telt daarin pas mee als je dat rooster opnieuw maakt.`
+  );
+  if (period.status === 'GEPUBLICEERD') {
+    uit.push(`Het rooster van ${period.naam} is al gepubliceerd. Wat je nu inleest, verandert dat rooster niet.`);
+  }
+  return uit;
+}
 
 /** `bestand`: the .xlsx as base64, as the panel sends it. */
 export function importeerAiosGeschiedenis(
@@ -184,6 +209,7 @@ export function importeerAiosGeschiedenis(
   const inBestand = new Set(rijen.map((b) => b.person_id));
   const naamVan = new Map(poolLeden(period.pool_id).map((p) => [p.id, p.codenaam]));
   uitkomst.vervalt = bestaand.filter((b) => !inBestand.has(b.person_id)).map((b) => naamVan.get(b.person_id) ?? b.person_id);
+  uitkomst.waarschuwingen = geschiedenisWaarschuwingen(period);
   if (!toepassen) return { ok: true, plan: uitkomst, toegepast: false };
   if (uitkomst.problemen.length > 0) {
     return {
@@ -193,6 +219,11 @@ export function importeerAiosGeschiedenis(
       message: 'Het bestand heeft nog problemen. Er is niets veranderd. Los ze eerst op en controleer opnieuw.',
       plan: uitkomst,
     };
+  }
+  // A generation of a quarter of this pool has read the history already: saving now would change the
+  // saldo shown without changing the roster that run writes.
+  if (aiosGeneratieLooptInPool(period.pool_id)) {
+    return { ok: false, status: 409, code: 'AIOS_GENERATIE_LOOPT', message: AIOS_GENERATIE_LOOPT, plan: uitkomst };
   }
   if (!bevestigd && bestaand.length > 0) {
     const n = bestaand.length === 1 ? '1 AIOS' : `${bestaand.length} AIOS`;

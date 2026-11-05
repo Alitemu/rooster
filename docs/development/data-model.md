@@ -89,6 +89,17 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   they did before the app, read in from the old Excel
   (lib/aiosGeschiedenis.ts): the diensten per soort, the feestdagdiensten
   among them, fte and maanden. A file read in replaces the pool's rows.
+  It can be read in at any status, also after the invitations; it counts
+  from the next roster made. Since 1.1.1 never silently not: saving is
+  refused (409, AIOS_GENERATIE_LOOPT) while a roster of any quarter of the
+  pool is being made (lib/aiosGenereren.ts aiosGeneratieLooptInPool: the
+  history is the pool's and that run read it when it started), and the
+  check and the save name each quarter of the pool with a made roster
+  that does not have it, and a published one that it does not change
+  (geschiedenisWaarschuwingen). The AIOS has no handmatige correcties
+  (its saldo is points, nights and weekend diensten, not counters); that
+  is a design question, left until a real case asks for it.
+  Proof: app/api/aios/aiosGeschiedenisAchteraf.test.ts.
 - `aios_ruil` (0.80.0, migration 0028) - a swap between two AIOS
   (lib/aiosRuilen.ts): the diensten of each side as a JSON array of slot
   ids (a whole block, or one dienst), status IN_BEHANDELING, GOEDGEKEURD,
