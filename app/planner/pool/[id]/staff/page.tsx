@@ -23,6 +23,7 @@ import { localIsoDate } from '@/lib/localDate';
 import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults } from '@/lib/membershipDefaults';
 import { foutTekst } from '@/lib/foutTekst';
 import { codenaamReeks } from '@/lib/codenaamReeks';
+import { PARTTIMEDAGEN_TELLEN, verdelingTekst, type Verdeling } from '@/lib/deelnamefactorVerdeling';
 
 interface Pool {
   id: string;
@@ -41,6 +42,8 @@ interface StaffMember {
   deelnamefactor: number | null;
   /** The period that factor is about; null when the pool has none. */
   deelnamefactor_periode?: string | null;
+  /** Whether the factor counts in that period; null for an AIOS pool (lib/deelnamefactorVerdeling.ts). */
+  deelnamefactor_verdeling?: Verdeling | null;
 }
 
 // Today on a Dutch calendar, not in UTC (lib/localDate.ts, audit 9).
@@ -56,6 +59,7 @@ export default function PoolStaffPage() {
   const [poolError, setPoolError] = useState<string | null>(null);
 
   const [members, setMembers] = useState<StaffMember[]>([]);
+  const verdelingLid = members.find((m) => m.deelnamefactor_verdeling);
   const [staffLoading, setStaffLoading] = useState(true);
   const [staffError, setStaffError] = useState<string | null>(null);
 
@@ -673,6 +677,11 @@ export default function PoolStaffPage() {
               </span>
             )}
           </p>
+          {verdelingLid?.deelnamefactor_verdeling && verdelingLid.deelnamefactor_periode && (
+            <p className="text-xs text-neutral-600" data-testid="deelnamefactor-verdeling">
+              {verdelingTekst(verdelingLid.deelnamefactor_verdeling, verdelingLid.deelnamefactor_periode)} {PARTTIMEDAGEN_TELLEN}
+            </p>
+          )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <div>
               <label htmlFor="nieuw-lid-codenaam" className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>

@@ -4841,6 +4841,28 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // Whether the deelnamefactor counts, on Personeel beheren (1.1.2, lib/deelnamefactorVerdeling.ts).
+  {
+    name: "deelnamefactor verdeling: every period said to divide equally",
+    file: "lib/deelnamefactorVerdeling.ts",
+    find: "return config.distributionMode === 'NAAR_RATO' ? 'NAAR_RATO' : 'GELIJK';",
+    replace: "return 'GELIJK';",
+    tests: ["lib/deelnamefactorVerdeling", "app/api/planner/pool/[id]/members"],
+  },
+  {
+    name: "deelnamefactor verdeling: the pool's ruleset instead of the period's frozen one",
+    file: "app/api/planner/pool/[id]/members/route.ts",
+    find: "return period ? verdelingUitConfig(resolveRulesetConfig(period)) : null;",
+    replace: "return period ? verdelingUitConfig(resolveRulesetConfig({ pool_id: period.pool_id })) : null;",
+    tests: ["app/api/planner/pool/[id]/members"],
+  },
+  {
+    name: "deelnamefactor verdeling: also said for an AIOS pool",
+    file: "app/api/planner/pool/[id]/members/route.ts",
+    find: "if (!pool || pool.type === 'AIOS') return null;",
+    replace: "if (!pool) return null;",
+    tests: ["app/api/planner/pool/[id]/members"],
+  },
   // The deelnamefactor from the part-time days (0.93.0, lib/deelnamefactor.ts).
   {
     name: "deelnamefactor: every other week counts as every week",

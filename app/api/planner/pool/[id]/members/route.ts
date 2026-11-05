@@ -21,6 +21,8 @@ import { validateCodenaam } from '@/lib/codenaam';
 import { isValidIsoDate } from '@/lib/isoDate';
 import { deelnamefactorVoorLijst, periodeMetDatums } from '@/lib/deelnamefactor';
 import { synchroniseer, voegLidToe } from '@/lib/poolLeden';
+import { resolveRulesetConfig } from '@/lib/rosterBands';
+import { verdelingUitConfig, type Verdeling } from '@/lib/deelnamefactorVerdeling';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PoolMember {
@@ -34,6 +36,11 @@ interface PoolMember {
   deelnamefactor: number | null;
   /** The period that factor is about (its name), null when the pool has none to ask. */
   deelnamefactor_periode: string | null;
+  /**
+   * That period's verdeelmodus, whether the factor counts (lib/deelnamefactorVerdeling.ts);
+   * null for an AIOS pool, whose fte works otherwise, and when there is no period.
+   */
+  deelnamefactor_verdeling: Verdeling | null;
 }
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -70,17 +77,19 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       ORDER BY p.codenaam ASC
     `);
 
-    const rows = membersStmt.all(periodEnd, periodStart, poolId) as Array<Omit<PoolMember, 'deelnamefactor' | 'deelnamefactor_periode'>>;
+    const rows = membersStmt.all(periodEnd, periodStart, poolId) as Array<Omit<PoolMember, 'deelnamefactor' | 'deelnamefactor_periode' | 'deelnamefactor_verdeling'>>;
     // Worked out from what each person filled in, not typed in (lib/deelnamefactor.ts), over the
     // period the caller asks about (the wizard sends its own dates) or else the one the pool is dealing with.
     const gevraagdVan = req.nextUrl.searchParams.get('period_start');
     const gevraagdTot = req.nextUrl.searchParams.get('period_end');
     const gevraagd = gevraagdVan && gevraagdTot ? periodeMetDatums(poolId, gevraagdVan, gevraagdTot) : undefined;
     const { factoren, periode } = deelnamefactorVoorLijst(poolId, [...new Set(rows.map((r) => r.person_id))], gevraagd);
+    const verdeling = periode ? verdelingVan(poolId, periode.id) : null;
     const members: PoolMember[] = rows.map((r) => ({
       ...r,
       deelnamefactor: factoren.get(r.person_id) ?? null,
       deelnamefactor_periode: periode?.naam ?? null,
+      deelnamefactor_verdeling: verdeling,
     }));
 
     const response: ApiSuccessResponse<PoolMember[]> = {
@@ -92,6 +101,16 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
   } catch (error) {
     return internalErrorResponse('planner-pool-members', error);
   }
+}
+
+/** The period's frozen verdeelmodus (the pool's ruleset before it opens), as the bands read it. */
+function verdelingVan(poolId: string, periodId: string): Verdeling | null {
+  const pool = db.prepare('SELECT type FROM dienstrooster_pool WHERE id = ?').get(poolId) as { type: string } | undefined;
+  if (!pool || pool.type === 'AIOS') return null;
+  const period = db.prepare('SELECT pool_id, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?').get(periodId) as
+    | { pool_id: string; bevroren_ruleset_json: string | null }
+    | undefined;
+  return period ? verdelingUitConfig(resolveRulesetConfig(period)) : null;
 }
 
 interface AddMemberRequest {

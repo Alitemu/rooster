@@ -284,4 +284,42 @@ describe('the deelnamefactor of a member is not typed in', () => {
     // Dates of no period: the one the pool is dealing with, not a guess.
     expect(await lijst('?period_start=2027-04-05&period_end=2027-09-27')).toMatchObject({ deelnamefactor: 1, deelnamefactor_periode: 'Oud' });
   });
+
+  // 1.1.2 (lib/deelnamefactorVerdeling.ts): the list says whether the factor counts, by that period's own verdeelmodus.
+  it("says the verdeelmodus of the period the factor is about: the frozen one, else the pool's; none for an AIOS pool", async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const { poolId } = createPool();
+    expect((await addMember(planner.id, poolId, participant.codenaam)).status).toBe(201);
+    const periode = (naam: string, start: string, eind: string, bevroren: string | null) =>
+      db
+        .prepare(
+          `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, status, aangemaakt_op, bevroren_ruleset_json)
+           VALUES (?, ?, ?, ?, ?, '2099-01-01T00:00', 'OPEN', datetime('now'), ?)`
+        )
+        .run(crypto.randomUUID(), poolId, naam, start, eind, bevroren);
+    periode('Gelijk', '2027-04-05', '2027-09-26', JSON.stringify({ distributionMode: 'GELIJK' }));
+    periode('Rato', '2027-10-04', '2028-03-26', JSON.stringify({ distributionMode: 'NAAR_RATO' }));
+    periode('Nog niet open', '2028-04-03', '2028-09-24', null);
+    // The pool's ruleset now says Naar rato: a frozen Gelijk stays Gelijk, an unfrozen period follows the pool.
+    db.prepare(
+      `UPDATE dienstrooster_ruleset SET config_json = '{"distributionMode":"NAAR_RATO"}' WHERE id = (SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?)`
+    ).run(poolId);
+    const lijst = async (query: string) => {
+      const res = await GET(
+        new NextRequest(`http://localhost/api/planner/pool/${poolId}/members${query}`, { headers: { Cookie: plannerCookie(planner.id) } }),
+        { params: Promise.resolve({ id: poolId }) }
+      );
+      return ((await res.json()).data as Array<{ person_id: string; deelnamefactor_periode: string | null; deelnamefactor_verdeling: string | null }>).find(
+        (m) => m.person_id === participant.id
+      )!;
+    };
+    expect(await lijst('?period_start=2027-04-05&period_end=2027-09-26')).toMatchObject({ deelnamefactor_periode: 'Gelijk', deelnamefactor_verdeling: 'GELIJK' });
+    expect(await lijst('?period_start=2027-10-04&period_end=2028-03-26')).toMatchObject({ deelnamefactor_periode: 'Rato', deelnamefactor_verdeling: 'NAAR_RATO' });
+    expect(await lijst('?period_start=2028-04-03&period_end=2028-09-24')).toMatchObject({ deelnamefactor_periode: 'Nog niet open', deelnamefactor_verdeling: 'NAAR_RATO' });
+    // An AIOS pool: its fte works otherwise, the list says nothing about a verdeelmodus.
+    db.prepare(`UPDATE dienstrooster_pool SET type = 'AIOS' WHERE id = ?`).run(poolId);
+    db.prepare(`UPDATE dienstrooster_person SET dienst_type = 'AIOS' WHERE id = ?`).run(planner.id);
+    expect((await lijst('?period_start=2027-10-04&period_end=2028-03-26')).deelnamefactor_verdeling).toBeNull();
+  });
 });

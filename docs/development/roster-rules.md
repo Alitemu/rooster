@@ -167,6 +167,17 @@ Audit 0.94.0 on top of that:
   is answered "Geen velden om bij te werken". A value typed in earlier is
   ignored: a part-timer without part-time days counts as full-time until
   they are filled in.
+- **Whether it counts (1.1.2).** The factor scales a streefbereik only under
+  the verdeelmodus Naar rato (wizard step 4); under Gelijk it changes
+  nothing, while the part-time days themselves are blocked either way. The
+  planner asked why the column is there when it "does not count". So the
+  members route also sends `deelnamefactor_verdeling`, the verdeelmodus of
+  the same period (its frozen ruleset, the pool's before it opens; null for
+  an AIOS pool, whose fte works otherwise), and Personeel beheren says in
+  words whether the factor counts (lib/deelnamefactorVerdeling.ts). Its
+  test checks the sentence against `scaledBandForMember` itself. Not
+  renamed to fte: the factor follows from the part-time days only, not from
+  a contract the app does not know.
 
 ## Streefbereik, venster and the solver's phases
 
