@@ -8,6 +8,7 @@
  * Prerequisites: publication-check must pass.
  */
 
+import { zinnenLijst } from '@/lib/zinnenLijst';
 import { NextRequest, NextResponse } from 'next/server';
 import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
 import { db } from '@/db/client';
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       return NextResponse.json(
         {
           success: false,
-          error: `Rooster is nog niet klaar om te publiceren: ${check.issues.join('; ')}`,
+          error: `Rooster is nog niet klaar om te publiceren: ${zinnenLijst(check.issues)}`,
           data: { issues: check.issues, checks: check.checks },
         },
         { status: 400 }
@@ -117,7 +118,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           success: false,
           error: {
             code: 'CONFIRMATION_REQUIRED',
-            message: `Dit rooster bevat bewuste uitzonderingen: ${check.warnings.join('; ')}`,
+            message: `Dit rooster bevat bewuste uitzonderingen: ${zinnenLijst(check.warnings)}`,
           },
           data: { warnings: check.warnings, checks: check.checks },
         },

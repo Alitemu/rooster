@@ -38,6 +38,15 @@ export function formatSwapDate(datum: string): string {
   }).format(new Date(`${datum}T00:00:00Z`));
 }
 
+/**
+ * The in-app notice of a new swap request: the two days in words, as in the mail (1.1.5). It said
+ * "Aangeboden: 2027-03-04 (avonddienst)".
+ */
+export function ruilverzoekDetails(aangeboden: SwapShift | undefined, gevraagd: SwapShift | undefined): string {
+  const regel = (s: SwapShift | undefined) => (s ? `${formatSwapDate(s.datum)} (${TELLER_LABELS[s.teller] ?? s.teller})` : '');
+  return `Aangeboden: ${regel(aangeboden)}\nGevraagd: ${regel(gevraagd)}`;
+}
+
 function shift(s: SwapShift): string {
   return `${TELLER_LABELS[s.teller] ?? 'dienst'} op ${formatSwapDate(s.datum)}`;
 }

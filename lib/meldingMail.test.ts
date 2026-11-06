@@ -248,6 +248,7 @@ afterEach(async () => {
       db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_person_access_link WHERE geldt_voor_periode_id = ?').run(id);
+      db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(id);

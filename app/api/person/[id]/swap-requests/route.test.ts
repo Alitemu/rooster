@@ -95,6 +95,7 @@ afterEach(() => {
       db.prepare('DELETE FROM dienstrooster_mail_queue WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(id);
+      db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(id);
@@ -150,6 +151,17 @@ describe('swap requests and the window between shifts', () => {
       .prepare('SELECT person_id FROM dienstrooster_assignment WHERE schedule_version_id = ? AND slot_id = ?')
       .get(f.periodId, f.offered) as { person_id: string };
     expect(owner.person_id).toBe(f.collega);
+
+    // The swap is in the wijzigingsgeschiedenis (1.1.5), one RUIL row per shift that changed hands.
+    const edits = db
+      .prepare(`SELECT slot_id, person_id, oorspronkelijke_person_id FROM dienstrooster_assignment_edit WHERE periode_id = ? AND edit_type = 'RUIL' ORDER BY slot_id`)
+      .all(f.periodId) as Array<{ slot_id: string; person_id: string; oorspronkelijke_person_id: string }>;
+    expect(edits).toEqual(
+      [
+        { slot_id: f.offered, person_id: f.collega, oorspronkelijke_person_id: f.aanvrager },
+        { slot_id: f.requested, person_id: f.aanvrager, oorspronkelijke_person_id: f.collega },
+      ].sort((a, b) => a.slot_id.localeCompare(b.slot_id))
+    );
   });
 
   // Audit 9's mutation check: taking the "both still hold their shift"

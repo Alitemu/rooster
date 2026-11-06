@@ -4841,6 +4841,28 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // 1.1.5: messages as sentences, swap notice days in words, swaps in the wijzigingsgeschiedenis.
+  {
+    name: "zinnenlijst: messages joined with a semicolon again",
+    file: "lib/zinnenLijst.ts",
+    find: "    .join(' ');",
+    replace: "    .join('; ');",
+    tests: ["lib/zinnenLijst"],
+  },
+  {
+    name: "ruilverzoek details: the day as YYYY-MM-DD again",
+    file: "lib/swapMailDetails.ts",
+    find: "(s ? `${formatSwapDate(s.datum)} (",
+    replace: "(s ? `${s.datum} (",
+    tests: ["lib/swapMailDetails"],
+  },
+  {
+    name: "ruil achterwacht: no RUIL rows in the wijzigingsgeschiedenis",
+    file: "app/api/person/[id]/swap-requests/[swap-id]/approve/route.ts",
+    find: "VALUES (?, ?, ?, ?, ?, 'RUIL', ?, ?, ?, ?, 1)`\n      );",
+    replace: "VALUES (?, ?, ?, ?, ?, 'RUIL', ?, ?, ?, ?, 1)`\n      ) as unknown as { run: (...a: unknown[]) => void };\n      ruilRegel.run = () => {};",
+    tests: ["app/api/person/[id]/swap-requests"],
+  },
   // A day outside Geldig vanaf/tot is niet in dienst on the calendar and takes no marking (1.1.4).
   {
     name: "niet in dienst: the calendar route says every day is in",

@@ -13,7 +13,7 @@ import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
-import { swapMailDetails } from '@/lib/swapMailDetails';
+import { ruilverzoekDetails, swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding, queuedMailCount, SWAP_REQUESTED_MAIL_TEMPLATE, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
 import { verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { getMailFailure } from '@/lib/appSettings';
@@ -23,11 +23,6 @@ import { swapWindowConflicts } from '@/lib/swapWindowRule';
 import { swapQuotaReached, RUILVERZOEK_LIMIET_MELDING } from '@/lib/swapQuota';
 import { swapMembershipProblem } from '@/lib/membershipWindow';
 
-const TELLER_LABELS: Record<string, string> = {
-  AVOND: 'avonddienst',
-  WEEKEND: 'weekenddienst',
-  FEESTDAG: 'feestdagdienst',
-};
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -297,7 +292,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
       .get(respondentAssignment.person_id) as { codenaam: string } | undefined;
 
-    const details = `Aangeboden: ${offeredSlot?.datum} (${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller})\nGevraagd: ${requestedSlot?.datum} (${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller})`;
+    const details = ruilverzoekDetails(offeredSlot, requestedSlot);
 
     const placeholders = {
       codenaam: respondent?.codenaam ?? '',

@@ -142,7 +142,17 @@ the swap row when sent) with one bericht each for the fixed codenamen
 `Planner` and `Roosterbureau` (DOORGEVEN_AAN, lib/swapMailDetails.ts):
 who now does which shift, `personen` = both who swapped, no link. The
 operator adds those two rows to the flow's sheet; the app never puts an
-address in a verzendlijst, so a forged one can't reach anyone outside it. The swap dialog says only an equal swap goes through the app (one shift
+address in a verzendlijst, so a forged one can't reach anyone outside it.
+
+Since 1.1.5 the in-app notice of a new request spells the days out
+(ruilverzoekDetails, lib/swapMailDetails.ts: "Aangeboden: donderdag 4 maart
+2027 (avonddienst)") instead of an ISO date, and an approved swap writes
+two RUIL rows in dienstrooster_assignment_edit (one per shift, the new
+holder in person_id, the old one in oorspronkelijke_person_id, the approver
+in bewerkt_door_person_id), so the planner's wijzigingsgeschiedenis and the
+audit-trail export show it as "Geruild". The publish and finalize refusals
+join their messages as sentences (lib/zinnenLijst.ts) instead of with "; ",
+which gave ".;" in the message. The swap dialog says only an equal swap goes through the app (one shift
 for one of the same kind, which the create route enforces); any other
 trade colleagues agree themselves and mail it themselves to the planner
 (the contact address of the dienst, lib/appSettings.ts getSwapContacts,

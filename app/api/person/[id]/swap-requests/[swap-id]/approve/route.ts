@@ -197,6 +197,19 @@ export async function POST(
         'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
       ).run(requesterAssignment.person_id, 'MANUAL', respondentAssignment.id);
 
+      // In the wijzigingsgeschiedenis, as the AIOS's swaps are (1.1.5): a swap changed the roster without a trace
+      // there, so the download showed only the planner's own changes. One row per shift that changed hands, by the
+      // colleague who approved it.
+      const ruilRegel = db.prepare(
+        `INSERT INTO dienstrooster_assignment_edit
+           (id, toewijzing_id, periode_id, person_id, slot_id, edit_type, oorspronkelijke_person_id, reden, bewerkt_door_person_id, aangemaakt_op, row_version)
+         VALUES (?, ?, ?, ?, ?, 'RUIL', ?, ?, ?, ?, 1)`
+      );
+      const collega = db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(respondentAssignment.person_id) as { codenaam: string } | undefined;
+      const ruilReden = `ruil tussen ${aanvrager?.codenaam ?? ''} en ${collega?.codenaam ?? ''}`;
+      ruilRegel.run(uuid(), requesterAssignment.id, swapRequest.periode_id, respondentAssignment.person_id, requesterAssignment.slot_id, requesterAssignment.person_id, ruilReden, personId, now);
+      ruilRegel.run(uuid(), respondentAssignment.id, swapRequest.periode_id, requesterAssignment.person_id, respondentAssignment.slot_id, respondentAssignment.person_id, ruilReden, personId, now);
+
       // WHERE status='PENDING' makes this the actual guard against a
       // double-approve race, not just the earlier SELECT-based check
       // (harmless today under single-threaded, no-await execution, but a
