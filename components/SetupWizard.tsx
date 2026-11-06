@@ -19,9 +19,10 @@
  * step's data was read by nothing.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
+import { OPEN_EINDE } from '@/lib/membershipDefaults';
 import { readUploadedRows } from '@/lib/sheetUpload';
 import { leesSaldoBestand, type SaldoRegel } from '@/lib/saldoBestand';
 import { withBasePath } from '@/lib/basePath';
@@ -173,11 +174,27 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [savingMembership, setSavingMembership] = useState(false);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
   const [togglingMembershipId, setTogglingMembershipId] = useState<string | null>(null);
-  // Guards the one-time auto-activation below from re-running (and undoing
-  // a planner's manual uncheck) every time the staff step is re-entered
-  // within the same wizard session - it should only bring everyone up to
-  // date the first time this period's staff list is loaded.
-  const autoActivatedPeriodRef = useRef<string | null>(null);
+  // Each mistake of the staff step shows where it was made, as on Personeel
+  // beheren: under Toevoegen, or under the row being changed or removed. They
+  // all showed in staffError above the list, out of sight under 30 people,
+  // and the planner saw "Opslaan" do nothing (1.1.3).
+  const [addError, setAddError] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ membershipId: string; message: string } | null>(null);
+  // A change that reaches a period with a roster asks first (lib/membershipRooster.ts):
+  // the wizard had no way to say yes, so such a change could not be saved here at all.
+  const [bevestigVraag, setBevestigVraag] = useState<{
+    membershipId: string;
+    message: string;
+    actie: 'opslaan' | 'actief' | 'verwijderen';
+  } | null>(null);
+  const addErrorRef = useRef<HTMLDivElement>(null);
+  const rowMeldingRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (addError) addErrorRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [addError]);
+  useEffect(() => {
+    if (rowError || bevestigVraag) rowMeldingRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [rowError, bevestigVraag]);
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
     windowWeeksAvond: 2,
     windowWeeksWeekendFeestdag: 2,
@@ -315,11 +332,11 @@ export function SetupWizard({ period, onComplete }: Props) {
     return patch;
   };
 
-  const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }) =>
+  const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }, bevestigd = false) =>
     fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
+      body: JSON.stringify(bevestigd ? { ...patch, bevestigd: true } : patch),
     });
 
   // Real pool membership (with its geldig_vanaf/geldig_tot date range) is
@@ -327,6 +344,17 @@ export function SetupWizard({ period, onComplete }: Props) {
   // and the capacity check already read it directly. Shows every member
   // (not just active ones) so a planner can see who's about to roll off or
   // who hasn't started yet, not just who's currently eligible.
+  //
+  // Loading writes nothing (1.1.3). It used to widen every membership that
+  // did not cover the whole period, "the first time this period's staff
+  // list is opened" - but that first time was kept in a ref, so it came
+  // again with every new page load. A Geldig tot the planner had set inside
+  // the period, a later Geldig vanaf and an unticked "Actief" were all undone
+  // the next time the step opened, and an open end (2099) was cut to the
+  // period's end on the way: the planner's report, "die data worden niet
+  // opgeslagen". Members get an open end now (OPEN_EINDE, as on Personeel
+  // beheren), so they take part in the next period without being widened;
+  // who has an end date before it is shown as Niet actief and ticked by hand.
   // `silent` skips the full-table "Personeel laden..." placeholder (see
   // staffLoading below) - used when refreshing after a single row's own
   // mutation (toggle active, save, remove, add), which already has its own
@@ -350,38 +378,13 @@ export function SetupWizard({ period, onComplete }: Props) {
         fetch(membersUrl),
         fetch(withBasePath(`/api/planner/period/${period.id}/staff-links`)),
       ]);
-      let membersData = await membersRes.json();
+      const membersData = await membersRes.json();
       const linksData = await linksRes.json();
       const linkedPersonIds = new Set(
         (linksData.data || [])
           .filter((l: any) => !l.revoked_at)
           .map((l: any) => l.person_id)
       );
-
-      // The first time this period's staff list is opened, everyone in the
-      // pool should default to 100% coverage of this period - matches how a
-      // newly-added member already defaults to this period's dates. Widen
-      // any membership window that doesn't already fully cover the period
-      // (whether it's currently fully inactive, or only partially
-      // overlapping - e.g. left over from an earlier period's shorter
-      // dates) instead of making the planner click/edit each one.
-      // computeActivationPatch only ever widens (never narrows), so a
-      // window a planner already stretched past this period's bounds is
-      // left alone here.
-      if (period?.id && autoActivatedPeriodRef.current !== period.id) {
-        autoActivatedPeriodRef.current = period.id;
-        const toWiden = membersData.data || [];
-        if (toWiden.length > 0) {
-          await Promise.all(
-            toWiden.map((m: any) => {
-              const patch = computeActivationPatch(m, true);
-              return patch ? patchMembership(m.id, patch) : Promise.resolve(null);
-            })
-          );
-          const refreshedRes = await fetch(membersUrl);
-          membersData = await refreshedRes.json();
-        }
-      }
 
       setStaffMembers(
         (membersData.data || []).map((m: any) => ({
@@ -409,41 +412,35 @@ export function SetupWizard({ period, onComplete }: Props) {
   // dropdown, and a planner can reach it via the step tabs without ever
   // visiting 'staff' first.
   //
-  // The new-member date fields default to the period's dates, but a planner
-  // can go back to step 1 and change those dates after already having
+  // The new member's Geldig vanaf defaults to the period's start, but a
+  // planner can go back to step 1 and change that date after already having
   // visited 'staff' once - a plain "fill only if empty" check would then
-  // keep showing the stale original dates forever, since the fields are no
-  // longer empty. lastAutoFilledDatesRef tracks what was last auto-filled so
+  // keep showing the stale original date forever, since the field is no
+  // longer empty. lastAutoFilledStartRef tracks what was last auto-filled so
   // the default can track a period-date change, while still leaving a value
-  // the planner typed in by hand alone.
-  const lastAutoFilledDatesRef = useRef({ start: '', end: '' });
+  // the planner typed in by hand alone. Geldig tot is the open end
+  // (OPEN_EINDE, as on Personeel beheren since 0.901.0): it was the period's
+  // own end, so whoever was added here dropped out of the next period.
+  const lastAutoFilledStartRef = useRef('');
   useEffect(() => {
     if ((currentStep !== 'staff' && currentStep !== 'corrections') || !periodData.pool_id) return;
     loadStaff();
-    setNewMember((prev) => {
-      const lastAuto = lastAutoFilledDatesRef.current;
-      return {
-        ...prev,
-        geldig_vanaf:
-          !prev.geldig_vanaf || prev.geldig_vanaf === lastAuto.start
-            ? periodData.start_datum
-            : prev.geldig_vanaf,
-        geldig_tot:
-          !prev.geldig_tot || prev.geldig_tot === lastAuto.end
-            ? periodData.eind_datum
-            : prev.geldig_tot,
-      };
-    });
-    lastAutoFilledDatesRef.current = { start: periodData.start_datum, end: periodData.eind_datum };
+    setNewMember((prev) => ({
+      ...prev,
+      geldig_vanaf:
+        !prev.geldig_vanaf || prev.geldig_vanaf === lastAutoFilledStartRef.current ? periodData.start_datum : prev.geldig_vanaf,
+      geldig_tot: prev.geldig_tot || OPEN_EINDE,
+    }));
+    lastAutoFilledStartRef.current = periodData.start_datum;
   }, [currentStep, periodData.pool_id, periodData.start_datum, periodData.eind_datum]);
 
   const handleAddMember = async () => {
     if (!newMember.codenaam.trim() || !newMember.geldig_vanaf || !newMember.geldig_tot) {
-      setStaffError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
+      setAddError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
       return;
     }
     setAddingMember(true);
-    setStaffError(null);
+    setAddError(null);
     try {
       const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members`), {
         method: 'POST',
@@ -453,76 +450,89 @@ export function SetupWizard({ period, onComplete }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
 
-      setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum });
+      setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: OPEN_EINDE });
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(foutTekst(err, 'Toevoegen mislukt'));
+      setAddError(foutTekst(err, 'Toevoegen mislukt'));
     } finally {
       setAddingMember(false);
     }
   };
 
   const startEditMembership = (member: StaffMember) => {
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     setEditingMembershipId(member.id);
     setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot });
   };
 
-  const handleSaveMembership = async (membershipId: string) => {
+  const handleSaveMembership = async (membershipId: string, bevestigd = false) => {
     setSavingMembership(true);
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     try {
-      const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editDates),
-      });
+      const res = await patchMembership(membershipId, editDates, bevestigd);
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId, message: data.error.message, actie: 'opslaan' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Opslaan mislukt');
 
       setEditingMembershipId(null);
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(foutTekst(err, 'Opslaan mislukt'));
+      setRowError({ membershipId, message: foutTekst(err, 'Opslaan mislukt') });
     } finally {
       setSavingMembership(false);
     }
   };
 
-  const handleRemoveMembership = async (membershipId: string) => {
-    if (removingMembershipId !== membershipId) {
+  const handleRemoveMembership = async (membershipId: string, bevestigd = false) => {
+    if (removingMembershipId !== membershipId && !bevestigd) {
       // First click arms the confirmation instead of deleting immediately.
       setRemovingMembershipId(membershipId);
       return;
     }
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     try {
-      const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
-        method: 'DELETE',
-      });
+      const res = await fetch(
+        withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}${bevestigd ? '?bevestigd=1' : ''}`),
+        { method: 'DELETE' }
+      );
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId, message: data.error.message, actie: 'verwijderen' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
 
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(foutTekst(err, 'Verwijderen mislukt'));
+      setRowError({ membershipId, message: foutTekst(err, 'Verwijderen mislukt') });
     } finally {
       setRemovingMembershipId(null);
     }
   };
 
-  const handleToggleActive = async (member: StaffMember) => {
+  const handleToggleActive = async (member: StaffMember, bevestigd = false) => {
     const patch = computeActivationPatch(member, !member.is_active);
     if (!patch) return;
     setTogglingMembershipId(member.id);
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     try {
-      const res = await patchMembership(member.id, patch);
+      const res = await patchMembership(member.id, patch, bevestigd);
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId: member.id, message: data.error.message, actie: 'actief' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Bijwerken mislukt');
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(foutTekst(err, 'Bijwerken mislukt'));
+      setRowError({ membershipId: member.id, message: foutTekst(err, 'Bijwerken mislukt') });
     } finally {
       setTogglingMembershipId(null);
     }
@@ -882,14 +892,26 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'staff' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Iedereen in de pool doet standaard mee met deze periode (vinkje &quot;Actief&quot;
+              Wie volgens Geldig vanaf en Geldig tot in deze periode valt, doet mee (vinkje &quot;Actief&quot;
               staat aan). Na het openen verstuur je de uitnodigingen zelf. Vink iemand uit om diegene voor
-              deze periode uit te sluiten, waardoor de geldigheidsdatum automatisch wordt aangepast.
-              Voeg hieronder eventueel iemand nieuw toe.
+              deze periode uit te sluiten, waardoor de geldigheidsdatum automatisch wordt aangepast. Wat
+              je hier wijzigt, blijft staan. Voeg hieronder eventueel iemand nieuw toe.
             </p>
 
+            {!staffLoading && staffMembers.some((m) => !m.is_active) && (
+              <p className="text-sm text-neutral-700" data-testid="niet-actief-uitleg">
+                {(() => {
+                  const n = staffMembers.filter((m) => !m.is_active).length;
+                  return n === 1
+                    ? '1 persoon doet niet mee in deze periode, omdat Geldig vanaf of Geldig tot erbuiten valt.'
+                    : `${n} mensen doen niet mee in deze periode, omdat Geldig vanaf of Geldig tot erbuiten valt.`;
+                })()}{' '}
+                Vink Actief aan als iemand toch meedoet.
+              </p>
+            )}
+
             {staffError && (
-              <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
+              <div role="alert" className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
             )}
 
             {staffLoading ? (
@@ -913,8 +935,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <tbody className="divide-y">
                     {staffMembers.map((member) => {
                       const isEditing = editingMembershipId === member.id;
+                      const vraag = bevestigVraag?.membershipId === member.id ? bevestigVraag : null;
+                      const fout = rowError?.membershipId === member.id ? rowError.message : null;
                       return (
-                        <tr key={member.id} className="hover:bg-neutral-50">
+                        <Fragment key={member.id}>
+                        <tr className="hover:bg-neutral-50">
                           <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
                           <td className="px-4 py-2 text-sm">
                             <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -938,6 +963,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                             {isEditing ? (
                               <input
                                 type="date"
+                                aria-label={`Geldig vanaf van ${member.codenaam}`}
                                 value={editDates.geldig_vanaf}
                                 onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
                                 className="px-2 py-1 border rounded text-sm w-36"
@@ -950,6 +976,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                             {isEditing ? (
                               <input
                                 type="date"
+                                aria-label={`Geldig tot van ${member.codenaam}`}
                                 value={editDates.geldig_tot}
                                 onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
                                 className="px-2 py-1 border rounded text-sm w-36"
@@ -1007,7 +1034,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                                   {savingMembership ? 'Bezig…' : 'Opslaan'}
                                 </button>
                                 <button
-                                  onClick={() => setEditingMembershipId(null)}
+                                  onClick={() => {
+                                    setEditingMembershipId(null);
+                                    setBevestigVraag(null);
+                                    setRowError(null);
+                                  }}
                                   className="text-xs font-medium text-neutral-600 hover:text-neutral-800"
                                 >
                                   Annuleren
@@ -1031,6 +1062,57 @@ export function SetupWizard({ period, onComplete }: Props) {
                             )}
                           </td>
                         </tr>
+                        {vraag && (
+                          <tr>
+                            <td colSpan={7} className="px-4 pb-3">
+                              <div
+                                ref={rowMeldingRef}
+                                role="alert"
+                                data-testid="rooster-bevestiging"
+                                className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2"
+                              >
+                                <p>{vraag.message}</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      vraag.actie === 'opslaan'
+                                        ? handleSaveMembership(member.id, true)
+                                        : vraag.actie === 'actief'
+                                          ? handleToggleActive(member, true)
+                                          : handleRemoveMembership(member.id, true)
+                                    }
+                                    className="px-3 py-1 rounded bg-amber-700 text-white hover:bg-amber-800"
+                                  >
+                                    Toch doorgaan
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBevestigVraag(null)}
+                                    className="px-3 py-1 rounded border border-neutral-300 hover:bg-neutral-50"
+                                  >
+                                    Annuleren
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {fout && (
+                          <tr>
+                            <td colSpan={7} className="px-4 pb-3">
+                              <div
+                                ref={rowMeldingRef}
+                                role="alert"
+                                data-testid="rij-fout"
+                                className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700"
+                              >
+                                {fout}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                     {staffMembers.length === 0 && (
@@ -1086,9 +1168,15 @@ export function SetupWizard({ period, onComplete }: Props) {
                   </button>
                 </div>
               </div>
+              {addError && (
+                <div ref={addErrorRef} role="alert" data-testid="toevoegen-fout" className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                  {addError}
+                </div>
+              )}
               <p className="text-xs text-neutral-500">
                 Bestaat de codenaam al (bijv. iemand die eerder in een andere pool zat), dan wordt
-                die persoon hergebruikt in plaats van dubbel aangemaakt.
+                die persoon hergebruikt in plaats van dubbel aangemaakt. Geldig tot staat open (31-12-2099):
+                vul een einddatum in als iemand weggaat.
               </p>
             </div>
           </div>

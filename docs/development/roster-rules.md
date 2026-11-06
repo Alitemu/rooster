@@ -87,6 +87,26 @@ everyone added that way at once at the end of 2029. Before that it was
 empty, and an end date typed short of the period gave shifts nobody could
 take.
 
+The setup wizard's stap 2 "Personeel" (1.1.3, components/SetupWizard.tsx)
+writes nothing when it opens. It widened every membership that did not
+cover the whole period "the first time this period's staff list is
+opened", but that first time lived in a ref and came again with every page
+load: a Geldig tot set inside the period, a later Geldig vanaf and an
+unticked Actief were undone the next time the wizard opened, someone who
+had left was taken in again, and an open end was cut to the period's end on
+the way (the planner's report: "die data worden niet opgeslagen"). A member
+added there gets the open end too, as on Personeel beheren: it got the
+period's own end and so dropped out of the next period, which the widening
+then hid. Who has dates outside the period shows as Niet actief, with a
+line above the list counting them, and is ticked by hand. A change that
+reaches a period with a roster asks in its row ("Toch doorgaan",
+lib/membershipRooster.ts), for a date, the Actief tick and a removal, and
+every mistake shows under its row or under Toevoegen: it showed above a
+list of 30 people, out of sight, and the wizard had no way to say yes, so
+such a change could not be saved there at all.
+components/wizardPersoneel.test.ts and tests/e2e/wizard-personeel.e2e.ts
+hold it.
+
 Several at once (0.901.0), all through lib/poolLeden.ts, so a reeks adds
 nobody the single form would refuse (capitals, an account, the other
 dienst, an overlap):

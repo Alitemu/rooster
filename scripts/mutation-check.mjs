@@ -4841,6 +4841,43 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // Stap 2 "Personeel" of the setup wizard keeps what the planner set (1.1.3, components/SetupWizard.tsx).
+  {
+    name: "wizard personeel: loading the step widens every membership again",
+    file: "components/SetupWizard.tsx",
+    find: "      const membersData = await membersRes.json();",
+    replace:
+      "      const membersData = await membersRes.json();\n      await Promise.all((membersData.data || []).map((m: any) => { const p = computeActivationPatch(m, true); return p ? patchMembership(m.id, p) : null; }));",
+    tests: ["components/wizardPersoneel"],
+  },
+  {
+    name: "wizard personeel: a new member ends with the period again",
+    file: "components/SetupWizard.tsx",
+    find: "setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: OPEN_EINDE });",
+    replace: "setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum });",
+    tests: ["components/wizardPersoneel"],
+  },
+  {
+    name: "wizard personeel: a change that reaches a roster is not asked in the row",
+    file: "components/SetupWizard.tsx",
+    find: "        setBevestigVraag({ membershipId, message: data.error.message, actie: 'opslaan' });\n        return;",
+    replace: "        throw new Error(data.error.message);",
+    tests: ["components/wizardPersoneel"],
+  },
+  {
+    name: "wizard personeel: the yes is not sent",
+    file: "components/SetupWizard.tsx",
+    find: "body: JSON.stringify(bevestigd ? { ...patch, bevestigd: true } : patch),",
+    replace: "body: JSON.stringify(patch),",
+    tests: ["components/wizardPersoneel"],
+  },
+  {
+    name: "wizard personeel: a refused save is told above the list again",
+    file: "components/SetupWizard.tsx",
+    find: "      setRowError({ membershipId, message: foutTekst(err, 'Opslaan mislukt') });",
+    replace: "      setStaffError(foutTekst(err, 'Opslaan mislukt'));",
+    tests: ["components/wizardPersoneel"],
+  },
   // Whether the deelnamefactor counts, on Personeel beheren (1.1.2, lib/deelnamefactorVerdeling.ts).
   {
     name: "deelnamefactor verdeling: every period said to divide equally",
