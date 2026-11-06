@@ -14,6 +14,7 @@ import {
   loadAiosVoorkeurDagen,
   loadAiosVoorkeurDagenVoor,
   loadAiosWens,
+  markeerNietInDienst,
   saveAiosWens,
   setAiosVoorkeur,
 } from './aiosPreferences';
@@ -212,6 +213,23 @@ describe('marking an AIOS dienst', () => {
     syncAiosPersoon(f);
     // The uitloopdienst's block takes the voorkeur over; the night keeps it; the old blocked evening is liever niet now.
     expect(marks(f, '2034-04-17')).toEqual({ UD: 'ABSOLUUT/PARTTIME', AD: 'LIEVER_NIET/PARTTIME', ND: 'VOORKEUR/MANUAL' });
+  });
+});
+
+describe('a day outside Geldig vanaf/tot (1.1.4)', () => {
+  // Hard rule 1: the solver never gives one there, so the AIOS's screen shows it as niet in dienst.
+  it('is marked niet in dienst, takes no mark, also for a block that reaches past it', () => {
+    const g = person('g');
+    // Leaves on Monday 17 April 2034: the block zo 16 t/m di 18 reaches past it.
+    db.prepare('UPDATE dienstrooster_pool_membership SET geldig_tot = ? WHERE person_id = ?').run('2034-04-17', g);
+    const dagen = markeerNietInDienst(g, ids.period, loadAiosVoorkeurDagen(g, ids.period));
+    const op = (datum: string) => dagen.find((d) => d.datum === datum)!.diensten.map((x) => x.niet_in_dienst);
+    expect(op('2034-04-17').every((x) => x === false)).toBe(true);
+    expect(op('2034-04-18').every((x) => x === true)).toBe(true);
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-19', 'UD'), 'VOORKEUR')).toMatchObject({ ok: false, code: 'NIET_IN_DIENST' });
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-16', 'ADW'), 'ABSOLUUT')).toMatchObject({ ok: false, code: 'NIET_IN_DIENST' });
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-19', 'UD'), null)).toEqual({ ok: true });
+    expect(setAiosVoorkeur(g, ids.period, slot('2034-04-17', 'UD'), 'VOORKEUR')).toEqual({ ok: true });
   });
 });
 

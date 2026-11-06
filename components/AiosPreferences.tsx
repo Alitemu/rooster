@@ -133,6 +133,23 @@ function VakKnop({
   readOnly: boolean;
   onKies: (vak: Vak, s: Stand) => void;
 }) {
+  // Outside Geldig vanaf/tot (1.1.4): never rostered, so shown as such and not to tap.
+  if (vak.diensten.some((d) => d.niet_in_dienst)) {
+    const codesNid = vak.diensten.map((d) => d.code);
+    const uitlegNid = `${uitleg}${blok ? ` (${blok})` : ''}: niet in dienst (buiten Geldig vanaf en Geldig tot)`;
+    return (
+      <div
+        role="img"
+        data-testid="niet-in-dienst"
+        aria-label={uitlegNid}
+        title={uitlegNid}
+        className="w-full h-9 rounded text-[11px] font-semibold leading-none flex items-center justify-center gap-0.5 cursor-not-allowed border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500"
+      >
+        <span>{blok ? codesNid[0] : codesNid.join(' ')}</span>
+        <span aria-hidden="true">—</span>
+      </div>
+    );
+  }
   const nu = vakStand(vak);
   const volgende = volgendeVakStand(vak);
   const vast = vakKeuzes(vak).length <= 1;
@@ -366,6 +383,7 @@ function Legenda() {
       {item('calendar-cell-parttime', 'PT~', 'Parttimedag: liever niet, je kunt het aanpassen')}
       {item('calendar-cell-absence', 'AF✕', 'Afwezig')}
       {item('calendar-cell-absence', 'AF~', 'Afwezig op een feestdag: liever niet')}
+      {item('border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500', '—', 'Niet in dienst: buiten Geldig vanaf en Geldig tot')}
       {item('border-2 border-neutral-800 bg-white', 'AD', 'Blok: één AIOS doet het hele blok')}
       <span>★ Feestdag</span>
     </div>

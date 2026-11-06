@@ -65,6 +65,17 @@ candidates leave the person out; swap create and approve refuse it; and
 the publication check lists such a shift as an issue (only possible when
 the membership changed after the roster was made).
 
+The calendar shows those days (1.1.4): GET .../preferences/[periodId] gives
+each slot `niet_in_dienst`, PreferencesCalendar draws it as "niet in dienst"
+(a dash, dashed border, in the legend), not to click and not counted in the
+block budget, and the slot route refuses a marking there (409
+NIET_IN_DIENST; clearing an old one stays possible). Nothing is stored, so
+a later change of the dates is right at once. The planner asked: a member
+with dates shorter than the period saw those days open. The AIOS has its own
+copy (lib/aiosPreferences.ts markeerNietInDienst for its screen,
+setAiosVoorkeur refuses a mark on a dienst or block that reaches past the
+membership; hard rule 1 already kept the solver off them).
+
 "Today" on Personeel beheren (the members route's Actief, the new
 member's start) is the Dutch calendar date (lib/localDate.ts
 `localIsoDate`, Europe/Amsterdam), never `toISOString().slice(0, 10)`: that

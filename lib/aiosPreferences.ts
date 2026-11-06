@@ -137,6 +137,31 @@ export function loadAiosVoorkeurDagen(personId: string, periodId: string): AiosV
 }
 
 /**
+ * Marks the diensten outside the AIOS's Geldig vanaf/tot (1.1.4): the solver never gives one there (hard rule 1),
+ * so the AIOS's own screen shows them as niet in dienst instead of open. For that screen only.
+ */
+export function markeerNietInDienst(personId: string, periodId: string, dagen: AiosVoorkeurDag[]): AiosVoorkeurDag[] {
+  for (const dag of dagen) {
+    const lid = isAiosLidOp(personId, periodId, dag.datum);
+    for (const d of dag.diensten) d.niet_in_dienst = !lid;
+  }
+  return dagen;
+}
+
+/** Whether the AIOS's membership of the period's pool holds `datum` (both ends inclusive). */
+export function isAiosLidOp(personId: string, periodId: string, datum: string): boolean {
+  return Boolean(
+    db
+      .prepare(
+        `SELECT 1 FROM dienstrooster_pool_membership pm
+         JOIN dienstrooster_schedule_period sp ON sp.pool_id = pm.pool_id
+         WHERE sp.id = ? AND pm.person_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? LIMIT 1`
+      )
+      .get(periodId, personId, datum, datum)
+  );
+}
+
+/**
  * The same days for several people at once: the diensten of the period are read once and their marks in one
  * more query, instead of the whole period once per person (72 AIOS took 817 queries to build the solver's input).
  * Gives each person exactly what loadAiosVoorkeurDagen(person, period) gives.
@@ -232,6 +257,16 @@ export function setAiosVoorkeur(personId: string, periodId: string, slotId: stri
     )
     .all(personId, slot.shift_block_id ?? slot.id) as Array<{ id: string; is_feestdag: number; level: Niveau | null; bron: Bron | null }>;
   const blok = targets.length > 1;
+
+  // Outside Geldig vanaf/tot nothing is rostered (hard rule 1, 1.1.4): no mark to give there. Clearing stays possible.
+  if (level !== null) {
+    const datums = db
+      .prepare(`SELECT datum FROM dienstrooster_shift_slot WHERE ${slot.shift_block_id ? 'shift_block_id = ?' : 'id = ?'}`)
+      .all(slot.shift_block_id ?? slot.id) as Array<{ datum: string }>;
+    if (datums.some((d) => !isAiosLidOp(personId, periodId, d.datum))) {
+      return weiger(409, 'NIET_IN_DIENST', 'Op deze dag ben je volgens Geldig vanaf en Geldig tot niet in dienst. Daar word je niet ingeroosterd.');
+    }
+  }
 
   if (level === 'ABSOLUUT' && targets.some((t) => t.is_feestdag)) {
     return weiger(

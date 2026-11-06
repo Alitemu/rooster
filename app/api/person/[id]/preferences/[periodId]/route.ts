@@ -13,6 +13,7 @@ import { blockBudgetLimits } from '@/lib/blockBudget';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
+import { coversDate, membershipWindows } from '@/lib/membershipWindow';
 import { periodUsableFor } from '@/lib/periodAccess';
 import { internalErrorResponse } from '@/lib/api-errors';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
@@ -25,6 +26,12 @@ interface PreferenceEntry {
   blocking_level: string | null; // ABSOLUUT, LIEVER_NIET, or null
   source: string | null; // MANUAL, PARTTIME, ABSENCE, or null when blocking_level is null
   fellow_blok: number | null; // 1 = placed by "Ik ben fellow" (lib/fellows.ts)
+  /**
+   * The day is outside the person's Geldig vanaf/tot (1.1.4): nobody is rostered there
+   * (generate-roster blocks it, lib/membershipWindow.ts), so the calendar shows it as
+   * "niet in dienst" and the slot route takes no marking on it.
+   */
+  niet_in_dienst: boolean;
 }
 
 interface GetPreferencesResponse {
@@ -89,7 +96,11 @@ export async function GET(
       ORDER BY s.datum, st.teller
     `);
 
-    const preferences = stmt.all(id, periodId) as PreferenceEntry[];
+    const vensters = membershipWindows(period.pool_id, period.start_datum, period.eind_datum).get(id);
+    const preferences = (stmt.all(id, periodId) as Omit<PreferenceEntry, 'niet_in_dienst'>[]).map((p) => ({
+      ...p,
+      niet_in_dienst: !coversDate(vensters, p.datum),
+    }));
 
     const response: ApiSuccessResponse<GetPreferencesResponse> = {
       success: true,

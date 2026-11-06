@@ -28,6 +28,8 @@ export interface AiosVoorkeurDienst {
   blok: { id: string; soort: BlokSoort; vorm: BlokVorm; start_datum: string; eind_datum: string } | null;
   level: Niveau | null;
   bron: Bron | null;
+  /** Outside the AIOS's Geldig vanaf/tot (1.1.4): never rostered (hard rule 1), shown as niet in dienst, not markable. */
+  niet_in_dienst?: boolean;
 }
 
 export interface AiosVoorkeurDag {

@@ -4841,6 +4841,35 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // A day outside Geldig vanaf/tot is niet in dienst on the calendar and takes no marking (1.1.4).
+  {
+    name: "niet in dienst: the calendar route says every day is in",
+    file: "app/api/person/[id]/preferences/[periodId]/route.ts",
+    find: "      niet_in_dienst: !coversDate(vensters, p.datum),",
+    replace: "      niet_in_dienst: false,",
+    tests: ["app/api/person/[id]/preferences/slot"],
+  },
+  {
+    name: "niet in dienst: the slot route takes a marking outside the membership",
+    file: "app/api/person/[id]/preferences/slot/[slotId]/route.ts",
+    find: "if (level !== null && !isMemberOnDate(slot.pool_id, id, slot.datum)) {",
+    replace: "if (false) {",
+    tests: ["app/api/person/[id]/preferences/slot"],
+  },
+  {
+    name: "niet in dienst (AIOS): the screen says every day is in",
+    file: "lib/aiosPreferences.ts",
+    find: "    for (const d of dag.diensten) d.niet_in_dienst = !lid;",
+    replace: "    for (const d of dag.diensten) d.niet_in_dienst = false;",
+    tests: ["lib/aiosPreferences"],
+  },
+  {
+    name: "niet in dienst (AIOS): a mark is taken for a block that reaches past the membership",
+    file: "lib/aiosPreferences.ts",
+    find: "    if (datums.some((d) => !isAiosLidOp(personId, periodId, d.datum))) {",
+    replace: "    if (datums.every((d) => !isAiosLidOp(personId, periodId, d.datum))) {",
+    tests: ["lib/aiosPreferences"],
+  },
   // Stap 2 "Personeel" of the setup wizard keeps what the planner set (1.1.3, components/SetupWizard.tsx).
   {
     name: "wizard personeel: loading the step widens every membership again",

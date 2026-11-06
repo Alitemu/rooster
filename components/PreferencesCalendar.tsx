@@ -38,6 +38,7 @@ interface SlotPreference {
   level: BlockLevel;
   source: string | null; // MANUAL, PARTTIME, ABSENCE, or null when level is null
   fellow?: boolean; // a weekend block from "Ik ben fellow" - still the person's to release
+  nietInDienst?: boolean; // outside Geldig vanaf/tot (1.1.4): never rostered, nothing to mark
 }
 
 /** The real limit per kind of shift (lib/blockBudget.ts); null: none. */
@@ -179,6 +180,7 @@ export function PreferencesCalendar({
           level: slot.blocking_level,
           source: slot.source,
           fellow: Boolean(slot.fellow_blok),
+          nietInDienst: Boolean(slot.niet_in_dienst),
         });
       }
 
@@ -440,7 +442,7 @@ export function PreferencesCalendar({
   for (const dayPref of preferences.values()) {
     for (const counter of shiftCounters) {
       const slot = dayPref.slots.get(counter);
-      if (!slot) continue;
+      if (!slot || slot.nietInDienst) continue;
       const totals = counterTotals.get(counter)!;
       totals.total++;
       if (slot.level !== 'ABSOLUUT') continue;
@@ -517,6 +519,10 @@ export function PreferencesCalendar({
           <i className="calendar-cell-absence inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AF</i>
           Afwezigheid
         </span>
+        <span className="flex items-center gap-1.5">
+          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500 text-[9px] font-bold">—</i>
+          Niet in dienst
+        </span>
         {dienstLegenda(shiftCounters).map(({ counter, letter, naam }) => (
           <span key={counter} className="flex items-center gap-1.5">
             <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">{letter}</i>
@@ -590,7 +596,7 @@ export function PreferencesCalendar({
                         // buttons stay clickable in that case.
                         const editableCounters = shiftCounters.filter((c) => {
                           const s = dayPref?.slots.get(c);
-                          return s && s.source !== 'PARTTIME' && s.source !== 'ABSENCE';
+                          return s && !s.nietInDienst && s.source !== 'PARTTIME' && s.source !== 'ABSENCE';
                         });
                         const soleEditableCounter =
                           editableCounters.length === 1 ? editableCounters[0] : null;
@@ -654,6 +660,25 @@ export function PreferencesCalendar({
                                   // visually-distinct treatment rather than looking like (and
                                   // being editable as) a plain manual "geblokkeerd" cell.
                                   const autoSource = slot.source === 'PARTTIME' || slot.source === 'ABSENCE' ? slot.source : null;
+
+                                  // Outside Geldig vanaf/tot (1.1.4): the solver never rosters this
+                                  // day, so it is shown as such and cannot be marked.
+                                  if (slot.nietInDienst) {
+                                    const explanation = 'niet in dienst (buiten Geldig vanaf en Geldig tot)';
+                                    return (
+                                      <div
+                                        key={`${datum}-${counter}`}
+                                        role="img"
+                                        data-testid="niet-in-dienst"
+                                        aria-label={`${formatDayLong(datum)}, ${COUNTER_LABEL[counter] || counter}: ${explanation}`}
+                                        className="calendar-cell-niet-in-dienst w-full h-8 rounded text-[20px] leading-none font-semibold
+                                          flex items-center justify-center cursor-not-allowed border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500"
+                                        title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
+                                      >
+                                        —
+                                      </div>
+                                    );
+                                  }
 
                                   if (autoSource) {
                                     // Kept to 2 characters, same as the manual toggle's
