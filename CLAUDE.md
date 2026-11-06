@@ -147,6 +147,11 @@ identifiers, DB fields, comments, and console/log output only.
   - Geblokkeerd (hard)
   - Part-time (auto-generated)
 - Print-friendly: must work in B&W
+- Date fields read dd-mm-jjjj (time uu:mm, 24-hour) in every browser:
+  components/DatumVeld.tsx (DatumVeld, DatumTijdVeld), never a native
+  `type="date"`/`datetime-local`, which follows the browser's language
+  (mm/dd/yyyy on an English Chrome). Values in and out stay YYYY-MM-DD
+  and YYYY-MM-DDTHH:MM (lib/datumInvoer.test.ts, tests/e2e/datumveld.e2e.ts).
 
 **No Mock Data in Production:**
 - All seed data via `/scripts/seed.ts`

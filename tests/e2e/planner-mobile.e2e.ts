@@ -66,6 +66,6 @@ test.describe('in the Netherlands, just after midnight', () => {
     await page.clock.setFixedTime(new Date('2026-10-13T22:30:00Z'));
     await page.goto(`${getBaseUrl()}/planner/pool/${pools[0]}/staff`);
     await expect(page.getByText('Nieuw personeelslid toevoegen')).toBeVisible();
-    await expect(page.locator('input[type="date"]').nth(0)).toHaveValue('2026-10-14');
+    await expect(page.locator('input[data-datumveld]').nth(0)).toHaveValue('14-10-2026');
   });
 });

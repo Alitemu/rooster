@@ -4841,6 +4841,42 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // 1.2.0: date fields in dd-mm-jjjj, whatever the browser's language.
+  {
+    name: "datumveld: a stored date shown the American way",
+    file: "lib/datumInvoer.ts",
+    find: "return `${d}-${m}-${j}`;",
+    replace: "return `${m}-${d}-${j}`;",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "datumveld: 24:00 taken as a time",
+    file: "lib/datumInvoer.ts",
+    find: "if (uur > 23 || minuut > 59) return null;",
+    replace: "if (uur > 24 || minuut > 59) return null;",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "datumveld: a browser date input back in a form",
+    file: "components/AiosVoortgangstoets.tsx",
+    find: "<DatumVeld aria-label=\"Datum van de voortgangstoets\"",
+    replace: "<input type=\"date\" aria-label=\"Datum van de voortgangstoets\"",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "datumveld: the field shows the stored YYYY-MM-DD",
+    file: "components/DatumVeld.tsx",
+    find: "useState(() => isoNaarInvoer(value))",
+    replace: "useState(() => value)",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "datumveld: what was typed passed on as it stands",
+    file: "components/DatumVeld.tsx",
+    find: "const iso = invoerNaarIso(nieuw) ?? '';",
+    replace: "const iso = nieuw;",
+    tests: ["lib/datumInvoer"],
+  },
   // 1.1.5: messages as sentences, swap notice days in words, swaps in the wijzigingsgeschiedenis.
   {
     name: "zinnenlijst: messages joined with a semicolon again",

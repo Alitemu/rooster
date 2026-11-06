@@ -15,6 +15,7 @@ import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { vensterTekst } from '@/lib/windowWeeks';
 import { foutTekst } from '@/lib/foutTekst';
+import { DatumTijdVeld } from '@/components/DatumVeld';
 
 interface Period {
   id: string;
@@ -234,10 +235,10 @@ export default function PlannerPeriodPage() {
             {editingDeadline ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <label className="text-neutral-600">Deadline:</label>
-                <input
-                  type="datetime-local"
+                <DatumTijdVeld
+                  aria-label="Deadline"
                   value={deadlineInput}
-                  onChange={(e) => setDeadlineInput(e.target.value)}
+                  onChange={(waarde) => setDeadlineInput(waarde)}
                   className="px-2 py-1 border rounded text-sm"
                 />
                 <button

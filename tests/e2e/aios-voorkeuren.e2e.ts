@@ -82,8 +82,8 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(vanVeld).toHaveValue('');
   await expect(totVeld).toHaveValue('');
   await expect(page.getByLabel('Soort').getByRole('option', { name: 'Onderwijs' })).toHaveCount(1);
-  await vanVeld.fill('2097-05-06');
-  await expect(totVeld).toHaveValue('2097-05-07');
+  await vanVeld.fill('06-05-2097');
+  await expect(totVeld).toHaveValue('07-05-2097');
 
   await page.getByRole('button', { name: 'Volgende: voorkeuren opgeven' }).click();
 

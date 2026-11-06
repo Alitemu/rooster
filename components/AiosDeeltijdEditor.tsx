@@ -11,6 +11,7 @@
 import { useState, useId } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/aiosFoutTekst';
+import { DatumVeld } from '@/components/DatumVeld';
 
 export interface ParttimePattern {
   id: string;
@@ -247,19 +248,17 @@ export function AiosDeeltijdEditor({
           </div>
           <div>
             <label htmlFor={`${veldId}-2`} className="block text-xs font-medium text-neutral-600 mb-1">Vanaf</label>
-            <input id={`${veldId}-2`}
-              type="date"
+            <DatumVeld id={`${veldId}-2`}
               value={form.geldig_vanaf}
-              onChange={(e) => setForm({ ...form, geldig_vanaf: e.target.value })}
+              onChange={(waarde) => setForm({ ...form, geldig_vanaf: waarde })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
             />
           </div>
           <div>
             <label htmlFor={`${veldId}-3`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-            <input id={`${veldId}-3`}
-              type="date"
+            <DatumVeld id={`${veldId}-3`}
               value={form.geldig_tot}
-              onChange={(e) => setForm({ ...form, geldig_tot: e.target.value })}
+              onChange={(waarde) => setForm({ ...form, geldig_tot: waarde })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
             />
           </div>

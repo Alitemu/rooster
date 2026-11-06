@@ -78,7 +78,7 @@ test('a reeks adds everyone but who is there already, and a selection gets one n
   await page.getByLabel(`b${tag}05 selecteren`).uncheck();
   const balk = page.getByTestId('selectie-balk');
   await expect(balk).toContainText('3 personen geselecteerd');
-  await balk.getByLabel('Nieuwe Geldig tot').fill('2027-12-31');
+  await balk.getByLabel('Nieuwe Geldig tot').fill('31-12-2027');
   await balk.getByRole('button', { name: 'Toepassen op selectie' }).click();
   await expect(page.getByRole('status').filter({ hasText: '3 lidmaatschappen gewijzigd.' })).toBeVisible();
   expect(leden(id).map((l) => l.geldig_tot)).toEqual(['2099-12-31', '2027-12-31', '2027-12-31', '2027-12-31', '2099-12-31']);

@@ -34,6 +34,7 @@ import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
 import { CorrectieFormulier } from '@/components/CorrectieFormulier';
 import { CORRECTION_TYPE_LABELS, type Correction } from '@/lib/correctieRedenen';
+import { DatumTijdVeld, DatumVeld } from '@/components/DatumVeld';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -847,21 +848,19 @@ export function SetupWizard({ period, onComplete }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label htmlFor="wizard-start" className="block text-sm font-medium mb-1">Startdatum</label>
-                <input
+                <DatumVeld
                   id="wizard-start"
-                  type="date"
                   value={periodData.start_datum}
-                  onChange={(e) => setPeriodData({ ...periodData, start_datum: e.target.value })}
+                  onChange={(waarde) => setPeriodData({ ...periodData, start_datum: waarde })}
                   className="w-full px-3 py-2 border rounded"
                 />
               </div>
               <div>
                 <label htmlFor="wizard-eind" className="block text-sm font-medium mb-1">Einddatum</label>
-                <input
+                <DatumVeld
                   id="wizard-eind"
-                  type="date"
                   value={periodData.eind_datum}
-                  onChange={(e) => setPeriodData({ ...periodData, eind_datum: e.target.value })}
+                  onChange={(waarde) => setPeriodData({ ...periodData, eind_datum: waarde })}
                   className="w-full px-3 py-2 border rounded"
                 />
               </div>
@@ -869,11 +868,10 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             <div>
               <label htmlFor="wizard-deadline" className="block text-sm font-medium mb-1">Deadline voorkeuren</label>
-              <input
+              <DatumTijdVeld
                 id="wizard-deadline"
-                type="datetime-local"
                 value={periodData.deadline}
-                onChange={(e) => setPeriodData({ ...periodData, deadline: e.target.value })}
+                onChange={(waarde) => setPeriodData({ ...periodData, deadline: waarde })}
                 className="w-full px-3 py-2 border rounded"
               />
               <p className="text-xs text-neutral-600 mt-1">
@@ -961,11 +959,10 @@ export function SetupWizard({ period, onComplete }: Props) {
                           </td>
                           <td className="px-4 py-2 text-sm">
                             {isEditing ? (
-                              <input
-                                type="date"
+                              <DatumVeld
                                 aria-label={`Geldig vanaf van ${member.codenaam}`}
                                 value={editDates.geldig_vanaf}
-                                onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
+                                onChange={(waarde) => setEditDates({ ...editDates, geldig_vanaf: waarde })}
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
@@ -974,11 +971,10 @@ export function SetupWizard({ period, onComplete }: Props) {
                           </td>
                           <td className="px-4 py-2 text-sm">
                             {isEditing ? (
-                              <input
-                                type="date"
+                              <DatumVeld
                                 aria-label={`Geldig tot van ${member.codenaam}`}
                                 value={editDates.geldig_tot}
-                                onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
+                                onChange={(waarde) => setEditDates({ ...editDates, geldig_tot: waarde })}
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
@@ -1142,19 +1138,19 @@ export function SetupWizard({ period, onComplete }: Props) {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig vanaf</label>
-                  <input
-                    type="date"
+                  <DatumVeld
+                    aria-label="Geldig vanaf"
                     value={newMember.geldig_vanaf}
-                    onChange={(e) => setNewMember({ ...newMember, geldig_vanaf: e.target.value })}
+                    onChange={(waarde) => setNewMember({ ...newMember, geldig_vanaf: waarde })}
                     className="w-full px-2 py-2 border rounded text-sm"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig tot</label>
-                  <input
-                    type="date"
+                  <DatumVeld
+                    aria-label="Geldig tot"
                     value={newMember.geldig_tot}
-                    onChange={(e) => setNewMember({ ...newMember, geldig_tot: e.target.value })}
+                    onChange={(waarde) => setNewMember({ ...newMember, geldig_tot: waarde })}
                     className="w-full px-2 py-2 border rounded text-sm"
                   />
                 </div>

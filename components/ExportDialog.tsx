@@ -14,6 +14,7 @@ import { personaliseReminder } from '@/lib/reminderText';
 import { herinnerdOpTekst } from '@/lib/herinnerdOp';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { foutTekst } from '@/lib/foutTekst';
+import { DatumTijdVeld } from '@/components/DatumVeld';
 
 export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
@@ -387,11 +388,10 @@ export function ExportDialog({
       <label className="block text-xs font-semibold text-amber-900" htmlFor="nieuwe-deadline">
         Nieuwe deadline
       </label>
-      <input
+      <DatumTijdVeld
         id="nieuwe-deadline"
-        type="datetime-local"
         value={newDeadline}
-        onChange={(e) => setNewDeadline(e.target.value)}
+        onChange={(waarde) => setNewDeadline(waarde)}
         className="w-full px-3 py-2 border rounded text-sm bg-white"
       />
       {deadlineError && (

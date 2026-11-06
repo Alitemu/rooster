@@ -90,7 +90,7 @@ test('what the planner changes in stap 2 stays when the wizard is opened again',
 
   // Someone who leaves halfway the new period.
   await rij(page, lid(3)).getByRole('button', { name: 'Bewerken' }).click();
-  await page.getByLabel(`Geldig tot van ${lid(3)}`).fill('2098-02-15');
+  await page.getByLabel(`Geldig tot van ${lid(3)}`).fill('15-02-2098');
   await rij(page, lid(3)).getByRole('button', { name: 'Opslaan' }).click();
   await expect(rij(page, lid(3))).toContainText('2098-02-15');
 
@@ -117,7 +117,7 @@ test('a change that reaches a period with a roster is asked in the row, and save
 
   // A later start takes days out of the published period: that needs a yes.
   await rij(page, lid(31)).getByRole('button', { name: 'Bewerken' }).click();
-  await page.getByLabel(`Geldig vanaf van ${lid(31)}`).fill('2098-02-09');
+  await page.getByLabel(`Geldig vanaf van ${lid(31)}`).fill('09-02-2098');
   await rij(page, lid(31)).getByRole('button', { name: 'Opslaan' }).click();
 
   const vraag = page.getByTestId('rooster-bevestiging');
@@ -138,10 +138,10 @@ test('a member added in the wizard gets the open end', async ({ page }) => {
   await openPersoneel(page);
   const nieuw = `Wiz-nieuw-${tag}`;
   const formulier = page.locator('div', { has: page.getByText('Nieuw personeelslid toevoegen', { exact: true }) }).last();
-  await formulier.locator('input[type="text"]').fill(nieuw);
-  const datums = formulier.locator('input[type="date"]');
-  await expect(datums.nth(0)).toHaveValue('2098-02-02');
-  await expect(datums.nth(1)).toHaveValue('2099-12-31');
+  await formulier.locator('input[type="text"]:not([data-datumveld])').fill(nieuw);
+  const datums = formulier.locator('input[data-datumveld]');
+  await expect(datums.nth(0)).toHaveValue('02-02-2098');
+  await expect(datums.nth(1)).toHaveValue('31-12-2099');
   await formulier.getByRole('button', { name: 'Toevoegen' }).click();
   await expect(rij(page, nieuw)).toContainText('2099-12-31');
   const id = (db.prepare('SELECT id FROM dienstrooster_person WHERE codenaam = ?').get(nieuw) as { id: string }).id;

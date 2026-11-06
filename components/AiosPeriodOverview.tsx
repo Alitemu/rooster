@@ -31,6 +31,7 @@ import { benodigdeFte, SOORT_LABELS } from '@/lib/aiosDiensten';
 import type { AiosDienstenOverzicht } from '@/lib/aiosSlots';
 import { bovenHelftPlanner, type AiosWens, type BlokkadeTeller, type MarkeringTelling } from '@/lib/aiosVoorkeur';
 import { foutTekst } from '@/lib/aiosFoutTekst';
+import { DatumTijdVeld } from '@/components/DatumVeld';
 
 interface Period {
   id: string;
@@ -111,11 +112,10 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
             <label htmlFor="aios-deadline" className="block text-sm font-medium text-neutral-800 mb-1">
               Deadline voor de voorkeuren
             </label>
-            <input
+            <DatumTijdVeld
               id="aios-deadline"
-              type="datetime-local"
               value={deadline}
-              onChange={(e) => setDeadline(e.target.value)}
+              onChange={(waarde) => setDeadline(waarde)}
               className="px-2 py-1 border rounded text-sm"
             />
             <p className="text-xs text-neutral-500 mt-1">Standaard 8 weken voor de start van het kwartaal, om 17:00.</p>
@@ -143,11 +143,10 @@ function Stappen({ period, stand, onChanged }: { period: Period; stand: AiosStan
               <label htmlFor="aios-deadline-wijzigen" className="block text-xs font-medium text-neutral-600 mb-1">
                 Deadline verschuiven
               </label>
-              <input
+              <DatumTijdVeld
                 id="aios-deadline-wijzigen"
-                type="datetime-local"
                 value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
+                onChange={(waarde) => setDeadline(waarde)}
                 className="px-2 py-1 border rounded text-sm"
               />
             </div>

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
 import { localIsoDate } from '@/lib/localDate';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 import { getBaseUrl, loginAsPlanner } from './setup';
 
 /**
@@ -46,7 +47,7 @@ async function newMemberDates(page: import('@playwright/test').Page, poolId: str
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/pool/${poolId}/staff`);
   await expect(page.getByText('Nieuw personeelslid toevoegen')).toBeVisible();
-  const dates = page.locator('input[type="date"]');
+  const dates = page.locator('input[data-datumveld]');
   return { vanaf: dates.nth(0), tot: dates.nth(1), uitleg: page.getByTestId('geldig-uitleg') };
 }
 
@@ -55,8 +56,8 @@ test('a new member starts at the period being rostered, with an open end', async
   period(id, 'Vorige periode', 'GEPUBLICEERD', '2099-01-05', '2099-03-01');
   period(id, 'Winter 2099', 'OPEN', '2099-03-02', '2099-08-30');
   const { vanaf, tot, uitleg } = await newMemberDates(page, id);
-  await expect(vanaf).toHaveValue('2099-03-02');
-  await expect(tot).toHaveValue('2099-12-31');
+  await expect(vanaf).toHaveValue('02-03-2099');
+  await expect(tot).toHaveValue('31-12-2099');
   await expect(uitleg).toContainText('staat op het begin van de periode Winter 2099');
 });
 
@@ -65,7 +66,7 @@ test('without a period being rostered: today, with an open end', async ({ page }
   const { vanaf, tot, uitleg } = await newMemberDates(page, id);
   // The Dutch date, like the page: in UTC it is still yesterday until 01:00
   // or 02:00 (audit 10 caught this test failing at 00:47).
-  await expect(vanaf).toHaveValue(localIsoDate());
-  await expect(tot).toHaveValue('2099-12-31');
+  await expect(vanaf).toHaveValue(isoNaarInvoer(localIsoDate()));
+  await expect(tot).toHaveValue('31-12-2099');
   await expect(uitleg).toHaveText('Geldig vanaf staat op vandaag. Geldig tot staat op 31 december 2099: deze persoon doet mee tot je een einddatum zet.');
 });

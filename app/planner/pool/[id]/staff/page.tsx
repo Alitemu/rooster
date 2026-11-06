@@ -24,6 +24,7 @@ import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults 
 import { foutTekst } from '@/lib/foutTekst';
 import { codenaamReeks } from '@/lib/codenaamReeks';
 import { PARTTIMEDAGEN_TELLEN, verdelingTekst, type Verdeling } from '@/lib/deelnamefactorVerdeling';
+import { DatumVeld } from '@/components/DatumVeld';
 
 interface Pool {
   id: string;
@@ -435,21 +436,19 @@ export default function PoolStaffPage() {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
               <div>
                 <label htmlFor="groep-vanaf" className="block text-xs font-medium text-neutral-700 mb-1">Nieuwe Geldig vanaf</label>
-                <input
+                <DatumVeld
                   id="groep-vanaf"
-                  type="date"
                   value={groepDatums.geldig_vanaf}
-                  onChange={(e) => setGroepDatums({ ...groepDatums, geldig_vanaf: e.target.value })}
+                  onChange={(waarde) => setGroepDatums({ ...groepDatums, geldig_vanaf: waarde })}
                   className="w-full px-2 py-2 border rounded text-sm"
                 />
               </div>
               <div>
                 <label htmlFor="groep-tot" className="block text-xs font-medium text-neutral-700 mb-1">Nieuwe Geldig tot</label>
-                <input
+                <DatumVeld
                   id="groep-tot"
-                  type="date"
                   value={groepDatums.geldig_tot}
-                  onChange={(e) => setGroepDatums({ ...groepDatums, geldig_tot: e.target.value })}
+                  onChange={(waarde) => setGroepDatums({ ...groepDatums, geldig_tot: waarde })}
                   className="w-full px-2 py-2 border rounded text-sm"
                 />
               </div>
@@ -544,11 +543,10 @@ export default function PoolStaffPage() {
                         </td>
                         <td className="px-4 py-2 text-sm">
                           {isEditing ? (
-                            <input
-                              type="date"
+                            <DatumVeld
                               aria-label={`Geldig vanaf voor ${member.codenaam}`}
                               value={editDates.geldig_vanaf}
-                              onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
+                              onChange={(waarde) => setEditDates({ ...editDates, geldig_vanaf: waarde })}
                               className="px-2 py-1 border rounded text-sm w-36"
                             />
                           ) : (
@@ -557,11 +555,10 @@ export default function PoolStaffPage() {
                         </td>
                         <td className="px-4 py-2 text-sm">
                           {isEditing ? (
-                            <input
-                              type="date"
+                            <DatumVeld
                               aria-label={`Geldig tot voor ${member.codenaam}`}
                               value={editDates.geldig_tot}
-                              onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
+                              onChange={(waarde) => setEditDates({ ...editDates, geldig_tot: waarde })}
                               className="px-2 py-1 border rounded text-sm w-36"
                             />
                           ) : (
@@ -697,21 +694,19 @@ export default function PoolStaffPage() {
             </div>
             <div>
               <label htmlFor="nieuw-lid-vanaf" className="block text-xs font-medium text-neutral-600 mb-1">Geldig vanaf</label>
-              <input
+              <DatumVeld
                 id="nieuw-lid-vanaf"
-                type="date"
                 value={newMember.geldig_vanaf}
-                onChange={(e) => setNewMember({ ...newMember, geldig_vanaf: e.target.value })}
+                onChange={(waarde) => setNewMember({ ...newMember, geldig_vanaf: waarde })}
                 className="w-full px-2 py-2 border rounded text-sm"
               />
             </div>
             <div>
               <label htmlFor="nieuw-lid-tot" className="block text-xs font-medium text-neutral-600 mb-1">Geldig tot</label>
-              <input
+              <DatumVeld
                 id="nieuw-lid-tot"
-                type="date"
                 value={newMember.geldig_tot}
-                onChange={(e) => setNewMember({ ...newMember, geldig_tot: e.target.value })}
+                onChange={(waarde) => setNewMember({ ...newMember, geldig_tot: waarde })}
                 className="w-full px-2 py-2 border rounded text-sm"
               />
             </div>

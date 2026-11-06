@@ -187,7 +187,9 @@ part-time days and leave in it), the hourly check and the start. The
 test reads every import: one outside that list fails, and so does AIOS
 code that imports the achterwacht's beyond the shared parts (login and
 sessions, the database, the mail account, the dienst checks, input checks,
-dates, file formats, the HTTP call to a solver). Where the AIOS needed
+dates (since 1.2.0 also the date fields, components/DatumVeld.tsx with
+lib/datumInvoer.ts: new code for both, not achterwacht code reused), file
+formats, the HTTP call to a solver). Where the AIOS needed
 the achterwacht's behaviour it has a copy (0.84.0): lib/aiosInvoer.ts
 (the deadline rules), lib/aiosVerzendlijst.ts (the verzendlijst, the same
 format for the AIOS's flow), lib/aiosTeksten.ts (status words, dates), the

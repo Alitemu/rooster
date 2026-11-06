@@ -26,6 +26,7 @@ import {
 } from '@/lib/aiosQuarter';
 import { foutTekst } from '@/lib/foutTekst';
 import { localIsoDate, localIsoMinute } from '@/lib/localDate';
+import { DatumTijdVeld, DatumVeld } from '@/components/DatumVeld';
 
 interface Period {
   id: string;
@@ -535,20 +536,20 @@ export default function PlannerHomePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="label">Startdatum</label>
-                <input
-                  type="date"
+                <DatumVeld
+                  aria-label="Startdatum"
                   className="input w-full"
                   value={form.start_datum}
-                  onChange={(e) => setForm({ ...form, start_datum: e.target.value })}
+                  onChange={(waarde) => setForm({ ...form, start_datum: waarde })}
                 />
               </div>
               <div className="form-group">
                 <label className="label">Einddatum</label>
-                <input
-                  type="date"
+                <DatumVeld
+                  aria-label="Einddatum"
                   className="input w-full"
                   value={form.eind_datum}
-                  onChange={(e) => setForm({ ...form, eind_datum: e.target.value })}
+                  onChange={(waarde) => setForm({ ...form, eind_datum: waarde })}
                 />
               </div>
             </div>
@@ -556,15 +557,13 @@ export default function PlannerHomePage() {
 
           <div className="form-group">
             <label className="label">Deadline voorkeuren</label>
-            {/* datetime-local, net als de deadline-stap in de setup wizard
-                verderop - zelfde invoerformaat, zodat deze waarde daar
-                automatisch wordt overgenomen in plaats van leeg te lijken en
-                opnieuw ingevuld te moeten worden. */}
-            <input
-              type="datetime-local"
+            {/* Same value format as the wizard's deadline step (YYYY-MM-DDTHH:MM),
+                so the wizard takes this value over instead of showing it empty. */}
+            <DatumTijdVeld
+              aria-label="Deadline voorkeuren"
               className="input w-full"
               value={form.deadline}
-              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+              onChange={(waarde) => setForm({ ...form, deadline: waarde })}
             />
           </div>
 

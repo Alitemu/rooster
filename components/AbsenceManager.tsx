@@ -16,6 +16,7 @@ import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
+import { DatumVeld } from '@/components/DatumVeld';
 
 export interface Absence {
   id: string;
@@ -247,11 +248,10 @@ export function AbsenceManager({
             </div>
             <div>
               <label htmlFor={`${veldId}-1`} className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
-              <input id={`${veldId}-1`}
-                type="date"
+              <DatumVeld id={`${veldId}-1`}
                 value={form.van_datum}
-                onChange={(e) => {
-                  const van_datum = e.target.value;
+                onChange={(waarde) => {
+                  const van_datum = waarde;
                   // Most absences are 1-3 weeks - jump "tot en met" to the
                   // day right after "van" so there's a sensible nearby
                   // default to adjust from, instead of leaving it wherever
@@ -268,10 +268,9 @@ export function AbsenceManager({
             </div>
             <div>
               <label htmlFor={`${veldId}-2`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-              <input id={`${veldId}-2`}
-                type="date"
+              <DatumVeld id={`${veldId}-2`}
                 value={form.tot_datum}
-                onChange={(e) => setForm({ ...form, tot_datum: e.target.value })}
+                onChange={(waarde) => setForm({ ...form, tot_datum: waarde })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
               />
             </div>

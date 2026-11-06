@@ -13,6 +13,7 @@ import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
 import { foutTekst } from '@/lib/aiosFoutTekst';
 import { telwoord } from '@/lib/aiosTelwoord';
+import { DatumVeld } from '@/components/DatumVeld';
 
 export interface Absence {
   id: string;
@@ -245,12 +246,11 @@ export function AiosAfwezigheid({
             </div>
             <div>
               <label htmlFor={`${veld}-van`} className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
-              <input
+              <DatumVeld
                 id={`${veld}-van`}
-                type="date"
                 value={form.van_datum}
-                onChange={(e) => {
-                  const van_datum = e.target.value;
+                onChange={(waarde) => {
+                  const van_datum = waarde;
                   // Most absences are 1-3 weeks - jump "tot en met" to the
                   // day right after "van" so there's a sensible nearby
                   // default to adjust from, instead of leaving it wherever
@@ -267,11 +267,10 @@ export function AiosAfwezigheid({
             </div>
             <div>
               <label htmlFor={`${veld}-tot`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-              <input
+              <DatumVeld
                 id={`${veld}-tot`}
-                type="date"
                 value={form.tot_datum}
-                onChange={(e) => setForm({ ...form, tot_datum: e.target.value })}
+                onChange={(waarde) => setForm({ ...form, tot_datum: waarde })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
               />
             </div>

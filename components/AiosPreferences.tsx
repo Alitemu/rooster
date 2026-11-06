@@ -39,6 +39,7 @@ import {
   type Niveau,
 } from '@/lib/aiosVoorkeur';
 import { foutTekst } from '@/lib/aiosFoutTekst';
+import { DatumVeld } from '@/components/DatumVeld';
 
 interface Scherm {
   period: { id: string; naam: string; start_datum: string; eind_datum: string; deadline: string; status: string };
@@ -507,14 +508,13 @@ function Verzoeken({
               <label htmlFor={`aios-${key}`} className="block text-xs font-medium text-neutral-600 mb-1">
                 {deel === 'van' ? 'Vanaf' : 'Tot en met'}
               </label>
-              <input
+              <DatumVeld
                 id={`aios-${key}`}
-                type="date"
                 min={min}
                 max={max}
                 disabled={readOnly}
                 value={wens[key] ?? ''}
-                onChange={(e) => wijzig({ [key]: e.target.value || null })}
+                onChange={(waarde) => wijzig({ [key]: waarde || null })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
               />
             </div>

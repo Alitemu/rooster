@@ -17,6 +17,7 @@ import { useAiosDialoogSluiten, useAiosScrollSlot } from '@/lib/aiosDialoog';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { foutTekst } from '@/lib/aiosFoutTekst';
+import { DatumTijdVeld } from '@/components/DatumVeld';
 
 export type AiosExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
@@ -246,11 +247,10 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
       <label className="block text-xs font-semibold text-amber-900" htmlFor="aios-nieuwe-deadline">
         Nieuwe deadline
       </label>
-      <input
+      <DatumTijdVeld
         id="aios-nieuwe-deadline"
-        type="datetime-local"
         value={nieuweDeadline}
-        onChange={(e) => setNieuweDeadline(e.target.value)}
+        onChange={(waarde) => setNieuweDeadline(waarde)}
         className="w-full px-3 py-2 border rounded text-sm bg-white"
       />
       {deadlineFout && (
