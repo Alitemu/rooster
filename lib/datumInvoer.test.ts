@@ -99,6 +99,20 @@ describe('no field of the app uses the browser date input', () => {
     expect(bron).toContain('placeholder="uu:mm"');
   });
 
+  it('shows dates in lists and tables as dd-mm-jjjj, never as the stored YYYY-MM-DD (1.2.1)', () => {
+    // A date shown as stored, between JSX braces or as the other branch of an
+    // edit field: 23-04-2027 typed in, 2027-04-23 in the list under it.
+    const veld = '(geldig_vanaf|geldig_tot|van_datum|tot_datum|start_datum|eind_datum|datum)';
+    const inTekst = new RegExp(`(?<![=$\\w])\\{\\s*[\\w.?]+\\.${veld}\\s*\\}`);
+    const alsTak = new RegExp(`\\(\\s*\\n\\s*[\\w.?]+\\.${veld}\\s*\\n\\s*\\)`);
+    const inMelding = new RegExp(`\\(\\$\\{[\\w.?]+\\.${veld}\\} t/m`);
+    const fout = [...bestanden('app'), ...bestanden('components')].filter((pad) => {
+      const bron = readFileSync(pad, 'utf8');
+      return inTekst.test(bron) || alsTak.test(bron) || inMelding.test(bron);
+    });
+    expect(fout).toEqual([]);
+  });
+
   it('shows a stored date the Dutch way and passes on only a real date, as YYYY-MM-DD', () => {
     // The behaviour itself is in tests/e2e/datumveld.e2e.ts; these lines are what it rests on.
     const bron = readFileSync(join('components', 'DatumVeld.tsx'), 'utf8');

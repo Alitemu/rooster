@@ -13,6 +13,7 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { MAX_WORKBOOK_BYTES, WORKBOOK_TOO_LARGE } from '@/lib/sheetUpload';
 import { telwoord } from '@/lib/telwoord';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface Change {
   codenaam: string;
@@ -215,7 +216,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                         {plan.wijzigingen.slice(0, SHOWN).map((w) => (
                           <tr key={`${w.codenaam}|${w.datum}|${w.dienst}`} className="border-b border-neutral-100">
                             <td className="py-1 pr-2">{w.codenaam}</td>
-                            <td className="py-1 pr-2">{w.datum}</td>
+                            <td className="py-1 pr-2">{isoNaarInvoer(w.datum)}</td>
                             <td className="py-1 pr-2">{w.dienst}</td>
                             <td className="py-1 pr-2">{w.van}</td>
                             <td className="py-1">{w.naar}</td>

@@ -12,6 +12,7 @@ import { useState, useId } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/aiosFoutTekst';
 import { DatumVeld } from '@/components/DatumVeld';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 export interface ParttimePattern {
   id: string;
@@ -185,7 +186,7 @@ export function AiosDeeltijdEditor({
                 <span className="font-medium">{WEEKDAG_LABEL[p.weekdag] || p.weekdag}</span>
                 <span className="text-neutral-600"> · {FREQUENTIE_LABEL[p.frequentie] || p.frequentie}</span>
                 <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
-                  {p.geldig_vanaf} t/m {p.geldig_tot}
+                  {isoNaarInvoer(p.geldig_vanaf)} t/m {isoNaarInvoer(p.geldig_tot)}
                 </span>
               </div>
               {!readOnly && (

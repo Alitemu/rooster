@@ -78,7 +78,7 @@ test('adding someone twice says so under Toevoegen, in sight', async ({ page }) 
 
 test('a change that overlaps says so under its own row, in sight', async ({ page }) => {
   await openStaff(page);
-  const row = page.locator('tr', { hasText: `Zz-Twee-${tag}` }).filter({ hasText: '2099-02-28' });
+  const row = page.locator('tr', { hasText: `Zz-Twee-${tag}` }).filter({ hasText: '28-02-2099' });
   await row.getByRole('button', { name: 'Bewerken' }).click();
   const editing = page.locator('tr', { hasText: `Zz-Twee-${tag}` }).filter({ has: page.locator('input[data-datumveld]') });
   await editing.locator('input[data-datumveld]').nth(1).fill('01-05-2099');

@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 import { useAiosDialoogSluiten, useAiosScrollSlot } from '@/lib/aiosDialoog';
 import { withBasePath } from '@/lib/basePath';
 import { telwoord } from '@/lib/aiosTelwoord';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface Change {
   codenaam: string;
@@ -220,7 +221,7 @@ export function AiosVoorkeurenImportButton({ periodId, periodStatus, onImported 
                         {plan.wijzigingen.slice(0, SHOWN).map((w) => (
                           <tr key={`${w.codenaam}|${w.datum}|${w.dienst}`} className="border-b border-neutral-100">
                             <td className="py-1 pr-2">{w.codenaam}</td>
-                            <td className="py-1 pr-2">{w.datum}</td>
+                            <td className="py-1 pr-2">{isoNaarInvoer(w.datum)}</td>
                             <td className="py-1 pr-2">{w.dienst}</td>
                             <td className="py-1 pr-2">{w.van}</td>
                             <td className="py-1">{w.naar}</td>

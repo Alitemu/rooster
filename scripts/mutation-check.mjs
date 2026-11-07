@@ -4841,6 +4841,28 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // 1.2.1: dates in lists, tables and messages as dd-mm-jjjj too.
+  {
+    name: "datumweergave: an absence listed as YYYY-MM-DD again",
+    file: "components/AbsenceManager.tsx",
+    find: "{isoNaarInvoer(a.van_datum)} t/m {isoNaarInvoer(a.tot_datum)}",
+    replace: "{a.van_datum} t/m {a.tot_datum}",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "datumweergave: Geldig vanaf in the staff table as YYYY-MM-DD again",
+    file: "app/planner/pool/[id]/staff/page.tsx",
+    find: "isoNaarInvoer(member.geldig_vanaf)\n",
+    replace: "member.geldig_vanaf\n",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "datumweergave: an import problem names the day as YYYY-MM-DD again",
+    file: "lib/preferencesImport.ts",
+    find: "de ${dienstWoord} op ${isoNaarInvoer(datum)} staat ook op regel",
+    replace: "de ${dienstWoord} op ${datum} staat ook op regel",
+    tests: ["app/api/admin/period/[id]/preferences-import"],
+  },
   // 1.2.0: date fields in dd-mm-jjjj, whatever the browser's language.
   {
     name: "datumveld: a stored date shown the American way",

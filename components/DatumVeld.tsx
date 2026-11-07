@@ -83,7 +83,7 @@ export function DatumVeld({
         data-datumveld=""
         aria-label={rest['aria-label']}
         aria-invalid={fout && verlaten ? true : undefined}
-        title={fout && verlaten ? 'Vul de datum in als dd-mm-jjjj, bijvoorbeeld 06-11-2026.' : undefined}
+        title={fout && verlaten ? 'Vul de datum in als dd-mm-jjjj, bijvoorbeeld 23-04-2027.' : undefined}
         disabled={rest.disabled}
         value={tekst}
         onChange={(e) => {

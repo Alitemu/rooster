@@ -32,6 +32,7 @@ import { withoutFormulaGuard } from './csv';
 import { loadPeriodMembers } from './rosterBands';
 import { isAiosPerson } from './aiosPeriod';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from './rosterGenerationJobs';
+import { isoNaarInvoer } from './datumInvoer';
 
 type Level = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 
@@ -205,12 +206,12 @@ function plan(period: ImportPeriod, rows: string[][], regels?: number[]): { plan
     }
     const slotId = slotByKey.get(`${datum}|${teller}`);
     if (!slotId) {
-      problemen.push(`Regel ${regel}: geen ${dienstWoord} op ${datum} in deze periode.`);
+      problemen.push(`Regel ${regel}: geen ${dienstWoord} op ${isoNaarInvoer(datum)} in deze periode.`);
       continue;
     }
     const eerder = seenOn.get(slotId);
     if (eerder !== undefined) {
-      problemen.push(`Regel ${regel}: de ${dienstWoord} op ${datum} staat ook op regel ${eerder}.`);
+      problemen.push(`Regel ${regel}: de ${dienstWoord} op ${isoNaarInvoer(datum)} staat ook op regel ${eerder}.`);
       continue;
     }
     seenOn.set(slotId, regel);

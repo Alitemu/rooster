@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
@@ -289,7 +290,7 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     copy[grid[0].indexOf(a.codenaam)] = 'voorkeur';
     grid.push(copy);
     const check = await importXlsx(f, grid, false);
-    expect(check.body.data.problemen).toEqual([`Regel ${grid.length}: de avonddienst op ${f.slots[0].datum} staat ook op regel 2.`]);
+    expect(check.body.data.problemen).toEqual([`Regel ${grid.length}: de avonddienst op ${isoNaarInvoer(f.slots[0].datum)} staat ook op regel 2.`]);
     expect((await importXlsx(f, grid, true)).status).toBe(400);
     expect(markings(f)).toEqual({});
   });

@@ -92,7 +92,7 @@ test('what the planner changes in stap 2 stays when the wizard is opened again',
   await rij(page, lid(3)).getByRole('button', { name: 'Bewerken' }).click();
   await page.getByLabel(`Geldig tot van ${lid(3)}`).fill('15-02-2098');
   await rij(page, lid(3)).getByRole('button', { name: 'Opslaan' }).click();
-  await expect(rij(page, lid(3))).toContainText('2098-02-15');
+  await expect(rij(page, lid(3))).toContainText('15-02-2098');
 
   // Someone who does not take part this time.
   await rij(page, lid(4)).getByRole('checkbox').click();
@@ -100,7 +100,7 @@ test('what the planner changes in stap 2 stays when the wizard is opened again',
 
   // Coming back to the wizard later: nothing is undone.
   await openPersoneel(page);
-  await expect(rij(page, lid(3))).toContainText('2098-02-15');
+  await expect(rij(page, lid(3))).toContainText('15-02-2098');
   await expect(rij(page, lid(4))).toContainText('Niet actief');
   await expect(rij(page, WEG)).toContainText('Niet actief');
   expect(lidmaatschap(lid(3))).toEqual({ geldig_vanaf: '2098-01-05', geldig_tot: '2098-02-15' });
@@ -128,7 +128,7 @@ test('a change that reaches a period with a roster is asked in the row, and save
   expect(lidmaatschap(lid(31)).geldig_vanaf).toBe('2098-01-05');
 
   await vraag.getByRole('button', { name: 'Toch doorgaan' }).click();
-  await expect(rij(page, lid(31))).toContainText('2098-02-09');
+  await expect(rij(page, lid(31))).toContainText('09-02-2098');
   expect(lidmaatschap(lid(31))).toEqual({ geldig_vanaf: '2098-02-09', geldig_tot: '2099-12-31' });
   await expect(page.getByTestId('rooster-bevestiging')).toHaveCount(0);
 });
@@ -143,7 +143,7 @@ test('a member added in the wizard gets the open end', async ({ page }) => {
   await expect(datums.nth(0)).toHaveValue('02-02-2098');
   await expect(datums.nth(1)).toHaveValue('31-12-2099');
   await formulier.getByRole('button', { name: 'Toevoegen' }).click();
-  await expect(rij(page, nieuw)).toContainText('2099-12-31');
+  await expect(rij(page, nieuw)).toContainText('31-12-2099');
   const id = (db.prepare('SELECT id FROM dienstrooster_person WHERE codenaam = ?').get(nieuw) as { id: string }).id;
   persons.push(id);
   expect(lidmaatschap(nieuw)).toEqual({ geldig_vanaf: '2098-02-02', geldig_tot: '2099-12-31' });

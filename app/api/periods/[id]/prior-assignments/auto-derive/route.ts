@@ -14,6 +14,7 @@ import { trashedPeriodDenial } from '@/lib/periodTrash';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { writeAuditLog } from '@/lib/auditLog';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface AutoDeriveResult {
   period_id: string;
@@ -115,9 +116,9 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         from_previous_period_id: refresh.previous.id,
         message:
           derivedCount + refresh.removed > 0
-            ? `${derivedCount} toewijzing${derivedCount === 1 ? '' : 'en'} afgeleid uit de vorige periode (${startDate} t/m ${endDate})` +
+            ? `${derivedCount} toewijzing${derivedCount === 1 ? '' : 'en'} afgeleid uit de vorige periode (${isoNaarInvoer(startDate)} t/m ${isoNaarInvoer(endDate)})` +
               (refresh.removed > 0 ? `. ${refresh.removed} dag${refresh.removed === 1 ? '' : 'en'} zonder dienst meer weggehaald.` : '')
-            : `Niets nieuws gevonden om af te leiden. De vorige periode had niets in het overloopvenster (${startDate} t/m ${endDate}) of alles stond al goed.`,
+            : `Niets nieuws gevonden om af te leiden. De vorige periode had niets in het overloopvenster (${isoNaarInvoer(startDate)} t/m ${isoNaarInvoer(endDate)}) of alles stond al goed.`,
       },
     };
 

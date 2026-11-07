@@ -48,6 +48,7 @@ import { loadAiosRedenen, saveAiosReden } from '@/lib/aiosReden';
 import { isAiosPerson } from '@/lib/aiosPeriod';
 import { schrijfAiosVoorkeurBackup } from '@/lib/aiosVoorkeurBackup';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
+import { isoNaarInvoer } from './datumInvoer';
 
 const NIVEAU_VAN_WOORD: Record<string, Niveau> = {
   geblokkeerd: 'ABSOLUUT',
@@ -272,12 +273,12 @@ function lees(period: AiosUitnodigPeriode, rows: string[][], regels?: number[]):
     }
     const slotId = slotVan.get(`${datum}|${code}`);
     if (!slotId) {
-      problemen.push(`Regel ${regel}: geen ${dienstWoord.toLowerCase()} op ${datum} in deze periode.`);
+      problemen.push(`Regel ${regel}: geen ${dienstWoord.toLowerCase()} op ${isoNaarInvoer(datum)} in deze periode.`);
       continue;
     }
     const eerder = gezienOp.get(slotId);
     if (eerder !== undefined) {
-      problemen.push(`Regel ${regel}: de ${dienstWoord.toLowerCase()} op ${datum} staat ook op regel ${eerder}.`);
+      problemen.push(`Regel ${regel}: de ${dienstWoord.toLowerCase()} op ${isoNaarInvoer(datum)} staat ook op regel ${eerder}.`);
       continue;
     }
     gezienOp.set(slotId, regel);
@@ -408,7 +409,7 @@ function voerUit(period: AiosUitnodigPeriode, gelezen: Gelezen, terug: boolean):
       const sleutel = `${cel.personId}|${cel.datum}|${cel.dienst}`;
       if (gemeld.has(sleutel)) continue;
       gemeld.add(sleutel);
-      problemen.push(`Regel ${cel.regel}, ${cel.codenaam}: de keuze voor de ${cel.dienst.toLowerCase()} op ${cel.datum} past niet bij de rest van het blok.`);
+      problemen.push(`Regel ${cel.regel}, ${cel.codenaam}: de keuze voor de ${cel.dienst.toLowerCase()} op ${isoNaarInvoer(cel.datum)} past niet bij de rest van het blok.`);
     }
     for (const cel of cellen) {
       const was = voor.get(`${cel.personId}|${cel.slotId}`)?.level ?? null;

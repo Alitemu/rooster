@@ -35,6 +35,7 @@ import { telwoord } from '@/lib/telwoord';
 import { CorrectieFormulier } from '@/components/CorrectieFormulier';
 import { CORRECTION_TYPE_LABELS, type Correction } from '@/lib/correctieRedenen';
 import { DatumTijdVeld, DatumVeld } from '@/components/DatumVeld';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -706,7 +707,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       }
 
       setOpenResult(
-        `Periode geopend (${openData.data.start_datum} t/m ${openData.data.eind_datum}): ` +
+        `Periode geopend (${isoNaarInvoer(openData.data.start_datum)} t/m ${isoNaarInvoer(openData.data.eind_datum)}): ` +
           `${telwoord(openData.data.slots_generated, 'dienst', 'diensten')} gegenereerd, ${telwoord(linksSent, 'uitnodiging', 'uitnodigingen')} verstuurd.` +
           (correctionsFailed
             ? ' Let op: de handmatige correcties zijn niet opgeslagen. Noteer ze en laat de beheerder ze alsnog verwerken.'
@@ -966,7 +967,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
-                              member.geldig_vanaf
+                              isoNaarInvoer(member.geldig_vanaf)
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">
@@ -978,7 +979,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
-                              member.geldig_tot
+                              isoNaarInvoer(member.geldig_tot)
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">

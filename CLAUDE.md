@@ -152,6 +152,8 @@ identifiers, DB fields, comments, and console/log output only.
   `type="date"`/`datetime-local`, which follows the browser's language
   (mm/dd/yyyy on an English Chrome). Values in and out stay YYYY-MM-DD
   and YYYY-MM-DDTHH:MM (lib/datumInvoer.test.ts, tests/e2e/datumveld.e2e.ts).
+  A date shown in a list, table or message reads dd-mm-jjjj too
+  (`isoNaarInvoer`, 1.2.1); an example date is unambiguous (23-04-2027).
 
 **No Mock Data in Production:**
 - All seed data via `/scripts/seed.ts`

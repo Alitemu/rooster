@@ -25,6 +25,7 @@ import { foutTekst } from '@/lib/foutTekst';
 import { codenaamReeks } from '@/lib/codenaamReeks';
 import { PARTTIMEDAGEN_TELLEN, verdelingTekst, type Verdeling } from '@/lib/deelnamefactorVerdeling';
 import { DatumVeld } from '@/components/DatumVeld';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface Pool {
   id: string;
@@ -550,7 +551,7 @@ export default function PoolStaffPage() {
                               className="px-2 py-1 border rounded text-sm w-36"
                             />
                           ) : (
-                            member.geldig_vanaf
+                            isoNaarInvoer(member.geldig_vanaf)
                           )}
                         </td>
                         <td className="px-4 py-2 text-sm">
@@ -562,7 +563,7 @@ export default function PoolStaffPage() {
                               className="px-2 py-1 border rounded text-sm w-36"
                             />
                           ) : (
-                            member.geldig_tot
+                            isoNaarInvoer(member.geldig_tot)
                           )}
                         </td>
                         <td className="px-4 py-2 text-sm" data-testid="deelnamefactor">
@@ -781,7 +782,7 @@ export default function PoolStaffPage() {
               const voorbeeld = n <= 4 ? r.codenamen.join(', ') : `${r.codenamen.slice(0, 2).join(', ')} … ${r.codenamen.slice(-2).join(', ')}`;
               return (
                 <p className="text-xs text-neutral-700" data-testid="reeks-voorbeeld">
-                  {n === 1 ? '1 codenaam' : `${n} codenamen`}: {voorbeeld}, van {newMember.geldig_vanaf} tot {newMember.geldig_tot}.
+                  {n === 1 ? '1 codenaam' : `${n} codenamen`}: {voorbeeld}, van {isoNaarInvoer(newMember.geldig_vanaf)} tot {isoNaarInvoer(newMember.geldig_tot)}.
                 </p>
               );
             })()}

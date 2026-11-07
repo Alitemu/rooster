@@ -18,6 +18,7 @@ import { EERDERE_KOP, kopFout } from '@/lib/importSjablonen';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { foutTekst } from '@/lib/foutTekst';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface PriorAssignment {
   datum: string;
@@ -400,7 +401,7 @@ export default function PriorAssignmentsPage() {
               const key = `${a.datum}-${a.teller}`;
               return (
                 <tr key={key} className={!a.person_codenaam ? 'bg-amber-50' : ''}>
-                  <td className="px-3 py-2 font-mono">{a.datum}</td>
+                  <td className="px-3 py-2 font-mono">{isoNaarInvoer(a.datum)}</td>
                   <td className="px-3 py-2">W{a.iso_week}</td>
                   <td className="px-3 py-2">{TELLER_LABELS[a.teller] || a.teller}</td>
                   <td className="px-3 py-2">
