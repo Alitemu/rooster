@@ -91,6 +91,9 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
   const c = controle ?? stand.controle;
   const kan = c.problemen.length === 0;
   const metWaarschuwing = c.waarschuwingen.length > 0;
+  const harde = c.harde_regels ?? [];
+  const overige = c.waarschuwingen.filter((w) => !harde.includes(w));
+  const hardeZin = harde.length === 1 ? 'Dit rooster breekt een harde regel.' : `Dit rooster breekt ${harde.length} keer een harde regel.`;
 
   return (
     // A block of the card at the top of the page (components/AiosRoosterMaken.tsx), not a section of its own.
@@ -126,11 +129,21 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
           </ul>
         </div>
       )}
-      {metWaarschuwing && (
+      {harde.length > 0 && (
+        <div className="rounded border-2 border-red-700 p-3 text-sm text-red-900" data-testid="aios-publicatie-harde-regels">
+          <p className="font-bold">⛔ {hardeZin} Je kunt het toch publiceren, maar alleen als je dat bewust doet:</p>
+          <ul className="list-disc pl-5">
+            {harde.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {overige.length > 0 && (
         <div className="rounded border-2 border-dashed border-neutral-800 p-3 text-sm" data-testid="aios-publicatie-waarschuwingen">
           <p className="font-medium">⚠ Waarschuwingen:</p>
           <ul className="list-disc pl-5">
-            {c.waarschuwingen.map((w) => (
+            {overige.map((w) => (
               <li key={w}>{w}</li>
             ))}
           </ul>
@@ -143,7 +156,8 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
             {zeker === 'definitief' && 'Alle AIOS krijgen nu tegelijk een mail met hun definitieve diensten.'}
             {zeker === 'opnieuw' && 'Alle AIOS krijgen de mail met hun diensten nog een keer, ook wie hem al had.'}
             {zeker === 'intrekken' && 'Het rooster gaat terug naar gemaakt. De AIOS zien het niet meer, maar er gaat geen mail. Alle diensten blijven staan.'}
-            {(zeker === 'publiceren' || zeker === 'definitief') && metWaarschuwing && ' Het rooster heeft waarschuwingen.'}
+            {(zeker === 'publiceren' || zeker === 'definitief') && harde.length > 0 && ` ${hardeZin} Weet je zeker dat je dat bewust zo wilt?`}
+            {(zeker === 'publiceren' || zeker === 'definitief') && harde.length === 0 && metWaarschuwing && ' Het rooster heeft waarschuwingen.'}
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => doe(zeker, metWaarschuwing)}>
@@ -152,7 +166,9 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
                   ? 'Ja, toch publiceren'
                   : 'Ja, publiceren'
                 : zeker === 'definitief'
-                  ? 'Ja, definitief maken'
+                  ? harde.length > 0
+                    ? 'Ja, toch definitief maken'
+                    : 'Ja, definitief maken'
                   : zeker === 'opnieuw'
                     ? 'Ja, opnieuw mailen'
                     : 'Ja, intrekken'}

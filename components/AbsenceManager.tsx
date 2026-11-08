@@ -16,8 +16,7 @@ import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
-import { DatumVeld } from '@/components/DatumVeld';
-import { isoNaarInvoer } from '@/lib/datumInvoer';
+import { DatumVeld, DatumTekst } from '@/components/DatumVeld';
 
 export interface Absence {
   id: string;
@@ -181,7 +180,7 @@ export function AbsenceManager({
               <div>
                 <span className="font-medium">{SOORT_LABEL[a.soort] || a.soort}</span>
                 <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
-                  {isoNaarInvoer(a.van_datum)} t/m {isoNaarInvoer(a.tot_datum)}
+                  <DatumTekst iso={a.van_datum} /> t/m <DatumTekst iso={a.tot_datum} />
                 </span>
                 {a.notitie && <span className="text-neutral-600 text-xs block sm:inline sm:ml-2">{a.notitie}</span>}
                 {typeof a.total_days_in_period === 'number' && (

@@ -1,4 +1,4 @@
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
@@ -155,6 +155,10 @@ describe('before publishing', () => {
     expect(check.controle.problemen).toEqual([]);
     expect(check.controle.waarschuwingen).toEqual(expect.arrayContaining([expect.stringMatching(/^aiospub-y-.*: dienstpercentage .*, boven 25%\.$/)]));
     expect(check.controle.waarschuwingen.some((t: string) => t.includes('Een dienst op een compensatiedag'))).toBe(true);
+    // The hard rule broken is named apart, so the warning can say so in those words (1.2.2); the 25% is not a hard rule.
+    expect(check.controle.harde_regels.some((t: string) => t.includes('Een dienst op een compensatiedag'))).toBe(true);
+    expect(check.controle.harde_regels.some((t: string) => t.includes('dienstpercentage'))).toBe(false);
+    for (const h of check.controle.harde_regels) expect(check.controle.waarschuwingen).toContain(h);
     const r = await doe(publiceren, 'publiceren', {});
     expect(r.status).toBe(409);
     expect(r.json.error.code).toBe('WARNINGS');
@@ -376,5 +380,17 @@ describe('access', () => {
     }
     expect((await downloadRooster(req(`${w.period}/download-rooster`, 'GET', undefined, stafCookie), ctx(w.period))).status).toBe(404);
     expect(stand().status).toBe('GEPUBLICEERD');
+  });
+});
+
+describe('the warning before publishing a roster that breaks a hard rule', () => {
+  // Hard rules may be broken on purpose, after a clear warning (the user's
+  // choice, 1.2.2): the confirmation says "breekt ... een harde regel", not
+  // just "waarschuwingen".
+  it('names the hard rule in the confirmation and on the button', () => {
+    const bron = readFileSync(join(process.cwd(), 'components', 'AiosPubliceren.tsx'), 'utf8');
+    expect(bron).toContain("`Dit rooster breekt ${harde.length} keer een harde regel.`");
+    expect(bron).toContain('harde.length > 0 && ` ${hardeZin} Weet je zeker dat je dat bewust zo wilt?`');
+    expect(bron).toContain('data-testid="aios-publicatie-harde-regels"');
   });
 });

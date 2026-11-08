@@ -102,7 +102,7 @@ describe('no field of the app uses the browser date input', () => {
   it('shows dates in lists and tables as dd-mm-jjjj, never as the stored YYYY-MM-DD (1.2.1)', () => {
     // A date shown as stored, between JSX braces or as the other branch of an
     // edit field: 23-04-2027 typed in, 2027-04-23 in the list under it.
-    const veld = '(geldig_vanaf|geldig_tot|van_datum|tot_datum|start_datum|eind_datum|datum)';
+    const veld = '(geldig_vanaf|geldig_tot|van_datum|tot_datum|start_datum|eind_datum|datum|date_range)(\\[\\d+\\])?';
     const inTekst = new RegExp(`(?<![=$\\w])\\{\\s*[\\w.?]+\\.${veld}\\s*\\}`);
     const alsTak = new RegExp(`\\(\\s*\\n\\s*[\\w.?]+\\.${veld}\\s*\\n\\s*\\)`);
     const inMelding = new RegExp(`\\(\\$\\{[\\w.?]+\\.${veld}\\} t/m`);
@@ -111,6 +111,23 @@ describe('no field of the app uses the browser date input', () => {
       return inTekst.test(bron) || alsTak.test(bron) || inMelding.test(bron);
     });
     expect(fout).toEqual([]);
+  });
+
+  it('shows a date as dd-mm-jjjj, never as d-m-jjjj from toLocaleDateString without options (1.2.2)', () => {
+    const fout = [...bestanden('app'), ...bestanden('components')].filter((pad) => readFileSync(pad, 'utf8').includes("toLocaleDateString('nl-NL')"));
+    expect(fout).toEqual([]);
+  });
+
+  it('keeps a date in a list on one line: the hyphens are no place to break (1.2.2)', () => {
+    const bron = readFileSync(join('components', 'DatumVeld.tsx'), 'utf8');
+    expect(bron).toMatch(/<span className="whitespace-nowrap" data-datumtekst="">\s*\{isoNaarInvoer\(iso\)\}/);
+    expect(readFileSync(join('app', 'planner', 'page.tsx'), 'utf8')).toContain('<DatumTekst iso={p.start_datum} /> t/m <DatumTekst iso={p.eind_datum} />');
+  });
+
+  it('counts only the absence days inside the period under the calendar (1.2.2)', () => {
+    // An absence in February on a July-December period counted 7 days nobody could see.
+    const bron = readFileSync(join('components', 'PartTimeCheckStep.tsx'), 'utf8');
+    expect(bron).toContain('(d) => d >= periodStart && d <= periodEnd && !byDate.has(d) && !blockedElsewhereByDate.has(d)');
   });
 
   it('shows a stored date the Dutch way and passes on only a real date, as YYYY-MM-DD', () => {

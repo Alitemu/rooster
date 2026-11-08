@@ -163,6 +163,12 @@ copy of the hard rules, for changing the roster by hand.
   not while a generation runs.
 - lib/aiosRooster.ts lists what the whole roster breaks (overtredingen):
   nothing as the solver made it, a change by hand may.
+- Breaking a hard rule may be published on purpose, after a clear warning
+  (the user's choice, 1.2.2): lib/aiosPublicatie.ts returns those lines
+  apart as `harde_regels` (also in `waarschuwingen`, which still decides
+  the 409 WARNINGS), and components/AiosPubliceren.tsx shows them in their
+  own block and asks "Dit rooster breekt ... een harde regel. Weet je zeker
+  dat je dat bewust zo wilt?" before "Ja, toch publiceren".
 - Tests: lib/aiosRegels.test.ts, aios-solver/test_gedeeld.py,
   app/api/aios/aiosHandmatig.test.ts, the first test of
   tests/e2e/aios-rooster.e2e.ts (a block by hand and back).

@@ -4841,6 +4841,49 @@ const MUTATIONS = [
     cwd: 'aios-solver',
     tests: ["test_contract.py"],
   },
+  // 1.2.2: audit with screenshots.
+  {
+    name: "auditpunten 122: absence days outside the period counted again",
+    file: "components/PartTimeCheckStep.tsx",
+    find: "(d) => d >= periodStart && d <= periodEnd && !byDate.has(d)",
+    replace: "(d) => !byDate.has(d)",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "auditpunten 122: the overloopvenster as YYYY-MM-DD again",
+    file: "app/planner/period/[id]/prior-assignments/page.tsx",
+    find: "overloopvenster <DatumTekst iso={data.date_range[0]} />",
+    replace: "overloopvenster {data.date_range[0]}",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "auditpunten 122: a date in a list breaks at its hyphens again",
+    file: "components/DatumVeld.tsx",
+    find: '<span className="whitespace-nowrap" data-datumtekst="">',
+    replace: '<span data-datumtekst="">',
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "auditpunten 122: the period heading as d-m-jjjj again",
+    file: "app/planner/period/[id]/page.tsx",
+    find: "<DatumTekst iso={period.eind_datum} />",
+    replace: "{new Date(`${period.eind_datum}T12:00:00`).toLocaleDateString('nl-NL')}",
+    tests: ["lib/datumInvoer"],
+  },
+  {
+    name: "auditpunten 122: no hard rule named apart in the AIOS publish check",
+    file: "lib/aiosPublicatie.ts",
+    find: "  return { problemen, waarschuwingen, harde_regels };",
+    replace: "  return { problemen, waarschuwingen, harde_regels: [] };",
+    tests: ["app/api/aios/aiosPublicatie"],
+  },
+  {
+    name: "auditpunten 122: the AIOS confirmation only says waarschuwingen",
+    file: "components/AiosPubliceren.tsx",
+    find: "harde.length > 0 && ` ${hardeZin} Weet je zeker dat je dat bewust zo wilt?`",
+    replace: "harde.length > 0 && ' Het rooster heeft waarschuwingen.'",
+    tests: ["app/api/aios/aiosPublicatie"],
+  },
   // 1.2.1: dates in lists, tables and messages as dd-mm-jjjj too.
   {
     name: "datumweergave: an absence listed as YYYY-MM-DD again",

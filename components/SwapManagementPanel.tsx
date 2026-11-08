@@ -412,7 +412,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   )}
 
                   <p className="text-xs text-neutral-500">
-                    {new Date(swap.aangemaakt_op).toLocaleDateString('nl-NL')}
+                    {new Date(swap.aangemaakt_op).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                   </p>
 
                   {isPending && isRequester && (

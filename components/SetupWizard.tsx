@@ -34,7 +34,7 @@ import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
 import { CorrectieFormulier } from '@/components/CorrectieFormulier';
 import { CORRECTION_TYPE_LABELS, type Correction } from '@/lib/correctieRedenen';
-import { DatumTijdVeld, DatumVeld } from '@/components/DatumVeld';
+import { DatumTijdVeld, DatumVeld, DatumTekst } from '@/components/DatumVeld';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
@@ -967,7 +967,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
-                              isoNaarInvoer(member.geldig_vanaf)
+                              <DatumTekst iso={member.geldig_vanaf} />
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">
@@ -979,7 +979,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
-                              isoNaarInvoer(member.geldig_tot)
+                              <DatumTekst iso={member.geldig_tot} />
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">
@@ -1616,8 +1616,8 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_active).length} actief in deze periode
                 </p>
                 <p>
-                  <strong>Venster:</strong> avond {telwoord(windowConfig.windowWeeksAvond, 'week', 'weken')} · weekend/
-                  feestdag {telwoord(windowConfig.windowWeeksWeekendFeestdag, 'week', 'weken')}
+                  <strong>Venster:</strong> avond {telwoord(windowConfig.windowWeeksAvond, 'week', 'weken')} · weekend/feestdag{' '}
+                  {telwoord(windowConfig.windowWeeksWeekendFeestdag, 'week', 'weken')}
                 </p>
                 <p>
                   <strong>Verdeling:</strong> {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}

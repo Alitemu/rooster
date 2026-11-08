@@ -199,3 +199,16 @@ function splits(waarde: string): { datum: string; tijd: string } {
 function samen(datumIso: string, tijd: string): string {
   return invoerNaarDatumTijd(isoNaarInvoer(datumIso), tijd);
 }
+
+/**
+ * A stored date as text in a list or heading: dd-mm-jjjj on one line. The
+ * hyphens are break points, so on a phone "03-01-2028" fell apart over three
+ * lines (audit 1.2.1); nowrap keeps it whole.
+ */
+export function DatumTekst({ iso }: { iso: string }) {
+  return (
+    <span className="whitespace-nowrap" data-datumtekst="">
+      {isoNaarInvoer(iso)}
+    </span>
+  );
+}

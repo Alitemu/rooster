@@ -23,6 +23,8 @@ import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
 import { withBasePath } from '@/lib/basePath';
 import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 import { foutTekst } from '@/lib/foutTekst';
+import { DatumTekst } from '@/components/DatumVeld';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 type Step = 'calendar' | 'parttime' | 'confirmation' | 'submitted' | 'roster';
 
@@ -306,7 +308,7 @@ function PersonalLinkPageContent() {
               const toViolations = (a: { datum: string; teller: string }): SoftBlockViolation => ({
                 datum: a.datum,
                 teller: a.teller,
-                date_str: new Date(`${a.datum}T12:00:00`).toLocaleDateString('nl-NL'),
+                date_str: isoNaarInvoer(a.datum),
               });
               const assignments = rosterInfo.data.assignments as Array<{
                 slot_id: string;
@@ -511,8 +513,8 @@ function PersonalLinkPageContent() {
               {period.naam}
             </h1>
             <p className="text-neutral-600 mb-4">
-              {new Date(`${period.start_datum}T12:00:00`).toLocaleDateString('nl-NL')} t/m{' '}
-              {new Date(`${period.eind_datum}T12:00:00`).toLocaleDateString('nl-NL')}
+              <DatumTekst iso={period.start_datum} /> t/m{' '}
+              <DatumTekst iso={period.eind_datum} />
             </p>
             {/* Once the roster is out the deadline no longer means anything here. */}
             {period.status !== 'GEPUBLICEERD' && (

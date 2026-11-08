@@ -24,7 +24,7 @@ import { newMembershipDefaults, type MembershipDefaults, type PeriodForDefaults 
 import { foutTekst } from '@/lib/foutTekst';
 import { codenaamReeks } from '@/lib/codenaamReeks';
 import { PARTTIMEDAGEN_TELLEN, verdelingTekst, type Verdeling } from '@/lib/deelnamefactorVerdeling';
-import { DatumVeld } from '@/components/DatumVeld';
+import { DatumVeld, DatumTekst } from '@/components/DatumVeld';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface Pool {
@@ -551,7 +551,7 @@ export default function PoolStaffPage() {
                               className="px-2 py-1 border rounded text-sm w-36"
                             />
                           ) : (
-                            isoNaarInvoer(member.geldig_vanaf)
+                            <DatumTekst iso={member.geldig_vanaf} />
                           )}
                         </td>
                         <td className="px-4 py-2 text-sm">
@@ -563,7 +563,7 @@ export default function PoolStaffPage() {
                               className="px-2 py-1 border rounded text-sm w-36"
                             />
                           ) : (
-                            isoNaarInvoer(member.geldig_tot)
+                            <DatumTekst iso={member.geldig_tot} />
                           )}
                         </td>
                         <td className="px-4 py-2 text-sm" data-testid="deelnamefactor">

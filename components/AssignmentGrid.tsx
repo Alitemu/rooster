@@ -11,6 +11,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getHolidayInfo } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
+import { DatumTekst } from '@/components/DatumVeld';
 
 interface Assignment {
   id: string;
@@ -376,7 +377,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
               {assignments.map((a) => (
                 <tr key={a.id} className={rowBackground(a)}>
                   <td className="px-3 py-2 font-medium">
-                    {new Date(`${a.datum}T12:00:00`).toLocaleDateString('nl-NL')}
+                    <DatumTekst iso={a.datum} />
                   </td>
                   <td className="px-3 py-2 text-neutral-600">W{a.iso_week}</td>
                   <td className="px-3 py-2">{a.codenaam}</td>

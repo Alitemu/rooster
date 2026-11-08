@@ -84,3 +84,16 @@ test('a deadline is a date and a 24-hour time, stored as before', async ({ page 
     .poll(() => (db.prepare('SELECT deadline FROM dienstrooster_schedule_period WHERE id = ?').get(periodId) as { deadline: string }).deadline)
     .toBe('2099-01-15T17:30');
 });
+
+test('a date in a list stays on one line on a phone', async ({ page }) => {
+  // "03-01-2028" fell apart over three lines at 375px: the hyphens are break points (audit 1.2.1).
+  await page.setViewportSize({ width: 375, height: 812 });
+  await loginAsPlanner(page);
+  await page.goto(`${getBaseUrl()}/planner`);
+  const datums = page.locator('[data-datumtekst]');
+  await expect(datums.first()).toBeVisible();
+  const regels = await datums.evaluateAll((els) => els.map((el) => el.getClientRects().length));
+  expect(regels.length).toBeGreaterThan(0);
+  expect(regels.every((n) => n === 1)).toBe(true);
+  await expect(datums.first()).toHaveText(/^\d{2}-\d{2}-\d{4}$/);
+});

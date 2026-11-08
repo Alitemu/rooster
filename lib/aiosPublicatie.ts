@@ -82,6 +82,9 @@ export interface AiosPublicatieControle {
   problemen: string[];
   // Published only when confirmed.
   waarschuwingen: string[];
+  // The part of waarschuwingen that breaks a hard rule: may be published on
+  // purpose, but only after a warning that says so in those words (1.2.2).
+  harde_regels: string[];
 }
 
 export function aiosPublicatieControle(rooster: AiosRooster): AiosPublicatieControle {
@@ -89,8 +92,11 @@ export function aiosPublicatieControle(rooster: AiosRooster): AiosPublicatieCont
     rooster.leeg > 0
       ? [`${rooster.leeg === 1 ? '1 dienst is' : `${rooster.leeg} diensten zijn`} nog leeg. Vul ${rooster.leeg === 1 ? 'die' : 'ze'} eerst met de hand.`]
       : [];
+  const harde_regels = rooster.overtredingen.map(
+    (o) => `${o.wie.join(' en ')}: ${o.tekst}${o.datums.length ? ` (${o.datums.map(datumKort).join(', ')})` : ''}`
+  );
   const waarschuwingen = [
-    ...rooster.overtredingen.map((o) => `${o.wie.join(' en ')}: ${o.tekst}${o.datums.length ? ` (${o.datums.map(datumKort).join(', ')})` : ''}`),
+    ...harde_regels,
     ...rooster.per_aios
       .filter((a) => a.dienstpercentage !== null && a.dienstpercentage > PERCENTAGE_GRENS)
       .map((a) => `${a.codenaam}: dienstpercentage ${procent(a.dienstpercentage!)}, boven 25%.`),
@@ -101,7 +107,7 @@ export function aiosPublicatieControle(rooster: AiosRooster): AiosPublicatieCont
         (a) => `${a.codenaam}: dienstpercentage over ${KWARTALEN_WOORD[a.jaar_kwartalen]} kwartalen samen ${procent(a.jaar_percentage!)}, boven 25%.`
       ),
   ];
-  return { problemen, waarschuwingen };
+  return { problemen, waarschuwingen, harde_regels };
 }
 
 export interface AiosPublicatieStand {

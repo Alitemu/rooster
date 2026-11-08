@@ -19,6 +19,7 @@ import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { foutTekst } from '@/lib/foutTekst';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
+import { DatumTekst } from '@/components/DatumVeld';
 
 interface PriorAssignment {
   datum: string;
@@ -276,7 +277,7 @@ export default function PriorAssignmentsPage() {
         </button>
         <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Eerdere toewijzingen</h1>
         <p className="text-neutral-600">
-          {period.naam} · overloopvenster {data.date_range[0]} t/m {data.date_range[1]}
+          {period.naam} · overloopvenster <DatumTekst iso={data.date_range[0]} /> t/m <DatumTekst iso={data.date_range[1]} />
         </p>
         {period.overloop_bevestigd_op && (
           <p className="text-sm text-green-700 mt-2">
@@ -316,7 +317,7 @@ export default function PriorAssignmentsPage() {
           Download het sjabloon (Excel), vul bij elke dag de codenaam in van wie die dienst deed en upload het bestand weer.
           Een eerder gedownload &quot;Rooster downloaden (Excel)&quot;-bestand kan ook: dat heeft dezelfde kolommen (Datum,
           Week, Diensttype, Codenaam). Rijen zonder codenaam worden overgeslagen. Regels buiten het overloopvenster
-          hierboven ({data.date_range[0]} t/m {data.date_range[1]}) worden automatisch genegeerd.
+          hierboven (<DatumTekst iso={data.date_range[0]} /> t/m <DatumTekst iso={data.date_range[1]} />) worden automatisch genegeerd.
         </p>
         <a
           href={withBasePath(`/api/periods/${periodId}/prior-assignments/sjabloon`)}

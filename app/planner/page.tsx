@@ -26,8 +26,7 @@ import {
 } from '@/lib/aiosQuarter';
 import { foutTekst } from '@/lib/foutTekst';
 import { localIsoDate, localIsoMinute } from '@/lib/localDate';
-import { DatumTijdVeld, DatumVeld } from '@/components/DatumVeld';
-import { isoNaarInvoer } from '@/lib/datumInvoer';
+import { DatumTijdVeld, DatumVeld, DatumTekst } from '@/components/DatumVeld';
 
 interface Period {
   id: string;
@@ -646,7 +645,7 @@ export default function PlannerHomePage() {
                     )}
                   </td>
                   <td className="px-4 py-2 text-sm text-neutral-600">
-                    {isoNaarInvoer(p.start_datum)} t/m {isoNaarInvoer(p.eind_datum)}
+                    <DatumTekst iso={p.start_datum} /> t/m <DatumTekst iso={p.eind_datum} />
                   </td>
                   <td className="px-4 py-2 text-sm">
                     {statusLabel(p)}
@@ -718,7 +717,7 @@ export default function PlannerHomePage() {
                   <div>
                     <p className="text-sm font-medium">{p.naam}</p>
                     <p className="text-xs text-neutral-600">
-                      {isoNaarInvoer(p.start_datum)} t/m {isoNaarInvoer(p.eind_datum)} · was {statusLabels[p.status] || p.status} ·{' '}
+                      <DatumTekst iso={p.start_datum} /> t/m <DatumTekst iso={p.eind_datum} /> · was {statusLabels[p.status] || p.status} ·{' '}
                       {p.dagen_resterend === 0
                         ? 'wordt binnenkort definitief verwijderd'
                         : `nog ${p.dagen_resterend} dag${p.dagen_resterend === 1 ? '' : 'en'} te herstellen`}

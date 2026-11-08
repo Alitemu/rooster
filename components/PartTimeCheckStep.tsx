@@ -141,8 +141,10 @@ export function PartTimeCheckStep({
   // account for - counting all of absenceDates here would double-count a
   // day that also happens to be a pattern day (already in generatedDays or
   // blockedElsewhereDays).
+  // Only days inside the period: an absence in February listed on a
+  // July-December period counted 7 days nobody could see (audit 1.2.1).
   const absenceOnlyCount = [...absenceDates].filter(
-    (d) => !byDate.has(d) && !blockedElsewhereByDate.has(d)
+    (d) => d >= periodStart && d <= periodEnd && !byDate.has(d) && !blockedElsewhereByDate.has(d)
   ).length;
 
   const startDate = parseISO(periodStart);

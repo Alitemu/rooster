@@ -11,6 +11,7 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface Assignment {
   id: string;
@@ -63,10 +64,9 @@ interface Props {
   onSuccess?: (result: { mailVertraagd: boolean }) => void;
 }
 
-// Rest of the app formats dates via toLocaleDateString('nl-NL') rather than
-// showing the raw YYYY-MM-DD - kept consistent here too.
+// dd-mm-jjjj like every date the app shows (1.2.2).
 function formatDatum(datum: string): string {
-  return new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL');
+  return isoNaarInvoer(datum);
 }
 
 export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSuccess }: Props) {

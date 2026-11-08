@@ -184,7 +184,7 @@ export function AiosRuilen({
         <span>
           Aan <span className="font-medium">{r.respondent}</span>
         </span>
-        <span className="text-xs text-neutral-500">{new Date(r.aangemaakt_op).toLocaleDateString('nl-NL')}</span>
+        <span className="text-xs text-neutral-500">{new Date(r.aangemaakt_op).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
       </p>
       <p>
         Jij geeft: {wat(r.aangeboden)}. Jij krijgt: {wat(r.gevraagd)}.
@@ -220,7 +220,7 @@ export function AiosRuilen({
         <span>
           Van <span className="font-medium">{r.aanvrager}</span>
         </span>
-        <span className="text-xs text-neutral-500">{new Date(r.aangemaakt_op).toLocaleDateString('nl-NL')}</span>
+        <span className="text-xs text-neutral-500">{new Date(r.aangemaakt_op).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })}</span>
       </p>
       <p>Jij geeft: {wat(r.gevraagd)}</p>
       <p>Jij krijgt: {wat(r.aangeboden)}</p>

@@ -26,6 +26,7 @@ import { AiosMijnRooster } from '@/components/AiosMijnRooster';
 import { AiosRuilen } from '@/components/AiosRuilen';
 import { AiosHarmonica, AiosSectie } from '@/components/AiosSectie';
 import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 type Stap = 'deeltijd' | 'voorkeuren' | 'bevestigen' | 'ingediend';
 const STAPPEN: Stap[] = ['deeltijd', 'voorkeuren', 'bevestigen', 'ingediend'];
@@ -54,7 +55,7 @@ interface Patroon {
   geldig_tot: string;
 }
 
-const datum = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL');
+const datum = (d: string) => isoNaarInvoer(d);
 
 function AiosLinkPagina() {
   const params = useParams();
