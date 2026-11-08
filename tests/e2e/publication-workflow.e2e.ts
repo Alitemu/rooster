@@ -273,7 +273,8 @@ test.describe('Roster Publication Workflow - E2E', () => {
     const dialoog = page.getByRole('dialog', { name: 'Publicatie intrekken' });
     await expect(dialoog).toContainText('Er gaat geen mail.');
     await dialoog.getByRole('button', { name: 'Ja, publicatie intrekken' }).click();
-    await expect(page.getByText(/Status: Gegenereerd/)).toBeVisible();
+    // The status reads in the header and in the period's own block.
+    await expect(page.getByText(/Status: Gegenereerd/).first()).toBeVisible();
 
     const context = await browser.newContext();
     const deelnemer = await context.newPage();
