@@ -433,15 +433,18 @@ async function main() {
     // labelled, never quietly mixed in with genuinely free candidates.
     // This used to assert the opposite - that the list excluded them - and
     // had been failing ever since the category was introduced.
+    // A fellow's weekend block has its own label, FELLOW (lib/rosterGaps.ts, docs/development/roster-rules.md
+    // "Fellows"). Until 1.3.0 none showed up here: the seed had the fellow, Persoon-02, blocked on nearly every
+    // day by a conversion error, so their weekend days were plain blocks, not fellow blocks.
     const hardBlocked = db.prepare(
-      `SELECT person_id, source FROM dienstrooster_availability
+      `SELECT person_id, source, fellow_blok FROM dienstrooster_availability
        WHERE slot_id=? AND blocking_level='ABSOLUUT'`
     ).all(gap.slot_id);
     const categoryById = new Map(gap.eligible_people.map((p) => [p.id, p.category]));
     const mislabelled = hardBlocked.filter((row) => {
       const category = categoryById.get(row.person_id);
       if (category === undefined) return false; // not offered at all is fine too
-      return category !== (row.source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD');
+      return category !== (row.fellow_blok ? 'FELLOW' : row.source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD');
     });
     rec('Anyone who blocked that slot is labelled, not offered as free',
         mislabelled.length === 0, `${hardBlocked.length} blocked, ${mislabelled.length} mislabelled`);
