@@ -465,13 +465,17 @@ estimate rather than the exact maximum.
 
 ## Rules from the audit of 1.2.2 (1.3.0)
 
-- **No swap onto a day you blocked yourself.** The swap candidates warned
-  about the colleague's blocks only; Persoon-23 got 21 April through a swap,
-  a day they had blocked themselves (an absence or a deeltijddag is stored
-  as an ABSOLUUT marking too). lib/swapEigenBlokkade.ts: the candidates
-  leave such a shift out (lib/swapCandidates.ts) and the create route
-  refuses it with EIGEN_BLOKKADE_MELDING. A liever niet stays allowed. The
-  AIOS's swap already did not show them.
+- **A swap onto a day you blocked yourself: a warning, not a refusal.** The
+  swap candidates warned about the colleague's blocks only; Persoon-23 got
+  21 April through a swap, a day they had blocked themselves (an absence or
+  a deeltijddag is stored as an ABSOLUUT marking too), without a word. The
+  planner chose a warning over a block: someone may want to work that day
+  after all. lib/swapCandidates.ts marks such a shift
+  (requester_geblokkeerd, lib/swapEigenBlokkade.ts), the option says "(jij
+  hebt die dag zelf geblokkeerd)" and the preview shows
+  EIGEN_BLOKKADE_WAARSCHUWING (lib/eigenBlokkadeWaarschuwing.ts) before the
+  request goes out; the create route takes it. A liever niet is not marked.
+  The AIOS's swap does not offer such swaps at all (its own rules).
 - **Rooster vooraf invullen checks one round against itself.** The
   categories come from the server and know only what is already in the
   roster, so one round could put the same person on 14 and 15 January

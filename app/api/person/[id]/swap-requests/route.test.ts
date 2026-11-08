@@ -164,7 +164,8 @@ describe('swap requests and the window between shifts', () => {
     );
   });
 
-  it('refuses a swap onto a day the requester blocked, and creates nothing (audit 1.2.2)', async () => {
+  // 1.3.0, the planner's choice after audit 1.2.2: the dialog warns, the route does not refuse.
+  it('takes a swap onto a day the requester blocked: the dialog warned them', async () => {
     const f = createFixture();
     db.prepare(
       `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
@@ -178,10 +179,9 @@ describe('swap requests and the window between shifts', () => {
       }),
       { params: Promise.resolve({ id: f.aanvrager }) }
     );
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/zelf geblokkeerd/);
-    const n = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_swap_request WHERE periode_id = ?').get(f.periodId) as { n: number };
-    expect(n.n).toBe(0);
+    expect(res.status).toBe(200);
+    const n = db.prepare("SELECT COUNT(*) AS n FROM dienstrooster_swap_request WHERE periode_id = ? AND status = 'PENDING'").get(f.periodId) as { n: number };
+    expect(n.n).toBe(1);
     db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ?').run(f.aanvrager);
   });
 

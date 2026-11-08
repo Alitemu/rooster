@@ -6648,18 +6648,25 @@ const MUTATIONS = [
   },
   // 1.3.0: audit 1.2.2 with screenshots.
   {
-    name: "1.3.0: a swap offers a day the requester blocked again",
+    name: "1.3.0: a shift on the requester's own blocked day is no longer marked",
     file: "lib/swapCandidates.ts",
-    find: "    if (eigenBlokkadeOp(requesterId, other.slot_id)) continue;\n",
+    find: "      requester_geblokkeerd: eigenBlokkadeOp(requesterId, other.slot_id),",
+    replace: "      requester_geblokkeerd: false,",
+    tests: ["lib/swapCandidates"],
+  },
+  {
+    name: "1.3.0: the swap dialog no longer warns about the requester's own blocked day",
+    file: "components/SwapRequestDialog.tsx",
+    find: "⚠️ {EIGEN_BLOKKADE_WAARSCHUWING}",
     replace: "",
     tests: ["lib/swapCandidates"],
   },
   {
-    name: "1.3.0: the create route takes a swap onto the requester's own blocked day",
-    file: "app/api/person/[id]/swap-requests/route.ts",
-    find: "    if (eigenBlokkadeOp(personId, requested_slot_id)) {",
-    replace: "    if (false && eigenBlokkadeOp(personId, requested_slot_id)) {",
-    tests: ["app/api/person/[id]/swap-requests/route"],
+    name: "1.3.0: the option of a shift on the requester's own blocked day says nothing",
+    file: "components/SwapRequestDialog.tsx",
+    find: "? ' (jij hebt die dag zelf geblokkeerd)'",
+    replace: "? ''",
+    tests: ["lib/swapCandidates"],
   },
   {
     name: "1.3.0: Meldingen only on a published roster again",

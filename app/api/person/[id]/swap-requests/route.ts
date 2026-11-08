@@ -22,7 +22,6 @@ import { optionalFreeText } from '@/lib/freeText';
 import { swapWindowConflicts } from '@/lib/swapWindowRule';
 import { swapQuotaReached, RUILVERZOEK_LIMIET_MELDING } from '@/lib/swapQuota';
 import { swapMembershipProblem } from '@/lib/membershipWindow';
-import { eigenBlokkadeOp, EIGEN_BLOKKADE_MELDING } from '@/lib/swapEigenBlokkade';
 
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -254,10 +253,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       return NextResponse.json({ success: false, error: buitenLidmaatschap }, { status: 400 });
     }
 
-    // Never a day the requester blocked themselves (lib/swapEigenBlokkade.ts).
-    if (eigenBlokkadeOp(personId, requested_slot_id)) {
-      return NextResponse.json({ success: false, error: EIGEN_BLOKKADE_MELDING }, { status: 400 });
-    }
+    // A day the requester blocked themselves is allowed: the dialog warned them (lib/swapEigenBlokkade.ts).
 
     // No window-rule check here on purpose: someone who wants two shifts
     // close together may agree to that themselves (see

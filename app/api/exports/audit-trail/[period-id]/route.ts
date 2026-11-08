@@ -104,8 +104,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
            -- (SQLite takes no outer column in a subquery's ORDER BY, hence the MIN.)
            (SELECT al.nieuw_json FROM dienstrooster_audit_log al
              WHERE al.entiteit_id = ae.toewijzing_id AND al.entiteit = 'assignment'
-               AND ABS(julianday(al.tijdstip) - julianday(ae.aangemaakt_op)) = (
-                 SELECT MIN(ABS(julianday(al2.tijdstip) - julianday(ae.aangemaakt_op)))
+               AND ABS(julianday(al.tijdstip)-julianday(ae.aangemaakt_op)) = (
+                 SELECT MIN(ABS(julianday(al2.tijdstip)-julianday(ae.aangemaakt_op)))
                  FROM dienstrooster_audit_log al2
                  WHERE al2.entiteit_id = ae.toewijzing_id AND al2.entiteit = 'assignment')
              LIMIT 1) as audit_nieuw_json

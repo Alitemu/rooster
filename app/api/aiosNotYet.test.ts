@@ -114,6 +114,8 @@ function fill(routePath: string, person: string): { url: string; params: Record<
         return person === ids.staf ? ids.stafSwap : ids.swap;
       case 'linkId':
         return ids.link;
+      case 'personId':
+        return ids.x;
       case 'absenceId':
         return ids.absence;
       case 'patternId':

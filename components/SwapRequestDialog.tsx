@@ -12,6 +12,7 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
+import { EIGEN_BLOKKADE_WAARSCHUWING } from '@/lib/eigenBlokkadeWaarschuwing';
 
 interface Assignment {
   id: string;
@@ -32,6 +33,7 @@ interface Candidate {
   category: CandidateCategory;
   /** You would end up with two shifts close together yourself. */
   requester_te_dichtbij: boolean;
+  requester_geblokkeerd: boolean;
   /** You already asked this colleague for this shift, and they haven't answered yet. */
   al_gevraagd: boolean;
 }
@@ -317,7 +319,9 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                           {c.codenaam}: {formatDatum(c.datum)} - {shiftTypeNames[c.teller]}
                           {c.al_gevraagd
                             ? ' (al gevraagd, wacht op antwoord)'
-                            : c.requester_te_dichtbij
+                            : c.requester_geblokkeerd
+                              ? ' (jij hebt die dag zelf geblokkeerd)'
+                              : c.requester_te_dichtbij
                               ? ' (jij hebt dan twee diensten kort op elkaar)'
                               : ''}
                         </option>
@@ -353,6 +357,11 @@ export function SwapRequestDialog({ personId, periodId, isOpen, onClose, onSucce
                       Van: <span className="font-semibold">{getRequestedSlot()!.codenaam}</span>
                     </p>
                   </div>
+                  {getRequestedSlot()!.requester_geblokkeerd && (
+                    <p className="text-sm text-amber-800 mt-2" data-testid="eigen-blokkade">
+                      ⚠️ {EIGEN_BLOKKADE_WAARSCHUWING}
+                    </p>
+                  )}
                   {getRequestedSlot()!.requester_te_dichtbij && (
                     <p className="text-sm text-amber-800 mt-2">
                       ⚠️ Na deze ruil heb je zelf twee diensten kort op elkaar. Dat mag, als je dat zelf wilt.

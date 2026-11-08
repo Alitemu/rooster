@@ -48,6 +48,8 @@ export interface SwapCandidate {
   category: SwapCandidateCategory;
   /** The requester would end up with two shifts close together. */
   requester_te_dichtbij: boolean;
+  /** The requester blocked that day themselves: allowed, with a warning (lib/swapEigenBlokkade.ts). */
+  requester_geblokkeerd: boolean;
   /**
    * The requester already has an open request offering this same shift
    * for this one. Offering one shift to several colleagues is fine (first
@@ -99,7 +101,7 @@ export function getSwapCandidates(
        ORDER BY s.datum`
     )
     .all(periodId, requesterId, offered.teller) as Array<
-    Omit<SwapCandidate, 'category' | 'requester_te_dichtbij' | 'al_gevraagd'>
+    Omit<SwapCandidate, 'category' | 'requester_te_dichtbij' | 'requester_geblokkeerd' | 'al_gevraagd'>
   >;
 
   const alGevraagd = new Set(
@@ -131,9 +133,6 @@ export function getSwapCandidates(
     if (!checkSwapAllowed({ periodStatus: period.status, definitiefOp: period.definitief_op, slotDates: [other.datum] }, now).allowed) continue;
     // Nor one that would hand a shift to someone not taking part that day.
     if (swapMembershipProblem(period.pool_id, requesterId, other.person_id, offered.datum, other.datum)) continue;
-    // Nor a day the requester blocked: that swap is refused (lib/swapEigenBlokkade.ts).
-    if (eigenBlokkadeOp(requesterId, other.slot_id)) continue;
-
     const conflicts = swapWindowConflicts({
       periodId,
       requesterPersonId: requesterId,
@@ -162,6 +161,8 @@ export function getSwapCandidates(
       ...other,
       category,
       requester_te_dichtbij: conflicts.requesterTooClose,
+      // A day the requester blocked stays in the list, marked: the dialog warns (lib/swapEigenBlokkade.ts).
+      requester_geblokkeerd: eigenBlokkadeOp(requesterId, other.slot_id),
       al_gevraagd: alGevraagd.has(other.slot_id),
     });
   }
