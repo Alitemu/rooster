@@ -285,13 +285,21 @@ async function main() {
   const weekendDays = db.prepare(
     `SELECT COUNT(*) c FROM dienstrooster_shift_slot WHERE period_id=? AND strftime('%w', datum) IN ('0','6')`
   ).get(period.id).c;
+  // Every weekend day they had not marked themselves (lib/fellows.ts setFellow): a day they marked, such as a
+  // liever niet, stays theirs and counts as released (docs/development/roster-rules.md "Fellows"). Until 1.3.0
+  // this asked for every weekend day, which held only because the seed's blokkades had Persoon-02 blocked on
+  // nearly every day (a conversion error, docs/development/data-model.md).
   const unblockedWeekend = db.prepare(`
     SELECT COUNT(*) c FROM dienstrooster_shift_slot s
     WHERE s.period_id=? AND strftime('%w', s.datum) IN ('0','6')
-      AND NOT EXISTS (SELECT 1 FROM dienstrooster_availability a
-                      WHERE a.person_id=? AND a.slot_id=s.id AND a.blocking_level='ABSOLUUT')`).get(period.id, s2.id).c;
-  rec('…every weekend day of the period is blocked for them', weekendDays > 0 && unblockedWeekend === 0,
-      `${weekendDays} weekend days, ${unblockedWeekend} open`);
+      AND NOT EXISTS (SELECT 1 FROM dienstrooster_availability a WHERE a.person_id=? AND a.slot_id=s.id)`).get(period.id, s2.id).c;
+  const ownMarks = db.prepare(`
+    SELECT COUNT(*) c FROM dienstrooster_shift_slot s
+    WHERE s.period_id=? AND strftime('%w', s.datum) IN ('0','6')
+      AND EXISTS (SELECT 1 FROM dienstrooster_availability a
+                  WHERE a.person_id=? AND a.slot_id=s.id AND a.blocking_level!='ABSOLUUT')`).get(period.id, s2.id).c;
+  rec('…every weekend day they had not marked themselves is blocked for them', weekendDays > 0 && unblockedWeekend === 0,
+      `${weekendDays} weekend days, ${unblockedWeekend} open without a marking, ${ownMarks} kept as they marked them`);
   const fellowSummary = await req('GET', `/api/planner/period/${period.id}/fellows`, { jar: planner });
   const wk = fellowSummary.json?.data?.weekend;
   rec('…and the others\' weekend band goes up', fellowSummary.status === 200 &&
