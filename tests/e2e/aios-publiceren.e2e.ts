@@ -158,7 +158,7 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   expect(await aios.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
   await paneel.getByRole('button', { name: 'Definitief maken' }).click();
-  await paneel.getByRole('button', { name: 'Ja, definitief maken' }).click();
+  await paneel.getByRole('button', { name: /^Ja, (toch )?definitief maken$/ }).click();
   await expect(paneel.getByText(/^Het rooster is definitief\./)).toBeVisible();
   await expect(page.getByTestId('aios-periode-status')).toContainText('Status: Definitief');
   // Now the workbook, as the planner downloads it for the roosterbureau.
