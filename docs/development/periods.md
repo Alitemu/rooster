@@ -215,4 +215,12 @@ roster needs a reason, as here. What follows is the achterwacht's.)
   fields and snapshot (publishing again starts voorlopig), keeps every assignment
   (withdrawing is not discarding the roster), keeps notifications already
   sent (a historical record) and sends a new one telling participants the
-  publication was withdrawn.
+  publication was withdrawn. No mail goes out, and until 1.3.0 that notice
+  was invisible: the participant's page showed "🔔 Meldingen" only for a
+  published roster, while the dialog promised "krijgt een melding" (audit
+  1.2.2). Meldingen now shows in every status, the dialog says "Er gaat
+  geen mail" and that they see it when they open their link, and the page
+  of a generated but unpublished roster says so in one banner
+  (`rooster-nog-niet-gepubliceerd`) instead of two that contradicted each
+  other (app/person/[token]/meldingenZichtbaar.test.ts, the last test of
+  tests/e2e/publication-workflow.e2e.ts).

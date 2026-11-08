@@ -13,6 +13,7 @@ import { withBasePath } from '@/lib/basePath';
 import { AiosSectie } from '@/components/AiosSectie';
 import type { GeschiedenisPlan, GeschiedenisRij } from '@/lib/aiosGeschiedenis';
 import { foutTekst } from '@/lib/aiosFoutTekst';
+import { BestandKiezer } from '@/components/BestandKiezer';
 
 /** The largest workbook sent: as base64 it must stay under the 1 MB a request body may be, or the server sees no file at all (a copy of lib/sheetUpload.ts, which is the achterwacht's). */
 const MAX_WERKMAP_BYTES = 700_000;
@@ -161,10 +162,10 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
         <a className={`${knop} inline-block`} href={withBasePath(`/api/aios/periode/${periodId}/geschiedenis-sjabloon`)}>
           Sjabloon downloaden
         </a>
-        <label className="block text-sm">
+        <div className="text-sm">
           <span className="block text-xs font-medium text-neutral-700 mb-1">Ingevuld bestand</span>
-          <input type="file" accept=".xlsx" aria-label="Excel-bestand met de geschiedenis" disabled={bezig} onChange={(e) => kies(e.target.files?.[0])} />
-        </label>
+          <BestandKiezer accept=".xlsx" aria-label="Excel-bestand met de geschiedenis" disabled={bezig} onKies={(bestand) => kies(bestand ?? undefined)} />
+        </div>
         {bestand && (
           <div className="flex flex-wrap gap-2">
             <button type="button" className={knop} disabled={bezig} onClick={() => stuur(false)}>

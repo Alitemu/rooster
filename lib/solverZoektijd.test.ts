@@ -32,11 +32,12 @@ describe('the longer search of the achterwacht', () => {
 
   it('the text says it starts over, replaces the roster even when not better, and keeps what was filled in by hand', () => {
     const tekst = opnieuwUitleg(null, 600);
-    expect(tekst).toContain('na 5 minuten nog niet bewezen');
+    expect(tekst).toContain('De solver kon met een zoektijd van 5 minuten niet bewijzen');
+    expect(tekst).not.toMatch(/had na/);
     expect(tekst).toContain('Met 10 minuten zoektijd begint de solver helemaal opnieuw: hij zoekt niet verder vanaf dit rooster.');
     expect(tekst).toContain('Het nieuwe rooster vervangt dit rooster, ook als het niet beter is.');
     expect(tekst).toContain('Diensten die je met de hand hebt ingevuld, blijven staan.');
-    expect(opnieuwUitleg(600, 1800)).toContain('na 10 minuten nog niet bewezen');
+    expect(opnieuwUitleg(600, 1800)).toContain('met een zoektijd van 10 minuten niet bewijzen');
   });
 
   it('says a time in words', () => {

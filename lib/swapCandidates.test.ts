@@ -197,6 +197,22 @@ describe('getSwapCandidates', () => {
     expect(result.ok).toBe(false);
   });
 
+  it("leaves out a shift on a day the requester blocked, whatever the source; liever niet stays", () => {
+    const f = createFixture(2);
+    const ander = f.person('Ander');
+    const geblokkeerd = f.shift(ander, '2099-04-06', 15);
+    const lieverNiet = f.shift(ander, '2099-04-13', 16);
+    const vrij = f.shift(ander, '2099-04-20', 17);
+    f.mark(f.requester, geblokkeerd, 'ABSOLUUT');
+    f.mark(f.requester, lieverNiet, 'LIEVER_NIET');
+    const result = getSwapCandidates(f.requester, f.periodId, f.offered);
+    if (!result.ok) throw new Error(result.message);
+    const ids = result.candidates.map((c) => c.slot_id);
+    expect(ids).not.toContain(geblokkeerd);
+    expect(ids).toContain(lieverNiet);
+    expect(ids).toContain(vrij);
+  });
+
   it('marks a colleague already asked for this shift, so they are not asked twice', () => {
     const f = createFixture(2);
     const gevraagd = f.person('Gevraagd');

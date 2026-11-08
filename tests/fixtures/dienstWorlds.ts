@@ -247,6 +247,8 @@ export function fill(path: string, w: World): { url: string; params: Record<stri
         return w.ruil;
       case 'linkId':
         return w.link;
+      case 'personId':
+        return w.x;
       case 'absenceId':
         return w.absence;
       case 'patternId':

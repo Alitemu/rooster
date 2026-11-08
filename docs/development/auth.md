@@ -149,6 +149,13 @@ entry on the period with the numbers) revokes every working link of the period
 and ends the sessions of each of those people once; links of other periods
 stay, so a person who has one is back in with a fresh session. The question
 says how many links and people it is about.
+"Alle links van één medewerker" (1.3.0, POST .../toegangslinks/persoon/[personId]/intrekken)
+revokes every working link of that person for the period and ends their
+sessions once: the audit of 1.2.2 found 14 links of one person after one
+period, 14 times "Intrekken" to take away their access. Links of other
+periods stay (the question says so). One audit entry on the period with the
+number; a person with no working link there answers 404 and writes nothing.
+The select lists only people with a working link, with how many.
 
 **Session revocation**
 

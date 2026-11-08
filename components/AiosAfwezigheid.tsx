@@ -13,7 +13,7 @@ import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
 import { foutTekst } from '@/lib/aiosFoutTekst';
 import { telwoord } from '@/lib/aiosTelwoord';
-import { DatumVeld } from '@/components/DatumVeld';
+import { DatumTekst, DatumVeld } from '@/components/DatumVeld';
 
 export interface Absence {
   id: string;
@@ -50,7 +50,6 @@ const SOORT_LABEL: Record<string, string> = {
 };
 
 // Both dates start empty: the whole quarter as the start would be a wrong absence if saved as it is.
-const datumLeesbaar = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' });
 
 const emptyForm = () => ({
   van_datum: '',
@@ -177,7 +176,7 @@ export function AiosAfwezigheid({
               <div>
                 <span className="font-medium">{SOORT_LABEL[a.soort] || a.soort}</span>
                 <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
-                  {datumLeesbaar(a.van_datum)} t/m {datumLeesbaar(a.tot_datum)}
+                  <DatumTekst iso={a.van_datum} /> t/m <DatumTekst iso={a.tot_datum} />
                 </span>
                 {a.notitie && <span className="text-neutral-600 text-xs block sm:inline sm:ml-2">{a.notitie}</span>}
                 {typeof a.total_days_in_period === 'number' && (
@@ -286,7 +285,7 @@ export function AiosAfwezigheid({
             </div>
           </div>
           {form.van_datum && form.tot_datum && form.van_datum > form.tot_datum && (
-            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;tot&quot; liggen</p>
+            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;Tot en met&quot; liggen</p>
           )}
           <div className="flex gap-3">
             <button

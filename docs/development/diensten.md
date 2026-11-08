@@ -140,6 +140,15 @@ temporary password to the AIOS pool).
 
 ## Copied, not changed
 
+Shared on purpose, like components/DatumVeld.tsx: components/BestandKiezer.tsx
+(1.3.0), the file field in Dutch for all seven file inputs of both diensten.
+The browser's own said "Choose File" on an English Chrome. It imports nothing
+but React, and app/dienstImports.test.ts lists it with the shared parts;
+components/bestandKiezer.test.ts fails on a native file input anywhere else.
+The AIOS's mail subjects name the period once (lib/aiosTeksten.ts
+aiosPeriodeInOnderwerp: no "AIOS AIOS 2027 Q1"), its absences read dd-mm-jjjj
+and an empty block box carries its days in its label (blokTitel).
+
 (0.92.0: "Exporteren & communicatie" of an AIOS period is a copy of the
 achterwacht's section: components/AiosExporteren.tsx, its dialog
 components/AiosExportDialog.tsx (invitations, reminders, links,

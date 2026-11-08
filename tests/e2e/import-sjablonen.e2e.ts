@@ -52,19 +52,27 @@ test('beginsaldo: the sjabloon is there, a CSV and a wrong layout are refused, t
   expect(download.headers()['content-type']).toBe(XLSX);
 
   const kies = page.getByLabel('Beginsaldo als Excel-bestand');
+  // In Dutch whatever the browser's language (components/BestandKiezer.tsx, 1.3.0).
+  await expect(page.getByText('Bestand kiezen', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('gekozen-bestand')).toHaveText('Geen bestand gekozen');
   // A CSV is refused.
   await kies.setInputFiles({ name: 'saldo.csv', mimeType: 'text/csv', buffer: Buffer.from('codenaam,AVOND_delta,WEEKEND_delta\nPersoon-01,-1,0') });
   await expect(page.getByText('Alleen Excel-bestanden (.xlsx) kunnen worden ingelezen')).toBeVisible();
-  await expect(page.getByText(/records klaar om te importeren/)).toHaveCount(0);
+  await expect(page.getByText(/klaar om te importeren/)).toHaveCount(0);
+  await expect(page.getByTestId('gekozen-bestand')).toHaveText('saldo.csv');
 
   // A workbook with other columns is refused, naming the right ones.
   await kies.setInputFiles(xlsxBestand([['codenaam', 'AVOND_delta', 'WEEKEND_delta'], ['Persoon-01', -1, 0]]));
   await expect(page.getByText(/niet de kolommen van het sjabloon \(Codenaam, Avonddiensten \(saldo\), Weekenddiensten \(saldo\)\)/)).toBeVisible();
-  await expect(page.getByText(/records klaar om te importeren/)).toHaveCount(0);
+  await expect(page.getByText(/klaar om te importeren/)).toHaveCount(0);
 
   // The sjabloon's layout goes through.
   await kies.setInputFiles(xlsxBestand([[...SALDO_KOP], ['Persoon-01', -1, 0], ['Persoon-02', null, 2]]));
-  await expect(page.getByText('2 records klaar om te importeren')).toBeVisible();
+  await expect(page.getByText('2 regels klaar om te importeren')).toBeVisible();
+  // In words, never "AVOND -1, WEEKEND 0" (1.3.0, audit 1.2.2).
+  await expect(page.getByText('Persoon-01: 1 avonddienst minder', { exact: true })).toBeVisible();
+  await expect(page.getByText('Persoon-02: 2 weekenddiensten extra', { exact: true })).toBeVisible();
+  await expect(page.getByText(/AVOND -?\d/)).toHaveCount(0);
   await expect(page.getByText(/niet de kolommen/)).toHaveCount(0);
 });
 
@@ -92,22 +100,22 @@ test('beginsaldo: a saldo that is there already is said first, and only replaced
   await expect(vraag).toContainText('Voor 1 persoon staat al een beginsaldo');
   await expect(vraag).toContainText('ook als een vakje in het bestand leeg is');
   await expect(vraag).toContainText(lid.codenaam);
-  await expect(page.getByText(/records klaar om te importeren/)).toHaveCount(0);
+  await expect(page.getByText(/klaar om te importeren/)).toHaveCount(0);
 
   // No: nothing is taken along.
   await vraag.getByRole('button', { name: 'Annuleren' }).click();
   await expect(vraag).toHaveCount(0);
-  await expect(page.getByText(/records klaar om te importeren/)).toHaveCount(0);
+  await expect(page.getByText(/klaar om te importeren/)).toHaveCount(0);
 
   // Yes: the rows are ready.
   await kies.setInputFiles(xlsxBestand([[...SALDO_KOP], [lid.codenaam, 5, null]]));
   await page.getByTestId('saldo-overschrijven').getByRole('button', { name: 'Ja, overschrijven' }).click();
-  await expect(page.getByText('1 records klaar om te importeren')).toBeVisible();
+  await expect(page.getByText('1 regel klaar om te importeren')).toBeVisible();
   await expect(page.getByTestId('saldo-overschrijven')).toHaveCount(0);
 
   // A person with nothing yet is not asked about.
   await kies.setInputFiles(xlsxBestand([[...SALDO_KOP], ['Niemand-heeft-deze-naam', 1, 1]]));
-  await expect(page.getByText('1 records klaar om te importeren')).toBeVisible();
+  await expect(page.getByText('1 regel klaar om te importeren')).toBeVisible();
   await expect(page.getByTestId('saldo-overschrijven')).toHaveCount(0);
 });
 

@@ -52,6 +52,7 @@ const SHARED = new Set([
   'lib/isoDate.ts',
   'lib/linkGeldigheid.ts',
   'components/DatumVeld.tsx',
+  'components/BestandKiezer.tsx',
   'components/PeriodeVerwijderd.tsx',
   'lib/localDate.ts',
   'lib/rateLimit.ts',

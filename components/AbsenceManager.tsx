@@ -15,7 +15,7 @@ import { useState, useId } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
-import { telwoord } from '@/lib/telwoord';
+import { afwezigheidKaartTekst } from '@/lib/afwezigheidTelling';
 import { DatumVeld, DatumTekst } from '@/components/DatumVeld';
 
 export interface Absence {
@@ -188,15 +188,14 @@ export function AbsenceManager({
                     <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
                       (buiten deze periode)
                     </span>
-                  ) : a.blocked_days_in_period === a.total_days_in_period ? (
-                    <span className="text-green-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ✓ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} geblokkeerd in deze periode
-                    </span>
                   ) : (
-                    <span className="text-amber-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ⚠ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} geblokkeerd in deze
-                      periode. De rest was al om een andere reden geblokkeerd.
-                    </span>
+                    // The same days as the line under the calendar counts (lib/afwezigheidTelling.ts).
+                    (() => {
+                      const kaart = afwezigheidKaartTekst(a.blocked_days_in_period ?? 0, a.total_days_in_period);
+                      return (
+                        <span className={`${kaart.volledig ? 'text-green-700' : 'text-amber-700'} text-xs font-medium block sm:inline sm:ml-2`}>{kaart.tekst}</span>
+                      );
+                    })()
                   )
                 )}
               </div>
@@ -285,7 +284,7 @@ export function AbsenceManager({
             </div>
           </div>
           {form.van_datum > form.tot_datum && (
-            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;tot&quot; liggen</p>
+            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;Tot en met&quot; liggen</p>
           )}
           <div className="flex gap-3">
             <button

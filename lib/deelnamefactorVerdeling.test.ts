@@ -30,6 +30,6 @@ describe('whether the deelnamefactor counts, in words', () => {
     expect(verdelingTekst('NAAR_RATO', 'Voorjaar 2027')).toBe(
       'De periode Voorjaar 2027 verdeelt naar rato. De factor telt mee: iemand met 0,8 krijgt naar verhouding minder diensten dan iemand met 1,0.'
     );
-    expect(PARTTIMEDAGEN_TELLEN).toBe('Op de parttimedagen zelf wordt bij beide verdelingen niemand ingeroosterd.');
+    expect(PARTTIMEDAGEN_TELLEN).toBe('Op de deeltijddagen zelf wordt bij beide verdelingen niemand ingeroosterd.');
   });
 });

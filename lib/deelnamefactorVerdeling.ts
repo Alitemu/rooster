@@ -23,4 +23,4 @@ export function verdelingTekst(verdeling: Verdeling, periode: string): string {
     : `De periode ${periode} verdeelt gelijk. De factor telt dan niet mee: iedereen krijgt hetzelfde streefbereik. Alleen bij de verdeling Naar rato (stap 4 van de wizard) krijgt iemand met een lagere factor minder diensten.`;
 }
 
-export const PARTTIMEDAGEN_TELLEN = 'Op de parttimedagen zelf wordt bij beide verdelingen niemand ingeroosterd.';
+export const PARTTIMEDAGEN_TELLEN = 'Op de deeltijddagen zelf wordt bij beide verdelingen niemand ingeroosterd.';

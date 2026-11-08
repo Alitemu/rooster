@@ -200,6 +200,15 @@ before.
 
 All data uses codenamen only, no real personal data.
 
+**The blokkades fixture (tests/fixtures/blokkades-2027-h1.csv).** Until 1.3.0,
+14 of the 31 columns were blocked on 153 of the 154 days: converting the
+original form read a non-breaking space in an empty cell as a mark. The
+seed then had 17 people really available and the solver left 33 shifts
+open, so every browser check tested with half a roster. Only initials count
+as a mark; those 14 columns are now empty. tests/blokkadesFixture.test.ts
+holds the shape (31 people, 154 days, X or empty, nobody blocked on more
+than 75% of the days).
+
 **The seed builds the schema with its own raw SQL**, and db/client.ts then
 skips migrations for a database that came out of it (migration 0000 would
 collide with the tables already there). A column added to `db/schema.ts`

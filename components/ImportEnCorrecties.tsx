@@ -20,7 +20,8 @@ import { leesSaldoBestand, type SaldoRegel } from '@/lib/saldoBestand';
 import { CorrectieFormulier } from '@/components/CorrectieFormulier';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
-import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
+import { beginsaldoInWoorden, kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
+import { BestandKiezer } from '@/components/BestandKiezer';
 
 interface Props {
   periodId: string;
@@ -192,17 +193,15 @@ export function ImportEnCorrecties({ periodId, status, mensen, onGewijzigd }: Pr
 
         {kan && (
           <>
-            <label className="block text-sm font-medium text-neutral-700">
-              Ingevuld sjabloon
-              <input
+            <div>
+              <span className="block mb-1 text-sm font-medium text-neutral-700">Ingevuld sjabloon</span>
+              <BestandKiezer
                 key={bestandSleutel}
-                type="file"
                 accept=".xlsx"
                 aria-label="Beginsaldo als Excel-bestand"
-                className="block w-full mt-1 text-sm"
-                onChange={(e) => e.target.files?.[0] && kiesBestand(e.target.files[0])}
+                onKies={(bestand) => bestand && kiesBestand(bestand)}
               />
-            </label>
+            </div>
 
             {waarschuwingen.length > 0 && (
               <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-800">
@@ -276,9 +275,7 @@ export function ImportEnCorrecties({ periodId, status, mensen, onGewijzigd }: Pr
               {beginsaldi.map((b) => (
                 <li key={b.codenaam}>
                   <span className="font-medium">{b.codenaam}</span>:{' '}
-                  {[b.avond !== 0 && saldoInWoorden('AVOND', b.avond), b.weekend !== 0 && saldoInWoorden('WEEKEND', b.weekend)]
-                    .filter(Boolean)
-                    .join(', ') || 'geen verschil'}
+                  {beginsaldoInWoorden(b.avond, b.weekend)}
                 </li>
               ))}
             </ul>

@@ -17,6 +17,7 @@ import { foutTekst } from '@/lib/foutTekst';
 import { APP_TIME_ZONE } from '@/lib/localDate';
 import { backupFoutmelding } from '@/lib/terugzetAntwoord';
 import { WachtwoordVeld } from '@/components/WachtwoordVeld';
+import { BestandKiezer } from '@/components/BestandKiezer';
 
 interface Status {
   ingesteld: boolean;
@@ -273,13 +274,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                   <label htmlFor="backup-bestand" className="block text-sm font-semibold text-neutral-900 mb-1">
                     Back-upbestand (.drbackup)
                   </label>
-                  <input
-                    id="backup-bestand"
-                    type="file"
-                    accept=".drbackup"
-                    onChange={(e) => setBestand(e.target.files?.[0] ?? null)}
-                    className="w-full text-sm"
-                  />
+                  <BestandKiezer id="backup-bestand" accept=".drbackup" onKies={setBestand} />
                 </div>
                 <div>
                   <label htmlFor="backup-terug-wachtwoord" className="block text-sm font-semibold text-neutral-900 mb-1">

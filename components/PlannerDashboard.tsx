@@ -40,7 +40,7 @@ import { herinnerdOpTekst, isRecentHerinnerd } from '@/lib/herinnerdOp';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
 import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
-import { kanSaldoWijzigen } from '@/lib/saldoWijzigen';
+import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
 
 interface PersonProgress {
   person_id: string;
@@ -705,12 +705,6 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   const submissionProgress =
     totalSubmissions > 0 ? Math.round((stats.confirmed / totalSubmissions) * 100) : 0;
 
-  const counterDisplayName: Record<string, string> = {
-    AVOND: 'avonddienst',
-    WEEKEND: 'weekenddienst',
-    FEESTDAG: 'feestdagdienst',
-  };
-
   // Once GEGENEREERD/GEPUBLICEERD, the solver has run - status alone
   // already answers "how is this roster filled". Before that, the only
   // possible source is a planner's own manual pre-fill (see
@@ -780,7 +774,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               <div key={`${item.person_id}-${item.counter}`} className="flex justify-between text-sm">
                 <span className="font-medium">{item.codenaam}</span>
                 <span className="text-amber-800">
-                  {Math.abs(item.delta)} {counterDisplayName[item.counter]} {item.delta > 0 ? 'extra' : 'minder'}
+                  {/* "2 weekenddiensten extra", not "2 weekenddienst extra" (audit 1.2.2). */}
+                  {saldoInWoorden(item.counter, item.delta)}
                 </span>
               </div>
             ))}
@@ -1251,7 +1246,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
             regardless of how many lines the text takes. */}
         <p className="text-sm text-neutral-600 mb-3">
           Voeg hier personeel toe of verwijder ze. Per persoon pas je hier ook de geldigheidsperiode
-          aan. De deelnamefactor volgt uit de parttimedagen die de medewerker zelf opgeeft. Dit werkt op elk moment, ook in een al gepubliceerd rooster. Dat is
+          aan. De deelnamefactor volgt uit de deeltijddagen die de medewerker zelf opgeeft. Dit werkt op elk moment, ook in een al gepubliceerd rooster. Dat is
           handig als iemand halverwege start: voeg diegene hier toe met de juiste
           geldig-vanaf-datum. Die persoon verschijnt dan meteen in de keuzelijst bij het handmatig
           toewijzen van diensten in deze periode.
@@ -1268,7 +1263,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
       <Section
         title="Exporteren & communicatie"
-        hint={`uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, ${beheerder ? 'mailinstellingen' : 'mail'}`}
+        hint={`uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, wijzigingsgeschiedenis, ${beheerder ? 'mailinstellingen' : 'mail'}`}
         isOpen={openSections.has('export')}
         pinned={pinnedSections.has('export')}
         onToggleOpen={() => toggleSectionOpen('export')}
@@ -1334,6 +1329,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               📅 Rooster downloaden (Excel)
             </a>
           )}
+          {/* Also in the dialog behind "Uitnodigingen en herinneringen", where nobody looked for it (audit 1.2.2). */}
+          <a
+            href={withBasePath(`/api/exports/audit-trail/${periodId}`)}
+            className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+          >
+            📄 Wijzigingsgeschiedenis downloaden (Excel)
+          </a>
         </div>
         {!beheerder && (
           <div className="mt-4">
@@ -1568,8 +1570,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               rooster later opnieuw publiceren.
             </p>
             <p className="text-sm text-neutral-700 mb-4">
-              Iedereen die het gepubliceerde rooster kon zien, krijgt een melding dat de publicatie
-              is ingetrokken.
+              Er gaat geen mail. Wie het rooster kon zien, krijgt in de app een melding dat de
+              publicatie is ingetrokken. Die zien ze pas als ze hun link openen. Laat het zo nodig
+              zelf weten.
             </p>
             {unpublishError && (
               <div className="bg-red-50 border border-red-200 rounded p-3 mb-4">

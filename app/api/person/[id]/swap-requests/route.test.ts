@@ -164,6 +164,27 @@ describe('swap requests and the window between shifts', () => {
     );
   });
 
+  it('refuses a swap onto a day the requester blocked, and creates nothing (audit 1.2.2)', async () => {
+    const f = createFixture();
+    db.prepare(
+      `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+       VALUES (?, ?, ?, 'ABSOLUUT', 'ABSENCE', datetime('now'))`
+    ).run(crypto.randomUUID(), f.aanvrager, f.requested);
+    const res = await POST(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_id: f.periodId, offered_slot_id: f.offered, requested_slot_id: f.requested }),
+      }),
+      { params: Promise.resolve({ id: f.aanvrager }) }
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/zelf geblokkeerd/);
+    const n = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_swap_request WHERE periode_id = ?').get(f.periodId) as { n: number };
+    expect(n.n).toBe(0);
+    db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ?').run(f.aanvrager);
+  });
+
   // Audit 9's mutation check: taking the "both still hold their shift"
   // check out of the approve route left every test green. The planner gives
   // the offered shift to someone else while the request is open; approving

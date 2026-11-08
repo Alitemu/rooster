@@ -21,6 +21,7 @@ import { db } from '@/db/client';
 import { checkSwapAllowed } from './swapEligibility';
 import { swapWindowConflicts } from './swapWindowRule';
 import { swapMembershipProblem } from './membershipWindow';
+import { eigenBlokkadeOp } from './swapEigenBlokkade';
 
 export type SwapCandidateCategory =
   | 'VOORKEUR'
@@ -130,6 +131,8 @@ export function getSwapCandidates(
     if (!checkSwapAllowed({ periodStatus: period.status, definitiefOp: period.definitief_op, slotDates: [other.datum] }, now).allowed) continue;
     // Nor one that would hand a shift to someone not taking part that day.
     if (swapMembershipProblem(period.pool_id, requesterId, other.person_id, offered.datum, other.datum)) continue;
+    // Nor a day the requester blocked: that swap is refused (lib/swapEigenBlokkade.ts).
+    if (eigenBlokkadeOp(requesterId, other.slot_id)) continue;
 
     const conflicts = swapWindowConflicts({
       periodId,

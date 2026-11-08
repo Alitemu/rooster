@@ -20,6 +20,7 @@ import { deadlineTekst } from '@/lib/verzendlijst';
 import { foutTekst } from '@/lib/foutTekst';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
 import { DatumTekst } from '@/components/DatumVeld';
+import { BestandKiezer } from '@/components/BestandKiezer';
 
 interface PriorAssignment {
   datum: string;
@@ -326,17 +327,7 @@ export default function PriorAssignmentsPage() {
           Sjabloon downloaden (Excel)
         </a>
         <br />
-        <input
-          type="file"
-          accept=".xlsx"
-          aria-label="Rooster als Excel-bestand"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleCsvFile(file);
-            e.target.value = '';
-          }}
-          className="text-sm"
-        />
+        <BestandKiezer accept=".xlsx" aria-label="Rooster als Excel-bestand" wisNaKiezen onKies={(bestand) => bestand && handleCsvFile(bestand)} />
         {csvRows !== null && (
           <div className="mt-3 p-3 rounded bg-blue-50 border border-blue-200 text-sm">
             <p className="text-blue-900">

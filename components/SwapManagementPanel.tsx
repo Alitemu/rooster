@@ -120,6 +120,18 @@ function Categorie({
   );
 }
 
+/**
+ * The filter each list opens with: "In afwachting" when something waits there, otherwise all statuses
+ * (audit 1.2.2: an empty "In afwachting" while the list held approved and rejected requests).
+ */
+export function beginFilters(
+  verzoeken: Array<{ status: string; aanvrager_person_id: string; respondent_person_id: string }>,
+  personId: string
+): { verzonden: string; ontvangen: string } {
+  const open = (wie: 'aanvrager_person_id' | 'respondent_person_id') => verzoeken.some((v) => v[wie] === personId && v.status === 'PENDING');
+  return { verzonden: open('aanvrager_person_id') ? 'PENDING' : '', ontvangen: open('respondent_person_id') ? 'PENDING' : '' };
+}
+
 export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwapsChanged }: Props) {
   // What the last load returned, to notice a background refresh bringing
   // back something different (see onSwapsChanged).
@@ -206,6 +218,17 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   useEffect(() => {
     if (refreshKey > 0) setFilterVerzonden('PENDING');
   }, [refreshKey]);
+
+  // With nothing in afwachting the list stood on "In afwachting" and looked empty (audit 1.2.2). After
+  // the first load a list without an open request shows all of them; a choice made later stays.
+  const eersteLading = useRef(true);
+  useEffect(() => {
+    if (loading || error || !eersteLading.current) return;
+    eersteLading.current = false;
+    const filters = beginFilters(swapRequests, personId);
+    setFilterVerzonden(filters.verzonden);
+    setFilterOntvangen(filters.ontvangen);
+  }, [loading, error, swapRequests, personId]);
 
   // One approve, reject or withdraw at a time: a double click used to send two, and the second one answered
   // with an error next to the success of the first.

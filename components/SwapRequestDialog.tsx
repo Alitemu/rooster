@@ -52,7 +52,7 @@ const CATEGORY_LABELS: Record<CandidateCategory, string> = {
   BESCHIKBAAR: 'Niets aangegeven voor die dag',
   LIEVER_NIET: 'Liever niet op die dag',
   KORT_OP_ELKAAR: 'Heeft dan twee diensten kort op elkaar',
-  GEBLOKKEERD: 'Heeft die dag geblokkeerd (ook parttime of afwezig)',
+  GEBLOKKEERD: 'Heeft die dag geblokkeerd (ook een deeltijddag of afwezigheid)',
 };
 
 interface Props {

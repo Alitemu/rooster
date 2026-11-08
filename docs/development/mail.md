@@ -150,7 +150,9 @@ Since 1.1.5 the in-app notice of a new request spells the days out
 two RUIL rows in dienstrooster_assignment_edit (one per shift, the new
 holder in person_id, the old one in oorspronkelijke_person_id, the approver
 in bewerkt_door_person_id), so the planner's wijzigingsgeschiedenis and the
-audit-trail export show it as "Geruild". The publish and finalize refusals
+audit-trail export show it as "Geruild" (and since 1.3.0 the planner's list
+of toewijzingen too: the shift's latest assignment_edit is RUIL, while its
+bron stays MANUAL). The publish and finalize refusals
 join their messages as sentences (lib/zinnenLijst.ts) instead of with "; ",
 which gave ".;" in the message. The swap dialog says only an equal swap goes through the app (one shift
 for one of the same kind, which the create route enforces); any other

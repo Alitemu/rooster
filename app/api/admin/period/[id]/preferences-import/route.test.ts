@@ -230,6 +230,24 @@ describe('POST /api/admin/period/[id]/preferences-import', () => {
     });
   });
 
+  // 1.3.0: the overview says "(deeltijd)" now, as the screens do; a file from before says "(parttime)".
+  it('writes "(deeltijd)" on a deeltijddag and skips that cell, and the old "(parttime)" as well', async () => {
+    const f = createFixture();
+    const [, b] = f.people;
+    const [, , d2, d3] = f.slots.map((s) => s.datum);
+    mark(b.id, f.slots[2].id, 'ABSOLUUT', 'PARTTIME');
+    mark(b.id, f.slots[3].id, 'ABSOLUUT', 'PARTTIME');
+    const before = markings(f);
+    const grid = await exported(f);
+    const col = grid[0].indexOf(b.codenaam);
+    expect(grid.find((r) => r[0] === serial(d2))![col]).toBe('geblokkeerd (deeltijd)');
+
+    const { body } = await importXlsx(f, edit(grid, [[d3, b.codenaam, 'voorkeur (parttime)']]), true);
+    expect(body.data.problemen).toEqual([]);
+    expect(body.data.wijzigingen).toEqual([]);
+    expect(markings(f)).toEqual(before);
+  });
+
   it('reads a date typed as text too, ISO or the Dutch way', async () => {
     const f = createFixture();
     const [a] = f.people;

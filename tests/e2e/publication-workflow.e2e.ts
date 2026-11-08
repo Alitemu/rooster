@@ -263,4 +263,29 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await context.close();
     }
   });
+  // Audit 1.2.2: "Publicatie intrekken" promised every participant a melding, but the Meldingen
+  // button and panel were only there while the roster was published, so nobody could read it; and
+  // the page then said both "wijzigen kan niet meer" and "Wijzigingen die je nu opslaat, worden
+  // bewaard". Runs last: it takes the publication back.
+  test('after Publicatie intrekken the participant can read the melding, under one honest banner', async ({ page, browser }) => {
+    await gotoPlanner(page);
+    await page.getByRole('button', { name: '↩️ Publicatie intrekken' }).click();
+    const dialoog = page.getByRole('dialog', { name: 'Publicatie intrekken' });
+    await expect(dialoog).toContainText('Er gaat geen mail.');
+    await dialoog.getByRole('button', { name: 'Ja, publicatie intrekken' }).click();
+    await expect(page.getByText(/Status: Gegenereerd/)).toBeVisible();
+
+    const context = await browser.newContext();
+    const deelnemer = await context.newPage();
+    try {
+      await deelnemer.goto(`${getBaseUrl()}/person/${testData.users[1].token}`);
+      await deelnemer.waitForLoadState('networkidle');
+      await expect(deelnemer.getByTestId('rooster-nog-niet-gepubliceerd')).toContainText('nog niet gepubliceerd');
+      await expect(deelnemer.getByText(/Wijzigingen die je nu opslaat/)).toHaveCount(0);
+      await deelnemer.getByRole('button', { name: '🔔 Meldingen' }).click();
+      await expect(deelnemer.getByText(/publicatie ingetrokken/).first()).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
 });

@@ -80,3 +80,28 @@ export function trekAlleToegangslinksIn(periodId: string, nu: string = new Date(
     return { aantal: werkend.length, personen: personen.size };
   })();
 }
+
+/**
+ * Revokes every link of this period that still works for one person, and ends that person's sessions,
+ * in one step (audit 1.2.2: one person had 14 links after one period, 14 times "Intrekken" to take
+ * away their access). Links of other periods stay. `codenaam` is null when the person has none.
+ */
+export function trekToegangslinksVanPersoonIn(
+  periodId: string,
+  personId: string,
+  nu: string = new Date().toISOString()
+): { aantal: number; codenaam: string | null } {
+  return db.transaction(() => {
+    const werkend = db
+      .prepare(
+        `SELECT pal.id, p.codenaam FROM dienstrooster_person_access_link pal JOIN dienstrooster_person p ON p.id = pal.person_id
+         WHERE pal.geldt_voor_periode_id = ? AND pal.person_id = ? AND pal.ingetrokken_op IS NULL`
+      )
+      .all(periodId, personId) as Array<{ id: string; codenaam: string }>;
+    if (werkend.length === 0) return { aantal: 0, codenaam: null };
+    const intrekken = db.prepare('UPDATE dienstrooster_person_access_link SET ingetrokken_op = ? WHERE id = ?');
+    for (const link of werkend) intrekken.run(nu, link.id);
+    revokeAllSessions(personId);
+    return { aantal: werkend.length, codenaam: werkend[0].codenaam };
+  })();
+}

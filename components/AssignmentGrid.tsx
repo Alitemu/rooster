@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { sorteerOpRuimte } from '@/lib/vooraf';
 import { getHolidayInfo } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
@@ -23,6 +24,8 @@ interface Assignment {
   shift_type_id: string;
   teller: string;
   bron: string;
+  /** The latest change of this shift was an approved swap (stored as MANUAL, shown as "Geruild"). */
+  geruild?: boolean;
 }
 
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
@@ -74,14 +77,14 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: 'Beschikbaar',
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
-  PARTTIME: 'Part-time dag',
+  PARTTIME: 'Deeltijddag',
   FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
 
 function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, EligiblePerson[]]> {
   return CATEGORY_ORDER.map(
-    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, people.filter((p) => p.category === cat)]
+    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, sorteerOpRuimte(people.filter((p) => p.category === cat))]
   ).filter(([, group]) => group.length > 0);
 }
 
@@ -383,8 +386,8 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                   <td className="px-3 py-2">{a.codenaam}</td>
                   <td className="px-3 py-2">{dienstTypeLabel(a)}</td>
                   <td className="px-3 py-2">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${sourceColors[a.bron] || 'bg-neutral-100'}`}>
-                      {sourceNames[a.bron] || a.bron}
+                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${a.geruild ? 'bg-teal-100 text-teal-800' : sourceColors[a.bron] || 'bg-neutral-100'}`}>
+                      {a.geruild ? 'Geruild' : sourceNames[a.bron] || a.bron}
                     </span>
                   </td>
                   <td className="px-3 py-2 text-center">

@@ -124,10 +124,17 @@ describe('no field of the app uses the browser date input', () => {
     expect(readFileSync(join('app', 'planner', 'page.tsx'), 'utf8')).toContain('<DatumTekst iso={p.start_datum} /> t/m <DatumTekst iso={p.eind_datum} />');
   });
 
+  it("the AIOS's list of absences reads dd-mm-jjjj, not \"15 feb 2027\" (1.3.0)", () => {
+    const bron = readFileSync(join('components', 'AiosAfwezigheid.tsx'), 'utf8');
+    expect(bron).toContain('<DatumTekst iso={a.van_datum} /> t/m <DatumTekst iso={a.tot_datum} />');
+    expect(bron).not.toMatch(/month: 'short', year: 'numeric'/);
+  });
+
   it('counts only the absence days inside the period under the calendar (1.2.2)', () => {
     // An absence in February on a July-December period counted 7 days nobody could see.
     const bron = readFileSync(join('components', 'PartTimeCheckStep.tsx'), 'utf8');
-    expect(bron).toContain('(d) => d >= periodStart && d <= periodEnd && !byDate.has(d) && !blockedElsewhereByDate.has(d)');
+    expect(bron).toContain('afwezigheidsdagenInPeriode(absenceDates, periodStart, periodEnd,');
+    expect(readFileSync(join('lib', 'afwezigheidTelling.ts'), 'utf8')).toContain('.filter((d) => d >= periodStart && d <= periodEnd)');
   });
 
   it('shows a stored date the Dutch way and passes on only a real date, as YYYY-MM-DD', () => {

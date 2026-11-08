@@ -71,7 +71,7 @@ interface MarkingRow {
  */
 function cell(row: MarkingRow): string {
   const keuze = KEUZE[row.blocking_level] ?? row.blocking_level;
-  if (row.source === 'PARTTIME') return `${keuze} (parttime)`;
+  if (row.source === 'PARTTIME') return `${keuze} (deeltijd)`;
   if (row.source === 'ABSENCE') return `${keuze} (afwezig)`;
   if (row.fellow_blok) return `${keuze} (fellow)`;
   return keuze;

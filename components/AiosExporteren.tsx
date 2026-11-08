@@ -50,7 +50,7 @@ export function AiosExporteren({ period, stand, onChanged }: Props) {
     <AiosSectie
       sleutel="export"
       titel="Exporteren & communicatie"
-      hint={`uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, ${beheerder ? 'mailinstellingen' : 'mail'}`}
+      hint={`uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, wijzigingsgeschiedenis, ${beheerder ? 'mailinstellingen' : 'mail'}`}
       testId="aios-exporteren"
     >
       <div className="flex gap-3 flex-wrap">
@@ -91,6 +91,10 @@ export function AiosExporteren({ period, stand, onChanged }: Props) {
             📅 Rooster downloaden (Excel)
           </a>
         )}
+        {/* Also in the dialog behind "Uitnodigingen en herinneringen", where nobody looked for it (audit 1.2.2). */}
+        <a href={link('download-wijzigingen')} className={KNOP}>
+          📄 Wijzigingsgeschiedenis downloaden (Excel)
+        </a>
       </div>
       {stand && !stand.mail_ingesteld && (
         <p className="text-sm text-amber-900" data-testid="aios-mail-nog-niet">

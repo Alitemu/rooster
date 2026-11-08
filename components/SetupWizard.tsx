@@ -32,9 +32,11 @@ import { parseISO } from '@/lib/holidays';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
+import { beginsaldoInWoorden } from '@/lib/saldoWijzigen';
 import { CorrectieFormulier } from '@/components/CorrectieFormulier';
 import { CORRECTION_TYPE_LABELS, type Correction } from '@/lib/correctieRedenen';
 import { DatumTijdVeld, DatumVeld, DatumTekst } from '@/components/DatumVeld';
+import { BestandKiezer } from '@/components/BestandKiezer';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
@@ -1382,14 +1384,14 @@ export function SetupWizard({ period, onComplete }: Props) {
                     setBlockBudgetConfig({ ...blockBudgetConfig, parttimeExempt: e.target.checked })
                   }
                 />
-                Parttime-vrije dagen tellen niet mee voor het budget
+                Deeltijddagen tellen niet mee voor het budget
               </label>
               <p className="text-xs text-neutral-500 mt-1">
                 Het percentage hierboven wordt altijd berekend over het totaal aantal diensten in
                 de hele periode, niet over iemands persoonlijke (lagere) aantal werkdagen. Met dit
-                vinkje uit telt een automatisch geblokkeerde parttime-dag gewoon mee als een
+                vinkje uit telt een automatisch geblokkeerde deeltijddag gewoon mee als een
                 geblokkeerde dag, zoals elke andere. Met dit vinkje aan telt die dag niet mee en
-                komt hij dus bovenop het budget. Iemand met een parttime-dag kan dan in totaal
+                komt hij dus bovenop het budget. Iemand met een deeltijddag kan dan in totaal
                 meer dagen blokkeren dan een fulltimer met hetzelfde percentage.
               </p>
             </div>
@@ -1468,16 +1470,14 @@ export function SetupWizard({ period, onComplete }: Props) {
               verdelen voorrang.
             </p>
 
-            <div className="border-2 border-dashed rounded p-6 text-center">
-              <p className="text-sm text-neutral-600 mb-2">Sleep een bestand hierheen of klik om te selecteren</p>
-              <input
-                type="file"
-                accept=".xlsx"
-                aria-label="Beginsaldo als Excel-bestand"
-                className="w-full"
-                onChange={(e) => e.target.files?.[0] && handleBalancesFile(e.target.files[0])}
-              />
-            </div>
+            <BestandKiezer
+              accept=".xlsx"
+              aria-label="Beginsaldo als Excel-bestand"
+              onKies={(bestand) => bestand && handleBalancesFile(bestand)}
+              className="border-2 border-dashed rounded p-6 flex flex-col items-center gap-2"
+            >
+              <p className="text-sm text-neutral-600">Sleep een bestand hierheen of kies er een.</p>
+            </BestandKiezer>
 
             {balanceVraag && (
               <div role="alert" data-testid="saldo-overschrijven" className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2">
@@ -1514,14 +1514,14 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             {balanceRows.length > 0 && (
               <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-                <p className="font-medium">{balanceRows.length} records klaar om te importeren</p>
+                <p className="font-medium">{telwoord(balanceRows.length, 'regel', 'regels')} klaar om te importeren</p>
                 <ul className="text-xs mt-1 space-y-0.5">
                   {balanceRows.slice(0, 5).map((r, i) => (
                     <li key={i}>
-                      {r.codenaam}: AVOND {r.AVOND_delta ?? 0}, WEEKEND {r.WEEKEND_delta ?? 0}
+                      <span className="font-medium">{r.codenaam}</span>: {beginsaldoInWoorden(r.AVOND_delta ?? 0, r.WEEKEND_delta ?? 0)}
                     </li>
                   ))}
-                  {balanceRows.length > 5 && <li>...en {balanceRows.length - 5} meer</li>}
+                  {balanceRows.length > 5 && <li>en nog {telwoord(balanceRows.length - 5, 'regel', 'regels')}</li>}
                 </ul>
               </div>
             )}

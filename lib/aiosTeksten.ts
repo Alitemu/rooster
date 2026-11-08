@@ -58,3 +58,12 @@ export function formatSwapDate(datum: string): string {
     timeZone: 'UTC',
   }).format(new Date(`${datum}T00:00:00Z`));
 }
+
+/**
+ * The period in a mail subject, with "AIOS" in front only when its name does not already start with it:
+ * a new AIOS period is called "AIOS 2027 Q1" (app/planner/page.tsx), and the subjects read "Definitief
+ * rooster AIOS AIOS 2027 Q1" (audit 1.2.2).
+ */
+export function aiosPeriodeInOnderwerp(naam: string): string {
+  return /^aios\b/i.test(naam.trim()) ? naam.trim() : `AIOS ${naam.trim()}`;
+}

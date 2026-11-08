@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { sorteerOpRuimte } from '@/lib/vooraf';
 import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
@@ -119,7 +120,7 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: 'Beschikbaar',
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
-  PARTTIME: 'Part-time dag',
+  PARTTIME: 'Deeltijddag',
   FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
@@ -130,7 +131,7 @@ function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, 
     if (!groups.has(person.category)) groups.set(person.category, []);
     groups.get(person.category)!.push(person);
   }
-  return CATEGORY_ORDER.filter((c) => groups.has(c)).map((c) => [c, groups.get(c)!]);
+  return CATEGORY_ORDER.filter((c) => groups.has(c)).map((c) => [c, sorteerOpRuimte(groups.get(c)!)]);
 }
 
 export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props) {

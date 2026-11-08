@@ -1,4 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
+import { v4 as uuid } from 'uuid';
+import { db } from '@/db/client';
+import { generateAccessToken, hashToken } from '@/lib/auth';
 import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsBeheerder, loginAsPlanner } from './setup';
 
 /**
@@ -72,6 +75,42 @@ test.describe('at 375px', () => {
     await expect(sectie(page).getByRole('alertdialog')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   });
+});
+
+// 1.3.0 (audit 1.2.2): one person had 14 links after one period, 14 times "Intrekken" to take away their access.
+test('Alle links van één medewerker asks first, then revokes the links of that person only', async ({ page, request }) => {
+  const user = testData.users[3];
+  const extra = [generateAccessToken(), generateAccessToken()];
+  for (const token of extra) {
+    db.prepare(
+      `INSERT INTO dienstrooster_person_access_link (id, person_id, geldt_voor_periode_id, token_hash, aangemaakt_op) VALUES (?, ?, ?, ?, datetime('now'))`
+    ).run(uuid(), user.id, testData.period.id, hashToken(token));
+  }
+  const status = async (token: string) => (await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${token}`)).status();
+  await loginAsBeheerder(page);
+  await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+  await sectie(page).getByRole('heading').getByRole('button').click();
+  const rijen = sectie(page).getByTestId('toegangslink').filter({ hasText: user.codenaam });
+  await expect(rijen).toHaveCount(3);
+  const knop = sectie(page).getByRole('button', { name: 'Links van medewerker intrekken' });
+  await expect(knop).toBeDisabled();
+  await sectie(page).getByLabel('Alle links van één medewerker').selectOption({ label: `${user.codenaam} (3 werkende links)` });
+
+  // Asking is not revoking.
+  await knop.click();
+  const vraag = sectie(page).getByRole('alertdialog', { name: `Alle links van ${user.codenaam} intrekken` });
+  await expect(vraag).toContainText('alle 3 werkende links');
+  await vraag.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(vraag).toHaveCount(0);
+  expect(await status(user.token)).toBe(200);
+
+  await knop.click();
+  await vraag.getByRole('button', { name: `Ja, alles van ${user.codenaam} intrekken` }).click();
+  await expect(sectie(page).getByRole('status')).toContainText(`3 links van ${user.codenaam} zijn ingetrokken`);
+  await expect(rijen.filter({ hasText: 'Werkt' })).toHaveCount(0);
+  for (const token of [user.token, ...extra]) expect(await status(token)).toBe(401);
+  // Someone else's link still works.
+  expect(await status(testData.users[2].token)).toBe(200);
 });
 
 test('Alles intrekken asks first, then revokes every working link of the period', async ({ page, request }) => {

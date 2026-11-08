@@ -35,7 +35,7 @@ import { telwoord } from '@/lib/telwoord';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
-  PARTTIME_OVERRIDE: 'een parttime-vrije dag is toch ingepland',
+  PARTTIME_OVERRIDE: 'een deeltijddag is toch ingepland',
   WINDOW_OVERRIDE: 'een dienst binnen het venster is toch ingepland',
 };
 
@@ -191,7 +191,7 @@ export async function POST(
 
     const warning = blocked
       ? blocked.source === 'PARTTIME'
-        ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een parttime-vrije dag voor deze persoon.' }
+        ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een deeltijddag van deze persoon.' }
         : { code: 'BLOCKED_OVERRIDE', message: 'Let op: deze persoon heeft deze dag geblokkeerd.' }
       : windowConflict
         ? {

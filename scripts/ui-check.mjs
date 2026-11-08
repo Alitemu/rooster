@@ -466,11 +466,11 @@ db.prepare(
 
 await page.goto(`${BASE}/planner/setup/${wizardPeriodId}`, { waitUntil: 'networkidle' });
 await page.click('button:has-text("3. Venster")');
-await page.waitForSelector('text=Parttime-vrije dagen tellen niet mee voor het budget', { timeout: 5000 });
+await page.waitForSelector('text=Deeltijddagen tellen niet mee voor het budget', { timeout: 5000 });
 const exemptChecked = await page
-  .locator('label:has-text("Parttime-vrije dagen tellen niet mee voor het budget") input[type=checkbox]')
+  .locator('label:has-text("Deeltijddagen tellen niet mee voor het budget") input[type=checkbox]')
   .isChecked();
-rec('"Parttime-vrije dagen tellen niet mee voor het budget" is checked by default', exemptChecked);
+rec('"Deeltijddagen tellen niet mee voor het budget" is checked by default', exemptChecked);
 db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(wizardPeriodId);
 
 // "Personeel beheren" (medewerkers): removing someone from the pool is a

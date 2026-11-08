@@ -13,9 +13,9 @@
  *   do.
  * - dienstrooster_audit_log (entiteit='assignment'): every one of the
  *   three actions writes here, and it's the only place the "was a block/
- *   parttime/window rule knowingly overruled" fact lives. LEFT JOINed onto
- *   the edit rows by entiteit_id = toewijzing_id (both are set to the same
- *   assignment id by every route that writes both), and queried directly
+ *   parttime/window rule knowingly overruled" fact lives. Each edit row
+ *   reads the one entry of its assignment (entiteit_id = toewijzing_id)
+ *   nearest in time to it, and the entries are queried directly
  *   for MANUAL_ASSIGN entries, which have no edit-table counterpart at
  *   all.
  */
@@ -43,7 +43,7 @@ const EDIT_TYPE_LABELS: Record<string, string> = {
 
 const OVERRIDE_LABELS: Record<string, string> = {
   BLOCKED_OVERRIDE: 'Geblokkeerde dag overschreven',
-  PARTTIME_OVERRIDE: 'Parttime-vrije dag overschreven',
+  PARTTIME_OVERRIDE: 'Deeltijddag toch ingepland',
   WINDOW_OVERRIDE: 'Vensterregel overschreven',
 };
 
@@ -98,14 +98,22 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
            ae.edit_type, ae.reden, ae.aangemaakt_op,
            p.codenaam as persoon, actor.codenaam as door,
            s.datum as dienst_datum, st.teller,
-           al.nieuw_json as audit_nieuw_json
+           -- The one audit entry written with this edit: the same assignment, nearest in time. A
+           -- plain LEFT JOIN on the assignment gave every edit of an assignment changed twice (a
+           -- wissel and its Ongedaan maken) every audit entry of it: n x m rows (audit 1.2.2).
+           -- (SQLite takes no outer column in a subquery's ORDER BY, hence the MIN.)
+           (SELECT al.nieuw_json FROM dienstrooster_audit_log al
+             WHERE al.entiteit_id = ae.toewijzing_id AND al.entiteit = 'assignment'
+               AND ABS(julianday(al.tijdstip) - julianday(ae.aangemaakt_op)) = (
+                 SELECT MIN(ABS(julianday(al2.tijdstip) - julianday(ae.aangemaakt_op)))
+                 FROM dienstrooster_audit_log al2
+                 WHERE al2.entiteit_id = ae.toewijzing_id AND al2.entiteit = 'assignment')
+             LIMIT 1) as audit_nieuw_json
          FROM dienstrooster_assignment_edit ae
          JOIN dienstrooster_person p ON p.id = ae.person_id
          JOIN dienstrooster_person actor ON actor.id = ae.bewerkt_door_person_id
          JOIN dienstrooster_shift_slot s ON s.id = ae.slot_id
          JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
-         LEFT JOIN dienstrooster_audit_log al
-           ON al.entiteit_id = ae.toewijzing_id AND al.entiteit = 'assignment'
          WHERE ae.periode_id = ?
          ORDER BY ae.aangemaakt_op`
       )
@@ -191,7 +199,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ 'period-i
           { header: 'Dienstdatum' },
           { header: 'Diensttype' },
           { header: 'Reden' },
-          { header: 'Overrule' },
+          { header: 'Afwijking' },
           { header: 'Aangepast door' },
         ],
         rows: rows.map((r) => [

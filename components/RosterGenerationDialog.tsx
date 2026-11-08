@@ -915,7 +915,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       </div>
                     )}
 
-                    {ruleset.objectiveMode === 'weighted' && (
+                    {ruleset?.objectiveMode === 'weighted' && (
                       <>
                     <p className="text-xs text-neutral-500">
                       Dit zijn de punten waarmee de solver bepaalt hoe hij diensten verdeelt: hoe
@@ -1190,10 +1190,14 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       {SOLVER_STATUS_LABEL[result.solver_status] || result.solver_status}
                     </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-700">Totale kosten:</dt>
-                    <dd className="font-semibold text-neutral-900">{result.cost.toFixed(2)}</dd>
-                  </div>
+                  {/* Only the Puntenplanner works with one score; for the other methods this number
+                      means nothing to a planner (audit 1.2.2: "Totale kosten: 0.00"). */}
+                  {ruleset?.objectiveMode === 'weighted' && (
+                    <div className="flex justify-between">
+                      <dt className="text-neutral-700">Score (lager is beter):</dt>
+                      <dd className="font-semibold text-neutral-900">{result.cost.toLocaleString('nl-NL', { maximumFractionDigits: 2 })}</dd>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <dt className="text-neutral-700">Duur:</dt>
                     <dd className="font-semibold text-neutral-900">{result.time_seconds.toFixed(2)}s</dd>

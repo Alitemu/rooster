@@ -85,6 +85,14 @@ interface Wijzigen {
   paneel: ReactNode;
 }
 
+/**
+ * The name of a block box with its days in this week: "Nachtblok zo t/m di wo 3 mrt t/m vr 5 mrt". A
+ * screen reader heard only "Nachtblok zo t/m di: leeg" for every empty block (audit 1.2.2).
+ */
+export function blokTitel(naam: string, van: string, tot: string): string {
+  return van === tot ? `${naam} ${datumKort(van)}` : `${naam} ${datumKort(van)} t/m ${datumKort(tot)}`;
+}
+
 /** A box: a button to change it when the roster can change by hand, marked when chosen (not by colour alone). */
 function Vak({ dienst, keuze, w, className, title }: { dienst: AiosRoosterDienst; keuze: Keuze; w: Wijzigen | null; className: string; title: string }) {
   if (!w) {
@@ -180,7 +188,7 @@ function RoosterWeek({ dagen, w }: { dagen: AiosRoosterDag[]; w: Wijzigen | null
                     keuze={{ naam, blok: true, dagen: blokDagen }}
                     w={w}
                     className={`block truncate rounded border-2 border-neutral-700 py-0.5 text-center ${rand}`}
-                    title={naam}
+                    title={blokTitel(naam, dagen[i].datum, dagen[j - 1].datum)}
                   />
                 </td>
               );

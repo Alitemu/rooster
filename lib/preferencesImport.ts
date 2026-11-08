@@ -7,7 +7,7 @@
  * /api/admin/period/[id]/preferences-import).
  *
  * Only markings made by hand are imported. A cell the export wrote with a
- * reason - "(parttime)", "(afwezig)", "(fellow)" - comes from a part-time
+ * reason - "(deeltijd)", "(afwezig)", "(fellow)" - comes from a part-time
  * pattern, an absence or the fellow tick, which keep it in sync themselves;
  * such a cell is skipped, and an empty cell never clears one. A plain
  * "geblokkeerd", "liever niet" or "voorkeur" is set as a hand marking, the
@@ -51,7 +51,8 @@ const TELLER_BY_WORD: Record<string, string> = {
   weekenddienst: 'WEEKEND',
   feestdagdienst: 'FEESTDAG',
 };
-const AUTOMATIC = /^(geblokkeerd|liever niet|voorkeur) \((parttime|afwezig|fellow)\)$/;
+// "(parttime)" is what the overview wrote before 1.3.0: a file downloaded then still imports.
+const AUTOMATIC = /^(geblokkeerd|liever niet|voorkeur) \((deeltijd|parttime|afwezig|fellow)\)$/;
 
 /** Statuses in which a roster already rests on the preferences. */
 const ROSTER_BUILT = ['GEGENEREERD', 'GEPUBLICEERD'];

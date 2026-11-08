@@ -46,10 +46,14 @@ export function opnieuwKnopTekst(volgende: number): string {
   return `Opnieuw maken met ${zoektijdWoorden(volgende)} zoektijd`;
 }
 
-/** Above that button: why, and that it starts over. */
+/**
+ * Above that button: why, and that it starts over. "Kon met een zoektijd van": the search can stop
+ * well before that time (each phase in solver/solver.py gets a share of it), so "had na 5 minuten" read
+ * wrong next to "Duur: 101s" (audit 1.2.2).
+ */
 export function opnieuwUitleg(vorige: number | null, volgende: number): string {
   return (
-    `De solver had na ${zoektijdWoorden(vorige ?? STANDAARD_ZOEKTIJD_SECONDEN)} nog niet bewezen dat dit het best mogelijke rooster is. ` +
+    `De solver kon met een zoektijd van ${zoektijdWoorden(vorige ?? STANDAARD_ZOEKTIJD_SECONDEN)} niet bewijzen dat dit het best mogelijke rooster is. ` +
     `Met ${zoektijdWoorden(volgende)} zoektijd begint de solver helemaal opnieuw: hij zoekt niet verder vanaf dit rooster. ` +
     'Het nieuwe rooster vervangt dit rooster, ook als het niet beter is. Diensten die je met de hand hebt ingevuld, blijven staan.'
   );

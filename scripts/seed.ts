@@ -1612,9 +1612,16 @@ async function seed() {
     // header's original left-to-right column order) before being checked
     // in, matching CLAUDE.md's "no real names - only codenaam" rule.
     //
-    // A marked cell in the source (whether it held a non-breaking space or
-    // the person's own initials again - both forms appeared, meaning the
-    // same thing) became a plain 'X' in the fixture; empty stayed empty.
+    // A marked cell in the source (the person's own initials) became a plain
+    // 'X' in the fixture; empty stayed empty.
+    // The first conversion also read a non-breaking space as a mark: in 14
+    // columns the source used it as filler, and those columns came out
+    // blocked on every day but the first (153 of 154). That was a conversion
+    // error, not real blockades (1.3.0, the user's call): those columns are
+    // empty now, so those 14 people have no hard blocks in the demo. Their
+    // real blocks are lost; the other 17 columns are as in the source.
+    // tests/fixtures/blokkadesFixture.test.ts fails when a column is blocked
+    // on (nearly) every day again.
     console.log('Importing real blockades (anonymized)...');
     const maandNummer: Record<string, number> = {
       Januari: 1, Februari: 2, Maart: 3, April: 4, Mei: 5, Juni: 6,

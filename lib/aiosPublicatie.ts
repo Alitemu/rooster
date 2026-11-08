@@ -30,7 +30,7 @@ import { laadAiosRooster, type AiosRooster } from '@/lib/aiosRooster';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import { writeAuditLog } from '@/lib/auditLog';
-import { formatSwapDate, periodStatusLabel } from '@/lib/aiosTeksten';
+import { aiosPeriodeInOnderwerp, formatSwapDate, periodStatusLabel } from '@/lib/aiosTeksten';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import { meldAiosRuilenIngetrokken, trekAlleOpenAiosRuilenIn, type IngetrokkenRuil } from '@/lib/aiosRuilen';
 
@@ -185,7 +185,7 @@ export function aiosVoorlopigBericht(
     soort: 'ROOSTER_VOORLOPIG',
     codenaam,
     personen: verzendlijstPersonen(codenaam),
-    onderwerp: `Voorlopig rooster AIOS ${period.naam}`,
+    onderwerp: `Voorlopig rooster ${aiosPeriodeInOnderwerp(period.naam)}`,
     tekst: `Beste ${codenaam},
 
 Het voorlopige rooster van de AIOS voor ${period.naam} staat klaar. ${dienstenTekst(eigen, percentage)}
@@ -229,7 +229,7 @@ export function aiosDefinitiefBericht(
     soort: 'ROOSTER_DEFINITIEF',
     codenaam,
     personen: verzendlijstPersonen(codenaam),
-    onderwerp: `Definitief rooster AIOS ${period.naam}`,
+    onderwerp: `Definitief rooster ${aiosPeriodeInOnderwerp(period.naam)}`,
     tekst: `Beste ${codenaam},
 
 Het rooster van de AIOS voor ${period.naam} is nu definitief. ${dienstenTekst(eigen, percentage)}

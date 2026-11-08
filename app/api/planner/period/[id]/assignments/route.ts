@@ -110,7 +110,20 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     query += ` LIMIT ? OFFSET ?`;
     params_list.push(pageSize, offset);
 
-    const assignments = db.prepare(query).all(...params_list) as any[];
+    // "Geruild" in the list instead of "Handmatig" (audit 1.2.2): an approved swap stores bron MANUAL,
+    // like a planner's own change, and records itself as an assignment_edit of type RUIL. A shift whose
+    // latest edit is that swap reads as geruild; a planner's change after it makes it Handmatig again.
+    const laatsteBewerking = new Map(
+      (
+        db
+          .prepare('SELECT toewijzing_id, edit_type FROM dienstrooster_assignment_edit WHERE periode_id = ? ORDER BY aangemaakt_op ASC, rowid ASC')
+          .all(periodId) as Array<{ toewijzing_id: string; edit_type: string }>
+      ).map((e) => [e.toewijzing_id, e.edit_type])
+    );
+    const assignments = (db.prepare(query).all(...params_list) as any[]).map((a) => ({
+      ...a,
+      geruild: laatsteBewerking.get(a.id) === 'RUIL',
+    }));
 
     return NextResponse.json({
       success: true,

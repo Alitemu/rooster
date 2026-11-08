@@ -15,7 +15,7 @@ export default function Home() {
           <li>✓ Automatische roosterplanning op basis van voorkeuren</li>
           <li>✓ Verdeling van diensten</li>
           <li>✓ Feestdagdiensten eerlijk verdeeld over de jaren</li>
-          <li>✓ Parttime ondersteuning</li>
+          <li>✓ Rekening met deeltijd</li>
         </ul>
       </div>
 

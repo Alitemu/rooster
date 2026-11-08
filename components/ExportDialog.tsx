@@ -554,11 +554,11 @@ export function ExportDialog({
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
                 Elke handmatige toewijzing, wisseling en verwijdering in deze periode, met reden,
-                wie het deed en of daarbij een blokkade, parttime-dag of de vensterregel is
-                overruled.
+                wie het deed en of daarbij bewust is afgeweken van een blokkade, een deeltijddag of
+                de vensterregel.
               </p>
               <p className="text-xs text-blue-800 mt-2">
-                Kolommen: Datum wijziging, Actie, Betreft, Dienstdatum, Diensttype, Reden, Overrule, Aangepast door
+                Kolommen: Datum wijziging, Actie, Betreft, Dienstdatum, Diensttype, Reden, Afwijking, Aangepast door
               </p>
             </div>
 

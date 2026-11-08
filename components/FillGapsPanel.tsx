@@ -31,6 +31,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
+import { botsingenInRonde, sorteerOpRuimte } from '@/lib/vooraf';
 
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
 // comment there for why a person can only ever be in one of these.
@@ -74,6 +75,8 @@ interface UnfilledSlot {
   assigned_count: number;
   shortfall: number;
   eligible_people: EligiblePerson[];
+  /** The period's windows (lib/rosterGaps.ts), to check the picks of one round against each other. */
+  venster: { avond: number; weekendFeestdag: number };
 }
 
 interface Props {
@@ -112,7 +115,7 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: 'Beschikbaar',
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
-  PARTTIME: 'Part-time dag',
+  PARTTIME: 'Deeltijddag',
   FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
@@ -123,16 +126,20 @@ const CATEGORY_NOTES: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: '',
   LIEVER_NIET: 'heeft aangegeven liever niet op deze dag te werken',
   VENSTERBLOK: 'heeft al een dienst binnen het venster',
-  PARTTIME: 'heeft parttime-vrij op deze dag',
+  PARTTIME: 'heeft op deze dag een deeltijddag',
   FELLOW: 'is fellow en ondersteunt in het weekend de AIOS',
   GEBLOKKEERD: 'heeft deze dag geblokkeerd',
 };
 
+// Within a group most room first (lib/vooraf.ts): alphabetical put someone already "vol" on top (audit 1.2.2).
 function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, EligiblePerson[]]> {
   return CATEGORY_ORDER.map(
-    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, people.filter((p) => p.category === cat)]
+    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, sorteerOpRuimte(people.filter((p) => p.category === cat))]
   ).filter(([, group]) => group.length > 0);
 }
+
+const dagKort = (datum: string) =>
+  new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 
 function draftStorageKey(periodId: string): string {
   return `dienstrooster-fillgaps-draft-${periodId}`;
@@ -313,6 +320,9 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
   ) : null;
 
   const stagedCount = Object.keys(selection).length;
+  // The other picks of this round for that person within the window (lib/vooraf.ts, audit 1.2.2).
+  const rondeBotsing = (slot: UnfilledSlot, personId: string): string[] =>
+    slots ? botsingenInRonde(slot, personId, selection, slots, slot.venster) : [];
 
   const handleApplyAll = async () => {
     const entries = Object.entries(selection);
@@ -452,9 +462,20 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                 <p className="text-xs text-neutral-500">
                   Week {slot.iso_week} · {slot.assigned_count}/{slot.benodigd_aantal_personen} ingevuld
                 </p>
-                {selectedPerson && selectedPerson.category !== 'BESCHIKBAAR' && (
+                {selectedPerson && selectedPerson.category === 'VOORKEUR' && (
+                  <p className="text-xs text-green-700 mt-1">
+                    ✓ {selectedPerson.codenaam} {CATEGORY_NOTES.VOORKEUR}
+                  </p>
+                )}
+                {selectedPerson && selectedPerson.category !== 'BESCHIKBAAR' && selectedPerson.category !== 'VOORKEUR' && (
                   <p className="text-xs text-orange-700 mt-1">
                     ⚠️ {selectedPerson.codenaam} {CATEGORY_NOTES[selectedPerson.category]}
+                  </p>
+                )}
+                {selectedPerson && rondeBotsing(slot, selectedPerson.id).length > 0 && (
+                  <p className="text-xs text-orange-700 mt-1" data-testid="ronde-botsing">
+                    ⚠️ {selectedPerson.codenaam} staat in deze ronde ook op{' '}
+                    {rondeBotsing(slot, selectedPerson.id).map(dagKort).join(' en ')}: twee diensten binnen het venster.
                   </p>
                 )}
               </div>
@@ -491,11 +512,15 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                           key={category}
                           label={`${CATEGORY_GROUP_LABELS[category]} (${people.length})`}
                         >
-                          {people.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {bandLabel(p)}
-                            </option>
-                          ))}
+                          {people.map((p) => {
+                            const botsing = rondeBotsing(slot, p.id);
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {bandLabel(p)}
+                                {botsing.length > 0 ? ` · in deze ronde al op ${botsing.map(dagKort).join(' en ')}` : ''}
+                              </option>
+                            );
+                          })}
                         </optgroup>
                       ))}
                     </select>

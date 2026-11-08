@@ -198,7 +198,14 @@ CSV's separator and encoding depend on the machine).
 
 **Downloads:** every download is a one-sheet workbook (.xlsx, 0.20.0):
 rooster, statusrapport, voorkeurenoverzicht, uitnodigingen,
-wijzigingsgeschiedenis (app/api/exports). They were CSV, which a Dutch
+wijzigingsgeschiedenis (app/api/exports). The wijzigingsgeschiedenis stood
+only in the dialog behind "Uitnodigingen en herinneringen", where the
+planner did not find it; since 1.3.0 it is a link of its own in
+"Exporteren & communicatie" for both diensten (components/exportKnoppen.test.ts).
+Its rows came twice for a shift changed more than once: the export joined
+every audit entry of the assignment to every edit. Each edit now takes the
+one audit entry nearest in time (a correlated MIN(ABS(julianday)) in the
+route; SQLite does not allow an outer column in a subquery's ORDER BY). They were CSV, which a Dutch
 Excel opened in one column (it splits on ";" and wants a byte order mark),
 and a CSV saved again changes with the machine. lib/xlsxWrite.ts writes
 them with Node's zlib, no library, like the reader: a date is a real date

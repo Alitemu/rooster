@@ -485,14 +485,11 @@ function PersonalLinkPageContent() {
   const inputGate = checkPeriodAcceptsInput(period);
   const inputClosed = period.status !== 'GEPUBLICEERD' && !inputGate.allowed;
 
-  // The sync from preferences/absences/deeltijd into the solver's input
-  // only runs while a period is OPEN (lib/absenceSync.ts, lib/parttimeSync.ts)
-  // - once a roster has been generated, a change saved here is stored but
-  // has no effect on the already-generated roster until the planner
-  // regenerates it by hand. Distinct from deadlinePassed: the deadline may
-  // still be in the future, so the form stays editable, but a save here
-  // would otherwise look like it "took" with no indication that it hasn't
-  // actually reached the roster yet.
+  // Generated, not (or no longer) published. Input is closed then (only an
+  // OPEN period takes input, lib/periodInputGate.ts): the banner used to say
+  // that changes saved now were kept, right under the one saying nothing can
+  // be changed (audit 1.2.2). After "Publicatie intrekken" this is also what
+  // the participant sees, with the melding about it under Meldingen.
   const rosterAlreadyGenerated = period.status === 'GEGENEREERD';
 
   return (
@@ -524,14 +521,15 @@ function PersonalLinkPageContent() {
             )}
           </div>
           <div className="flex shrink-0 gap-2 self-start print:hidden">
-            {period.status === 'GEPUBLICEERD' && (
-              <button
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
-              >
-                🔔 Meldingen
-              </button>
-            )}
+            {/* In every status, not only once published: "publicatie ingetrokken"
+                is a melding for a period that is no longer published, and it
+                could not be read until the roster came out again (audit 1.2.2). */}
+            <button
+              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+            >
+              🔔 Meldingen
+            </button>
             {/* There was no way to end a session here at all. On a shared
                 ward computer that mattered: the session cookie is good for
                 30 days, so the next person to sit down was still signed in
@@ -558,17 +556,17 @@ function PersonalLinkPageContent() {
         </div>
       )}
 
-      {!deadlinePassed && rosterAlreadyGenerated && (
-        <div className="card p-4 bg-amber-50 border border-amber-200">
+      {rosterAlreadyGenerated && (
+        <div className="card p-4 bg-amber-50 border border-amber-200" data-testid="rooster-nog-niet-gepubliceerd">
           <p className="text-sm text-amber-900">
-            ⚠️ Het rooster voor deze periode is al gegenereerd. Wijzigingen die je nu opslaat,
-            worden bewaard, maar tellen pas mee als de planner het rooster opnieuw genereert.
+            📋 Het rooster is gemaakt, maar nog niet gepubliceerd. Zodra de planner het publiceert, zie je hier
+            je diensten. Berichten van de planner staan bij Meldingen.
           </p>
         </div>
       )}
 
       {/* Notifications Panel */}
-      {period.status === 'GEPUBLICEERD' && notificationsOpen && personId && (
+      {notificationsOpen && personId && (
         <div className="card p-4 bg-blue-50 border border-blue-200">
           <button
             onClick={() => setNotificationsOpen(false)}

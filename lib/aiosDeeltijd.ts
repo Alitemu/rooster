@@ -261,7 +261,7 @@ function afwezigheidFout(soort?: string, van?: string, tot?: string): Antwoord |
   for (const d of [van, tot]) {
     if (d !== undefined && !isValidIsoDate(d)) return fout(400, 'INVALID_DATE', 'Gebruik een geldige datum (JJJJ-MM-DD)');
   }
-  if (van !== undefined && tot !== undefined && van > tot) return fout(400, 'INVALID_RANGE', '"Van" moet vóór of op "tot" liggen');
+  if (van !== undefined && tot !== undefined && van > tot) return fout(400, 'INVALID_RANGE', '"Van" moet vóór of op "Tot en met" liggen');
   return null;
 }
 

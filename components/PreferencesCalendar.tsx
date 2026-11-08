@@ -513,7 +513,7 @@ export function PreferencesCalendar({
         </span>
         <span className="flex items-center gap-1.5">
           <i className="calendar-cell-parttime inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">PT</i>
-          Parttime dag
+          Deeltijddag
         </span>
         <span className="flex items-center gap-1.5">
           <i className="calendar-cell-absence inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AF</i>
@@ -688,7 +688,7 @@ export function PreferencesCalendar({
                                     const label = autoSource === 'PARTTIME' ? 'PT' : 'AF';
                                     const explanation =
                                       autoSource === 'PARTTIME'
-                                        ? 'parttime dag (automatisch geblokkeerd)'
+                                        ? 'deeltijddag (automatisch geblokkeerd)'
                                         : 'afwezigheid (automatisch geblokkeerd)';
                                     const cellClass =
                                       autoSource === 'PARTTIME' ? 'calendar-cell-parttime' : 'calendar-cell-absence';

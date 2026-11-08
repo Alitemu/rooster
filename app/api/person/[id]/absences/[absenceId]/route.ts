@@ -122,7 +122,7 @@ export async function PATCH(
     if (newVanDatum > newTotDatum) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "tot" liggen' },
+        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "Tot en met" liggen' },
       };
       return NextResponse.json(response, { status: 400 });
     }

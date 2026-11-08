@@ -14,6 +14,7 @@ import { useAiosDialoogSluiten, useAiosScrollSlot } from '@/lib/aiosDialoog';
 import { withBasePath } from '@/lib/basePath';
 import { telwoord } from '@/lib/aiosTelwoord';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
+import { BestandKiezer } from '@/components/BestandKiezer';
 
 interface Change {
   codenaam: string;
@@ -152,12 +153,11 @@ export function AiosVoorkeurenImportButton({ periodId, periodStatus, onImported 
               <li>Controleren verandert nog niets. Je ziet eerst wat er zou veranderen.</li>
             </ul>
 
-            <input
-              type="file"
+            <BestandKiezer
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               disabled={busy}
-              onChange={(e) => pickFile(e.target.files?.[0])}
-              className="block w-full text-sm mb-4"
+              onKies={(bestand) => pickFile(bestand ?? undefined)}
+              className="mb-4"
               aria-label="Excel-bestand met voorkeuren van de AIOS"
             />
 

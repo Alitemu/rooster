@@ -38,7 +38,7 @@ import { randomUUID } from 'crypto';
 import { aiosIsDefinitief } from '@/lib/aiosDefinitief';
 import { db } from '@/db/client';
 import type { VerzendlijstSoort } from '@/lib/aiosVerzendlijst';
-import { formatSwapDate } from '@/lib/aiosTeksten';
+import { aiosPeriodeInOnderwerp, formatSwapDate } from '@/lib/aiosTeksten';
 import { aiosContactAdres, aiosMailIngesteld } from '@/lib/aiosMail';
 import { mailAiosRuil } from '@/lib/aiosRuilMail';
 import { type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
@@ -637,7 +637,7 @@ export function keurAiosRuilGoed(period: AiosUitnodigPeriode, personId: string, 
     r.id,
     'RUIL_DOORGEVEN',
     { codenaam: DOORGEVEN_AAN },
-    `Ruil in het rooster van de AIOS ${period.naam}`,
+    `Ruil in het rooster ${aiosPeriodeInOnderwerp(period.naam)}`,
     `Twee AIOS hebben geruild in het rooster voor ${period.naam}.\n\n${collega} doet nu: ${dienstTekst(ua)}\n${aanvrager} doet nu: ${dienstTekst(ub)}`,
     { anderen: [aanvrager, collega], cc: [aanvrager, collega, DOORGEVEN_CC_PLANNER] }
   );

@@ -462,3 +462,38 @@ Show live in settings screen with interpretation in plain Dutch.
 Since the window counts days (0.22.0) a person can do floor((days - 1) /
 (7 x windowWeeks)) + 1 shifts at most, so formula 1 stays a cautious
 estimate rather than the exact maximum.
+
+## Rules from the audit of 1.2.2 (1.3.0)
+
+- **No swap onto a day you blocked yourself.** The swap candidates warned
+  about the colleague's blocks only; Persoon-23 got 21 April through a swap,
+  a day they had blocked themselves (an absence or a deeltijddag is stored
+  as an ABSOLUUT marking too). lib/swapEigenBlokkade.ts: the candidates
+  leave such a shift out (lib/swapCandidates.ts) and the create route
+  refuses it with EIGEN_BLOKKADE_MELDING. A liever niet stays allowed. The
+  AIOS's swap already did not show them.
+- **Rooster vooraf invullen checks one round against itself.** The
+  categories come from the server and know only what is already in the
+  roster, so one round could put the same person on 14 and 15 January
+  without a word. lib/vooraf.ts botsingenInRonde names the other picks of
+  the same person in the round within the window (requiredGapWeeks, from
+  lib/windowGap.ts, the database-free half of lib/windowRule.ts), next to
+  the option and under the slot. sorteerOpRuimte puts who still has room
+  first in every group (the grid and the calendar too), "vol" last; a
+  voorkeur shows as a green ✓, not a ⚠️.
+- **The solver's words.** "had na 5 minuten nog niet bewezen" after 101
+  seconds: lib/solverZoektijd.ts names the zoektijd it had, not a duration
+  it did not take. "Totale kosten" is gone; "Score (lager is beter)" shows
+  only for the Puntenplanner (objectiveMode weighted).
+- **Absence days counted once, the same way.** The card of an absence and
+  the line under the calendar both name every day of the absence inside
+  the period (lib/afwezigheidTelling.ts); the card says apart how many this
+  absence blocked itself and the line how many fall on a deeltijddag.
+  Before, the card said "7 van de 12 dagen" and the line "10
+  afwezigheidsdagen" for the same absence.
+- **Words.** "deeltijd" everywhere on the achterwacht's screens (the
+  voorkeurenoverzicht writes "(deeltijd)"; the import still reads
+  "(parttime)" from an older file), "Afwijking" instead of "Overrule",
+  "Personeel beheren" instead of "Medewerkers", "Tot en met" in the range
+  message, "2 weekenddiensten extra" and wizard step 5 in words
+  (lib/saldoWijzigen.ts saldoInWoorden, beginsaldoInWoorden).

@@ -458,6 +458,8 @@ test('the planner of the AIOS: Exporteren & communicatie without the beheerder\'
   const sectie = p.getByTestId('aios-exporteren');
   await expect(sectie.getByRole('link', { name: /Voorkeurenoverzicht downloaden/ })).toBeVisible();
   await expect(sectie.getByRole('link', { name: /Statusrapport downloaden/ })).toBeVisible();
+  // 1.3.0: the change history straight in the section, not only behind "Uitnodigingen en herinneringen".
+  await expect(sectie.getByRole('link', { name: 'Wijzigingsgeschiedenis downloaden (Excel)' })).toHaveAttribute('href', /\/download-wijzigingen$/);
   // The planner's own voorkeurenoverzicht has no toelichting: only the beheerder's file, the back-up, has them.
   const bestand = await p.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-voorkeuren`);
   expect(bestand.status()).toBe(200);

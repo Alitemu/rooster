@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { EERST_VERWIJDEREN, aiosDienstroosterStatus, eerstVerwijderenUitleg } from '@/lib/aiosTeksten';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { EERST_VERWIJDEREN, aiosDienstroosterStatus, aiosPeriodeInOnderwerp, eerstVerwijderenUitleg } from '@/lib/aiosTeksten';
 
 /**
  * What the status bar of an AIOS period says after "Terug naar open" was
@@ -40,5 +42,21 @@ describe('aiosDienstroosterStatus', () => {
     expect(aiosDienstroosterStatus('GEGENEREERD', true)).toBe('handmatig aangepast');
     expect(aiosDienstroosterStatus('GEPUBLICEERD', false)).toBe('gepubliceerd');
     expect(aiosDienstroosterStatus('GEPUBLICEERD', true)).toBe('gepubliceerd');
+  });
+});
+
+describe('aiosPeriodeInOnderwerp', () => {
+  it('no "AIOS AIOS" in a subject: a name that starts with AIOS stays as it is (1.3.0)', () => {
+    expect(aiosPeriodeInOnderwerp('AIOS 2027 Q1')).toBe('AIOS 2027 Q1');
+    expect(aiosPeriodeInOnderwerp('aios 2027 Q2')).toBe('aios 2027 Q2');
+    expect(aiosPeriodeInOnderwerp('2027 Q1')).toBe('AIOS 2027 Q1');
+    expect(aiosPeriodeInOnderwerp('Aiosrooster voorjaar')).toBe('AIOS Aiosrooster voorjaar');
+  });
+
+  it('the subjects of the roster and swap mails use it', () => {
+    const lees = (p: string) => readFileSync(join(__dirname, p), 'utf8');
+    expect(lees('aiosPublicatie.ts')).toContain('onderwerp: `Voorlopig rooster ${aiosPeriodeInOnderwerp(period.naam)}`');
+    expect(lees('aiosPublicatie.ts')).toContain('onderwerp: `Definitief rooster ${aiosPeriodeInOnderwerp(period.naam)}`');
+    expect(lees('aiosRuilen.ts')).toContain('`Ruil in het rooster ${aiosPeriodeInOnderwerp(period.naam)}`');
   });
 });

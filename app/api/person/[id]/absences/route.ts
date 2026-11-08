@@ -212,7 +212,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (van_datum > tot_datum) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "tot" liggen' },
+        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "Tot en met" liggen' },
       };
       return NextResponse.json(response, { status: 400 });
     }
