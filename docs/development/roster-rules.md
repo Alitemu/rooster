@@ -28,7 +28,9 @@ over.
   part-time patterns and absences; setting such a day by hand clears the
   flag (slot route), an absence takes it over. Never counted against a
   block budget.
-- A fellow may release weekend days (clear or mark them). Bands: fellows
+- A fellow may release weekend days (clear or mark them). A liever niet on
+  a weekend day counts as released too, so the solver may give that day;
+  asked after 1.3.0, the planner chose to leave this as it is. Bands: fellows
   don't count for WEEKEND, so the others' band goes up at generation
   (lib/rosterBands.ts `resolvePeriodBands`: a configured band scaled by
   everyone / the non-fellows, both as effective headcounts, floor/ceil;
