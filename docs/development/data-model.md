@@ -189,7 +189,11 @@ before.
 - Pool: 2-week window (default)
 - Period: 2027-01-04 to 2027-06-06 (22 weeks)
 - Various part-time patterns
-- Mixed balances (some -1, +1, 0)
+- Mixed balances (some -1, +1, 0), with the reason the import writes
+  ("Geïmporteerd beginsaldo"): the import replaces a person's beginsaldo
+  found by that reason, and the seed's own reason "Beginsaldo vanuit import"
+  stayed next to an imported one and counted twice (audit 1.3.0,
+  scripts/seedBeginsaldo.test.ts)
 - Holiday history for 2025-2028
 - Creates the audit_log table, but does not insert any rows into it - a
   fresh seed has an empty audit trail until real actions happen

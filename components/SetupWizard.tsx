@@ -38,6 +38,8 @@ import { CORRECTION_TYPE_LABELS, type Correction } from '@/lib/correctieRedenen'
 import { DatumTijdVeld, DatumVeld, DatumTekst } from '@/components/DatumVeld';
 import { BestandKiezer } from '@/components/BestandKiezer';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
+import type { VorigeInstellingen } from '@/lib/vorigeInstellingen';
+import { budgetTekst, verschilMelding } from '@/lib/vorigeInstellingenTekst';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -199,26 +201,30 @@ export function SetupWizard({ period, onComplete }: Props) {
   useEffect(() => {
     if (rowError || bevestigVraag) rowMeldingRef.current?.scrollIntoView({ block: 'nearest' });
   }, [rowError, bevestigVraag]);
+  // A new period starts from what the pool's previous period was opened with
+  // (lib/vorigeInstellingen.ts): it always started on Gelijk and 100%, and
+  // 2027-2 lost the Naar rato of 2027-1 without a word (audit 1.3.0).
+  const vorige: VorigeInstellingen | null = period?.vorige_instellingen ?? null;
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
-    windowWeeksAvond: 2,
-    windowWeeksWeekendFeestdag: 2,
+    windowWeeksAvond: vorige?.windowWeeksAvond ?? 2,
+    windowWeeksWeekendFeestdag: vorige?.windowWeeksWeekendFeestdag ?? 2,
     band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
     band_max: { AVOND: 8, WEEKEND: 3, FEESTDAG: 2 },
   });
   const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
-    mode: 'GELIJK',
+    mode: vorige?.distributionMode ?? 'GELIJK',
     factors: {},
   });
   const [blockBudgetConfig, setBlockBudgetConfig] = useState<BlockBudgetConfig>({
-    hardPercent: 100,
-    softPercent: 100,
+    hardPercent: vorige?.hardPercent ?? 100,
+    softPercent: vorige?.softPercent ?? 100,
     // Matches the server-side default (lib/blockBudget.ts's normalizeConfig
     // falls back to true when the field is missing, same as scripts/seed.ts)
     // - the wizard's own initial state was the one place still defaulting
     // to false, so a freshly opened wizard showed the checkbox unchecked
     // even though every other part of the app already treats "on" as the
     // default.
-    parttimeExempt: true,
+    parttimeExempt: vorige?.parttimeExempt ?? true,
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [balanceParseWarnings, setBalanceParseWarnings] = useState<string[]>([]);
@@ -1130,8 +1136,9 @@ export function SetupWizard({ period, onComplete }: Props) {
               <p className="text-sm font-medium text-neutral-800">Nieuw personeelslid toevoegen</p>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
+                  <label htmlFor="nieuw-lid-codenaam" className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
                   <input
+                    id="nieuw-lid-codenaam"
                     type="text"
                     value={newMember.codenaam}
                     onChange={(e) => setNewMember({ ...newMember, codenaam: e.target.value })}
@@ -1184,12 +1191,19 @@ export function SetupWizard({ period, onComplete }: Props) {
         {/* Step 3: Window & Budgets */}
         {currentStep === 'window' && (
           <div className="space-y-4">
+            {vorige && (
+              <p className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-900" data-testid="vorige-instellingen">
+                Het venster en het blokkadebudget zijn overgenomen van {vorige.periode_naam}. Pas ze aan als het voor
+                deze periode anders moet. Het streefbereik rekent de app uit voor deze periode.
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="venster-avond" className="block text-sm font-medium mb-1">
                   Venster avonddiensten (weken)
                 </label>
                 <input
+                  id="venster-avond"
                   type="number"
                   min="0"
                   max="8"
@@ -1207,10 +1221,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="venster-weekend" className="block text-sm font-medium mb-1">
                   Venster weekend-/feestdagdiensten (weken)
                 </label>
                 <input
+                  id="venster-weekend"
                   type="number"
                   min="0"
                   max="8"
@@ -1330,10 +1345,11 @@ export function SetupWizard({ period, onComplete }: Props) {
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium mb-2">
+                  <label htmlFor="budget-geblokkeerd" className="block text-xs font-medium mb-2">
                     Geblokkeerd (max % van de diensten)
                   </label>
                   <input
+                    id="budget-geblokkeerd"
                     type="number"
                     min="0"
                     max="100"
@@ -1356,10 +1372,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium mb-2">
+                  <label htmlFor="budget-liever-niet" className="block text-xs font-medium mb-2">
                     Liever niet (max % van de diensten)
                   </label>
                   <input
+                    id="budget-liever-niet"
                     type="number"
                     min="0"
                     max="100"
@@ -1401,6 +1418,11 @@ export function SetupWizard({ period, onComplete }: Props) {
         {/* Step 4: Distribution Mode */}
         {currentStep === 'distribution' && (
           <div className="space-y-4">
+            {vorige && (
+              <p className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-900" data-testid="vorige-verdeling">
+                De verdeling is overgenomen van {vorige.periode_naam}: {DISTRIBUTION_MODE_LABELS[vorige.distributionMode] || vorige.distributionMode}.
+              </p>
+            )}
             <div>
               <label className="block text-sm font-medium mb-2">Verdelingsstrategie</label>
               <div className="space-y-2">
@@ -1623,10 +1645,31 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Verdeling:</strong> {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}
                 </p>
                 <p>
+                  <strong>Blokkadebudget:</strong> geblokkeerd {budgetTekst(blockBudgetConfig.hardPercent)} · liever niet{' '}
+                  {budgetTekst(blockBudgetConfig.softPercent)}
+                </p>
+                <p>
                   <strong>Correcties:</strong> {corrections.length} klaar om toe te passen
                 </p>
               </div>
             </div>
+
+            {vorige &&
+              (() => {
+                const melding = verschilMelding(vorige, {
+                  distributionMode: distributionConfig.mode,
+                  windowWeeksAvond: windowConfig.windowWeeksAvond,
+                  windowWeeksWeekendFeestdag: windowConfig.windowWeeksWeekendFeestdag,
+                  hardPercent: blockBudgetConfig.hardPercent,
+                  softPercent: blockBudgetConfig.softPercent,
+                  parttimeExempt: blockBudgetConfig.parttimeExempt,
+                });
+                return melding ? (
+                  <div className="bg-amber-50 border border-amber-300 rounded p-4 text-sm text-amber-900" data-testid="anders-dan-vorige">
+                    ⚠️ {melding}
+                  </div>
+                ) : null;
+              })()}
 
             {staffMembers.filter((s) => s.is_active).length === 0 && (
               <div className="bg-red-50 border border-red-200 rounded p-4">

@@ -26,4 +26,10 @@ describe('Meldingen on the participant page', () => {
     expect(bron).not.toMatch(/Wijzigingen die je nu opslaat/);
     expect(bron).toMatch(/Het rooster is gemaakt, maar nog niet gepubliceerd/);
   });
+
+  // Audit 1.3.0: after unpublishing, "De planner heeft deze periode gesloten" stood above it as well.
+  it('shows only that banner then, which also says nothing can be changed', () => {
+    expect(bron).toMatch(/\{inputClosed && !rosterAlreadyGenerated && \(/);
+    expect(bron).toMatch(/Wat je hebt ingevuld, kun je hieronder nog zien, maar niet meer wijzigen\./);
+  });
 });

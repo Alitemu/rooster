@@ -20,6 +20,7 @@ import { validateLedgerDelta } from '@/lib/ledgerDelta';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
 import { bestaandBeginsaldo } from '@/lib/importSjabloonBouwen';
+import { doorgeschovenSaldo } from '@/lib/carryOver';
 
 interface BalanceRow {
   codenaam: string;
@@ -45,7 +46,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const aiosNotYet = aiosNotYetDenial(params.id);
     if (aiosNotYet) return aiosNotYet;
     const personen = bestaandBeginsaldo(params.id).map((b) => ({ codenaam: b.codenaam, avond: b.AVOND, weekend: b.WEEKEND }));
-    return NextResponse.json({ success: true, data: { personen } });
+    // What the app carried over from the previous period by itself (lib/carryOver.ts), in words.
+    return NextResponse.json({ success: true, data: { personen, doorgeschoven: doorgeschovenSaldo(params.id) } });
   } catch (error) {
     return internalErrorResponse('import-balances-list', error);
   }

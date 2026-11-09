@@ -9,7 +9,7 @@
  *   and the typed word, because it replaces everything for both diensten.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
@@ -87,6 +87,13 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       })
       .catch(() => setError('De instellingen van de back-up konden niet geladen worden.'));
   }, [isOpen]);
+
+  // The answer stands at the foot of the dialog, under "Back-up terugzetten": after a wrong password
+  // only a red edge showed and the beheerder had to scroll to read it (audit 1.3.0).
+  const antwoordRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error || melding) antwoordRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [error, melding]);
 
   if (!isOpen) return null;
 
@@ -324,12 +331,14 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
             </>
           )}
 
-          {error && (
-            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-              {error}
-            </div>
-          )}
-          {melding && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">{melding}</div>}
+          <div ref={antwoordRef} className="space-y-3 empty:hidden">
+            {error && (
+              <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                {error}
+              </div>
+            )}
+            {melding && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-900">{melding}</div>}
+          </div>
         </div>
 
         <div className="border-t p-6 flex-shrink-0 flex flex-wrap justify-between gap-3">

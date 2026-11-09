@@ -282,6 +282,8 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await deelnemer.goto(`${getBaseUrl()}/person/${testData.users[1].token}`);
       await deelnemer.waitForLoadState('networkidle');
       await expect(deelnemer.getByTestId('rooster-nog-niet-gepubliceerd')).toContainText('nog niet gepubliceerd');
+      // One banner: not also "De planner heeft deze periode gesloten" (audit 1.3.0).
+      await expect(deelnemer.getByText(/De planner heeft deze periode gesloten/)).toHaveCount(0);
       await expect(deelnemer.getByText(/Wijzigingen die je nu opslaat/)).toHaveCount(0);
       await deelnemer.getByRole('button', { name: '🔔 Meldingen' }).click();
       await expect(deelnemer.getByText(/publicatie ingetrokken/).first()).toBeVisible();

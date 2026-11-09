@@ -22,6 +22,7 @@ import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
 import { beginsaldoInWoorden, kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
 import { BestandKiezer } from '@/components/BestandKiezer';
+import type { DoorgeschovenSaldo } from '@/lib/carryOver';
 
 interface Props {
   periodId: string;
@@ -46,6 +47,8 @@ export function ImportEnCorrecties({ periodId, status, mensen, onGewijzigd }: Pr
   const kan = kanSaldoWijzigen(status);
 
   const [beginsaldi, setBeginsaldi] = useState<Array<{ codenaam: string; avond: number; weekend: number }>>([]);
+  // What the app carried over by itself (lib/carryOver.ts): on no screen until 1.4.0 (audit 1.3.0).
+  const [doorgeschoven, setDoorgeschoven] = useState<DoorgeschovenSaldo | null>(null);
   const [correcties, setCorrecties] = useState<OpgeslagenCorrectie[]>([]);
   const [laadFout, setLaadFout] = useState<string | null>(null);
 
@@ -69,6 +72,7 @@ export function ImportEnCorrecties({ periodId, status, mensen, onGewijzigd }: Pr
       const corr = await corrRes.json();
       if (!saldoRes.ok || !corrRes.ok) throw new Error(saldo?.error?.message || corr?.error?.message || 'Laden mislukt');
       setBeginsaldi(saldo.data.personen);
+      setDoorgeschoven(saldo.data.doorgeschoven ?? null);
       setCorrecties(corr.data.correcties);
       setLaadFout(null);
     } catch (err) {
@@ -172,6 +176,31 @@ export function ImportEnCorrecties({ periodId, status, mensen, onGewijzigd }: Pr
       )}
 
       {laadFout && <p className="text-sm text-red-700">{laadFout}</p>}
+
+      {doorgeschoven && (
+        <div className="space-y-2" data-testid="doorgeschoven-saldo">
+          <h3 className="font-semibold text-neutral-900">
+            Saldo uit {doorgeschoven.vorige_periode ?? 'de vorige periode'}
+          </h3>
+          {doorgeschoven.regels.length === 0 ? (
+            <p className="text-sm text-neutral-600">Er schuift niets door: iedereen kwam binnen het eigen bereik uit.</p>
+          ) : (
+            <>
+              <p className="text-sm text-neutral-600">
+                De app neemt dit vanzelf mee. Dat gebeurt bij het openen en opnieuw bij elk genereren, zodat een wijziging in
+                het vorige rooster nog meetelt.
+              </p>
+              <ul className="text-sm text-neutral-800 space-y-1">
+                {doorgeschoven.regels.map((r) => (
+                  <li key={`${r.codenaam}|${r.tekst}`}>
+                    <span className="font-medium">{r.codenaam}</span>: {r.tekst}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+      )}
 
       <div className="space-y-3">
         <h3 className="font-semibold text-neutral-900">Beginsaldo importeren</h3>

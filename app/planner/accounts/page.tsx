@@ -166,7 +166,7 @@ export default function AccountsPage() {
           Alleen een beheerder kan accounts beheren.
         </div>
       )}
-      {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>}
+      {error && <div role="alert" className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>}
       {!geenToegang && melding && (
         <div className="card p-4 bg-green-50 border border-green-200 text-sm text-green-800" role="status">
           {melding}

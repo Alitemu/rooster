@@ -452,6 +452,9 @@ export function PreferencesCalendar({
     }
   }
   const heeftBudget = shiftCounters.some((c) => budget[c]);
+  // A kind of shift the period does not have gets no box: "Feestdagdiensten geblokkeerd 0 van 0
+  // toegestaan 0%" stood in a period from June to December (audit 1.3.0).
+  const zichtbareTellers = shiftCounters.filter((c) => counterTotals.get(c)!.total > 0);
 
   const highlightCov = highlightDatum ? coverage.get(highlightDatum) : undefined;
 
@@ -464,7 +467,7 @@ export function PreferencesCalendar({
           : 'Hoeveel dagen je per soort dienst hebt geblokkeerd, van alle dagen in deze periode.'}
       </p>
       <div className="flex gap-3 flex-wrap">
-        {shiftCounters.map((counter) => {
+        {zichtbareTellers.map((counter) => {
           const totals = counterTotals.get(counter)!;
           const limit = budget[counter];
           const teller = limit ? totals.counted : totals.blocked;

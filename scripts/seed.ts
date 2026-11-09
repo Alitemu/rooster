@@ -1510,7 +1510,10 @@ async function seed() {
       `).run(uuid(), periodId, dagen);
     }
 
-    // 8. Create some ledger entries (beginsaldi)
+    // 8. Create some ledger entries (beginsaldi). With the reason the import
+    // writes: the import replaces only rows with that reason, so a demo row
+    // with another reason stayed next to an imported one and counted twice
+    // (audit 1.3.0, Persoon-01 two avonddiensten fewer instead of one).
     console.log('Creating beginsaldi...');
     for (let i = 0; i < 10; i++) {
       const staffId = staffIds[i];
@@ -1528,7 +1531,7 @@ async function seed() {
           'AVOND',
           periodId,
           delta,
-          'Beginsaldo vanuit import',
+          'Geïmporteerd beginsaldo',
           'BEGINSALDO',
           plannerId,
           now

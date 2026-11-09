@@ -366,7 +366,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
         ) : exportType === 'invitations-download' ? (
           <>
             <h2 className="text-2xl font-bold mb-4">Uitnodigingen downloaden</h2>
-            {error && <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>}
+            {error && <div role="alert" className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>}
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">Het Excel-bestand bevat namen en persoonlijke links naar het voorkeurenformulier.</p>
               <p className="text-xs text-blue-800 mt-2">Kolommen: Naam, Persoonlijke link, Deadline</p>
@@ -395,7 +395,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
         ) : exportType === 'audit-trail' ? (
           <>
             <h2 className="text-2xl font-bold mb-4">Wijzigingsgeschiedenis downloaden</h2>
-            {error && <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>}
+            {error && <div role="alert" className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>}
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
                 Elke handmatige toewijzing, wisseling en verwijdering in deze periode, met reden en wie het deed.
@@ -420,7 +420,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
         ) : (
           <>
             <h2 className="text-2xl font-bold mb-4">Herinneringen versturen</h2>
-            {error && <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>}
+            {error && <div role="alert" className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700">{error}</div>}
             {mailKan === null ? (
               <p className="text-center text-neutral-600 mb-4">Laden...</p>
             ) : !mailKan ? (

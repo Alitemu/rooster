@@ -268,6 +268,10 @@ non-CONCEPT period with a basis_url, LATER_COLUMN_BACKFILL in the seed and
 migration 0018). Another period's invitations are refused (409
 OTHER_PERIOD_ACTIVE) until the active one is GEPUBLICEERD; the period
 list marks it "Actief".
+The planner's choice after audit 1.3.0 (1.4.0): "Link kwijt?" stays for
+the active period only. Once the next period's invitations went out, a lost
+link of the running, published roster is not offered; the old invitation
+link keeps working until that period ends.
 `berichten` stays empty on purpose: a flow that doesn't know this soort
 must send nothing rather than mail everyone. The flow looks the address
 up in its sheet and sends only that codenaam's bericht, to the sheet's

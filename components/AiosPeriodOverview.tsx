@@ -387,7 +387,7 @@ function Pagina({ period: begin }: { period: Period }) {
       {period.status !== 'CONCEPT' && <AiosToegangslinksSectie periodId={period.id} />}
       <AiosDienstpercentage periodId={period.id} status={period.status} versie={roosterVersie + handmatigVersie + toetsVersie} />
 
-      {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
+      {error && <div role="alert" className="card p-4 bg-red-50 border border-red-200 text-sm text-red-700">{error}</div>}
       {!overzicht && !error && <div className="card p-8 text-center text-neutral-600">Diensten laden...</div>}
 
       {overzicht && (

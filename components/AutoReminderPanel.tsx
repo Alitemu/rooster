@@ -144,7 +144,7 @@ export function AutoReminderPanel({ periodId, refreshKey }: Props) {
           ))}
         </ul>
       )}
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </div>
   );
 }

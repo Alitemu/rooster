@@ -85,6 +85,8 @@ test('the beheerder restores a backup of more than 10 MB in the browser, and a w
     await dialoog.getByLabel('Typ TERUGZETTEN om te bevestigen').fill('TERUGZETTEN');
     await knop.click();
     await expect(dialoog.getByRole('alert')).toHaveText('Het wachtwoord klopt niet of het bestand is beschadigd. Let op hoofdletters en kleine letters.');
+    // In sight, not under the edge of the dialog (audit 1.3.0).
+    await expect(dialoog.getByRole('alert')).toBeInViewport({ ratio: 1 });
     expect(markerWaarde(later)).toBe('na-de-backup');
 
     // 0.904.0: what was typed can be shown, and a field the browser could fill starts empty.

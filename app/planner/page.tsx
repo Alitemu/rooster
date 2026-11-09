@@ -567,7 +567,7 @@ export default function PlannerHomePage() {
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
           <button onClick={handleCreate} disabled={creating} className="btn-primary">
             {creating ? 'Bezig met aanmaken...' : 'Aanmaken en instellen'}

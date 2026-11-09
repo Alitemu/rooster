@@ -15,6 +15,7 @@ import { validateSingleLine, PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
 import { softDeletePeriod, PeriodTrashError } from '@/lib/periodTrash';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { isPeriodVisibleToPerson } from '@/lib/periodAccess';
+import { vorigeInstellingen, type VorigeInstellingen } from '@/lib/vorigeInstellingen';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface PeriodDetail {
@@ -33,6 +34,11 @@ interface PeriodDetail {
   verwijderd_op: string | null;
   // The pool's dienst: an AIOS period gets its own page (lib/aiosPeriod.ts).
   pool_type: string;
+}
+
+/** For the planner: a concept also gets what Rooster instellen starts from (lib/vorigeInstellingen.ts). */
+interface PlannerPeriodDetail extends PeriodDetail {
+  vorige_instellingen: VorigeInstellingen | null;
 }
 
 /**
@@ -142,9 +148,9 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     const otherDienst = periodDienstDenial(auth, params.id);
     if (otherDienst) return otherDienst;
 
-    const response: ApiSuccessResponse<PeriodDetail> = {
+    const response: ApiSuccessResponse<PlannerPeriodDetail> = {
       success: true,
-      data: row,
+      data: { ...row, vorige_instellingen: row.status === 'CONCEPT' ? vorigeInstellingen(row.id) : null },
     };
 
     return NextResponse.json(response);

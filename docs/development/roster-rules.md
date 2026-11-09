@@ -503,3 +503,32 @@ estimate rather than the exact maximum.
   "Personeel beheren" instead of "Medewerkers", "Tot en met" in the range
   message, "2 weekenddiensten extra" and wizard step 5 in words
   (lib/saldoWijzigen.ts saldoInWoorden, beginsaldoInWoorden).
+
+## Rules from the audit of 1.3.0 (1.4.0)
+
+- **A new period starts from the previous period's settings.** Rooster
+  instellen always started on Gelijk and a blokkadebudget of 100%: 2027-1
+  ran Naar rato, 2027-2 opened on Gelijk, and only "Verdeling: Gelijk" in
+  the summary said so. With deelnamefactoren of 0.8 and 0.9 that gives
+  part-timers a full-timer's streefaantal. lib/vorigeInstellingen.ts reads
+  the pool's latest opened period before this one (a frozen ruleset, outside
+  the trash) and GET /api/periods/[id] hands a concept's
+  `vorige_instellingen` to the wizard: the verdeling, both windows, the two
+  budgets and "deeltijddagen tellen niet mee". Steps 3 and 4 say "overgenomen
+  van …"; step 7 shows the budget and, when the planner changed one,
+  "Anders dan in … Daar was het: …" (lib/vorigeInstellingenTekst.ts). The
+  streefbereik is not taken over (the capacity check works it out for this
+  period), nor the solver's advanced settings.
+- **The carry-over is on screen.** The CARRY_OVER rows (lib/carryOver.ts)
+  showed nowhere for the planner: "Import en correcties" lists imported
+  beginsaldi only and "Grote verschillen" starts at 2. The import-balances
+  GET returns `doorgeschoven` (doorgeschovenSaldo): the previous published
+  period's name and each row as the ledger words it ("1 avonddienst in te
+  halen van vorige periode"), or "Er schuift niets door" when the previous
+  period settled everyone. Nothing for a concept, which has no rows yet.
+- **Labels and announcements.** Every label in the wizard points at its
+  field (components/wizardLabels.test.ts), a one-line `{error && ...}`
+  message has role="alert" everywhere (app/foutmeldingRol.test.ts), the
+  back-up dialog scrolls its answer into view (a wrong password showed only
+  a red edge), the participant sees one banner after Publicatie intrekken,
+  and a kind of shift the period lacks gets no blocked-days box.

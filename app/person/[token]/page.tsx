@@ -546,7 +546,8 @@ function PersonalLinkPageContent() {
         </div>
       </div>
 
-      {inputClosed && (
+      {/* One banner, not two (audit 1.3.0): with a roster made, the one below says it all. */}
+      {inputClosed && !rosterAlreadyGenerated && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
           <p className="text-sm text-amber-900">
             {deadlinePassed
@@ -560,7 +561,8 @@ function PersonalLinkPageContent() {
         <div className="card p-4 bg-amber-50 border border-amber-200" data-testid="rooster-nog-niet-gepubliceerd">
           <p className="text-sm text-amber-900">
             📋 Het rooster is gemaakt, maar nog niet gepubliceerd. Zodra de planner het publiceert, zie je hier
-            je diensten. Berichten van de planner staan bij Meldingen.
+            je diensten. Wat je hebt ingevuld, kun je hieronder nog zien, maar niet meer wijzigen. Berichten van de
+            planner staan bij Meldingen.
           </p>
         </div>
       )}

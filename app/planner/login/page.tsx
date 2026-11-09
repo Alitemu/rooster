@@ -171,7 +171,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
               Minimaal 8 tekens, met kleine letters, hoofdletters, cijfers en een speciaal teken.
             </p>
 
-            {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
 
             <button type="submit" className="btn-primary w-full" disabled={loading}>
               {loading ? 'Bezig...' : 'Wachtwoord instellen'}
@@ -315,7 +315,7 @@ function PlannerLoginForm() {
               />
             </div>
 
-            {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
 
             <button type="submit" className="btn-primary w-full" disabled={loading}>
               {loading ? 'Bezig...' : 'Inloggen'}
