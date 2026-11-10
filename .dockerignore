@@ -68,3 +68,11 @@ certs
 *.p12
 **/*.p12
 .mutation-backup
+
+# The audit of 1.4.0: reports about the app, not part of it. The image is what an installation pulls, and a
+# list of its weak spots has no business in there. .claude holds the playbook the audit followed.
+.claude
+AUDIT_REPORT.md
+SECURITY_FINDINGS.md
+TECHNICAL_DEBT.md
+IMPROVEMENT_ROADMAP.md
