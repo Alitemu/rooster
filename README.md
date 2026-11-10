@@ -1,12 +1,42 @@
 # Dienstrooster
 
-Een dienstroosterapplicatie voor verpleegafdelingen (20-40 medewerkers) met
-automatische roostergeneratie, verdeling van diensten en
-voorkeursbeheer.
+Een dienstroosterapplicatie voor een medische afdeling (20 tot 40 mensen per
+rooster). Deelnemers geven hun voorkeuren op, een solver maakt het rooster en
+de planner controleert, corrigeert en publiceert het.
 
-Alle fasen uit het implementatieplan zijn gebouwd en getest: authenticatie,
-datamodel, feestdagberekening, capaciteitscontrole, voorkeuren, de CP-SAT-
-solver voor roostergeneratie, publicatie, ruilverzoeken en correcties.
+De app bedient twee roosters, elk met een eigen planner en een eigen solver:
+
+- **Achterwacht:** avond-, weekend- en feestdagdiensten in periodes die de
+  planner zelf kiest. In productie.
+- **AIOS:** nacht-, avond-, dag- en uitloopdiensten per kwartaal (woensdag tot
+  en met dinsdag), met blokken, punten en een dienstpercentage. In gebruik
+  sinds versie 0.81.0. Het ontwerp staat in `docs/aios-rooster.md`.
+
+Na de inlogpagina gaan de twee elk hun eigen weg. Gedeeld zijn alleen de
+inlogpagina, de database en het Gmail-account. Een planner ziet alleen de
+eigen dienst, de beheerder ziet beide.
+
+## Wat de app doet
+
+- **Voorkeuren:** elke deelnemer vult via een persoonlijke link per dag in:
+  geblokkeerd, liever niet of voorkeur. Deeltijddagen en afwezigheid worden
+  vanzelf verwerkt.
+- **Rooster maken:** de solver (CP-SAT) verdeelt de diensten binnen een
+  streefbereik per persoon en schendt nooit een harde regel. Wat niet past,
+  blijft leeg met de reden erbij en vult de planner met de hand.
+- **Saldo:** wie in een periode meer of minder deed dan het doel, krijgt dat
+  in de volgende periode verrekend. Feestdagdiensten worden over de jaren
+  gelijk verdeeld: het aantal telt, niet welke feestdag.
+- **Publiceren:** eerst voorlopig, zodat iedereen kan nakijken, daarna
+  definitief. Intrekken kan.
+- **Ruilen:** deelnemers ruilen onderling bij een definitief rooster. De
+  collega keurt goed of wijst af.
+- **Mail:** de app bewaart geen e-mailadressen van deelnemers en mailt hen
+  niet zelf. Uitnodigingen, herinneringen en ruilmails gaan als verzendlijst
+  naar een Power Automate-stroom van de beheerder.
+- **Beheer:** een wijzigingsgeschiedenis van elke actie van planner en
+  beheerder, een prullenbak voor periodes en een dagelijkse back-up, ook
+  versleuteld per mail, die de beheerder in de app terugzet.
 
 ## Stack
 
@@ -14,16 +44,18 @@ solver voor roostergeneratie, publicatie, ruilverzoeken en correcties.
 - **Styling:** Tailwind CSS + shadcn/ui
 - **Database:** SQLite (WAL-mode) + Drizzle ORM
 - **Auth:** eigen implementatie (persoonlijke links, bcrypt-wachtwoorden)
-- **Solver:** Python + FastAPI + OR-Tools CP-SAT
-- **Testen:** Vitest + fast-check (unit/integratie), Playwright (e2e)
+- **Solvers:** Python 3.11 + FastAPI + OR-Tools CP-SAT 9.8, één per rooster
+  (`./solver` voor de achterwacht, `./aios-solver` voor de AIOS)
+- **Testen:** Vitest + fast-check (unit/integratie), Playwright (e2e),
+  pytest (solvers), mutatietests
 - **Container:** Docker Compose (4 services: caddy, web, solver, aios-solver)
 
 ## Snel starten
 
 ### Vereisten
 
-- Node.js 20+
-- Python 3.11+ (alleen nodig als je de solver buiten Docker draait)
+- Node.js 22 (de versie in de image)
+- Python 3.11 (alleen nodig als je een solver buiten Docker draait)
 - Docker & Docker Compose
 - npm
 
@@ -36,7 +68,7 @@ npm install
 # Database aanmaken en vullen met voorbeelddata
 npm run seed
 
-# Ontwikkelomgeving starten (Docker Compose: caddy + web + solver)
+# Ontwikkelomgeving starten (Docker Compose: caddy, web, solver, aios-solver)
 npm run dev
 
 # Tests draaien
@@ -49,19 +81,23 @@ npm run test
   de poort is `APP_PORT` in `.env`, bijvoorbeeld `APP_PORT=8010` als 443 bezet
   is, en het adres wordt dan https://localhost:8010)
 - **Health check:** https://localhost/health
-- **Solver:** http://localhost:8000 (alleen intern netwerk, geen publieke poort)
+- **Solvers:** alleen bereikbaar vanuit `web`, op het interne netwerk. Geen
+  van beide heeft een publieke poort.
 
 ### Testgebruikers
 
 Na `npm run seed`:
 
 - **Planner en beheerder:** codenamen `planner` en `admin` (hoofdletters
-  maken bij het inloggen niet uit), wachtwoord zoals gezet in `DEFAULT_TEST_PASSWORD`
-  (`lib/seedPassword.ts`) - wijzig dit voordat de app voor een echte
-  afdeling gebruikt wordt. De server waarschuwt bij elke start zolang een
-  account dit standaardwachtwoord nog heeft.
-- **Medewerkers:** Persoon-01 t/m Persoon-31 (persoonlijke toegangslinks,
-  geen echte namen of e-mailadressen)
+  maken bij het inloggen niet uit), met het wachtwoord uit
+  `DEFAULT_TEST_PASSWORD` (`lib/seedPassword.ts`). Wijzig dit voordat de app
+  voor een echte afdeling gebruikt wordt. De server waarschuwt bij elke start
+  zolang een account dit standaardwachtwoord nog heeft.
+- **Deelnemers achterwacht:** Persoon-01 t/m Persoon-31 (persoonlijke
+  toegangslinks, geen echte namen of e-mailadressen). Een productie-installatie
+  begint met staf01 t/m staf30.
+- **AIOS:** de pool AIOS staat er, zonder deelnemers. Die voeg je toe bij
+  *Personeel beheren* (aios01, aios02 enzovoort).
 
 ## Ontwikkeling
 
@@ -69,27 +105,40 @@ Na `npm run seed`:
 
 ```
 ├── app/                     # Next.js App Router (routes, pagina's, API)
-│   ├── api/                 # API-routes (planner + deelnemer)
+│   ├── api/                 # API-routes van de achterwacht (planner + deelnemer)
+│   │   └── aios/            # API-routes van de AIOS
 │   ├── planner/             # Schermen voor planner/beheerder
-│   └── person/[token]/      # Persoonlijke pagina per medewerker
-├── components/              # React-componenten
+│   ├── person/[token]/      # Persoonlijke pagina van een deelnemer (achterwacht)
+│   └── aios/[token]/        # Persoonlijke pagina van een AIOS
+├── components/              # React-componenten (die van de AIOS heten Aios*)
 ├── lib/                     # Logica: holidays, auth, capaciteit, solver-client, ...
+│                            # (die van de AIOS in aios*.ts)
 ├── db/                      # Drizzle-schema & migraties
 ├── types/                   # TypeScript-types
-├── scripts/                 # seed.ts, claim-password.ts, full-check.mjs, ui-check.mjs, schema-drift.mjs
+├── scripts/                 # seed.ts, de controles (full-check, ui-check,
+│                            # scenario-check, mutation-check, schema-drift,
+│                            # upgrade-drift) en beheer (reset-password,
+│                            # create-account, back-up-openen)
 ├── solver/                  # Python-solverservice (CP-SAT) van de achterwacht
-├── aios-solver/             # De eigen solver van de AIOS (vanaf 0.74.0)
+├── aios-solver/             # De eigen solver van de AIOS
 ├── tests/                   # Testfixtures en de Playwright e2e-suite
+├── docs/                    # Handleidingen (Nederlands) en docs/development
+│                            # (achtergrond per onderdeel, Engels)
 ├── CLAUDE.md                # Ontwerpregels & conventies (verplichte leesstof)
-└── docker-compose.yml       # Services: caddy, web, solver, aios-solver
+└── docker-compose.yml       # De hele installatie: caddy, web, solver, aios-solver
 ```
 
 ### Codeconventies
 
-**Belangrijk: lees CLAUDE.md voordat je code schrijft.**
+**Belangrijk: lees CLAUDE.md voordat je code schrijft.** De achtergrond per
+onderdeel (waarom een regel bestaat, wat er eerder misging) staat in
+`docs/development/`.
 
 Kernpunten:
-- **Geen echte namen/e-mailadressen** - uitsluitend pseudonieme codenamen
+- **Geen echte namen/e-mailadressen:** uitsluitend pseudonieme codenamen
+- **Achterwacht en AIOS apart:** code die voor de achterwacht werkt, wordt
+  niet aangepast voor de AIOS. Wat de AIOS nodig heeft, wordt gekopieerd naar
+  eigen bestanden (`docs/development/diensten.md`)
 - **Tekenconventie:** delta < 0 = minder diensten, delta > 0 = meer diensten
   (nooit een los getal tonen aan de gebruiker, altijd in woorden)
 - **Taal van de interface:** alles wat een deelnemer of planner ziet is
@@ -111,24 +160,30 @@ npm run test -- --watch
 npm run test:ui
 
 # Type-check
-npx tsc --noEmit
+npx tsc --noEmit -p .
 
 # Lint
-npm run lint
+npx eslint .
+
+# De solvers (in ./solver en in ./aios-solver, op OR-Tools 9.8)
+python -m pytest -q
 ```
 
-De browser-/livechecks hebben een gestarte solver, een geseede database en
-een gestarte app nodig (niets hiervan start zichzelf op):
+De browser-/livechecks hebben beide solvers, een geseede database en een
+gestarte app nodig (niets hiervan start zichzelf op):
 
 ```bash
-# Solver starten (in ./solver)
+# Solver van de achterwacht starten (in ./solver)
 uvicorn main:app --host 127.0.0.1 --port 8000
+
+# Solver van de AIOS starten (in ./aios-solver)
+uvicorn main:app --host 127.0.0.1 --port 8001
 
 # Database seeden
 npm run seed
 
 # App starten
-ALLOW_SEED_PASSWORD=true SESSION_SECRET=... SOLVER_URL=http://localhost:8000 npm start
+ALLOW_SEED_PASSWORD=true SESSION_SECRET=... SOLVER_URL=http://localhost:8000 AIOS_SOLVER_URL=http://localhost:8001 npm start
 ```
 
 Daarna:
@@ -140,25 +195,34 @@ Daarna:
 # niemand voorbij zijn streefbereik)
 node scripts/full-check.mjs
 
-# De twee meest gebruikte schermen, in een echte browser
+# De twee meest gebruikte schermen, in een echte browser (op dezelfde seed)
 node scripts/ui-check.mjs
 
 # Playwright e2e-suite (bouwt zijn eigen periode/toewijzingen-fixture per
 # testbestand, leest dus niet de geseede periode)
 npm run test:e2e
 
-# Vergelijkt het schema dat de seed bouwt met het schema dat de migraties
-# bouwen, kolom voor kolom, index voor index, foreign key voor foreign key
-# - nodig omdat scripts/seed.ts (niet db/migrations) in productie het
-# schema bouwt zodra SEED_ON_START=planner of true staat (de standaard)
+# Het scenario van de planner van begin tot eind (--kort voor de korte versie;
+# de volledige duurt ongeveer 35 minuten)
+node scripts/scenario-check.mjs
+
+# Na een schemawijziging: schema-drift vergelijkt het schema dat de seed
+# bouwt met het schema dat de migraties bouwen. upgrade-drift vergelijkt een
+# bijgewerkte oude database met een verse
 node scripts/schema-drift.mjs
+node scripts/upgrade-drift.mjs
 ```
+
+Welke controle je bij welke wijziging draait, staat in
+`docs/teststrategie.md`. Hoe elke controle werkt en wat hij dekt, staat in
+`docs/development/checks.md`.
 
 ### Database
 
 De migraties in `db/migrations` voert de app bij het starten zelf uit
 (`db/client.ts`). Een geseede database krijgt nieuwe tabellen en kolommen
-via `scripts/seed.ts` (zie Bijwerken). Er is geen apart migratiecommando.
+via `scripts/seed.ts` (zie Bijwerken). Dat geldt voor elke
+productie-installatie (`SEED_ON_START=planner`). Er is geen apart migratiecommando.
 
 ```bash
 # Database (opnieuw) seeden
@@ -167,11 +231,12 @@ npm run seed -- --reset
 ```
 
 Let op: een kolom die aan `db/schema.ts` wordt toegevoegd heeft drie
-dingen nodig, niet één: het schema, een migratie onder `db/migrations`, en
-een vermelding in `scripts/seed.ts` (in de CREATE TABLE, of in
-`LATER_COLUMNS` zodat een langer geleden geseede database hem ook
-oppikt) - anders draait een verse installatie op een ander schema dan een
-gemigreerde. `node scripts/schema-drift.mjs` bewaakt dit.
+dingen nodig, niet één: het schema, een migratie onder `db/migrations` en
+een vermelding in `scripts/seed.ts` (in de CREATE TABLE en in
+`LATER_COLUMNS`, zodat een langer geleden geseede database hem ook
+oppikt). Anders draait een verse installatie op een ander schema dan een
+gemigreerde. `node scripts/schema-drift.mjs` en
+`node scripts/upgrade-drift.mjs` bewaken dit.
 
 ### Bouwen
 
@@ -183,20 +248,27 @@ npm run build
 npm start
 ```
 
+De images voor productie bouwt GitHub (zie Bijwerken naar een nieuwe versie).
+
 ## Architectuur in het kort
 
 ### Databaseschema
 
-Belangrijkste tabellen:
-- `person` - medewerkers (codenaam, rol, wachtwoord_hash, sessie_versie)
-- `pool` / `pool_membership` - dienstenpool en wie daar wanneer in zit
-- `schedule_period` - periodes (CONCEPT, OPEN, CLOSED, GEGENEREERD, GEPUBLICEERD)
+Belangrijkste tabellen (in de database met het voorvoegsel `dienstrooster_`):
+- `person` - deelnemers en accounts (codenaam, rol, dienst, wachtwoord_hash, sessie_versie)
+- `pool` / `pool_membership` - dienstenpool (achterwacht of AIOS) en wie daar wanneer in zit
+- `schedule_period` - periodes (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD; gepubliceerd is eerst voorlopig en daarna definitief)
 - `shift_slot` / `assignment` - te vullen diensten en de uiteindelijke toewijzingen
-- `availability` - blokkeringsvoorkeuren (ABSOLUUT, LIEVER_NIET, VOORKEUR)
+- `availability` - voorkeuren per dag (ABSOLUUT, LIEVER_NIET, VOORKEUR)
+- `absence` / `parttime_pattern` - afwezigheid en deeltijddagen
 - `ledger_entry` - saldo-aanpassingen (append-only, nooit overschreven)
 - `holiday_history` - welke feestdag iemand in welk jaar had (oude import, wordt niet meer gebruikt)
-- `swap_request` - dienstruilverzoeken
+- `swap_request` - dienstruilverzoeken van de achterwacht
+- `aios_*` - wat alleen de AIOS heeft: verzoeken per kwartaal, de keuzes voor blokken rond feestdagen, doelen, de geschiedenis van vóór de app, ruilverzoeken en een eigen mailwachtrij
 - `audit_log` - alle acties van planners/beheerders
+
+De bron is `db/schema.ts`. Uitleg per tabel staat in
+`docs/development/data-model.md`.
 
 ### Feestdagberekening
 
@@ -217,20 +289,26 @@ bij de eerste periode in de app.
 
 ### Authenticatie
 
-**Voor medewerkers (deelnemers):**
+**Voor deelnemers (achterwacht en AIOS):**
 - Persoonlijke toegangslinks (lange willekeurige token, SHA256-hash in de
-  database)
+  database). Een AIOS heeft een eigen soort link, die op /aios/ met een code
+  eindigt
 - Geen e-mailadressen opgeslagen (pseudoniem)
 - Alleen-lezen toegang na de deadline
+- Een link verloopt na de laatste dag van zijn periode. De beheerder kan een
+  link eerder intrekken
 
 **Voor planner/beheerder:**
-- Wachtwoord (bcrypt)
+- Wachtwoord (bcrypt), zonder tweestapsverificatie (weggehaald in 0.805.0)
 - Geen e-mailadres vereist
+- Elk account hoort bij één dienst. De beheerder ziet beide
 - Sessies zijn ondertekende tokens; `person.sessie_versie` maakt het
   mogelijk om alle sessies van een account in één keer ongeldig te maken
   (bijv. bij uitloggen op alle apparaten of een wachtwoordwijziging)
 
-### Capaciteitscontrole
+Meer in `docs/development/auth.md`.
+
+### Capaciteitscontrole (achterwacht)
 
 Twee formules, beide live zichtbaar in het instellingenscherm:
 
@@ -239,14 +317,13 @@ Twee formules, beide live zichtbaar in het instellingenscherm:
 
 Formule 2 is meestal het beperkendst.
 
-### Roostergeneratie (solver)
+### Roostergeneratie achterwacht (`./solver`)
 
 De Python-solver (CP-SAT via OR-Tools) genereert een rooster dat nooit een
 harde regel schendt (ABSOLUUT-blokkade, de vensterregel, het streefbereik)
-en levert bij schaarste een gedeeltelijk
-rooster op in plaats van alles-of-niets - de planner vult de resterende
-gaten handmatig aan, met duidelijke aanduiding wie een gat wél of niet mag
-invullen.
+en levert bij schaarste een gedeeltelijk rooster op in plaats van
+alles-of-niets. De planner vult de resterende gaten handmatig aan, met
+duidelijke aanduiding wie een gat wél of niet mag invullen.
 
 Een venster van N weken betekent: minstens 7 × N dagen tussen twee
 diensten van dezelfde persoon (sinds 0.22.0). Bij 2 weken zitten er dus
@@ -257,25 +334,29 @@ vensterregel. Met een apart venster voor avonddiensten en voor weekend- en
 feestdagdiensten geldt het kleinste van de twee ook tussen een avonddienst
 en een weekend- of feestdagdienst.
 
+De solver zoekt standaard 5 minuten. Is hij dan niet klaar, dan kan de
+planner het rooster opnieuw laten maken met 10 en daarna 30 minuten. Meer in
+`docs/development/roster-rules.md`.
+
+### Roostergeneratie AIOS (`./aios-solver`)
+
+De AIOS hebben een eigen solver in een eigen container. Die verdeelt per
+kwartaal de nacht-, dag-, avond- en uitloopdiensten naar fte en werkdagen,
+houdt avond- en nachtblokken waar mogelijk heel en bewaakt rust en
+compensatiedagen, ook over de grens van een kwartaal. De planner kiest
+vooraf wat er gebeurt met blokken rond feestdagen. De solver zoekt standaard
+10 minuten en hoogstens een uur. Het dienstpercentage per AIOS hoort onder de
+25% te blijven.
+
+De harde regels van de AIOS staan op drie plekken die gelijk moeten blijven:
+de solver (`aios-solver/model.py`), zijn onafhankelijke controle
+(`aios-solver/controle.py`) en de kopie in de app (`lib/aiosRegels.ts`), die
+waarschuwt bij handmatig wijzigen en ruilen. Meer in
+`docs/development/aios-solver.md`.
+
 ## Conventies
 
 Zie CLAUDE.md voor de bijgehouden conventies en ontwerpbeslissingen.
-
-## Implementatie
-
-Voor deze fase gebouwd:
-- Projectopzet en Docker Compose-configuratie
-- Datamodel (Drizzle ORM + SQLite)
-- Authenticatie (persoonlijke links + wachtwoord)
-- Feestdagberekening voor alle Nederlandse feestdagen
-- Capaciteitscontrole
-- Periodebeheer (venster openen/sluiten, ruleset bevriezen bij openen)
-- Voorkeuren en deeltijdpatronen
-- Roostergeneratie via de CP-SAT-solver, met diagnostiek bij gaten
-- Handmatig gaten vullen, met overrides en waarschuwingen
-- Publicatie/depublicatie van een rooster
-- Dienstruilverzoeken
-- Audit-trail van alle planner-/beheerdersacties
 
 ## Implementatiedetails
 
@@ -283,17 +364,20 @@ Voor deze fase gebouwd:
 
 #### Docker Compose
 
-Drie containers met intern netwerk:
+Vier containers met intern netwerk:
 
 ```
-caddy:443 ──→ web:3000 ──→ solver:8000
-  (TLS)        (Next.js)    (Python/FastAPI)
+caddy:443 ──→ web:3000 ──┬─→ solver:8000        (achterwacht)
+  (TLS)        (Next.js)  └─→ aios-solver:8000   (AIOS)
 ```
 
-- **Caddy:** TLS-terminatie met interne certificaten
+- **Caddy:** TLS-terminatie met interne certificaten. De enige container met
+  een publieke poort
 - **Web:** Next.js + SQLite (WAL-mode)
-- **Solver:** Python FastAPI (geen publieke poort, alleen bereikbaar vanuit
-  `web`)
+- **Solver:** Python FastAPI, de solver van de achterwacht (geen publieke
+  poort, alleen bereikbaar vanuit `web`)
+- **Aios-solver:** Python FastAPI, de eigen solver van de AIOS (ook alleen
+  bereikbaar vanuit `web`). De app start ook als deze container niet start
 
 De database en de back-ups van de voorkeuren-CSV (`lib/preferencesBackup.ts`)
 staan in `DATA_DIR` (standaard `./data`, naast `docker-compose.yml`),
@@ -566,6 +650,39 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 1.4.0:**
+- *Rooster instellen:* een nieuwe periode van de achterwacht begint met de verdeling, de vensters en het blokkadebudget van de vorige periode. Stap 7 waarschuwt als je er een hebt veranderd.
+- *Import en correcties:* het saldo dat uit de vorige periode is doorgeschoven, staat er in woorden bij.
+- *Klein:* het venster *Back-up* schuift het antwoord in beeld, labels in de wizard horen bij hun veld en na *Publicatie intrekken* staat er één melding.
+- `docker-compose.yml` en de database veranderen niet.
+
+**Vanaf versie 1.3.0:**
+- *Ruilen naar een eigen geblokkeerde dag:* dat kan, met een waarschuwing vooraf. Iemand kan die dag toch willen werken.
+- *Publicatie intrekken:* het venster zegt dat er geen mail uitgaat. *Meldingen* staat er in elke status.
+- *Wijzigingsgeschiedenis:* geen dubbele rijen meer voor een dienst die vaker is gewijzigd. Er is een eigen download bij *Exporteren & communicatie* (achterwacht en AIOS).
+- *Rooster vooraf invullen:* de keuzes van één ronde worden onderling aan het venster getoetst. De kandidaten staan op volgorde van ruimte.
+- *Persoonlijke links:* de beheerder trekt alle links van één persoon voor een periode in één keer in (achterwacht en AIOS).
+- *Voorbeelddata:* in de seed stonden 14 van de 31 deelnemers op bijna elke dag geblokkeerd, door een fout bij het omzetten. Dat is hersteld. Productie heeft die data niet.
+
+**Vanaf versie 1.2.0 tot en met 1.2.2:**
+- *Datums:* elk datumveld leest dd-mm-jjjj (tijd uu:mm, 24 uur) in elke browser, met een kalenderknop. Het datumveld van de browser volgde de taal van de browser en toonde op een Engelse Chrome mm/dd/jjjj. Ook in lijsten, tabellen en meldingen staat een datum als dd-mm-jjjj, op één regel op een telefoon.
+- *Afwezigheid:* het totaal onder de kalender telt alleen de afwezigheid binnen de periode.
+- *AIOS publiceren:* de bevestiging noemt het breken van een harde regel apart van de gewone waarschuwingen.
+
+**Vanaf versie 1.1.0 tot en met 1.1.5:**
+- *Import en correcties (achterwacht):* een beginsaldo uit Excel en handmatige correcties kunnen ook na het openen van de periode, in de nieuwe eerste sectie *Import en correcties*. Beide gelden tot het rooster is gegenereerd.
+- *AIOS, geschiedenis van vóór de app:* opslaan wordt geweigerd terwijl er een rooster wordt gemaakt. De app noemt elk kwartaal met een gemaakt rooster waarin de geschiedenis nog niet zit.
+- *Generaties:* een afgeronde generatie wordt 30 minuten na het einde opgeruimd, niet na de start. Een zoektijd van 30 of 60 minuten verloor anders zijn uitkomst. Zolang een back-up wordt teruggezet, kan er geen rooster gemaakt worden.
+- *Personeel beheren:* de lijst zegt of de deelnamefactor meetelt bij de verdeling van die periode. De stap *Personeel* van de wizard draait geen einddatums of *Niet actief* meer terug bij het openen.
+- *Kalender:* dagen buiten *Geldig vanaf* en *Geldig tot* staan op niet in dienst en zijn niet aan te klikken (achterwacht en AIOS).
+- *Ruilen:* een ruil staat in de wijzigingsgeschiedenis en het ruilverzoek noemt de datums in woorden.
+
+**Vanaf versie 1.0.1:**
+- *Verzendlijst:* de bevestiging aan het roosterbureau noemt ook het tussenvoegsel en de achternaam. Zie `docs/verzendlijst-power-automate.md`.
+- *AIOS:* publiceren, definitief maken en het rooster opnieuw mailen leggen het adres voor latere links vast, niet alleen de uitnodigingen.
+- *Ruilverzoeken:* een verzoek dat vervalt doordat de publicatie is ingetrokken, krijgt de reden "Het rooster is weer voorlopig."
+- *Kalender van de achterwacht:* de uitleg noemt ook F (feestdagdienst).
 
 **Vanaf versie 1.0.0:**
 - *Teksten:* de app noemt de rol overal planner, ook op de startpagina, bij het inloggen, in het scherm van de deelnemers en in de mails. Mailteksten die al in de database stonden, krijgen bij de eerste start het nieuwe woord, behalve als iemand ze met de hand heeft aangepast. Aan de werking verandert niets.
@@ -1119,8 +1236,8 @@ image, zodat een installatie niets van GitHub nodig heeft behalve de image.
    Gmail-app-wachtwoord en het back-upwachtwoord opnieuw in.
    Probeer het terugzetten één keer uit voordat de installatie echt in
    gebruik gaat.
-5. **Grenzen:** de solver mag hooguit 2 GB geheugen gebruiken, de app 1 GB
-   (`SOLVER_MEM_LIMIT`, `WEB_MEM_LIMIT` in `.env`). Logbestanden van elke
+5. **Grenzen:** elke solver mag hooguit 2 GB geheugen gebruiken, de app 1 GB
+   (`SOLVER_MEM_LIMIT`, `AIOS_SOLVER_MEM_LIMIT`, `WEB_MEM_LIMIT` in `.env`). Logbestanden van elke
    container blijven onder de 30 MB.
 
 ### E-mail versturen (Gmail en Power Automate)
@@ -1188,7 +1305,8 @@ de stroom al gebouwd?".
   openen, bijvoorbeeld `https://192.168.1.10`. Dan wijzen alle links in
   mails daarheen.
 - **Grenzen:** een verzoek mag hooguit 1 MB zijn (Caddy en de app zelf),
-  tekst die een deelnemer typt hooguit 1000 tekens.
+  tekst die een deelnemer typt hooguit 1000 tekens. Alleen een back-up die
+  de beheerder terugzet mag groter zijn, tot 32 MB.
 - **Alleen TLS** via Caddy (interne certificaten zijn acceptabel binnen een
   ziekenhuisnetwerk)
 - **Persoonlijke links** met SHA256-hashing (alleen de hash staat in de
@@ -1199,21 +1317,28 @@ de stroom al gebouwd?".
 ### Teststrategie
 
 Uit CLAUDE.md: "Eén regel = één test die bewijst dat hij niet gebroken kan
-worden." Voorbeeld: de vensterregel ("iemand met een dienst in week 12
-heeft geen dienst in week 11 of 13") heeft een test die bewijst dat de
-regel een overtreding tegenhoudt, niet slechts een voorbeeld van correct
-gedrag.
+worden." Voorbeeld: de vensterregel (bij een venster van 2 weken minstens
+14 dagen tussen twee diensten van dezelfde persoon) heeft een test die
+bewijst dat de regel een overtreding tegenhoudt, niet slechts een voorbeeld
+van correct gedrag. Mutatietests (`scripts/mutation-check.mjs`) breken elke
+bewaakte regel met opzet en eisen dat een test het merkt.
 
 Kritieke testgebieden:
 1. Feestdagberekening (2024-2035, inclusief schrikkeljaren)
 2. ISO-weekafronding en periodegrenzen
 3. Capaciteitsformules
 4. Authenticatie: tokenhashing, sessieversies
-5. Harde solver-regels: ABSOLUUT, vensterregel, streefbereik, geen dubbele
-   week
+5. Harde solver-regels van de achterwacht: ABSOLUUT, vensterregel,
+   streefbereik, geen dubbele week
+6. Harde regels van de AIOS, gelijk in de solver, zijn controle en de app
+   (`tests/fixtures/aios-regels.json`)
+7. De scheiding tussen achterwacht en AIOS
+8. Per route de toegangscontrole, het logboek en de prullenbak (sweeptests
+   onder `app/`)
 
-Draai met `npm run test` (unit/integratie) en `npm run test:e2e`
-(Playwright, met draaiende app/solver/database).
+Draai met `npm run test` (unit/integratie), `python -m pytest -q` in elke
+solvermap en `npm run test:e2e` (Playwright, met draaiende app, solvers en
+database). Wat je wanneer draait, staat in `docs/teststrategie.md`.
 
 ## Bijdragen
 
@@ -1236,5 +1361,21 @@ Zie CLAUDE.md voor:
 - UI-terminologie (Nederlandse vertalingen van interne termen)
 - Bekende valkuilen en hoe ze te voorkomen
 
-Zie [docs/verzendlijst-power-automate.md](docs/verzendlijst-power-automate.md)
-voor het instellen van e-mail via Gmail en Power Automate.
+Handleidingen voor wie de app beheert of test:
+- [docs/installatie-it.md](docs/installatie-it.md): installeren op een
+  server, voor de IT-afdeling
+- [docs/verzendlijst-power-automate.md](docs/verzendlijst-power-automate.md):
+  e-mail via Gmail en Power Automate
+- [docs/back-up-power-automate.md](docs/back-up-power-automate.md): de
+  back-up buiten de server
+- [docs/teststrategie.md](docs/teststrategie.md): wat je wanneer test
+- [docs/stappenplan-testen.md](docs/stappenplan-testen.md): zelf testen met
+  een lijst om af te vinken
+- [docs/aios-testdraaiboek.md](docs/aios-testdraaiboek.md): een kwartaal van
+  de AIOS stap voor stap
+
+Achtergrond voor wie aan de code werkt:
+- [docs/aios-rooster.md](docs/aios-rooster.md): het ontwerp van het rooster
+  voor de AIOS
+- [docs/development/](docs/development/): per onderdeel waarom een regel
+  bestaat en welk bestand wat doet (Engels)
