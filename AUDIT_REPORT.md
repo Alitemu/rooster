@@ -104,7 +104,7 @@ zou zijn, staat dat erbij.
 | Routes en pagina's | 173 API-routes, 13 pagina's, 75 clientcomponenten |
 | Database | 41 tabellen, 48 migraties, 33 indexen |
 | Grootste bestanden | `scripts/mutation-check.mjs` 7195, `scripts/seed.ts` 1761, `components/SetupWizard.tsx` 1749, `components/PlannerDashboard.tsx` 1639, `components/RosterGenerationDialog.tsx` 1340, `app/api/planner/period/[id]/generate-roster/route.ts` 1053 |
-| Releases | 75 versietags van v0.71.0 tot v1.4.0. In de zichtbare 11 dagen: 51 commits en 13 versies |
+| Releases | 75 versietags van v0.71.0 tot v1.4.0. In de zichtbare 11 dagen: 51 commits en 19 versienummers, waarvan er twee niet zijn gebouwd |
 | Auteurs | 1 in de zichtbare geschiedenis. Alle 51 commits dragen een `Claude-Session`-regel |
 | Uitrol | Handmatig: "Bouwen (test)" en "Vrijgeven (productie)" op GitHub, daarna `docker compose pull` op de server |
 
@@ -412,7 +412,7 @@ is alles wat automatisch waakt.
 |---|---|
 | Beschrijving | Beide workflows starten alleen met de hand. Bij een push of pull request draait er geen typecheck, geen lint en geen test. De tests draaien pas als iemand "Bouwen (test)" start. De browsertests, `full-check`, `ui-check`, `scenario-check`, de mutatiecontrole, de twee driftcontroles en `npm audit` draaien nooit in de pipeline: alleen op de machine van de ontwikkelaar, volgens een lijst in `CLAUDE.md` |
 | Impact | De releasepoort is een afspraak, geen mechanisme. Een overgeslagen stap wordt door niets opgemerkt. De volledige controle duurt ruim een halfuur per variant en is afhankelijk van de lokale opstelling. Het project documenteert zelf twee builds die faalden op iets wat lokaal slaagde |
-| Risico | **High.** Waarschijnlijkheid: waarschijnlijk bij 13 versies in 11 dagen. Impact: midden |
+| Risico | **High.** Waarschijnlijkheid: waarschijnlijk bij 17 versies in 11 dagen. Impact: midden |
 | Bewijs | `on: workflow_dispatch` als enige trigger in beide workflows. Geen stap met `playwright`, `mutation`, `schema-drift` of `npm audit` |
 | Bestandslocatie | `.github/workflows/images.yml:32-33` en de jobs `test-app`, `test-solver`, `test-aios-solver`. `CLAUDE.md`, sectie Testing |
 | Aanbevolen oplossing | Een workflow op `push` en `pull_request` met typecheck, lint, vitest, beide pytest-suites, `npm audit --omit=dev` en de twee driftcontroles. Een tweede, nachtelijke workflow met de browsertests tegen een compose-opstelling. Inspanning: M |
@@ -617,7 +617,7 @@ bestaat en wat er eerder misging. Dat is zeldzaam en waardevol.
 
 | Veld | Inhoud |
 |---|---|
-| Beschrijving | De zichtbare geschiedenis heeft één auteur. Alle 51 commits dragen de regels van een AI-assistent en `CLAUDE.md` is feitelijk het besturingsdocument van het project: het bevat de regels, de releaseprocedure en de valkuilen. In 11 dagen zijn 13 versies uitgebracht. Er is geen codereview door een tweede persoon zichtbaar: de workflows hebben geen pull-requeststap en de versies volgen elkaar binnen uren op |
+| Beschrijving | De zichtbare geschiedenis heeft één auteur. Alle 51 commits dragen de regels van een AI-assistent en `CLAUDE.md` is feitelijk het besturingsdocument van het project: het bevat de regels, de releaseprocedure en de valkuilen. In 11 dagen zijn 17 versies gebouwd. Er is geen codereview door een tweede persoon zichtbaar: de workflows hebben geen pull-requeststap en de versies volgen elkaar binnen uren op |
 | Impact | Valt de ene persoon weg, dan is er niemand die het systeem kent. De werkwijze is overdraagbaar omdat hij is opgeschreven, maar alleen aan iemand die op dezelfde manier wil werken. De hoeveelheid code (76.000 regels plus 53.000 regels tests) is groter dan één mens zonder dat hulpmiddel in redelijke tijd overziet. Het tempo is hoger dan een handmatige controle van een halfuur per release geloofwaardig maakt |
 | Risico | **High.** Waarschijnlijkheid: mogelijk. Impact: hoog (continuïteit) |
 | Bewijs | `git log --format=%an` over de zichtbare commits: één naam. 51 van 51 commits met `Claude-Session`. Versies 1.1.0 tot en met 1.1.5 op 5 en 6 november |
