@@ -7260,6 +7260,13 @@ const MUTATIONS = [
     tests: ["components/wizardOpenen"],
   },
   {
+    name: "1.6.1: a column the start adds to an old database is forgotten",
+    file: "scripts/seed.ts",
+    find: "    wachtwoord_moet_wijzigen: 'INTEGER NOT NULL DEFAULT 0',\n    dienst_type: 'TEXT',",
+    replace: "    wachtwoord_moet_wijzigen: 'INTEGER NOT NULL DEFAULT 0',",
+    tests: ["scripts/seed.upgradeOud"],
+  },
+  {
     name: "1.6.0: the wizard reads the staff only on steps 2 and 6 again",
     file: "components/SetupWizard.tsx",
     find: "    if (currentStep === 'staff' || currentStep === 'corrections') return;\n    loadStaff({ silent: true });",
