@@ -523,7 +523,7 @@ export function PreferencesCalendar({
           Afwezigheid
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500 text-[9px] font-bold">—</i>
+          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-dashed border-neutral-400 bg-neutral-100 text-neutral-600 text-[9px] font-bold">—</i>
           Niet in dienst
         </span>
         {dienstLegenda(shiftCounters).map(({ counter, letter, naam }) => (
@@ -545,7 +545,7 @@ export function PreferencesCalendar({
             <span className="coverage-bar w-full">
               <span className="coverage-bar-fill coverage-warning block" style={{ width: '50%' }} />
             </span>
-            <span className="text-[9px] text-neutral-500 tabular-nums">15/31</span>
+            <span className="text-[9px] text-neutral-600 tabular-nums">15/31</span>
           </span>
           Onder elke dag: hoeveel collega&apos;s die dag nog beschikbaar zijn (15 van de 31)
         </span>
@@ -645,7 +645,7 @@ export function PreferencesCalendar({
                                   {parseISO(datum).getDate()}
                                 </span>
                                 {tag && (
-                                  <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate w-full text-left" title={tag}>
+                                  <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-600 truncate w-full text-left" title={tag}>
                                     {tag}
                                   </span>
                                 )}
@@ -675,7 +675,7 @@ export function PreferencesCalendar({
                                         data-testid="niet-in-dienst"
                                         aria-label={`${formatDayLong(datum)}, ${COUNTER_LABEL[counter] || counter}: ${explanation}`}
                                         className="calendar-cell-niet-in-dienst w-full h-8 rounded text-[20px] leading-none font-semibold
-                                          flex items-center justify-center cursor-not-allowed border border-dashed border-neutral-400 bg-neutral-100 text-neutral-500"
+                                          flex items-center justify-center cursor-not-allowed border border-dashed border-neutral-400 bg-neutral-100 text-neutral-600"
                                         title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
                                       >
                                         —
@@ -749,7 +749,7 @@ export function PreferencesCalendar({
                                       style={{ width: `${Math.round(ratio * 100)}%` }}
                                     />
                                   </div>
-                                  <div className="text-[9px] text-neutral-500 text-center mt-0.5 tabular-nums">
+                                  <div className="text-[9px] text-neutral-600 text-center mt-0.5 tabular-nums">
                                     {cov.available}/{cov.total_in_pool}
                                   </div>
                                 </div>

@@ -166,6 +166,16 @@ function uitleg(error: unknown): string {
   if (code === 'EAUTH') {
     return 'Gmail weigerde de inlog. Controleer het Gmail-account bij Mailinstellingen. Dat doet de beheerder.';
   }
+  // A certificate this server does not trust arrives as ESOCKET too, and "no internet" then sends the
+  // beheerder the wrong way: on a network that opens https on its way out, this is the likely cause (1.6.1).
+  const origineel = String((error as { originalCode?: string }).originalCode ?? '') + ' ' + String((error as { message?: string }).message ?? '');
+  if (/CERT|certificate|SELF_SIGNED|UNABLE_TO_VERIFY/i.test(origineel)) {
+    return (
+      'De mailserver toont een certificaat dat deze server niet vertrouwt, dus er is niets verstuurd. ' +
+      'Dat gebeurt als het netwerk versleuteld verkeer onderweg openmaakt. Het gebeurt ook als de klok van de server verkeerd staat. ' +
+      'Vraag de IT-afdeling om verkeer naar smtp.gmail.com op poort 465 ongemoeid door te laten.'
+    );
+  }
   if (code === 'ECONNECTION' || code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'EDNS') {
     return 'Gmail is niet bereikbaar. Controleer of de server verbinding heeft met internet.';
   }

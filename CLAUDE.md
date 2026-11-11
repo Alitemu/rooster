@@ -235,8 +235,10 @@ The gate before a release, all green:
    mutations whose file or tests changed since then, every one caught. A
    0.0.x release runs none (the user's choice). It edits sources while it
    runs: nothing else meanwhile.
-4. After a schema change: `node scripts/schema-drift.mjs` and
-   `node scripts/upgrade-drift.mjs`.
+4. After a schema change: `node scripts/schema-drift.mjs`. The upgrade of
+   an old database runs in vitest (scripts/seed.upgradeOud.test.ts, on
+   tests/fixtures/oude-databases); `node scripts/upgrade-drift.mjs
+   --schrijf <version>` adds one for a version installed somewhere.
 5. Browser checks, with a seeded database, both solvers (the AIOS's on
    AIOS_SOLVER_URL) and the app running (ALLOW_SEED_PASSWORD=true): `node scripts/full-check.mjs` then
    `node scripts/ui-check.mjs` on the same seed, `npx playwright test`,
@@ -278,7 +280,8 @@ Traps that cost a day each time:
   app/genegeerdeBron.test.ts does.
 - **The seed builds the schema with its own SQL.** A new column needs the
   schema (db/schema.ts), a migration (db/migrations) and the seed (its
-  CREATE TABLE and `LATER_COLUMNS`); then schema-drift and upgrade-drift.
+  CREATE TABLE and `LATER_COLUMNS`); then schema-drift, and
+  scripts/seed.upgradeOud.test.ts holds the upgrade.
 - **Production starts with `seed.ts --alleen-planner`** at every start
   (SEED_ON_START=planner), not with the migrations.
 - **Periods:** one period per day per pool; the ruleset is frozen when a

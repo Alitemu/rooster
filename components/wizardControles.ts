@@ -36,6 +36,20 @@ export function streefbereikInWoorden(min: Bereik, max: Bereik): string {
   );
 }
 
+/**
+ * The same sentence from a frozen ruleset (bandAvond: [min, max] and so on), for the period page's header:
+ * it read "Avond 3-4 · Weekend 1-2 · Feestdag 0-1", the raw range the rules ban (audit 4, N-06). Null when
+ * a band is missing or not two numbers.
+ */
+export function streefbereikUitRuleset(cfg: unknown): string | null {
+  const c = (cfg ?? {}) as Record<string, unknown>;
+  const paar = (v: unknown): [number, number] | null =>
+    Array.isArray(v) && v.length === 2 && v.every((n) => typeof n === 'number' && Number.isFinite(n)) ? [v[0], v[1]] : null;
+  const [a, w, f] = [paar(c.bandAvond), paar(c.bandWeekend), paar(c.bandFeestdag)];
+  if (!a || !w || !f) return null;
+  return streefbereikInWoorden({ AVOND: a[0], WEEKEND: w[0], FEESTDAG: f[0] }, { AVOND: a[1], WEEKEND: w[1], FEESTDAG: f[1] });
+}
+
 export interface WizardStand {
   naam: string;
   start_datum: string;

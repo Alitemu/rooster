@@ -135,14 +135,34 @@ it is scripts/seed.ts - not db/migrations - that builds the schema, and
 the two drifting apart means production quietly runs a different one than
 every test does.
 
-`node scripts/upgrade-drift.mjs [commit...]` covers the other half: a
-production database was never built from nothing. It builds one with an
-older version's own seed (a git worktree; by default 0.2.0, 0.6.0, 0.8.1
-and 0.11.0), runs the current production start over it (seed.ts
---alleen-planner) and compares the result with a fresh database - every
-column, index, foreign key and CHECK constraint - and checks no row of the
-core tables was lost. Run it after adding a column; it needs the git
-history, not a shallow clone.
+The other half: a production database was never built from nothing.
+scripts/seed.upgradeOud.test.ts (1.6.1, in every `npx vitest run` and so in
+every build) loads the database of an older version from
+tests/fixtures/oude-databases/*.sql (0.2.0, 0.11.0, and 1.0.1 and 1.3.0, which
+an installation on a ward has run), runs the current production start over it
+(seed.ts --alleen-planner) and compares the result with a fresh database -
+every column, index, foreign key and CHECK constraint - and checks no row of
+the core tables was lost (scripts/upgradeVorm.mjs).
+
+`node scripts/upgrade-drift.mjs [--schrijf] [version|commit...]` did this
+alone until then, by building an old version with its own seed in a git
+worktree. It ran with today's node_modules, so it has failed since 26 October
+2026, when a package every older version imports left (`speakeasy`), and
+nobody saw: it ran by hand only, after a schema change, and needs the full
+history. It stays as the tool that writes a fixture (`--schrijf 1.3.0`; for a
+version before that day `npm install --no-save speakeasy@2` first and `npm ci`
+after). The lesson, the same as the Caddy check that skipped everywhere until
+1.1.1: a check that no build runs is gone within months.
+
+**The carry-over as a chain** is the end of scenario-check (1.6.1): its roster
+is published (with `confirmOverrides`, the scenario's roster has a few people
+just outside their bereik), one avonddienst is taken off someone inside their
+bereik as for an illness, the next period is opened, and that person has
+exactly "1 avonddienst in te halen van vorige periode" there, nobody who ended
+inside their bereik has a row, and nothing is booked against the old period.
+scripts/check-carryover-live.mjs did this on the seed and had been dead since
+the generation moved to the background (it read the roster from the POST's
+response); it is removed.
 
 Two things these get wrong easily, and both cost a day to diagnose:
 - **Assert on Dutch.** Every user-facing string is Dutch; a selector looking

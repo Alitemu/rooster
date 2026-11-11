@@ -333,3 +333,20 @@ describe('the build context and the start', () => {
     expect(readFileSync('docker-entrypoint.sh', 'utf8')).toMatch(/chown -R -h node:node \/data/);
   });
 });
+
+// 1.6.1: an installation was made from this file alone, without the handleiding. What only the handleiding
+// said therefore travels in the one file people open.
+describe('the compose file says what it does not arrange (1.6.1)', () => {
+  const kop = compose.slice(0, compose.indexOf('x-logging:'));
+  it('names the certificate, the backup and updating, and where the handleiding is', () => {
+    expect(kop).toMatch(/TLS_MODUS=bestand/);
+    expect(kop).toMatch(/Back-up/);
+    expect(kop).toMatch(/back-upwachtwoord op een plek buiten deze machine/);
+    expect(kop).toMatch(/docker compose pull.*niet dit bestand/);
+    expect(kop).toMatch(/installatie-it\.md/);
+    expect(kop).toMatch(/\/app\/installatie/);
+  });
+  it('is comment only, so an installed file stays valid', () => {
+    expect(kop.split('\n').filter((l) => l.trim() !== '' && !l.startsWith('#'))).toEqual([]);
+  });
+});

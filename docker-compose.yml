@@ -1,3 +1,18 @@
+# Dienstrooster. Dit ene bestand is de installatie. Drie dingen regelt het
+# niet voor je. De stappen staan in installatie-it.md. Die handleiding zit in
+# de image van de app, in /app/installatie, naast dit bestand.
+#
+# 1. Het certificaat. Zonder TLS_MODUS=bestand in .env en het certificaat van
+#    de organisatie in certs/ gebruikt Caddy een eigen certificaat. Elke
+#    browser waarschuwt daar dan voor.
+# 2. Een back-up. Alles staat in data/, op deze ene schijf. Stel als
+#    beheerder in de app "Back-up" in: elke dag een versleutelde kopie per
+#    mail. Neem anders data/ mee in de back-up van de server. Bewaar het
+#    back-upwachtwoord op een plek buiten deze machine.
+# 3. Bijwerken. "docker compose pull" haalt de images op, niet dit bestand.
+#    Haal het bij elke versie opnieuw uit de nieuwe image, want het kan met
+#    een versie veranderen.
+
 # Every container's log, capped: Docker otherwise keeps it forever, and on
 # a NAS that runs for months that slowly fills the disk.
 x-logging: &logging

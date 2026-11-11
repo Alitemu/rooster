@@ -133,7 +133,7 @@ function Section({
     <div className="card overflow-hidden">
       <div
         onClick={onToggleOpen}
-        className="flex items-center justify-between gap-3 p-4 cursor-pointer select-none hover:bg-neutral-50"
+        className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-3 gap-y-1 p-4 cursor-pointer select-none hover:bg-neutral-50"
       >
         {/* The title is a heading with a button in it (the pattern for an accordion); the pin is next to it,
             not inside it, so Enter on the pin pins instead of folding. The click bubbles to the row. */}
@@ -154,8 +154,9 @@ function Section({
             {title}
           </button>
         </h2>
-        <span className="flex items-center gap-3 shrink-0">
-          {hint && <span className="text-sm text-neutral-500 text-right">{hint}</span>}
+        {/* On a phone the summary goes under the title instead of being cut off at the card's edge (1.6.1). */}
+        <span className="flex items-center gap-3 min-w-0 sm:shrink-0">
+          {hint && <span className="text-sm text-neutral-500 sm:text-right">{hint}</span>}
           {isOpen && (
             <button
               type="button"

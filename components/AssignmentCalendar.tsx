@@ -399,7 +399,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
                                 {parseISO(datum).getDate()}
                               </span>
                               {tag && (
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate w-full text-left" title={tag}>
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-600 truncate w-full text-left" title={tag}>
                                   {tag}
                                 </span>
                               )}

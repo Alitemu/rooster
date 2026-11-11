@@ -207,10 +207,10 @@ npm run test:e2e
 node scripts/scenario-check.mjs
 
 # Na een schemawijziging: schema-drift vergelijkt het schema dat de seed
-# bouwt met het schema dat de migraties bouwen. upgrade-drift vergelijkt een
-# bijgewerkte oude database met een verse
+# bouwt met het schema dat de migraties bouwen. Of een oude database goed
+# door de nieuwe start komt, bewaakt scripts/seed.upgradeOud.test.ts bij
+# elke `npx vitest run`. upgrade-drift maakt de oude databases daarvoor
 node scripts/schema-drift.mjs
-node scripts/upgrade-drift.mjs
 ```
 
 Welke controle je bij welke wijziging draait, staat in
@@ -236,7 +236,7 @@ een vermelding in `scripts/seed.ts` (in de CREATE TABLE en in
 `LATER_COLUMNS`, zodat een langer geleden geseede database hem ook
 oppikt). Anders draait een verse installatie op een ander schema dan een
 gemigreerde. `node scripts/schema-drift.mjs` en
-`node scripts/upgrade-drift.mjs` bewaken dit.
+`scripts/seed.upgradeOud.test.ts` bewaken dit.
 
 ### Bouwen
 
@@ -650,6 +650,13 @@ De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
+
+**Vanaf versie 1.6.1:**
+- *Kalender met voorkeuren:* de kleine dagafkortingen (ma, di, za) en de aantallen onder een dag zijn donkerder grijs. Ze haalden het contrast van 4,5 op 1 net niet.
+- *Periodepagina van de planner:* onder de naam staat het streefbereik in woorden, bijvoorbeeld "Streefbereik per persoon: 3 of 4 avonddiensten, 1 of 2 weekenddiensten en hoogstens 1 feestdagdienst". Er stond "Avond 3-4 · Weekend 1-2 · Feestdag 0-1". Op een telefoon staat de samenvatting van een onderdeel onder de titel en wordt ze niet meer afgekapt.
+- *Mail die niet verstuurd kan worden:* vertrouwt de server het certificaat van de mailserver niet, dan zegt de melding dat. Er stond "Gmail is niet bereikbaar. Controleer of de server verbinding heeft met internet", ook als het netwerk versleuteld verkeer onderweg openmaakt. De melding zegt nu wat de IT-afdeling moet doen.
+- *`docker-compose.yml`:* bovenaan staat wat het bestand niet voor je regelt: het certificaat, een back-up en het bijwerken van het bestand zelf. Het zijn alleen commentaarregels. Een bestand dat al geïnstalleerd is, blijft geldig.
+- *Controles (voor wie de app onderhoudt):* een database van versie 0.2.0, 0.11.0, 1.0.1 en 1.3.0 gaat bij elke bouw door de start van de nieuwe versie. Het schema moet daarna gelijk zijn aan dat van een verse database en er mag geen rij verloren gaan. De controle die dit deed, werkte sinds 26 oktober niet meer. De overdracht van saldo naar de volgende periode wordt bij elke release als keten doorlopen: publiceren, een dienst die wegvalt, de volgende periode openen.
 
 **Vanaf versie 1.6.0:**
 - *Periode instellen, stap 7 (achterwacht):* de laatste stap van de wizard toont nu het streefbereik per persoon in woorden, bijvoorbeeld "2 of 3 avonddiensten, hoogstens 1 weekenddienst en hoogstens 1 feestdagdienst". Dat is wat er bij het openen wordt vastgelegd en wat in de uitnodiging komt. De vier vaste vinkjes zijn vervangen door echte controles: periode en deadline, personeel, streefbereik en capaciteit. *Periode openen* werkt alleen als de eerste drie kloppen. Bij te weinig capaciteit staat er een waarschuwing en kun je toch openen.

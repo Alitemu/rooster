@@ -14,6 +14,7 @@ import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { vensterTekst } from '@/lib/windowWeeks';
+import { streefbereikUitRuleset } from '@/components/wizardControles';
 import { foutTekst } from '@/lib/foutTekst';
 import { DatumTijdVeld, DatumTekst } from '@/components/DatumVeld';
 
@@ -277,12 +278,11 @@ export default function PlannerPeriodPage() {
             {period.bevroren_ruleset_json && (() => {
               try {
                 const cfg = JSON.parse(period.bevroren_ruleset_json);
+                const bereik = streefbereikUitRuleset(cfg);
                 return (
-                  <p className="text-sm text-neutral-600 mt-1">
-                    {vensterTekst(cfg)} · Avond {cfg.bandAvond?.[0] ?? '?'}-
-                    {cfg.bandAvond?.[1] ?? '?'} · Weekend {cfg.bandWeekend?.[0] ?? '?'}-
-                    {cfg.bandWeekend?.[1] ?? '?'} · Feestdag {cfg.bandFeestdag?.[0] ?? '?'}-
-                    {cfg.bandFeestdag?.[1] ?? '?'}
+                  <p className="text-sm text-neutral-600 mt-1" data-testid="periode-regels">
+                    {vensterTekst(cfg)}
+                    {bereik ? `. Streefbereik per persoon: ${bereik}.` : ''}
                   </p>
                 );
               } catch {
