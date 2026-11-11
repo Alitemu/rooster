@@ -40,6 +40,7 @@ import { BestandKiezer } from '@/components/BestandKiezer';
 import { isoNaarInvoer } from '@/lib/datumInvoer';
 import type { VorigeInstellingen } from '@/lib/vorigeInstellingen';
 import { budgetTekst, verschilMelding } from '@/lib/vorigeInstellingenTekst';
+import { kanOpenen, streefbereikInWoorden, wizardControles, type Bereik } from './wizardControles';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -208,8 +209,10 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
     windowWeeksAvond: vorige?.windowWeeksAvond ?? 2,
     windowWeeksWeekendFeestdag: vorige?.windowWeeksWeekendFeestdag ?? 2,
-    band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
-    band_max: { AVOND: 8, WEEKEND: 3, FEESTDAG: 2 },
+    // Empty until the proposal for this period is in (the effect below, on every step since 1.6.0): the
+    // range the code started with (7 or 8 avonddiensten) was what a period opened on when step 3 was skipped.
+    band_min: { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 },
+    band_max: { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 },
   });
   const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
     mode: vorige?.distributionMode ?? 'GELIJK',
@@ -243,6 +246,12 @@ export function SetupWizard({ period, onComplete }: Props) {
   // once they've typed a value of their own, further capacity refreshes
   // (e.g. from changing the window) must not silently overwrite it.
   const [bandTouched, setBandTouched] = useState(false);
+  // The proposal in the fields is the one of the dates, window and verdeling on screen (1.6.0): step 7 lets
+  // the period open only then, or on a range the planner typed.
+  const [voorstelGeladen, setVoorstelGeladen] = useState(false);
+  const [capaciteitMislukt, setCapaciteitMislukt] = useState(false);
+  // The staff list on screen is the one of these dates: "0 actief" was what step 7 read before the list was in.
+  const [staffGeladenVoor, setStaffGeladenVoor] = useState<string | null>(null);
 
   // Guards against a slower, older request (e.g. from before the planner
   // adjusted windowWeeks or distributionMode again) resolving after a
@@ -252,11 +261,14 @@ export function SetupWizard({ period, onComplete }: Props) {
   const capacityRequestRef = useRef(0);
 
   useEffect(() => {
-    if (currentStep !== 'window' || !period?.id) return;
+    // On every step, not only while step 3 is on screen: a planner who comes back goes straight to step 7.
+    if (!period?.id) return;
 
     const loadCapacity = async () => {
       const ticket = ++capacityRequestRef.current;
       setCapacityLoading(true);
+      setVoorstelGeladen(false);
+      setCapaciteitMislukt(false);
       try {
         // The live capacity check (CLAUDE.md's floor(weeks/windowWeeks)
         // formula) only has one windowWeeks slot, not a per-teller one -
@@ -279,6 +291,8 @@ export function SetupWizard({ period, onComplete }: Props) {
 
         const result: CapacityCheckResult | null = data.success ? data.data : null;
         setCapacityCheck(result);
+        if (result?.suggested_band) setVoorstelGeladen(true);
+        else setCapaciteitMislukt(true);
         if (result?.suggested_band && !bandTouched) {
           setWindowConfig((prev) => ({
             ...prev,
@@ -295,14 +309,17 @@ export function SetupWizard({ period, onComplete }: Props) {
           }));
         }
       } catch {
-        if (ticket === capacityRequestRef.current) setCapacityCheck(null);
+        if (ticket === capacityRequestRef.current) {
+          setCapacityCheck(null);
+          setCapaciteitMislukt(true);
+        }
       } finally {
         if (ticket === capacityRequestRef.current) setCapacityLoading(false);
       }
     };
 
     loadCapacity();
-  }, [currentStep, windowConfig.windowWeeksAvond, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
+  }, [windowConfig.windowWeeksAvond, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
 
   // Membership is_active is purely date-range-based (geldig_vanaf/tot
   // overlapping the period), so "activating" someone for this period just
@@ -396,6 +413,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           .map((l: any) => l.person_id)
       );
 
+      setStaffGeladenVoor(`${periodData.pool_id}|${periodData.start_datum}|${periodData.eind_datum}`);
       setStaffMembers(
         (membersData.data || []).map((m: any) => ({
           id: m.id,
@@ -442,6 +460,13 @@ export function SetupWizard({ period, onComplete }: Props) {
       geldig_tot: prev.geldig_tot || OPEN_EINDE,
     }));
     lastAutoFilledStartRef.current = periodData.start_datum;
+  }, [currentStep, periodData.pool_id, periodData.start_datum, periodData.eind_datum]);
+
+  // The staff of these dates on every step (1.6.0), as the proposal above: step 7 counts who is active.
+  // The effect before this one loads it for steps 2 and 6 itself.
+  useEffect(() => {
+    if (currentStep === 'staff' || currentStep === 'corrections') return;
+    loadStaff({ silent: true });
   }, [currentStep, periodData.pool_id, periodData.start_datum, periodData.eind_datum]);
 
   const handleAddMember = async () => {
@@ -729,6 +754,23 @@ export function SetupWizard({ period, onComplete }: Props) {
       setLoading(false);
     }
   };
+
+  // Step 7 (1.6.0, components/wizardControles.ts): what the period opens with, and whether it can.
+  const staffGeladen = staffGeladenVoor === `${periodData.pool_id}|${periodData.start_datum}|${periodData.eind_datum}`;
+  const bereikKlaar = bandTouched || (voorstelGeladen && !capacityLoading);
+  const controles = wizardControles({
+    naam: periodData.naam,
+    start_datum: periodData.start_datum,
+    eind_datum: periodData.eind_datum,
+    deadline: periodData.deadline,
+    personeelGeladen: staffGeladen,
+    aantalActief: staffMembers.filter((m) => m.is_active).length,
+    capaciteitGoed: capacityLoading || !capacityCheck ? null : capacityCheck.valid,
+    capaciteitMislukt,
+    voorstelGeladen: voorstelGeladen && !capacityLoading,
+    zelfIngevuld: bandTouched,
+  });
+  const magOpenen = kanOpenen(controles);
 
   const steps: { id: Step; label: string; title: string }[] = [
     { id: 'period', label: '1. Periode', title: 'Periode en deadline' },
@@ -1641,6 +1683,14 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Venster:</strong> avond {telwoord(windowConfig.windowWeeksAvond, 'week', 'weken')} · weekend/feestdag{' '}
                   {telwoord(windowConfig.windowWeeksWeekendFeestdag, 'week', 'weken')}
                 </p>
+                <p data-testid="stap7-streefbereik">
+                  <strong>Streefbereik per persoon:</strong>{' '}
+                  {bereikKlaar
+                    ? streefbereikInWoorden(windowConfig.band_min as Bereik, windowConfig.band_max as Bereik)
+                    : capaciteitMislukt
+                      ? 'nog niet bekend'
+                      : 'wordt berekend...'}
+                </p>
                 <p>
                   <strong>Verdeling:</strong> {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}
                 </p>
@@ -1671,26 +1721,17 @@ export function SetupWizard({ period, onComplete }: Props) {
                 ) : null;
               })()}
 
-            {staffMembers.filter((s) => s.is_active).length === 0 && (
-              <div className="bg-red-50 border border-red-200 rounded p-4">
-                <p className="text-sm font-semibold text-red-900">
-                  ⚠️ Nog niemand actief voor deze periode
-                </p>
-                <p className="text-sm text-red-800 mt-1">
-                  Er is geen personeel actief voor deze periode. Ga terug naar stap 2 (Personeel) om
-                  iemand toe te voegen of te activeren, want zonder actief personeel kan de periode
-                  niet geopend worden.
-                </p>
-              </div>
-            )}
-
-            <div className="bg-amber-50 border border-amber-200 rounded p-4">
-              <p className="font-semibold text-amber-900 mb-2">⚠️ Voordat je opent</p>
-              <ul className="text-sm text-amber-800 space-y-1 ml-4">
-                <li>✓ Periodedata en deadline zijn correct</li>
-                <li>✓ Personeel is toegevoegd</li>
-                <li>✓ Venster- en budgetinstellingen zijn geschikt</li>
-                <li>✓ Beginsaldi (indien van toepassing) zijn geïmporteerd</li>
+            <div
+              className={`border rounded p-4 ${magOpenen && controles.every((c) => c.goed) ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}
+              data-testid="stap7-controles"
+            >
+              <p className="font-semibold text-neutral-900 mb-2">{magOpenen ? 'Klaar om te openen' : 'Nog niet klaar om te openen'}</p>
+              <ul className="text-sm text-neutral-800 space-y-1">
+                {controles.map((c) => (
+                  <li key={c.naam}>
+                    <span aria-hidden="true">{c.goed ? '✓' : c.nodig ? '✗' : '⚠️'}</span> <strong>{c.naam}:</strong> {c.tekst}
+                  </li>
+                ))}
               </ul>
             </div>
 
@@ -1736,7 +1777,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           ) : (
             <button
               onClick={handleOpenPeriod}
-              disabled={loading || staffMembers.filter((s) => s.is_active).length === 0}
+              disabled={loading || !magOpenen}
               className="flex-1 px-4 py-2 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-neutral-400 transition-colors"
             >
               {loading ? 'Bezig met openen...' : 'Periode openen'}

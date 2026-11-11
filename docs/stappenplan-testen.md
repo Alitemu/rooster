@@ -47,7 +47,9 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
 
 ## Blok C. Achterwacht: een periode van begin tot eind
 
-- [ ] **C1.** Maak een nieuwe periode met de wizard. De bereiken
+- [ ] **C1.** Maak een nieuwe periode met de wizard. Sluit de wizard halverwege, open
+  hem opnieuw en ga direct naar stap 7. Je ziet: het juiste aantal actieve mensen,
+  het streefbereik in woorden en *Klaar om te openen*. De bereiken
   (streefaantallen) staan in woorden, nooit als `[7,8]` of `-1`.
 - [ ] **C2.** Personeel toevoegen en een geldigheidsperiode aanpassen. Een
   collega die halverwege start, verschijnt in de keuzelijst bij handmatig

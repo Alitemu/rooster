@@ -224,3 +224,30 @@ roster needs a reason, as here. What follows is the achterwacht's.)
   (`rooster-nog-niet-gepubliceerd`) instead of two that contradicted each
   other (app/person/[token]/meldingenZichtbaar.test.ts, the last test of
   tests/e2e/publication-workflow.e2e.ts).
+
+## The wizard's last step (1.6.0)
+
+"Periode instellen" (components/SetupWizard.tsx) read its data per step: the
+proposed streefbereik (`GET /api/periods/[id]/capacity`) only while step 3
+was on screen, the staff only on step 2 or 6. A planner who came back to a
+concept period and went straight to step 7 read "0 actief" with everyone
+active and could not open. After a look at step 2 the period opened on the
+range the code started with, 7 or 8 avonddiensten whatever the period, and
+every invitation promised "ongeveer 8 avonddiensten" (audit per role, R-01;
+six scenarios, two of them wrong).
+
+Now both are read on every step and again when the dates, the window or the
+verdeling change. The fields start empty. Step 7 shows the streefbereik in
+words and four checks (components/wizardControles.ts): periode en deadline,
+personeel and streefbereik must hold before "Periode openen" works, the
+capacity is a warning. With nobody active the button is off and says why;
+someone added in step 2, or dates moved in step 1, turn it on again and that
+person is in the period (the planner's wish). tests/e2e/wizard-openen.e2e.ts
+opens three periods this way and reads what was frozen;
+components/wizardControles.test.ts holds the checks,
+components/wizardOpenen.test.ts the three places in the source.
+
+Not kept: a window, verdeling or budget the planner chose without opening.
+Coming back, the wizard starts from the previous period's settings again
+(lib/vorigeInstellingen.ts); step 7 shows what it opens with (option A, the
+user's choice; keeping a draft in the browser or on the server were B and C).
