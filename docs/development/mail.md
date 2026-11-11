@@ -303,6 +303,15 @@ again (voorlopig while voorlopig, definitief when definitief) to everyone, for
 when it failed. Nothing about the roster changes; the audit log notes it. The
 buttons ask first ("Rooster opnieuw mailen").
 
+After a roster mail the planner is told to look (1.6.0, the user's
+wording): "Controleer over 30 minuten of de e-mails zichtbaar zijn in de
+verzonden items van de mailbox <adres>", with the address the verzendlijst
+goes to. The app knows the verzendlijst reached the flow's mailbox, not
+that the flow mailed everyone. `mailControleZin`
+(components/RosterPublicationDialog.tsx) for publishing, making definitief
+and "Rooster opnieuw mailen"; the AIOS's copy `aiosMailControleZin`
+(components/AiosPubliceren.tsx).
+
 ## The beheerder's password mail (0.805.0)
 
 The one mail that does not go to the flow's mailbox: lib/wachtwoordHerstel.ts

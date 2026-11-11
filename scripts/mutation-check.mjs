@@ -7084,6 +7084,27 @@ const MUTATIONS = [
     replace: "`",
     tests: ["lib/ruilWachtend"],
   },
+  {
+    name: "1.6.0: the sentence after a roster mail leaves the mailbox out",
+    file: "components/RosterPublicationDialog.tsx",
+    find: "const mailbox = adres?.trim() ? `de mailbox ${adres.trim()}` : 'de mailbox van de Power Automate-stroom';",
+    replace: "const mailbox = 'de mailbox van de Power Automate-stroom';",
+    tests: ["components/mailControleZin"],
+  },
+  {
+    name: "1.6.0: the sentence after a roster mail does not say when to look",
+    file: "components/RosterPublicationDialog.tsx",
+    find: "return `Controleer over 30 minuten of de e-mails zichtbaar zijn in de verzonden items van ${mailbox}.`;",
+    replace: "return `Controleer of de e-mails zichtbaar zijn in de verzonden items van ${mailbox}.`;",
+    tests: ["components/mailControleZin"],
+  },
+  {
+    name: "1.6.0: the AIOS's sentence after a roster mail leaves the mailbox out",
+    file: "components/AiosPubliceren.tsx",
+    find: "const mailbox = adres?.trim() ? `de mailbox ${adres.trim()}` : 'de mailbox van de Power Automate-stroom van de AIOS';",
+    replace: "const mailbox = 'de mailbox van de Power Automate-stroom van de AIOS';",
+    tests: ["components/mailControleZin"],
+  },
 ];
 
 const args = process.argv.slice(2);

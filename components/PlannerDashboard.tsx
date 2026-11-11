@@ -24,7 +24,7 @@ import { AssignmentGrid } from './AssignmentGrid';
 import { AssignmentCalendar } from './AssignmentCalendar';
 import { StaffingOverview } from './StaffingOverview';
 import { ToegangslinksBeheer } from './ToegangslinksBeheer';
-import { RosterPublicationDialog } from './RosterPublicationDialog';
+import { RosterPublicationDialog, mailControleZin } from './RosterPublicationDialog';
 import { RebalanceSuggestions } from './RebalanceSuggestions';
 import { FillGapsSummary } from './FillGapsSummary';
 import { SwapRequestsOverview } from './SwapRequestsOverview';
@@ -266,6 +266,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   const [roosterMailVraag, setRoosterMailVraag] = useState(false);
   const [roosterMailBezig, setRoosterMailBezig] = useState(false);
   const [roosterMailMelding, setRoosterMailMelding] = useState<{ fout: boolean; tekst: string } | null>(null);
+  // Where the verzendlijst goes: the sentence after "Rooster opnieuw mailen" names that mailbox (mailControleZin).
+  const [verzendlijstAan, setVerzendlijstAan] = useState<string | null>(null);
   // Accordion state for the four collapsible sections below (Personeel &
   // voortgang / Exporteren & communicatie / Voorstellen voor herverdeling /
   // Dienstrooster). At most one unpinned section is open at a time - opening
@@ -427,7 +429,10 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   useEffect(() => {
     fetch(withBasePath('/api/planner/mail-settings'))
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setMailIngesteld(data?.success ? Boolean(data.data.ingesteld) : null))
+      .then((data) => {
+        setMailIngesteld(data?.success ? Boolean(data.data.ingesteld) : null);
+        setVerzendlijstAan(data?.success ? (data.data.verzendlijst_aan ?? null) : null);
+      })
       .catch(() => setMailIngesteld(null));
   }, [mailSettingsKey]);
 
@@ -719,7 +724,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       if (!res.ok) {
         setRoosterMailMelding({ fout: true, tekst: data?.error?.message ?? 'Opnieuw mailen is mislukt.' });
       } else if (data.data.mail.verstuurd) {
-        setRoosterMailMelding({ fout: false, tekst: `De mail met het ${data.data.soort === 'definitief' ? 'definitieve' : 'voorlopige'} rooster is opnieuw verstuurd (${data.data.mail.aantal} personen).` });
+        setRoosterMailMelding({ fout: false, tekst: `De mail met het ${data.data.soort === 'definitief' ? 'definitieve' : 'voorlopige'} rooster is opnieuw verstuurd (${data.data.mail.aantal} personen). ${mailControleZin(verzendlijstAan)}` });
       } else {
         setRoosterMailMelding({ fout: true, tekst: data.data.mail.melding });
       }

@@ -651,6 +651,9 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 1.6.0:** (nog niet gebouwd)
+- *Na het mailen van een rooster:* de melding na voorlopig publiceren, definitief maken en *Rooster opnieuw mailen* zegt er nu bij: "Controleer over 30 minuten of de e-mails zichtbaar zijn in de verzonden items van de mailbox", met het adres waar de verzendlijst naartoe gaat. De app weet alleen dat de verzendlijst bij de stroom is aangekomen, niet dat de stroom iedereen heeft gemaild. Voor de achterwacht en de AIOS.
+
 **Vanaf versie 1.5.0:**
 - *Afwezigheid opgeven (achterwacht):* de datums van een nieuwe afwezigheid zijn leeg. Ze stonden op de hele periode, zodat één tik op *Toevoegen* alle dagen blokkeerde. Kies je een begindatum, dan staat de einddatum op de dag erna. Bij de AIOS was dit al zo.
 - *Ruilverzoek dat op je wacht (achterwacht):* op de pagina van de deelnemer staat naast *Ruilen* hoeveel verzoeken van collega's op antwoord wachten, bijvoorbeeld "1 verzoek wacht op je antwoord". De lijst met ruilverzoeken staat dan al open. Eerder moest je *Ruilen* openen en daarna *Ruilverzoeken bekijken*, zonder dat iets erop wees.

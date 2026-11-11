@@ -18,12 +18,31 @@ const moment = (iso: string) => new Date(iso).toLocaleString('nl-NL', { dateStyl
 type Actie = 'publiceren' | 'definitief' | 'intrekken' | 'opnieuw';
 const ROUTE: Record<Actie, string> = { publiceren: 'publiceren', definitief: 'definitief-maken', intrekken: 'publicatie-intrekken', opnieuw: 'rooster-mail' };
 
+/**
+ * What the planner does after a roster mail went out (1.6.0, the user's
+ * wording; the AIOS's copy of the achterwacht's mailControleZin in
+ * components/RosterPublicationDialog.tsx). The app knows the verzendlijst
+ * reached the mailbox of the AIOS's flow, not that the flow mailed everyone.
+ */
+export function aiosMailControleZin(adres: string | null | undefined): string {
+  const mailbox = adres?.trim() ? `de mailbox ${adres.trim()}` : 'de mailbox van de Power Automate-stroom van de AIOS';
+  return `Controleer over 30 minuten of de e-mails zichtbaar zijn in de verzonden items van ${mailbox}.`;
+}
+
 export function AiosPubliceren({ periodId, status, onChanged }: { periodId: string; status: string; onChanged: () => void }) {
   const [stand, setStand] = useState<AiosPublicatieStand | null>(null);
   const [zeker, setZeker] = useState<Actie | null>(null);
   const [bezig, setBezig] = useState(false);
   const [melding, setMelding] = useState<{ fout: boolean; tekst: string } | null>(null);
   const [controle, setControle] = useState<AiosPublicatieControle | null>(null);
+  // Where the AIOS's verzendlijst goes (Mail naar de AIOS): the sentence after a mail names that mailbox.
+  const [verzendlijstAan, setVerzendlijstAan] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(withBasePath('/api/aios/mail-instellingen'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setVerzendlijstAan(data?.success ? (data.data?.verzendlijst_aan ?? null) : null))
+      .catch(() => {});
+  }, []);
 
   const laad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${periodId}/publicatie`))
@@ -62,7 +81,7 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
               : 'De publicatie is ingetrokken.';
       setMelding({
         fout: !mail.verstuurd,
-        tekst: actie === 'intrekken' ? wat : mail.verstuurd ? `${wat} De mail aan ${mail.aantal} AIOS is verstuurd.` : `${wat} ${mail.melding}`,
+        tekst: actie === 'intrekken' ? wat : mail.verstuurd ? `${wat} De mail aan ${mail.aantal} AIOS is verstuurd. ${aiosMailControleZin(verzendlijstAan)}` : `${wat} ${mail.melding}`,
       });
       setZeker(null);
       onChanged();
