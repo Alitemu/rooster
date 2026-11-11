@@ -287,6 +287,15 @@ solver.
    nachtblok zondag tot en met dinsdag: dat is voor wie meer dagen vrij heeft
    (F7; tot 0.88.1 gold dit alleen voor 1,0 fte, de keuze van de planner in
    oktober 2026). De codenaam van de regel blijft `5_FULLTIME_NACHTBLOK`.
+   Wie geen parttimedagen heeft opgegeven, telt als 1,0 fte. Zijn er te weinig
+   AIOS met minder dan 0,9 fte bekend, dan blijven deze nachten leeg. De
+   pagina waarschuwt daarom vóór het maken (1.6.0, `lib/aiosNachtblok.ts`):
+   bij meer dan drie van deze blokken per AIOS die ze mag doen (de keuze van
+   de planner in november 2026), met de opdracht te controleren of alle AIOS
+   hun parttimedagen juist hebben opgegeven. Een opgeknipt blok telt niet mee.
+   Wie tijdens een blok wordt ingewerkt of de opleiding onderbreekt, telt voor
+   dat blok niet mee. Het is een waarschuwing: het rooster maken kan. De
+   regel zelf is niet veranderd.
 6. Inwerken: zie hierboven.
 7. Geen dienst op een compensatiedag (C8, F6, F7). De compensatie zelf regelt
    het roosterbureau na de publicatie. De app blokkeert die dagen automatisch

@@ -157,7 +157,7 @@ export function AiosRoosterMaken({
   onChanged: () => void;
 }) {
   // `generatie`: what the last generation told, kept by the server (a refresh or another login shows it again).
-  const [rooster, setRooster] = useState<(AiosRooster & { loopt: boolean; generatie: AiosLaatsteGeneratie | null }) | null>(null);
+  const [rooster, setRooster] = useState<(AiosRooster & { loopt: boolean; generatie: AiosLaatsteGeneratie | null; nachtblok_waarschuwing?: string | null }) | null>(null);
   const [tijdKeuze, setTijdKeuze] = useState<string>(String(STANDAARD_TIJD));
   const [eigenMinuten, setEigenMinuten] = useState('');
   const [bezig, setBezig] = useState(false);
@@ -172,6 +172,10 @@ export function AiosRoosterMaken({
       .then((data) => setRooster(data))
       .catch((err) => setFout(foutTekst(err, 'Laden van het rooster is mislukt')));
   }, [periodId]);
+  // A block cut up around feestdagen is loose nights anyone may do: the warning above is read again once the choices are saved.
+  useEffect(() => {
+    if (!feestdag.gewijzigd) laad();
+  }, [feestdag.gewijzigd, feestdag.open, laad]);
   useEffect(() => {
     actief.current = true;
     laad();
@@ -264,6 +268,12 @@ export function AiosRoosterMaken({
                 ? 'Het rooster is gemaakt. Je kunt het opnieuw laten maken. Dan wordt het hele rooster opnieuw gemaakt, ook wat je met de hand hebt veranderd.'
                 : 'De solver van de AIOS maakt het rooster: per blok één AIOS, binnen de harde regels en zo eerlijk mogelijk naar fte.'}
             </p>
+            {/* Too few part-timers known for the night blocks zo-di (1.6.0, lib/aiosNachtblok.ts): a warning, the roster can still be made. */}
+            {rooster?.nachtblok_waarschuwing && (
+              <p role="status" data-testid="aios-nachtblok-waarschuwing" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                ⚠️ {rooster.nachtblok_waarschuwing}
+              </p>
+            )}
             {nietKlaar && (
               <p className="text-sm font-medium text-neutral-900">
                 {feestdag.open > 0

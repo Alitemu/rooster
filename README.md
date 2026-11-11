@@ -652,6 +652,7 @@ te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
 **Vanaf versie 1.6.0:** (nog niet gebouwd)
+- *AIOS, nachtblokken van zondag tot en met dinsdag:* vóór het maken van het rooster waarschuwt de pagina als er te weinig AIOS in deeltijd bekend zijn. Die blokken mag alleen doen wie een deeltijdfactor lager dan 0,9 heeft. Wie geen parttimedagen heeft opgegeven, telt als voltijd. De waarschuwing komt bij meer dan drie van deze blokken per AIOS die ze mag doen en vraagt je te controleren of alle AIOS hun parttimedagen juist hebben opgegeven. Het rooster maken kan gewoon. Aan de regel zelf en aan de solver verandert niets.
 - *Na het mailen van een rooster:* de melding na voorlopig publiceren, definitief maken en *Rooster opnieuw mailen* zegt er nu bij: "Controleer over 30 minuten of de e-mails zichtbaar zijn in de verzonden items van de mailbox", met het adres waar de verzendlijst naartoe gaat. De app weet alleen dat de verzendlijst bij de stroom is aangekomen, niet dat de stroom iedereen heeft gemaild. Voor de achterwacht en de AIOS.
 
 **Vanaf versie 1.5.0:**

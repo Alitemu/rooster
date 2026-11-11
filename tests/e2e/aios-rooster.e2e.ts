@@ -96,6 +96,11 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeDisabled();
   await expect(paneel.getByTestId('aios-tijd-uitleg')).toContainText('Vul een heel aantal minuten in, van 1 tot 60.');
   await paneel.getByLabel(/Aantal minuten/).fill('1');
+  // Eight AIOS, none with a part-time day: the page warns before the roster is made (1.6.0), and the roster can still be made.
+  await expect(paneel.getByTestId('aios-nachtblok-waarschuwing')).toContainText(
+    /Te weinig AIOS in deeltijd voor de nachtblokken van zondag tot en met dinsdag\..*Geen enkele AIOS mag die doen.*Controleer of alle AIOS hun parttimedagen juist hebben opgegeven\./
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
   await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
   // Whether the solver finished is said, either way.

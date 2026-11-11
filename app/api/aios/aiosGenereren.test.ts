@@ -327,6 +327,23 @@ describe('making the AIOS roster', () => {
     expect(data.leeg).toBe(slotsVan(w.period).length - toewijzingen().length);
   });
 
+  it('warns before the roster is made when too few part-timers are known for the night blocks zo-di (1.6.0)', async () => {
+    const lees = async () =>
+      (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.nachtblok_waarschuwing as string | null;
+    // One of the two has a part-time day (0,8 fte), for the thirteen night blocks of a quarter.
+    const een = await lees();
+    expect(een).toContain('Te weinig AIOS in deeltijd voor de nachtblokken van zondag tot en met dinsdag.');
+    expect(een).toContain('Maar 1 AIOS mag die doen');
+    expect(een).toContain('Controleer of alle AIOS hun parttimedagen juist hebben opgegeven.');
+    // Nobody with a part-time day: everyone counts as full-time.
+    db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2000-01-01' WHERE person_id = ?`).run(w.x);
+    try {
+      expect(await lees()).toContain('Geen enkele AIOS mag die doen');
+    } finally {
+      db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2099-12-31' WHERE person_id = ?`).run(w.x);
+    }
+  });
+
   it('stores the share of every soort and shows each as a fair range; an older solver without the new two shows none for them (0.903.0)', async () => {
     const doelen = { doel_punten: 5, doel_feestdagdiensten: 0.4, doel_nachten: 2.6, doel_dagen: 0, doel_weekendavonden: -0.3, doel_weekavonden: 1.5, doel_uitloopdiensten: 4 };
     antwoordVan = (invoer) => {

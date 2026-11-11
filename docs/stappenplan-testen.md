@@ -116,7 +116,9 @@ overslaan:
   blokken van nachten en een toelichting per dag.
 - [ ] **E3.** Voorkeurenoverzicht downloaden, aanpassen en terug importeren
   (alleen de beheerder). Eerst controleren, dan toepassen.
-- [ ] **E4.** Rooster maken met de AIOS-solver. Geen lege diensten die er niet
+- [ ] **E4.** Rooster maken met de AIOS-solver. Hebben te weinig AIOS parttimedagen
+  opgegeven, dan staat er vóór het maken een gele waarschuwing over de nachtblokken
+  van zondag tot en met dinsdag. Geen lege diensten die er niet
   hoeven te zijn, en de uitleg bij lege diensten klopt.
 - [ ] **E5.** Publiceren, definitief maken, ruilen tussen twee AIOS.
 - [ ] **E6.** Een AIOS ziet niets van een andere AIOS en niets van de
