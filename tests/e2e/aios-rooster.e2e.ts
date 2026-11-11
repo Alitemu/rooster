@@ -133,7 +133,10 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await kies.click();
   const klaar = page.getByTestId('aios-laatste-wijziging');
-  const toch = wijzig.getByRole('button', { name: 'Ja, toch indelen' });
+  // Which AIOS the list offers first follows from the roster the solver made: one who already has another
+  // dienst that day gets the question with its own button (0.100.0). The test failed on that one in two of
+  // four runs (audit of 1.4.0), while the app did what it should.
+  const toch = wijzig.getByRole('button', { name: /^Ja, (toch indelen|dit is echt de bedoeling)$/ });
   await expect(klaar.or(toch)).toBeVisible();
   if (await toch.isVisible()) await toch.click();
   await expect(klaar).toContainText(`nu ${codenaam}.`);
