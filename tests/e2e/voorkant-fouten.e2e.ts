@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, getBaseUrl, getPersonalLinkUrl, loginAsPlanner, openSecties } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, getPersonalLinkUrl, loginAsPlanner, openSecties, toonRuilverzoeken } from './setup';
 
 /**
  * Front-end faults of the 0.805.0 audit, each in the browser:
@@ -51,7 +51,7 @@ test('the swap panel keeps its list when a background refresh fails, and recover
   });
   await page.goto(getPersonalLinkUrl(testData.users[1].token));
   await openSecties(page);
-  await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+  await toonRuilverzoeken(page);
   const kaart = ontvangen(page).locator('[data-status="PENDING"]');
   await expect(kaart).toHaveCount(1);
 
@@ -68,7 +68,7 @@ test('the swap panel keeps its list when a background refresh fails, and recover
   expect(mislukt).toBe(voor);
 });
 
-test('a double click on Goedkeuren sends one request and shows no error beside the success', async ({ page }) => {
+test('a double click on Ja, ruilen sends one request and shows no error beside the success', async ({ page }) => {
   let aanroepen = 0;
   await page.route(/\/swap-requests\/[^/]+\/approve/, async (route) => {
     aanroepen++;
@@ -77,8 +77,9 @@ test('a double click on Goedkeuren sends one request and shows no error beside t
   });
   await page.goto(getPersonalLinkUrl(testData.users[1].token));
   await openSecties(page);
-  await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
-  await ontvangen(page).getByRole('button', { name: 'Goedkeuren' }).dblclick();
+  await toonRuilverzoeken(page);
+  await ontvangen(page).getByRole('button', { name: 'Goedkeuren' }).click();
+  await page.getByTestId('ruil-goedkeuren-vraag').getByRole('button', { name: 'Ja, ruilen' }).dblclick();
   await expect(page.getByText('Ruil goedgekeurd', { exact: true })).toBeVisible();
   expect(aanroepen).toBe(1);
   await expect(page.getByRole('button', { name: 'Sluiten' })).toHaveCount(0);

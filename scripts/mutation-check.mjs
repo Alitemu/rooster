@@ -7035,6 +7035,55 @@ const MUTATIONS = [
     replace: "{shiftCounters.map((counter) => {",
     tests: ["components/blokkadeTellers"],
   },
+  {
+    name: "1.5.0: a new absence of the achterwacht starts on a date again",
+    file: "components/AbsenceManager.tsx",
+    find: "export const leegAfwezigheidFormulier = () => ({\n  van_datum: '',",
+    replace: "export const leegAfwezigheidFormulier = () => ({\n  van_datum: '2027-01-04',",
+    tests: ["components/afwezigheidLeeg"],
+  },
+  {
+    name: "1.5.0: a new absence of the achterwacht ends on a date again",
+    file: "components/AbsenceManager.tsx",
+    find: "  van_datum: '',\n  tot_datum: '',",
+    replace: "  van_datum: '',\n  tot_datum: '2027-03-28',",
+    tests: ["components/afwezigheidLeeg"],
+  },
+  {
+    name: "1.5.0: the header of Ruilen counts requests that wait for a colleague",
+    file: "lib/ruilWachtend.ts",
+    find: "v.status === 'PENDING' && v.respondent_person_id === personId",
+    replace: "v.status === 'PENDING'",
+    tests: ["lib/ruilWachtend"],
+  },
+  {
+    name: "1.5.0: the header of Ruilen counts answered requests",
+    file: "lib/ruilWachtend.ts",
+    find: "v.status === 'PENDING' && v.respondent_person_id === personId",
+    replace: "v.respondent_person_id === personId",
+    tests: ["lib/ruilWachtend"],
+  },
+  {
+    name: "1.5.0: the header of Ruilen says '0 verzoeken wachten'",
+    file: "lib/ruilWachtend.ts",
+    find: "  if (aantal <= 0) return undefined;\n",
+    replace: "",
+    tests: ["lib/ruilWachtend"],
+  },
+  {
+    name: "1.5.0: the question before approving swaps the two days around",
+    file: "lib/ruilWachtend.ts",
+    find: "Je geeft je dienst op ${ruil.geef} aan ${ruil.van} en krijgt de dienst op ${ruil.krijg}.",
+    replace: "Je geeft je dienst op ${ruil.krijg} aan ${ruil.van} en krijgt de dienst op ${ruil.geef}.",
+    tests: ["lib/ruilWachtend"],
+  },
+  {
+    name: "1.5.0: the question before approving does not say it is final",
+    file: "lib/ruilWachtend.ts",
+    find: " Daarna is de ruil definitief.`",
+    replace: "`",
+    tests: ["lib/ruilWachtend"],
+  },
 ];
 
 const args = process.argv.slice(2);

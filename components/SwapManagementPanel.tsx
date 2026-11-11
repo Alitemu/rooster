@@ -11,6 +11,7 @@ import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { RuilHerinnering } from '@/components/RuilHerinnering';
 import { foutTekst } from '@/lib/foutTekst';
+import { aantalWachtend, goedkeurVraag } from '@/lib/ruilWachtend';
 
 /** "di 5 jan 2027": a stored YYYY-MM-DD as people read it. */
 function datumTekst(datum: string): string {
@@ -60,6 +61,8 @@ interface Props {
    * approved swap moves shifts, so the parent reloads the roster itself.
    */
   onSwapsChanged?: () => void;
+  /** How many requests of colleagues wait for this person's answer, each time the list changes (1.5.0). */
+  onWachtend?: (aantal: number) => void;
 }
 
 const FILTER_STATUSSEN = [
@@ -132,7 +135,7 @@ export function beginFilters(
   return { verzonden: open('aanvrager_person_id') ? 'PENDING' : '', ontvangen: open('respondent_person_id') ? 'PENDING' : '' };
 }
 
-export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwapsChanged }: Props) {
+export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwapsChanged, onWachtend }: Props) {
   // What the last load returned, to notice a background refresh bringing
   // back something different (see onSwapsChanged).
   const lastSignature = useRef<string | null>(null);
@@ -147,6 +150,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   const [filterVerzonden, setFilterVerzonden] = useState('PENDING');
   const [filterOntvangen, setFilterOntvangen] = useState('PENDING');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  // Goedkeuren asks first (1.5.0): one tap moved both shifts and there is no way back.
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   // Bumped after a reminder, so the card shows when it went.
@@ -252,6 +257,11 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
     setSwapRequests((prev) => prev.map((s) => (s.id === swapId ? { ...s, status: newStatus } : s)));
   };
 
+  // The header of Ruilen (components/PersonalRosterView.tsx) follows the list while it is on screen.
+  useEffect(() => {
+    if (!loading && !error) onWachtend?.(aantalWachtend(swapRequests, personId));
+  }, [swapRequests, loading, error]);
+
   const handleApprove = async (swapId: string) => {
     if (bezig) return;
     setBezig(true);
@@ -288,6 +298,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       setActionError(foutTekst(err, 'Goedkeuren van ruil mislukt'));
     } finally {
       setBezig(false);
+      setApprovingId(null);
     }
   };
 
@@ -450,10 +461,13 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                 </div>
 
                 {/* Actions */}
-                {isPending && isRespondent && rejectingId !== swap.id && (
+                {isPending && isRespondent && rejectingId !== swap.id && approvingId !== swap.id && (
                   <div className="flex gap-2">
                     <button
-                      onClick={() => handleApprove(swap.id)}
+                      onClick={() => {
+                        setApprovingId(swap.id);
+                        setActionError(null);
+                      }}
                       disabled={bezig}
                       className="px-3 py-1 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
                     >
@@ -462,6 +476,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                     <button
                       onClick={() => {
                         setRejectingId(swap.id);
+                        setApprovingId(null);
                         setRejectionReason('');
                       }}
                       className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
@@ -482,6 +497,34 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
                   </div>
                 )}
               </div>
+
+              {isPending && isRespondent && approvingId === swap.id && (
+                <div className="mt-3 pt-3 border-t space-y-2" data-testid="ruil-goedkeuren-vraag">
+                  <p className="text-sm text-neutral-900">
+                    {goedkeurVraag({
+                      geef: datumTekst(swap.gevraagde_datum),
+                      krijg: datumTekst(swap.aangeboden_datum),
+                      van: swap.aanvrager_codenaam,
+                    })}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApprove(swap.id)}
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                    >
+                      Ja, ruilen
+                    </button>
+                    <button
+                      onClick={() => setApprovingId(null)}
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {isPending && isRespondent && rejectingId === swap.id && (
                 <div className="mt-3 pt-3 border-t space-y-2">

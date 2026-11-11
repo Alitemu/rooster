@@ -263,7 +263,7 @@ How to run them and what each one covers: docs/development/checks.md.
 | Links, passwords, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
 | Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |
 | Images, workflows, compose, sub-folder, backups (also by mail, and the restore), uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts, lib/dbBackup*.ts |
-| Operator guides (Dutch) | README.md, docs/installatie-it.md (for the IT department), docs/verzendlijst-power-automate.md, docs/back-up-power-automate.md, docs/teststrategie.md (what to test when), docs/stappenplan-testen.md (the checklist for the user) | - |
+| Operator guides (Dutch) | README.md, docs/installatie-it.md (for the IT department), docs/verzendlijst-power-automate.md, docs/back-up-power-automate.md, docs/teststrategie.md (what to test when), docs/stappenplan-testen.md (the checklist for the user), docs/todo.md (wishes put off, with the reason) | - |
 
 Traps that cost a day each time:
 - **`.gitignore` has `*backup*`** (database copies). A source file with

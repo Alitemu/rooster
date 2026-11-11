@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getPersonalLinkUrl, getBaseUrl, cleanupTestData, openSecties } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, getBaseUrl, cleanupTestData, openSecties, toonRuilverzoeken } from './setup';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 
@@ -124,7 +124,7 @@ test.describe('Swap Request Workflow - E2E', () => {
 
       // Open the list of own swap requests first - with it already open,
       // a new request used to appear only after reloading the page.
-      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      await toonRuilverzoeken(page);
 
       await page.getByRole('button', { name: '+ Ruilverzoek' }).click();
       await expect(page.getByRole('heading', { name: 'Ruilverzoek indienen' })).toBeVisible();
@@ -190,10 +190,13 @@ test.describe('Swap Request Workflow - E2E', () => {
 
     try {
       await page.goto(getPersonalLinkUrl(respondent.token));
-      await openSecties(page);
+      // Before anything is opened the header of Ruilen says a request waits (1.5.0), in words.
       await page.waitForLoadState('networkidle');
-
-      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      await expect(page.getByTestId('deelnemer-sectie-ruilen')).toContainText(/\d+ verzoek(en)? wacht(en)? op je antwoord/);
+      await openSecties(page);
+      // And the list is open by itself: no "Ruilverzoeken bekijken" to find first.
+      await expect(page.getByRole('button', { name: 'Ruilverzoeken verbergen' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Ruilverzoeken bekijken' })).toHaveCount(0);
 
       const pendingRow = page.locator('[data-status="PENDING"]');
       await expect(pendingRow.first()).toBeVisible();
@@ -221,7 +224,7 @@ test.describe('Swap Request Workflow - E2E', () => {
       await page.goto(getPersonalLinkUrl(requester.token));
       await openSecties(page);
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      await toonRuilverzoeken(page);
       const herinnering = page.getByTestId('swap-verzonden').getByTestId('ruil-herinnering').first();
       await expect(herinnering).toContainText('Er is nog geen herinnering gestuurd.');
       await herinnering.getByRole('button', { name: 'Herinnering sturen' }).click();
@@ -274,7 +277,7 @@ test.describe('Swap Request Workflow - E2E', () => {
       await requesterPage.goto(getPersonalLinkUrl(requester.token));
       await openSecties(requesterPage);
       await requesterPage.waitForLoadState('networkidle');
-      await requesterPage.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      await toonRuilverzoeken(requesterPage);
       const pendingOwn = requesterPage.getByRole('button', { name: 'Intrekken' });
       await expect(pendingOwn.first()).toBeVisible();
       const pendingBefore = await pendingOwn.count();
@@ -282,9 +285,17 @@ test.describe('Swap Request Workflow - E2E', () => {
       await page.goto(getPersonalLinkUrl(respondent.token));
       await openSecties(page);
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      await toonRuilverzoeken(page);
 
+      // Goedkeuren asks first (1.5.0): what you give, to whom, what comes back. Annuleren changes nothing.
       await page.getByRole('button', { name: 'Goedkeuren' }).first().click();
+      const vraag = page.getByTestId('ruil-goedkeuren-vraag');
+      await expect(vraag).toContainText(/Je geeft je dienst op .+ aan .+ en krijgt de dienst op .+\. Daarna is de ruil definitief\./);
+      await vraag.getByRole('button', { name: 'Annuleren' }).click();
+      await expect(vraag).toHaveCount(0);
+      expect((db.prepare('SELECT status FROM dienstrooster_swap_request WHERE id = ?').get(swap.id) as { status: string }).status).toBe('PENDING');
+      await page.getByRole('button', { name: 'Goedkeuren' }).first().click();
+      await page.getByTestId('ruil-goedkeuren-vraag').getByRole('button', { name: 'Ja, ruilen' }).click();
 
       await expect
         .poll(
@@ -346,7 +357,7 @@ test.describe('Swap Request Workflow - E2E', () => {
       await page.goto(getPersonalLinkUrl(respondent.token));
       await openSecties(page);
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      await toonRuilverzoeken(page);
 
       await page.getByRole('button', { name: 'Afwijzen' }).first().click();
       // The inline reason form appears below the row; its own Reject button
@@ -553,7 +564,7 @@ test.describe('Swap Request Workflow - E2E', () => {
       await page.goto(getPersonalLinkUrl(user.token));
       await openSecties(page);
       await page.waitForLoadState('networkidle');
-      await page.getByRole('button', { name: 'Ruilverzoeken bekijken' }).click();
+      await toonRuilverzoeken(page);
 
       const verzonden = page.getByTestId('swap-verzonden');
       const ontvangen = page.getByTestId('swap-ontvangen');

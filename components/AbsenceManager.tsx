@@ -41,8 +41,6 @@ interface Props {
   // saved.
   periodId?: string;
   absences: Absence[];
-  defaultVanaf: string;
-  defaultTot: string;
   readOnly?: boolean; // True once the period's deadline has passed - view only
   onAbsencesChange: (absences: Absence[]) => void;
 }
@@ -53,9 +51,15 @@ const SOORT_LABEL: Record<string, string> = {
   OVERIG: 'Overig',
 };
 
-const emptyForm = (defaultVanaf: string, defaultTot: string) => ({
-  van_datum: defaultVanaf,
-  tot_datum: defaultTot,
+/**
+ * A new absence starts without dates (1.5.0). It started on the whole
+ * period: one tap on Toevoegen and every day of it was blocked. Picking
+ * "Van" sets "Tot en met" to the day after (below). The AIOS's copy
+ * (components/AiosAfwezigheid.tsx) has done this since 0.109.0.
+ */
+export const leegAfwezigheidFormulier = () => ({
+  van_datum: '',
+  tot_datum: '',
   soort: 'VAKANTIE',
   notitie: '',
 });
@@ -64,13 +68,11 @@ export function AbsenceManager({
   personId,
   periodId,
   absences,
-  defaultVanaf,
-  defaultTot,
   readOnly = false,
   onAbsencesChange,
 }: Props) {
   const veldId = useId();
-  const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
+  const [form, setForm] = useState(leegAfwezigheidFormulier());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -102,7 +104,7 @@ export function AbsenceManager({
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(emptyForm(defaultVanaf, defaultTot));
+    setForm(leegAfwezigheidFormulier());
     setError(null);
   };
 
@@ -283,7 +285,7 @@ export function AbsenceManager({
               />
             </div>
           </div>
-          {form.van_datum > form.tot_datum && (
+          {form.van_datum && form.tot_datum && form.van_datum > form.tot_datum && (
             <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;Tot en met&quot; liggen</p>
           )}
           <div className="flex gap-3">

@@ -94,11 +94,14 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
 
 - [ ] **D1.** Als medewerker: *+ Ruilverzoek* indienen voor een dienst in een
   definitief rooster. Bij een voorlopig rooster kan het niet.
-- [ ] **D2.** De collega keurt goed. Je ziet: de diensten zijn gewisseld in het
+- [ ] **D2.** Open de link van de collega. Je ziet: naast *Ruilen* staat dat er een
+  verzoek op antwoord wacht en de lijst staat al open. *Goedkeuren* vraagt eerst
+  om bevestiging. Kies *Ja, ruilen*. Je ziet: de diensten zijn gewisseld in het
   rooster van beiden.
 - [ ] **D3.** Een ruil afwijzen en een ruil laten intrekken door het rooster
   (bijvoorbeeld na een wijziging). De uitkomst is in woorden en "ingetrokken".
-- [ ] **D4.** Afwezigheid opgeven en weer weghalen. Parttimedagen kloppen met
+- [ ] **D4.** Afwezigheid opgeven en weer weghalen. De datums zijn eerst leeg. Na
+  een begindatum staat de einddatum op de dag erna. Parttimedagen kloppen met
   de factor in *Personeel beheren*.
 
 ## Blok E. AIOS: een kwartaal

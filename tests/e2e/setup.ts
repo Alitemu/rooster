@@ -305,3 +305,15 @@ export function cleanupTestData(periodId: string, userIds: string[]): void {
 
   db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(periodId);
 }
+
+/**
+ * The list of swap requests on a participant's page of the achterwacht. It
+ * is open by itself when a colleague's request waits for an answer (1.5.0,
+ * lib/ruilWachtend.ts); otherwise "Ruilverzoeken bekijken" opens it.
+ */
+export async function toonRuilverzoeken(page: Page): Promise<void> {
+  await page.waitForLoadState('networkidle');
+  const bekijken = page.getByRole('button', { name: 'Ruilverzoeken bekijken' });
+  if ((await bekijken.count()) > 0) await bekijken.click();
+  await expect(page.getByRole('button', { name: 'Ruilverzoeken verbergen' })).toBeVisible();
+}

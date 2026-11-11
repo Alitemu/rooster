@@ -687,8 +687,6 @@ function PersonalLinkPageContent() {
             personId={personId}
             periodId={period.id}
             absences={absences}
-            defaultVanaf={period.start_datum}
-            defaultTot={period.eind_datum}
             readOnly={inputClosed}
             onAbsencesChange={(next) => {
               setAbsences(next);

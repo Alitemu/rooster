@@ -227,6 +227,18 @@ in lib/aiosToegang.ts. The AIOS's:
   All closed at first; a page whose roster is not published is as it was.
   The e2e tests open them with openSecties (tests/e2e/setup.ts), also after
   a reload, which closes them again.
+  A colleague's swap request that waits for an answer shows on the closed
+  page (1.5.0, the achterwacht, lib/ruilWachtend.ts): the header of Ruilen
+  says "1 verzoek wacht op je antwoord" and the list is open by itself. It
+  sat behind two taps with nothing pointing at it. Goedkeuren asks first
+  what you give, to whom and what comes back ("Ja, ruilen"): one tap moved
+  both shifts and there is no way back. The e2e tests open the list with
+  toonRuilverzoeken (tests/e2e/setup.ts), which takes either state. The
+  AIOS's page has its two lists open under Ruilen and is left as it is.
+  A new absence of the achterwacht starts without dates (1.5.0,
+  components/AbsenceManager.tsx `leegAfwezigheidFormulier`), as the AIOS's
+  has since 0.109.0: it started on the whole period and one tap on
+  Toevoegen blocked every day of it.
   A primary button of the AIOS's dims when off (`disabled:opacity-50`;
   globals.css's btn-primary has no disabled look, and the achterwacht's is
   left as it is): "Uitnodigingen versturen" without the mail was off but

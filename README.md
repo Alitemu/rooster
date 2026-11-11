@@ -651,6 +651,12 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 1.5.0:**
+- *Afwezigheid opgeven (achterwacht):* de datums van een nieuwe afwezigheid zijn leeg. Ze stonden op de hele periode, zodat één tik op *Toevoegen* alle dagen blokkeerde. Kies je een begindatum, dan staat de einddatum op de dag erna. Bij de AIOS was dit al zo.
+- *Ruilverzoek dat op je wacht (achterwacht):* op de pagina van de deelnemer staat naast *Ruilen* hoeveel verzoeken van collega's op antwoord wachten, bijvoorbeeld "1 verzoek wacht op je antwoord". De lijst met ruilverzoeken staat dan al open. Eerder moest je *Ruilen* openen en daarna *Ruilverzoeken bekijken*, zonder dat iets erop wees.
+- *Ruil goedkeuren (achterwacht):* *Goedkeuren* vraagt eerst om bevestiging en zegt welke dienst je geeft, aan wie en welke je terugkrijgt. Pas na *Ja, ruilen* gaat de ruil door. *Annuleren* verandert niets.
+- `docker-compose.yml` en de database veranderen niet.
+
 **Vanaf versie 1.4.0:**
 - *Rooster instellen:* een nieuwe periode van de achterwacht begint met de verdeling, de vensters en het blokkadebudget van de vorige periode. Stap 7 waarschuwt als je er een hebt veranderd.
 - *Import en correcties:* het saldo dat uit de vorige periode is doorgeschoven, staat er in woorden bij.

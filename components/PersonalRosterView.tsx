@@ -17,6 +17,7 @@ import { SwapRequestDialog } from './SwapRequestDialog';
 import { DeelnemerHarmonica, DeelnemerSectie } from '@/components/DeelnemerSectie';
 import { SwapManagementPanel } from './SwapManagementPanel';
 import { telwoord } from '@/lib/telwoord';
+import { aantalWachtend, wachtHint, type RuilVerzoekKort } from '@/lib/ruilWachtend';
 
 interface AssignedShift {
   datum: string;
@@ -88,6 +89,26 @@ export function PersonalRosterView({
   // 'vertraagd': created, but the mail to the colleague follows later.
   const [swapSuccessMessage, setSwapSuccessMessage] = useState<'ok' | 'vertraagd' | null>(null);
   const [swapListRefreshKey, setSwapListRefreshKey] = useState(0);
+  // A colleague's request that waits for an answer (1.5.0): the header of Ruilen says so and the list is
+  // open, so it is not two taps away with nothing pointing at it. Read here because the list itself is
+  // only on the page once it is opened. While it is, it reports every change (onWachtend below).
+  const [wachtend, setWachtend] = useState(0);
+  useEffect(() => {
+    if (!definitief) return;
+    let actueel = true;
+    fetch(withBasePath(`/api/person/${personId}/swap-requests?period_id=${periodId}`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!actueel || !data?.success) return;
+        const aantal = aantalWachtend(data.data.swap_requests as RuilVerzoekKort[], personId);
+        setWachtend(aantal);
+        if (aantal > 0) setShowSwapManagement(true);
+      })
+      .catch(() => {});
+    return () => {
+      actueel = false;
+    };
+  }, [definitief, personId, periodId]);
 
   // Group shifts by ISO week - keyed on (iso_jaar, iso_week) together, not
   // iso_week alone: a period spanning a year boundary (e.g. October to
@@ -309,7 +330,7 @@ export function PersonalRosterView({
     </div>
     </DeelnemerSectie>
 
-    <DeelnemerSectie sleutel="ruilen" titel="Ruilen" testId="deelnemer-sectie-ruilen" blijfGeladen>
+    <DeelnemerSectie sleutel="ruilen" titel="Ruilen" hint={wachtHint(wachtend)} testId="deelnemer-sectie-ruilen" blijfGeladen>
     <div className="space-y-8">
       {/* Shift Swap Management - not on paper: a printed roster is for
           reading, the buttons do nothing there. */}
@@ -377,6 +398,7 @@ export function PersonalRosterView({
               periodId={periodId}
               refreshKey={swapListRefreshKey}
               onSwapsChanged={onRosterChanged}
+              onWachtend={setWachtend}
             />
           </div>
         )}
