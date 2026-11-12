@@ -53,7 +53,7 @@ versie, vervang dan `stable` door het versienummer, bijvoorbeeld `0.88.1`.
 Het certificaat moet de DNS-naam van de server bevatten (als SAN). Heb je een
 `.pfx`, zet het dan eerst om naar twee PEM-bestanden.
 
-**3. Maak `.env`** naast `docker-compose.yml` met deze regel:
+**3. Maak `.env`** naast `docker-compose.yml` met deze regel. Na elke latere wijziging in `.env` voer je `docker compose up -d` uit, niet `docker compose restart`: alleen `up -d` leest het bestand opnieuw.
 
 ```bash
 TLS_MODUS=bestand
@@ -149,7 +149,7 @@ andere toepassing een eigen servernaam.
 |---|---|
 | `docker compose up` stopt met `Bind mount failed: ... certs does not exist` (Synology) | Daar maakt Docker een ontbrekende map niet zelf aan. Voer naast `docker-compose.yml` `mkdir certs data` uit en start opnieuw. |
 | `docker compose up` meldt dat poort 443 of 80 bezet is | Een andere dienst gebruikt de poort. Controleer met `ss -tlnp \| grep ':443 '`. Zet in `.env` een andere poort: `APP_PORT=8010` voor https, `HTTP_PORT=8080` voor de doorverwijzing van http. |
-| De browser geeft een certificaatwaarschuwing | `TLS_MODUS=bestand` ontbreekt in `.env` (dan gebruikt Caddy zijn eigen CA). Of het certificaat bevat de DNS-naam niet of is verlopen. Zie `docker compose logs caddy --tail 50`. |
+| De browser geeft een certificaatwaarschuwing | `TLS_MODUS=bestand` ontbreekt in `.env` (dan gebruikt Caddy zijn eigen CA). Of `.env` is aangepast maar alleen `docker compose restart` gedaan: dat leest `.env` niet opnieuw, `docker compose up -d` wel. Of de map heet niet precies `certs`. Of het certificaat bevat de DNS-naam niet of is verlopen. Zie `docker compose logs caddy --tail 50`. |
 | `caddy` start niet en `docker compose logs caddy` begint met `[dienstrooster] FOUT: certs/rooster.pem ontbreekt of is niet leesbaar` (daarna Caddy's eigen melding `loading certificates`) | Met `TLS_MODUS=bestand` moeten `certs/rooster.pem` en `certs/rooster.key` bestaan en leesbaar zijn. De sleutel mag geen wachtwoord hebben. Zolang `caddy` niet start, is de hele site onbereikbaar. |
 | `caddy` start niet en het log begint met `[dienstrooster] FOUT: TLS_MODUS=... bestaat niet` (daarna Caddy's eigen melding `File to import not found: tls_...`) | De waarde van `TLS_MODUS` in `.env` is fout gespeld. Alleen `bestand` en `intern` bestaan, in kleine letters (`Bestand` of `file` werkt niet). Verbeter `.env` en voer `docker compose up -d` uit. |
 | De pagina laadt niet | Kijk of `web` op `healthy` staat: `docker compose logs web --tail 50`. |
