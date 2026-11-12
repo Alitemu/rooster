@@ -19,6 +19,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { checkPeriodAcceptsInput } from '@/lib/aiosInvoer';
+import { aiosInvoerDichtMelding } from '@/lib/aiosInvoerDichtMelding';
 import { AiosDeeltijdEditor } from '@/components/AiosDeeltijdEditor';
 import { AiosAfwezigheid, type Absence } from '@/components/AiosAfwezigheid';
 import { AiosBevestigen, AiosVoorkeuren } from '@/components/AiosPreferences';
@@ -184,10 +185,8 @@ function AiosLinkPagina() {
     <>
       {invoerDicht && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
-          <p className="text-sm text-amber-900">
-            {deadlineVoorbij
-              ? '⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'
-              : '🔒 De planner heeft deze periode gesloten. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'}
+          <p className="text-sm text-amber-900" data-testid="aios-invoer-dicht">
+            {aiosInvoerDichtMelding(periode.status, deadlineVoorbij)}
           </p>
         </div>
       )}

@@ -86,7 +86,7 @@ export function LinkAanvraagForm() {
           maxLength={254}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="naam@werk.nl"
+          placeholder="je e-mailadres op het werk"
           className="min-w-0 flex-1 rounded border border-neutral-300 px-3 py-2 text-sm"
         />
         <button type="submit" disabled={state.kind === 'sending'} className="btn-primary whitespace-nowrap disabled:opacity-60">

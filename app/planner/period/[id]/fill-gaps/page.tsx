@@ -16,10 +16,12 @@ import Link from 'next/link';
 import { FillGapsPanel } from '@/components/FillGapsPanel';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
+import { voorafNaam } from '@/lib/vooraf';
 
 interface Period {
   id: string;
   naam: string;
+  status: string;
 }
 
 export default function FillGapsPage() {
@@ -71,7 +73,7 @@ export default function FillGapsPage() {
         >
           ← Terug naar periode
         </Link>
-        <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Rooster vooraf invullen</h1>
+        <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">{voorafNaam(period.status)}</h1>
         <p className="text-neutral-600">{period.naam}</p>
       </div>
 

@@ -20,6 +20,8 @@ import { PreferencesConfirmation } from '@/components/PreferencesConfirmation';
 import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
+import { invoerDichtMelding } from '@/lib/invoerDichtMelding';
+import { telVoorkeuren } from '@/lib/voorkeurTelling';
 import { withBasePath } from '@/lib/basePath';
 import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 import { foutTekst } from '@/lib/foutTekst';
@@ -157,6 +159,7 @@ function PersonalLinkPageContent() {
     total: 0,
   });
   const [voorkeurDays, setVoorkeurDays] = useState<VoorkeurDaysSummary>({ total: 0 });
+  const [lieverNietDays, setLieverNietDays] = useState(0);
   // Bumped when "Ik ben fellow" changes, so the calendar reloads the weekend blocks it placed.
   const [calendarKey, setCalendarKey] = useState(0);
   const [softBlockViolations, setSoftBlockViolations] = useState<SoftBlockViolation[]>([]);
@@ -389,21 +392,10 @@ function PersonalLinkPageContent() {
         if (!res.ok) return;
         const data = await res.json();
 
-        const summary: BlockedDaysSummary = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0, total: 0 };
-        let voorkeurCount = 0;
-        for (const pref of data.data.preferences as Array<{ teller: string; blocking_level: string | null }>) {
-          if (pref.blocking_level === 'VOORKEUR') {
-            voorkeurCount++;
-            continue;
-          }
-          if (pref.blocking_level !== 'ABSOLUUT') continue;
-          if (pref.teller in summary) {
-            summary[pref.teller as 'AVOND' | 'WEEKEND' | 'FEESTDAG']++;
-            summary.total++;
-          }
-        }
-        setBlockedDays(summary);
-        setVoorkeurDays({ total: voorkeurCount });
+        const telling = telVoorkeuren(data.data.preferences as Array<{ teller: string; blocking_level: string | null }>);
+        setBlockedDays(telling.geblokkeerd);
+        setVoorkeurDays({ total: telling.voorkeur });
+        setLieverNietDays(telling.lieverNiet);
       } catch {
         // Leave the previous summary in place on failure
       }
@@ -549,10 +541,8 @@ function PersonalLinkPageContent() {
       {/* One banner, not two (audit 1.3.0): with a roster made, the one below says it all. */}
       {inputClosed && !rosterAlreadyGenerated && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
-          <p className="text-sm text-amber-900">
-            {deadlinePassed
-              ? '⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'
-              : '🔒 De planner heeft deze periode gesloten. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer. Neem contact op met de planner als er nog iets aangepast moet worden.'}
+          <p className="text-sm text-amber-900" data-testid="invoer-dicht">
+            {invoerDichtMelding(period.status, deadlinePassed)}
           </p>
         </div>
       )}
@@ -767,6 +757,7 @@ function PersonalLinkPageContent() {
             periodId={period.id}
             blockedDays={blockedDays}
             voorkeurDays={voorkeurDays.total}
+            lieverNietDays={lieverNietDays}
             parttimeConfirmed={parttimeConfirmed}
             readOnly={inputClosed}
             onSubmit={handleSubmitSuccess}

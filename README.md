@@ -651,6 +651,19 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 1.7.0:**
+- *Lege diensten in de lijst (achterwacht):* zodra het rooster gemaakt is, staat in het tabblad *Lijst* van het dienstrooster elke lege dienst als eigen rij, met "nog niemand" en de knop *Iemand toewijzen*. Eerder ontbrak zo'n dienst gewoon in de lijst.
+- *Lege diensten aanvullen:* het scherm *Rooster vooraf invullen* heet na het genereren *Lege diensten aanvullen*. Op een telefoon staat de keuzelijst nu onder de dienst, zodat de datum op één regel blijft.
+- *Streefbereik in een open periode:* op de periodepagina staat *Aanpassen* naast het streefbereik zolang de periode open is. Waren de uitnodigingen al verstuurd, dan zegt de pagina dat ze het oude aantal noemden.
+- *Periode sluiten:* vóór de tweede klik zegt de vraag hoeveel deelnemers nog niet bevestigden en hoeveel nog niets invulden.
+- *Contactadres van de planner:* bij "Vragen over je rooster?" staat het contactadres, voor de achterwacht en de AIOS. Ook de mail met het voorlopige rooster noemt het, als de beheerder het heeft ingesteld.
+- *Bevestigen:* de samenvatting telt nu ook de dagen op liever niet.
+- *Kalender:* het voorbeeld onder de kalender rekent met de eigen groep, niet meer altijd met "15 van de 31".
+- *Een periode die nog niet open is* zegt dat ook, voor de achterwacht en de AIOS. Er stond dat de planner de periode had gesloten.
+- *Startpagina:* noemt de achterwacht en de AIOS.
+- *Een adres dat niet bestaat* geeft een Nederlandse pagina met een knop naar de startpagina, in plaats van de Engelse foutpagina.
+- *Voorbeeldadressen:* de repository bevat geen e-mailadressen meer op bestaande domeinen. Een test bewaakt dat.
+
 **Vanaf versie 1.6.1:**
 - *Kalender met voorkeuren:* de kleine dagafkortingen (ma, di, za) en de aantallen onder een dag zijn donkerder grijs. Ze haalden het contrast van 4,5 op 1 net niet.
 - *Periodepagina van de planner:* onder de naam staat het streefbereik in woorden, bijvoorbeeld "Streefbereik per persoon: 3 of 4 avonddiensten, 1 of 2 weekenddiensten en hoogstens 1 feestdagdienst". Er stond "Avond 3-4 · Weekend 1-2 · Feestdag 0-1". Op een telefoon staat de samenvatting van een onderdeel onder de titel en wordt ze niet meer afgekapt.

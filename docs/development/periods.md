@@ -251,3 +251,30 @@ Not kept: a window, verdeling or budget the planner chose without opening.
 Coming back, the wizard starts from the previous period's settings again
 (lib/vorigeInstellingen.ts); step 7 shows what it opens with (option A, the
 user's choice; keeping a draft in the browser or on the server were B and C).
+
+## The period page and its roster (1.7.0)
+
+From the functional audit and the audit per role (all of section 2 of the overview, the user's choice):
+
+- **The streefbereik while the period is open (R-06).** It could be changed only in Rooster genereren,
+  which is closed while the period is open, so a wrong range went into every invitation without a way
+  back. "Aanpassen" next to the streefbereik on the period page, only while OPEN
+  (components/streefbereikAanpassen.ts), saves through PATCH /api/periods/[id]/ruleset: the route of
+  Rooster genereren, which took an open period all along, writes the audit log and refuses an old
+  row_version. Not a change to "the ruleset is frozen when a period opens": that freeze is about the
+  pool's ruleset, the period's own copy was always the planner's to change. The invitations name the
+  expected number (lib/periodInvitations.ts indicatieTekst), so after `uitgenodigd_op` (now in GET
+  /api/periods/[id] for the planner) the page says they named the old one and that sending them again
+  gives the new. Kept small at the user's request: no proposal of the app in that editor.
+- **Periode sluiten (R-08)** asks the dashboard's submission_stats at the first click and says how many
+  have not confirmed and how many filled in nothing (lib/sluitVraag.ts), before the second click.
+- **Empty diensten in the tab Lijst (F-03).** `?met_lege=1` on GET .../assignments returns every dienst
+  of the period, an empty one as a row with id null and `leeg: true`, paged over the diensten; a search on
+  a person stays a list of toewijzingen. The list asks for it once the roster is made
+  (lib/rosterLijst.ts toonLegeDiensten) and fills an empty row through manual-assign, its candidates from
+  slots/[slotId]/eligible-people, as the calendar does. Without the flag the route is what it was.
+- **Rooster vooraf invullen (F-05, F-02)** is "Lege diensten aanvullen" once the roster is made
+  (lib/vooraf.ts voorafNaam: section, button, page and the warning before generating). Below sm a dienst
+  and its list of names stack (components/voorafOpTelefoon.test.ts, measured at 375 pixels in
+  tests/e2e/lege-diensten.e2e.ts).
+

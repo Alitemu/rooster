@@ -444,14 +444,17 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
           const selectedPerson = slot.eligible_people.find((p) => p.id === selection[slot.slot_id]);
           const groups = groupByCategory(slot.eligible_people);
           return (
+            // On a phone the choice goes under the dienst (functional audit F-02, 1.7.0): side by side the
+            // list of names, as wide as its longest option, squeezed the date to one word a line.
             <div
               key={slot.slot_id}
-              className={`flex items-center justify-between gap-3 p-3 rounded bg-white border ${
+              data-testid="vooraf-dienst"
+              className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 p-3 rounded bg-white border ${
                 selectedPerson ? 'border-green-300' : 'border-amber-200'
               }`}
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-neutral-900">
+                <p className="text-sm font-medium text-neutral-900" data-testid="vooraf-dienst-datum">
                   {new Date(`${slot.datum}T12:00:00`).toLocaleDateString('nl-NL', {
                     weekday: 'short',
                     day: 'numeric',
@@ -480,7 +483,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                 )}
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0 sm:shrink-0">
                 {slot.eligible_people.length === 0 ? (
                   <span className="text-xs text-red-600">Niemand in de pool beschikbaar</span>
                 ) : (
@@ -491,7 +494,8 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                       </span>
                     )}
                     <select
-                      className="text-sm border border-neutral-300 rounded px-2 py-1"
+                      className="w-full min-w-0 sm:w-auto text-sm border border-neutral-300 rounded px-2 py-1"
+                      aria-label="Kies iemand voor deze dienst"
                       title="Het getal achter een naam toont het aantal diensten van dit type dat iemand al heeft, ten opzichte van het eigen streefbereik"
                       value={selection[slot.slot_id] || ''}
                       disabled={applying}

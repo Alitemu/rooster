@@ -94,7 +94,7 @@ test.describe('Periodepagina', () => {
 
     const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
     await expect(dialog.getByText('De app werkt alleen met Gmail.')).toBeVisible();
-    await dialog.getByLabel('Gmail-adres').fill('iemand@outlook.com');
+    await dialog.getByLabel('Gmail-adres').fill('iemand@organisatie.example');
     await dialog.getByLabel('App-wachtwoord').fill('abcdefghijklmnop');
     await dialog.getByLabel('Verzendlijst sturen naar').fill('flow@ziekenhuis.test');
     await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click();

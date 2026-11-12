@@ -21,6 +21,7 @@ import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht, type
 import { issuePersonLink } from './periodInvitations';
 import { formatSwapDate } from './swapMailDetails';
 import { sendVerzendlijst, verzendlijstMailConfigured } from './verzendlijstMail';
+import { getContactPlanner } from './appSettings';
 
 export interface PublishedShift {
   person_id: string;
@@ -108,11 +109,16 @@ function dienstenBlok(eigen: PublishedShift[]): string {
   return `Je hebt ${aantal}:\n${eigen.map(shiftRegel).join('\n')}`;
 }
 
+/**
+ * `contact`: the planner's contactadres (Mailinstellingen), so "laat het de planner weten" says where to
+ * (audit per role R-05, 1.7.0). Without one the sentence stays as it was.
+ */
 export function voorlopigBericht(
   period: { naam: string },
   codenaam: string,
   eigen: PublishedShift[],
-  personalLink: string | null
+  personalLink: string | null,
+  contact: string | null = null
 ): VerzendlijstBericht {
   return {
     soort: 'ROOSTER_VOORLOPIG',
@@ -123,7 +129,7 @@ export function voorlopigBericht(
 
 Het voorlopige rooster voor ${period.naam} staat klaar. ${dienstenBlok(eigen)}
 
-Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten. Zonder reactie wordt dit rooster over ongeveer twee weken definitief. Je krijgt dan nog een bericht.
+Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten${contact ? `: mail naar ${contact}` : ''}. Zonder reactie wordt dit rooster over ongeveer twee weken definitief. Je krijgt dan nog een bericht.
 ${personalLink ? `\nJe rooster in de app:\n${personalLink}\n` : ''}
 Deze link is alleen voor jou. Stuur hem niet door.`,
   };
@@ -185,12 +191,13 @@ export async function sendRosterMail(
   }
   const rooster = rosterSnapshot(period.id);
   const ontvangers = publicationRecipients(period);
+  const contact = getContactPlanner();
   const berichten = db.transaction(() =>
     ontvangers.map((o) => {
       const eigen = rooster.filter((s) => s.person_id === o.person_id);
       const link = baseUrl ? issuePersonLink(o.person_id, period.id, baseUrl) : null;
       return soort === 'ROOSTER_VOORLOPIG'
-        ? voorlopigBericht(period, o.codenaam, eigen, link)
+        ? voorlopigBericht(period, o.codenaam, eigen, link, contact)
         : definitiefBericht(period, o.codenaam, eigen, shiftChanges(o.person_id, voorlopig, rooster), link);
     })
   )();

@@ -327,3 +327,12 @@ is restored, the 7-day limit still applies, and a purge removes it with the
 period (lib/periodTrash.ts). A restored backup brings back the queue and the
 reminder claims of its own moment, so a mail sent after that moment can go
 again: the restore warning says so (components/BackupDialog.tsx).
+
+**The contactadres where a question goes (1.7.0, audit per role R-05).** "Vragen over je rooster? Neem
+contact op met de planner" named no address; it stood only under Ruilen. The achterwacht's roster view now
+reads it for every roster (it did only for a voorlopig one) and names it there and in the notice about a
+blocked day that was given anyway. The AIOS's own roster carries `contact_planner` (aiosContactAdres) for
+its voorlopig notice and a line for questions. The voorlopige roster mail of each dienst says "Laat het de
+planner zo snel mogelijk weten: mail naar ..." when an address is set (voorlopigBericht,
+aiosVoorlopigBericht); without one the sentence is as it was.
+

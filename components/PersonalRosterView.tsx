@@ -74,15 +74,25 @@ export function PersonalRosterView({
   onRosterChanged,
   definitief = true,
 }: Props) {
-  // The planner's contact address, set by the beheerder: where to report a mistake in a voorlopig roster.
+  // The planner's contact address, set by the beheerder: where to report a mistake in a voorlopig roster,
+  // and where to go with a question about any roster (audit per role R-05, 1.7.0: it was read only for a
+  // voorlopig one, while "Vragen over je rooster?" named no address at all).
   const [contactPlanner, setContactPlanner] = useState<string | null>(null);
   useEffect(() => {
-    if (definitief) return;
     fetch(withBasePath(`/api/person/${personId}/swap-contacts`))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => data?.success && setContactPlanner(data.data.planner ?? null))
       .catch(() => {});
-  }, [definitief, personId]);
+  }, [personId]);
+  const plannerAdres = contactPlanner ? (
+    <>
+      {' ('}
+      <a className="underline font-medium break-all" href={`mailto:${contactPlanner}`}>
+        {contactPlanner}
+      </a>
+      {')'}
+    </>
+  ) : null;
   const [weekView, setWeekView] = useState<Map<string, WeekGroup>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [showSwapManagement, setShowSwapManagement] = useState(false);
@@ -221,8 +231,8 @@ export function PersonalRosterView({
               </p>
               <p className="text-sm text-red-800 mt-1">
                 De planner heeft je bewust ingedeeld op{' '}
-                {telwoord(blockedOverrideViolations.length, 'dag', 'dagen')} die je had geblokkeerd. Neem contact op met de planner als dit niet
-                klopt.
+                {telwoord(blockedOverrideViolations.length, 'dag', 'dagen')} die je had geblokkeerd. Neem contact op met de planner
+                {plannerAdres} als dit niet klopt.
               </p>
               <ul className="text-sm text-red-800 mt-2 space-y-1">
                 {blockedOverrideViolations.slice(0, 5).map((v) => (
@@ -323,8 +333,8 @@ export function PersonalRosterView({
           <strong>A</strong> = Avonddienst | <strong>W</strong> = Weekenddienst |{' '}
           <strong>F</strong> = Feestdagdienst
         </p>
-        <p>
-          Vragen over je rooster? Neem contact op met de planner.
+        <p data-testid="vragen-rooster">
+          Vragen over je rooster? Neem contact op met de planner{plannerAdres}.
         </p>
       </div>
     </div>

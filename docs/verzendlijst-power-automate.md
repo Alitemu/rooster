@@ -267,12 +267,14 @@ elkaar gemeen, ook niet in wie de lijst mag lezen.
 
 Beide bestanden hebben een tabel met de naam `Adressen` en dezelfde kolommen:
 
-| Codenaam      | Voornaam | E-mail                      |
-|---------------|----------|-----------------------------|
-| staf01        | Anna     | iemand@ziekenhuis.nl        |
-| staf02        | Bram     | iemand.anders@ziekenhuis.nl |
-| Planner       |          | planner@ziekenhuis.nl       |
-| Roosterbureau |          | roosterbureau@ziekenhuis.nl |
+| Codenaam      | Voornaam | E-mail                             |
+|---------------|----------|------------------------------------|
+| staf01        | Anna     | iemand@organisatie.example         |
+| staf02        | Bram     | iemand.anders@organisatie.example  |
+| Planner       |          | planner@organisatie.example        |
+| Roosterbureau |          | roosterbureau@organisatie.example  |
+
+De adressen hierboven zijn voorbeelden. Vul de echte werkadressen in.
 
 In het bestand van de AIOS staan aios01, aios02 enzovoort.
 

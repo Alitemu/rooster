@@ -54,3 +54,13 @@ export function sorteerOpRuimte<T extends MetRuimte>(mensen: T[]): T[] {
   const deel = (p: T) => (p.band_max > 0 ? p.band_count / p.band_max : 1);
   return [...mensen].sort((a, b) => vol(a) - vol(b) || deel(a) - deel(b) || a.codenaam.localeCompare(b.codenaam));
 }
+
+/**
+ * What the screen for filling diensten by hand is called (functional audit F-05, 1.7.0). Before the
+ * roster is made it fills in advance: "Rooster vooraf invullen". Once made, it fills what stayed empty,
+ * and "vooraf" no longer fits: "Lege diensten aanvullen". The section, its button, the page and the
+ * warning before generating all take it from here.
+ */
+export function voorafNaam(status: string | null | undefined): string {
+  return status === 'GEGENEREERD' || status === 'GEPUBLICEERD' ? 'Lege diensten aanvullen' : 'Rooster vooraf invullen';
+}

@@ -4,6 +4,7 @@ import { db } from '@/db/client';
 import { startSmtpSink, configureSmtp, clearSmtpConfig, verzendlijstPayload, type SmtpSink } from '@/tests/smtpSink';
 import { buildWorld, deleteRowsAfter, rowidSnapshot, staffCookie, type World } from '../../../../../../tests/fixtures/dienstWorlds';
 import { claimVerzending } from '@/lib/inFlight';
+import { saveContactPlanner } from '@/lib/appSettings';
 import { POST } from './route';
 
 /**
@@ -60,6 +61,21 @@ describe('POST /api/planner/period/[id]/rooster-mail', () => {
     expect(r.body.data.mail).toMatchObject({ verstuurd: true });
     expect(sink.received).toHaveLength(1);
     expect(verzendlijstPayload(sink.received[0].raw).berichten.every((b) => b.soort === 'ROOSTER_VOORLOPIG')).toBe(true);
+  });
+
+  // Audit per role R-05 (1.7.0): "laat het de planner weten" said nowhere where to.
+  it('the voorlopige mail says where to mail the planner when the beheerder set a contactadres', async () => {
+    configureSmtp(sink);
+    saveContactPlanner('planner@organisatie.example', w.planner);
+    try {
+      const r = await stuur();
+      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      const berichten = verzendlijstPayload(sink.received[0].raw).berichten;
+      expect(berichten.length).toBeGreaterThan(0);
+      for (const b of berichten) expect(b.tekst).toContain('Laat het de planner zo snel mogelijk weten: mail naar planner@organisatie.example.');
+    } finally {
+      saveContactPlanner('', w.planner);
+    }
   });
 
   it('sends the definitieve mail when the roster is definitief', async () => {

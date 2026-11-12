@@ -9,7 +9,7 @@ export default function Home() {
           Welkom bij Dienstrooster
         </h2>
         <p className="text-neutral-600 mb-4">
-          Dit systeem helpt bij de verdeling van diensten voor medische achterwachten.
+          Dit systeem helpt bij de verdeling van diensten, voor de achterwacht en voor de AIOS.
         </p>
         <ul className="space-y-2 text-neutral-600">
           <li>✓ Automatische roosterplanning op basis van voorkeuren</li>

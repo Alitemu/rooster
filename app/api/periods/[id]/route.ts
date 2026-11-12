@@ -32,6 +32,9 @@ interface PeriodDetail {
   definitief_op: string | null;
   row_version: number;
   verwijderd_op: string | null;
+  // When the invitations went out (lib/activePeriod.ts markInvited): the period page warns that they named
+  // the old streefbereik when it is changed afterwards (R-06, 1.7.0). Not in the participant's view.
+  uitgenodigd_op: string | null;
   // The pool's dienst: an AIOS period gets its own page (lib/aiosPeriod.ts).
   pool_type: string;
 }
@@ -95,6 +98,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         sp.definitief_op,
         sp.row_version,
         sp.verwijderd_op,
+        sp.uitgenodigd_op,
         pl.type AS pool_type
       FROM dienstrooster_schedule_period sp
       JOIN dienstrooster_pool pl ON pl.id = sp.pool_id

@@ -29,7 +29,7 @@ import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
-import { dienstLegenda, dienstLetter } from '@/lib/calendarLegend';
+import { beschikbaarVoorbeeld, dienstLegenda, dienstLetter, groepsgrootte } from '@/lib/calendarLegend';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
 
@@ -142,6 +142,8 @@ export function PreferencesCalendar({
   const [preferences, setPreferences] = useState<Map<string, DayPreference>>(new Map());
   const [budget, setBudget] = useState<BlokkadeBudget>({});
   const [coverage, setCoverage] = useState<Map<string, CoverageInfo>>(new Map());
+  // The example under the calendar in this group's own numbers (R-10, 1.7.0), not a fixed 15 of 31.
+  const voorbeeld = beschikbaarVoorbeeld(groepsgrootte(coverage.values()));
   const [loading, setLoading] = useState(true);
   // Separate from saveError (an inline save failure with the calendar
   // still shown) - this means the calendar itself never rendered, which
@@ -540,14 +542,14 @@ export function PreferencesCalendar({
           <i className="holiday-slot inline-block w-5 h-4 rounded" />
           Feestdag (naam in het vakje)
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5" data-testid="legenda-beschikbaar">
           <span className="inline-flex w-9 flex-col items-center">
             <span className="coverage-bar w-full">
               <span className="coverage-bar-fill coverage-warning block" style={{ width: '50%' }} />
             </span>
-            <span className="text-[9px] text-neutral-600 tabular-nums">15/31</span>
+            {voorbeeld && <span className="text-[9px] text-neutral-600 tabular-nums">{voorbeeld.kort}</span>}
           </span>
-          Onder elke dag: hoeveel collega&apos;s die dag nog beschikbaar zijn (15 van de 31)
+          Onder elke dag: hoeveel collega&apos;s die dag nog beschikbaar zijn{voorbeeld ? ` (bijvoorbeeld ${voorbeeld.tekst})` : ''}
         </span>
       </div>
 

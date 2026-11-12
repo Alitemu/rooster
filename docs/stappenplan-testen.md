@@ -51,6 +51,11 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   hem opnieuw en ga direct naar stap 7. Je ziet: het juiste aantal actieve mensen,
   het streefbereik in woorden en *Klaar om te openen*. De bereiken
   (streefaantallen) staan in woorden, nooit als `[7,8]` of `-1`.
+- [ ] **C1a.** Open de periodepagina van een open periode en klik op *Aanpassen*
+  naast het streefbereik. Vul een ander bereik in en sla het op. Je ziet: het
+  nieuwe bereik in woorden. Waren de uitnodigingen al verstuurd, dan zegt de
+  pagina dat ze het oude aantal noemden. Een minimum boven het maximum wordt
+  geweigerd met een Nederlandse melding.
 - [ ] **C2.** Personeel toevoegen en een geldigheidsperiode aanpassen. Een
   collega die halverwege start, verschijnt in de keuzelijst bij handmatig
   toewijzen.
@@ -78,11 +83,20 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
 - [ ] **C5.** Open een link als medewerker (privévenster). Geef voorkeuren op:
   geblokkeerd, liever niet, voorkeur, parttime. De vijf toestanden zijn
   zichtbaar verschillend, ook in zwart-wit.
-- [ ] **C6.** Hand de voorkeuren in. *Status voorkeuren* bij de planner telt
-  mee.
+- [ ] **C6.** Hand de voorkeuren in. De samenvatting bij *Bevestigen* noemt de
+  dagen geblokkeerd, voorkeur en liever niet. *Status voorkeuren* bij de planner
+  telt mee.
+- [ ] **C6a.** Klik bij de planner één keer op *Periode sluiten*. Je ziet vóór de
+  tweede klik hoeveel deelnemers nog niet bevestigden en hoeveel nog niets
+  invulden.
 - [ ] **C7.** *Rooster opnieuw genereren met solver*. Je ziet: geen lege
   diensten, geen dienst op een geblokkeerde dag, niemand twee diensten in één
   week.
+- [ ] **C7a.** Laat een dienst leeg of haal er een weg en open *Dienstrooster*,
+  tabblad *Lijst*. Je ziet: de lege dienst als eigen rij met "nog niemand" en
+  *Iemand toewijzen*. Het scherm om lege diensten in te vullen heet na het
+  genereren *Lege diensten aanvullen* en is op een telefoon leesbaar: de datum
+  op één regel, de keuzelijst eronder.
 - [ ] **C8.** Wijzig een dienst met de hand, klik op *Ongedaan maken* binnen
   twee minuten. Na twee minuten of na verversen is de knop weg.
 - [ ] **C9.** Publiceren: de publicatiecontrole noemt wat niet klopt. Publiceer,
@@ -186,6 +200,8 @@ overslaan:
 - [ ] **I4.** Herstart alle containers. Gegevens en sessies blijven.
 - [ ] **I5.** Maak een back-up van de map `data` en zet die terug op een lege
   installatie. Alles is er weer.
+- [ ] **I6.** Open een adres dat niet bestaat, bijvoorbeeld `/bestaat-niet`. Je
+  ziet: een Nederlandse pagina met een knop naar de startpagina.
 
 ## Afronden
 

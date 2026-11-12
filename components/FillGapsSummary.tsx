@@ -22,6 +22,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
 import { foutTekst } from '@/lib/foutTekst';
+import { voorafNaam } from '@/lib/vooraf';
 
 interface Props {
   periodId: string;
@@ -34,9 +35,11 @@ interface Props {
    * jump right after every assignment.
    */
   refreshKey?: number;
+  /** The period's status: the button says what the screen is called then (lib/vooraf.ts voorafNaam). */
+  status?: string;
 }
 
-export function FillGapsSummary({ periodId, onCountChange, refreshKey }: Props) {
+export function FillGapsSummary({ periodId, onCountChange, refreshKey, status }: Props) {
   const [count, setCount] = useState<number | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -101,7 +104,7 @@ export function FillGapsSummary({ periodId, onCountChange, refreshKey }: Props) 
         href={`/planner/period/${periodId}/fill-gaps`}
         className="shrink-0 px-4 py-2 rounded font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors"
       >
-        📝 Rooster vooraf invullen
+        📝 {voorafNaam(status)}
       </Link>
     </div>
   );

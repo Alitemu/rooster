@@ -47,7 +47,18 @@ export function AiosMijnRooster({ personId, periodId, inSectie = false }: { pers
       {rooster.voorlopig ? (
         <div className="rounded border-2 border-dashed border-neutral-800 p-3 text-sm" data-testid="aios-voorlopig">
           <p className="font-semibold">Dit is het voorlopige rooster.</p>
-          <p>Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten. Daarna wordt het rooster definitief.</p>
+          <p>
+            Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten
+            {rooster.contact_planner ? (
+              <>
+                {': mail naar '}
+                <a className="underline font-medium break-all" href={`mailto:${rooster.contact_planner}`}>
+                  {rooster.contact_planner}
+                </a>
+              </>
+            ) : null}
+            . Daarna wordt het rooster definitief.
+          </p>
         </div>
       ) : (
         <p className="text-sm font-medium">Dit rooster is definitief.</p>
@@ -75,6 +86,19 @@ export function AiosMijnRooster({ personId, periodId, inSectie = false }: { pers
         {rooster.jaar_kwartalen > 1 &&
           rooster.jaar_percentage !== null &&
           ` Over de laatste ${KWARTALEN_WOORD[rooster.jaar_kwartalen]} kwartalen samen: ${procent(rooster.jaar_percentage)}${rooster.jaar_percentage > 0.25 ? ', boven 25%' : ''}.`}
+      </p>
+      {/* Where to go with a question (audit per role R-05, 1.7.0): the address was only under Ruilen. */}
+      <p className="text-sm text-neutral-700" data-testid="aios-vragen-rooster">
+        Vragen over je rooster? Neem contact op met de planner
+        {rooster.contact_planner ? (
+          <>
+            {': '}
+            <a className="underline font-medium break-all" href={`mailto:${rooster.contact_planner}`}>
+              {rooster.contact_planner}
+            </a>
+          </>
+        ) : null}
+        .
       </p>
     </div>
   );

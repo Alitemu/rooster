@@ -25,6 +25,8 @@ interface Props {
   periodId: string;
   blockedDays: BlockedDaysSummary;
   voorkeurDays?: number;
+  /** Days on liever niet (R-09, 1.7.0): in no summary before. */
+  lieverNietDays?: number;
   parttimeConfirmed: boolean;
   readOnly?: boolean;
   onSubmit?: (success: boolean) => void;
@@ -35,6 +37,7 @@ export function PreferencesConfirmation({
   periodId,
   blockedDays,
   voorkeurDays = 0,
+  lieverNietDays = 0,
   parttimeConfirmed,
   readOnly = false,
   onSubmit,
@@ -130,6 +133,15 @@ export function PreferencesConfirmation({
           <p className="text-sm text-green-900">
             <span className="font-mono font-bold">{voorkeurDays}</span>{' '}
             {voorkeurDays === 1 ? 'dag' : 'dagen'} als voorkeur opgegeven
+          </p>
+        </div>
+      )}
+
+      {lieverNietDays > 0 && (
+        <div className="bg-neutral-50 border border-neutral-300 rounded p-3" data-testid="samenvatting-liever-niet">
+          <p className="text-sm text-neutral-900">
+            <span className="font-mono font-bold">{lieverNietDays}</span>{' '}
+            {lieverNietDays === 1 ? 'dag' : 'dagen'} als liever niet opgegeven
           </p>
         </div>
       )}

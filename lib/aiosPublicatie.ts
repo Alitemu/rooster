@@ -24,7 +24,7 @@
 
 import { db } from '@/db/client';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht } from '@/lib/aiosVerzendlijst';
-import { verstuurAiosVerzendlijst, aiosMailIngesteld } from '@/lib/aiosMail';
+import { verstuurAiosVerzendlijst, aiosMailIngesteld, aiosContactAdres } from '@/lib/aiosMail';
 import { aiosDeelnemers, aiosMailBasisUrl, aiosPersoonlijkeLink, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { laadAiosRooster, type AiosRooster } from '@/lib/aiosRooster';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
@@ -174,12 +174,14 @@ function linkTekst(link: string | null): string {
   return link ? `\nJe rooster in de app:\n${link}\n` : '';
 }
 
+/** `contact`: the AIOS planner's contactadres, so "laat het de planner weten" says where to (R-05, 1.7.0). */
 export function aiosVoorlopigBericht(
   period: { naam: string },
   codenaam: string,
   eigen: AiosGepubliceerd[],
   percentage: number | null,
-  link: string | null
+  link: string | null,
+  contact: string | null = null
 ): VerzendlijstBericht {
   return {
     soort: 'ROOSTER_VOORLOPIG',
@@ -190,7 +192,7 @@ export function aiosVoorlopigBericht(
 
 Het voorlopige rooster van de AIOS voor ${period.naam} staat klaar. ${dienstenTekst(eigen, percentage)}
 
-Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten. Daarna wordt het rooster definitief. Je krijgt dan nog een bericht.
+Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten${contact ? `: mail naar ${contact}` : ''}. Daarna wordt het rooster definitief. Je krijgt dan nog een bericht.
 ${linkTekst(link)}
 Deze link is alleen voor jou. Stuur hem niet door.`,
   };
@@ -251,13 +253,14 @@ async function mail(period: AiosUitnodigPeriode, soort: 'ROOSTER_VOORLOPIG' | 'R
   const rooster = aiosMomentopname(period.id);
   const percentage = new Map(laadAiosRooster(period).per_aios.map((a) => [a.person_id, a.dienstpercentage]));
   const basis = aiosMailBasisUrl(period.id);
+  const contact = aiosContactAdres();
   const berichten = db.transaction(() =>
     aiosDeelnemers(period).map((p) => {
       const eigen = rooster.filter((d) => d.person_id === p.id);
       const link = basis ? aiosPersoonlijkeLink(p.id, period.id, basis) : null;
       const pct = percentage.get(p.id) ?? null;
       return soort === 'ROOSTER_VOORLOPIG'
-        ? aiosVoorlopigBericht(period, p.codenaam, eigen, pct, link)
+        ? aiosVoorlopigBericht(period, p.codenaam, eigen, pct, link, contact)
         : aiosDefinitiefBericht(period, p.codenaam, eigen, pct, aiosWijzigingen(p.id, voorlopig, rooster), link);
     })
   )();
@@ -397,6 +400,8 @@ export interface AiosEigenRooster {
   // Over this quarter and the ones before it (lib/aiosJaarPercentage.ts); 1 is this one alone.
   jaar_percentage: number | null;
   jaar_kwartalen: number;
+  /** Where to mail about the roster: the AIOS planner's contactadres, when the beheerder set one (R-05, 1.7.0). */
+  contact_planner: string | null;
 }
 
 /** One AIOS's own diensten of a published quarter, with their points and dienstpercentage (G12). */
@@ -423,5 +428,6 @@ export function aiosEigenRooster(period: AiosUitnodigPeriode, personId: string):
     dienstpercentage: mij?.dienstpercentage ?? null,
     jaar_percentage: mij?.jaar_percentage ?? null,
     jaar_kwartalen: mij?.jaar_kwartalen ?? 1,
+    contact_planner: aiosContactAdres(),
   };
 }

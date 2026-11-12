@@ -5,7 +5,7 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
+import { bewaarAiosContactAdres, bewaarAiosStroomAdres } from '@/lib/aiosMail';
 import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
 import { readFirstSheet } from '@/lib/xlsx';
 import { excelSerialToDate } from '@/lib/isoDate';
@@ -37,6 +37,7 @@ import { buildWorld, deleteRowsAfter, insert, now, personCookie, rowidSnapshot, 
  */
 
 const AAN_AIOS = 'stroom-aios@example.test';
+const CONTACT_AIOS = 'planner-aios@organisatie.example';
 const START = '2094-07-07'; // a Wednesday: 13 weeks, 65 werkdagen, no feestdagen
 const EIND = '2094-10-05';
 
@@ -93,6 +94,8 @@ beforeAll(async () => {
   staf = buildWorld('ACHTERWACHT');
   w.planner = staff('PLANNER', 'AIOS');
   bewaarAiosStroomAdres(AAN_AIOS, w.planner);
+  // The AIOS planner's contactadres (R-05, 1.7.0): in the voorlopige mail and on the AIOS's own roster.
+  expect(bewaarAiosContactAdres(CONTACT_AIOS, w.planner)).toEqual({ ok: true });
   process.env.BASE_URL = 'http://localhost:3000';
   const ruleset = insert('dienstrooster_ruleset', { naam: `AiosPub-${tag}`, config_json: '{}', aangemaakt_op: now });
   w.pool = insert('dienstrooster_pool', { naam: `AiosPub-${tag}`, type: 'AIOS', ruleset_id: ruleset, aangemaakt_op: now });
@@ -129,6 +132,7 @@ beforeAll(async () => {
 afterAll(async () => {
   delete process.env.BASE_URL;
   bewaarAiosStroomAdres('', w.planner);
+  bewaarAiosContactAdres('', w.planner);
   clearSmtpConfig();
   await sink.close();
   deleteRowsAfter(snapshot);
@@ -222,12 +226,13 @@ describe('voorlopig', () => {
     // 3,2 points in 65 werkdagen, fulltime.
     expect(x.tekst).toMatch(/Je dienstpercentage dit kwartaal: 4,9%\./);
     expect(x.tekst).toMatch(/http:\/\/localhost:3000\/aios\/[A-Za-z0-9_-]+/);
+    expect(x.tekst).toContain(`Klopt er iets niet? Laat het de planner zo snel mogelijk weten: mail naar ${CONTACT_AIOS}. Daarna`);
   });
 
   it('the AIOS sees their own diensten, voorlopig, and their dienstpercentage', async () => {
     const r = await mijn(w.x);
     expect(r.status).toBe(200);
-    expect(r.json.data).toMatchObject({ voorlopig: true, punten: 3.2 });
+    expect(r.json.data).toMatchObject({ voorlopig: true, punten: 3.2, contact_planner: CONTACT_AIOS });
     expect(r.json.data.dienstpercentage).toBeCloseTo(3.2 / (65 * 1));
     expect(r.json.data.diensten.map((d: any) => [d.datum, d.code, d.blok])).toEqual([
       ['2094-07-07', 'ND', 'nachtblok wo t/m vr'],

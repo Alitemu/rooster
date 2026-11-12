@@ -32,7 +32,9 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
 - The repository is public: no organisation names, domains, e-mail
   addresses, IP addresses, internal paths or real names of people anywhere
   in it (code, docs, tests, commit messages). Files the user shares
-  (rosters, forms) stay out of the repository.
+  (rosters, forms) stay out of the repository. An example address uses a
+  reserved domain (`.test`, `.example`); app/geenEchteAdressen.test.ts fails
+  on one that could be someone's (1.7.0).
 - Never ask for or show the Gmail app password: the beheerder enters it in
   the app.
 - **Version:** the header shows `versie` from package.json, right of the

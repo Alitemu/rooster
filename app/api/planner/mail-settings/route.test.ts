@@ -160,7 +160,7 @@ describe('Mailinstellingen in de app', () => {
     configureSmtpServerOnly(sink);
     const planner = person('ADMIN');
 
-    const nietGmail = await PUT(request('PUT', planner, { ...goed, gebruiker: 'iemand@outlook.com' }));
+    const nietGmail = await PUT(request('PUT', planner, { ...goed, gebruiker: 'iemand@organisatie.example' }));
     expect(nietGmail.status).toBe(400);
     expect((await nietGmail.json()).error.message).toContain('alleen via Gmail');
 
@@ -184,11 +184,11 @@ describe('Mailinstellingen in de app', () => {
     expect(zelfde.status).toBe(200);
     expect((await zelfde.json()).data.verzendlijst_aan).toBe('nieuw@ziekenhuis.test');
 
-    const ander = await PUT(request('PUT', planner, { ...goed, gebruiker: 'ander@gmail.com', wachtwoord: '' }));
+    const ander = await PUT(request('PUT', planner, { ...goed, gebruiker: 'ander_test@gmail.com', wachtwoord: '' }));
     expect(ander.status).toBe(400);
     // Refused for having no password, before any login with the saved one is tried.
     expect((await ander.json()).error.message).toBe('Vul het app-wachtwoord in.');
-    expect(sink.logins).not.toContain('ander@gmail.com');
+    expect(sink.logins).not.toContain('ander_test@gmail.com');
   });
 
   it('is the only place sending is set up: .env is ignored, and removing the settings stops sending', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { botsingenInRonde, sorteerOpRuimte } from './vooraf';
+import { botsingenInRonde, sorteerOpRuimte, voorafNaam } from './vooraf';
 
 /**
  * Rooster vooraf invullen (audit 1.2.2): one round put Persoon-07 on 14 and 15 January without a word
@@ -56,5 +56,32 @@ describe('the screens use it', () => {
   it('the grid and the calendar sort their candidates by room too', () => {
     expect(lees('components/AssignmentGrid.tsx')).toMatch(/sorteerOpRuimte\(/);
     expect(lees('components/AssignmentCalendar.tsx')).toMatch(/sorteerOpRuimte\(/);
+  });
+});
+
+/**
+ * Functional audit F-05 (1.7.0): the screen was called "Rooster vooraf invullen" also after the roster
+ * was made, when it fills what stayed empty. Its name follows the status now, everywhere it is named.
+ */
+describe('voorafNaam', () => {
+  it('fills in advance before the roster is made, and what stayed empty after', () => {
+    for (const status of ['OPEN', 'GESLOTEN']) expect(voorafNaam(status)).toBe('Rooster vooraf invullen');
+    for (const status of ['GEGENEREERD', 'GEPUBLICEERD']) expect(voorafNaam(status)).toBe('Lege diensten aanvullen');
+    expect(voorafNaam(undefined)).toBe('Rooster vooraf invullen');
+  });
+
+  it('is the name of the section, its button, the page and the warning before generating', () => {
+    const lees = (f: string) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8');
+    const dashboard = lees('components/PlannerDashboard.tsx');
+    expect(dashboard).toContain('title={voorafNaam(dashboard.status)}');
+    expect(dashboard).toContain('📝 Ga naar {voorafNaam(dashboard.status)}');
+    expect(dashboard).toContain('status={dashboard.status}');
+    expect(lees('components/FillGapsSummary.tsx')).toContain('📝 {voorafNaam(status)}');
+    expect(lees('app/planner/period/[id]/fill-gaps/page.tsx')).toContain('{voorafNaam(period.status)}');
+    // Nowhere fixed in what is shown (comments may name it).
+    for (const f of ['components/PlannerDashboard.tsx', 'components/FillGapsSummary.tsx', 'app/planner/period/[id]/fill-gaps/page.tsx']) {
+      const zonderCommentaar = lees(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+      expect(zonderCommentaar, f).not.toMatch(/>\s*(📝 )?(Ga naar )?Rooster vooraf invullen|title="Rooster vooraf invullen"|&quot;Rooster vooraf invullen&quot;/);
+    }
   });
 });

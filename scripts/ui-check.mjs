@@ -372,7 +372,8 @@ await page.locator('button', { hasText: /Rooster.*genereren/i }).first().click()
 await page.waitForTimeout(500);
 const draftWarning = page.locator('[role="dialog"][aria-label="Niet-toegepaste toewijzingen"]');
 rec('Generating with an unapplied "Rooster vooraf invullen" draft warns first', await draftWarning.isVisible().catch(() => false));
-await page.click('text=Ga naar Rooster vooraf invullen');
+// The name follows the period's status (lib/vooraf.ts voorafNaam, 1.7.0).
+await page.click('text=/Ga naar (Rooster vooraf invullen|Lege diensten aanvullen)/');
 await page.waitForTimeout(500);
 rec(
   '"Ga naar Rooster vooraf invullen" navigates to the fill-gaps page',

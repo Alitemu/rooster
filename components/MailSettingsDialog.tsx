@@ -265,7 +265,7 @@ export function MailSettingsDialog({ isOpen, onClose, onChanged }: Props) {
               id="mail-gebruiker"
               type="email"
               autoComplete="off"
-              placeholder="naam@gmail.com"
+              placeholder="…@gmail.com"
               value={gebruiker}
               onChange={(e) => setGebruiker(e.target.value)}
               className="w-full px-3 py-2 border rounded-lg text-sm"

@@ -73,7 +73,7 @@ describe('/api/admin/back-up', () => {
   it('is for the beheerder only, every method', async () => {
     const planner = await account('PLANNER');
     for (const [handler, method] of [[GET, 'GET'], [PUT, 'PUT'], [DELETE, 'DELETE']] as const) {
-      const body = method === 'GET' ? undefined : { aan: 'a@b.nl', wachtwoord: WACHTWOORD };
+      const body = method === 'GET' ? undefined : { aan: 'a@b.example', wachtwoord: WACHTWOORD };
       expect((await handler(req('/api/admin/back-up', null, method, body))).status).toBe(401);
       expect((await handler(req('/api/admin/back-up', planner, method, body))).status).toBe(403);
     }

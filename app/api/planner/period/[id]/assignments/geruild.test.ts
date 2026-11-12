@@ -61,6 +61,7 @@ describe('the source of a shift in the list', () => {
     const fs = await import('fs');
     const path = await import('path');
     const bron = fs.readFileSync(path.resolve(__dirname, '../../../../../../components/AssignmentGrid.tsx'), 'utf-8');
-    expect(bron).toContain("{a.geruild ? 'Geruild' : sourceNames[a.bron] || a.bron}");
+    // An empty dienst (F-03, 1.7.0) has no bron, hence the ?? ''.
+    expect(bron).toContain("{a.geruild ? 'Geruild' : sourceNames[a.bron ?? ''] || a.bron}");
   });
 });

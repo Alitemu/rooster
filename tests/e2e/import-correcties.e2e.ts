@@ -137,8 +137,11 @@ test('an import and a correctie after the opening give each person that many shi
   await expect(sectie.getByText(`Correctie voor ${codenaam.minder} opgeslagen.`)).toBeVisible();
   await expect(sectie.getByTestId('correcties')).toContainText('1 avonddienst minder');
 
-  // Close the period as the planner does, then generate with the real solver.
+  // Close the period as the planner does, then generate with the real solver. The question says who has
+  // not confirmed yet (R-08, 1.7.0): in this period nobody has.
   await page.getByRole('button', { name: '🔒 Periode sluiten' }).click();
+  await expect(page.getByTestId('sluit-vraag')).toContainText(/deelnemers hebben hun voorkeuren nog niet bevestigd|deelnemers heeft de voorkeuren nog niet bevestigd/);
+  await expect(page.getByTestId('sluit-vraag')).toContainText('Na het sluiten kan niemand meer iets invullen of wijzigen.');
   await page.getByRole('button', { name: 'Zeker weten? Nogmaals klikken' }).click();
   await expect(page.getByText('🔒 Status: Gesloten')).toBeVisible();
 

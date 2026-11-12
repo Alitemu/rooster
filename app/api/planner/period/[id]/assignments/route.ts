@@ -54,8 +54,34 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       );
     }
 
+    // ?met_lege=1 (the list's tab Lijst once the roster is made, lib/rosterLijst.ts): every dienst of the
+    // period, the empty ones as their own row (functional audit F-03, 1.7.0). The list showed only who was
+    // ingedeeld, so 53 empty diensten were 53 missing rows: it ran from 29 January to 3 February without a
+    // word. A search on a person has no empty row to show, so that stays a list of toewijzingen.
+    const metLege = searchParams.get('met_lege') === '1' && !personId && !codenaam;
+
     // Build query
-    let query = `
+    let query = metLege
+      ? `
+      SELECT
+        a.id,
+        a.person_id,
+        s.id AS slot_id,
+        a.bron,
+        a.aangemaakt_op,
+        p.codenaam,
+        s.datum,
+        s.iso_week,
+        s.shift_type_id,
+        st.teller,
+        s.benodigd_aantal_personen
+      FROM dienstrooster_shift_slot s
+      JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
+      LEFT JOIN dienstrooster_assignment a ON a.slot_id = s.id AND a.schedule_version_id = ?
+      LEFT JOIN dienstrooster_person p ON p.id = a.person_id
+      WHERE s.period_id = ?
+    `
+      : `
       SELECT
         a.id,
         a.person_id,
@@ -74,7 +100,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
       WHERE a.schedule_version_id = ?
     `;
-    const params_list: any[] = [periodId];
+    const params_list: any[] = metLege ? [periodId, periodId] : [periodId];
 
     if (personId) {
       query += ' AND a.person_id = ?';
@@ -120,10 +146,11 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
           .all(periodId) as Array<{ toewijzing_id: string; edit_type: string }>
       ).map((e) => [e.toewijzing_id, e.edit_type])
     );
-    const assignments = (db.prepare(query).all(...params_list) as any[]).map((a) => ({
-      ...a,
-      geruild: laatsteBewerking.get(a.id) === 'RUIL',
-    }));
+    const assignments = (db.prepare(query).all(...params_list) as any[]).map((a) =>
+      a.id === null
+        ? { ...a, leeg: true, geruild: false }
+        : { ...a, leeg: false, geruild: laatsteBewerking.get(a.id) === 'RUIL' }
+    );
 
     return NextResponse.json({
       success: true,

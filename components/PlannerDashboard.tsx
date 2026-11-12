@@ -41,6 +41,7 @@ import { foutTekst } from '@/lib/foutTekst';
 import { telwoord } from '@/lib/telwoord';
 import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
 import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
+import { voorafNaam } from '@/lib/vooraf';
 
 interface PersonProgress {
   person_id: string;
@@ -938,7 +939,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           shift_slot rows yet, so "unfilled slots" is meaningless there. */}
       {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
         <Section
-          title="Rooster vooraf invullen"
+          title={voorafNaam(dashboard.status)}
           hint={
             fillGapsCount === null
               ? undefined
@@ -953,7 +954,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           keepMounted
         >
           {undoBanner('VOORAF')}
-          <FillGapsSummary refreshKey={fillGapsRefreshKey} periodId={periodId} onCountChange={setFillGapsCount} />
+          <FillGapsSummary refreshKey={fillGapsRefreshKey} periodId={periodId} status={dashboard.status} onCountChange={setFillGapsCount} />
         </Section>
       )}
 
@@ -1616,7 +1617,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h2 className="text-xl font-bold mb-2 text-amber-800">⚠️ Niet-toegepaste toewijzingen</h2>
             <p className="text-sm text-neutral-700 mb-4">
-              Bij &quot;Rooster vooraf invullen&quot; staan nog keuzes klaar die niet zijn toegepast.
+              Bij &quot;{voorafNaam(dashboard.status)}&quot; staan nog keuzes klaar die niet zijn toegepast.
               De solver ziet deze pas zodra je op &quot;Alle toewijzingen toepassen&quot; hebt geklikt.
               Ga je nu verder met genereren, dan worden deze keuzes genegeerd.
             </p>
@@ -1625,7 +1626,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 href={`/planner/period/${periodId}/fill-gaps`}
                 className="flex-1 py-2 px-4 rounded font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors text-center"
               >
-                📝 Ga naar Rooster vooraf invullen
+                📝 Ga naar {voorafNaam(dashboard.status)}
               </Link>
               <button
                 onClick={() => {

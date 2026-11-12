@@ -14,7 +14,9 @@ import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { vensterTekst } from '@/lib/windowWeeks';
-import { streefbereikUitRuleset } from '@/components/wizardControles';
+import { streefbereikInWoorden, streefbereikUitRuleset } from '@/components/wizardControles';
+import { BEREIK_TELLERS, invoerUitRuleset, leesBereikInvoer, NA_UITNODIGING, streefbereikAanpasbaar, type BereikInvoer } from '@/components/streefbereikAanpassen';
+import { sluitVraag, type InvulStand } from '@/lib/sluitVraag';
 import { foutTekst } from '@/lib/foutTekst';
 import { DatumTijdVeld, DatumTekst } from '@/components/DatumVeld';
 
@@ -32,7 +34,10 @@ interface Period {
   pool_type?: string;
   verwijderd_op?: string | null;
   row_version?: number;
+  uitgenodigd_op?: string | null;
 }
+
+const BEREIK_NAAM = { AVOND: 'Avond', WEEKEND: 'Weekend', FEESTDAG: 'Feestdag' } as const;
 
 export default function PlannerPeriodPage() {
   const params = useParams();
@@ -44,6 +49,7 @@ export default function PlannerPeriodPage() {
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeConfirmArmed, setCloseConfirmArmed] = useState(false);
+  const [sluitStand, setSluitStand] = useState<InvulStand | null>(null);
   const [reopening, setReopening] = useState(false);
   const [reopenError, setReopenError] = useState<string | null>(null);
   const [reopenConfirmArmed, setReopenConfirmArmed] = useState(false);
@@ -56,6 +62,11 @@ export default function PlannerPeriodPage() {
   const [deadlineInput, setDeadlineInput] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
+  // The streefbereik while the period is open (R-06, 1.7.0): null when nothing is being changed.
+  const [bereikInvoer, setBereikInvoer] = useState<BereikInvoer | null>(null);
+  const [bereikBezig, setBereikBezig] = useState(false);
+  const [bereikFout, setBereikFout] = useState<string | null>(null);
+  const [bereikMelding, setBereikMelding] = useState<string | null>(null);
 
   const loadPeriod = async () => {
     try {
@@ -108,11 +119,53 @@ export default function PlannerPeriodPage() {
     }
   };
 
+  const startBereikAanpassen = (cfg: unknown) => {
+    setBereikFout(null);
+    setBereikMelding(null);
+    setBereikInvoer(invoerUitRuleset(cfg));
+  };
+
+  const handleBereikOpslaan = async () => {
+    if (!bereikInvoer) return;
+    const gelezen = leesBereikInvoer(bereikInvoer);
+    if (!gelezen.ok) {
+      setBereikFout(gelezen.fout);
+      return;
+    }
+    setBereikBezig(true);
+    setBereikFout(null);
+    try {
+      // The route of Rooster genereren (app/api/periods/[id]/ruleset): it takes an open period too,
+      // writes the audit log and refuses a period someone else changed meanwhile.
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/ruleset`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...gelezen.body, rowVersion: period?.row_version }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Aanpassen van het streefbereik mislukt');
+      setBereikInvoer(null);
+      setBereikMelding(period?.uitgenodigd_op ? NA_UITNODIGING : null);
+      await loadPeriod();
+    } catch (err) {
+      setBereikFout(foutTekst(err, 'Aanpassen van het streefbereik mislukt'));
+    } finally {
+      setBereikBezig(false);
+    }
+  };
+
   const handleClosePeriod = async () => {
     if (!closeConfirmArmed) {
       // First click arms the confirmation instead of closing immediately -
-      // closing a period is not reversible from this screen.
+      // closing a period is not reversible from this screen. With it, who has
+      // not confirmed yet (R-08, 1.7.0): the counts of the dashboard. Without
+      // them the question stays as it was.
       setCloseConfirmArmed(true);
+      setSluitStand(null);
+      fetch(withBasePath(`/api/planner/period/${periodId}/dashboard`))
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => setSluitStand(data?.data?.submission_stats ?? null))
+        .catch(() => {});
       return;
     }
     setCloseConfirmArmed(false);
@@ -279,11 +332,85 @@ export default function PlannerPeriodPage() {
               try {
                 const cfg = JSON.parse(period.bevroren_ruleset_json);
                 const bereik = streefbereikUitRuleset(cfg);
+                const gelezen = bereikInvoer ? leesBereikInvoer(bereikInvoer) : null;
                 return (
-                  <p className="text-sm text-neutral-600 mt-1" data-testid="periode-regels">
-                    {vensterTekst(cfg)}
-                    {bereik ? `. Streefbereik per persoon: ${bereik}.` : ''}
-                  </p>
+                  <>
+                    <p className="text-sm text-neutral-600 mt-1" data-testid="periode-regels">
+                      {vensterTekst(cfg)}
+                      {bereik ? `. Streefbereik per persoon: ${bereik}.` : ''}
+                      {bereik && streefbereikAanpasbaar(period.status) && !bereikInvoer && (
+                        <button
+                          onClick={() => startBereikAanpassen(cfg)}
+                          className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-800"
+                          data-testid="streefbereik-aanpassen"
+                        >
+                          Aanpassen
+                        </button>
+                      )}
+                    </p>
+                    {bereikInvoer && (
+                      <div className="mt-2 space-y-2 text-sm" data-testid="streefbereik-bewerken">
+                        {BEREIK_TELLERS.map((t) => (
+                          <div key={t} className="flex flex-wrap items-center gap-2">
+                            <span className="w-20 text-neutral-700">{BEREIK_NAAM[t]}</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              inputMode="numeric"
+                              aria-label={`${BEREIK_NAAM[t]}, minimaal`}
+                              value={bereikInvoer[t].van}
+                              onChange={(e) => setBereikInvoer({ ...bereikInvoer, [t]: { ...bereikInvoer[t], van: e.target.value } })}
+                              className="w-16 px-2 py-1 border rounded"
+                            />
+                            <span className="text-neutral-600">tot en met</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              inputMode="numeric"
+                              aria-label={`${BEREIK_NAAM[t]}, maximaal`}
+                              value={bereikInvoer[t].tot}
+                              onChange={(e) => setBereikInvoer({ ...bereikInvoer, [t]: { ...bereikInvoer[t], tot: e.target.value } })}
+                              className="w-16 px-2 py-1 border rounded"
+                            />
+                          </div>
+                        ))}
+                        {gelezen?.ok && (
+                          <p className="text-neutral-700" data-testid="streefbereik-wordt">
+                            Wordt:{' '}
+                            {streefbereikInWoorden(
+                              { AVOND: gelezen.body.bandAvond[0], WEEKEND: gelezen.body.bandWeekend[0], FEESTDAG: gelezen.body.bandFeestdag[0] },
+                              { AVOND: gelezen.body.bandAvond[1], WEEKEND: gelezen.body.bandWeekend[1], FEESTDAG: gelezen.body.bandFeestdag[1] }
+                            )}
+                            .
+                          </p>
+                        )}
+                        <div className="flex gap-3">
+                          <button
+                            onClick={handleBereikOpslaan}
+                            disabled={bereikBezig}
+                            className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          >
+                            {bereikBezig ? 'Bezig…' : 'Opslaan'}
+                          </button>
+                          <button onClick={() => setBereikInvoer(null)} className="text-xs font-medium text-neutral-600 hover:text-neutral-800">
+                            Annuleren
+                          </button>
+                        </div>
+                        {bereikFout && (
+                          <p className="text-xs text-red-600" role="alert">
+                            {bereikFout}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {bereikMelding && (
+                      <p className="text-sm text-amber-900 mt-1" role="status" data-testid="streefbereik-melding">
+                        {bereikMelding}
+                      </p>
+                    )}
+                  </>
                 );
               } catch {
                 return null;
@@ -334,6 +461,11 @@ export default function PlannerPeriodPage() {
                     </button>
                   )}
                 </div>
+                {closeConfirmArmed && sluitStand && (
+                  <p className="text-sm text-neutral-800 max-w-xs" data-testid="sluit-vraag">
+                    {sluitVraag(sluitStand)}
+                  </p>
+                )}
                 {closeError && <p className="text-sm text-red-600">{closeError}</p>}
               </div>
             )}
