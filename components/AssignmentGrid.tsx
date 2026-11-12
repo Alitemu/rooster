@@ -215,13 +215,11 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     setEligibleLoading(true);
     setWarning(null);
     try {
-      const res = await fetch(
-        withBasePath(
-          rij.id === null
-            ? `/api/planner/period/${periodId}/slots/${rij.slot_id}/eligible-people`
-            : `/api/planner/period/${periodId}/assignments/${rij.id}/eligible-people`
-        )
-      );
+      const adres =
+        rij.id === null
+          ? withBasePath(`/api/planner/period/${periodId}/slots/${rij.slot_id}/eligible-people`)
+          : withBasePath(`/api/planner/period/${periodId}/assignments/${rij.id}/eligible-people`);
+      const res = await fetch(adres);
       const data = await res.json();
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Ophalen van beschikbare collega\'s mislukt');
       setEligiblePeople(data.data);
@@ -242,12 +240,12 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     setReassigning(rijSleutel(rij));
     setError(null);
     try {
+      const adres =
+        rij.id === null
+          ? withBasePath(`/api/planner/period/${periodId}/assignments/manual-assign`)
+          : withBasePath(`/api/planner/period/${periodId}/assignments/${rij.id}/reassign`);
       const res = await fetch(
-        withBasePath(
-          rij.id === null
-            ? `/api/planner/period/${periodId}/assignments/manual-assign`
-            : `/api/planner/period/${periodId}/assignments/${rij.id}/reassign`
-        ),
+        adres,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

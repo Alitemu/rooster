@@ -7466,7 +7466,8 @@ const MUTATIONS = [
     name: "1.7.0: an example address on a real domain is back in a placeholder",
     file: "components/LinkAanvraagForm.tsx",
     find: "placeholder=\"je e-mailadres op het werk\"",
-    replace: "placeholder=\"naam@werk.nl\"",
+    // \u0040, not the sign itself: this file holds no address either (app/geenEchteAdressen.test.ts).
+    replace: "placeholder=\"naam\u0040werk.nl\"",
     tests: ["app/geenEchteAdressen"],
   },
   {
