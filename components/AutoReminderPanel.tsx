@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Status {
   aan: boolean;
@@ -56,7 +57,7 @@ export function AutoReminderPanel({ periodId, refreshKey }: Props) {
       setStatus(data.data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden mislukt');
+      setError(foutTekst(err, 'Laden mislukt'));
     }
   }, [periodId]);
 
@@ -78,7 +79,7 @@ export function AutoReminderPanel({ periodId, refreshKey }: Props) {
       setStatus(data.data);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setError(foutTekst(err, 'Opslaan mislukt'));
     } finally {
       setSaving(false);
     }
@@ -143,7 +144,7 @@ export function AutoReminderPanel({ periodId, refreshKey }: Props) {
           ))}
         </ul>
       )}
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
     </div>
   );
 }

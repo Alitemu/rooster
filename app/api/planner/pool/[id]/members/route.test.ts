@@ -3,7 +3,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
-import { POST } from './route';
+import { GET, POST } from './route';
+import { PATCH } from './[membershipId]/route';
 
 /**
  * The hard rules:
@@ -57,16 +58,20 @@ function createPool(): { poolId: string; periodId: string; slotId: string } {
   return { poolId, periodId, slotId };
 }
 
-function addMember(plannerId: string, poolId: string, codenaam: string) {
+function plannerCookie(plannerId: string): string {
   const token = createSessionToken(
     { kind: 'staff', personId: plannerId, sessionVersion: getSessionVersion(plannerId)! },
     STAFF_SESSION_MAX_AGE_SECONDS
   );
+  return `${SESSION_COOKIE_NAME}=${token}`;
+}
+
+function addMember(plannerId: string, poolId: string, codenaam: string, extra: Record<string, unknown> = {}) {
   return POST(
     new NextRequest(`http://localhost/api/planner/pool/${poolId}/members`, {
       method: 'POST',
-      headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ codenaam, geldig_vanaf: '2027-01-01', geldig_tot: '2027-12-31' }),
+      headers: { Cookie: plannerCookie(plannerId), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ codenaam, geldig_vanaf: '2027-01-01', geldig_tot: '2027-12-31', ...extra }),
     }),
     { params: Promise.resolve({ id: poolId }) }
   );
@@ -81,6 +86,7 @@ afterEach(() => {
         'DELETE FROM dienstrooster_availability WHERE slot_id IN (SELECT id FROM dienstrooster_shift_slot WHERE period_id = ?)'
       ).run(id);
       db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(id);
+      db.prepare('DELETE FROM dienstrooster_submission WHERE schedule_period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(id);
     }
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(poolId);
@@ -91,6 +97,7 @@ afterEach(() => {
   }
   for (const personId of created.people) {
     db.prepare('DELETE FROM dienstrooster_absence WHERE person_id = ?').run(personId);
+    db.prepare('DELETE FROM dienstrooster_parttime_pattern WHERE person_id = ?').run(personId);
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE person_id = ?').run(personId);
     // Audit rows they wrote as planner point at them (lib/auditLog.ts).
     db.prepare('DELETE FROM dienstrooster_audit_log WHERE actor_id = ?').run(personId);
@@ -163,5 +170,156 @@ describe('POST /api/planner/pool/[id]/members', () => {
       .prepare('SELECT blocking_level, source FROM dienstrooster_availability WHERE person_id = ? AND slot_id = ?')
       .get(participant.id, slotId);
     expect(row).toEqual({ blocking_level: 'ABSOLUUT', source: 'ABSENCE' });
+  });
+});
+
+// 0.93.0: the deelnamefactor is no longer typed in. It follows from the
+// part-time days the person fills in (lib/deelnamefactor.ts), and the list
+// says "nog onbekend" until they handed in their preferences.
+describe('the deelnamefactor of a member is not typed in', () => {
+  it('adding a member ignores a factor in the request and stores none', async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const { poolId } = createPool();
+
+    const res = await addMember(planner.id, poolId, participant.codenaam, { deelnamefactor: 0.3 });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.data).not.toHaveProperty('deelnamefactor');
+    const rij = db.prepare('SELECT deelnamefactor FROM dienstrooster_pool_membership WHERE person_id = ?').get(participant.id) as {
+      deelnamefactor: number;
+    };
+    expect(rij.deelnamefactor).toBe(1);
+  });
+
+  it('changing a member takes dates only: a factor alone is "geen velden"', async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const { poolId } = createPool();
+    const membershipId = crypto.randomUUID();
+    db.prepare(
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot) VALUES (?, ?, ?, '2027-01-01', '2027-12-31')`
+    ).run(membershipId, participant.id, poolId);
+
+    const res = await PATCH(
+      new NextRequest(`http://localhost/api/planner/pool/${poolId}/members/${membershipId}`, {
+        method: 'PATCH',
+        headers: { Cookie: plannerCookie(planner.id), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deelnamefactor: 0.5 }),
+      }),
+      { params: Promise.resolve({ id: poolId, membershipId }) }
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('NO_UPDATES');
+    const rij = db.prepare('SELECT deelnamefactor FROM dienstrooster_pool_membership WHERE id = ?').get(membershipId) as { deelnamefactor: number };
+    expect(rij.deelnamefactor).toBe(1);
+  });
+
+  it('the list shows nog onbekend (null) until the person handed in, then the factor from their part-time days', async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const { poolId, periodId } = createPool();
+    expect((await addMember(planner.id, poolId, participant.codenaam)).status).toBe(201);
+    db.prepare(`UPDATE dienstrooster_schedule_period SET uitgenodigd_op = datetime('now') WHERE id = ?`).run(periodId);
+    db.prepare(
+      `INSERT INTO dienstrooster_parttime_pattern (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, 'MA', 'ELKE_WEEK', '2027-01-01', '2027-12-31', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), participant.id, participant.id);
+
+    const lijst = async () => {
+      const res = await GET(
+        new NextRequest(`http://localhost/api/planner/pool/${poolId}/members`, { headers: { Cookie: plannerCookie(planner.id) } }),
+        { params: Promise.resolve({ id: poolId }) }
+      );
+      return ((await res.json()).data as Array<{ person_id: string; deelnamefactor: number | null }>).find((m) => m.person_id === participant.id)!;
+    };
+    expect((await lijst()).deelnamefactor).toBeNull();
+
+    db.prepare(
+      `INSERT INTO dienstrooster_submission (id, person_id, schedule_period_id, status, ingediend_op, row_version, aangemaakt_op)
+       VALUES (?, ?, ?, 'BEVESTIGD', datetime('now'), 1, datetime('now'))`
+    ).run(crypto.randomUUID(), participant.id, periodId);
+    expect((await lijst()).deelnamefactor).toBe(0.8);
+  });
+
+  it('the list is about the period the wizard asks for (its dates), else the one the pool is dealing with, and says which', async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const { poolId } = createPool();
+    expect((await addMember(planner.id, poolId, participant.codenaam)).status).toBe(201);
+    const periode = (naam: string, start: string, eind: string, status: string, extra = '') =>
+      db
+        .prepare(
+          `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, status, aangemaakt_op ${extra ? ', uitgenodigd_op' : ''})
+           VALUES (?, ?, ?, ?, ?, '2099-01-01T00:00', ?, datetime('now') ${extra ? ', ?' : ''})`
+        )
+        .run(...([crypto.randomUUID(), poolId, naam, start, eind, status, ...(extra ? [extra] : [])] as string[])) && naam;
+    const idVan = (naam: string) => (db.prepare('SELECT id FROM dienstrooster_schedule_period WHERE pool_id = ? AND naam = ?').get(poolId, naam) as { id: string }).id;
+    periode('Oud', '2026-09-07', '2027-02-28', 'GEPUBLICEERD', '2026-07-01T09:00:00.000Z');
+    periode('Nieuw', '2027-04-05', '2027-09-26', 'OPEN');
+    // Off on Wednesdays from the new period on.
+    db.prepare(
+      `INSERT INTO dienstrooster_parttime_pattern (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, 'WO', 'ELKE_WEEK', '2027-03-01', '2027-12-31', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), participant.id, participant.id);
+    for (const naam of ['Oud', 'Nieuw']) {
+      db.prepare(
+        `INSERT INTO dienstrooster_submission (id, person_id, schedule_period_id, status, ingediend_op, row_version, aangemaakt_op)
+         VALUES (?, ?, ?, 'BEVESTIGD', datetime('now'), 1, datetime('now'))`
+      ).run(crypto.randomUUID(), participant.id, idVan(naam));
+    }
+    const lijst = async (query = '') => {
+      const res = await GET(
+        new NextRequest(`http://localhost/api/planner/pool/${poolId}/members${query}`, { headers: { Cookie: plannerCookie(planner.id) } }),
+        { params: Promise.resolve({ id: poolId }) }
+      );
+      return ((await res.json()).data as Array<{ person_id: string; deelnamefactor: number | null; deelnamefactor_periode: string | null }>).find(
+        (m) => m.person_id === participant.id
+      )!;
+    };
+    // Without a period: the one that went out, over which nothing is off.
+    expect(await lijst()).toMatchObject({ deelnamefactor: 1, deelnamefactor_periode: 'Oud' });
+    // The wizard of the new period sends its dates: that period, where this person is off on Wednesdays.
+    expect(await lijst('?period_start=2027-04-05&period_end=2027-09-26')).toMatchObject({ deelnamefactor: 0.8, deelnamefactor_periode: 'Nieuw' });
+    // Dates of no period: the one the pool is dealing with, not a guess.
+    expect(await lijst('?period_start=2027-04-05&period_end=2027-09-27')).toMatchObject({ deelnamefactor: 1, deelnamefactor_periode: 'Oud' });
+  });
+
+  // 1.1.2 (lib/deelnamefactorVerdeling.ts): the list says whether the factor counts, by that period's own verdeelmodus.
+  it("says the verdeelmodus of the period the factor is about: the frozen one, else the pool's; none for an AIOS pool", async () => {
+    const planner = createPerson('PLANNER');
+    const participant = createPerson('DEELNEMER');
+    const { poolId } = createPool();
+    expect((await addMember(planner.id, poolId, participant.codenaam)).status).toBe(201);
+    const periode = (naam: string, start: string, eind: string, bevroren: string | null) =>
+      db
+        .prepare(
+          `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, status, aangemaakt_op, bevroren_ruleset_json)
+           VALUES (?, ?, ?, ?, ?, '2099-01-01T00:00', 'OPEN', datetime('now'), ?)`
+        )
+        .run(crypto.randomUUID(), poolId, naam, start, eind, bevroren);
+    periode('Gelijk', '2027-04-05', '2027-09-26', JSON.stringify({ distributionMode: 'GELIJK' }));
+    periode('Rato', '2027-10-04', '2028-03-26', JSON.stringify({ distributionMode: 'NAAR_RATO' }));
+    periode('Nog niet open', '2028-04-03', '2028-09-24', null);
+    // The pool's ruleset now says Naar rato: a frozen Gelijk stays Gelijk, an unfrozen period follows the pool.
+    db.prepare(
+      `UPDATE dienstrooster_ruleset SET config_json = '{"distributionMode":"NAAR_RATO"}' WHERE id = (SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?)`
+    ).run(poolId);
+    const lijst = async (query: string) => {
+      const res = await GET(
+        new NextRequest(`http://localhost/api/planner/pool/${poolId}/members${query}`, { headers: { Cookie: plannerCookie(planner.id) } }),
+        { params: Promise.resolve({ id: poolId }) }
+      );
+      return ((await res.json()).data as Array<{ person_id: string; deelnamefactor_periode: string | null; deelnamefactor_verdeling: string | null }>).find(
+        (m) => m.person_id === participant.id
+      )!;
+    };
+    expect(await lijst('?period_start=2027-04-05&period_end=2027-09-26')).toMatchObject({ deelnamefactor_periode: 'Gelijk', deelnamefactor_verdeling: 'GELIJK' });
+    expect(await lijst('?period_start=2027-10-04&period_end=2028-03-26')).toMatchObject({ deelnamefactor_periode: 'Rato', deelnamefactor_verdeling: 'NAAR_RATO' });
+    expect(await lijst('?period_start=2028-04-03&period_end=2028-09-24')).toMatchObject({ deelnamefactor_periode: 'Nog niet open', deelnamefactor_verdeling: 'NAAR_RATO' });
+    // An AIOS pool: its fte works otherwise, the list says nothing about a verdeelmodus.
+    db.prepare(`UPDATE dienstrooster_pool SET type = 'AIOS' WHERE id = ?`).run(poolId);
+    db.prepare(`UPDATE dienstrooster_person SET dienst_type = 'AIOS' WHERE id = ?`).run(planner.id);
+    expect((await lijst('?period_start=2027-10-04&period_end=2028-03-26')).deelnamefactor_verdeling).toBeNull();
   });
 });

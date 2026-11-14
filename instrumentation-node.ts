@@ -129,6 +129,40 @@ async function warnAboutSeededPassword(): Promise<void> {
   }
 }
 
+/**
+ * Say so, in the log, when the name in AIOS_SOLVER_URL does not exist on the
+ * network at all, which is what an old docker-compose.yml without the
+ * aios-solver service looks like after an update. The planner only sees
+ * "niet bereikbaar" when making the roster, so this is what points the
+ * beheerder at the compose file on the first start instead.
+ *
+ * A name lookup only, no connection: a solver that is still starting or has
+ * stopped has a name and is not what this is about. Never refuses to start
+ * and never waits for the answer (see instrumentation.ts), because a lookup
+ * that hangs must not hold up the first request.
+ */
+export async function warnAboutMissingAiosSolver(
+  lookup: (host: string) => Promise<unknown> = async (host) => (await import('dns')).promises.lookup(host)
+): Promise<void> {
+  try {
+    const url = process.env.AIOS_SOLVER_URL || 'http://aios-solver:8000';
+    const host = new URL(url).hostname;
+    try {
+      await lookup(host);
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'ENOTFOUND') return;
+      console.warn(
+        `\n[dienstrooster] LET OP: de naam "${host}" (AIOS_SOLVER_URL) bestaat niet in het netwerk.\n` +
+          '            Het rooster voor de AIOS kan zo niet gemaakt worden. Waarschijnlijk\n' +
+          '            mist de dienst "aios-solver" in docker-compose.yml. Neem het nieuwe\n' +
+          '            docker-compose.yml over en start opnieuw met "docker compose up -d".\n'
+      );
+    }
+  } catch {
+    // An AIOS_SOLVER_URL that is not a URL is the solver's own error later on.
+  }
+}
+
 const AUTO_REMINDER_INTERVAL_MS = 60 * 60 * 1000;
 
 /**
@@ -153,45 +187,90 @@ export function startAutoReminderScheduler(): void {
     if (running) return;
     running = true;
     try {
-      const { runAutoReminders } = await import('./lib/autoReminders');
-      // What was sent is on record (dienstrooster_reminder_run, the
-      // dashboard); only what didn't go out is worth a line in the log.
-      for (const result of await runAutoReminders()) {
-        if (result.uitkomst !== 'VERSTUURD') {
-          console.warn(`[auto-herinneringen] periode ${result.periodId}, ${result.dagen} dagen: ${result.uitkomst}`);
-        }
-      }
-    } catch (error) {
-      console.error('[auto-herinneringen] controle mislukt', error);
-    }
-    // The AIOS's own automatic reminders (lib/aiosAutoHerinneringen.ts), a
-    // copy apart from the achterwacht's above: a failure in either leaves
-    // the other alone.
-    try {
-      const { runAiosAutoHerinneringen } = await import('./lib/aiosAutoHerinneringen');
-      for (const result of await runAiosAutoHerinneringen()) {
-        if (result.uitkomst !== 'VERSTUURD') {
-          console.warn(`[aios-herinneringen] periode ${result.periodId}, ${result.dagen} dagen: ${result.uitkomst}`);
-        }
-      }
-    } catch (error) {
-      console.error('[aios-herinneringen] controle mislukt', error);
-    }
-    // Today's copy of the database, if there is none yet (lib/dbBackup.ts).
-    try {
-      const { runDailyDatabaseBackup } = await import('./lib/dbBackup');
-      const written = runDailyDatabaseBackup();
-      if (written) console.warn(`[back-up] database gekopieerd naar ${written}`);
-    } catch (error) {
-      console.error('[back-up] database kopiëren mislukt', error);
-    }
-    // Swap mails that could not go out earlier (lib/meldingMail.ts).
-    try {
-      const { flushMailQueue } = await import('./lib/meldingMail');
-      const { verstuurd, over } = await flushMailQueue();
-      if (verstuurd > 0 || over > 0) console.warn(`[ruilmails] alsnog verstuurd: ${verstuurd}, wachten nog: ${over}`);
-    } catch (error) {
-      console.error('[ruilmails] wachtrij versturen mislukt', error);
+    const { draaiTaken } = await import('./lib/taakUitvoerder');
+    // Each task on its own (lib/taakUitvoerder.ts): the AIOS's are copies apart from the achterwacht's, and a
+    // failure in one leaves every other alone.
+    await draaiTaken([
+      {
+        naam: 'auto-herinneringen',
+        doe: async () => {
+          const { runAutoReminders } = await import('./lib/autoReminders');
+          // What was sent is on record (dienstrooster_reminder_run, the
+          // dashboard); only what didn't go out is worth a line in the log.
+          for (const result of await runAutoReminders()) {
+            if (result.uitkomst !== 'VERSTUURD') {
+              console.warn(`[auto-herinneringen] periode ${result.periodId}, ${result.dagen} dagen: ${result.uitkomst}`);
+            }
+          }
+        },
+      },
+      {
+        // The AIOS's own automatic reminders (lib/aiosAutoHerinneringen.ts), a copy apart from the achterwacht's above.
+        naam: 'aios-herinneringen',
+        doe: async () => {
+          const { runAiosAutoHerinneringen } = await import('./lib/aiosAutoHerinneringen');
+          for (const result of await runAiosAutoHerinneringen()) {
+            if (result.uitkomst !== 'VERSTUURD') {
+              console.warn(`[aios-herinneringen] periode ${result.periodId}, ${result.dagen} dagen: ${result.uitkomst}`);
+            }
+          }
+        },
+      },
+      {
+        // The reminders for swap requests that open 6 to 7 days.
+        naam: 'ruilherinneringen',
+        doe: async () => {
+          const { stuurAutomatischeRuilHerinneringen } = await import('./lib/ruilHerinnering');
+          const aantal = stuurAutomatischeRuilHerinneringen();
+          if (aantal > 0) console.warn(`[ruilherinneringen] verstuurd: ${aantal}`);
+        },
+      },
+      {
+        naam: 'aios-ruilherinneringen',
+        doe: async () => {
+          const { stuurAutomatischeAiosRuilHerinneringen } = await import('./lib/aiosRuilen');
+          const aantal = stuurAutomatischeAiosRuilHerinneringen();
+          if (aantal > 0) console.warn(`[aios-ruilherinneringen] verstuurd: ${aantal}`);
+        },
+      },
+      {
+        // The AIOS's swap mails that could not go out earlier (lib/aiosRuilMail.ts).
+        naam: 'aios-ruilmails',
+        doe: async () => {
+          const { flushAiosMailWachtrij } = await import('./lib/aiosRuilMail');
+          const { verstuurd, over } = await flushAiosMailWachtrij();
+          if (verstuurd > 0 || over > 0) console.warn(`[aios-ruilmails] alsnog verstuurd: ${verstuurd}, wachten nog: ${over}`);
+        },
+      },
+      {
+        // Today's copy of the database, if there is none yet (lib/dbBackup.ts).
+        naam: 'back-up',
+        doe: async () => {
+          const { runDailyDatabaseBackup } = await import('./lib/dbBackup');
+          const written = runDailyDatabaseBackup();
+          if (written) console.warn(`[back-up] database gekopieerd naar ${written}`);
+        },
+      },
+      {
+        // The encrypted copy that leaves the server, by mail (lib/dbBackupMail.ts): once a day, when something changed.
+        naam: 'back-up-mail',
+        doe: async () => {
+          const { runBackupMail } = await import('./lib/dbBackupMail');
+          const uit = await runBackupMail();
+          if (uit.uitkomst === 'VERSTUURD') console.warn(`[back-up-mail] verstuurd: ${uit.bestand}`);
+          if (uit.uitkomst === 'MISLUKT') console.warn(`[back-up-mail] mislukt: ${uit.melding}`);
+        },
+      },
+      {
+        // Swap mails that could not go out earlier (lib/meldingMail.ts).
+        naam: 'ruilmails',
+        doe: async () => {
+          const { flushMailQueue } = await import('./lib/meldingMail');
+          const { verstuurd, over } = await flushMailQueue();
+          if (verstuurd > 0 || over > 0) console.warn(`[ruilmails] alsnog verstuurd: ${verstuurd}, wachten nog: ${over}`);
+        },
+      },
+    ]);
     } finally {
       running = false;
     }

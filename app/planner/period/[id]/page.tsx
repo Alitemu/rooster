@@ -6,13 +6,19 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { AiosPeriodOverview } from '@/components/AiosPeriodOverview';
+import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { vensterTekst } from '@/lib/windowWeeks';
+import { streefbereikInWoorden, streefbereikUitRuleset } from '@/components/wizardControles';
+import { BEREIK_TELLERS, invoerUitRuleset, leesBereikInvoer, NA_UITNODIGING, streefbereikAanpasbaar, type BereikInvoer } from '@/components/streefbereikAanpassen';
+import { sluitVraag, type InvulStand } from '@/lib/sluitVraag';
+import { foutTekst } from '@/lib/foutTekst';
+import { DatumTijdVeld, DatumTekst } from '@/components/DatumVeld';
 
 interface Period {
   id: string;
@@ -27,7 +33,11 @@ interface Period {
   bevroren_ruleset_json?: string | null;
   pool_type?: string;
   verwijderd_op?: string | null;
+  row_version?: number;
+  uitgenodigd_op?: string | null;
 }
+
+const BEREIK_NAAM = { AVOND: 'Avond', WEEKEND: 'Weekend', FEESTDAG: 'Feestdag' } as const;
 
 export default function PlannerPeriodPage() {
   const params = useParams();
@@ -39,6 +49,7 @@ export default function PlannerPeriodPage() {
   const [closing, setClosing] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closeConfirmArmed, setCloseConfirmArmed] = useState(false);
+  const [sluitStand, setSluitStand] = useState<InvulStand | null>(null);
   const [reopening, setReopening] = useState(false);
   const [reopenError, setReopenError] = useState<string | null>(null);
   const [reopenConfirmArmed, setReopenConfirmArmed] = useState(false);
@@ -51,6 +62,11 @@ export default function PlannerPeriodPage() {
   const [deadlineInput, setDeadlineInput] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
+  // The streefbereik while the period is open (R-06, 1.7.0): null when nothing is being changed.
+  const [bereikInvoer, setBereikInvoer] = useState<BereikInvoer | null>(null);
+  const [bereikBezig, setBereikBezig] = useState(false);
+  const [bereikFout, setBereikFout] = useState<string | null>(null);
+  const [bereikMelding, setBereikMelding] = useState<string | null>(null);
 
   const loadPeriod = async () => {
     try {
@@ -61,7 +77,7 @@ export default function PlannerPeriodPage() {
       setPeriod(data.data);
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden van periode mislukt');
+      setError(foutTekst(err, 'Laden van periode mislukt'));
       setLoading(false);
     }
   };
@@ -90,24 +106,66 @@ export default function PlannerPeriodPage() {
       const res = await fetch(withBasePath(`/api/periods/${periodId}/deadline`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deadline: deadlineInput }),
+        body: JSON.stringify({ deadline: deadlineInput, rowVersion: period?.row_version }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Aanpassen van deadline mislukt');
       setEditingDeadline(false);
       await loadPeriod();
     } catch (err) {
-      setDeadlineError(err instanceof Error ? err.message : 'Aanpassen van deadline mislukt');
+      setDeadlineError(foutTekst(err, 'Aanpassen van deadline mislukt'));
     } finally {
       setSavingDeadline(false);
+    }
+  };
+
+  const startBereikAanpassen = (cfg: unknown) => {
+    setBereikFout(null);
+    setBereikMelding(null);
+    setBereikInvoer(invoerUitRuleset(cfg));
+  };
+
+  const handleBereikOpslaan = async () => {
+    if (!bereikInvoer) return;
+    const gelezen = leesBereikInvoer(bereikInvoer);
+    if (!gelezen.ok) {
+      setBereikFout(gelezen.fout);
+      return;
+    }
+    setBereikBezig(true);
+    setBereikFout(null);
+    try {
+      // The route of Rooster genereren (app/api/periods/[id]/ruleset): it takes an open period too,
+      // writes the audit log and refuses a period someone else changed meanwhile.
+      const res = await fetch(withBasePath(`/api/periods/${periodId}/ruleset`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...gelezen.body, rowVersion: period?.row_version }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Aanpassen van het streefbereik mislukt');
+      setBereikInvoer(null);
+      setBereikMelding(period?.uitgenodigd_op ? NA_UITNODIGING : null);
+      await loadPeriod();
+    } catch (err) {
+      setBereikFout(foutTekst(err, 'Aanpassen van het streefbereik mislukt'));
+    } finally {
+      setBereikBezig(false);
     }
   };
 
   const handleClosePeriod = async () => {
     if (!closeConfirmArmed) {
       // First click arms the confirmation instead of closing immediately -
-      // closing a period is not reversible from this screen.
+      // closing a period is not reversible from this screen. With it, who has
+      // not confirmed yet (R-08, 1.7.0): the counts of the dashboard. Without
+      // them the question stays as it was.
       setCloseConfirmArmed(true);
+      setSluitStand(null);
+      fetch(withBasePath(`/api/planner/period/${periodId}/dashboard`))
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => setSluitStand(data?.data?.submission_stats ?? null))
+        .catch(() => {});
       return;
     }
     setCloseConfirmArmed(false);
@@ -119,7 +177,7 @@ export default function PlannerPeriodPage() {
       if (!res.ok) throw new Error(data.error?.message || 'Sluiten van periode mislukt');
       await loadPeriod();
     } catch (err) {
-      setCloseError(err instanceof Error ? err.message : 'Sluiten van periode mislukt');
+      setCloseError(foutTekst(err, 'Sluiten van periode mislukt'));
     } finally {
       setClosing(false);
     }
@@ -141,7 +199,7 @@ export default function PlannerPeriodPage() {
       if (!res.ok) throw new Error(data.error?.message || 'Terugzetten naar open mislukt');
       await loadPeriod();
     } catch (err) {
-      setReopenError(err instanceof Error ? err.message : 'Terugzetten naar open mislukt');
+      setReopenError(foutTekst(err, 'Terugzetten naar open mislukt'));
     } finally {
       setReopening(false);
     }
@@ -168,7 +226,7 @@ export default function PlannerPeriodPage() {
       setResetOokHandmatig(false);
       await loadPeriod();
     } catch (err) {
-      setResetError(err instanceof Error ? err.message : 'Verwijderen van het rooster mislukt');
+      setResetError(foutTekst(err, 'Verwijderen van het rooster mislukt'));
     } finally {
       setResetting(false);
     }
@@ -199,6 +257,9 @@ export default function PlannerPeriodPage() {
     );
   }
 
+  // Opened from a bookmark or a tab left open: nothing of it is shown, it comes back through the Prullenbak.
+  if (period.verwijderd_op) return <PeriodeVerwijderd voorPlanner />;
+
   // The AIOS roster has its own page while it is being built (lib/aiosPeriod.ts).
   if (period.pool_type === 'AIOS') return <AiosPeriodOverview period={period} />;
 
@@ -214,21 +275,6 @@ export default function PlannerPeriodPage() {
 
   return (
     <div className="container-main py-8 space-y-6">
-      {/* Opened from a bookmark or a tab left open: every change is refused
-          there (lib/periodTrash.ts trashedPeriodDenial). */}
-      {period.verwijderd_op && (
-        <div className="card p-4 bg-red-50 border border-red-200" data-testid="in-prullenbak">
-          <p className="text-sm text-red-900">
-            Deze periode staat in de prullenbak. Je kunt hem bekijken, maar niet wijzigen. Zet hem terug via
-            de{' '}
-            <a href={withBasePath('/planner')} className="font-medium underline">
-              Prullenbak op het overzicht
-            </a>
-            .
-          </p>
-        </div>
-      )}
-
       {/* Header */}
       <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
         {/* Stacked on a phone, side by side from sm up: next to each other the
@@ -237,16 +283,16 @@ export default function PlannerPeriodPage() {
           <div>
             <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{period.naam}</h1>
             <p className="text-neutral-600 mb-2">
-              {new Date(period.start_datum).toLocaleDateString('nl-NL')} t/m{' '}
-              {new Date(period.eind_datum).toLocaleDateString('nl-NL')}
+              <DatumTekst iso={period.start_datum} /> t/m{' '}
+              <DatumTekst iso={period.eind_datum} />
             </p>
             {editingDeadline ? (
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <label className="text-neutral-600">Deadline:</label>
-                <input
-                  type="datetime-local"
+                <DatumTijdVeld
+                  aria-label="Deadline"
                   value={deadlineInput}
-                  onChange={(e) => setDeadlineInput(e.target.value)}
+                  onChange={(waarde) => setDeadlineInput(waarde)}
                   className="px-2 py-1 border rounded text-sm"
                 />
                 <button
@@ -285,13 +331,86 @@ export default function PlannerPeriodPage() {
             {period.bevroren_ruleset_json && (() => {
               try {
                 const cfg = JSON.parse(period.bevroren_ruleset_json);
+                const bereik = streefbereikUitRuleset(cfg);
+                const gelezen = bereikInvoer ? leesBereikInvoer(bereikInvoer) : null;
                 return (
-                  <p className="text-sm text-neutral-600 mt-1">
-                    {vensterTekst(cfg)} · Avond {cfg.bandAvond?.[0] ?? '?'}-
-                    {cfg.bandAvond?.[1] ?? '?'} · Weekend {cfg.bandWeekend?.[0] ?? '?'}-
-                    {cfg.bandWeekend?.[1] ?? '?'} · Feestdag {cfg.bandFeestdag?.[0] ?? '?'}-
-                    {cfg.bandFeestdag?.[1] ?? '?'}
-                  </p>
+                  <>
+                    <p className="text-sm text-neutral-600 mt-1" data-testid="periode-regels">
+                      {vensterTekst(cfg)}
+                      {bereik ? `. Streefbereik per persoon: ${bereik}.` : ''}
+                      {bereik && streefbereikAanpasbaar(period.status) && !bereikInvoer && (
+                        <button
+                          onClick={() => startBereikAanpassen(cfg)}
+                          className="ml-2 text-xs font-medium text-blue-600 hover:text-blue-800"
+                          data-testid="streefbereik-aanpassen"
+                        >
+                          Aanpassen
+                        </button>
+                      )}
+                    </p>
+                    {bereikInvoer && (
+                      <div className="mt-2 space-y-2 text-sm" data-testid="streefbereik-bewerken">
+                        {BEREIK_TELLERS.map((t) => (
+                          <div key={t} className="flex flex-wrap items-center gap-2">
+                            <span className="w-20 text-neutral-700">{BEREIK_NAAM[t]}</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              inputMode="numeric"
+                              aria-label={`${BEREIK_NAAM[t]}, minimaal`}
+                              value={bereikInvoer[t].van}
+                              onChange={(e) => setBereikInvoer({ ...bereikInvoer, [t]: { ...bereikInvoer[t], van: e.target.value } })}
+                              className="w-16 px-2 py-1 border rounded"
+                            />
+                            <span className="text-neutral-600">tot en met</span>
+                            <input
+                              type="number"
+                              min={0}
+                              step={1}
+                              inputMode="numeric"
+                              aria-label={`${BEREIK_NAAM[t]}, maximaal`}
+                              value={bereikInvoer[t].tot}
+                              onChange={(e) => setBereikInvoer({ ...bereikInvoer, [t]: { ...bereikInvoer[t], tot: e.target.value } })}
+                              className="w-16 px-2 py-1 border rounded"
+                            />
+                          </div>
+                        ))}
+                        {gelezen?.ok && (
+                          <p className="text-neutral-700" data-testid="streefbereik-wordt">
+                            Wordt:{' '}
+                            {streefbereikInWoorden(
+                              { AVOND: gelezen.body.bandAvond[0], WEEKEND: gelezen.body.bandWeekend[0], FEESTDAG: gelezen.body.bandFeestdag[0] },
+                              { AVOND: gelezen.body.bandAvond[1], WEEKEND: gelezen.body.bandWeekend[1], FEESTDAG: gelezen.body.bandFeestdag[1] }
+                            )}
+                            .
+                          </p>
+                        )}
+                        <div className="flex gap-3">
+                          <button
+                            onClick={handleBereikOpslaan}
+                            disabled={bereikBezig}
+                            className="text-xs font-medium text-blue-600 hover:text-blue-800 disabled:opacity-50"
+                          >
+                            {bereikBezig ? 'Bezig…' : 'Opslaan'}
+                          </button>
+                          <button onClick={() => setBereikInvoer(null)} className="text-xs font-medium text-neutral-600 hover:text-neutral-800">
+                            Annuleren
+                          </button>
+                        </div>
+                        {bereikFout && (
+                          <p className="text-xs text-red-600" role="alert">
+                            {bereikFout}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    {bereikMelding && (
+                      <p className="text-sm text-amber-900 mt-1" role="status" data-testid="streefbereik-melding">
+                        {bereikMelding}
+                      </p>
+                    )}
+                  </>
                 );
               } catch {
                 return null;
@@ -327,6 +446,7 @@ export default function PlannerPeriodPage() {
               <div className="flex flex-col items-start gap-2">
                 <div className="flex flex-wrap gap-3">
                   <button
+                    id="knop-periode-sluiten"
                     onClick={handleClosePeriod}
                     disabled={closing}
                     className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"
@@ -342,6 +462,11 @@ export default function PlannerPeriodPage() {
                     </button>
                   )}
                 </div>
+                {closeConfirmArmed && sluitStand && (
+                  <p className="text-sm text-neutral-800 max-w-xs" data-testid="sluit-vraag">
+                    {sluitVraag(sluitStand)}
+                  </p>
+                )}
                 {closeError && <p className="text-sm text-red-600">{closeError}</p>}
               </div>
             )}
@@ -457,7 +582,10 @@ export default function PlannerPeriodPage() {
       )}
 
       {/* Dashboard */}
-      <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} periodStatus={period.status} />
+      {/* Suspense: the dashboard reads the address (?indeling, ?onderdeel; lib/periodeIndeling.ts). */}
+      <Suspense fallback={<p className="text-sm text-neutral-600">Laden...</p>}>
+        <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} periodStatus={period.status} />
+      </Suspense>
     </div>
   );
 }

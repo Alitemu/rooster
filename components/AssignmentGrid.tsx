@@ -7,20 +7,29 @@
  * Supports filtering and pagination.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { sorteerOpRuimte } from '@/lib/vooraf';
 import { getHolidayInfo } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { DatumTekst } from '@/components/DatumVeld';
+import { rijSleutel, toonLegeDiensten } from '@/lib/rosterLijst';
 
 interface Assignment {
-  id: string;
-  person_id: string;
+  /** Null for an empty dienst (F-03, 1.7.0): the list asks for those once the roster is made. */
+  id: string | null;
+  person_id: string | null;
   slot_id: string;
-  codenaam: string;
+  codenaam: string | null;
   datum: string;
   iso_week: number;
   shift_type_id: string;
   teller: string;
-  bron: string;
+  bron: string | null;
+  /** The latest change of this shift was an approved swap (stored as MANUAL, shown as "Geruild"). */
+  geruild?: boolean;
+  /** Nobody has this dienst yet. */
+  leeg?: boolean;
 }
 
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
@@ -72,14 +81,14 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: 'Beschikbaar',
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
-  PARTTIME: 'Part-time dag',
+  PARTTIME: 'Deeltijddag',
   FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
 
 function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, EligiblePerson[]]> {
   return CATEGORY_ORDER.map(
-    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, people.filter((p) => p.category === cat)]
+    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, sorteerOpRuimte(people.filter((p) => p.category === cat))]
   ).filter(([, group]) => group.length > 0);
 }
 
@@ -100,6 +109,11 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   // required for a published period") isn't a reason to hide everything
   // else the planner was looking at.
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The placeholder replaces the whole component only for the very first load. Later loads (a filter, a page)
+  // keep the filters on screen: the codenaam field used to be unmounted while typing and lost its focus.
+  const [heeftGeladen, setHeeftGeladen] = useState(false);
+  // Counts the loads: of two answers that cross, only the last one asked is shown.
+  const laadNummer = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -132,6 +146,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   // as AssignmentCalendar's loadSlots: swapping it for the "Toewijzingen
   // laden..." placeholder after every change made the page jump to the top.
   const loadAssignments = useCallback(async (silent = false) => {
+    const nummer = ++laadNummer.current;
     if (!silent) setLoading(true);
     setLoadError(null);
 
@@ -139,19 +154,26 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       let url = withBasePath(`/api/planner/period/${periodId}/assignments?page=${page}`);
       if (debouncedFilterPerson) url += `&codenaam=${encodeURIComponent(debouncedFilterPerson)}`;
       if (filterShiftType) url += `&shift_type=${filterShiftType}`;
+      // Once the roster is made, the empty diensten as their own rows (F-03, 1.7.0).
+      if (toonLegeDiensten(periodStatus)) url += '&met_lege=1';
 
       const res = await fetch(url);
       if (!res.ok) throw new Error('Laden van toewijzingen mislukt');
 
       const data = await res.json();
+      if (nummer !== laadNummer.current) return;
       setAssignments(data.data.assignments);
       setTotalPages(data.data.pagination.total_pages);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Laden van toewijzingen mislukt');
+      if (nummer !== laadNummer.current) return;
+      setLoadError(foutTekst(err, 'Laden van toewijzingen mislukt'));
     } finally {
-      setLoading(false);
+      if (nummer === laadNummer.current) {
+        setLoading(false);
+        setHeeftGeladen(true);
+      }
     }
-  }, [periodId, page, debouncedFilterPerson, filterShiftType]);
+  }, [periodId, page, debouncedFilterPerson, filterShiftType, periodStatus]);
 
   useEffect(() => {
     loadAssignments();
@@ -177,29 +199,32 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       await loadAssignments(true);
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van toewijzing mislukt');
+      setError(foutTekst(err, 'Verwijderen van toewijzing mislukt'));
     } finally {
       setRemoving(null);
     }
   };
 
-  const openReassign = async (assignmentId: string) => {
+  // An empty dienst asks who can take it by the dienst itself, as the calendar does (F-03, 1.7.0).
+  const openReassign = async (rij: Assignment) => {
     setConfirmingId(null);
-    setReassigningId(assignmentId);
+    setReassigningId(rijSleutel(rij));
     setReassignPersonId('');
     setReassignReason('');
     setEligiblePeople(null);
     setEligibleLoading(true);
     setWarning(null);
     try {
-      const res = await fetch(
-        withBasePath(`/api/planner/period/${periodId}/assignments/${assignmentId}/eligible-people`)
-      );
+      const adres =
+        rij.id === null
+          ? withBasePath(`/api/planner/period/${periodId}/slots/${rij.slot_id}/eligible-people`)
+          : withBasePath(`/api/planner/period/${periodId}/assignments/${rij.id}/eligible-people`);
+      const res = await fetch(adres);
       const data = await res.json();
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Ophalen van beschikbare collega\'s mislukt');
       setEligiblePeople(data.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ophalen van beschikbare collega\'s mislukt');
+      setError(foutTekst(err, 'Ophalen van beschikbare collega\'s mislukt'));
       setEligiblePeople([]);
     } finally {
       setEligibleLoading(false);
@@ -209,17 +234,26 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
   // personId is passed explicitly when a pick in the dropdown applies the
   // swap straight away (see its onChange) - the state update from that
   // same pick hasn't landed yet at that point.
-  const handleReassign = async (assignmentId: string, personId: string = reassignPersonId) => {
+  // An empty dienst gets someone through manual-assign, a toewijzing another person through reassign.
+  const handleReassign = async (rij: Assignment, personId: string = reassignPersonId) => {
     if (!personId) return;
-    setReassigning(assignmentId);
+    setReassigning(rijSleutel(rij));
     setError(null);
     try {
+      const adres =
+        rij.id === null
+          ? withBasePath(`/api/planner/period/${periodId}/assignments/manual-assign`)
+          : withBasePath(`/api/planner/period/${periodId}/assignments/${rij.id}/reassign`);
       const res = await fetch(
-        withBasePath(`/api/planner/period/${periodId}/assignments/${assignmentId}/reassign`),
+        adres,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ person_id: personId, reason: reassignReason.trim() || null }),
+          body: JSON.stringify(
+            rij.id === null
+              ? { person_id: personId, slot_id: rij.slot_id, reason: reassignReason.trim() || null }
+              : { person_id: personId, reason: reassignReason.trim() || null }
+          ),
         }
       );
       const data = await res.json();
@@ -233,7 +267,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       await loadAssignments(true);
       onChanged?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Wisselen van toewijzing mislukt');
+      setError(foutTekst(err, 'Wisselen van toewijzing mislukt'));
     } finally {
       setReassigning(null);
     }
@@ -274,18 +308,10 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
     return 'hover:bg-neutral-50';
   };
 
-  if (loading) {
+  if (loading && !heeftGeladen) {
     return (
       <div className="card p-8 text-center">
         <p className="text-lg text-neutral-600">Toewijzingen laden...</p>
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div className="card p-8 bg-red-50 border border-red-200">
-        <p className="text-red-700">{loadError}</p>
       </div>
     );
   }
@@ -309,6 +335,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
         <div className="grid grid-cols-2 gap-4">
           <input
             type="text"
+            aria-label="Filter op codenaam"
             placeholder="Filter op codenaam"
             value={filterPerson}
             onChange={(e) => {
@@ -318,6 +345,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             className="px-3 py-2 border rounded text-sm"
           />
           <select
+            aria-label="Filter op diensttype"
             value={filterShiftType}
             onChange={(e) => {
               setFilterShiftType(e.target.value);
@@ -332,6 +360,19 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
           </select>
         </div>
       </div>
+
+      {loadError && (
+        <div className="card p-3 bg-red-50 border border-red-200 flex items-start justify-between gap-3" role="alert">
+          <p className="text-red-700 text-sm">{loadError}</p>
+          <button
+            onClick={() => loadAssignments()}
+            className="shrink-0 px-3 py-1 rounded border border-red-300 bg-white text-red-700 text-sm font-medium hover:bg-red-100"
+          >
+            Opnieuw proberen
+          </button>
+        </div>
+      )}
+      {loading && heeftGeladen && <p className="text-sm text-neutral-600">Toewijzingen laden...</p>}
 
       {warning && (
         <div className="card p-3 bg-orange-50 border border-orange-300 text-sm text-orange-900">
@@ -355,30 +396,37 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             </thead>
             <tbody className="divide-y">
               {assignments.map((a) => (
-                <tr key={a.id} className={rowBackground(a)}>
+                <tr key={rijSleutel(a)} className={a.leeg ? 'bg-amber-50 hover:bg-amber-100' : rowBackground(a)} data-testid={a.leeg ? 'lijst-lege-dienst' : undefined}>
                   <td className="px-3 py-2 font-medium">
-                    {new Date(a.datum).toLocaleDateString('nl-NL')}
+                    <DatumTekst iso={a.datum} />
                   </td>
                   <td className="px-3 py-2 text-neutral-600">W{a.iso_week}</td>
-                  <td className="px-3 py-2">{a.codenaam}</td>
+                  <td className="px-3 py-2">{a.leeg ? <span className="italic text-amber-900">nog niemand</span> : a.codenaam}</td>
                   <td className="px-3 py-2">{dienstTypeLabel(a)}</td>
                   <td className="px-3 py-2">
-                    <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${sourceColors[a.bron] || 'bg-neutral-100'}`}>
-                      {sourceNames[a.bron] || a.bron}
-                    </span>
+                    {a.leeg ? (
+                      <span className="inline-block px-2 py-1 rounded-full text-xs font-medium border border-dashed border-amber-700 text-amber-900">
+                        Leeg
+                      </span>
+                    ) : (
+                      <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium ${a.geruild ? 'bg-teal-100 text-teal-800' : sourceColors[a.bron ?? ''] || 'bg-neutral-100'}`}>
+                        {a.geruild ? 'Geruild' : sourceNames[a.bron ?? ''] || a.bron}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2 text-center">
-                    {confirmingId === a.id ? (
+                    {confirmingId === a.id && a.id !== null ? (
                       <div className="flex items-center justify-end gap-2">
                         <input
                           type="text"
+                          aria-label="Reden voor het verwijderen"
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
                           placeholder={isPublished ? 'Reden (verplicht)' : 'Reden (optioneel)'}
                           className="px-2 py-1 border rounded text-xs w-44"
                         />
                         <button
-                          onClick={() => handleRemove(a.id)}
+                          onClick={() => handleRemove(a.id!)}
                           disabled={removing === a.id || (isPublished && !reason.trim())}
                           className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:bg-neutral-300"
                         >
@@ -394,16 +442,16 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           Annuleren
                         </button>
                       </div>
-                    ) : reassigningId === a.id ? (
+                    ) : reassigningId === rijSleutel(a) ? (
                       <div className="flex items-center justify-end gap-2">
                         {eligibleLoading || eligiblePeople === null ? (
                           <span className="text-xs text-neutral-500">Collega&apos;s laden…</span>
                         ) : eligiblePeople.length === 0 ? (
-                          <span className="text-xs text-red-600">Niemand anders komt in aanmerking</span>
+                          <span className="text-xs text-red-600">{a.leeg ? 'Niemand komt in aanmerking' : 'Niemand anders komt in aanmerking'}</span>
                         ) : (
                           <select
                             value={reassignPersonId}
-                            disabled={reassigning === a.id}
+                            disabled={reassigning === rijSleutel(a)}
                             onChange={(e) => {
                               const personId = e.target.value;
                               setReassignPersonId(personId);
@@ -411,8 +459,9 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                               // calendar view: apply it and close the editor. A
                               // published roster still needs a reason first, so there
                               // the pick waits for "Bevestigen".
-                              if (personId && !isPublished) handleReassign(a.id, personId);
+                              if (personId && !isPublished) handleReassign(a, personId);
                             }}
+                            aria-label="Kies iemand voor deze dienst"
                             className="text-xs border border-neutral-300 rounded px-2 py-1"
                           >
                             <option value="">Kies iemand…</option>
@@ -437,21 +486,22 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           <>
                             <input
                               type="text"
+                              aria-label="Reden voor het wijzigen"
                               value={reassignReason}
                               onChange={(e) => setReassignReason(e.target.value)}
                               placeholder="Reden (verplicht)"
                               className="px-2 py-1 border rounded text-xs w-36"
                             />
                             <button
-                              onClick={() => handleReassign(a.id)}
-                              disabled={reassigning === a.id || !reassignPersonId || !reassignReason.trim()}
+                              onClick={() => handleReassign(a)}
+                              disabled={reassigning === rijSleutel(a) || !reassignPersonId || !reassignReason.trim()}
                               className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:bg-neutral-300"
                             >
-                              {reassigning === a.id ? 'Bezig…' : 'Bevestigen'}
+                              {reassigning === rijSleutel(a) ? 'Bezig…' : 'Bevestigen'}
                             </button>
                           </>
                         ) : (
-                          reassigning === a.id && <span className="text-xs text-neutral-500">Bezig…</span>
+                          reassigning === rijSleutel(a) && <span className="text-xs text-neutral-500">Bezig…</span>
                         )}
                         <button
                           onClick={() => {
@@ -464,10 +514,19 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
                           Annuleren
                         </button>
                       </div>
+                    ) : a.leeg ? (
+                      <div className="flex items-center justify-end gap-3">
+                        <button
+                          onClick={() => openReassign(a)}
+                          className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          Iemand toewijzen
+                        </button>
+                      </div>
                     ) : (
                       <div className="flex items-center justify-end gap-3">
                         <button
-                          onClick={() => openReassign(a.id)}
+                          onClick={() => openReassign(a)}
                           className="text-xs text-blue-600 hover:text-blue-800 font-medium"
                         >
                           Wisselen

@@ -4,7 +4,8 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { setAiosVoorkeur } from '@/lib/aiosPreferences';
+import { loadAiosPeriode, setAiosVoorkeur } from '@/lib/aiosPreferences';
+import { saveAiosReden } from '@/lib/aiosReden';
 import { laadAiosRooster } from '@/lib/aiosRooster';
 import { aiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { GET as kandidaten } from './periode/[id]/rooster/kandidaten/route';
@@ -113,10 +114,10 @@ describe('before choosing', () => {
     const k = new Map(data.kandidaten.map((c: any) => [c.person_id, c]));
     // Who has it now changes nothing: no warnings.
     expect(k.get(w.x)).toMatchObject({ nu: true, kan: true, waarschuwingen: [] });
-    // y is fulltime: the nachtblok zo t/m di is for part-timers (rule 5); and
+    // y is fulltime: the nachtblok zo t/m di is not for 0,9 fte or more (rule 5); and
     // y has the Saturday dagdienst of 10 juli, whose Monday after is a compensation day.
     expect((k.get(w.y) as any).waarschuwingen.map((x: any) => x.tekst)).toEqual([
-      'Een fulltimer in het nachtblok zo t/m di.',
+      'Iemand met 0,9 fte of meer in het nachtblok zo t/m di.',
       'Een dienst op een compensatiedag.',
     ]);
     // z is in the pool till 13 juli: the block fits, but not the second week.
@@ -128,6 +129,32 @@ describe('before choosing', () => {
     expect(later.kandidaten[later.kandidaten.length - 1].person_id).toBe(w.z);
   });
 
+  it('two diensten on one day: one warning that names the other dienst and says it stays', async () => {
+    // x has the night of 12 juli (the first night block); the avonddienst and the uitloopdienst of that day are x's second.
+    const avond = (await (await vraag(slot('AD', '2094-07-12').id, false)).json()).data.kandidaten.find((c: any) => c.person_id === w.x);
+    const dag = avond.waarschuwingen.filter((x: any) => x.code === '3_TWEE_OP_EEN_DAG');
+    expect(dag).toEqual([
+      { code: '3_TWEE_OP_EEN_DAG', tekst: 'Heeft op ma 12 jul (nachtdienst) al een andere dienst. Een AIOS kan maar één dienst per dag doen. Die dienst blijft staan.' },
+    ]);
+    const uitloop = (await (await vraag(slot('UD', '2094-07-12').id, false)).json()).data.kandidaten.find((c: any) => c.person_id === w.x);
+    expect(uitloop.waarschuwingen).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: '3_TWEE_OP_EEN_DAG', tekst: expect.stringContaining('ma 12 jul (nachtdienst)') })])
+    );
+    // y has no dienst that day: no such warning.
+    const y = (await (await vraag(slot('AD', '2094-07-12').id, false)).json()).data.kandidaten.find((c: any) => c.person_id === w.y);
+    expect(y.waarschuwingen.some((x: any) => x.code === '3_TWEE_OP_EEN_DAG')).toBe(false);
+  });
+
+  it('a whole block over several days names every day, once', async () => {
+    // The evening block zo t/m di of x's nights: three days with a night of x's.
+    const blok = slot('AD', '2094-07-12').blok!;
+    const k = (await (await vraag(slot('AD', '2094-07-12').id, true)).json()).data.kandidaten.find((c: any) => c.person_id === w.x);
+    const dag = k.waarschuwingen.filter((x: any) => x.code === '3_TWEE_OP_EEN_DAG');
+    expect(blokDiensten(blok).length).toBeGreaterThan(1);
+    expect(dag).toHaveLength(1);
+    expect(dag[0].tekst).toMatch(/^Heeft op .*ma 12 jul \(nachtdienst\).*di 13 jul \(nachtdienst\).* al een andere dienst\./);
+  });
+
   it('the marks: liever niet and geblokkeerd as the AIOS marked them', async () => {
     const dd = (await (await vraag(slot('DD', '2094-07-17').id, false)).json()).data;
     expect(dd.kandidaten.find((c: any) => c.person_id === w.y).waarschuwingen).toEqual(
@@ -135,6 +162,17 @@ describe('before choosing', () => {
     );
     const nacht = (await (await vraag(slot('ND', '2094-07-14').id, true)).json()).data;
     expect(nacht.kandidaten.find((c: any) => c.person_id === w.y).waarschuwingen.map((x: any) => x.code)).toContain('GEBLOKKEERD');
+  });
+
+  it("the AIOS's own words on a marked day, for the planner correcting by hand", async () => {
+    const periode = loadAiosPeriode(w.period)!;
+    expect(saveAiosReden(w.y, periode, '2094-07-17', 'Mijn zus trouwt')).toEqual({ ok: true });
+    const dd = (await (await vraag(slot('DD', '2094-07-17').id, false)).json()).data;
+    expect(dd.kandidaten.find((c: any) => c.person_id === w.y).toelichtingen).toEqual([{ datum: '2094-07-17', tekst: 'Mijn zus trouwt' }]);
+    // Not for another AIOS, a day without one, nor for who has the dienst already.
+    expect(dd.kandidaten.find((c: any) => c.person_id === w.x).toelichtingen).toEqual([]);
+    const andere = (await (await vraag(slot('DD', '2094-07-10').id, false)).json()).data;
+    expect(andere.kandidaten.find((c: any) => c.person_id === w.y).toelichtingen).toEqual([]);
   });
 
   it("a part-time day's evening: liever niet, said as the part-time day's", async () => {
@@ -328,5 +366,52 @@ describe('the way back', () => {
       ),
       { numRuns: 15 }
     );
+  });
+});
+
+describe('two diensten on one day, at the end: it leaves edit rows behind', () => {
+  it('never refused: the change goes through with the warning, and the other dienst stays', async () => {
+    const avond = slot('AD', '2094-07-12');
+    // Whoever has that night by now (earlier tests moved some of it).
+    const nacht = wieHeeft(slot('ND', '2094-07-12').id)!;
+    const res = await zet([{ dienst_id: avond.id, aios_id: nacht, was: null }]);
+    expect(res.status).toBe(200);
+    const data = (await res.json()).data;
+    expect(data.waarschuwingen.map((x: any) => x.code)).toContain('3_TWEE_OP_EEN_DAG');
+    expect(wieHeeft(avond.id)).toBe(nacht);
+    expect(wieHeeft(slot('ND', '2094-07-12').id)).toBe(nacht);
+    // Back to how it was.
+    expect((await zet([{ dienst_id: avond.id, aios_id: null, was: nacht }])).status).toBe(200);
+    expect(wieHeeft(avond.id)).toBeNull();
+  });
+});
+
+describe('the heading of the roster section: changed by hand since the roster was made', () => {
+  it('true after a change by hand, false again once the roster is made anew, true after the next change', async () => {
+    const periode = aiosUitnodigPeriode(w.period)!;
+    // Earlier tests changed it by hand.
+    expect(laadAiosRooster(periode).handmatig).toBe(true);
+    // Made anew: the edits from before it do not count (they stay in the history).
+    db.prepare(
+      'INSERT OR REPLACE INTO dienstrooster_aios_generatie (period_id, gemaakt_op, solver_status, gevuld, tijd_seconden, leeg_json) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(w.period, new Date().toISOString(), 'OPTIMAAL', 0, 1, '[]');
+    expect(laadAiosRooster(periode).handmatig).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    const avond = slot('UD', '2094-07-21');
+    expect((await zet([{ dienst_id: avond.id, aios_id: w.y, was: wieHeeft(avond.id) }])).status).toBe(200);
+    expect(laadAiosRooster(periode).handmatig).toBe(true);
+    // Emptying a dienst by hand counts as well.
+    db.prepare('INSERT OR REPLACE INTO dienstrooster_aios_generatie (period_id, gemaakt_op, solver_status, gevuld, tijd_seconden, leeg_json) VALUES (?, ?, ?, ?, ?, ?)').run(
+      w.period,
+      new Date().toISOString(),
+      'OPTIMAAL',
+      0,
+      1,
+      '[]'
+    );
+    expect(laadAiosRooster(periode).handmatig).toBe(false);
+    await new Promise((r) => setTimeout(r, 20));
+    expect((await zet([{ dienst_id: avond.id, aios_id: null, was: w.y }])).status).toBe(200);
+    expect(laadAiosRooster(periode).handmatig).toBe(true);
   });
 });

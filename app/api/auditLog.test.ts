@@ -222,25 +222,27 @@ describe('the audit log records a planner changing the pool', () => {
     const added = await call(addMember, 'POST', { id: ids.pool }, { codenaam, geldig_vanaf: '2029-01-01', geldig_tot: '2029-12-31' });
     expect(added.status).toBe(201);
     const membershipId = added.audit[0]?.entiteit_id;
-    expect(expectOneRow(added.audit, 'pool_membership', membershipId, 'CREATE')).toMatchObject({ codenaam, deelnamefactor: 1 });
+    expect(expectOneRow(added.audit, 'pool_membership', membershipId, 'CREATE')).toMatchObject({ codenaam });
+    expect(added.audit[0].nieuw_json).not.toContain('deelnamefactor');
     expect(db.prepare('SELECT 1 FROM dienstrooster_pool_membership WHERE id = ?').get(membershipId)).toBeTruthy();
 
-    const changed = await call(changeMember, 'PATCH', { id: ids.pool, membershipId }, { deelnamefactor: 0.5 });
+    // The factor is no longer typed in: only the dates change.
+    const changed = await call(changeMember, 'PATCH', { id: ids.pool, membershipId }, { geldig_tot: '2029-06-30' });
     expect(changed.status).toBe(200);
-    expect(expectOneRow(changed.audit, 'pool_membership', membershipId, 'UPDATE')).toMatchObject({ deelnamefactor: 0.5 });
-    expect(JSON.parse(changed.audit[0].oud_json!)).toMatchObject({ deelnamefactor: 1 });
+    expect(expectOneRow(changed.audit, 'pool_membership', membershipId, 'UPDATE')).toMatchObject({ geldig_tot: '2029-06-30' });
+    expect(JSON.parse(changed.audit[0].oud_json!)).toMatchObject({ geldig_tot: '2029-12-31' });
 
     const removed = await call(removeMember, 'DELETE', { id: ids.pool, membershipId });
     expect(removed.status).toBe(200);
     expectOneRow(removed.audit, 'pool_membership', membershipId, 'DELETE');
-    expect(JSON.parse(removed.audit[0].oud_json!)).toMatchObject({ deelnamefactor: 0.5, geldig_vanaf: '2029-01-01' });
+    expect(JSON.parse(removed.audit[0].oud_json!)).toMatchObject({ geldig_vanaf: '2029-01-01', geldig_tot: '2029-06-30' });
 
     const restored = await call(undoRemoveMember, 'POST', { id: ids.pool });
     expect(restored.status).toBe(200);
     const restoredId = restored.audit[0]?.entiteit_id;
     expect(expectOneRow(restored.audit, 'pool_membership', restoredId, 'CREATE')).toMatchObject({
       wijziging: 'verwijderen ongedaan gemaakt',
-      deelnamefactor: 0.5,
+      geldig_tot: '2029-06-30',
     });
   });
 

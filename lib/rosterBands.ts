@@ -14,6 +14,7 @@
 import { db } from '@/db/client';
 import { parseISO } from '@/lib/holidays';
 import { combinedMembership } from '@/lib/coverageFactor';
+import { afgeleideDeelnamefactor, bevrorenFactoren, laadParttimePatronen } from '@/lib/deelnamefactor';
 import { getFellowIds, releasedWeekendDays } from '@/lib/fellows';
 
 export type Teller = 'AVOND' | 'WEEKEND' | 'FEESTDAG';
@@ -186,11 +187,16 @@ export function combineMemberships<R extends MembershipRow>(
  * fellow summary and the capacity check, so none of them can count a
  * person differently.
  */
-export function loadPeriodMembers(period: {
-  pool_id: string;
-  start_datum: string;
-  eind_datum: string;
-}): Array<PeriodMember & { codenaam: string }> {
+export function loadPeriodMembers(
+  period: {
+    /** With it, the factors held when the roster was made count (lib/deelnamefactor.ts); without, those of now. */
+    id?: string;
+    pool_id: string;
+    start_datum: string;
+    eind_datum: string;
+  },
+  opties: { vers?: boolean } = {}
+): Array<PeriodMember & { codenaam: string }> {
   const rows = db
     .prepare(
       `SELECT p.id, p.codenaam, pm.deelnamefactor, pm.geldig_vanaf, pm.geldig_tot
@@ -199,7 +205,25 @@ export function loadPeriodMembers(period: {
        WHERE pm.pool_id = ? AND pm.geldig_vanaf <= ? AND pm.geldig_tot >= ? AND p.actief = 1`
     )
     .all(period.pool_id, period.eind_datum, period.start_datum) as Array<MembershipRow & { codenaam: string }>;
-  return combineMemberships(rows, period);
+  // The deelnamefactor is the person's own, from their part-time days
+  // (lib/deelnamefactor.ts), not the column of the membership: over the days
+  // of each membership within the period, so combineMemberships weighs them
+  // by those days and a part-time pattern that follows a partial membership
+  // is not diluted by the days outside it.
+  const patronen = laadParttimePatronen([...new Set(rows.map((r) => r.id))], period.start_datum, period.eind_datum);
+  // Once the roster is made, the factor of that moment; `vers` is the generation itself, which makes a new one.
+  const vast = period.id && !opties.vers ? bevrorenFactoren(period.id) : new Map<string, number>();
+  return combineMemberships(
+    rows.map((r) => ({
+      ...r,
+      deelnamefactor: vast.get(r.id) ?? afgeleideDeelnamefactor(
+        patronen.get(r.id) ?? [],
+        r.geldig_vanaf > period.start_datum ? r.geldig_vanaf : period.start_datum,
+        r.geldig_tot < period.eind_datum ? r.geldig_tot : period.eind_datum
+      ),
+    })),
+    period
+  );
 }
 
 /**
@@ -358,7 +382,10 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
         continue;
       }
       const delta = deltas.get(`${member.id}|${teller}`) || 0;
-      byTeller[teller] = { min: scaled[0] + delta, max: scaled[1] + delta, fellow: false };
+      // A credit bigger than the bereik pulls the ceiling below zero: nobody
+      // has fewer than none, so zero shifts is then exactly right (the solver
+      // lets such a person end on zero as well, solver/constraints.py).
+      byTeller[teller] = { min: Math.max(0, scaled[0] + delta), max: Math.max(0, scaled[1] + delta), fellow: false };
     }
     result.set(member.id, byTeller);
   }

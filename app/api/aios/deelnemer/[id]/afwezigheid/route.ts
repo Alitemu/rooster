@@ -16,9 +16,10 @@ import { lijstAfwezigheden, maakAfwezigheid } from '@/lib/aiosDeeltijd';
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
   try {
-    const denied = personAccessDenial(getAuthContextFromRequest(req), id) ?? geenAiosDenial(id);
+    const auth = getAuthContextFromRequest(req);
+    const denied = personAccessDenial(auth, id) ?? geenAiosDenial(id);
     if (denied) return denied;
-    const { status, body } = lijstAfwezigheden(id, req.nextUrl.searchParams.get('period_id'));
+    const { status, body } = lijstAfwezigheden(id, req.nextUrl.searchParams.get('period_id'), auth);
     return NextResponse.json(body, { status });
   } catch (error) {
     return internalErrorResponse('aios-afwezigheid-list', error);

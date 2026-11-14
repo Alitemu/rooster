@@ -30,6 +30,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { botsingenInRonde, sorteerOpRuimte } from '@/lib/vooraf';
 
 // Mirrors lib/rosterGaps.ts's EligibilityCategory - see the priority-order
 // comment there for why a person can only ever be in one of these.
@@ -73,6 +75,8 @@ interface UnfilledSlot {
   assigned_count: number;
   shortfall: number;
   eligible_people: EligiblePerson[];
+  /** The period's windows (lib/rosterGaps.ts), to check the picks of one round against each other. */
+  venster: { avond: number; weekendFeestdag: number };
 }
 
 interface Props {
@@ -111,7 +115,7 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: 'Beschikbaar',
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
-  PARTTIME: 'Part-time dag',
+  PARTTIME: 'Deeltijddag',
   FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
@@ -122,16 +126,20 @@ const CATEGORY_NOTES: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: '',
   LIEVER_NIET: 'heeft aangegeven liever niet op deze dag te werken',
   VENSTERBLOK: 'heeft al een dienst binnen het venster',
-  PARTTIME: 'heeft parttime-vrij op deze dag',
+  PARTTIME: 'heeft op deze dag een deeltijddag',
   FELLOW: 'is fellow en ondersteunt in het weekend de AIOS',
   GEBLOKKEERD: 'heeft deze dag geblokkeerd',
 };
 
+// Within a group most room first (lib/vooraf.ts): alphabetical put someone already "vol" on top (audit 1.2.2).
 function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, EligiblePerson[]]> {
   return CATEGORY_ORDER.map(
-    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, people.filter((p) => p.category === cat)]
+    (cat): [EligibilityCategory, EligiblePerson[]] => [cat, sorteerOpRuimte(people.filter((p) => p.category === cat))]
   ).filter(([, group]) => group.length > 0);
 }
+
+const dagKort = (datum: string) =>
+  new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 
 function draftStorageKey(periodId: string): string {
   return `dienstrooster-fillgaps-draft-${periodId}`;
@@ -164,6 +172,13 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // "Ongedaan maken" for what was applied here, for the acute moment only (lib/pendingUndo.ts, 0.106.0): what was
+  // already there when this page opened stays hidden (undoBasis), and what is shown goes away after two minutes.
+  const [undo, setUndo] = useState<{ id: string; label: string; verloopt_over_seconden: number } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  // undefined: not read yet; null: nothing was there when the page opened.
+  const undoBasis = useRef<string | null | undefined>(undefined);
 
   // Restore any draft left over from a previous visit - before the first
   // load() below runs, so its "drop selections for slots no longer open"
@@ -231,7 +246,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
 
       if (data.data.length === 0 && onAllFilled) onAllFilled();
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Laden van openstaande diensten mislukt');
+      setLoadError(foutTekst(err, 'Laden van openstaande diensten mislukt'));
     }
   }, [periodId, onAllFilled]);
 
@@ -239,7 +254,75 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
     load();
   }, [load]);
 
+  const loadUndo = useCallback(async () => {
+    try {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/pending-undo`));
+      const data = await res.json();
+      const gelezen = res.ok ? data.data?.pending ?? null : null;
+      if (undoBasis.current === undefined) undoBasis.current = gelezen?.id ?? null;
+      setUndo(gelezen && gelezen.id !== undoBasis.current ? gelezen : null);
+    } catch {
+      setUndo(null);
+    }
+  }, [periodId]);
+
+  useEffect(() => {
+    undoBasis.current = undefined;
+    loadUndo();
+  }, [loadUndo]);
+
+  // The button goes away when the two minutes are over.
+  useEffect(() => {
+    if (!undo) return;
+    const timer = setTimeout(() => setUndo(null), undo.verloopt_over_seconden * 1000);
+    return () => clearTimeout(timer);
+  }, [undo]);
+
+  const handleUndo = async () => {
+    setUndoing(true);
+    setUndoError(null);
+    try {
+      const res = await fetch(withBasePath(`/api/planner/period/${periodId}/assignments/undo-last`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'Handmatig aangevuld, ongedaan gemaakt' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || 'Ongedaan maken mislukt');
+      setUndo(null);
+      onAssignmentsChanged?.();
+      await load();
+    } catch (err) {
+      setUndoError(foutTekst(err, 'Ongedaan maken mislukt'));
+    } finally {
+      setUndoing(false);
+    }
+  };
+
+  const undoBanner = undo ? (
+    <div className="mb-4 p-3 rounded border border-neutral-300 bg-white flex flex-wrap items-center justify-between gap-3" data-testid="fillgaps-undo">
+      <p className="text-sm text-neutral-800">
+        <span className="font-medium">Laatst gewijzigd:</span> {undo.label}
+      </p>
+      <button
+        type="button"
+        onClick={handleUndo}
+        disabled={undoing}
+        className="px-3 py-1.5 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50"
+      >
+        {undoing ? 'Bezig…' : '↩️ Ongedaan maken'}
+      </button>
+    </div>
+  ) : undoError ? (
+    <p role="alert" className="mb-4 text-sm text-red-700">
+      {undoError}
+    </p>
+  ) : null;
+
   const stagedCount = Object.keys(selection).length;
+  // The other picks of this round for that person within the window (lib/vooraf.ts, audit 1.2.2).
+  const rondeBotsing = (slot: UnfilledSlot, personId: string): string[] =>
+    slots ? botsingenInRonde(slot, personId, selection, slots, slot.venster) : [];
 
   const handleApplyAll = async () => {
     const entries = Object.entries(selection);
@@ -265,9 +348,9 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
       } catch (err) {
         const slot = slots?.find((s) => s.slot_id === slotId);
         const label = slot
-          ? `${new Date(slot.datum).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} (${TELLER_LABELS[slot.teller] || slot.teller})`
+          ? `${new Date(`${slot.datum}T12:00:00`).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' })} (${TELLER_LABELS[slot.teller] || slot.teller})`
           : slotId;
-        failures.push(`${label}: ${err instanceof Error ? err.message : 'Toewijzen mislukt'}`);
+        failures.push(`${label}: ${foutTekst(err, 'Toewijzen mislukt')}`);
       }
     }
 
@@ -292,6 +375,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
     // only picks for slots still open (including any that just failed)
     // survive, so a retry doesn't need to be redone from scratch.
     await load();
+    await loadUndo();
     setApplying(false);
   };
 
@@ -316,6 +400,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
   if (slots.length === 0) {
     return (
       <div className="card p-4 bg-green-50 border border-green-200">
+        {undoBanner}
         <p className="text-sm text-green-900 font-medium">
           ✓ Elke dienst in dit rooster is ingevuld.
         </p>
@@ -325,6 +410,7 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
 
   return (
     <div className="card p-6 bg-amber-50 border border-amber-200">
+      {undoBanner}
       <h3 className="font-semibold text-amber-900 mb-1">
         ⚠️ {slots.length} dienst{slots.length === 1 ? '' : 'en'} nog niet ingevuld
       </h3>
@@ -358,15 +444,18 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
           const selectedPerson = slot.eligible_people.find((p) => p.id === selection[slot.slot_id]);
           const groups = groupByCategory(slot.eligible_people);
           return (
+            // On a phone the choice goes under the dienst (functional audit F-02, 1.7.0): side by side the
+            // list of names, as wide as its longest option, squeezed the date to one word a line.
             <div
               key={slot.slot_id}
-              className={`flex items-center justify-between gap-3 p-3 rounded bg-white border ${
+              data-testid="vooraf-dienst"
+              className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 p-3 rounded bg-white border ${
                 selectedPerson ? 'border-green-300' : 'border-amber-200'
               }`}
             >
               <div className="min-w-0">
-                <p className="text-sm font-medium text-neutral-900">
-                  {new Date(slot.datum).toLocaleDateString('nl-NL', {
+                <p className="text-sm font-medium text-neutral-900" data-testid="vooraf-dienst-datum">
+                  {new Date(`${slot.datum}T12:00:00`).toLocaleDateString('nl-NL', {
                     weekday: 'short',
                     day: 'numeric',
                     month: 'short',
@@ -376,14 +465,25 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                 <p className="text-xs text-neutral-500">
                   Week {slot.iso_week} · {slot.assigned_count}/{slot.benodigd_aantal_personen} ingevuld
                 </p>
-                {selectedPerson && selectedPerson.category !== 'BESCHIKBAAR' && (
+                {selectedPerson && selectedPerson.category === 'VOORKEUR' && (
+                  <p className="text-xs text-green-700 mt-1">
+                    ✓ {selectedPerson.codenaam} {CATEGORY_NOTES.VOORKEUR}
+                  </p>
+                )}
+                {selectedPerson && selectedPerson.category !== 'BESCHIKBAAR' && selectedPerson.category !== 'VOORKEUR' && (
                   <p className="text-xs text-orange-700 mt-1">
                     ⚠️ {selectedPerson.codenaam} {CATEGORY_NOTES[selectedPerson.category]}
                   </p>
                 )}
+                {selectedPerson && rondeBotsing(slot, selectedPerson.id).length > 0 && (
+                  <p className="text-xs text-orange-700 mt-1" data-testid="ronde-botsing">
+                    ⚠️ {selectedPerson.codenaam} staat in deze ronde ook op{' '}
+                    {rondeBotsing(slot, selectedPerson.id).map(dagKort).join(' en ')}: twee diensten binnen het venster.
+                  </p>
+                )}
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 min-w-0 sm:shrink-0">
                 {slot.eligible_people.length === 0 ? (
                   <span className="text-xs text-red-600">Niemand in de pool beschikbaar</span>
                 ) : (
@@ -394,7 +494,8 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                       </span>
                     )}
                     <select
-                      className="text-sm border border-neutral-300 rounded px-2 py-1"
+                      className="w-full min-w-0 sm:w-auto text-sm border border-neutral-300 rounded px-2 py-1"
+                      aria-label="Kies iemand voor deze dienst"
                       title="Het getal achter een naam toont het aantal diensten van dit type dat iemand al heeft, ten opzichte van het eigen streefbereik"
                       value={selection[slot.slot_id] || ''}
                       disabled={applying}
@@ -415,11 +516,15 @@ export function FillGapsPanel({ periodId, onAllFilled, onAssignmentsChanged }: P
                           key={category}
                           label={`${CATEGORY_GROUP_LABELS[category]} (${people.length})`}
                         >
-                          {people.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {bandLabel(p)}
-                            </option>
-                          ))}
+                          {people.map((p) => {
+                            const botsing = rondeBotsing(slot, p.id);
+                            return (
+                              <option key={p.id} value={p.id}>
+                                {bandLabel(p)}
+                                {botsing.length > 0 ? ` · in deze ronde al op ${botsing.map(dagKort).join(' en ')}` : ''}
+                              </option>
+                            );
+                          })}
                         </optgroup>
                       ))}
                     </select>

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
+import { aiosIsDefinitief } from '@/lib/aiosDefinitief';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosDeelnemers, aiosPeriodeStand } from '@/lib/aiosUitnodigen';
@@ -29,6 +30,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         uitgenodigd_op: aiosPeriodeStand(id).uitgenodigd_op,
         mail_ingesteld: mail.ingesteld,
         aantal_deelnemers: aiosDeelnemers(period).length,
+        // Published as voorlopig or as definitief: the status bar says which.
+        definitief: aiosIsDefinitief(id),
       },
     });
   } catch (error) {

@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, openDienstrooster } from './setup';
 
 /**
  * Step 4a (docs/aios-rooster.md): the planner makes an AIOS roster with the
@@ -85,19 +85,35 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
 
   const paneel = page.getByTestId('aios-rooster-maken');
-  await expect(paneel.getByRole('heading', { name: 'Rooster' })).toBeVisible();
-  await openAiosSectie(page, 'Rooster');
+  // Making, publishing and withdrawing sit at the top as a card, not in sections of their own.
+  await expect(page.getByRole('heading', { name: 'Rooster', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Publiceren', exact: true })).toHaveCount(0);
+  // Ten minutes unless chosen otherwise (0.902.0); a test quarter of 8 AIOS takes one, typed in.
+  await expect(paneel.getByLabel('Hoe lang zoeken')).toHaveValue('600');
+  await expect(paneel.getByTestId('aios-tijd-uitleg')).toContainText('Hoe langer de solver zoekt, hoe eerlijker de verdeling.');
+  await paneel.getByLabel('Hoe lang zoeken').selectOption('eigen');
+  await paneel.getByLabel(/Aantal minuten/).fill('61');
+  await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeDisabled();
+  await expect(paneel.getByTestId('aios-tijd-uitleg')).toContainText('Vul een heel aantal minuten in, van 1 tot 60.');
+  await paneel.getByLabel(/Aantal minuten/).fill('1');
+  // Eight AIOS, none with a part-time day: the page warns before the roster is made (1.6.0), and the roster can still be made.
+  await expect(paneel.getByTestId('aios-nachtblok-waarschuwing')).toContainText(
+    /Te weinig AIOS in deeltijd voor de nachtblokken van zondag tot en met dinsdag\..*Geen enkele AIOS mag die doen.*Controleer of alle AIOS hun parttimedagen juist hebben opgegeven\./
+  );
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
-  await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
+  await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
+  // Whether the solver finished is said, either way.
+  await expect(paneel.getByTestId('aios-solver-klaar')).toHaveText(/^(De solver is klaar: dit is de eerlijkste verdeling binnen de regels\.|De tijd was op voordat de solver klaar was.*)$/);
 
-  await expect(page.getByRole('heading', { name: 'Per AIOS' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Het rooster per week' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dienstpercentage en saldo' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dienstrooster (automatisch ingevuld)', exact: true })).toBeVisible();
   // Every AIOS a row with a percentage; the roster names them.
-  await openAiosSectie(page, 'Per AIOS');
+  await openAiosSectie(page, 'Dienstpercentage en saldo');
   const tabel = page.locator('table', { hasText: 'Percentage' });
   await expect(tabel.locator('tbody tr')).toHaveCount(8);
   await expect(tabel.getByText(/\d+(,\d)?%/).first()).toBeVisible();
-  await openAiosSectie(page, 'Het rooster per week');
+  await openDienstrooster(page);
   await expect(page.locator('td span', { hasText: new RegExp(`^ar0\\d-${stamp % 100000}`) }).first()).toBeVisible();
   const ingedeeld = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(ids.period) as { n: number }).n;
   expect(ingedeeld).toBeGreaterThan(0);
@@ -122,10 +138,15 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
   await kies.click();
   const klaar = page.getByTestId('aios-laatste-wijziging');
-  const toch = wijzig.getByRole('button', { name: 'Ja, toch indelen' });
+  // Which AIOS the list offers first follows from the roster the solver made: one who already has another
+  // dienst that day gets the question with its own button (0.100.0). The test failed on that one in two of
+  // four runs (audit of 1.4.0), while the app did what it should.
+  const toch = wijzig.getByRole('button', { name: /^Ja, (toch indelen|dit is echt de bedoeling)$/ });
   await expect(klaar.or(toch)).toBeVisible();
   if (await toch.isVisible()) await toch.click();
   await expect(klaar).toContainText(`nu ${codenaam}.`);
+  // Changed by hand: the heading says so.
+  await expect(page.getByRole('heading', { name: 'Dienstrooster (handmatig aangepast)', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: new RegExp(`^Nachtblok .*: ${codenaam}`) }).first()).toBeVisible();
   const na = rooster();
   expect(Object.keys(na).filter((k) => na[k] !== voor[k]).length).toBeGreaterThanOrEqual(3);
@@ -133,11 +154,44 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(klaar).toHaveCount(0);
   expect(rooster()).toEqual(voor);
 
-  await openAiosSectie(page, 'Rooster');
+  // The other views of the same section: the list of every dienst, the dienstdoende with their numbers, the swaps (empty before publishing).
+  const sectie = page.getByTestId('aios-dienstrooster');
+  await sectie.getByRole('tab', { name: /Lijst/ }).click();
+  const lijst = sectie.getByTestId('aios-dienstrooster-lijst');
+  const aantalDiensten = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_shift_slot WHERE period_id = ?').get(ids.period) as { n: number }).n;
+  await expect(lijst.locator('tbody tr')).toHaveCount(aantalDiensten);
+  await lijst.getByRole('button', { name: /Wijzig in de lijst$/ }).first().click();
+  await expect(sectie.getByTestId('aios-wijzigen').getByRole('heading', { name: 'Wie doet dit?' })).toBeVisible();
+  await sectie.getByTestId('aios-wijzigen').getByRole('button', { name: 'Sluiten' }).click();
+  await sectie.getByRole('tab', { name: /Dienstdoende/ }).click();
+  const dienstdoende = sectie.getByTestId('aios-dienstdoende');
+  await expect(dienstdoende.locator('tbody tr')).toHaveCount(8);
+  await expect(dienstdoende.getByRole('row', { name: /^Samen/ })).toBeVisible();
+  // Fairness is in points per fte, not in the number of diensten: both are there (0.902.0).
+  await expect(dienstdoende.getByRole('columnheader', { name: 'Punten' })).toBeVisible();
+  await expect(dienstdoende.getByRole('columnheader', { name: 'Percentage' })).toBeVisible();
+  await expect(dienstdoende.getByTestId('dienstdoende-punten')).toHaveCount(8);
+  // The fair range of every soort behind each bar (0.903.0): 8 AIOS, 6 soorten, the solver's own share. The summary
+  // names exactly the cells with an arrow, and a screen reader hears the cell in words.
+  await expect(dienstdoende.getByTestId('eerlijk-vlak')).toHaveCount(8 * 6);
+  const samenvatting = dienstdoende.getByTestId('eerlijk-samenvatting');
+  await expect(samenvatting).toHaveText(/^(Iedereen heeft van elke soort een eerlijk aantal diensten\.|\d+ AIOS (heeft|hebben) van een soort meer of minder diensten dan eerlijk:.*)$/s);
+  const verschillen = (await samenvatting.locator('li').allTextContents()).reduce((n, r) => n + r.split('; ').length, 0);
+  await expect(dienstdoende.getByTestId('eerlijk-pijl')).toHaveCount(verschillen);
+  await expect(dienstdoende.getByTestId('dienstdoende-nachten').first()).toContainText(/\d+ (nacht|nachten), eerlijk is \d+( of \d+)?\./);
+  await sectie.getByRole('tab', { name: /Ruilverzoeken/ }).click();
+  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Er zijn nog geen ruilverzoeken gedaan.');
+  await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster definitief is.');
+  await sectie.getByRole('tab', { name: /Kalender/ }).click();
+
   await paneel.getByRole('button', { name: 'Rooster verwijderen' }).click();
   await paneel.getByRole('button', { name: 'Ja, rooster verwijderen' }).click();
   await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Per AIOS' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Dienstpercentage en saldo' })).toHaveCount(0);
+  // Not made: the heading says so, and the calendar shows the diensten themselves.
+  await expect(page.getByRole('heading', { name: 'Dienstrooster (nog niet gegenereerd)', exact: true })).toBeVisible();
+  await openDienstrooster(page);
+  await expect(page.getByTestId('aios-dienstrooster-nog-niet')).toBeVisible();
   expect((db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(ids.period) as { n: number }).n).toBe(0);
 });
 
@@ -148,8 +202,8 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
   await page.goto(`${getBaseUrl()}/planner/period/${ids.kerst}`);
 
   const paneel = page.getByTestId('aios-rooster-maken');
-  await openAiosSectie(page, 'Rooster');
-  const vragen = paneel.getByTestId('aios-feestdagblokken');
+  await openAiosSectie(page, 'Blokken rond de feestdagen');
+  const vragen = page.getByTestId('aios-feestdagblokken');
   await expect(vragen.getByRole('heading', { name: '★ Blokken rond feestdagen' })).toBeVisible();
   await expect(vragen.getByText(/Eerste Kerstdag en Tweede Kerstdag/)).toBeVisible();
   await expect(paneel.getByText('Kies eerst bij elk blok rond de feestdagen wat ermee gebeurt en bewaar je keuzes.')).toBeVisible();
@@ -164,9 +218,11 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
   await expect(vragen.getByText('Bewaard.')).toBeVisible();
   await expect(vragen.getByText('(nog kiezen)')).toHaveCount(0);
 
+  await paneel.getByLabel('Hoe lang zoeken').selectOption('eigen');
+  await paneel.getByLabel(/Aantal minuten/).fill('1');
   await paneel.getByRole('button', { name: 'Rooster maken' }).click();
-  await expect(paneel.getByText(/^Klaar: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
-  await openAiosSectie(page, 'Het rooster per week');
+  await expect(paneel.getByTestId('aios-lege-diensten').getByText(/^Gemaakt op .*: \d+ diensten ingedeeld/)).toBeVisible({ timeout: 200_000 });
+  await openDienstrooster(page);
   await expect(page.getByRole('cell', { name: 'Nacht 2', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 

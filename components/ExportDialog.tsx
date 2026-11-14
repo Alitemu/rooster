@@ -6,13 +6,15 @@
  * Interface for downloading invitations/reminders and sending emails
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
 import { personaliseReminder } from '@/lib/reminderText';
 import { herinnerdOpTekst } from '@/lib/herinnerdOp';
 import { deadlineTekst } from '@/lib/verzendlijst';
+import { foutTekst } from '@/lib/foutTekst';
+import { DatumTijdVeld } from '@/components/DatumVeld';
 
 export type ExportType = 'invitations-send' | 'invitations-download' | 'reminders' | 'audit-trail' | null;
 
@@ -128,6 +130,24 @@ export function ExportDialog({
     setSendState({ kind: 'idle' });
   }, [deadline]);
 
+  // The version of the period as it was when the dialog opened: a deadline
+  // moved by somebody else in the meantime is refused, not overwritten.
+  const periodeVersie = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isOpen) return;
+    periodeVersie.current = undefined;
+    let vervallen = false;
+    fetch(withBasePath(`/api/periods/${periodId}`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!vervallen && typeof data?.data?.row_version === 'number') periodeVersie.current = data.data.row_version;
+      })
+      .catch(() => {});
+    return () => {
+      vervallen = true;
+    };
+  }, [isOpen, periodId, deadline]);
+
   const [newDeadline, setNewDeadline] = useState('');
   const [savingDeadline, setSavingDeadline] = useState(false);
   const [deadlineError, setDeadlineError] = useState<string | null>(null);
@@ -151,7 +171,7 @@ export function ExportDialog({
       const res = await fetch(withBasePath(`/api/periods/${periodId}/deadline`), {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ deadline: newDeadline }),
+        body: JSON.stringify({ deadline: newDeadline, rowVersion: periodeVersie.current }),
       });
       const data = await res.json().catch(() => null);
       if (!res.ok) {
@@ -253,7 +273,7 @@ export function ExportDialog({
       }
       setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Laden van herinneringen mislukt');
+      setError(foutTekst(err, 'Laden van herinneringen mislukt'));
       setRemindersLoadFailed(true);
       setLoading(false);
     }
@@ -340,7 +360,7 @@ export function ExportDialog({
 
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
+      setError(foutTekst(err, 'Downloaden mislukt'));
     }
   };
 
@@ -353,7 +373,7 @@ export function ExportDialog({
 
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Downloaden mislukt');
+      setError(foutTekst(err, 'Downloaden mislukt'));
     }
   };
 
@@ -368,11 +388,10 @@ export function ExportDialog({
       <label className="block text-xs font-semibold text-amber-900" htmlFor="nieuwe-deadline">
         Nieuwe deadline
       </label>
-      <input
+      <DatumTijdVeld
         id="nieuwe-deadline"
-        type="datetime-local"
         value={newDeadline}
-        onChange={(e) => setNewDeadline(e.target.value)}
+        onChange={(waarde) => setNewDeadline(waarde)}
         className="w-full px-3 py-2 border rounded text-sm bg-white"
       />
       {deadlineError && (
@@ -383,7 +402,7 @@ export function ExportDialog({
       <button
         onClick={saveDeadline}
         disabled={!newDeadline || savingDeadline}
-        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+        className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors"
       >
         {savingDeadline ? 'Bezig met opslaan...' : 'Deadline opslaan'}
       </button>
@@ -517,7 +536,7 @@ export function ExportDialog({
             <div className="flex gap-3">
               <button
                 onClick={downloadInvitations}
-                className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                className="flex-1 py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
               >
                 📥 Excel downloaden
               </button>
@@ -535,18 +554,18 @@ export function ExportDialog({
             <div className="bg-blue-50 border border-blue-200 rounded p-4 mb-6">
               <p className="text-sm text-blue-900">
                 Elke handmatige toewijzing, wisseling en verwijdering in deze periode, met reden,
-                wie het deed en of daarbij een blokkade, parttime-dag of de vensterregel is
-                overruled.
+                wie het deed en of daarbij bewust is afgeweken van een blokkade, een deeltijddag of
+                de vensterregel.
               </p>
               <p className="text-xs text-blue-800 mt-2">
-                Kolommen: Datum wijziging, Actie, Betreft, Dienstdatum, Diensttype, Reden, Overrule, Aangepast door
+                Kolommen: Datum wijziging, Actie, Betreft, Dienstdatum, Diensttype, Reden, Afwijking, Aangepast door
               </p>
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={downloadAuditTrail}
-                className="flex-1 py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
+                className="flex-1 py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
               >
                 📥 Excel downloaden
               </button>
@@ -589,7 +608,7 @@ export function ExportDialog({
                 </div>
                 <button
                   onClick={loadReminders}
-                  className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 transition-colors mb-3"
+                  className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors mb-3"
                 >
                   Herinneringen genereren
                 </button>
@@ -640,10 +659,10 @@ export function ExportDialog({
                   <p className="text-sm font-semibold text-green-900">Versturen via Power Automate</p>
                   <p className="text-sm text-green-900">
                     {unsentReminders.length === reminders.length
-                      ? `Stuurt alle ${reminders.length} herinneringen met de tekst hierboven naar de Power Automate-stroom.`
+                      ? `Stuurt ${reminders.length === 1 ? 'de herinnering' : `alle ${reminders.length} herinneringen`} met de tekst hierboven naar de Power Automate-stroom.`
                       : unsentReminders.length === 0
                         ? 'Alle herinneringen zijn verstuurd.'
-                        : `Stuurt de ${unsentReminders.length} herinneringen die nog niet verstuurd zijn.`}
+                        : `Stuurt ${unsentReminders.length === 1 ? 'de herinnering' : `de ${unsentReminders.length} herinneringen`} die nog niet verstuurd ${unsentReminders.length === 1 ? 'is' : 'zijn'}.`}
                   </p>
                   {unsentReminders.length > 0 && (
                     <SendButton
@@ -680,7 +699,7 @@ export function ExportDialog({
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => sendReminders(recentVraag.list, recentVraag.alle, true)}
-                        className="py-1.5 px-3 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700"
+                        className="py-1.5 px-3 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800"
                       >
                         Toch versturen
                       </button>
@@ -733,7 +752,7 @@ export function ExportDialog({
                               onClick={() => sendReminders([reminder], false)}
                               disabled={!linkPlaceholderIntact || anyReminderSending}
                               aria-label={`Herinnering versturen aan ${reminder.codenaam}`}
-                              className="py-1.5 px-3 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors whitespace-nowrap"
+                              className="py-1.5 px-3 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors whitespace-nowrap"
                             >
                               {state.kind === 'sending' ? 'Bezig...' : '✉️ Versturen'}
                             </button>
@@ -783,7 +802,7 @@ function SendButton({
       <button
         onClick={onClick}
         disabled={disabled || done || state.kind === 'sending'}
-        className="w-full py-2 px-4 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-green-300 transition-colors"
+        className="w-full py-2 px-4 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-green-300 transition-colors"
       >
         {state.kind === 'sending' ? 'Bezig met versturen...' : label}
       </button>

@@ -65,7 +65,7 @@ export function csvField(value: string | number | null | undefined): string {
  * byte order mark ("CSV UTF-8") is dropped.
  */
 export function parseCsv(text: string): string[][] {
-  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).map((l) => l.trim()).filter((l) => l !== '');
+  const lines = logicalLines(text.replace(/^\uFEFF/, '')).map((l) => l.trim()).filter((l) => l !== '');
   const delimiter = lines.length > 0 && countOutsideQuotes(lines[0], ';') > countOutsideQuotes(lines[0], ',') ? ';' : ',';
   const rows: string[][] = [];
   for (const line of lines) {
@@ -102,6 +102,41 @@ export function parseCsv(text: string): string[][] {
     rows.push(cells);
   }
   return rows;
+}
+
+/**
+ * The text split into lines, but not at a line break inside a quoted cell: a
+ * cell that holds a line break (Excel saves it so) is one cell, not two rows.
+ * A quote opens a cell the same way parseCsv's cells do: at the start of one.
+ */
+function logicalLines(text: string): string[] {
+  const lines: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (inQuotes) {
+      current += char;
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      }
+    } else if (char === '"' && (current === '' || current.endsWith(',') || current.endsWith(';'))) {
+      inQuotes = true;
+      current += char;
+    } else if (char === '\n') {
+      lines.push(current.replace(/\r$/, ''));
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  lines.push(current.replace(/\r$/, ''));
+  return lines;
 }
 
 function countOutsideQuotes(line: string, char: string): number {

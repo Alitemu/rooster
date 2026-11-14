@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { terugzettenBezig, TERUGZETTEN_BEZIG } from '@/lib/terugzetBezig';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -21,6 +22,8 @@ import {
   type PeriodMember,
   type Teller,
 } from '@/lib/rosterBands';
+import { solverVerbindingsFout } from '@/lib/solverFout';
+import { legFactorenVast, neemFactorenOp, zetFactorenTerug, type FactorenOpname } from '@/lib/deelnamefactor';
 import { getFellowIds } from '@/lib/fellows';
 import { clearSolverAssignments, getManuallyFilledSlotIds } from '@/lib/rosterGaps';
 import { postJson } from '@/lib/solverClient';
@@ -42,6 +45,56 @@ import { clearPendingUndo } from '@/lib/pendingUndo';
 import { feestdagTargets } from '@/lib/feestdagHistory';
 import { computeBandShortfall, fellowBandOverrides } from '@/lib/bandShortfall';
 import { writeAuditLog } from '@/lib/auditLog';
+import { isBetterRoster, isPerfectRoster } from '@/lib/rosterVergelijk';
+import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
+import { MAX_ZOEKTIJD_SECONDEN, zoektijdVoorGeneratie } from '@/lib/solverZoektijd';
+
+/** The period as this route reads it (SELECT *): the columns it uses. */
+interface PeriodeRij {
+  id: string;
+  status: string;
+  row_version: number;
+  pool_id: string;
+  start_datum: string;
+  eind_datum: string;
+  overloop_bevestigd_op: string | null;
+  bevroren_ruleset_json: string | null;
+}
+
+/** A dienst of the period with its counter (SELECT s.*, st.teller): the columns sent to the solver. */
+interface DienstRij {
+  id: string;
+  datum: string;
+  iso_jaar: number;
+  iso_week: number;
+  shift_type_id: string;
+  teller: string;
+  benodigd_aantal_personen: number;
+  // SQLite has no boolean: 0 or 1.
+  is_feestdag: number;
+  feestdag_groep: string | null;
+}
+
+/** What POST /solve and /solve-greedy answer (solver/main.py, SolverOutput and SolverDiagnostics). */
+interface SolverUitvoer {
+  success: boolean;
+  assignments: Array<{ person_id: string; slot_id: string }>;
+  diagnostics: {
+    unfilled_slots: Array<{ slot_id: string; shortfall: number }>;
+    total_cost: number;
+    time_seconds: number;
+    solver_status: string;
+    violations: Record<string, number>;
+    max_band_deviation?: number;
+    total_band_deviation?: number;
+    soft_block_violations?: number;
+    preference_matches?: number;
+  };
+  message?: string;
+}
+
+/** The solver's input as runMultiStart passes it on, with a random_seed added to the rules each attempt. */
+type SolverInvoer = { rules: Record<string, unknown> } & Record<string, unknown>;
 
 export async function POST(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -66,8 +119,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Optional body: { time_limit_seconds } lets the planner ask for a
     // longer CP-SAT search after a first attempt comes back FEASIBLE
     // rather than OPTIMAL (see RosterGenerationDialog's "langer proberen"
-    // option). No body at all (the common case) falls back to the
-    // solver's own default. Clamped to the same [1, 600] range the solver
+    // option). No body at all (the common case) is the first run's 5
+    // minutes (lib/solverZoektijd.ts). Clamped to the same [1, 1800] range the solver
     // enforces so an out-of-range value fails fast here with a clear
     // message instead of a generic solver error.
     let timeLimitSeconds: number | undefined;
@@ -84,9 +137,9 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       }
       const candidate = (parsedBody as { time_limit_seconds?: unknown })?.time_limit_seconds;
       if (candidate !== undefined) {
-        if (typeof candidate !== 'number' || !Number.isInteger(candidate) || candidate < 1 || candidate > 600) {
+        if (typeof candidate !== 'number' || !Number.isInteger(candidate) || candidate < 1 || candidate > MAX_ZOEKTIJD_SECONDEN) {
           return NextResponse.json(
-            { success: false, error: 'Tijdslimiet moet een geheel getal tussen 1 en 600 seconden zijn' },
+            { success: false, error: `Tijdslimiet moet een geheel getal tussen 1 en ${MAX_ZOEKTIJD_SECONDEN} seconden zijn` },
             { status: 400 }
           );
         }
@@ -97,7 +150,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // Fetch period
     const period = db
       .prepare('SELECT * FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(periodId) as any;
+      .get(periodId) as PeriodeRij | undefined;
 
     if (!period) {
       return NextResponse.json(
@@ -106,22 +159,30 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
-    // CONCEPT is deliberately excluded: only /api/periods/[id]/open
-    // transitions CONCEPT -> OPEN, and that's also the only place that
-    // rounds dates to Monday/Sunday, checks for active staff, and applies
-    // carry-over from the previous published period - generating straight
-    // from CONCEPT would silently skip all three. GEGENEREERD is included
+    // Only a closed period generates: until it is closed, preferences and
+    // absences can still change under the solver. CONCEPT is excluded as
+    // well: only /api/periods/[id]/open transitions CONCEPT -> OPEN, and
+    // that's also the only place that rounds dates to Monday/Sunday,
+    // checks for active staff, and applies carry-over from the previous
+    // published period. GEGENEREERD is included
     // so a planner can regenerate - e.g. after manually filling some gaps
     // and wanting the solver to take another pass at the rest, or after a
     // preference changed. GEPUBLICEERD stays excluded: regenerating after
     // publish would silently invalidate a roster staff have already been
     // told about.
-    if (!['OPEN', 'GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
+    if (!['GESLOTEN', 'GEGENEREERD'].includes(period.status)) {
       return NextResponse.json(
-        { success: false, error: `Rooster kan niet gegenereerd worden vanuit status "${periodStatusLabel(period.status)}"` },
+        {
+          success: false,
+          error: `Rooster kan niet gegenereerd worden vanuit status "${periodStatusLabel(period.status)}". Sluit de periode eerst, zodat voorkeuren en afwezigheid vaststaan.`,
+        },
         { status: 400 }
       );
     }
+
+    // The saldo carried over comes from the period before: it has to be published first (lib/periodVolgorde.ts).
+    const vorige = vorigePeriodeDenial(periodId);
+    if (vorige) return vorige;
 
     // Only require overloop confirmation when there's actually a previous
     // published period to carry over from - a pool's first-ever period has
@@ -149,7 +210,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
          JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
          WHERE s.period_id = ?`
       )
-      .all(periodId) as any[];
+      .all(periodId) as DienstRij[];
 
     if (allSlots.length === 0) {
       return NextResponse.json(
@@ -173,7 +234,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // both count for their streefbereik (lib/rosterBands.ts
     // loadPeriodMembers). The days outside them are blocked further down
     // (blockOutsideMembership).
-    const poolMembers = loadPeriodMembers(period);
+    const poolMembers = loadPeriodMembers(period, { vers: true });
 
     const people = poolMembers.map((m) => m.id);
 
@@ -183,6 +244,30 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         { status: 400 }
       );
     }
+
+    // A backup being restored replaces the database under any roster written now (lib/terugzetBezig.ts, 1.1.1).
+    if (terugzettenBezig()) {
+      return NextResponse.json({ success: false, error: TERUGZETTEN_BEZIG }, { status: 409 });
+    }
+    // Two generations for the same period would both wipe and rewrite its
+    // assignments; the second to finish dies on the assignment table's
+    // UNIQUE(schedule_version_id, slot_id), after having already cleared
+    // part of the first one's roster.
+    if (hasRunningJobForPeriod(periodId)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Er loopt al een roostergeneratie voor deze periode. Wacht tot die klaar is of annuleer hem eerst.',
+        },
+        { status: 409 }
+      );
+    }
+
+    // What this roster counts with, held for good: the factors of now, replacing those of an earlier
+    // roster of this period (lib/deelnamefactor.ts). A change in someone's part-time days after this
+    // is for the next period, not for this one.
+    const factorenVoor = neemFactorenOp(period.id);
+    legFactorenVast(period.id, poolMembers);
 
     // Everything from here on is the slow part - the solver call itself can
     // legitimately run for minutes (up to 600s plus model-build overhead).
@@ -198,20 +283,6 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // client poll ./generate-roster/status instead of holding one request
     // open. Each poll is cheap and short, so a dropped one just means "ask
     // again in a moment" rather than losing the whole generation.
-    // Two generations for the same period would both wipe and rewrite its
-    // assignments; the second to finish dies on the assignment table's
-    // UNIQUE(schedule_version_id, slot_id), after having already cleared
-    // part of the first one's roster.
-    if (hasRunningJobForPeriod(periodId)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Er loopt al een roostergeneratie voor deze periode. Wacht tot die klaar is of annuleer hem eerst.',
-        },
-        { status: 409 }
-      );
-    }
-
     // Carry-over from the previous period was booked when this one opened;
     // that roster may have been corrected since (lib/carryOver.ts, audit 8).
     // Before the balances are read, here rather than in the job, so the
@@ -250,13 +321,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     }
 
     const jobId = createRosterGenerationJob(periodId);
-    runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people }).catch(
+    runGeneration({ jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people, factorenVoor }).catch(
       (error) => {
         // runGeneration reports its own failures via failRosterGenerationJob;
         // this only catches a genuinely unexpected throw that slipped past
         // that, so a job never gets stuck at RUNNING forever.
         const code = errorReference();
         console.error(`[generate-roster] foutcode ${code} unhandled error in background job`, error);
+        zetFactorenTerug(periodId, factorenVoor);
         failRosterGenerationJob(jobId, internalErrorMessage(code));
       }
     );
@@ -273,13 +345,15 @@ async function runGeneration(args: {
   actorId: string;
   now: string;
   timeLimitSeconds: number | undefined;
-  period: any;
-  slots: any[];
-  allSlots: any[];
+  period: PeriodeRij;
+  slots: DienstRij[];
+  allSlots: DienstRij[];
   poolMembers: PeriodMember[];
   people: string[];
+  /** The factors held before this run replaced them: put back when it ends without a roster. */
+  factorenVoor: FactorenOpname;
 }): Promise<void> {
-  const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people } = args;
+  const { jobId, periodId, actorId, now, timeLimitSeconds, period, slots, allSlots, poolMembers, people, factorenVoor } = args;
   try {
     // Only consulted by the solver when distribution_mode is NAAR_RATO -
     // see lib/rosterBands's resolveRulesetConfig / the RuleSet comment.
@@ -308,7 +382,7 @@ async function runGeneration(args: {
         `SELECT * FROM dienstrooster_availability
          WHERE person_id IN (${personPlaceholders}) AND slot_id IN (${slotPlaceholders})`
       )
-      .all(...people, ...slotIdList) as any[];
+      .all(...people, ...slotIdList) as Array<{ person_id: string; slot_id: string; blocking_level: string | null }>;
 
     // Build person preferences map
     const personPreferences: Record<string, Array<{ slot_id: string; blocking_level: string }>> = {};
@@ -337,7 +411,7 @@ async function runGeneration(args: {
          WHERE geldt_voor_periode_id = ? AND person_id IN (${personPlaceholders})
          GROUP BY person_id, teller`
       )
-      .all(periodId, ...people) as any[];
+      .all(periodId, ...people) as Array<{ person_id: string; teller: string; total: number | null }>;
 
     const balances: Record<string, Record<string, number>> = {};
     for (const person of people) {
@@ -458,6 +532,8 @@ async function runGeneration(args: {
       config.objectiveMode === 'randomized'
         ? config.objectiveMode
         : 'weighted';
+    // The planner's search time, else the first run's 5 minutes (0.905.0, lib/solverZoektijd.ts).
+    const zoektijd = zoektijdVoorGeneratie(timeLimitSeconds, objectiveModeConfig);
 
     // Which greedy day-fill order to use - only consulted when
     // objectiveModeConfig is 'randomized'. See solver/greedy.py's module
@@ -563,7 +639,7 @@ async function runGeneration(args: {
       feestdag_targets: feestdagTargets(periodId),
       coverage_factors: coverageFactors,
       band_overrides: bandOverrides,
-      ...(timeLimitSeconds !== undefined ? { time_limit_seconds: timeLimitSeconds } : {}),
+      ...(zoektijd !== undefined ? { time_limit_seconds: zoektijd } : {}),
     };
 
     // Call solver service. Not fetch(): see lib/solverClient.ts for why -
@@ -582,9 +658,9 @@ async function runGeneration(args: {
     // actually finished and answered successfully - a slow-but-legitimate
     // solve must never be mistaken for a dead connection.
     const solverUrl = process.env.SOLVER_URL || 'http://solver:8000';
-    const solverTimeoutMs = (timeLimitSeconds ?? 120) * 1000 + 300_000;
+    const solverTimeoutMs = (zoektijd ?? 120) * 1000 + 300_000;
 
-    let solverOutput: any;
+    let solverOutput: SolverUitvoer;
     let attemptsTried: number | undefined;
     let stoppedReason: RosterGenerationStoppedReason | undefined;
 
@@ -605,6 +681,7 @@ async function runGeneration(args: {
       });
 
       if (!multiStart.ok) {
+        zetFactorenTerug(periodId, factorenVoor);
         failRosterGenerationJob(jobId, multiStart.message, multiStart.status);
         return;
       }
@@ -615,6 +692,7 @@ async function runGeneration(args: {
     } else {
       const result = await callSolver(solverUrl, '/solve', solverInput, solverTimeoutMs);
       if (!result.ok) {
+        zetFactorenTerug(periodId, factorenVoor);
         failRosterGenerationJob(jobId, result.message, result.status);
         return;
       }
@@ -630,9 +708,14 @@ async function runGeneration(args: {
     // freshly-inserted SOLVER rows.
     const applyGeneratedRoster = db.transaction(() => {
       const current = db
-        .prepare('SELECT status, row_version FROM dienstrooster_schedule_period WHERE id = ?')
-        .get(periodId) as { status: string; row_version: number };
+        .prepare('SELECT status, row_version, verwijderd_op FROM dienstrooster_schedule_period WHERE id = ?')
+        .get(periodId) as { status: string; row_version: number; verwijderd_op: string | null } | undefined;
 
+      // Moved to the prullenbak (which bumps no row_version) or purged while the solver ran: nothing is
+      // written into a period that is on its way out (docs/development/periods.md).
+      if (!current || current.verwijderd_op !== null) {
+        return { conflict: true, assignmentCount: 0, rowVersion: period.row_version };
+      }
       if (current.status !== period.status || current.row_version !== period.row_version) {
         return { conflict: true, assignmentCount: 0, rowVersion: current.row_version };
       }
@@ -690,6 +773,7 @@ async function runGeneration(args: {
     const { conflict, assignmentCount, rowVersion } = applyGeneratedRoster();
 
     if (conflict) {
+      zetFactorenTerug(periodId, factorenVoor);
       failRosterGenerationJob(
         jobId,
         'Deze periode is ondertussen door een andere actie gewijzigd. Ververs de pagina en probeer opnieuw.',
@@ -778,6 +862,7 @@ async function runGeneration(args: {
   } catch (error) {
     const code = errorReference();
     console.error(`[generate-roster] foutcode ${code}`, error);
+    zetFactorenTerug(periodId, factorenVoor);
     failRosterGenerationJob(jobId, internalErrorMessage(code));
   }
 }
@@ -787,7 +872,7 @@ async function runGeneration(args: {
 // "Gerandomiseerde planner")
 // ============================================================================
 
-type SolverCallResult = { ok: true; output: any } | { ok: false; message: string; status: number };
+type SolverCallResult = { ok: true; output: SolverUitvoer } | { ok: false; message: string; status: number };
 
 /**
  * One POST to the solver (path is '/solve' for the CP-SAT models,
@@ -803,7 +888,17 @@ async function callSolver(
   timeoutMs: number,
   signal?: AbortSignal
 ): Promise<SolverCallResult> {
-  const solverResponse = await postJson(`${solverUrl}${path}`, solverInput, timeoutMs, signal);
+  let solverResponse: Awaited<ReturnType<typeof postJson>>;
+  try {
+    solverResponse = await postJson(`${solverUrl}${path}`, solverInput, timeoutMs, signal);
+  } catch (error) {
+    // A cancel by the planner is the caller's to handle; a lost connection is told as what it is.
+    if (error instanceof Error && error.name === 'AbortError') throw error;
+    const verbinding = solverVerbindingsFout(error);
+    if (!verbinding) throw error;
+    console.error(`[generate-roster] verbinding met de solver op ${solverUrl} mislukt`, error);
+    return { ok: false, ...verbinding };
+  }
 
   if (!solverResponse.ok) {
     const error = await solverResponse.text();
@@ -818,7 +913,7 @@ async function callSolver(
     };
   }
 
-  const output = await solverResponse.json();
+  const output: SolverUitvoer = await solverResponse.json();
 
   if (!output.success) {
     // Capacity and band limits are soft constraints (see solver/constraints.py),
@@ -844,45 +939,8 @@ async function callSolver(
   return { ok: true, output };
 }
 
-/**
- * Ranks two /solve outcomes against each other for the "Herhaalplanner" -
- * the same priority order the Prioriteitenplanner itself solves in
- * (dekking > eerlijkheid grootste afwijking > eerlijkheid totale afwijking
- * > liever-niet > voorkeur), so "beter" here means exactly what it means
- * inside a single solve, just applied across repeated ones. Returns true
- * when `a` is strictly better than `b`; a full tie keeps whichever was
- * found first (stable - doesn't churn the kept result for no reason).
- */
-function isBetterRoster(a: any, b: any): boolean {
-  const tupleOf = (d: any) => [
-    Array.isArray(d?.unfilled_slots) ? d.unfilled_slots.length : 0,
-    d?.max_band_deviation ?? 0,
-    d?.total_band_deviation ?? 0,
-    d?.soft_block_violations ?? 0,
-    -(d?.preference_matches ?? 0),
-  ];
-  const ta = tupleOf(a);
-  const tb = tupleOf(b);
-  for (let i = 0; i < ta.length; i++) {
-    if (ta[i] !== tb[i]) return ta[i] < tb[i];
-  }
-  return false;
-}
-
-/**
- * "Perfect" per the planner's own stopping rule: every slot filled and
- * everyone exactly within their streefbereik (zero band slack either
- * direction). Window rule and ABSOLUUT blocks are hard constraints the
- * solver can never violate in any OPTIMAL/FEASIBLE result, so they need no
- * separate check here.
- */
-function isPerfectRoster(d: any): boolean {
-  const unfilled = Array.isArray(d?.unfilled_slots) ? d.unfilled_slots.length : 0;
-  return unfilled === 0 && (d?.max_band_deviation ?? 0) === 0;
-}
-
 type MultiStartResult =
-  | { ok: true; output: any; attemptsTried: number; stoppedReason: RosterGenerationStoppedReason }
+  | { ok: true; output: SolverUitvoer; attemptsTried: number; stoppedReason: RosterGenerationStoppedReason }
   | { ok: false; message: string; status: number };
 
 /**
@@ -904,7 +962,7 @@ async function runMultiStart(args: {
   jobId: string;
   solverUrl: string;
   endpointPath: '/solve' | '/solve-greedy';
-  solverInput: any;
+  solverInput: SolverInvoer;
   // Merged onto the top-level request body for every attempt - e.g.
   // { variant: 'dagen' } for the greedy endpoint. Undefined for
   // "Herhaalplanner", which needs nothing beyond the per-attempt
@@ -915,7 +973,7 @@ async function runMultiStart(args: {
 }): Promise<MultiStartResult> {
   const { jobId, solverUrl, endpointPath, solverInput, extraAttemptFields, timeoutMs, maxAttempts } = args;
 
-  let best: any = null;
+  let best: SolverUitvoer | null = null;
   let attemptsTried = 0;
   let stoppedReason: RosterGenerationStoppedReason = 'max_attempts';
 

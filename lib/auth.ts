@@ -5,14 +5,12 @@
  * - Passwords: bcrypt hashing (native bindings - see package.json; the
  *   $2a$/$2b$ hash format is identical to bcryptjs's, so switching here
  *   doesn't invalidate any password hash already stored in a database)
- * - TOTP: speakeasy library
  * - Access tokens: SHA256 hash of long random token
  * - Always use ISO-8601 dates
  */
 
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
-import speakeasy from 'speakeasy';
 
 /**
  * Generate a long random token (for personal access links)
@@ -57,68 +55,6 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 export const DUMMY_PASSWORD_HASH = bcrypt.hashSync('dummy-password-for-timing-safety', 12);
 
 /**
- * Generate TOTP secret for 2FA setup
- * Returns secret and QR code data URL
- */
-export function generateTOTPSecret(name: string, issuer: string = 'Dienstrooster') {
-  const secret = speakeasy.generateSecret({
-    name: `${issuer} (${name})`,
-    issuer,
-    length: 32,
-  });
-
-  return {
-    secret: secret.base32,
-    qrCode: secret.otpauth_url || '',
-  };
-}
-
-// Per-secret last-accepted time-step, so a TOTP code (or one intercepted
-// in transit) can't be replayed again within its own ±2-window validity
-// - same threat model as a reused password, but a code is only 6 digits
-// and the window deliberately tolerates clock drift, so without this a
-// captured code stays usable for up to ~2.5 minutes. In-memory only:
-// this app runs as a single process (see lib/rateLimit.ts for the same
-// reasoning), and losing this on a restart just re-opens a ~2.5 minute
-// window rather than anything worse.
-const lastUsedTotpStep = new Map<string, number>();
-
-/**
- * Verify a TOTP code, rejecting a code from a time-step already consumed
- * by an earlier successful verification for this secret.
- */
-export function verifyTOTPCode(secret: string, code: string): boolean {
-  const result = speakeasy.totp.verifyDelta({
-    secret,
-    encoding: 'base32',
-    token: code,
-    window: 2, // Allow ±2 time windows (30-second windows)
-  });
-  if (!result) return false;
-
-  const currentStep = Math.floor(Date.now() / 1000 / 30);
-  const usedStep = currentStep + result.delta;
-
-  const lastUsed = lastUsedTotpStep.get(secret);
-  if (lastUsed !== undefined && usedStep <= lastUsed) {
-    return false;
-  }
-
-  lastUsedTotpStep.set(secret, usedStep);
-  return true;
-}
-
-/**
- * Generate a 6-digit TOTP code from secret (for testing)
- */
-export function generateTOTPCode(secret: string): string {
-  return speakeasy.totp({
-    secret,
-    encoding: 'base32',
-  });
-}
-
-/**
  * Constant-time comparison to prevent timing attacks
  */
 export function secureCompare(a: string, b: string): boolean {
@@ -157,11 +93,4 @@ export function validatePasswordStrength(password: string): string[] {
   }
 
   return errors;
-}
-
-/**
- * Validate TOTP code format (6 digits)
- */
-export function isValidTOTPFormat(code: string): boolean {
-  return /^\d{6}$/.test(code);
 }

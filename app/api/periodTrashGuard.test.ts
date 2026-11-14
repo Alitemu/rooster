@@ -77,7 +77,7 @@ async function call(route: Route): Promise<Response> {
   return route.handler(
     new NextRequest(`${url}?period_id=${w.period}`, {
       method: route.method,
-      headers: { 'Content-Type': 'application/json', Cookie: staffCookie(route.path.startsWith('admin/') ? beheerder : w.planner) },
+      headers: { 'Content-Type': 'application/json', Cookie: staffCookie(route.path.startsWith('admin/') || handlerSource(route.path, route.method).includes('requireAdminAccess(') ? beheerder : w.planner) },
       body: route.method === 'GET' ? undefined : body,
     }),
     { params: Promise.resolve(params) }

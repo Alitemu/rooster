@@ -7,8 +7,11 @@
  * Shows requests where user is requester or respondent.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { RuilHerinnering } from '@/components/RuilHerinnering';
+import { foutTekst } from '@/lib/foutTekst';
+import { aantalWachtend, goedkeurVraag } from '@/lib/ruilWachtend';
 
 /** "di 5 jan 2027": a stored YYYY-MM-DD as people read it. */
 function datumTekst(datum: string): string {
@@ -36,6 +39,8 @@ interface SwapRequest {
   gevraagde_type: string;
   opmerkingen: string | null;
   reden_afwijzing: string | null;
+  laatste_herinnering_op: string | null;
+  laatste_herinnering_door: string | null;
   // Only ever true for a request still waiting - see the list route.
   aanvrager_te_dichtbij?: boolean;
   respondent_te_dichtbij?: boolean;
@@ -56,9 +61,81 @@ interface Props {
    * approved swap moves shifts, so the parent reloads the roster itself.
    */
   onSwapsChanged?: () => void;
+  /** How many requests of colleagues wait for this person's answer, each time the list changes (1.5.0). */
+  onWachtend?: (aantal: number) => void;
 }
 
-export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwapsChanged }: Props) {
+const FILTER_STATUSSEN = [
+  ['PENDING', 'In afwachting'],
+  ['GOEDGEKEURD', 'Goedgekeurd'],
+  ['AFGEWEZEN', 'Afgewezen'],
+  ['INGETROKKEN', 'Ingetrokken'],
+] as const;
+
+/** One category of requests (sent or received) with its own status filter, the number behind every option. */
+function Categorie({
+  titel,
+  testid,
+  naam,
+  alle,
+  filter,
+  setFilter,
+  kaart,
+  leeg,
+}: {
+  titel: string;
+  testid: string;
+  naam: string;
+  alle: SwapRequest[];
+  filter: string;
+  setFilter: (value: string) => void;
+  kaart: (swap: SwapRequest) => ReactNode;
+  leeg: string;
+}) {
+  const zichtbaar = filter ? alle.filter((s) => s.status === filter) : alle;
+  return (
+    <section className="space-y-3" data-testid={testid}>
+      <h3 className="text-lg font-semibold">{titel}</h3>
+      <div className="card p-4 bg-neutral-50">
+        <select
+          name={naam}
+          aria-label={`Filter op status: ${titel}`}
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="px-3 py-2 border rounded text-sm"
+        >
+          <option value="">Alle statussen ({alle.length})</option>
+          {FILTER_STATUSSEN.map(([waarde, label]) => (
+            <option key={waarde} value={waarde}>
+              {label} ({alle.filter((s) => s.status === waarde).length})
+            </option>
+          ))}
+        </select>
+      </div>
+      {zichtbaar.length === 0 ? (
+        <div className="card p-6 text-center">
+          <p className="text-neutral-600">{alle.length === 0 ? leeg : 'Geen ruilverzoeken met deze status.'}</p>
+        </div>
+      ) : (
+        <div className="space-y-3">{zichtbaar.map((swap) => kaart(swap))}</div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The filter each list opens with: "In afwachting" when something waits there, otherwise all statuses
+ * (audit 1.2.2: an empty "In afwachting" while the list held approved and rejected requests).
+ */
+export function beginFilters(
+  verzoeken: Array<{ status: string; aanvrager_person_id: string; respondent_person_id: string }>,
+  personId: string
+): { verzonden: string; ontvangen: string } {
+  const open = (wie: 'aanvrager_person_id' | 'respondent_person_id') => verzoeken.some((v) => v[wie] === personId && v.status === 'PENDING');
+  return { verzonden: open('aanvrager_person_id') ? 'PENDING' : '', ontvangen: open('respondent_person_id') ? 'PENDING' : '' };
+}
+
+export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwapsChanged, onWachtend }: Props) {
   // What the last load returned, to notice a background refresh bringing
   // back something different (see onSwapsChanged).
   const lastSignature = useRef<string | null>(null);
@@ -69,10 +146,16 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   // whole panel below) - an approve/reject/cancel failure must not hide
   // the filter and the rest of the list, just report itself.
   const [actionError, setActionError] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState('PENDING');
+  // One filter per category: "Jouw ruilverzoeken" (sent) and "Ontvangen ruilverzoeken" (received).
+  const [filterVerzonden, setFilterVerzonden] = useState('PENDING');
+  const [filterOntvangen, setFilterOntvangen] = useState('PENDING');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+  // Goedkeuren asks first (1.5.0): one tap moved both shifts and there is no way back.
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Bumped after a reminder, so the card shows when it went.
+  const [herlaad, setHerlaad] = useState(0);
 
   useEffect(() => {
     // Same reason as NotificationCenter's list: changing the status filter
@@ -88,8 +171,8 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       if (!silent) setError(null);
 
       try {
-        let url = withBasePath(`/api/person/${personId}/swap-requests?period_id=${periodId}`);
-        if (filterStatus) url += `&status=${filterStatus}`;
+        // All of them: the counts behind the filters need every status.
+        const url = withBasePath(`/api/person/${personId}/swap-requests?period_id=${periodId}`);
 
         const res = await fetch(url);
         if (!res.ok) throw new Error('Laden van ruilverzoeken mislukt');
@@ -103,9 +186,13 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
         }
         lastSignature.current = signature;
         setSwapRequests(data.data.swap_requests);
+        // A load that works again takes an earlier failure away.
+        setError(null);
       } catch (err) {
         if (!current) return;
-        setError(err instanceof Error ? err.message : 'Laden van ruilverzoeken mislukt');
+        // A background refresh that fails (a moment without signal) keeps the list that is on screen: only
+        // the first load, or one the person asked for, replaces the panel by an error.
+        if (!silent) setError(foutTekst(err, 'Laden van ruilverzoeken mislukt'));
       } finally {
         if (current) setLoading(false);
       }
@@ -115,7 +202,7 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
 
     // The other side of a swap acts somewhere else: a colleague approving
     // or rejecting your request never touched this page, so the list kept
-    // showing it as "In behandeling" until a full reload. Refresh when you
+    // showing it as "In afwachting" until a full reload. Refresh when you
     // come back to the tab, and every 20 seconds while it's visible.
     const refreshIfVisible = () => {
       if (document.visibilityState === 'visible') loadSwaps(true);
@@ -129,37 +216,55 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       document.removeEventListener('visibilitychange', refreshIfVisible);
       window.removeEventListener('focus', refreshIfVisible);
     };
-  }, [personId, periodId, filterStatus, refreshKey]);
+  }, [personId, periodId, refreshKey, herlaad]);
 
   // A new request is always "in afwachting" - switch to that filter so it
   // is actually in the list you're looking at, whichever one was chosen.
   useEffect(() => {
-    if (refreshKey > 0) setFilterStatus('PENDING');
+    if (refreshKey > 0) setFilterVerzonden('PENDING');
   }, [refreshKey]);
+
+  // With nothing in afwachting the list stood on "In afwachting" and looked empty (audit 1.2.2). After
+  // the first load a list without an open request shows all of them; a choice made later stays.
+  const eersteLading = useRef(true);
+  useEffect(() => {
+    if (loading || error || !eersteLading.current) return;
+    eersteLading.current = false;
+    const filters = beginFilters(swapRequests, personId);
+    setFilterVerzonden(filters.verzonden);
+    setFilterOntvangen(filters.ontvangen);
+  }, [loading, error, swapRequests, personId]);
+
+  // One approve, reject or withdraw at a time: a double click used to send two, and the second one answered
+  // with an error next to the success of the first.
+  const [bezig, setBezig] = useState(false);
+  const meldingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (meldingTimer.current) clearTimeout(meldingTimer.current);
+  }, []);
 
   const showSuccess = (message: string) => {
     setSuccessMessage(message);
-    setTimeout(() => setSuccessMessage(null), 5000);
+    // A newer message gets its full five seconds: the timer of an earlier one must not clear it early.
+    if (meldingTimer.current) clearTimeout(meldingTimer.current);
+    meldingTimer.current = setTimeout(() => setSuccessMessage(null), 5000);
   };
 
-  // Updates the swap's status in place rather than always removing it from
-  // the list - removing unconditionally was only correct while filtering
-  // on PENDING; with "Alle statussen" (or any filter that still matches
-  // the new status) the row used to just vanish instead of showing its new
-  // badge. The list itself is fetched pre-filtered by ?status=, so a swap
-  // whose new status no longer matches the active filter is dropped here
-  // to stay consistent with what a fresh reload would show.
+  // Updates the swap's status in place: the lists filter on it themselves,
+  // so a swap whose new status no longer matches a filter leaves that list
+  // as a fresh reload would show it, and the counts behind the filters follow.
   const updateSwapStatus = (swapId: string, newStatus: string) => {
-    setSwapRequests((prev) => {
-      const updated = prev.map((s) => (s.id === swapId ? { ...s, status: newStatus } : s));
-      if (filterStatus && filterStatus !== newStatus) {
-        return updated.filter((s) => s.id !== swapId);
-      }
-      return updated;
-    });
+    setSwapRequests((prev) => prev.map((s) => (s.id === swapId ? { ...s, status: newStatus } : s)));
   };
+
+  // The header of Ruilen (components/PersonalRosterView.tsx) follows the list while it is on screen.
+  useEffect(() => {
+    if (!loading && !error) onWachtend?.(aantalWachtend(swapRequests, personId));
+  }, [swapRequests, loading, error]);
 
   const handleApprove = async (swapId: string) => {
+    if (bezig) return;
+    setBezig(true);
     setActionError(null);
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/approve`), {
@@ -190,11 +295,16 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       // The two shifts just changed hands - the roster above must show it.
       onSwapsChanged?.();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Goedkeuren van ruil mislukt');
+      setActionError(foutTekst(err, 'Goedkeuren van ruil mislukt'));
+    } finally {
+      setBezig(false);
+      setApprovingId(null);
     }
   };
 
   const handleReject = async (swapId: string, reason?: string) => {
+    if (bezig) return;
+    setBezig(true);
     setActionError(null);
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/reject`), {
@@ -205,19 +315,23 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
 
       if (!res.ok) {
         const data = await res.json().catch(() => null);
-        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Weigeren van ruil mislukt');
+        throw new Error((typeof data?.error === 'string' ? data.error : data?.error?.message) || 'Afwijzen van ruil mislukt');
       }
 
       updateSwapStatus(swapId, 'AFGEWEZEN');
       setRejectingId(null);
       setRejectionReason('');
-      showSuccess('Ruil geweigerd');
+      showSuccess('Ruil afgewezen');
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Weigeren van ruil mislukt');
+      setActionError(foutTekst(err, 'Afwijzen van ruil mislukt'));
+    } finally {
+      setBezig(false);
     }
   };
 
   const handleCancel = async (swapId: string) => {
+    if (bezig) return;
+    setBezig(true);
     setActionError(null);
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/swap-requests/${swapId}/cancel`), {
@@ -232,7 +346,9 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
       updateSwapStatus(swapId, 'INGETROKKEN');
       showSuccess('Ruilverzoek ingetrokken');
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Intrekken van ruilverzoek mislukt');
+      setActionError(foutTekst(err, 'Intrekken van ruilverzoek mislukt'));
+    } finally {
+      setBezig(false);
     }
   };
 
@@ -250,10 +366,199 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
   };
 
   const statusLabels: Record<string, string> = {
-    PENDING: 'In behandeling',
+    PENDING: 'In afwachting',
     GOEDGEKEURD: 'Goedgekeurd',
-    AFGEWEZEN: 'Geweigerd',
+    AFGEWEZEN: 'Afgewezen',
     INGETROKKEN: 'Ingetrokken',
+  };
+
+  const kaart = (swap: SwapRequest) => {
+          const isRequester = swap.aanvrager_person_id === personId;
+          const isRespondent = swap.respondent_person_id === personId;
+          const isPending = swap.status === 'PENDING';
+
+          return (
+            <div
+              key={swap.id}
+              data-status={swap.status}
+              className="card p-4 border-l-4 border-blue-600"
+            >
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusBadges[swap.status]}`}>
+                      {statusLabels[swap.status]}
+                    </span>
+                    {isRequester && (
+                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                        Door jou aangevraagd
+                      </span>
+                    )}
+                    {isRespondent && isPending && (
+                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
+                        Wacht op jouw goedkeuring
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-sm mb-2">
+                    <p className="font-semibold text-neutral-900">
+                      {isRequester
+                        ? `Jij → ${swap.respondent_codenaam}`
+                        : `${swap.aanvrager_codenaam} → Jij`}
+                    </p>
+                  </div>
+
+                  <div className="bg-neutral-50 rounded p-3 text-sm space-y-1 mb-2">
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <span className="text-neutral-600">Aangeboden:</span>
+                      <span className="font-medium">
+                        {datumTekst(swap.aangeboden_datum)} ({shiftTypeNames[swap.aangeboden_type]})
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap justify-between gap-x-2">
+                      <span className="text-neutral-600">Gevraagd:</span>
+                      <span className="font-medium">
+                        {datumTekst(swap.gevraagde_datum)} ({shiftTypeNames[swap.gevraagde_type]})
+                      </span>
+                    </div>
+                  </div>
+
+                  {swap.opmerkingen && (
+                    <p className="text-sm text-neutral-700 italic mb-2">
+                      &ldquo;{swap.opmerkingen}&rdquo;
+                    </p>
+                  )}
+
+                  {swap.status === 'PENDING' &&
+                    ((swap.respondent_person_id === personId && swap.respondent_te_dichtbij) ||
+                      (swap.aanvrager_person_id === personId && swap.aanvrager_te_dichtbij)) && (
+                      <p className="text-sm text-amber-800 mb-2">
+                        ⚠️ Na deze ruil heb je twee diensten kort op elkaar (binnen het venster tussen
+                        diensten). Dat mag, als je dat zelf wilt.
+                      </p>
+                    )}
+
+                  {swap.reden_afwijzing && (
+                    <p className="text-sm text-neutral-700 mb-2">
+                      Reden van afwijzen: &ldquo;{swap.reden_afwijzing}&rdquo;
+                    </p>
+                  )}
+
+                  <p className="text-xs text-neutral-500">
+                    {new Date(swap.aangemaakt_op).toLocaleDateString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </p>
+
+                  {isPending && isRequester && (
+                    <RuilHerinnering
+                      stuur={() => fetch(withBasePath(`/api/person/${personId}/swap-requests/${swap.id}/remind`), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bevestigd: true }) })}
+                      laatste={swap.laatste_herinnering_op}
+                      door={swap.laatste_herinnering_door}
+                      eigen
+                      onKlaar={() => setHerlaad((n) => n + 1)}
+                    />
+                  )}
+                </div>
+
+                {/* Actions */}
+                {isPending && isRespondent && rejectingId !== swap.id && approvingId !== swap.id && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setApprovingId(swap.id);
+                        setActionError(null);
+                      }}
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                    >
+                      Goedkeuren
+                    </button>
+                    <button
+                      onClick={() => {
+                        setRejectingId(swap.id);
+                        setApprovingId(null);
+                        setRejectionReason('');
+                      }}
+                      className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
+                    >
+                      Afwijzen
+                    </button>
+                  </div>
+                )}
+                {isPending && isRequester && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleCancel(swap.id)}
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
+                    >
+                      Intrekken
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {isPending && isRespondent && approvingId === swap.id && (
+                <div className="mt-3 pt-3 border-t space-y-2" data-testid="ruil-goedkeuren-vraag">
+                  <p className="text-sm text-neutral-900">
+                    {goedkeurVraag({
+                      geef: datumTekst(swap.gevraagde_datum),
+                      krijg: datumTekst(swap.aangeboden_datum),
+                      van: swap.aanvrager_codenaam,
+                    })}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApprove(swap.id)}
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-green-700 text-white hover:bg-green-800 disabled:opacity-50 transition-colors"
+                    >
+                      Ja, ruilen
+                    </button>
+                    <button
+                      onClick={() => setApprovingId(null)}
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {isPending && isRespondent && rejectingId === swap.id && (
+                <div className="mt-3 pt-3 border-t space-y-2">
+                  <label htmlFor={`reden-${swap.id}`} className="block text-xs font-medium text-neutral-700">
+                    Reden (optioneel)
+                  </label>
+                  <textarea
+                    id={`reden-${swap.id}`}
+                    name="rejection-reason"
+                    maxLength={1000}
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
+                    rows={2}
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleReject(swap.id, rejectionReason)}
+                      disabled={bezig}
+                      className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      Afwijzen
+                    </button>
+                    <button
+                      onClick={() => setRejectingId(null)}
+                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                    >
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
   };
 
   if (loading) {
@@ -292,173 +597,26 @@ export function SwapManagementPanel({ personId, periodId, refreshKey = 0, onSwap
         </div>
       )}
 
-      {/* Filter */}
-      <div className="card p-4 bg-neutral-50">
-        <select
-          name="status-filter"
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-3 py-2 border rounded text-sm"
-        >
-          <option value="">Alle statussen</option>
-          <option value="PENDING">In behandeling</option>
-          <option value="GOEDGEKEURD">Goedgekeurd</option>
-          <option value="AFGEWEZEN">Geweigerd</option>
-          <option value="INGETROKKEN">Ingetrokken</option>
-        </select>
-      </div>
-
-      {/* Swap Requests */}
-      {swapRequests.length === 0 && (
-        <div className="card p-8 text-center">
-          <p className="text-neutral-600">Geen ruilverzoeken gevonden</p>
-        </div>
-      )}
-
-      <div className="space-y-3">
-        {swapRequests.map((swap) => {
-          const isRequester = swap.aanvrager_person_id === personId;
-          const isRespondent = swap.respondent_person_id === personId;
-          const isPending = swap.status === 'PENDING';
-
-          return (
-            <div
-              key={swap.id}
-              data-status={swap.status}
-              className="card p-4 border-l-4 border-blue-600"
-            >
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${statusBadges[swap.status]}`}>
-                      {statusLabels[swap.status]}
-                    </span>
-                    {isRequester && (
-                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                        Door jou aangevraagd
-                      </span>
-                    )}
-                    {isRespondent && isPending && (
-                      <span className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
-                        Wacht op jouw goedkeuring
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="text-sm mb-2">
-                    <p className="font-semibold text-neutral-900">
-                      {isRequester
-                        ? `Jij → ${swap.respondent_codenaam}`
-                        : `${swap.aanvrager_codenaam} → Jij`}
-                    </p>
-                  </div>
-
-                  <div className="bg-neutral-50 rounded p-3 text-sm space-y-1 mb-2">
-                    <div className="flex justify-between">
-                      <span className="text-neutral-600">Aangeboden:</span>
-                      <span className="font-medium">
-                        {datumTekst(swap.aangeboden_datum)} ({shiftTypeNames[swap.aangeboden_type]})
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-neutral-600">Gevraagd:</span>
-                      <span className="font-medium">
-                        {datumTekst(swap.gevraagde_datum)} ({shiftTypeNames[swap.gevraagde_type]})
-                      </span>
-                    </div>
-                  </div>
-
-                  {swap.opmerkingen && (
-                    <p className="text-sm text-neutral-700 italic mb-2">
-                      &ldquo;{swap.opmerkingen}&rdquo;
-                    </p>
-                  )}
-
-                  {swap.status === 'PENDING' &&
-                    ((swap.respondent_person_id === personId && swap.respondent_te_dichtbij) ||
-                      (swap.aanvrager_person_id === personId && swap.aanvrager_te_dichtbij)) && (
-                      <p className="text-sm text-amber-800 mb-2">
-                        ⚠️ Na deze ruil heb je twee diensten kort op elkaar (binnen het venster tussen
-                        diensten). Dat mag, als je dat zelf wilt.
-                      </p>
-                    )}
-
-                  {swap.reden_afwijzing && (
-                    <p className="text-sm text-neutral-700 mb-2">
-                      Reden van afwijzen: &ldquo;{swap.reden_afwijzing}&rdquo;
-                    </p>
-                  )}
-
-                  <p className="text-xs text-neutral-500">
-                    {new Date(swap.aangemaakt_op).toLocaleDateString('nl-NL')}
-                  </p>
-                </div>
-
-                {/* Actions */}
-                {isPending && isRespondent && rejectingId !== swap.id && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleApprove(swap.id)}
-                      className="px-3 py-1 rounded text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors"
-                    >
-                      Goedkeuren
-                    </button>
-                    <button
-                      onClick={() => {
-                        setRejectingId(swap.id);
-                        setRejectionReason('');
-                      }}
-                      className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
-                    >
-                      Weigeren
-                    </button>
-                  </div>
-                )}
-                {isPending && isRequester && (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleCancel(swap.id)}
-                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-                    >
-                      Intrekken
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {isPending && isRespondent && rejectingId === swap.id && (
-                <div className="mt-3 pt-3 border-t space-y-2">
-                  <label className="block text-xs font-medium text-neutral-700">
-                    Reden (optioneel)
-                  </label>
-                  <textarea
-                    name="rejection-reason"
-                    maxLength={1000}
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    rows={2}
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleReject(swap.id, rejectionReason)}
-                      className="px-3 py-1 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors"
-                    >
-                      Weigeren
-                    </button>
-                    <button
-                      onClick={() => setRejectingId(null)}
-                      className="px-3 py-1 rounded text-sm font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-                    >
-                      Annuleren
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      <Categorie
+        titel="Jouw ruilverzoeken"
+        testid="swap-verzonden"
+        naam="status-filter-verzonden"
+        alle={swapRequests.filter((s) => s.aanvrager_person_id === personId)}
+        filter={filterVerzonden}
+        setFilter={setFilterVerzonden}
+        kaart={kaart}
+        leeg="Je hebt geen ruilverzoeken gedaan."
+      />
+      <Categorie
+        titel="Ontvangen ruilverzoeken"
+        testid="swap-ontvangen"
+        naam="status-filter-ontvangen"
+        alle={swapRequests.filter((s) => s.respondent_person_id === personId)}
+        filter={filterOntvangen}
+        setFilter={setFilterOntvangen}
+        kaart={kaart}
+        leeg="Je hebt geen ruilverzoeken ontvangen."
+      />
     </div>
   );
 }

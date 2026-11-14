@@ -4,6 +4,7 @@
  * POST /api/planner/periods - Create new period for planner
  */
 
+import { isDeadlineText } from '@/lib/periodInputGate';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -46,6 +47,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const body = await parseJsonBody<CreatePeriodRequest>(req);
 
+    if (body.pool_id && typeof body.pool_id !== 'string') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_INPUT', message: 'pool_id moet een tekst zijn' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
     if (!body.naam || !body.pool_id || !body.start_datum || !body.eind_datum || !body.deadline) {
       const response: ApiErrorResponse = {
         success: false,
@@ -100,7 +108,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const end = parseISO(body.eind_datum);
     const deadline = new Date(body.deadline);
 
-    if (isNaN(deadline.getTime())) {
+    if (!isDeadlineText(body.deadline) || isNaN(deadline.getTime())) {
       const response: ApiErrorResponse = {
         success: false,
         error: {
@@ -156,7 +164,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!poolExists || !staffMayAccessPool(auth!, body.pool_id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'POOL_NOT_FOUND', message: `Pool ${body.pool_id} niet gevonden` },
+        error: { code: 'POOL_NOT_FOUND', message: 'Pool niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

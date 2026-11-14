@@ -30,6 +30,7 @@ import { db } from '@/db/client';
 import { deadlinePassed } from '@/lib/aiosInvoer';
 import { buildVerzendlijst } from '@/lib/aiosVerzendlijst';
 import { aiosMailIngesteld, verstuurAiosVerzendlijst } from '@/lib/aiosMail';
+import { claimAiosVerzending } from '@/lib/aiosInFlight';
 import {
   aiosHerinnering,
   aiosMailBasisUrl,
@@ -169,60 +170,67 @@ export async function runAiosAutoHerinneringen(
       continue;
     }
 
-    const claimId = crypto.randomUUID();
-    const geclaimd = claim().run(
-      claimId,
-      period.id,
-      versturen.dagen,
-      period.deadline,
-      versturen.moment.toISOString(),
-      'VERSTUURD',
-      now.toISOString()
-    );
-    if (geclaimd.changes === 0) continue; // another tick got there first
+    // Not next to a send by hand (lib/aiosInFlight.ts): left unclaimed, the next tick tries again.
+    const release = claimAiosVerzending(`herinneren:${period.id}`);
+    if (!release) continue;
+    try {
+      const claimId = crypto.randomUUID();
+      const geclaimd = claim().run(
+        claimId,
+        period.id,
+        versturen.dagen,
+        period.deadline,
+        versturen.moment.toISOString(),
+        'VERSTUURD',
+        now.toISOString()
+      );
+      if (geclaimd.changes === 0) continue; // another tick got there first
 
-    const laatste = versturen.dagen === laatsteDagen;
-    const naar = ontvangers(period, now);
-    const bezig = naar.filter((o) => o.groep === 'BEZIG').length;
-    db.prepare('UPDATE dienstrooster_reminder_run SET aantal_niet_begonnen = ?, aantal_bezig = ? WHERE id = ?').run(
-      naar.length - bezig,
-      bezig,
-      claimId
-    );
-    if (naar.length === 0) {
-      uitkomsten.push({ periodId: period.id, dagen: versturen.dagen, uitkomst: 'VERSTUURD', aantal: 0 });
-      continue;
-    }
+      const laatste = versturen.dagen === laatsteDagen;
+      const naar = ontvangers(period, now);
+      const bezig = naar.filter((o) => o.groep === 'BEZIG').length;
+      db.prepare('UPDATE dienstrooster_reminder_run SET aantal_niet_begonnen = ?, aantal_bezig = ? WHERE id = ?').run(
+        naar.length - bezig,
+        bezig,
+        claimId
+      );
+      if (naar.length === 0) {
+        uitkomsten.push({ periodId: period.id, dagen: versturen.dagen, uitkomst: 'VERSTUURD', aantal: 0 });
+        continue;
+      }
 
-    const berichten = db.transaction(() =>
-      naar.map((o) => aiosHerinnering(period, o, aiosPersoonlijkeLink(o.id, period.id, basisUrl), laatste))
-    )();
-    const verstuurd = await verstuurAiosVerzendlijst(
-      buildVerzendlijst(
-        {
-          soort: laatste ? 'LAATSTE_HERINNERING' : 'HERINNERING',
-          automatisch: true,
-          periode: period.naam,
-          deadline: period.deadline,
-          groepen: { nog_niets_ingevuld: naar.length - bezig, nog_niet_ingediend: bezig },
-        },
-        berichten,
+      const berichten = db.transaction(() =>
+        naar.map((o) => aiosHerinnering(period, o, aiosPersoonlijkeLink(o.id, period.id, basisUrl), laatste))
+      )();
+      const verstuurd = await verstuurAiosVerzendlijst(
+        buildVerzendlijst(
+          {
+            soort: laatste ? 'LAATSTE_HERINNERING' : 'HERINNERING',
+            automatisch: true,
+            periode: period.naam,
+            deadline: period.deadline,
+            groepen: { nog_niets_ingevuld: naar.length - bezig, nog_niet_ingediend: bezig },
+          },
+          berichten,
+          now
+        )
+      );
+      if (!verstuurd.ok) {
+        db.prepare('DELETE FROM dienstrooster_reminder_run WHERE id = ?').run(claimId);
+        console.error(`[aios-herinneringen] ${period.naam}: niet verstuurd, volgende keer opnieuw: ${verstuurd.message}`);
+        uitkomsten.push({ periodId: period.id, dagen: versturen.dagen, uitkomst: 'MISLUKT', message: verstuurd.message });
+        continue;
+      }
+      logAiosHerinneringen(
+        naar.map((o) => o.id),
+        period.id,
+        laatste,
         now
-      )
-    );
-    if (!verstuurd.ok) {
-      db.prepare('DELETE FROM dienstrooster_reminder_run WHERE id = ?').run(claimId);
-      console.error(`[aios-herinneringen] ${period.naam}: niet verstuurd, volgende keer opnieuw: ${verstuurd.message}`);
-      uitkomsten.push({ periodId: period.id, dagen: versturen.dagen, uitkomst: 'MISLUKT', message: verstuurd.message });
-      continue;
+      );
+      uitkomsten.push({ periodId: period.id, dagen: versturen.dagen, uitkomst: 'VERSTUURD', aantal: naar.length });
+    } finally {
+      release();
     }
-    logAiosHerinneringen(
-      naar.map((o) => o.id),
-      period.id,
-      laatste,
-      now
-    );
-    uitkomsten.push({ periodId: period.id, dagen: versturen.dagen, uitkomst: 'VERSTUURD', aantal: naar.length });
   }
   return uitkomsten;
 }

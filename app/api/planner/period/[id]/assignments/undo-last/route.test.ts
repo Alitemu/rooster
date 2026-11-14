@@ -8,6 +8,7 @@ import { POST as reassign } from '../[assignment-id]/reassign/route';
 import { DELETE as deleteAssignment } from '../[assignment-id]/delete/route';
 import { POST as undoLast } from './route';
 import { GET as pendingUndo } from '../pending-undo/route';
+import { UNDO_VENSTER_SECONDEN } from '@/lib/pendingUndo';
 
 /**
  * The hard rule this file exists to prove: undoing the last action reverses
@@ -294,5 +295,37 @@ describe('POST /api/planner/period/[id]/assignments/undo-last', () => {
     await doUndo(f);
     const after = await (await doPending(f)).json();
     expect(after.data.pending).toBeNull();
+  });
+
+  it('reports the id and the seconds left, so the page can hide what it found at opening', async () => {
+    const f = createFixture(1);
+    await doManualAssign(f, f.slotIds[0], f.personIds[0]);
+    const { pending } = (await (await doPending(f)).json()).data;
+    expect(typeof pending.id).toBe('string');
+    expect(pending.verloopt_over_seconden).toBeGreaterThan(100);
+    expect(pending.verloopt_over_seconden).toBeLessThanOrEqual(UNDO_VENSTER_SECONDEN);
+  });
+
+  it('is only for the acute moment: after two minutes the change cannot be undone, by the button or by a request', async () => {
+    const f = createFixture(1);
+    await doManualAssign(f, f.slotIds[0], f.personIds[0]);
+    expect(assignmentFor(f.periodId, f.slotIds[0])).toBeDefined();
+    // Made 3 minutes ago.
+    db.prepare("UPDATE dienstrooster_pending_undo SET aangemaakt_op = datetime('now', '-3 minutes') WHERE scope_id = ?").run(f.periodId);
+
+    expect((await (await doPending(f)).json()).data.pending).toBeNull();
+    const res = await doUndo(f);
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe('NOTHING_TO_UNDO');
+    // Nothing was undone.
+    expect(assignmentFor(f.periodId, f.slotIds[0])).toBeDefined();
+  });
+
+  it('can still be undone just inside the two minutes', async () => {
+    const f = createFixture(1);
+    await doManualAssign(f, f.slotIds[0], f.personIds[0]);
+    db.prepare("UPDATE dienstrooster_pending_undo SET aangemaakt_op = datetime('now', '-110 seconds') WHERE scope_id = ?").run(f.periodId);
+    expect((await doUndo(f)).status).toBe(200);
+    expect(assignmentFor(f.periodId, f.slotIds[0])).toBeUndefined();
   });
 });

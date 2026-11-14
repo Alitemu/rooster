@@ -24,11 +24,13 @@ import { db } from '@/db/client';
 import { objectRows, optionalText } from '@/lib/requestFields';
 import { aiosSolverInvoer, type AiosSolverAios, type AiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 import { aiosWerkdagen, dienstpercentage, PERCENTAGE_GRENS } from '@/lib/aiosFte';
+import { aiosDienstType, type AiosCode } from '@/lib/aiosDiensten';
 import { controleerAiosRooster, regelZin, type Overtreding, type Regel } from '@/lib/aiosRegels';
 import { aiosDeelnemers, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
-import { sluitVervallenAiosRuilen } from '@/lib/aiosRuilen';
+import { loadAlleAiosRedenen } from '@/lib/aiosReden';
+import { meldAiosRuilenIngetrokken, trekOnmogelijkeAiosRuilenIn, type IngetrokkenRuil } from '@/lib/aiosRuilen';
 
 // What the marks say instead: a planner overriding a mark is told it as the mark.
 const ALS_MARKERING: ReadonlySet<Regel> = new Set(['1_GEBLOKKEERD', '1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT', '1_AFWEZIG_OF_PARTTIME']);
@@ -117,7 +119,25 @@ function waarschuwingen(ctx: Context, a: AiosSolverAios, diensten: string[], voo
     uit.push({ code: 'LIEVER_NIET', tekst: `Liever niet op ${lijst([...op('LIEVER_NIET', 'MANUAL'), ...op('LIEVER_NIET', 'ABSENCE')])}.` });
   }
   const nieuw = erbij(vanAios(ctx.invoer, voor, a.id), vanAios(ctx.invoer, na, a.id));
-  for (const regel of new Set(nieuw.map((s) => (JSON.parse(s) as Overtreding)[0]))) uit.push({ code: regel, tekst: regelZin(regel) });
+  // Two diensten on one day get a warning of their own that names the other dienst: the planner is
+  // asked whether that is meant (never refused, as with the rest), and the other dienst stays.
+  const metAnderen = new Map<string, string[]>();
+  for (const s of nieuw) {
+    const [regel, , ids] = JSON.parse(s) as Overtreding;
+    if (regel !== '3_TWEE_OP_EEN_DAG') continue;
+    for (const id of ids.filter((x) => !diensten.includes(x))) {
+      const d = ctx.dienst.get(id)!;
+      metAnderen.set(d.datum, [...(metAnderen.get(d.datum) ?? []), aiosDienstType(d.code as AiosCode).naam.toLowerCase()]);
+    }
+  }
+  if (metAnderen.size > 0) {
+    const lijst = [...metAnderen].sort(([x], [y]) => x.localeCompare(y)).map(([datum, namen]) => `${datumKort(datum)} (${namen.join(' en ')})`);
+    uit.push({ code: '3_TWEE_OP_EEN_DAG', tekst: `Heeft op ${lijst.join(', ')} al een andere dienst. Een AIOS kan maar één dienst per dag doen. Die dienst blijft staan.` });
+  }
+  for (const regel of new Set(nieuw.map((s) => (JSON.parse(s) as Overtreding)[0]))) {
+    if (regel === '3_TWEE_OP_EEN_DAG' && metAnderen.size > 0) continue;
+    uit.push({ code: regel, tekst: regelZin(regel) });
+  }
   const pct = percentage(ctx, a, na);
   if (pct !== null && pct > PERCENTAGE_GRENS) {
     uit.push({ code: 'BOVEN_25', tekst: `Dienstpercentage daarna ${(pct * 100).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%: boven 25%.` });
@@ -143,6 +163,8 @@ export interface Kandidaat {
   waarschuwingen: Waarschuwing[];
   voorkeur: boolean;
   percentage_na: number | null;
+  /** Why the AIOS marked a day of these diensten geblokkeerd or liever niet, in their words (lib/aiosReden.ts): the planner's alone. */
+  toelichtingen: Array<{ datum: string; tekst: string }>;
 }
 
 export type DienstKeuze = { ok: true; diensten: string[] } | { ok: false; message: string };
@@ -194,6 +216,8 @@ export function aiosKandidaten(period: AiosUitnodigPeriode, diensten: string[]):
   const ctx = context(period);
   const voor = huidigRooster(period.id);
   const codenaam = new Map(aiosDeelnemers(period).map((p) => [p.id, p.codenaam]));
+  const redenen = loadAlleAiosRedenen(period.id);
+  const datums = [...new Set(diensten.map((id) => ctx.dienst.get(id)!.datum))].sort();
   const uit = ctx.invoer.aios.map((a): Kandidaat => {
     const na = new Map(voor);
     for (const id of diensten) na.set(id, a.id);
@@ -210,6 +234,11 @@ export function aiosKandidaten(period: AiosUitnodigPeriode, diensten: string[]):
       waarschuwingen: reden || nu ? [] : [...waarschuwingen(ctx, a, diensten, voor, na), ...[blokNietHeel(ctx, diensten, na)].filter((w) => w !== null)],
       voorkeur: diensten.some((id) => markering.get(id) === 'VOORKEUR'),
       percentage_na: percentage(ctx, a, na),
+      // Who has it already, or cannot have it at all, has nothing to explain.
+      toelichtingen:
+        reden || nu
+          ? []
+          : datums.flatMap((datum) => (redenen.has(`${a.id}|${datum}`) ? [{ datum, tekst: redenen.get(`${a.id}|${datum}`)! }] : [])),
     };
   });
   uit.sort(
@@ -279,6 +308,7 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
 
   const op = new Date().toISOString();
   let gevolgen: Waarschuwing[] = [];
+  let ingetrokken: IngetrokkenRuil[] = [];
   const geschreven = db.transaction(() => {
     const voor = huidigRooster(period.id);
     if (wijzigingen.some((w) => (voor.get(w.dienst_id) ?? null) !== w.was)) return false;
@@ -317,8 +347,8 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
     const blok = blokNietHeel(ctx, ids, na);
     if (blok) gevolgen.push(blok);
     gevolgen = gevolgen.filter((w, i) => gevolgen.findIndex((x) => x.tekst === w.tekst) === i);
-    // A swap asked for one of these diensten can never go through now.
-    sluitVervallenAiosRuilen(period.id);
+    // A swap asked for one of these diensten can never go through now: withdrawn, those involved are told after the commit.
+    ingetrokken = trekOnmogelijkeAiosRuilenIn(period.id);
     db.prepare(
       `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, oud_json, nieuw_json, tijdstip)
        VALUES (?, ?, 'period', ?, 'UPDATE', ?, ?, ?)`
@@ -338,5 +368,6 @@ export function wijzigAiosRooster(period: AiosUitnodigPeriode, invoer: unknown, 
     return true;
   })();
   if (!geschreven) return nee(409, 'STALE', AIOS_ROOSTER_VERANDERD);
+  meldAiosRuilenIngetrokken(period, ingetrokken);
   return { ok: true, waarschuwingen: gevolgen, terug: wijzigingen.map((w) => ({ dienst_id: w.dienst_id, aios_id: w.was, was: w.aios_id })) };
 }

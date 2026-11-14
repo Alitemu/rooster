@@ -45,6 +45,10 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   which no code did.
 - **Freeze ruleset** when period opens (no retroactive rule changes)
 - **Row versioning** for optimistic concurrency on mutable periods
+- **The AIOS's deadline** (0.809.0) is guarded by the deadline the planner saw (`was`), not by row_version: its pages
+  never carry the row_version, and the deadline is what two people overwrite. A different `was` answers 409
+  `DEADLINE_CONFLICT`; the UPDATE itself checks the deadline it read, so a change in between is caught too
+  (lib/aiosStatus.ts, app/api/aios/aiosApart.test.ts).
 - **Back to OPEN** (`POST /api/periods/[id]/reopen`, "Terug naar open" in
   the period header, two clicks): from GESLOTEN or GEGENEREERD. From
   GEGENEREERD the SOLVER rows and the pending undo go; MANUAL/OVERRIDE rows
@@ -59,8 +63,23 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   start. Not from GEPUBLICEERD (409, unpublish first), nor without a
   generated roster or while a generation runs (409). Audit-logged. Swap
   requests play no part: they only exist on a published roster.
+- **Order of periods** (lib/periodVolgorde.ts): a period is generated and
+  published only after the latest period of its pool before it is
+  published (409 VORIGE_PERIODE_NIET_GEPUBLICEERD, with the name and the
+  state of that one). A period in the prullenbak does not count. Its saldo
+  comes from that one (lib/previousPeriod.ts), so skipping it books the
+  difference twice or not at all. Generating needs GESLOTEN (or
+  GEGENEREERD, to go again), so preferences and absences are fixed.
+  Reopening (back to OPEN) catches up the part-time and absence blocks
+  that only follow changes while a period is OPEN, wipes the frozen
+  deelnamefactoren and is refused (409) once the period has started.
+- **Membership and a roster**: changing or removing a membership on days
+  that fall in a GEGENEREERD or GEPUBLICEERD period answers 409
+  LIDMAATSCHAP_RAAKT_ROOSTER until the planner confirms (`bevestigd: true`,
+  `?bevestigd=1` for DELETE; lib/membershipRooster.ts). The roster does not
+  change with it.
 - **Rename** (`PATCH /api/periods/[id]` `{naam}`, "Naam wijzigen" in the
-  period list's row): any status, checked like a new period's name
+  period list's row): any status but not in the prullenbak (404 there), checked like a new period's name
   (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),
   audit-logged. Mails already sent keep the old name.
 - **The prullenbak** (lib/periodTrash.ts): any status may go in, a
@@ -81,6 +100,14 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   (audit 13). Restoring refuses days another period took meanwhile (409
   PERIOD_OVERLAP, lib/periodOverlap.ts); a draft comes back whatever its
   dates.
+- **A generation and the prullenbak (0.112.0):** a period is not put in the
+  prullenbak while a generation runs for it (409 GENERATION_RUNNING), and a
+  roster that comes back from the solver after it went there by another way
+  is not written (the apply transaction asks verwijderd_op too, for the
+  achterwacht and the AIOS: the prullenbak bumps no row_version). The factors
+  a generation holds (dienstrooster_period_factor) go back to what they
+  were when it ends without a roster: failed, no solution, a conflict, a
+  lost connection to the solver.
 - **Nothing changes in the prullenbak** (lib/periodTrash.ts
   trashedPeriodDenial, the full audit, 0.86.0): every changing
   achterwacht route under a period's path answers 409 PERIOD_TRASHED
@@ -89,8 +116,13 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   The period page still opened from a bookmark or a tab left open, and
   from there it was opened, generated and published: the verzendlijst
   told everyone about a roster none of them could open. Only "Terug naar
-  open" and "Rooster verwijderen" asked. Reading still works, and the
-  page says where the period is (`data-testid="in-prullenbak"`). A
+  open" and "Rooster verwijderen" asked. Since 0.96.0 the period page of a
+  period in the prullenbak shows nothing of it (components/PeriodeVerwijderd.tsx,
+  `data-testid="periode-verwijderd"`): a planner is told to bring it back
+  through the Prullenbak, a participant with their link is told to ask a
+  new one on the startpagina ("Link kwijt?"). The same for the AIOS: its
+  verify-link answers 410 PERIOD_DELETED for a link of its own period in the
+  prullenbak, and both participant pages show that page. A
   planner acting for a participant loses it too (lib/periodAccess.ts
   periodUsableFor). app/api/periodTrashGuard.test.ts sweeps both halves:
   the source of every changing handler, and every one of them called on
@@ -183,4 +215,102 @@ roster needs a reason, as here. What follows is the achterwacht's.)
   fields and snapshot (publishing again starts voorlopig), keeps every assignment
   (withdrawing is not discarding the roster), keeps notifications already
   sent (a historical record) and sends a new one telling participants the
-  publication was withdrawn.
+  publication was withdrawn. No mail goes out, and until 1.3.0 that notice
+  was invisible: the participant's page showed "🔔 Meldingen" only for a
+  published roster, while the dialog promised "krijgt een melding" (audit
+  1.2.2). Meldingen now shows in every status, the dialog says "Er gaat
+  geen mail" and that they see it when they open their link, and the page
+  of a generated but unpublished roster says so in one banner
+  (`rooster-nog-niet-gepubliceerd`) instead of two that contradicted each
+  other (app/person/[token]/meldingenZichtbaar.test.ts, the last test of
+  tests/e2e/publication-workflow.e2e.ts).
+
+## The wizard's last step (1.6.0)
+
+"Periode instellen" (components/SetupWizard.tsx) read its data per step: the
+proposed streefbereik (`GET /api/periods/[id]/capacity`) only while step 3
+was on screen, the staff only on step 2 or 6. A planner who came back to a
+concept period and went straight to step 7 read "0 actief" with everyone
+active and could not open. After a look at step 2 the period opened on the
+range the code started with, 7 or 8 avonddiensten whatever the period, and
+every invitation promised "ongeveer 8 avonddiensten" (audit per role, R-01;
+six scenarios, two of them wrong).
+
+Now both are read on every step and again when the dates, the window or the
+verdeling change. The fields start empty. Step 7 shows the streefbereik in
+words and four checks (components/wizardControles.ts): periode en deadline,
+personeel and streefbereik must hold before "Periode openen" works, the
+capacity is a warning. With nobody active the button is off and says why;
+someone added in step 2, or dates moved in step 1, turn it on again and that
+person is in the period (the planner's wish). tests/e2e/wizard-openen.e2e.ts
+opens three periods this way and reads what was frozen;
+components/wizardControles.test.ts holds the checks,
+components/wizardOpenen.test.ts the three places in the source.
+
+Not kept: a window, verdeling or budget the planner chose without opening.
+Coming back, the wizard starts from the previous period's settings again
+(lib/vorigeInstellingen.ts); step 7 shows what it opens with (option A, the
+user's choice; keeping a draft in the browser or on the server were B and C).
+
+## The period page and its roster (1.7.0)
+
+From the functional audit and the audit per role (all of section 2 of the overview, the user's choice):
+
+- **The streefbereik while the period is open (R-06).** It could be changed only in Rooster genereren,
+  which is closed while the period is open, so a wrong range went into every invitation without a way
+  back. "Aanpassen" next to the streefbereik on the period page, only while OPEN
+  (components/streefbereikAanpassen.ts), saves through PATCH /api/periods/[id]/ruleset: the route of
+  Rooster genereren, which took an open period all along, writes the audit log and refuses an old
+  row_version. Not a change to "the ruleset is frozen when a period opens": that freeze is about the
+  pool's ruleset, the period's own copy was always the planner's to change. The invitations name the
+  expected number (lib/periodInvitations.ts indicatieTekst), so after `uitgenodigd_op` (now in GET
+  /api/periods/[id] for the planner) the page says they named the old one and that sending them again
+  gives the new. Kept small at the user's request: no proposal of the app in that editor.
+- **Periode sluiten (R-08)** asks the dashboard's submission_stats at the first click and says how many
+  have not confirmed and how many filled in nothing (lib/sluitVraag.ts), before the second click.
+- **Empty diensten in the tab Lijst (F-03).** `?met_lege=1` on GET .../assignments returns every dienst
+  of the period, an empty one as a row with id null and `leeg: true`, paged over the diensten; a search on
+  a person stays a list of toewijzingen. The list asks for it once the roster is made
+  (lib/rosterLijst.ts toonLegeDiensten) and fills an empty row through manual-assign, its candidates from
+  slots/[slotId]/eligible-people, as the calendar does. Without the flag the route is what it was.
+- **Rooster vooraf invullen (F-05, F-02)** is "Lege diensten aanvullen" once the roster is made
+  (lib/vooraf.ts voorafNaam: section, button, page and the warning before generating). Below sm a dienst
+  and its list of names stack (components/voorafOpTelefoon.test.ts, measured at 375 pixels in
+  tests/e2e/lege-diensten.e2e.ts).
+
+## Volgende stap (1.8.0)
+
+One line at the top of the period page of the achterwacht, always there (the planner's wish), with what
+to do now: lib/volgendeStap.ts picks it from what the dashboard already reads (status, deadline,
+submission_stats, the empty diensten of FillGapsSummary, whether mail is set up) plus two dates the
+dashboard route now returns, `uitgenodigd_op` and `gepubliceerd_op`. The order is the planner's: invite,
+remind until the deadline, close, generate, fill what stayed empty, voorlopig, definitief. Nothing for a
+concept (the wizard's) or a status it does not know, and no button where nothing can be done (mail not
+set up, a definitief roster).
+
+The button is a signpost, never an action: STAP_PLEK in components/PlannerDashboard.tsx opens the section
+the step is in and gives the existing button the focus (knop-uitnodigingen, knop-periode-sluiten in the
+page header, knop-genereren and so on); lib/volgendeStap.test.ts fails when an id it points to is gone.
+The AIOS gets its own copy only when the planner of the achterwacht finds it useful. A different layout
+of the page (the sections as a list on the left) is on docs/todo.md.
+
+## The new layout of the period page (1.9.0)
+
+The planner found the accordion awkward. Next to it, not instead of it, a layout with the sections as a
+list on the left (four groups: Voorbereiden, Deelnemers, Communicatie, Rooster) and one section on the
+right; the status and Volgende stap stay on top. Opt-in with `?indeling=nieuw`; 2.0.0 makes it the default
+(docs/todo.md) once the planners have tried it.
+
+One list feeds both: `onderdelen` in components/PlannerDashboard.tsx holds per section its title,
+summary and whether it is there, and `Section` takes only `sleutel` and reads the rest from
+IndelingContext, drawing the accordion exactly as before or, in the new layout, only the chosen section
+(a keepMounted one stays mounted unseen, so FillGapsSummary and the herverdeling still report their
+counts). The groups, the address of each section (`?onderdeel=status-voorkeuren` and so on) and which one
+opens first (where Volgende stap points) are lib/periodeIndeling.ts. The items are `Link`s: the back
+button steps back and a section can be linked to. On a phone the list shows until a section is chosen,
+then that section with "‹ Alle onderdelen". The page wraps the dashboard in Suspense for
+useSearchParams.
+
+Every browser test but tests/e2e/indeling-nieuw.e2e.ts still uses the accordion, which is how 1.9.0 shows
+that nothing changed for it (139 of 139). Switching the default means moving those tests' section helpers.
+

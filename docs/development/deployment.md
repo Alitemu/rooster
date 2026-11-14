@@ -39,12 +39,37 @@ true) or else
 `scripts/seed.ts --schema-only` (tables, LATER_COLUMNS, reworded
 templates, no data; skipped for a migration-built database).
 
-**Port and address:** Caddy listens on APP_PORT (compose default 8010 for
-a NAS that uses 443 itself; .env.example and the IT instructions use 443),
+**One file (0.800.0):** docker-compose.yml is the whole installation. The
+Caddyfile is a heredoc in the caddy service's `sh -c` (written to
+/tmp/Caddyfile at start, `$$` for `$`), so there is no file next to the
+compose file to forget (a missing bind-mounted file becomes a directory and
+Caddy fails). It works on any Compose version, unlike `configs: content`.
+deployConfig.test.ts reads the Caddyfile back out of the compose file, and
+validates it with a real Caddy when `caddy` (or CADDY_BIN) is on the machine:
+have one for the release gate.
+
+**Port and address:** Caddy listens on APP_PORT (compose default 443; a NAS
+that uses 443 itself sets APP_PORT=8010 in .env),
 on any host name, with an on-demand certificate per name, so a renamed
 server needs no config change. `http://:80` in the Caddyfile redirects to
-https on APP_PORT; port 80 is only published through a
-docker-compose.override.yml the operator adds (README "Op poort 443").
+https on APP_PORT; port 80 is published on every interface by default,
+so a server needs no .env for that. A NAS that has it taken sets
+HTTP_PORT (8080, say) in .env.
+**Certificate:** TLS_MODUS in .env picks the snippet the Caddyfile imports (./certs is created empty by Docker when missing, which `intern` does not mind; not on a Synology, whose Docker refuses a missing bind-mount folder: there `mkdir certs data` first, README and installatie-it.md).
+`intern` (the default) is Caddy's own CA, on demand per name. `bestand` is
+the organisation's own certificate: ./certs/rooster.pem and rooster.key,
+mounted read-only at /certs. Caddy does not renew it; replacing the files
+needs `docker compose restart caddy`. The caddy service starts through a
+small `sh -c` in docker-compose.yml that says in Dutch what is wrong with
+TLS_MODUS or the files, and then execs Caddy (which fails on them anyway,
+the whole site then being down: a wrong certificate is not hidden by a
+fallback on purpose). The web image carries docker-compose.yml and
+docs/installatie-it.md in /app/installatie (Dockerfile), the very ones of
+that version: the IT department extracts them with `docker run ... tar`
+(the doc says how), so installing needs nothing from GitHub but the image.
+deployConfig.test.ts keeps the
+Caddyfile, the compose file and .env.example in step (README "Certificaat",
+Optie 3, is the instruction for the IT department).
 With BASE_URL empty the app takes its address from the Host header
 (resolveBaseUrl) and remembers it per period (basis_url) for mails.
 
@@ -86,6 +111,54 @@ holiday history), no period (the
 production start and compose's default; true adds the demo data); a rerun
 on a seeded database only upgrades the schema.
 
+**Backup by mail and restore (0.900.0):** the daily copy dies with the
+server, and IT backs nothing up. So lib/dbBackupMail.ts mails an encrypted
+copy once a day (hourly scheduler, `back-up-mail`) to the beheerder's
+address, when the database changed or HARTSLAG_DAGEN (7) passed; a flow puts
+it in OneDrive (docs/back-up-power-automate.md). Details that cost time:
+- The file (lib/dbBackupBestand.ts): gzip, then AES-256-GCM under scrypt
+  (2^15) of the beheerder's backup password, the JSON header as additional
+  data. Not the session secret: a backup must open on a new server. The
+  header's scrypt cost is capped before any work (a crafted file must not tie
+  up the server). Gmail's Sent folder keeps every one, hence the encryption.
+- "Changed" is the sha256 of a `VACUUM INTO` copy: unchanged data gives the
+  same bytes (tried). What went out is kept in `backups/mail-status.json`, not
+  in the database: a status row would change the database every day.
+- Restore (lib/dbBackupTerugzetten.ts) while the app runs: SQLite's backup API
+  from the decrypted file into the live file (`backup(..., progress: () =>
+  2^31-1)`, one step, the destination locked throughout). Every open
+  connection sees the restored data, WAL stays (tried before building it).
+  Refused while a generation runs (either dienst), from a newer version, when
+  integrity_check fails, without the tables, or without an active ADMIN with
+  a password (a restore must not lock everyone out). The live database is
+  copied to `voor-terugzetten-*.db` first. An older backup gets
+  `seed.ts --schema-only` afterwards.
+- The upload is the file as base64 in JSON, larger than any other body:
+  parseJsonBody takes `maxBytes` (MAX_BACKUP_UPLOAD_BYTES, 32 MB) for that one
+  route; Caddy allows 32 MB on that path only (two matchers that exclude each
+  other: two request_body limits on one request both apply, the smaller wins);
+  and next.config.js sets proxyClientMaxBodySize: proxy.ts makes Next buffer
+  every /api body and cut it off at 10 MB by default, without an error (the
+  restore then said "Kies eerst een back-upbestand"). deployConfig.test.ts runs
+  a real Caddy against the compose file's site block; tests/e2e/back-up.e2e.ts
+  restores a 12 MB backup through the browser.
+- Names: `.gitignore` has `*backup*` (lower case) against real backup files in
+  the public repository, so the code is lib/dbBackup*.ts, app/api/admin/back-up
+  and scripts/back-up-openen.ts (the way to open a backup when the app does not
+  start).
+
+**Start and stop (0.112.0):** docker-entrypoint.sh ends with `exec
+node_modules/.bin/next start`, not `npm start`: npm stays as a parent that
+passes no SIGTERM on (reproduced), so `docker stop` ended npm and left the
+server to be killed in the middle of its requests. `/data` is re-owned with
+`chown -R -h`, a link the app user left there is not followed. The build
+context leaves out `certs/`, `*.pem`, `*.key`, `*.crt` and `*.p12`: with
+TLS_MODUS=bestand the private key sits next to the compose file, and a build
+from the source would copy it into the image. The daily backup removes a
+`.db.bezig` left by a stop, and makes no copy when the disk has room for
+less than two of them (a copy that fills the disk makes the next save fail
+with "database or disk is full").
+
 **Container hardening:** the web image is built in two stages (no
 compiler, Python or dev dependencies in the one that runs, no .next/cache),
 code owned by root with only /data and .next/cache writable for `node`,
@@ -99,24 +172,40 @@ web, cap_drop ALL + mem_limit on the solver. Workflow actions are pinned
 to commit SHAs.
 
 **Uploads** (the wizard's beginsaldi, "Eerdere toewijzingen"): an .xlsx
-or a CSV (lib/sheetUpload.ts readUploadedRows). A workbook is read by the
-server, POST /api/planner/read-workbook (planner only, the same reader as
-the preferences import, writes nothing), and the rows come back to the
-page; "Eerdere toewijzingen" previews them with
-lib/priorAssignmentUpload.ts priorRowsInWindow. The roster download is a
-workbook since 0.20.0, and the import that reads it back took CSV only
-(read-workbook/route.test.ts: download, upload, import). A date cell
-arrives as Excel's day number (lib/isoDate.ts parseSheetDate, also text
-dates). lib/csv.ts parseCsv takes commas or semicolons, whichever the
-header line uses, and drops a byte order mark - a Dutch Excel saves "CSV"
-with semicolons, and every line became one cell (audit 12). The "Eerdere
-toewijzingen" import also reads d-m-yyyy dates and a codenaam with the
-formula-guard apostrophe (withoutFormulaGuard): the old CSV roster export
-saved again by a Dutch Excel.
+only since 0.806.0 (lib/sheetUpload.ts readUploadedRows refuses anything
+else in Dutch, ONLY_XLSX), in the layout of a sjabloon that the page offers
+to download next to the file field: GET /api/planner/period/[id]/import-
+balances/sjabloon (a row per person who takes part, an earlier import
+filled in) and GET /api/periods/[id]/prior-assignments/sjabloon (a row per
+day of the carry-over window with its diensttype, who is entered already
+filled in); lib/importSjabloonBouwen.ts builds them, lib/importSjablonen.ts
+holds their columns and `kopFout`, which refuses a first row that is not the
+sjabloon's before a row is read. The roster download has the same four
+columns as the "Eerdere toewijzingen" sjabloon, so it goes in as it is; an
+empty codenaam there is a row nobody filled in and is left out silently
+(priorRowsInWindow). The AIOS has its own sjabloon for its history
+(lib/aiosGeschiedenis.ts). The beginsaldo import asks before it replaces one that
+is there (0.807.0): GET .../import-balances lists what the period has, the wizard
+warns when the file names someone on that list and holds the rows until a yes;
+the route answers 409 SALDO_BESTAAT without `bevestigd: true`. A workbook is read by the server,
+POST /api/planner/read-workbook (planner only, the same reader as the
+preferences import, writes nothing), and the rows come back to the page;
+"Eerdere toewijzingen" previews them with lib/priorAssignmentUpload.ts
+priorRowsInWindow. A date cell arrives as Excel's day number
+(lib/isoDate.ts parseSheetDate, also text dates). lib/csv.ts parseCsv stays
+for the other CSV readers; these two imports no longer take a CSV (a re-saved
+CSV's separator and encoding depend on the machine).
 
 **Downloads:** every download is a one-sheet workbook (.xlsx, 0.20.0):
 rooster, statusrapport, voorkeurenoverzicht, uitnodigingen,
-wijzigingsgeschiedenis (app/api/exports). They were CSV, which a Dutch
+wijzigingsgeschiedenis (app/api/exports). The wijzigingsgeschiedenis stood
+only in the dialog behind "Uitnodigingen en herinneringen", where the
+planner did not find it; since 1.3.0 it is a link of its own in
+"Exporteren & communicatie" for both diensten (components/exportKnoppen.test.ts).
+Its rows came twice for a shift changed more than once: the export joined
+every audit entry of the assignment to every edit. Each edit now takes the
+one audit entry nearest in time (a correlated MIN(ABS(julianday)) in the
+route; SQLite does not allow an outer column in a subquery's ORDER BY). They were CSV, which a Dutch
 Excel opened in one column (it splits on ";" and wants a byte order mark),
 and a CSV saved again changes with the machine. lib/xlsxWrite.ts writes
 them with Node's zlib, no library, like the reader: a date is a real date
@@ -173,4 +262,14 @@ otherwise make two names look the same.
 
 **Networking:**
 - All services on internal bridge network
-- Only `caddy` exposes the app port (default 8010) to host
+- Only `caddy` exposes the app port (default 443) to host
+
+**A changed docker-compose.yml needs a line in the README (0.904.0).** `docker
+compose pull` brings new images, never a new docker-compose.yml. 0.800.0 moved
+the Caddyfile into it and 0.900.0 gave the restore of a backup 32 MB in Caddy;
+neither release note said to take the new file over, and an installation kept
+the 0.7x one with its own Caddyfile and 1 MB for every request: every backup
+above about 750 KB failed with an empty 413, which the dialog told as "Dat is
+niet gelukt." (now lib/terugzetAntwoord.ts says what it is). Every release that
+changes docker-compose.yml says in its README note, in so many words, to
+replace the file.

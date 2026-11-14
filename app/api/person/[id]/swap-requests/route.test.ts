@@ -44,8 +44,8 @@ function createFixture() {
   const periodId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
-       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, aangemaakt_op)
-     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', '{"windowWeeks":2}', datetime('now'))`
+       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, definitief_op, aangemaakt_op)
+     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', '{"windowWeeks":2}', datetime('now'), datetime('now'))`
   ).run(periodId, poolId);
 
   const person = () => {
@@ -95,6 +95,7 @@ afterEach(() => {
       db.prepare('DELETE FROM dienstrooster_mail_queue WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_swap_request WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_notification WHERE periode_id = ?').run(id);
+      db.prepare('DELETE FROM dienstrooster_assignment_edit WHERE periode_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_shift_slot WHERE period_id = ?').run(id);
       db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(id);
@@ -150,6 +151,38 @@ describe('swap requests and the window between shifts', () => {
       .prepare('SELECT person_id FROM dienstrooster_assignment WHERE schedule_version_id = ? AND slot_id = ?')
       .get(f.periodId, f.offered) as { person_id: string };
     expect(owner.person_id).toBe(f.collega);
+
+    // The swap is in the wijzigingsgeschiedenis (1.1.5), one RUIL row per shift that changed hands.
+    const edits = db
+      .prepare(`SELECT slot_id, person_id, oorspronkelijke_person_id FROM dienstrooster_assignment_edit WHERE periode_id = ? AND edit_type = 'RUIL' ORDER BY slot_id`)
+      .all(f.periodId) as Array<{ slot_id: string; person_id: string; oorspronkelijke_person_id: string }>;
+    expect(edits).toEqual(
+      [
+        { slot_id: f.offered, person_id: f.collega, oorspronkelijke_person_id: f.aanvrager },
+        { slot_id: f.requested, person_id: f.aanvrager, oorspronkelijke_person_id: f.collega },
+      ].sort((a, b) => a.slot_id.localeCompare(b.slot_id))
+    );
+  });
+
+  // 1.3.0, the planner's choice after audit 1.2.2: the dialog warns, the route does not refuse.
+  it('takes a swap onto a day the requester blocked: the dialog warned them', async () => {
+    const f = createFixture();
+    db.prepare(
+      `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+       VALUES (?, ?, ?, 'ABSOLUUT', 'ABSENCE', datetime('now'))`
+    ).run(crypto.randomUUID(), f.aanvrager, f.requested);
+    const res = await POST(
+      new NextRequest(`http://localhost/api/person/${f.aanvrager}/swap-requests`, {
+        method: 'POST',
+        headers: { Cookie: cookie(f.aanvrager), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ period_id: f.periodId, offered_slot_id: f.offered, requested_slot_id: f.requested }),
+      }),
+      { params: Promise.resolve({ id: f.aanvrager }) }
+    );
+    expect(res.status).toBe(200);
+    const n = db.prepare("SELECT COUNT(*) AS n FROM dienstrooster_swap_request WHERE periode_id = ? AND status = 'PENDING'").get(f.periodId) as { n: number };
+    expect(n.n).toBe(1);
+    db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ?').run(f.aanvrager);
   });
 
   // Audit 9's mutation check: taking the "both still hold their shift"

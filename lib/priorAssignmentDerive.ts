@@ -8,7 +8,7 @@
  * Convention: Dates stored as ISO-8601 strings (YYYY-MM-DD)
  */
 
-import { dateToISO, parseISO, getISOWeek } from './holidays';
+import { addDays, dateToISO, parseISO, getISOWeek } from './holidays';
 import { resolveRulesetConfig, resolveWindowWeeks } from './rosterBands';
 
 export interface PriorAssignmentInput {
@@ -178,15 +178,11 @@ export function doRangesOverlap(
   range2Start: string,
   range2End: string
 ): boolean {
-  const r1Start = parseISO(range1Start);
-  const r1End = parseISO(range1End);
-  const r2Start = parseISO(range2Start);
-  const r2End = parseISO(range2End);
-
   // Widen each range's end by one day so directly-adjacent ranges (no gap,
-  // no shared day) count as touching, not just ranges that share a day
-  const oneDay = 24 * 60 * 60 * 1000;
-  return r1End.getTime() + oneDay >= r2Start.getTime() && r2End.getTime() + oneDay >= r1Start.getTime();
+  // no shared day) count as touching, not just ranges that share a day.
+  // Calendar days as text: 24 hours added to a local midnight on the last
+  // Sunday of October (a 25 hour day) is still that day at 23:00.
+  return addDays(range1End, 1) >= range2Start && addDays(range2End, 1) >= range1Start;
 }
 
 /**

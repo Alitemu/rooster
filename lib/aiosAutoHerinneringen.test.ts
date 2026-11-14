@@ -14,6 +14,7 @@ import {
 } from '@/tests/smtpSink';
 import { aiosAutoHerinnerStatus, reminderMoment, runAiosAutoHerinneringen, zetAiosAutoHerinneren } from './aiosAutoHerinneringen';
 import { logAiosHerinneringen } from './aiosUitnodigen';
+import { claimAiosVerzending } from './aiosInFlight';
 import { GET as statusRoute, PATCH as zetRoute } from '@/app/api/aios/periode/[id]/auto-herinneringen/route';
 import { staffCookie } from '@/tests/fixtures/dienstWorlds';
 
@@ -210,6 +211,19 @@ describe("the AIOS's automatic reminders", () => {
     await run(moment(7));
     expect(sink.received).toHaveLength(0);
     expect(claims(w.periodId)).toHaveLength(0);
+  });
+
+  it('wait while a send by hand for the period is running, and go afterwards', async () => {
+    mailAan();
+    const w = wereld('AIOS');
+    const release = claimAiosVerzending(`herinneren:${w.periodId}`)!;
+    await run(moment(7));
+    expect(sink.received).toHaveLength(0);
+    expect(claims(w.periodId)).toHaveLength(0);
+    release();
+    await run(new Date(moment(7).getTime() + HOUR));
+    expect(sink.received).toHaveLength(1);
+    expect(claims(w.periodId)).toHaveLength(1);
   });
 
   it('try again next time when the mail server refuses', async () => {

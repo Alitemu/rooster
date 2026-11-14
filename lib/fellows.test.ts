@@ -417,6 +417,18 @@ describe('streefbereik met fellows', () => {
     expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 1, fellow: true });
   });
 
+  it('a credit bigger than the bereik leaves a target of zero, never one below zero', () => {
+    const f = createFixture({ people: 2, config: { bandAvond: [1, 2] } });
+    const [credit, ander] = f.people;
+    db.prepare(
+      `INSERT INTO dienstrooster_ledger_entry (id, person_id, pool_id, teller, geldt_voor_periode_id, delta, reden, categorie, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, ?, 'AVOND', ?, -5, 'test', 'CORRECTIE', ?, datetime('now'))`
+    ).run(crypto.randomUUID(), credit, f.poolId, f.periodId, credit);
+    const targets = computeMemberTargets(f.periodId);
+    expect(targets.get(credit)!.AVOND).toEqual({ min: 0, max: 0, fellow: false });
+    expect(targets.get(ander)!.AVOND.min).toBeGreaterThanOrEqual(0);
+  });
+
   it('keeps a fellow\'s weekend saldo: shifts taken anyway pay off debt, nothing new is added', () => {
     const f = createFixture({ people: 2, config: { bandWeekend: [1, 2] } });
     const [fellow, ander] = f.people;

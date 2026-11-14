@@ -91,6 +91,15 @@ describe('writeWorkbook: what goes in comes back out', () => {
   });
 });
 
+describe('writeWorkbook: a very long sheet', () => {
+  // Math.max(...rows) overflowed the call stack from about 125 000 rows on, a 500 for an audit trail export.
+  it('writes 140 000 rows', () => {
+    const rows = Array.from({ length: 140_000 }, (_, i) => [String(i)]);
+    const bestand = writeWorkbook(sheet(rows));
+    expect(bestand.length).toBeGreaterThan(1000);
+  });
+});
+
 describe('dates and moments', () => {
   it('writes a date as the day number Excel stores, in a date format', () => {
     const book = writeWorkbook(sheet([[{ date: '2027-01-04' }], [{ date: '2028-02-29' }]]));

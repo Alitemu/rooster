@@ -211,6 +211,69 @@
       "when": 1789061400000,
       "tag": "0029_aios_voortgangstoets",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "5",
+      "when": 1789147800000,
+      "tag": "0030_aios_generatie",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "5",
+      "when": 1789234200000,
+      "tag": "0031_aios_reden",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "5",
+      "when": 1789320600000,
+      "tag": "0032_period_factor",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "5",
+      "when": 1789407000000,
+      "tag": "0033_ruilen_herinneringen",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "5",
+      "when": 1789493400000,
+      "tag": "0034_aios_doel_nachten",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "5",
+      "when": 1789579800000,
+      "tag": "0035_aios_doel_weekend",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "5",
+      "when": 1789666200000,
+      "tag": "0036_absence_soort_onderwijs",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "5",
+      "when": 1789752600000,
+      "tag": "0037_indexes_slot_person",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "5",
+      "when": 1789839000000,
+      "tag": "0038_aios_doel_avond_uitloop",
+      "breakpoints": true
     }
   ]
 }

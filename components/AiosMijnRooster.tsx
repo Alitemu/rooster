@@ -11,12 +11,14 @@ import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import type { AiosEigenRooster } from '@/lib/aiosPublicatie';
 import { KWARTALEN_WOORD } from '@/lib/aiosFte';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const datumLang = (d: string) =>
   new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 const procent = (x: number) => `${(x * 100).toLocaleString('nl-NL', { maximumFractionDigits: 1 })}%`;
 
-export function AiosMijnRooster({ personId, periodId }: { personId: string; periodId: string }) {
+/** `inSectie`: on the page's foldable section, which has the title and the frame (0.110.0). */
+export function AiosMijnRooster({ personId, periodId, inSectie = false }: { personId: string; periodId: string; inSectie?: boolean }) {
   const [rooster, setRooster] = useState<AiosEigenRooster | null>(null);
   const [fout, setFout] = useState<string | null>(null);
 
@@ -27,7 +29,7 @@ export function AiosMijnRooster({ personId, periodId }: { personId: string; peri
         if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Laden van je rooster is mislukt.');
         setRooster(data.data);
       })
-      .catch((err) => setFout(err instanceof Error ? err.message : 'Laden van je rooster is mislukt.'));
+      .catch((err) => setFout(foutTekst(err, 'Laden van je rooster is mislukt.')));
   }, [personId, periodId]);
 
   if (fout) {
@@ -40,12 +42,23 @@ export function AiosMijnRooster({ personId, periodId }: { personId: string; peri
   if (!rooster) return <div className="card p-4 text-sm text-neutral-600">Je rooster laden...</div>;
 
   return (
-    <div className="card p-4 space-y-3" data-testid="aios-mijn-rooster">
-      <h2 className="text-xl font-semibold">Jouw rooster</h2>
+    <div className={inSectie ? 'space-y-3' : 'card p-4 space-y-3'} data-testid="aios-mijn-rooster">
+      {!inSectie && <h2 className="text-xl font-semibold">Jouw rooster</h2>}
       {rooster.voorlopig ? (
         <div className="rounded border-2 border-dashed border-neutral-800 p-3 text-sm" data-testid="aios-voorlopig">
           <p className="font-semibold">Dit is het voorlopige rooster.</p>
-          <p>Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten. Daarna wordt het rooster definitief.</p>
+          <p>
+            Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten
+            {rooster.contact_planner ? (
+              <>
+                {': mail naar '}
+                <a className="underline font-medium break-all" href={`mailto:${rooster.contact_planner}`}>
+                  {rooster.contact_planner}
+                </a>
+              </>
+            ) : null}
+            . Daarna wordt het rooster definitief.
+          </p>
         </div>
       ) : (
         <p className="text-sm font-medium">Dit rooster is definitief.</p>
@@ -73,6 +86,19 @@ export function AiosMijnRooster({ personId, periodId }: { personId: string; peri
         {rooster.jaar_kwartalen > 1 &&
           rooster.jaar_percentage !== null &&
           ` Over de laatste ${KWARTALEN_WOORD[rooster.jaar_kwartalen]} kwartalen samen: ${procent(rooster.jaar_percentage)}${rooster.jaar_percentage > 0.25 ? ', boven 25%' : ''}.`}
+      </p>
+      {/* Where to go with a question (audit per role R-05, 1.7.0): the address was only under Ruilen. */}
+      <p className="text-sm text-neutral-700" data-testid="aios-vragen-rooster">
+        Vragen over je rooster? Neem contact op met de planner
+        {rooster.contact_planner ? (
+          <>
+            {': '}
+            <a className="underline font-medium break-all" href={`mailto:${rooster.contact_planner}`}>
+              {rooster.contact_planner}
+            </a>
+          </>
+        ) : null}
+        .
       </p>
     </div>
   );

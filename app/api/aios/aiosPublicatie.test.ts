@@ -1,9 +1,11 @@
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { ensureAiosShiftTypes } from '@/lib/aiosPool';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { bewaarAiosStroomAdres } from '@/lib/aiosMail';
+import { bewaarAiosContactAdres, bewaarAiosStroomAdres } from '@/lib/aiosMail';
 import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
 import { readFirstSheet } from '@/lib/xlsx';
 import { excelSerialToDate } from '@/lib/isoDate';
@@ -12,8 +14,9 @@ import { GET as publicatie } from './periode/[id]/publicatie/route';
 import { POST as publiceren } from './periode/[id]/publiceren/route';
 import { POST as definitief } from './periode/[id]/definitief-maken/route';
 import { POST as intrekken } from './periode/[id]/publicatie-intrekken/route';
+import { POST as roosterMail } from './periode/[id]/rooster-mail/route';
+import { claimAiosVerzending } from '@/lib/aiosInFlight';
 import { GET as downloadRooster } from './periode/[id]/download-rooster/route';
-import { GET as downloadPerAios } from './periode/[id]/download-per-aios/route';
 import { POST as wijzigen } from './periode/[id]/rooster/wijzigen/route';
 import { POST as genereren } from './periode/[id]/genereren/route';
 import { GET as mijnRooster } from './deelnemer/[id]/periode/[periodId]/rooster/route';
@@ -34,6 +37,7 @@ import { buildWorld, deleteRowsAfter, insert, now, personCookie, rowidSnapshot, 
  */
 
 const AAN_AIOS = 'stroom-aios@example.test';
+const CONTACT_AIOS = 'planner-aios@organisatie.example';
 const START = '2094-07-07'; // a Wednesday: 13 weeks, 65 werkdagen, no feestdagen
 const EIND = '2094-10-05';
 
@@ -90,6 +94,8 @@ beforeAll(async () => {
   staf = buildWorld('ACHTERWACHT');
   w.planner = staff('PLANNER', 'AIOS');
   bewaarAiosStroomAdres(AAN_AIOS, w.planner);
+  // The AIOS planner's contactadres (R-05, 1.7.0): in the voorlopige mail and on the AIOS's own roster.
+  expect(bewaarAiosContactAdres(CONTACT_AIOS, w.planner)).toEqual({ ok: true });
   process.env.BASE_URL = 'http://localhost:3000';
   const ruleset = insert('dienstrooster_ruleset', { naam: `AiosPub-${tag}`, config_json: '{}', aangemaakt_op: now });
   w.pool = insert('dienstrooster_pool', { naam: `AiosPub-${tag}`, type: 'AIOS', ruleset_id: ruleset, aangemaakt_op: now });
@@ -126,6 +132,7 @@ beforeAll(async () => {
 afterAll(async () => {
   delete process.env.BASE_URL;
   bewaarAiosStroomAdres('', w.planner);
+  bewaarAiosContactAdres('', w.planner);
   clearSmtpConfig();
   await sink.close();
   deleteRowsAfter(snapshot);
@@ -152,6 +159,10 @@ describe('before publishing', () => {
     expect(check.controle.problemen).toEqual([]);
     expect(check.controle.waarschuwingen).toEqual(expect.arrayContaining([expect.stringMatching(/^aiospub-y-.*: dienstpercentage .*, boven 25%\.$/)]));
     expect(check.controle.waarschuwingen.some((t: string) => t.includes('Een dienst op een compensatiedag'))).toBe(true);
+    // The hard rule broken is named apart, so the warning can say so in those words (1.2.2); the 25% is not a hard rule.
+    expect(check.controle.harde_regels.some((t: string) => t.includes('Een dienst op een compensatiedag'))).toBe(true);
+    expect(check.controle.harde_regels.some((t: string) => t.includes('dienstpercentage'))).toBe(false);
+    for (const h of check.controle.harde_regels) expect(check.controle.waarschuwingen).toContain(h);
     const r = await doe(publiceren, 'publiceren', {});
     expect(r.status).toBe(409);
     expect(r.json.error.code).toBe('WARNINGS');
@@ -179,8 +190,10 @@ describe('before publishing', () => {
   it('no workbook before there is a roster', async () => {
     db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN' WHERE id = ?`).run(w.period);
     try {
-      expect((await downloadRooster(req(`${w.period}/download-rooster`), ctx(w.period))).status).toBe(409);
-      expect((await downloadPerAios(req(`${w.period}/download-per-aios`), ctx(w.period))).status).toBe(409);
+      const res = await downloadRooster(req(`${w.period}/download-rooster`), ctx(w.period));
+      expect(res.status).toBe(409);
+      // Not "nog niet definitief": there is no roster to be definitief.
+      expect((await res.json()).error.code).toBe('INVALID_STATUS');
       const r = await doe(publiceren, 'publiceren', { bevestigd: true });
       expect(r.status).toBe(409);
       expect(r.json.error.message).toMatch(/^Publiceren kan als het rooster gemaakt is/);
@@ -213,12 +226,13 @@ describe('voorlopig', () => {
     // 3,2 points in 65 werkdagen, fulltime.
     expect(x.tekst).toMatch(/Je dienstpercentage dit kwartaal: 4,9%\./);
     expect(x.tekst).toMatch(/http:\/\/localhost:3000\/aios\/[A-Za-z0-9_-]+/);
+    expect(x.tekst).toContain(`Klopt er iets niet? Laat het de planner zo snel mogelijk weten: mail naar ${CONTACT_AIOS}. Daarna`);
   });
 
   it('the AIOS sees their own diensten, voorlopig, and their dienstpercentage', async () => {
     const r = await mijn(w.x);
     expect(r.status).toBe(200);
-    expect(r.json.data).toMatchObject({ voorlopig: true, punten: 3.2 });
+    expect(r.json.data).toMatchObject({ voorlopig: true, punten: 3.2, contact_planner: CONTACT_AIOS });
     expect(r.json.data.dienstpercentage).toBeCloseTo(3.2 / (65 * 1));
     expect(r.json.data.diensten.map((d: any) => [d.datum, d.code, d.blok])).toEqual([
       ['2094-07-07', 'ND', 'nachtblok wo t/m vr'],
@@ -232,6 +246,12 @@ describe('voorlopig', () => {
       { params: Promise.resolve({ id: w.y, periodId: w.period }) }
     );
     expect(ander.status).toBe(403);
+  });
+
+  it('the Excel for the roosterbureau is refused: a voorlopig roster goes nowhere outside the planner\'s page', async () => {
+    const res = await downloadRooster(req(`${w.period}/download-rooster`), ctx(w.period));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('NOT_DEFINITIEF');
   });
 
   it('a change by hand needs a reason now, and no new roster', async () => {
@@ -278,6 +298,43 @@ describe('definitief', () => {
   });
 });
 
+describe('rooster opnieuw mailen', () => {
+  it('sends the definitieve mail again to every AIOS, leaving the roster as it is, and writes an audit row', async () => {
+    const voor = stand();
+    const r = await doe(roosterMail, 'rooster-mail');
+    expect(r.status, JSON.stringify(r.json)).toBe(200);
+    expect(r.json.data.mail).toEqual({ verstuurd: true, aantal: 2 });
+    expect(verzendlijstPayload(sink.received[0].raw).soort).toBe('ROOSTER_DEFINITIEF');
+    expect(stand()).toEqual(voor);
+    const rij = db
+      .prepare(`SELECT nieuw_json FROM dienstrooster_audit_log WHERE entiteit_id = ? AND nieuw_json LIKE '%roostermail AIOS opnieuw verstuurd%'`)
+      .get(w.period) as { nieuw_json: string };
+    expect(JSON.parse(rij.nieuw_json)).toMatchObject({ soort: 'definitief', verstuurd: true, aantal: 2 });
+  });
+
+  it('is told to wait while the same send runs (409 BEZIG)', async () => {
+    const release = claimAiosVerzending(`rooster-mail:${w.period}`)!;
+    try {
+      const r = await doe(roosterMail, 'rooster-mail');
+      expect(r.status).toBe(409);
+      expect(r.json.error.code).toBe('BEZIG');
+      expect(sink.received).toHaveLength(0);
+    } finally {
+      release();
+    }
+  });
+
+  it('only for a published roster', async () => {
+    db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(w.period);
+    try {
+      expect((await doe(roosterMail, 'rooster-mail')).status).toBe(409);
+      expect(sink.received).toHaveLength(0);
+    } finally {
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEPUBLICEERD' WHERE id = ?`).run(w.period);
+    }
+  });
+});
+
 describe('the roster as Excel', () => {
   it('per dag: who has each dienst', async () => {
     const [kop, ...rijen] = await blad(downloadRooster);
@@ -290,13 +347,8 @@ describe('the roster as Excel', () => {
     expect(eerste[6]).toBe(`aiospub-y-${tag}`);
   });
 
-  it('per AIOS: the points and the compensation days', async () => {
-    const [kop, ...rijen] = await blad(downloadPerAios);
-    expect(kop[0]).toBe('AIOS');
-    expect(kop[kop.length - 1]).toBe('Compensatiedagen');
-    const x = rijen.find((r) => r[0] === `aiospub-x-${tag}`)!;
-    // The night block wo t/m vr: Saturday and Sunday off.
-    expect(x[x.length - 1]).toBe('za 10 jul, zo 11 jul');
+  it('has no download of compensation days: the roosterbureau picks those itself, before or after a dienst', () => {
+    expect(existsSync(join(process.cwd(), 'app/api/aios/periode/[id]/download-per-aios'))).toBe(false);
   });
 });
 
@@ -326,11 +378,24 @@ describe('access', () => {
       [publiceren, 'publiceren'],
       [definitief, 'definitief-maken'],
       [intrekken, 'publicatie-intrekken'],
+      [roosterMail, 'rooster-mail'],
     ] as const) {
       expect((await route(req(`${w.period}/${pad}`, 'POST', { bevestigd: true }, stafCookie), ctx(w.period))).status).toBe(404);
       expect((await route(req(`${staf.period}/${pad}`, 'POST', { bevestigd: true }), ctx(staf.period))).status).toBe(404);
     }
     expect((await downloadRooster(req(`${w.period}/download-rooster`, 'GET', undefined, stafCookie), ctx(w.period))).status).toBe(404);
     expect(stand().status).toBe('GEPUBLICEERD');
+  });
+});
+
+describe('the warning before publishing a roster that breaks a hard rule', () => {
+  // Hard rules may be broken on purpose, after a clear warning (the user's
+  // choice, 1.2.2): the confirmation says "breekt ... een harde regel", not
+  // just "waarschuwingen".
+  it('names the hard rule in the confirmation and on the button', () => {
+    const bron = readFileSync(join(process.cwd(), 'components', 'AiosPubliceren.tsx'), 'utf8');
+    expect(bron).toContain("`Dit rooster breekt ${harde.length} keer een harde regel.`");
+    expect(bron).toContain('harde.length > 0 && ` ${hardeZin} Weet je zeker dat je dat bewust zo wilt?`');
+    expect(bron).toContain('data-testid="aios-publicatie-harde-regels"');
   });
 });

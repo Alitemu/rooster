@@ -32,7 +32,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       .get(params.id) as { start_datum: string; eind_datum: string; pool_type: string } | undefined;
     if (!period) {
       return NextResponse.json(
-        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${params.id} niet gevonden` } },
+        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' } },
         { status: 404 }
       );
     }

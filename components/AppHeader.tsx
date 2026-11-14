@@ -31,7 +31,7 @@ export function AppHeader() {
 
   return (
     <Link href={href} className="inline-block hover:opacity-90 transition-opacity">
-      <h1 className="text-2xl font-bold">Dienstrooster</h1>
+      <p className="text-2xl font-bold">Dienstrooster</p>
     </Link>
   );
 }

@@ -4,6 +4,7 @@
  * Remove an assignment (undo).
  */
 
+import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
@@ -118,6 +119,7 @@ export async function DELETE(
     // claiming a removal that never took effect) - wrap them as one unit,
     // matching how reassign/route.ts already handles its analogous
     // multi-step edit.
+    const swapMeldingen: Array<{ send: () => void }> = [];
     db.transaction(() => {
       // Log edit entry before deletion
       db.prepare(
@@ -170,7 +172,9 @@ export async function DELETE(
           actorId,
         });
       }
+      swapMeldingen.push(...closeSwapsAfterRosterChange(periodId, now).meldingen);
     })();
+    swapMeldingen.forEach((m) => m.send());
 
     return NextResponse.json({
       success: true,

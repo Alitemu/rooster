@@ -12,8 +12,10 @@
  * one only owns the pattern(s) that feed it.
  */
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { DatumVeld, DatumTekst } from '@/components/DatumVeld';
 
 export interface ParttimePattern {
   id: string;
@@ -70,6 +72,7 @@ export function ParttimePatternEditor({
   readOnly = false,
   onPatternsChange,
 }: Props) {
+  const veldId = useId();
   const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -130,7 +133,7 @@ export function ParttimePatternEditor({
       cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan van deeltijdpatroon mislukt');
+      setError(foutTekst(err, 'Opslaan van deeltijdpatroon mislukt'));
     } finally {
       setSaving(false);
     }
@@ -150,7 +153,7 @@ export function ParttimePatternEditor({
       if (editingId === patternId) cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van deeltijdpatroon mislukt');
+      setError(foutTekst(err, 'Verwijderen van deeltijdpatroon mislukt'));
     } finally {
       setRemovingId(null);
     }
@@ -184,7 +187,7 @@ export function ParttimePatternEditor({
                 <span className="font-medium">{WEEKDAG_LABEL[p.weekdag] || p.weekdag}</span>
                 <span className="text-neutral-600"> · {FREQUENTIE_LABEL[p.frequentie] || p.frequentie}</span>
                 <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
-                  {p.geldig_vanaf} t/m {p.geldig_tot}
+                  <DatumTekst iso={p.geldig_vanaf} /> t/m <DatumTekst iso={p.geldig_tot} />
                 </span>
               </div>
               {!readOnly && (
@@ -212,7 +215,7 @@ export function ParttimePatternEditor({
       {readOnly ? (
         <div className="border-t border-neutral-200 pt-4">
           <p className="text-sm text-neutral-600">
-            De deadline voor deze periode is verstreken. Deeltijdpatronen kun je nu alleen nog bekijken.
+            Deze periode is gesloten voor wijzigingen. Deeltijdpatronen kun je nu alleen nog bekijken.
           </p>
         </div>
       ) : (
@@ -222,8 +225,8 @@ export function ParttimePatternEditor({
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Dag</label>
-            <select
+            <label htmlFor={`${veldId}-0`} className="block text-xs font-medium text-neutral-600 mb-1">Dag</label>
+            <select id={`${veldId}-0`}
               value={form.weekdag}
               onChange={(e) => setForm({ ...form, weekdag: e.target.value })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -234,8 +237,8 @@ export function ParttimePatternEditor({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Frequentie</label>
-            <select
+            <label htmlFor={`${veldId}-1`} className="block text-xs font-medium text-neutral-600 mb-1">Frequentie</label>
+            <select id={`${veldId}-1`}
               value={form.frequentie}
               onChange={(e) => setForm({ ...form, frequentie: e.target.value })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -246,20 +249,18 @@ export function ParttimePatternEditor({
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Vanaf</label>
-            <input
-              type="date"
+            <label htmlFor={`${veldId}-2`} className="block text-xs font-medium text-neutral-600 mb-1">Vanaf</label>
+            <DatumVeld id={`${veldId}-2`}
               value={form.geldig_vanaf}
-              onChange={(e) => setForm({ ...form, geldig_vanaf: e.target.value })}
+              onChange={(waarde) => setForm({ ...form, geldig_vanaf: waarde })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-            <input
-              type="date"
+            <label htmlFor={`${veldId}-3`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
+            <DatumVeld id={`${veldId}-3`}
               value={form.geldig_tot}
-              onChange={(e) => setForm({ ...form, geldig_tot: e.target.value })}
+              onChange={(waarde) => setForm({ ...form, geldig_tot: waarde })}
               className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
             />
           </div>

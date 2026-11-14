@@ -18,7 +18,26 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
      request (lib/auth-context.ts), but no flow sets it - revoking is a
      deliberate manual act, not a side effect of exporting.
 
-2. **Password + TOTP** (planner/admin)
+**Writes from another page (0.112.0):** the session cookie is SameSite=Lax,
+which stops a page on another site, but "same site" ignores the port and
+the sub-domain: another web app on the same address (a different port on the
+NAS) still sends the cookie, and a form or a `text/plain` fetch needs no
+preflight. proxy.ts therefore refuses, for every /api route that is not
+GET, HEAD or OPTIONS, a request with Sec-Fetch-Site other than same-origin or
+none (403 CROSS_SITE), or, for a browser without Fetch Metadata, with an
+Origin that is not the Host or X-Forwarded-Host (lib/crossSite.ts), and a
+body of a form type (text/plain, urlencoded, multipart: 415). A request
+with neither header comes from no browser page (curl, the checks, a
+server) and is let through. GET /api/auth/verify-link sets a cookie, so it
+refuses a request from another site too: a link in a mail opens the page,
+which calls it itself. Do not run other web apps on the hostname of this one:
+the cookie is not scoped to a port (docs/installatie-it.md).
+A signed token that is not a session (the setup token, the password-reset link)
+is not read as one: verifySessionToken accepts only kind staff and person.
+
+2. **Password** (planner/admin). Two-step verification (TOTP) was removed in 0.805.0: the
+   routes, the dialog and the check at login are gone, `person.totp_secret` stays in the
+   table unused, and a leftover value never blocks a login.
    - bcrypt (the native binding) for password hashing; a password needs 8+
      characters with lower case, upper case, a digit and a special
      character (validatePasswordStrength)
@@ -30,13 +49,12 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
      check while the password was hashed, audit 10).
    - Ten wrong guesses per account (and per client) per quarter of an
      hour, also when they arrive at the same moment: staff-login,
-     change-password, totp/disable, totp/confirm and first-run-setup take
+     change-password and first-run-setup take
      an attempt with lib/rateLimit.ts `takeAttempt` before bcrypt or the
      code check runs and give it back (`releaseAttempt`) once the secret
      matched. Checking first and counting after the asynchronous compare
      let a burst of thirty all through (audit 8,
      app/api/auth/rateLimitConcurrency.test.ts).
-   - Speakeasy for TOTP generation
    - No email required (pseudonymous)
    - The password is changed through POST /api/auth/change-password
      ("Wachtwoord wijzigen" on the period list), which requires the
@@ -52,18 +70,30 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
      first; the seed password itself is refused as the new one.
      ALLOW_SEED_PASSWORD=true lifts this for local test runs only;
      docker-compose.yml does not pass it through.
-   - The TOTP secret is stored encrypted like the mail password
-     (lib/totpSecret.ts, "v1:"; a plain-text one from before is re-saved
-     encrypted at the next login). Unreadable after a key change: the
-     login says so, and `scripts/reset-totp.ts <codenaam>` on the server
-     turns two-step verification off for that account.
    - A forgotten password: `scripts/reset-password.ts <codenaam>` on the
      server (`docker compose exec -u node web ...`) asks for a new one twice
      without echo (NIEUW_WACHTWOORD without a terminal, never an argument),
      applies validatePasswordStrength, refuses the seed password, raises
-     sessie_versie and writes the audit log. Deliberately no reset on the
-     login page: no e-mail address to send to, and a reset anyone can
-     start is a way in.
+     sessie_versie and writes the audit log. Deliberately no reset for
+     planners on the login page: no e-mail address to send to.
+   - The beheerder's way back from the start page (lib/wachtwoordHerstel.ts):
+     the Gmail address of Mailinstellingen typed in "Link kwijt?"
+     (POST /api/link-aanvragen, the achterwacht's route only: the form asks
+     the AIOS's too, which does not know the address) mails that account one
+     link per active ADMIN. The link is `<base>/wachtwoord-herstel#token=...`:
+     a signed token (signPayload, kind `wachtwoordherstel`, 30 minutes) bound
+     to the account and a fingerprint of its current wachtwoord_hash, so it
+     works once and a new password kills the older links; the token is in the
+     fragment, never in a server log. `<base>` is BASE_URL, else a period's
+     basis_url, else the address a beheerder last logged in on (stored
+     after a correct password in app setting `herstel.basis_url`), never the
+     Host header of the asker. The answer is the same for any address
+     (the mail is awaited like a participant's, so the time says little too)
+     and the caller's limit is the Link kwijt limit (3 an hour). POST
+     /api/auth/wachtwoord-herstel { token, wachtwoord } sets it (same rules as
+     every password, the seed password refused), ends every session and
+     writes the audit log; ten wrong tokens per 15 minutes stop the
+     caller. Mail off (MAIL_UITGESCHAKELD) or not set up: nothing goes.
    - ADMIN ("beheerder") = everything a planner can (requirePlannerAccess)
      plus the staff accounts (requireAdminAccess, lib/staffAccounts.ts,
      /api/admin/accounts, page /planner/accounts linked from the period
@@ -71,7 +101,7 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
      een beheerder kan accounts beheren", no list and no form, and a list
      that fails to load says so instead of "Accounts laden..." for good,
      tests/e2e/accounts-access.e2e.ts, audit 16): add a PLANNER/ADMIN with a temporary password,
-     give an account a temporary password, turn off its TOTP, switch it
+     give an account a temporary password, switch it
      off or change its role. A temporary password sets
      `person.wachtwoord_moet_wijzigen` (migration 0021): the login session
      is flagged wachtwoordWijzigen like a seed-password login (login says
@@ -98,16 +128,34 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
    - The login page's `redirect` only goes to a /planner path on this site
      (lib/safeRedirect.ts, checked with the URL parser: "/\\host" leaves
      the site in a browser).
-   - TOTP is self-service, mirroring the password: "Tweestapsverificatie"
-     on the period list opens `TotpSettingsDialog`, which calls
-     `/api/auth/totp/setup` (a fresh secret + a server-rendered QR PNG,
-     `qrcode` renders the `otpauth://` URI - nothing is persisted yet) and
-     `/api/auth/totp/confirm` (a live code from that secret is what
-     actually writes `totp_secret`). `/api/auth/totp/disable` is the way
-     back - current password only, deliberately never a fresh TOTP code,
-     since "I no longer have a code to give" is the ordinary reason to
-     call it, not an edge case. All three routes, plus `/api/auth/me`'s
-     `totp_enrolled` flag the dialog reads its own state from.
+
+**Revoking a personal link (0.802.0)**
+
+The beheerder, and only the beheerder, sees the section "Persoonlijke links"
+on a period page (the achterwacht's and the AIOS's each have their own): the
+links issued for that period with when each was made, last used and
+revoked, never the link itself (only its hash is stored). "Intrekken" asks
+first, then sets `ingetrokken_op` (verify-link refuses the link from then on)
+and ends the sessions of that person (`revokeAllSessions`). The second step
+is needed because lib/auth-context.ts only asks for *a* valid link of the
+person: without it, whoever came in through the revoked link would stay in
+while the person has another one. The person gets back in with a link that
+is still valid, or a new one ("Link kwijt?" or the next invitation). Revoking
+is audit-logged (person_access_link), twice answers 409, a link of another
+period 404, and the achterwacht's route refuses an AIOS period. Revoking
+the last link of a person locks them out until a new one; the question says so.
+"Alles intrekken" (0.803.0, POST .../toegangslinks/alles-intrekken, one audit
+entry on the period with the numbers) revokes every working link of the period
+and ends the sessions of each of those people once; links of other periods
+stay, so a person who has one is back in with a fresh session. The question
+says how many links and people it is about.
+"Alle links van één medewerker" (1.3.0, POST .../toegangslinks/persoon/[personId]/intrekken)
+revokes every working link of that person for the period and ends their
+sessions once: the audit of 1.2.2 found 14 links of one person after one
+period, 14 times "Intrekken" to take away their access. Links of other
+periods stay (the question says so). One audit entry on the period with the
+number; a person with no working link there answers 404 and writes nothing.
+The select lists only people with a working link, with how many.
 
 **Session revocation**
 

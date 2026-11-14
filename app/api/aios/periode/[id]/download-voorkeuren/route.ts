@@ -1,13 +1,14 @@
 /**
  * GET /api/aios/periode/[id]/download-voorkeuren - "Voorkeuren per dienst"
  * of an AIOS quarter as a workbook: a row per dienst, a column per AIOS
- * (lib/aiosDownloads.ts). For the AIOS's planner and the beheerder; an
+ * (lib/aiosDownloads.ts). For the AIOS's planner and the beheerder, who
+ * alone gets the toelichtingen in it (the back-up); an
  * achterwacht period answers 404, its own export is
  * /api/exports/preferences.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { getAuthContextFromRequest, requireAdminAccess, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { xlsxDownload } from '@/lib/xlsxWrite';
@@ -23,7 +24,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (otherDienst) return otherDienst;
     const period = laadAiosPeriode(id);
     if (period instanceof NextResponse) return period;
-    return xlsxDownload(aiosVoorkeurenPerDienst(period), 'voorkeuren-aios', period.naam);
+    // Every toelichting only in the beheerder's file, the back-up: nobody else's file carries one.
+    return xlsxDownload(aiosVoorkeurenPerDienst(period, { metToelichting: requireAdminAccess(auth) }), 'voorkeuren-aios', period.naam);
   } catch (error) {
     return internalErrorResponse('aios-download-voorkeuren', error);
   }

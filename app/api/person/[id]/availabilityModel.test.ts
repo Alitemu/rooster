@@ -387,13 +387,53 @@ describe('availability: hand markings, part-time, absences and fellow blocks tog
   // but not the person's other patterns. Two patterns over the same day -
   // switching from an old pattern to a new one, the new one added first -
   // and removing the old one left that day open although the new one
-  // covers it, until some later sync.
+  // covers it, until some later sync. The routes refuse a second pattern
+  // over a day since 0.94.0 (below), but rows from before may hold two.
   it('removing one of two patterns over the same day leaves it blocked by the other', async () => {
     const { person, slots } = buildPerson();
     const oud = await call(addPattern, 'POST', person, {}, { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: day(0), geldig_tot: day(13) });
     expect(oud.status).toBe(201);
-    expect((await call(addPattern, 'POST', person, {}, { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: day(7), geldig_tot: day(27) })).status).toBe(201);
+    db.prepare(
+      `INSERT INTO dienstrooster_parttime_pattern (id, person_id, weekdag, frequentie, geldig_vanaf, geldig_tot, aangemaakt_door, aangemaakt_op)
+       VALUES (?, ?, 'MA', 'ELKE_WEEK', ?, ?, ?, datetime('now'))`
+    ).run(crypto.randomUUID(), person, day(7), day(27), person);
     expect((await call(removePattern, 'DELETE', person, { patternId: oud.json.data.id })).status).toBeLessThan(300);
     expect(rows(person).get(slots[7].id)?.blocking_level).toBe('ABSOLUUT');
+  });
+
+  // 0.94.0 (audit): the deelnamefactor counts each pattern, so one weekday has one pattern per week, as the
+  // AIOS's routes always insisted.
+  describe('one part-time day per weekday and week', () => {
+    const patroon = (extra: Record<string, unknown>) => ({ weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: day(0), geldig_tot: day(13), ...extra });
+
+    it('a second pattern with a day in common is refused, and nothing is stored', async () => {
+      const { person } = buildPerson();
+      expect((await call(addPattern, 'POST', person, {}, patroon({}))).status).toBe(201);
+      const dubbel = await call(addPattern, 'POST', person, {}, patroon({ geldig_vanaf: day(7), geldig_tot: day(27) }));
+      expect(dubbel.status).toBe(409);
+      expect(dubbel.json.error.code).toBe('PATTERN_OVERLAPS');
+      const n = db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_parttime_pattern WHERE person_id = ?').get(person) as { n: number };
+      expect(n.n).toBe(1);
+    });
+
+    it('even and odd weeks of one weekday share no day, another weekday neither, and dates apart neither', async () => {
+      const { person } = buildPerson();
+      expect((await call(addPattern, 'POST', person, {}, patroon({ frequentie: 'EVEN_WEKEN', geldig_vanaf: day(0), geldig_tot: day(41) }))).status).toBe(201);
+      expect((await call(addPattern, 'POST', person, {}, patroon({ frequentie: 'ONEVEN_WEKEN', geldig_vanaf: day(1), geldig_tot: day(40) }))).status).toBe(201);
+      expect((await call(addPattern, 'POST', person, {}, patroon({ weekdag: 'DI' }))).status).toBe(201);
+      expect((await call(addPattern, 'POST', person, {}, patroon({ geldig_vanaf: day(100), geldig_tot: day(120) }))).status).toBe(201);
+    });
+
+    it('changing a pattern onto a day another has is refused too; changing it within its own days is fine', async () => {
+      const { person } = buildPerson();
+      const a = await call(addPattern, 'POST', person, {}, patroon({ geldig_vanaf: day(0), geldig_tot: day(13) }));
+      const b = await call(addPattern, 'POST', person, {}, patroon({ geldig_vanaf: day(20), geldig_tot: day(34) }));
+      expect(a.status).toBe(201);
+      expect(b.status).toBe(201);
+      const nietZo = await call(editPattern, 'PATCH', person, { patternId: b.json.data.id }, { geldig_vanaf: day(7) });
+      expect(nietZo.status).toBe(409);
+      expect(nietZo.json.error.code).toBe('PATTERN_OVERLAPS');
+      expect((await call(editPattern, 'PATCH', person, { patternId: b.json.data.id }, { geldig_vanaf: day(21) })).status).toBeLessThan(300);
+    });
   });
 });

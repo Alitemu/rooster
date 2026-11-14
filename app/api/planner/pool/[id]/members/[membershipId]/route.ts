@@ -19,27 +19,24 @@ import { setPendingUndo } from '@/lib/pendingUndo';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { syncPatternsForPerson } from '@/lib/parttimeSync';
 import { syncAiosPersoon } from '@/lib/aiosSync';
+import { lidmaatschapRoosterDenial } from '@/lib/membershipRooster';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdateMembershipRequest {
   geldig_vanaf?: string;
   geldig_tot?: string;
-  deelnamefactor?: number;
-}
-
-/** 0 excluded (no participation at all isn't a membership) - 1 is full-time. */
-function isValidDeelnamefactor(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 && value <= 1;
+  /** Yes, even though a roster that already exists does not change with it (lib/membershipRooster.ts). */
+  bevestigd?: boolean;
 }
 
 function getMembership(poolId: string, membershipId: string) {
   return db
     .prepare(
-      `SELECT id, person_id, geldig_vanaf, geldig_tot, deelnamefactor FROM dienstrooster_pool_membership
+      `SELECT id, person_id, geldig_vanaf, geldig_tot FROM dienstrooster_pool_membership
        WHERE id = ? AND pool_id = ?`
     )
     .get(membershipId, poolId) as
-    | { id: string; person_id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }
+    | { id: string; person_id: string; geldig_vanaf: string; geldig_tot: string }
     | undefined;
 }
 
@@ -63,16 +60,15 @@ export async function PATCH(
     if (!membership) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'MEMBERSHIP_NOT_FOUND', message: `Lidmaatschap ${membershipId} niet gevonden` },
+        error: { code: 'MEMBERSHIP_NOT_FOUND', message: 'Lidmaatschap niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
 
     const geldig_vanaf = body.geldig_vanaf || membership.geldig_vanaf;
     const geldig_tot = body.geldig_tot || membership.geldig_tot;
-    const deelnamefactor = body.deelnamefactor ?? membership.deelnamefactor;
 
-    if (!body.geldig_vanaf && !body.geldig_tot && body.deelnamefactor === undefined) {
+    if (!body.geldig_vanaf && !body.geldig_tot) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'NO_UPDATES', message: 'Geen velden om bij te werken' },
@@ -109,14 +105,6 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
 
-    if (body.deelnamefactor !== undefined && !isValidDeelnamefactor(deelnamefactor)) {
-      const response: ApiErrorResponse = {
-        success: false,
-        error: { code: 'INVALID_DEELNAMEFACTOR', message: 'Deelnamefactor moet tussen 0 (exclusief) en 1 liggen' },
-      };
-      return NextResponse.json(response, { status: 400 });
-    }
-
     // Same overlap rule as creating a new membership - see members/route.ts.
     const overlapping = db
       .prepare(
@@ -135,16 +123,19 @@ export async function PATCH(
       return NextResponse.json(response, { status: 409 });
     }
 
+    const raaktRooster = lidmaatschapRoosterDenial(poolId, membership, { geldig_vanaf, geldig_tot }, body.bevestigd === true);
+    if (raaktRooster) return raaktRooster;
+
     db.prepare(
-      `UPDATE dienstrooster_pool_membership SET geldig_vanaf = ?, geldig_tot = ?, deelnamefactor = ? WHERE id = ?`
-    ).run(geldig_vanaf, geldig_tot, deelnamefactor, membershipId);
+      `UPDATE dienstrooster_pool_membership SET geldig_vanaf = ?, geldig_tot = ? WHERE id = ?`
+    ).run(geldig_vanaf, geldig_tot, membershipId);
     writeAuditLog({
       actorId: auth!.userId,
       entiteit: 'pool_membership',
       entiteitId: membershipId,
       actie: 'UPDATE',
-      oud: { geldig_vanaf: membership.geldig_vanaf, geldig_tot: membership.geldig_tot, deelnamefactor: membership.deelnamefactor },
-      nieuw: { wijziging: 'lidmaatschap gewijzigd', person_id: membership.person_id, geldig_vanaf, geldig_tot, deelnamefactor },
+      oud: { geldig_vanaf: membership.geldig_vanaf, geldig_tot: membership.geldig_tot },
+      nieuw: { wijziging: 'lidmaatschap gewijzigd', person_id: membership.person_id, geldig_vanaf, geldig_tot },
     });
 
     // A widened range can bring the person into a period that is already
@@ -154,9 +145,9 @@ export async function PATCH(
     // The AIOS's own sync for an AIOS pool (lib/aiosSync.ts): the two above leave its periods alone.
     syncAiosPersoon(membership.person_id);
 
-    const response: ApiSuccessResponse<{ id: string; geldig_vanaf: string; geldig_tot: string; deelnamefactor: number }> = {
+    const response: ApiSuccessResponse<{ id: string; geldig_vanaf: string; geldig_tot: string }> = {
       success: true,
-      data: { id: membershipId, geldig_vanaf, geldig_tot, deelnamefactor },
+      data: { id: membershipId, geldig_vanaf, geldig_tot },
     };
     return NextResponse.json(response);
   } catch (error) {
@@ -183,10 +174,18 @@ export async function DELETE(
     if (!membership) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'MEMBERSHIP_NOT_FOUND', message: `Lidmaatschap ${membershipId} niet gevonden` },
+        error: { code: 'MEMBERSHIP_NOT_FOUND', message: 'Lidmaatschap niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
+
+    const raaktRooster = lidmaatschapRoosterDenial(
+      poolId,
+      membership,
+      null,
+      new URL(req.url).searchParams.get('bevestigd') === '1'
+    );
+    if (raaktRooster) return raaktRooster;
 
     const person = db
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
@@ -204,7 +203,6 @@ export async function DELETE(
           pool_id: poolId,
           person_id: membership.person_id,
           codenaam: person?.codenaam ?? null,
-          deelnamefactor: membership.deelnamefactor,
           geldig_vanaf: membership.geldig_vanaf,
           geldig_tot: membership.geldig_tot,
         },
@@ -224,7 +222,6 @@ export async function DELETE(
             pool_id: poolId,
             geldig_vanaf: membership.geldig_vanaf,
             geldig_tot: membership.geldig_tot,
-            deelnamefactor: membership.deelnamefactor,
           },
           label: `${person.codenaam} verwijderd uit de pool (${membership.geldig_vanaf} t/m ${membership.geldig_tot})`,
           actorId: auth!.userId,

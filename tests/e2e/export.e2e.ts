@@ -23,7 +23,7 @@ test.describe('Exporteren & communicatie', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    await page.getByRole('heading', { name: /Exporteren & communicatie/ }).getByRole('button').click();
     await page.getByRole('button', { name: /Uitnodigingen en herinneringen/ }).click();
     return page.getByRole('dialog', { name: 'Exporteren' });
   };
@@ -35,6 +35,19 @@ test.describe('Exporteren & communicatie', () => {
     await expect(kopjes.nth(1)).toHaveText(/Herinneringen versturen/);
     await expect(kopjes.nth(2)).toHaveText(/Uitnodigingen downloaden/);
     await expect(kopjes.nth(3)).toHaveText(/Wijzigingsgeschiedenis downloaden/);
+  });
+
+  // 1.3.0 (audit 1.2.2): the download stood only in the dialog behind "Uitnodigingen en herinneringen".
+  test('de wijzigingsgeschiedenis staat ook direct in de sectie en downloadt een Excel-bestand', async ({ page }) => {
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
+    await page.getByRole('heading', { name: /Exporteren & communicatie/ }).getByRole('button').click();
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('link', { name: 'Wijzigingsgeschiedenis downloaden (Excel)' }).click(),
+    ]);
+    expect(download.suggestedFilename()).toMatch(/^wijzigingsgeschiedenis_.*\.xlsx$/);
   });
 
   test('zonder mailinstelling: versturen staat uit en zegt waarom, geen andere uitweg', async ({ page }) => {
@@ -56,9 +69,9 @@ test.describe('Exporteren & communicatie', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    await page.getByRole('heading', { name: /Exporteren & communicatie/ }).getByRole('button').click();
     await expect(page.getByRole('button', { name: /Deadlineherinnering versturen/ })).toBeDisabled();
-    await page.locator('[role="button"]:has-text("Status voorkeuren")').first().click();
+    await page.getByRole('heading', { name: /Status voorkeuren/ }).getByRole('button').click();
     await expect(page.getByRole('button', { name: /Herinnering sturen aan iedereen/ })).toBeDisabled();
     await expect(page.getByTestId('mail-nog-niet')).toHaveText(
       'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.'
@@ -72,7 +85,7 @@ test.describe('Exporteren & communicatie', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
+    await page.getByRole('heading', { name: /Exporteren & communicatie/ }).getByRole('button').click();
     const panel = page.getByTestId('auto-herinneringen');
     await expect(panel).toContainText('Automatische herinneringen');
     await expect(panel).toContainText('versturen is nog niet ingesteld');

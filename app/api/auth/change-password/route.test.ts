@@ -122,6 +122,18 @@ describe('POST /api/auth/change-password', () => {
     expect(await verifyPassword(NEW_PASSWORD, storedHash(planner)!)).toBe(true);
   });
 
+  it('answers 400, not 500, to a password that is not text, and leaves the old one in place', async () => {
+    const planner = await createStaff();
+    for (const body of [
+      { huidig_wachtwoord: 5, nieuw_wachtwoord: NEW_PASSWORD },
+      { huidig_wachtwoord: OLD_PASSWORD, nieuw_wachtwoord: {} },
+    ]) {
+      const res = await post(sessionCookie(planner), body);
+      expect(res.status, JSON.stringify(body)).toBe(400);
+    }
+    expect(await verifyPassword(OLD_PASSWORD, storedHash(planner)!)).toBe(true);
+  });
+
   it('refuses a wrong current password and leaves the old one in place', async () => {
     const planner = await createStaff();
     const before = storedHash(planner);

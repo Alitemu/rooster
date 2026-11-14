@@ -1,7 +1,7 @@
 /**
  * Staff Login Page
  *
- * Password (+TOTP if enrolled) login for ADMIN/PLANNER accounts.
+ * Password login for ADMIN/PLANNER accounts.
  */
 
 'use client';
@@ -116,7 +116,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
           <form onSubmit={handleSubmit}>
             <div className="form-group mb-4">
               <label className="label" htmlFor="setup-token">
-                Setup-token
+                Installatiecode
               </label>
               <input
                 id="setup-token"
@@ -171,7 +171,7 @@ function FirstRunSetupForm({ pending, onDone }: { pending: string[]; onDone: () 
               Minimaal 8 tekens, met kleine letters, hoofdletters, cijfers en een speciaal teken.
             </p>
 
-            {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
 
             <button type="submit" className="btn-primary w-full" disabled={loading}>
               {loading ? 'Bezig...' : 'Wachtwoord instellen'}
@@ -189,8 +189,6 @@ function PlannerLoginForm() {
 
   const [codenaam, setCodenaam] = useState('');
   const [password, setPassword] = useState('');
-  const [totpCode, setTotpCode] = useState('');
-  const [totpRequired, setTotpRequired] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   // Logged in with the public seed password: a new one comes first.
@@ -222,18 +220,13 @@ function PlannerLoginForm() {
       const res = await fetch(withBasePath('/api/auth/staff-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ codenaam, password, totpCode: totpCode || undefined }),
+        body: JSON.stringify({ codenaam, password }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        if (data.error?.code === 'TOTP_REQUIRED') {
-          setTotpRequired(true);
-          setError('Vul je authenticatiecode in');
-        } else {
-          setError(data.error?.message || 'Inloggen mislukt');
-        }
+        setError(data.error?.message || 'Inloggen mislukt');
         setLoading(false);
         return;
       }
@@ -286,7 +279,7 @@ function PlannerLoginForm() {
     <div className="container-main">
       <div className="max-w-sm mx-auto">
         <div className="card card-padding">
-          <h1 className="text-xl font-bold text-neutral-900 mb-6">Roosteraar inloggen</h1>
+          <h1 className="text-xl font-bold text-neutral-900 mb-6">Planner inloggen</h1>
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
@@ -322,26 +315,7 @@ function PlannerLoginForm() {
               />
             </div>
 
-            {totpRequired && (
-              <div className="form-group">
-                <label className="label" htmlFor="totp">
-                  Authenticatiecode
-                </label>
-                <input
-                  id="totp"
-                  className="input w-full"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value)}
-                  required
-                />
-              </div>
-            )}
-
-            {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+            {error && <p role="alert" className="text-sm text-red-600 mb-4">{error}</p>}
 
             <button type="submit" className="btn-primary w-full" disabled={loading}>
               {loading ? 'Bezig...' : 'Inloggen'}

@@ -10,7 +10,14 @@ import type { AiosCode, BlokSoort, BlokVorm, DagSoort } from '@/lib/aiosDiensten
 export type Niveau = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR';
 export type Bron = 'MANUAL' | 'PARTTIME' | 'ABSENCE';
 
-export const OPMERKING_MAX_LENGTH = 120;
+/** The optional reason (toelichting) for a day marked geblokkeerd or liever niet. */
+export const REDEN_MAX_LENGTH = 120;
+
+/** The toelichting of one day (lib/aiosReden.ts). */
+export interface AiosReden {
+  datum: string;
+  tekst: string;
+}
 
 export interface AiosVoorkeurDienst {
   slot_id: string;
@@ -21,6 +28,8 @@ export interface AiosVoorkeurDienst {
   blok: { id: string; soort: BlokSoort; vorm: BlokVorm; start_datum: string; eind_datum: string } | null;
   level: Niveau | null;
   bron: Bron | null;
+  /** Outside the AIOS's Geldig vanaf/tot (1.1.4): never rostered (hard rule 1), shown as niet in dienst, not markable. */
+  niet_in_dienst?: boolean;
 }
 
 export interface AiosVoorkeurDag {
@@ -39,7 +48,6 @@ export interface AiosWens {
   inwerken_tot: string | null;
   onderbreking_van: string | null;
   onderbreking_tot: string | null;
-  opmerking: string | null;
 }
 
 export const LEGE_WENS: AiosWens = {
@@ -50,7 +58,6 @@ export const LEGE_WENS: AiosWens = {
   inwerken_tot: null,
   onderbreking_van: null,
   onderbreking_tot: null,
-  opmerking: null,
 };
 
 export type TellerGroep =

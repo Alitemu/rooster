@@ -27,11 +27,14 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
   app/api/aios, app/aios, components/Aios*), docs/development/diensten.md
   "Copied, not changed". Shared: the login, the database, the Gmail
   account. The AIOS gets its own solver in its own container; the
-  achterwacht's solver is not changed.
+  achterwacht's solver is not changed without the user's say (0.905.0:
+  only its time bound, 10 to 30 minutes, their choice).
 - The repository is public: no organisation names, domains, e-mail
   addresses, IP addresses, internal paths or real names of people anywhere
   in it (code, docs, tests, commit messages). Files the user shares
-  (rosters, forms) stay out of the repository.
+  (rosters, forms) stay out of the repository. An example address uses a
+  reserved domain (`.test`, `.example`); app/geenEchteAdressen.test.ts fails
+  on one that could be someone's (1.7.0).
 - Never ask for or show the Gmail app password: the beheerder enters it in
   the app.
 - **Version:** the header shows `versie` from package.json, right of the
@@ -48,12 +51,12 @@ that says "CLAUDE.md, ..." points to a section that now lives there.
 
 | Layer | Technology | Version |
 |-------|-----------|---------|
-| Frontend + Backend | Next.js App Router | 16.3.8 |
+| Frontend + Backend | Next.js App Router | 16.4.2 |
 | Language | TypeScript | 5.5+ |
 | Styling | Tailwind CSS + shadcn/ui | 3.4+ (build only, devDependencies) |
 | Database | SQLite (WAL mode) | Latest via better-sqlite3 |
 | ORM | Drizzle | 0.45+ |
-| Auth | Custom (tokens + TOTP) | bcrypt, speakeasy |
+| Auth | Custom (tokens + passwords) | bcrypt |
 | Solver | Python + FastAPI + OR-Tools (./solver; the AIOS's own ./aios-solver) | 3.11, 0.141, 9.8 |
 | Testing | Vitest + fast-check + Playwright | 4.1+, 3.14+, 1.62+ |
 | Container | Docker Compose | - |
@@ -146,6 +149,14 @@ identifiers, DB fields, comments, and console/log output only.
   - Geblokkeerd (hard)
   - Part-time (auto-generated)
 - Print-friendly: must work in B&W
+- Date fields read dd-mm-jjjj (time uu:mm, 24-hour) in every browser:
+  components/DatumVeld.tsx (DatumVeld, DatumTijdVeld), never a native
+  `type="date"`/`datetime-local`, which follows the browser's language
+  (mm/dd/yyyy on an English Chrome). Values in and out stay YYYY-MM-DD
+  and YYYY-MM-DDTHH:MM (lib/datumInvoer.test.ts, tests/e2e/datumveld.e2e.ts).
+  A date shown in a list, table or message reads dd-mm-jjjj too
+  (`isoNaarInvoer`, 1.2.1; in JSX `<DatumTekst iso=... />`, which keeps it
+  on one line on a phone, 1.2.2); an example date is unambiguous (23-04-2027).
 
 **No Mock Data in Production:**
 - All seed data via `/scripts/seed.ts`
@@ -197,6 +208,7 @@ Every route keeps these, and a sweep test fails when one doesn't:
 - **Sub-folder:** every client fetch and plain link through `withBasePath`
   (app/basePathSweep.test.ts).
 - **Dutch style** in user-facing text (app/dutchStyle.test.ts).
+- **Contrast:** white text on a button reaches 4.5 to 1 (app/buttonContrast.test.ts).
 
 ### Testing
 
@@ -225,8 +237,10 @@ The gate before a release, all green:
    mutations whose file or tests changed since then, every one caught. A
    0.0.x release runs none (the user's choice). It edits sources while it
    runs: nothing else meanwhile.
-4. After a schema change: `node scripts/schema-drift.mjs` and
-   `node scripts/upgrade-drift.mjs`.
+4. After a schema change: `node scripts/schema-drift.mjs`. The upgrade of
+   an old database runs in vitest (scripts/seed.upgradeOud.test.ts, on
+   tests/fixtures/oude-databases); `node scripts/upgrade-drift.mjs
+   --schrijf <version>` adds one for a version installed somewhere.
 5. Browser checks, with a seeded database, both solvers (the AIOS's on
    AIOS_SOLVER_URL) and the app running (ALLOW_SEED_PASSWORD=true): `node scripts/full-check.mjs` then
    `node scripts/ui-check.mjs` on the same seed, `npx playwright test`,
@@ -250,22 +264,35 @@ How to run them and what each one covers: docs/development/checks.md.
 | Achterwacht and AIOS apart, the AIOS's copies | docs/development/diensten.md | lib/dienstAccess.ts, lib/activePeriod.ts, lib/aios*.ts, app/api/aios |
 | The AIOS roster (design, steps) | docs/aios-rooster.md | lib/aiosQuarter.ts, lib/aiosDiensten.ts, lib/aiosSlots.ts, lib/aiosPool.ts, lib/aiosPeriod.ts |
 | The AIOS's solver (contract, model, tests) | docs/development/aios-solver.md | aios-solver/ |
-| Links, passwords, TOTP, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
+| Links, passwords, beheerder, sessions | docs/development/auth.md | lib/auth-context.ts, lib/session.ts, lib/staffAccounts.ts |
 | Verzendlijst, reminders, swap mails, "Link kwijt?" | docs/development/mail.md | lib/verzendlijst.ts, lib/verzendlijstMail.ts, lib/meldingMail.ts, lib/autoReminders.ts |
-| Images, workflows, compose, sub-folder, backups, uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts |
-| Operator guides (Dutch) | README.md, docs/verzendlijst-power-automate.md | - |
+| Images, workflows, compose, sub-folder, backups (also by mail, and the restore), uploads, downloads, limits | docs/development/deployment.md | Dockerfile, docker-compose.yml, .github/workflows, lib/basePath.ts, lib/xlsxWrite.ts, lib/dbBackup*.ts |
+| Operator guides (Dutch) | README.md, docs/installatie-it.md (for the IT department), docs/verzendlijst-power-automate.md, docs/back-up-power-automate.md, docs/teststrategie.md (what to test when), docs/stappenplan-testen.md (the checklist for the user), docs/todo.md (wishes put off, with the reason) | - |
 
 Traps that cost a day each time:
+- **`.gitignore` has `*backup*`** (database copies). A source file with
+  "backup" in lowercase in its name is never committed: everything passes
+  here and the build on GitHub fails on a missing module (0.900.0, 0.904.0).
+  Name it dbBackup*, terugzet*, BackupDialog; app/genegeerdeBron.test.ts
+  fails when a source file is ignored.
+- **A test that runs a tool (git, a shell) runs on GitHub too**, in a
+  container whose checkout belongs to another user: git refuses it there
+  ("dubious ownership") and the build fails while everything passed here
+  (0.905.0). Call git with `-c safe.directory=*`, as
+  app/genegeerdeBron.test.ts does.
 - **The seed builds the schema with its own SQL.** A new column needs the
   schema (db/schema.ts), a migration (db/migrations) and the seed (its
-  CREATE TABLE and `LATER_COLUMNS`); then schema-drift and upgrade-drift.
+  CREATE TABLE and `LATER_COLUMNS`); then schema-drift, and
+  scripts/seed.upgradeOud.test.ts holds the upgrade.
 - **Production starts with `seed.ts --alleen-planner`** at every start
   (SEED_ON_START=planner), not with the migrations.
 - **Periods:** one period per day per pool; the ruleset is frozen when a
   period opens; while a generation runs, changes to the roster answer 409.
-- **Mail:** the app never stores e-mail addresses and never mails
-  participants itself; everything goes as a verzendlijst to the
-  operator's flow.
+- **Mail:** the app never stores a participant's e-mail address and never
+  mails participants itself; everything goes as a verzendlijst to the
+  operator's flow. It does keep the operator's own addresses, which the
+  beheerder enters: the Gmail account, the contactadres per dienst and the
+  address the backup goes to.
 - **The AIOS's hard rules live in three places:** aios-solver/model.py
   (the solver), aios-solver/controle.py (its independent check) and
   lib/aiosRegels.ts (the app's copy, the user's choice). A rule changed in

@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
 import type { BlokKeuze, BlokVraag, FeestdagVragen } from '@/lib/aiosFeestdagBlokken';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 export interface FeestdagStaat {
   open: number;
@@ -96,7 +97,7 @@ export function AiosFeestdagBlokken({
         if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Laden van de blokken rond feestdagen is mislukt');
         if (actief) neem(data.data);
       })
-      .catch((err) => actief && setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt' }));
+      .catch((err) => actief && setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt') }));
     return () => {
       actief = false;
     };
@@ -133,7 +134,7 @@ export function AiosFeestdagBlokken({
       neem(data.data);
       setMelding({ fout: false, tekst: 'Bewaard.' });
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Bewaren is mislukt' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Bewaren is mislukt') });
     } finally {
       setBezig(false);
     }

@@ -23,6 +23,12 @@ const MAX_ENTRIES = 2000;
 const MAX_ENTRY_BYTES = 20 * 1024 * 1024;
 /** Excel's last column, XFD. */
 const MAX_COLUMNS = 16384;
+// A worksheet is read into memory as rows of text cells. A row with one cell in
+// the last column is padded to 16384 cells, so 343 000 such rows (59 kB zipped)
+// used to exhaust the heap and take the whole app down. The planner's own files
+// have a few hundred rows of a few dozen columns.
+const MAX_ROWS = 20_000;
+const MAX_CELL_SLOTS = 1_000_000;
 
 export class XlsxError extends Error {}
 
@@ -189,6 +195,15 @@ export function readPart(buf: Buffer, name: string): string | null {
 
 /** Rows of the first worksheet, cells as text, empty rows left out. */
 export function readFirstSheet(buf: Buffer): string[][] {
+  return readFirstSheetMetRegels(buf).rijen;
+}
+
+/**
+ * The same rows, and for each the row number it has in Excel. The rows left
+ * out (empty ones) still count there: a message "Regel 12" has to point at
+ * the row the user sees.
+ */
+export function readFirstSheetMetRegels(buf: Buffer): { rijen: string[][]; regels: number[] } {
   if (buf.length < 22 || buf.readUInt32LE(0) !== 0x04034b50) {
     throw new XlsxError('Dit is geen Excel-bestand (.xlsx).');
   }
@@ -197,8 +212,15 @@ export function readFirstSheet(buf: Buffer): string[][] {
   if (sheet === null) throw new XlsxError('Het Excel-bestand heeft geen werkblad.');
   const shared = [...elements(entryText(buf, entries, 'xl/sharedStrings.xml') ?? '', 'si')].map((si) => itemText(si.body ?? ''));
 
-  const rows: string[][] = [];
+  const rijen: string[][] = [];
+  const regels: number[] = [];
+  let celPlaatsen = 0;
+  let teller = 0;
   for (const row of elements(sheet, 'row')) {
+    teller++;
+    const opgegeven = Number(attr(` ${row.attrs}`, 'r'));
+    const regel = Number.isInteger(opgegeven) && opgegeven >= teller ? opgegeven : teller;
+    teller = regel;
     const cells: string[] = [];
     for (const c of elements(row.body ?? '', 'c')) {
       const tag = ` ${c.attrs}`;
@@ -216,9 +238,16 @@ export function readFirstSheet(buf: Buffer): string[][] {
       while (cells.length < col) cells.push('');
       cells[col] = text.trim();
     }
-    if (cells.some((cell) => cell !== '')) rows.push(cells);
+    if (cells.some((cell) => cell !== '')) {
+      celPlaatsen += cells.length;
+      if (rijen.length >= MAX_ROWS || celPlaatsen > MAX_CELL_SLOTS) {
+        throw new XlsxError('Dit Excel-bestand heeft te veel rijen of cellen om in te lezen.');
+      }
+      rijen.push(cells);
+      regels.push(regel);
+    }
   }
-  return rows;
+  return { rijen, regels };
 }
 
 // Moved to lib/isoDate.ts, which the browser can load too.

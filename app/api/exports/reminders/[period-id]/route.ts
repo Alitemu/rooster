@@ -192,7 +192,7 @@ ${personalLink}
 
 Jouw input helpt ons een rooster te maken dat rekening houdt met ieders wensen en beschikbaarheid.
 
-Heb je vragen? Neem dan contact op met de roosteraar.
+Heb je vragen? Neem dan contact op met de planner.
 
 Bedankt!`;
 

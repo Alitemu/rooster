@@ -12,23 +12,31 @@
  * table, column, index, foreign key and CHECK constraint, and that no row
  * of the core tables is lost.
  *
- *   node scripts/upgrade-drift.mjs              # a few released versions
- *   node scripts/upgrade-drift.mjs <commit>...  # these
+ *   node scripts/upgrade-drift.mjs                       # a few released versions
+ *   node scripts/upgrade-drift.mjs <version|commit>...   # these
+ *   node scripts/upgrade-drift.mjs --schrijf 1.3.0 ...   # and keep each old database as text
  *
- * Needs nothing running; needs the git history (not a shallow clone).
+ * Needs nothing running; needs the git history (not a shallow clone) and
+ * the packages the old version's seed imports: it runs with today's
+ * node_modules, and every version before 26 October 2026 asks for
+ * `speakeasy`, which left with the tweestapsverificatie (`npm install
+ * --no-save speakeasy@2` before, `npm ci` after). That made this check fail
+ * unseen from that day on (audit 4, N-01).
+ *
+ * So the check that runs at every build is scripts/seed.upgradeOud.test.ts:
+ * it reads old databases from tests/fixtures/oude-databases/*.sql, which
+ * `--schrijf` writes here once per version, and needs neither the history
+ * nor an old package. Write one for a version that is installed somewhere.
  */
 
-import Database from 'better-sqlite3';
 import { execFileSync } from 'child_process';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { dumpDatabase, lostRows, rowCounts, shape, shapeProblems } from './upgradeVorm.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const CORE = ['person', 'pool_membership', 'schedule_period', 'availability', 'assignment', 'ledger_entry', 'absence', 'parttime_pattern'].map(
-  (t) => `dienstrooster_${t}`
-);
 
 function versionCommit(version) {
   const out = execFileSync('git', ['log', '--format=%h', `-S"version": "${version}"`, '--', 'package.json'], { cwd: repoRoot }).toString().trim().split('\n');
@@ -39,40 +47,12 @@ function seed(cwd, args, file) {
   execFileSync('npx', ['tsx', 'scripts/seed.ts', ...args], { cwd, env: { ...process.env, DATABASE_URL: `file:${file}` }, stdio: 'pipe' });
 }
 
-function rowCounts(file) {
-  const db = new Database(file, { readonly: true });
-  const out = {};
-  for (const t of CORE) {
-    try {
-      out[t] = db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
-    } catch {
-      out[t] = 0;
-    }
-  }
-  db.close();
-  return out;
-}
-
-function shape(file) {
-  const db = new Database(file, { readonly: true });
-  const out = {};
-  for (const { name, sql } of db.prepare(`SELECT name, sql FROM sqlite_master WHERE type='table' AND name LIKE 'dienstrooster%'`).all()) {
-    out[name] = {
-      column: db.prepare(`PRAGMA table_info("${name}")`).all().map((c) => `${c.name} ${c.type} notnull=${c.notnull} pk=${c.pk}`),
-      index: db
-        .prepare(`PRAGMA index_list("${name}")`)
-        .all()
-        .map((i) => `${i.unique ? 'unique' : 'index'} (${db.prepare(`PRAGMA index_info("${i.name}")`).all().map((c) => c.name).join(',')})`),
-      'foreign key': db.prepare(`PRAGMA foreign_key_list("${name}")`).all().map((f) => `${f.from} -> ${f.table}.${f.to}`),
-      check: [...sql.matchAll(/CHECK\s*\(((?:[^()]|\([^()]*\))*)\)/gi)].map((m) => m[1].replace(/[`"\s]/g, '')),
-    };
-  }
-  db.close();
-  return out;
-}
-
-const commits = process.argv.slice(2);
-if (commits.length === 0) commits.push(...['0.2.0', '0.6.0', '0.8.1', '0.11.0'].map(versionCommit));
+const args = process.argv.slice(2);
+const schrijf = args.includes('--schrijf');
+const names = args.filter((a) => a !== '--schrijf');
+if (names.length === 0) names.push('0.2.0', '0.6.0', '0.8.1', '0.11.0');
+const isVersion = (n) => /^\d+\.\d+\.\d+$/.test(n);
+const fixtureDir = path.join(repoRoot, 'tests', 'fixtures', 'oude-databases');
 
 const work = fs.mkdtempSync(path.join(os.tmpdir(), 'upgrade-drift-'));
 const fresh = path.join(work, 'fresh.db');
@@ -80,7 +60,8 @@ seed(repoRoot, ['--alleen-planner'], fresh);
 const expected = shape(fresh);
 
 let failures = 0;
-for (const commit of commits) {
+for (const name of names) {
+  const commit = isVersion(name) ? versionCommit(name) : name;
   const tree = path.join(work, `tree-${commit}`);
   const old = path.join(work, `${commit}.db`);
   execFileSync('git', ['worktree', 'add', '--detach', tree, commit], { cwd: repoRoot, stdio: 'pipe' });
@@ -90,27 +71,24 @@ for (const commit of commits) {
   } finally {
     execFileSync('git', ['worktree', 'remove', '--force', tree], { cwd: repoRoot, stdio: 'pipe' });
   }
+  if (schrijf) {
+    fs.mkdirSync(fixtureDir, { recursive: true });
+    const kopie = path.join(work, `${commit}-klein.db`);
+    fs.copyFileSync(old, kopie);
+    fs.writeFileSync(path.join(fixtureDir, `${name}.sql`), dumpDatabase(kopie));
+    console.log(`  geschreven: tests/fixtures/oude-databases/${name}.sql`);
+  }
   const before = rowCounts(old);
   seed(repoRoot, ['--alleen-planner'], old);
   const after = rowCounts(old);
   const got = shape(old);
 
-  const problems = [];
-  for (const table of new Set([...Object.keys(expected), ...Object.keys(got)])) {
-    if (!got[table]) problems.push(`table missing after the upgrade: ${table}`);
-    else if (!expected[table]) problems.push(`table only in the upgraded database: ${table}`);
-    else
-      for (const kind of Object.keys(expected[table])) {
-        for (const x of expected[table][kind].filter((x) => !got[table][kind].includes(x))) problems.push(`${table}: ${kind} missing after the upgrade: ${x}`);
-        for (const x of got[table][kind].filter((x) => !expected[table][kind].includes(x))) problems.push(`${table}: ${kind} only in the upgraded database: ${x}`);
-      }
-  }
-  for (const t of CORE) if (after[t] < before[t]) problems.push(`${t}: ${before[t] - after[t]} row(s) lost`);
+  const problems = [...shapeProblems(expected, got), ...lostRows(before, after)];
 
-  if (problems.length === 0) console.log(`✓ ${commit}: upgraded to the same schema, no rows lost`);
+  if (problems.length === 0) console.log(`✓ ${name}: upgraded to the same schema, no rows lost`);
   else {
     failures++;
-    console.log(`✗ ${commit}: ${problems.length} difference(s)`);
+    console.log(`✗ ${name}: ${problems.length} difference(s)`);
     for (const p of problems) console.log(`   ${p}`);
   }
 }

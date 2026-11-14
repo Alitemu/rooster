@@ -14,6 +14,7 @@ import { resolveBaseUrl } from '@/lib/baseUrl';
 import { buildVerzendlijst } from '@/lib/aiosVerzendlijst';
 import { aiosFout, laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosMailIngesteld, verstuurAiosVerzendlijst } from '@/lib/aiosMail';
+import { claimAiosVerzending, AIOS_VERZENDING_BEZIG } from '@/lib/aiosInFlight';
 import {
   aiosHerinnering,
   aiosMailMag,
@@ -26,6 +27,7 @@ import { db } from '@/db/client';
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
+  let release: (() => void) | null = null;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) return unauthorizedResponse();
@@ -41,6 +43,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     }
     const nietNu = aiosMailMag(period);
     if (nietNu) return aiosFout(409, 'PERIOD_NOT_OPEN', nietNu);
+
+    // One send at a time (lib/aiosInFlight.ts): taken before the first await, shared with the automatic reminder.
+    release = claimAiosVerzending(`herinneren:${period.id}`);
+    if (!release) return aiosFout(409, 'BEZIG', AIOS_VERZENDING_BEZIG);
 
     let ontvangers = aiosNogNietIngediend(period);
     if (typeof body.person_id === 'string') {
@@ -83,5 +89,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     return NextResponse.json({ success: true, data: { aantal: result.aantal, overgeslagen: recent.size } });
   } catch (error) {
     return internalErrorResponse('aios-herinneringen', error);
+  } finally {
+    release?.();
   }
 }

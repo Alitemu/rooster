@@ -9,6 +9,8 @@
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosSectie } from '@/components/AiosSectie';
+import { foutTekst } from '@/lib/aiosFoutTekst';
+import { DatumVeld } from '@/components/DatumVeld';
 
 const kort = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'short' });
 
@@ -73,7 +75,7 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
     fetch(withBasePath(`/api/aios/periode/${periodId}/voortgangstoets`))
       .then((res) => json(res, 'Laden van de voortgangstoets is mislukt.'))
       .then(neem)
-      .catch((err) => setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt.' }));
+      .catch((err) => setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt.') }));
   }, [periodId, status]);
 
   const bewaar = async () => {
@@ -90,7 +92,7 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
       setMelding({ fout: false, tekst: opgeslagen(status, nieuw.teruggezet) });
       onChanged();
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Opslaan is mislukt.' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Opslaan is mislukt.') });
     } finally {
       setBezig(false);
     }
@@ -123,7 +125,7 @@ export function AiosVoortgangstoets({ periodId, status, onChanged }: { periodId:
           {aan && (
             <label className="block text-sm">
               <span className="block text-xs text-neutral-600">Datum van de voortgangstoets</span>
-              <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} disabled={bezig} className="px-2 py-1 border rounded text-sm" />
+              <DatumVeld aria-label="Datum van de voortgangstoets" value={datum} onChange={(waarde) => setDatum(waarde)} disabled={bezig} className="px-2 py-1 border rounded text-sm" />
             </label>
           )}
           <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig || !veranderd || (aan && !datum)} onClick={bewaar}>

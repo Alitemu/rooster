@@ -54,11 +54,12 @@ export function LinkAanvraagForm() {
       <div className="mt-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-900" role="status">
         <p className="font-medium">Aanvraag ontvangen.</p>
         <p className="mt-1">
-          Als dit e-mailadres bij ons bekend is, krijg je binnen een paar minuten een e-mail met je persoonlijke link.
+          Als dit e-mailadres bij ons bekend is, krijg je een e-mail met je persoonlijke link. Dat kan tot een kwartier
+          duren. Vraag hem in die tijd niet opnieuw aan, want dan krijg je meerdere e-mails.
         </p>
         <p className="mt-1">
-          Geen e-mail ontvangen? Controleer of je het goede adres hebt ingevuld en of het je werk-e-mailadres is. Kijk
-          ook in je map met ongewenste e-mail.
+          Na een kwartier nog geen e-mail? Controleer of je het goede adres hebt ingevuld en of het je werk-e-mailadres
+          is. Kijk ook in je map met ongewenste e-mail.
         </p>
         <button
           type="button"
@@ -85,13 +86,14 @@ export function LinkAanvraagForm() {
           maxLength={254}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="naam@werk.nl"
+          placeholder="je e-mailadres op het werk"
           className="min-w-0 flex-1 rounded border border-neutral-300 px-3 py-2 text-sm"
         />
         <button type="submit" disabled={state.kind === 'sending'} className="btn-primary whitespace-nowrap disabled:opacity-60">
           {state.kind === 'sending' ? 'Bezig...' : 'Link aanvragen'}
         </button>
       </div>
+      <p className="mt-2 text-xs text-neutral-600">De e-mail kan tot een kwartier onderweg zijn. Vraag de link één keer aan.</p>
       {state.kind === 'error' && (
         <p className="mt-2 text-sm text-red-700" role="alert">
           {state.message}

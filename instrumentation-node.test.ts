@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { db } from '@/db/client';
 import { hashPassword } from '@/lib/auth';
 import { DEFAULT_TEST_PASSWORD } from '@/lib/seedPassword';
-import { runStartupBootstrap } from './instrumentation-node';
+import { runStartupBootstrap, warnAboutMissingAiosSolver } from './instrumentation-node';
 
 /**
  * The hard rule: this warning names every staff account still on the
@@ -91,5 +91,43 @@ describe('runStartupBootstrap / warnAboutSeededPassword', () => {
     // No staff accounts, no seeded database assumptions - just proving the
     // call itself is safe to await unconditionally at boot.
     await expect(runStartupBootstrap()).resolves.toBeUndefined();
+  });
+});
+
+describe('warnAboutMissingAiosSolver', () => {
+  const bewaardeUrl = process.env.AIOS_SOLVER_URL;
+  afterEach(() => {
+    if (bewaardeUrl === undefined) delete process.env.AIOS_SOLVER_URL;
+    else process.env.AIOS_SOLVER_URL = bewaardeUrl;
+  });
+
+  async function waarschuwingen(lookup: (host: string) => Promise<unknown>): Promise<string> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await warnAboutMissingAiosSolver(lookup);
+      return warn.mock.calls.map((call) => String(call[0])).join('\n');
+    } finally {
+      warn.mockRestore();
+    }
+  }
+
+  it('names the host and the compose file when the name does not exist', async () => {
+    process.env.AIOS_SOLVER_URL = 'http://aios-solver:8000';
+    const tekst = await waarschuwingen(() => Promise.reject(Object.assign(new Error('x'), { code: 'ENOTFOUND' })));
+    expect(tekst).toContain('"aios-solver"');
+    expect(tekst).toContain('docker-compose.yml');
+  });
+
+  it('says nothing when the name exists', async () => {
+    expect(await waarschuwingen(() => Promise.resolve({ address: '172.18.0.4' }))).toBe('');
+  });
+
+  it('says nothing about a lookup that failed for another reason', async () => {
+    expect(await waarschuwingen(() => Promise.reject(Object.assign(new Error('x'), { code: 'EAI_AGAIN' })))).toBe('');
+  });
+
+  it('never throws on an AIOS_SOLVER_URL that is not a URL', async () => {
+    process.env.AIOS_SOLVER_URL = 'geen url';
+    expect(await waarschuwingen(() => Promise.reject(Object.assign(new Error('x'), { code: 'ENOTFOUND' })))).toBe('');
   });
 });

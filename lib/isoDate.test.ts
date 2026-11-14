@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidIsoDate, parseDutchOrIsoDate, parseSheetDate } from './isoDate';
+import { isPlausibleIsoDate, isValidIsoDate, parseDutchOrIsoDate, parseSheetDate } from './isoDate';
 
 /**
  * The hard rule: only a real calendar date in YYYY-MM-DD form passes.
@@ -85,5 +85,14 @@ describe('parseDutchOrIsoDate', () => {
     expect(parseDutchOrIsoDate('1-13-2027')).toBeNull();
     expect(parseDutchOrIsoDate('2027')).toBeNull();
     expect(parseDutchOrIsoDate('')).toBeNull();
+  });
+});
+
+describe('isPlausibleIsoDate', () => {
+  it('takes the years a roster can concern and nothing outside them', () => {
+    for (const ok of ['2000-01-01', '2026-10-22', '2199-12-31']) expect(isPlausibleIsoDate(ok), ok).toBe(true);
+    for (const nee of ['1999-12-31', '1000-01-01', '2200-01-01', '9999-12-31', '2027-02-30', 'x', 20270101, null]) {
+      expect(isPlausibleIsoDate(nee), String(nee)).toBe(false);
+    }
   });
 });

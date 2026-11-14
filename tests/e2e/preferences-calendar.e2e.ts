@@ -114,3 +114,22 @@ test.describe('the preferences calendar on a phone', () => {
     for (const word of ['voorkeur', 'liever niet', 'geblokkeerd']) expect(titles.some((t) => t.includes(`: ${word} (`)), word).toBe(true);
   });
 });
+
+test('a new absence starts without dates and "Van" sets "Tot en met" to the day after', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(getPersonalLinkUrl(token));
+  await page.getByRole('button', { name: /Deeltijd/ }).first().click();
+  await expect(page.getByRole('heading', { name: 'Afwezigheid opgeven' })).toBeVisible();
+  // It started on the whole period (1.4.0 and before): one tap on Toevoegen blocked every day of it.
+  const van = page.getByLabel('Van', { exact: true });
+  // The deeltijd form above has a "Tot en met" of its own: the second one is the absence's.
+  const tot = page.getByLabel('Tot en met').nth(1);
+  await expect(van).toHaveValue('');
+  await expect(tot).toHaveValue('');
+  const toevoegen = page.getByRole('button', { name: 'Toevoegen' }).nth(1);
+  await expect(toevoegen).toBeDisabled();
+  await van.fill('09-03-2099');
+  await expect(tot).toHaveValue('10-03-2099');
+  await expect(toevoegen).toBeEnabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+});

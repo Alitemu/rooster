@@ -6,8 +6,9 @@
  * Shows notifications for a person with filtering and read/dismiss capability.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Notification {
   id: string;
@@ -68,7 +69,7 @@ export function NotificationCenter({ personId, periodId }: Props) {
         setUnreadCount(data.data.unread_count);
       } catch (err) {
         if (!current) return;
-        setError(err instanceof Error ? err.message : 'Laden van meldingen mislukt');
+        setError(foutTekst(err, 'Laden van meldingen mislukt'));
       } finally {
         if (current) setLoading(false);
       }
@@ -80,20 +81,23 @@ export function NotificationCenter({ personId, periodId }: Props) {
     };
   }, [personId, periodId, filterType, unreadOnly]);
 
+  // Notifications whose request is under way: a second click on the same one does nothing, and two different
+  // ones in a row both land (each update builds on the list as it is, not on the one of the click).
+  const onderweg = useRef(new Set<string>());
+
   const handleMarkRead = async (notifId: string) => {
+    if (onderweg.current.has(notifId)) return;
+    onderweg.current.add(notifId);
     setActionError(null);
+    const wasOngelezen = Boolean(notifications.find((n) => n.id === notifId && !n.gelezen));
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/notifications/${notifId}/read`), {
         method: 'POST',
       });
 
       if (res.ok) {
-        setNotifications(
-          notifications.map((n) =>
-            n.id === notifId ? { ...n, gelezen: true } : n
-          )
-        );
-        setUnreadCount((count) => Math.max(0, count - 1));
+        setNotifications((prev) => prev.map((n) => (n.id === notifId ? { ...n, gelezen: true } : n)));
+        if (wasOngelezen) setUnreadCount((count) => Math.max(0, count - 1));
       } else {
         // A click that appears to do nothing looks like a broken button,
         // not a failed request - both branches used to only console.error.
@@ -101,29 +105,33 @@ export function NotificationCenter({ personId, periodId }: Props) {
         setActionError(data?.error?.message || 'Markeren als gelezen mislukt');
       }
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Markeren als gelezen mislukt');
+      setActionError(foutTekst(err, 'Markeren als gelezen mislukt'));
+    } finally {
+      onderweg.current.delete(notifId);
     }
   };
 
   const handleDismiss = async (notifId: string) => {
+    if (onderweg.current.has(notifId)) return;
+    onderweg.current.add(notifId);
     setActionError(null);
+    const wasOngelezen = Boolean(notifications.find((n) => n.id === notifId && !n.gelezen));
     try {
       const res = await fetch(withBasePath(`/api/person/${personId}/notifications/${notifId}/dismiss`), {
         method: 'POST',
       });
 
       if (res.ok) {
-        const dismissed = notifications.find((n) => n.id === notifId);
-        setNotifications(notifications.filter((n) => n.id !== notifId));
-        if (dismissed && !dismissed.gelezen) {
-          setUnreadCount((count) => Math.max(0, count - 1));
-        }
+        setNotifications((prev) => prev.filter((n) => n.id !== notifId));
+        if (wasOngelezen) setUnreadCount((count) => Math.max(0, count - 1));
       } else {
         const data = await res.json().catch(() => null);
         setActionError(data?.error?.message || 'Sluiten van melding mislukt');
       }
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Sluiten van melding mislukt');
+      setActionError(foutTekst(err, 'Sluiten van melding mislukt'));
+    } finally {
+      onderweg.current.delete(notifId);
     }
   };
 

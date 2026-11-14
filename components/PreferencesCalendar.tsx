@@ -27,6 +27,9 @@ import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
+import { beschikbaarVoorbeeld, dienstLegenda, dienstLetter, groepsgrootte } from '@/lib/calendarLegend';
 
 type BlockLevel = 'ABSOLUUT' | 'LIEVER_NIET' | 'VOORKEUR' | null;
 
@@ -35,6 +38,7 @@ interface SlotPreference {
   level: BlockLevel;
   source: string | null; // MANUAL, PARTTIME, ABSENCE, or null when level is null
   fellow?: boolean; // a weekend block from "Ik ben fellow" - still the person's to release
+  nietInDienst?: boolean; // outside Geldig vanaf/tot (1.1.4): never rostered, nothing to mark
 }
 
 /** The real limit per kind of shift (lib/blockBudget.ts); null: none. */
@@ -117,11 +121,13 @@ function formatDayLong(datum: string): string {
 function coverageNoteText(cov: CoverageInfo): string {
   const day = formatDayLong(cov.datum);
   if (cov.absoluut_blocked === 0) {
-    return `Op ${day} heeft nog niemand geblokkeerd. Alle ${cov.total_in_pool} collega's zijn beschikbaar.`;
+    return cov.total_in_pool === 1
+      ? `Op ${day} heeft nog niemand geblokkeerd. De collega is beschikbaar.`
+      : `Op ${day} heeft nog niemand geblokkeerd. Alle ${cov.total_in_pool} collega's zijn beschikbaar.`;
   }
   return (
-    `Op ${day} hebben ${cov.absoluut_blocked} van de ${cov.total_in_pool} collega's al geblokkeerd. ` +
-    `Er blijven ${cov.available} mensen over voor die dag.`
+    `Op ${day} ${cov.absoluut_blocked === 1 ? 'heeft' : 'hebben'} ${cov.absoluut_blocked} van de ${telwoord(cov.total_in_pool, 'collega', "collega's")} al geblokkeerd. ` +
+    (cov.available === 1 ? 'Er blijft 1 persoon over voor die dag.' : `Er blijven ${cov.available} mensen over voor die dag.`)
   );
 }
 
@@ -136,6 +142,8 @@ export function PreferencesCalendar({
   const [preferences, setPreferences] = useState<Map<string, DayPreference>>(new Map());
   const [budget, setBudget] = useState<BlokkadeBudget>({});
   const [coverage, setCoverage] = useState<Map<string, CoverageInfo>>(new Map());
+  // The example under the calendar in this group's own numbers (R-10, 1.7.0), not a fixed 15 of 31.
+  const voorbeeld = beschikbaarVoorbeeld(groepsgrootte(coverage.values()));
   const [loading, setLoading] = useState(true);
   // Separate from saveError (an inline save failure with the calendar
   // still shown) - this means the calendar itself never rendered, which
@@ -174,13 +182,14 @@ export function PreferencesCalendar({
           level: slot.blocking_level,
           source: slot.source,
           fellow: Boolean(slot.fellow_blok),
+          nietInDienst: Boolean(slot.niet_in_dienst),
         });
       }
 
       setPreferences(prefs);
       setBudget(data.data.blokkadebudget ?? {});
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : 'Ophalen van voorkeuren mislukt');
+      setLoadError(foutTekst(error, 'Ophalen van voorkeuren mislukt'));
     } finally {
       setLoading(false);
     }
@@ -271,7 +280,7 @@ export function PreferencesCalendar({
         // even started).
         setHasChanged(false);
         onPreferencesChange?.(false);
-        setSaveError(error instanceof Error ? error.message : 'Opslaan van voorkeur mislukt');
+        setSaveError(foutTekst(error, 'Opslaan van voorkeur mislukt'));
       } finally {
         setIsSaving(false);
       }
@@ -331,7 +340,8 @@ export function PreferencesCalendar({
   // Left click: cycle null → VOORKEUR → LIEVER_NIET → ABSOLUUT → null
   const handleTogglePreference = useCallback(
     (datum: string, teller: string) => {
-      if (readOnly) return;
+      // While a save runs the cells stay focusable (aria-disabled), so a keyboard user does not lose their place.
+      if (readOnly || isSaving) return;
       const slot = preferences.get(datum)?.slots.get(teller);
       if (!slot) {
         console.error('Slot not found for', datum, teller);
@@ -346,7 +356,7 @@ export function PreferencesCalendar({
 
       applyPreferenceLevel(datum, teller, next);
     },
-    [preferences, applyPreferenceLevel, readOnly]
+    [preferences, applyPreferenceLevel, readOnly, isSaving]
   );
 
   // Right click (or long-press on touch devices, which fires the same
@@ -362,7 +372,15 @@ export function PreferencesCalendar({
       // keeps bubbling.
       e.stopPropagation();
       if (isSaving || readOnly) return;
-      setContextMenu({ datum, teller, x: e.clientX, y: e.clientY });
+      // The menu key and Shift+F10 fire the same event without a pointer position: open it under the cell.
+      let x = e.clientX;
+      let y = e.clientY;
+      if (x === 0 && y === 0) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        x = rect.left;
+        y = rect.bottom;
+      }
+      setContextMenu({ datum, teller, x, y });
     },
     [isSaving, readOnly]
   );
@@ -426,7 +444,7 @@ export function PreferencesCalendar({
   for (const dayPref of preferences.values()) {
     for (const counter of shiftCounters) {
       const slot = dayPref.slots.get(counter);
-      if (!slot) continue;
+      if (!slot || slot.nietInDienst) continue;
       const totals = counterTotals.get(counter)!;
       totals.total++;
       if (slot.level !== 'ABSOLUUT') continue;
@@ -436,6 +454,9 @@ export function PreferencesCalendar({
     }
   }
   const heeftBudget = shiftCounters.some((c) => budget[c]);
+  // A kind of shift the period does not have gets no box: "Feestdagdiensten geblokkeerd 0 van 0
+  // toegestaan 0%" stood in a period from June to December (audit 1.3.0).
+  const zichtbareTellers = shiftCounters.filter((c) => counterTotals.get(c)!.total > 0);
 
   const highlightCov = highlightDatum ? coverage.get(highlightDatum) : undefined;
 
@@ -448,7 +469,7 @@ export function PreferencesCalendar({
           : 'Hoeveel dagen je per soort dienst hebt geblokkeerd, van alle dagen in deze periode.'}
       </p>
       <div className="flex gap-3 flex-wrap">
-        {shiftCounters.map((counter) => {
+        {zichtbareTellers.map((counter) => {
           const totals = counterTotals.get(counter)!;
           const limit = budget[counter];
           const teller = limit ? totals.counted : totals.blocked;
@@ -497,20 +518,22 @@ export function PreferencesCalendar({
         </span>
         <span className="flex items-center gap-1.5">
           <i className="calendar-cell-parttime inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">PT</i>
-          Parttime dag
+          Deeltijddag
         </span>
         <span className="flex items-center gap-1.5">
           <i className="calendar-cell-absence inline-flex items-center justify-center w-5 h-4 rounded text-[9px] font-bold">AF</i>
           Afwezigheid
         </span>
         <span className="flex items-center gap-1.5">
-          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">A</i>
-          Avonddienst
+          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-dashed border-neutral-400 bg-neutral-100 text-neutral-600 text-[9px] font-bold">—</i>
+          Niet in dienst
         </span>
-        <span className="flex items-center gap-1.5">
-          <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">W</i>
-          Weekenddienst
-        </span>
+        {dienstLegenda(shiftCounters).map(({ counter, letter, naam }) => (
+          <span key={counter} className="flex items-center gap-1.5">
+            <i className="inline-flex items-center justify-center w-5 h-4 rounded border border-neutral-300 bg-white text-[9px] font-bold">{letter}</i>
+            {naam}
+          </span>
+        ))}
         <span className="flex items-center gap-1.5">
           <i className="weekend-slot inline-block w-5 h-4 rounded" />
           Weekend
@@ -519,14 +542,14 @@ export function PreferencesCalendar({
           <i className="holiday-slot inline-block w-5 h-4 rounded" />
           Feestdag (naam in het vakje)
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-1.5" data-testid="legenda-beschikbaar">
           <span className="inline-flex w-9 flex-col items-center">
             <span className="coverage-bar w-full">
               <span className="coverage-bar-fill coverage-warning block" style={{ width: '50%' }} />
             </span>
-            <span className="text-[9px] text-neutral-500 tabular-nums">15/31</span>
+            {voorbeeld && <span className="text-[9px] text-neutral-600 tabular-nums">{voorbeeld.kort}</span>}
           </span>
-          Onder elke dag: hoeveel collega&apos;s die dag nog beschikbaar zijn (15 van de 31)
+          Onder elke dag: hoeveel collega&apos;s die dag nog beschikbaar zijn{voorbeeld ? ` (bijvoorbeeld ${voorbeeld.tekst})` : ''}
         </span>
       </div>
 
@@ -578,7 +601,7 @@ export function PreferencesCalendar({
                         // buttons stay clickable in that case.
                         const editableCounters = shiftCounters.filter((c) => {
                           const s = dayPref?.slots.get(c);
-                          return s && s.source !== 'PARTTIME' && s.source !== 'ABSENCE';
+                          return s && !s.nietInDienst && s.source !== 'PARTTIME' && s.source !== 'ABSENCE';
                         });
                         const soleEditableCounter =
                           editableCounters.length === 1 ? editableCounters[0] : null;
@@ -624,7 +647,7 @@ export function PreferencesCalendar({
                                   {parseISO(datum).getDate()}
                                 </span>
                                 {tag && (
-                                  <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate w-full text-left" title={tag}>
+                                  <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-600 truncate w-full text-left" title={tag}>
                                     {tag}
                                   </span>
                                 )}
@@ -643,6 +666,25 @@ export function PreferencesCalendar({
                                   // being editable as) a plain manual "geblokkeerd" cell.
                                   const autoSource = slot.source === 'PARTTIME' || slot.source === 'ABSENCE' ? slot.source : null;
 
+                                  // Outside Geldig vanaf/tot (1.1.4): the solver never rosters this
+                                  // day, so it is shown as such and cannot be marked.
+                                  if (slot.nietInDienst) {
+                                    const explanation = 'niet in dienst (buiten Geldig vanaf en Geldig tot)';
+                                    return (
+                                      <div
+                                        key={`${datum}-${counter}`}
+                                        role="img"
+                                        data-testid="niet-in-dienst"
+                                        aria-label={`${formatDayLong(datum)}, ${COUNTER_LABEL[counter] || counter}: ${explanation}`}
+                                        className="calendar-cell-niet-in-dienst w-full h-8 rounded text-[20px] leading-none font-semibold
+                                          flex items-center justify-center cursor-not-allowed border border-dashed border-neutral-400 bg-neutral-100 text-neutral-600"
+                                        title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
+                                      >
+                                        —
+                                      </div>
+                                    );
+                                  }
+
                                   if (autoSource) {
                                     // Kept to 2 characters, same as the manual toggle's
                                     // counter-letter + glyph pattern below - at the enlarged
@@ -651,13 +693,15 @@ export function PreferencesCalendar({
                                     const label = autoSource === 'PARTTIME' ? 'PT' : 'AF';
                                     const explanation =
                                       autoSource === 'PARTTIME'
-                                        ? 'parttime dag (automatisch geblokkeerd)'
+                                        ? 'deeltijddag (automatisch geblokkeerd)'
                                         : 'afwezigheid (automatisch geblokkeerd)';
                                     const cellClass =
                                       autoSource === 'PARTTIME' ? 'calendar-cell-parttime' : 'calendar-cell-absence';
                                     return (
                                       <div
                                         key={`${datum}-${counter}`}
+                                        role="img"
+                                        aria-label={`${formatDayLong(datum)}, ${COUNTER_LABEL[counter] || counter}: ${explanation}`}
                                         className={`${cellClass} w-full h-8 rounded text-[20px] leading-none font-semibold
                                           flex items-center justify-center cursor-not-allowed`}
                                         title={`${COUNTER_LABEL[counter] || counter}: ${explanation}`}
@@ -680,16 +724,20 @@ export function PreferencesCalendar({
                                       key={`${datum}-${counter}`}
                                       onClick={() => handleTogglePreference(datum, counter)}
                                       onContextMenu={(e) => handleContextMenu(e, datum, counter)}
-                                      disabled={isSaving || readOnly}
+                                      disabled={readOnly}
+                                      aria-disabled={isSaving || readOnly}
+                                      aria-label={`${formatDayLong(datum)}, ${COUNTER_LABEL[counter] || counter}: ${
+                                        slot.fellow && level === 'ABSOLUUT' ? 'geblokkeerd omdat je fellow bent' : level ? LEVEL_LABEL[level].toLowerCase() : 'beschikbaar'
+                                      }`}
                                       className={`w-full h-8 rounded text-[20px] leading-none font-semibold transition-all
-                                        ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50`}
+                                        ${stateClass} hover:shadow-sm active:scale-95 disabled:opacity-50 aria-disabled:opacity-50`}
                                       title={
                                         slot.fellow && level === 'ABSOLUUT'
                                           ? `${COUNTER_LABEL[counter] || counter}: geblokkeerd omdat je fellow bent (klik om vrij te geven)`
                                           : `${COUNTER_LABEL[counter] || counter}: ${level ? LEVEL_LABEL[level].toLowerCase() : 'beschikbaar'} (rechtsklik voor opties)`
                                       }
                                     >
-                                      {counter[0]}{level ? GLYPH[level] : AVAILABLE_GLYPH}
+                                      {dienstLetter(counter)}{level ? GLYPH[level] : AVAILABLE_GLYPH}
                                     </button>
                                   );
                                 })}
@@ -703,7 +751,7 @@ export function PreferencesCalendar({
                                       style={{ width: `${Math.round(ratio * 100)}%` }}
                                     />
                                   </div>
-                                  <div className="text-[9px] text-neutral-500 text-center mt-0.5 tabular-nums">
+                                  <div className="text-[9px] text-neutral-600 text-center mt-0.5 tabular-nums">
                                     {cov.available}/{cov.total_in_pool}
                                   </div>
                                 </div>
@@ -736,17 +784,17 @@ export function PreferencesCalendar({
             </div>
           )}
           {isSaving && (
-            <div className="p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
+            <div role="status" className="p-2 bg-blue-50 border-t border-blue-200 text-sm text-blue-700">
               Voorkeuren opslaan...
             </div>
           )}
           {saveError && !isSaving && (
-            <div className="p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
+            <div role="alert" className="p-2 bg-red-50 border-t border-red-200 text-sm text-red-700">
               {saveError} De laatste wijziging is niet opgeslagen en teruggezet.
             </div>
           )}
           {hasChanged && !isSaving && (
-            <div className="p-2 bg-green-50 border-t border-green-200 text-sm text-green-700">
+            <div role="status" className="p-2 bg-green-50 border-t border-green-200 text-sm text-green-700">
               Voorkeuren opgeslagen
             </div>
           )}
@@ -765,8 +813,18 @@ export function PreferencesCalendar({
         return (
           <div
             role="menu"
+            aria-label={`${formatDayLong(contextMenu.datum)}, ${COUNTER_LABEL[contextMenu.teller] || contextMenu.teller}`}
             className="fixed z-50 w-44 rounded-lg border border-neutral-200 bg-white shadow-lg py-1"
             style={{ left, top }}
+            onKeyDown={(e) => {
+              // Arrow keys move through the choices, as a menu does; Escape is the shared dismiss rule.
+              if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+              e.preventDefault();
+              const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]'));
+              const at = items.indexOf(document.activeElement as HTMLElement);
+              const next = e.key === 'ArrowDown' ? (at + 1) % items.length : (at - 1 + items.length) % items.length;
+              items[next]?.focus();
+            }}
           >
             <div className="px-3 py-1.5 text-[11px] font-semibold text-neutral-500 uppercase tracking-wide">
               {COUNTER_LABEL[contextMenu.teller] || contextMenu.teller}
@@ -775,6 +833,7 @@ export function PreferencesCalendar({
               <button
                 key={level ?? 'NEUTRAL'}
                 role="menuitem"
+                autoFocus={currentLevel === level}
                 onClick={() => selectContextMenuLevel(level)}
                 className={`w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-neutral-100
                   ${currentLevel === level ? 'font-semibold text-blue-700' : 'text-neutral-800'}`}

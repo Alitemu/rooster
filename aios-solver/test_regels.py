@@ -7,6 +7,7 @@ gains points by it. Every solve also goes through the independent check
 rule in model.py and expects one of these to fail.
 """
 
+import time
 from datetime import date
 
 import pytest
@@ -162,18 +163,21 @@ def test_regel_4_the_night_block_over_a_part_time_day_may():
 # ---- rule 5 -----------------------------------------------------------------
 
 
-def test_regel_5_a_fulltimer_never_in_the_night_block_sunday_to_tuesday():
+def test_regel_5_from_0_9_fte_never_in_the_night_block_sunday_to_tuesday():
     inp = weken(1)
     nacht = blok(inp, 'NACHT', 'ZO_DI', dag(4))
     _alleen(inp, aios(inp, 'x', fte=1.0), nacht)
-    _, t = los_op(inp)
-    assert not t
-    inp['aios'][0]['fte'] = 0.8
-    _, t = los_op(inp)
-    assert set(t) == set(nacht)
+    for fte in (1.0, 0.9):
+        inp['aios'][0]['fte'] = fte
+        _, t = los_op(inp)
+        assert not t, fte
+    for fte in (0.89, 0.8):
+        inp['aios'][0]['fte'] = fte
+        _, t = los_op(inp)
+        assert set(t) == set(nacht), fte
 
 
-def test_regel_5_a_night_block_cut_up_is_single_nights_a_fulltimer_may_do():
+def test_regel_5_a_night_block_cut_up_is_single_nights_0_9_fte_may_do():
     # Around feestdagen in a row the planner may cut the block up
     # (docs/aios-rooster.md, "Blokken rond feestdagen"): then each night is
     # a single dienst with one compensation day, no longer the block.
@@ -325,6 +329,53 @@ def test_regel_9_46_hours_after_three_nights_14_after_one():
     assert not model.regel_9_rust(een, donderdag)
 
 
+def _nachtblok_voor_het_kwartaal() -> list[dict]:
+    """The nights Sunday to Tuesday just before START: the quarter before, as the app sends them (0.111.0)."""
+    return [
+        {
+            'id': f'ND-{dag(k).isoformat()}',
+            'datum': dag(k).isoformat(),
+            'code': 'ND',
+            'start_tijd': '22:30',
+            'eind_tijd': '08:30',
+            'blok_id': 'oud-1',
+            'blok_soort': 'NACHT',
+            'blok_vorm': 'ZO_DI',
+        }
+        for k in (-3, -2, -1)
+    ]
+
+
+def test_regel_7_9_the_rest_and_compensation_days_run_on_over_the_quarter_boundary():
+    """Nights Sunday to Tuesday before the quarter: Wednesday and Thursday are off, and 46 hours of rest after the last night."""
+
+    def uitkomst(eerder: list[dict]) -> set[str]:
+        inp = weken(1)
+        x = aios(inp, 'x', eerdere_diensten=eerder)
+        # x is the only one, and only for the first two days.
+        _alleen(inp, x, [dienst('UD', dag(0)), dienst('UD', dag(1)), dienst('UD', dag(2))])
+        uit, t = los_op(inp)  # the check knows the quarter before too
+        return van(t, 'x')
+
+    assert uitkomst([]) == {dienst('UD', dag(0)), dienst('UD', dag(1)), dienst('UD', dag(2))}
+    # With the block before: Wednesday and Thursday are compensation days; Friday's uitloopdienst is 57 hours later.
+    assert uitkomst(_nachtblok_voor_het_kwartaal()) == {dienst('UD', dag(2))}
+
+
+def test_regel_7_9_the_check_names_a_dienst_on_a_compensation_day_of_the_quarter_before():
+    import controle
+
+    inp = weken(1)
+    aios(inp, 'x', eerdere_diensten=_nachtblok_voor_het_kwartaal())
+    slots, blok_vorm, mensen, feestdagen = main.naar_model(main.SolveInput(**inp))
+    woensdag = dienst('UD', dag(0))
+    fouten = controle.controleer(slots, blok_vorm, mensen, feestdagen, {woensdag: 'x'})
+    regels = {r for r, _, _ in fouten}
+    assert '7_COMPENSATIEDAG' in regels and '9_RUST' in regels
+    # Without a dienst of this quarter there is nothing to judge: what lies wholly before it is not.
+    assert controle.controleer(slots, blok_vorm, mensen, feestdagen, {}) == []
+
+
 def test_regel_9_the_check_finds_more_than_seven_nights_in_a_row():
     import controle
 
@@ -417,3 +468,124 @@ def test_the_night_before_the_voortgangstoets_in_the_middle_of_a_block():
     if houder == 'x':
         assert dienst('UD', dag(8)) not in t, 'the Thursday: its second compensation day'
     assert kalender.compensatiedagen('NACHT', 'ZO_DI', dag(4), dag(6), set()) == {dag(7), dag(8)}
+
+
+# ---- 0.112.0: a large carry-over is a large difference, not an impossible model ----
+
+
+def _basis_leeg(**kw) -> int:
+    inp = weken(2, kw.pop('feestdagen', frozenset()))
+    for i in range(4):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 10
+    return len(los_op(inp)[0].leeg)
+
+
+@pytest.mark.parametrize('saldo', [100, -100, 400, -400])
+def test_a_large_saldo_still_gives_a_roster(saldo):
+    inp = weken(2)
+    aios(inp, 'a0', saldo_punten=saldo)
+    for i in range(1, 4):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 10
+    uit, toegewezen = los_op(inp)
+    # Before 0.112.0 the answer was "ONMOGELIJK" with every dienst empty from about 100 points.
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+    assert toegewezen
+    assert len(uit.leeg) == _basis_leeg()
+
+
+@pytest.mark.parametrize('achterstand', [100, -100, 200])
+def test_a_large_feestdag_debt_still_gives_a_roster(achterstand):
+    feest = {dag(3)}
+    inp = weken(2, feest)
+    aios(inp, 'a0', feestdag_achterstand=achterstand)
+    for i in range(1, 4):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 10
+    uit, toegewezen = los_op(inp)
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+    assert toegewezen
+    assert len(uit.leeg) == _basis_leeg(feestdagen=feest)
+
+
+def test_a_stop_asked_before_the_search_ends_it_at_once_and_says_nothing_was_solved():
+    inp = weken(2)
+    aios(inp, 'x')
+    aios(inp, 'y')
+    inp['tijdslimiet_seconden'] = 60
+    request = main.SolveInput(**inp)
+    stop = model.Stop()
+    stop.vraag()
+    begin = time.monotonic()
+    uit = main.los_op(request, stop)
+    assert time.monotonic() - begin < 10
+    assert uit.status in ('GEEN_OPLOSSING', 'HAALBAAR')
+
+
+def test_the_empty_roster_is_the_first_answer_when_time_is_short():
+    # No solution found is not the same as nothing to solve: the hint of the empty roster means that a
+    # short time ends in HAALBAAR (the best found), not in GEEN_OPLOSSING.
+    inp = weken(6)
+    for i in range(12):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 1
+    request = main.SolveInput(**inp)
+    uit = main.los_op(request)
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+
+
+def test_the_time_limit_is_for_the_whole_job_including_the_model_building():
+    inp = weken(13)
+    for i in range(30):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 3
+    request = main.SolveInput(**inp)
+    begin = time.monotonic()
+    main.los_op(request)
+    # Building the model took part of the 3 seconds: the whole stays near the limit, not building plus the limit.
+    assert time.monotonic() - begin < 3 + 12
+
+
+class _Verbinding:
+    """A request whose caller hangs up after a while: what main.solve polls."""
+
+    def __init__(self, na_seconden: float | None) -> None:
+        self.begin = time.monotonic()
+        self.na = na_seconden
+        self.gevraagd = 0
+
+    async def is_disconnected(self) -> bool:
+        self.gevraagd += 1
+        return self.na is not None and time.monotonic() - self.begin >= self.na
+
+
+def test_a_caller_who_hangs_up_stops_the_search_and_frees_the_solver():
+    import asyncio
+
+    inp = weken(13)
+    for i in range(30):
+        aios(inp, f'a{i}')
+    inp['tijdslimiet_seconden'] = 120
+    request = main.SolveInput(**inp)
+    verbinding = _Verbinding(na_seconden=2)
+    begin = time.monotonic()
+    uit = asyncio.run(main.solve(request, verbinding))
+    duur = time.monotonic() - begin
+    # Far under the 120 seconds the search was allowed: it stopped within a poll or two of the hang-up.
+    assert duur < 20
+    assert verbinding.gevraagd >= 2
+    assert uit.status in ('HAALBAAR', 'GEEN_OPLOSSING')
+    # The next request is not turned away with a 429.
+    assert main._loopt is False
+
+
+def test_a_caller_who_stays_gets_the_whole_search():
+    import asyncio
+
+    inp = weken(1)
+    aios(inp, 'x')
+    inp['tijdslimiet_seconden'] = 20
+    uit = asyncio.run(main.solve(main.SolveInput(**inp), _Verbinding(na_seconden=None)))
+    assert uit.status in ('OPTIMAAL', 'HAALBAAR')
+    assert main._loopt is False

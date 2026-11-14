@@ -15,7 +15,7 @@
 
 import nodemailer from 'nodemailer';
 import { db } from '@/db/client';
-import { clearMailFailure, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
+import { clearMailFailure, getContactPlanner, getMailFailure, getStoredMailSettings, recordMailFailure, type MailFailure } from './appSettings';
 import { VERZENDLIJST_SUBJECT, verzendlijstFilename, verzendlijstJson, type Verzendlijst } from './verzendlijst';
 
 interface MailConfig {
@@ -69,6 +69,8 @@ export function mailConfigStatus(): {
   uitgeschakeld: boolean;
   gebruiker: string | null;
   verzendlijst_aan: string | null;
+  /** The address participants mail about a voorlopig roster, apart from the flow's mailbox. */
+  contact_planner: string | null;
   /** Saved, but the password can no longer be read (new session secret). */
   wachtwoord_onleesbaar: boolean;
   /** The last failed send, until one succeeds again. */
@@ -85,6 +87,7 @@ export function mailConfigStatus(): {
     uitgeschakeld: mailSwitchedOff(),
     gebruiker: stored?.gebruiker ?? null,
     verzendlijst_aan: stored?.verzendlijstAan ?? null,
+    contact_planner: getContactPlanner(),
     wachtwoord_onleesbaar: Boolean(stored && !stored.wachtwoord),
     laatste_fout: getMailFailure(),
     wachtrij,
@@ -107,6 +110,16 @@ function explainSmtpError(error: unknown): string {
     return (
       'Gmail weigerde de inlog. Controleer het Gmail-adres en het app-wachtwoord bij Mailinstellingen. ' +
       'Het moet een app-wachtwoord zijn, niet je gewone wachtwoord.'
+    );
+  }
+  // A certificate this server does not trust arrives as ESOCKET too, and "no internet" then sends the
+  // beheerder the wrong way: on a network that opens https on its way out, this is the likely cause (1.6.1).
+  const origineel = String((error as { originalCode?: string }).originalCode ?? '') + ' ' + String((error as { message?: string }).message ?? '');
+  if (/CERT|certificate|SELF_SIGNED|UNABLE_TO_VERIFY/i.test(origineel)) {
+    return (
+      'De mailserver toont een certificaat dat deze server niet vertrouwt, dus er is niets verstuurd. ' +
+      'Dat gebeurt als het netwerk versleuteld verkeer onderweg openmaakt. Het gebeurt ook als de klok van de server verkeerd staat. ' +
+      'Vraag de IT-afdeling om verkeer naar smtp.gmail.com op poort 465 ongemoeid door te laten.'
     );
   }
   if (code === 'ECONNECTION' || code === 'ETIMEDOUT' || code === 'ESOCKET' || code === 'EDNS') {
@@ -182,6 +195,33 @@ async function sendJsonMail(mail: {
       text: mail.text,
       attachments: [{ filename: mail.filename, content: mail.json, contentType: 'application/json' }],
     });
+    return { ok: true };
+  } catch (error) {
+    console.error(`[verzendlijst-mail] ${mail.subject} failed`, error);
+    return { ok: false, message: explainSmtpError(error) };
+  } finally {
+    transport.close();
+  }
+}
+
+/**
+ * A mail from the Gmail account to an address the beheerder set, not the
+ * flow's mailbox: the password reset (lib/wachtwoordHerstel.ts, to the Gmail
+ * account itself) and the backup (lib/dbBackupMail.ts, to the backup address).
+ * The address is never taken from a request.
+ */
+export async function sendDirectMail(mail: {
+  to: string;
+  subject: string;
+  text: string;
+  /** The backup file (lib/dbBackupMail.ts); the password reset sends none. */
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
+}): Promise<{ ok: true } | { ok: false; message: string }> {
+  const config = readConfig();
+  if (!config) return { ok: false, message: 'Versturen is niet ingesteld.' };
+  const transport = createTransport(config);
+  try {
+    await transport.sendMail({ from: config.from, to: mail.to, subject: mail.subject, text: mail.text, attachments: mail.attachments });
     return { ok: true };
   } catch (error) {
     console.error(`[verzendlijst-mail] ${mail.subject} failed`, error);

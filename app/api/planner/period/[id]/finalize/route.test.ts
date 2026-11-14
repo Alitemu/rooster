@@ -158,6 +158,7 @@ describe('voorlopig publiceren en definitief maken', () => {
 
     const lijst = verzendlijstPayload(sink.received[0].raw);
     expect(lijst.soort).toBe('ROOSTER_VOORLOPIG');
+    expect(lijst.dienst).toBe('ACHTERWACHT');
     const vanA = lijst.berichten.find((b: { codenaam: string }) => b.codenaam === `A-${f.tag}`)!;
     expect(vanA.onderwerp).toBe('Voorlopig rooster Voorjaar');
     expect(vanA.tekst).toContain('- dinsdag 5 januari 2027: avonddienst');
@@ -208,6 +209,32 @@ describe('voorlopig publiceren en definitief maken', () => {
     const again = await call(finalize, f.periodId, f.planner);
     expect(again.status).toBe(409);
     expect((await again.json()).error.code).toBe('ALREADY_FINAL');
+  });
+
+  it('says why it refuses: not published, already final, not complete, and asks to confirm deliberate exceptions', async () => {
+    const f = createFixture();
+    const code = async (res: Response) => (await res.json()).error.code;
+    expect(await code(await call(finalize, f.periodId, f.planner))).toBe('NOT_PUBLISHED');
+
+    // A deliberate override on A's shift: published with the planner's say-so, finalising asks again.
+    db.prepare(
+      `INSERT INTO dienstrooster_availability (id, person_id, slot_id, blocking_level, source, aangemaakt_op)
+       VALUES (?, ?, ?, 'ABSOLUUT', 'MANUAL', datetime('now'))`
+    ).run(crypto.randomUUID(), f.a, f.slots['2027-01-05']);
+    expect((await call(publish, f.periodId, f.planner)).status).toBe(200);
+    const zonder = await call(finalize, f.periodId, f.planner, {});
+    expect(zonder.status).toBe(409);
+    expect(await code(zonder)).toBe('CONFIRMATION_REQUIRED');
+    expect(periodRow(f.periodId).definitief_op).toBeNull();
+
+    expect((await call(finalize, f.periodId, f.planner, { confirmOverrides: true })).status).toBe(200);
+    expect(await code(await call(finalize, f.periodId, f.planner))).toBe('ALREADY_FINAL');
+
+    const g = createFixture();
+    await call(publish, g.periodId, g.planner);
+    db.prepare('DELETE FROM dienstrooster_assignment WHERE slot_id = ?').run(g.slots['2027-01-12']);
+    expect(await code(await call(finalize, g.periodId, g.planner))).toBe('NOT_READY');
+    db.prepare('DELETE FROM dienstrooster_availability WHERE person_id = ?').run(f.a);
   });
 
   it('refuses a roster that has an unfilled shift by then', async () => {

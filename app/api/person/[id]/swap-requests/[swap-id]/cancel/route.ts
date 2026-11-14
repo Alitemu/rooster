@@ -13,7 +13,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { LIVE_SWAP_REQUEST_SQL } from '@/lib/periodAccess';
 import { v4 as uuid } from 'uuid';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { swapStatusLabel } from '@/lib/statusLabels';
@@ -93,6 +94,7 @@ export async function POST(
     cancelTx();
     meldingen.forEach((m) => m.send());
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, personId, { wijziging: 'ruilverzoek ingetrokken door planner' });
     return NextResponse.json({
       success: true,
       data: {

@@ -10,9 +10,12 @@
 import { db } from '@/db/client';
 import { isUniqueViolation } from '@/lib/api-errors';
 import { optionalFreeText } from '@/lib/freeText';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isPlausibleIsoDate, isValidIsoDate } from '@/lib/isoDate';
 import { addDays, getISOWeek, parseISO } from '@/lib/holidays';
 import { buildDeadlinePassedWarning } from '@/lib/aiosInvoer';
+import type { AuthContext } from '@/lib/auth-context';
+import { aiosPeriodeBruikbaarVoor } from '@/lib/aiosToegang';
+import { loadAiosPeriode } from '@/lib/aiosPreferences';
 import {
   aiosPeriodesNaDeadline,
   aiosPeriodesVoorInvoer,
@@ -34,7 +37,7 @@ const goed = (data: unknown, status = 200): Antwoord => ({ status, body: { succe
 
 const WEEKDAGEN = ['MA', 'DI', 'WO', 'DO', 'VR'];
 const FREQUENTIES = ['ELKE_WEEK', 'EVEN_WEKEN', 'ONEVEN_WEKEN'];
-const SOORTEN = ['VAKANTIE', 'CONGRES', 'OVERIG'];
+const SOORTEN = ['VAKANTIE', 'CONGRES', 'ONDERWIJS', 'OVERIG'];
 
 const bestaatPersoon = (id: string) => Boolean(db.prepare('SELECT 1 FROM dienstrooster_person WHERE id = ?').get(id));
 const geenPersoon = (id: string) => fout(404, 'PERSON_NOT_FOUND', `Persoon ${id} niet gevonden`);
@@ -85,7 +88,7 @@ function patroonFout(weekdag?: string, frequentie?: string, van?: string, tot?: 
   }
   if (frequentie !== undefined && !FREQUENTIES.includes(frequentie)) return fout(400, 'INVALID_FREQUENTIE', 'Onbekende frequentie');
   for (const d of [van, tot]) {
-    if (d !== undefined && !isValidIsoDate(d)) return fout(400, 'INVALID_DATE', 'Gebruik een geldige datum (JJJJ-MM-DD)');
+    if (d !== undefined && (!isValidIsoDate(d) || !isPlausibleIsoDate(d))) return fout(400, 'INVALID_DATE', 'Gebruik een geldige datum (JJJJ-MM-DD)');
   }
   if (van !== undefined && tot !== undefined && van > tot) {
     return fout(400, 'INVALID_RANGE', '"Vanaf" moet vóór of op "tot en met" liggen');
@@ -125,7 +128,13 @@ function deeltDag(personId: string, p: PatroonVelden, behalve: string | null): A
   return null;
 }
 
-export function maakPatroon(personId: string, body: Record<string, unknown>): Antwoord {
+/**
+ * Adds a pattern and puts it into the AIOS periods that take input: all of
+ * maakPatroon but what follows a change by the AIOS themselves (the backup
+ * file, "begun"), so the import can use it inside a transaction it may roll
+ * back (lib/aiosVoorkeurImport.ts).
+ */
+export function voegPatroonToe(personId: string, body: Record<string, unknown>): Antwoord & { id?: string } {
   const [weekdag, frequentie, van, tot] = [body.weekdag, body.frequentie, body.geldig_vanaf, body.geldig_tot].map(tekst);
   if (!weekdag || !frequentie || !van || !tot) return fout(400, 'INVALID_INPUT', 'Verplichte velden ontbreken');
   const ongeldig = patroonFout(weekdag, frequentie, van, tot);
@@ -147,9 +156,15 @@ export function maakPatroon(personId: string, body: Record<string, unknown>): An
     if (isUniqueViolation(error)) return DUBBEL_PATROON;
     throw error;
   }
+  return { ...goed({ id, weekdag, frequentie, geldig_vanaf: van, geldig_tot: tot }, 201), id };
+}
+
+export function maakPatroon(personId: string, body: Record<string, unknown>): Antwoord {
+  const gedaan = voegPatroonToe(personId, body);
+  if (gedaan.status >= 300) return { status: gedaan.status, body: gedaan.body };
   naWijziging(personId);
-  const w = waarschuwing(personId, van, tot);
-  return goed({ id, weekdag, frequentie, geldig_vanaf: van, geldig_tot: tot, ...(w ? { warning: w } : {}) }, 201);
+  const w = waarschuwing(personId, String(body.geldig_vanaf), String(body.geldig_tot));
+  return goed({ ...(gedaan.body.data as Record<string, unknown>), ...(w ? { warning: w } : {}) }, 201);
 }
 
 export function wijzigPatroon(personId: string, patternId: string, body: Record<string, unknown>): Antwoord {
@@ -206,8 +221,12 @@ export function verwijderPatroon(personId: string, patternId: string): Antwoord 
 
 // --- Absences ---------------------------------------------------------------
 
-export function lijstAfwezigheden(personId: string, periodId: string | null): Antwoord {
+export function lijstAfwezigheden(personId: string, gevraagd: string | null, auth: AuthContext | null): Antwoord {
   if (!bestaatPersoon(personId)) return geenPersoon(personId);
+  // A period that is not this person's to use (another dienst's, one in the prullenbak, a stranger's) gives what a
+  // period that does not exist gives: no days in it. Like the achterwacht's list (periodUsableFor).
+  const period = gevraagd ? loadAiosPeriode(gevraagd) : undefined;
+  const periodId = gevraagd ? (period && auth && aiosPeriodeBruikbaarVoor(auth, personId, period) ? gevraagd : 'geen-periode') : null;
   const rows = db
     .prepare(
       `SELECT a.id, a.van_datum, a.tot_datum, a.soort, a.notitie,
@@ -242,7 +261,7 @@ function afwezigheidFout(soort?: string, van?: string, tot?: string): Antwoord |
   for (const d of [van, tot]) {
     if (d !== undefined && !isValidIsoDate(d)) return fout(400, 'INVALID_DATE', 'Gebruik een geldige datum (JJJJ-MM-DD)');
   }
-  if (van !== undefined && tot !== undefined && van > tot) return fout(400, 'INVALID_RANGE', '"Van" moet vóór of op "tot" liggen');
+  if (van !== undefined && tot !== undefined && van > tot) return fout(400, 'INVALID_RANGE', '"Van" moet vóór of op "Tot en met" liggen');
   return null;
 }
 

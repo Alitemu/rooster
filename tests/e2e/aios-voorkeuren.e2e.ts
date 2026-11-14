@@ -74,6 +74,17 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
 
   // Deeltijd first, with what a part-time day means for the AIOS.
   await expect(page.getByText(/Je avond op die dag staat op liever niet/)).toBeVisible();
+
+  // A new absence starts empty, not on the whole quarter; a "van" sets "tot en met" to the next day; onderwijs is a soort.
+  const vanVeld = page.getByLabel('Van', { exact: true });
+  // The deeltijd form has a "Tot en met" of its own: this is the absence form's.
+  const totVeld = page.locator('input[id$="-tot"]');
+  await expect(vanVeld).toHaveValue('');
+  await expect(totVeld).toHaveValue('');
+  await expect(page.getByLabel('Soort').getByRole('option', { name: 'Onderwijs' })).toHaveCount(1);
+  await vanVeld.fill('06-05-2097');
+  await expect(totVeld).toHaveValue('07-05-2097');
+
   await page.getByRole('button', { name: 'Volgende: voorkeuren opgeven' }).click();
 
   await expect(page.getByRole('heading', { name: 'Je voorkeuren per dienst' })).toBeVisible();
@@ -107,14 +118,24 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await dd.click();
   await expect(dd).toHaveAttribute('aria-label', /: liever niet\. Tik voor geen voorkeur/);
 
+  // A line between the days, a double one where a weekend begins and ends.
+  const week = page.locator('table').first();
+  const dagKop = (dag: string) => week.locator('thead th[scope="col"]').filter({ hasText: new RegExp(`^${dag}\\d`) }).first();
+  for (const [dag, stijl] of [['wo', 'solid'], ['vr', 'solid'], ['za', 'double'], ['zo', 'solid'], ['ma', 'double'], ['di', 'solid']]) {
+    await expect(dagKop(dag)).toHaveCSS('border-left-style', stijl);
+  }
+
   // The requests at the top.
   await page.getByLabel(/^4 nachten/).check();
   await page.getByLabel(/^Inwerken/).check();
   await page.locator('#aios-inwerken_van').fill(q.start_datum);
   await page.locator('#aios-inwerken_tot').fill(q.start_datum);
-  await page.getByLabel('Algemene verzoeken').fill('Liever geen nachten in mei');
-  await page.getByRole('button', { name: 'Verzoeken opslaan' }).click();
-  await expect(page.getByText('Je verzoeken zijn opgeslagen.')).toBeVisible();
+  // Saved at once, with no button: the roster would never see a request nobody saved. And no field for general requests, the solver does nothing with it.
+  await expect(page.getByTestId('aios-verzoeken-status')).toHaveText('Je verzoeken zijn opgeslagen.');
+  await expect(page.getByRole('button', { name: 'Verzoeken opslaan' })).toHaveCount(0);
+  await expect(page.getByLabel('Algemene verzoeken')).toHaveCount(0);
+  const opgeslagen = db.prepare('SELECT vier_nachten, inwerken_van, inwerken_tot FROM dienstrooster_aios_wens WHERE period_id = ? AND person_id = ?').get(ids.period, ids.person);
+  expect(opgeslagen).toEqual({ vier_nachten: 1, inwerken_van: q.start_datum, inwerken_tot: q.start_datum });
 
   await page.getByRole('button', { name: 'Volgende: bevestigen' }).click();
   await expect(page.getByRole('heading', { name: 'Bevestigen' })).toBeVisible();
@@ -123,8 +144,8 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await page.getByRole('button', { name: 'Bevestigen en indienen' }).click();
   await expect(page.getByRole('heading', { name: 'Voorkeuren ingediend' })).toBeVisible();
 
-  const wens = db.prepare('SELECT vier_nachten, inwerken_van, opmerking FROM dienstrooster_aios_wens WHERE period_id = ? AND person_id = ?').get(ids.period, ids.person);
-  expect(wens).toEqual({ vier_nachten: 1, inwerken_van: q.start_datum, opmerking: 'Liever geen nachten in mei' });
+  const wens = db.prepare('SELECT vier_nachten, inwerken_van FROM dienstrooster_aios_wens WHERE period_id = ? AND person_id = ?').get(ids.period, ids.person);
+  expect(wens).toEqual({ vier_nachten: 1, inwerken_van: q.start_datum });
 
   // The planner sees it.
   await loginAsBeheerder(page);
@@ -134,27 +155,31 @@ test('an AIOS marks a block, finds no geblokkeerd on a feestdag, asks and hands 
   await expect(rij).toContainText('Ingediend');
   await expect(rij).toContainText('1 geblokkeerd');
   await expect(rij).toContainText('4 nachten');
-  await openAiosSectie(page, 'Voorkeuren van de AIOS');
-  await expect(page.getByRole('button', { name: 'Links downloaden' })).toBeVisible();
-  // Without the mail the buttons are off, look it and say why (0.87.0): clicking one did nothing visible.
-  const uitnodigen = page.getByRole('button', { name: 'Uitnodigingen versturen' });
-  await expect(uitnodigen).toBeDisabled();
-  await expect(uitnodigen).toHaveCSS('opacity', '0.5');
+  // Exporteren & communicatie, as the achterwacht's page has it. Without the mail the sending is off and says why (0.87.0).
+  await openAiosSectie(page, 'Exporteren & communicatie');
+  await expect(page.getByRole('button', { name: /Deadlineherinnering versturen/ })).toBeDisabled();
   await expect(page.getByTestId('aios-mail-nog-niet')).toContainText('kan pas als de mail voor de AIOS is ingesteld');
+  await page.getByRole('button', { name: /Uitnodigingen en herinneringen/ }).click();
+  const uitnodigen = page.getByRole('button', { name: /Uitnodigingen versturen/ });
+  await expect(uitnodigen).toBeDisabled();
+  await expect(uitnodigen).toHaveCSS('opacity', '0.6');
+  await expect(page.getByRole('button', { name: /Uitnodigingen downloaden/ })).toBeEnabled();
+  // Exact: the status at the top has its own "Periode sluiten".
+  await page.getByRole('button', { name: 'Sluiten', exact: true }).click();
+  await page.getByRole('button', { name: /Mailinstellingen/ }).click();
   await expect(page.getByText('Mail naar de AIOS', { exact: true })).toBeVisible();
   // The AIOS's own automatic reminders, off while their mail is not set up.
   await expect(page.getByTestId('aios-auto-herinneringen')).toContainText('de mail voor de AIOS is nog niet ingesteld');
 
   // The requests as a workbook, with this AIOS's 4 nachten in it.
-  await openAiosSectie(page, 'Status voorkeuren');
-  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '⬇ Verzoeken per AIOS' }).click()]);
-  expect(download.suggestedFilename()).toMatch(/^verzoeken-aios-.*\.xlsx$/);
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Statusrapport downloaden/ }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^verzoeken-aios_.*\.xlsx$/);
   const [kop, ...rijen] = readFirstSheet(fs.readFileSync((await download.path())!));
   const mijn = rijen.find((r) => r[0] === ids.codenaam)!;
   expect(mijn[kop.indexOf('Status')]).toBe('Ingediend');
   expect(mijn[kop.indexOf('4 nachten (wo t/m za)')]).toBe('ja');
-  expect(mijn[kop.indexOf('Opmerking')]).toBe('Liever geen nachten in mei');
-  const [perDienst] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: '⬇ Voorkeuren per dienst' }).click()]);
+  expect(kop).not.toContain('Opmerking');
+  const [perDienst] = await Promise.all([page.waitForEvent('download'), page.getByRole('link', { name: /Voorkeurenoverzicht downloaden/ }).click()]);
   const [dienstKop, ...diensten] = readFirstSheet(fs.readFileSync((await perDienst.path())!));
   const kolom = dienstKop.indexOf(ids.codenaam);
   expect(diensten.filter((r) => r[5]?.startsWith('avondblok zo t/m di') && r[kolom] === 'geblokkeerd').length).toBe(3);

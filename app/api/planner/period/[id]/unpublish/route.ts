@@ -25,13 +25,15 @@
  *     Those are a historical record of what happened and stay exactly
  *     that; a new notification tells people the roster was withdrawn
  *     instead.
- *   - Touch pending swap requests. checkSwapAllowed already refuses to
- *     act on one outside GEPUBLICEERD, and the approve route separately
- *     re-checks that the assignments it names still match what the
- *     request was actually about - so a stale request from before the
- *     withdrawal can't silently apply to a roster that has since changed.
+ *
+ * Pending swap requests do go: every open one is withdrawn (INGETROKKEN,
+ * ROOSTER_VOORLOPIG_REDEN) and both sides are told, in the same
+ * transaction (lib/swapLifecycle.ts closeSwapsAfterRosterChange with
+ * `alle`). Swapping needs a definitief roster, so none of them could go
+ * through any more.
  */
 
+import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
@@ -89,6 +91,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       )
       .all(period.pool_id, period.eind_datum, period.start_datum) as any[];
 
+    // Back to voorlopig: no request can stand, ruilen kan pas als het rooster weer definitief is.
+    const swapMeldingen: Array<{ send: () => void }> = [];
     const unpublishTx = db.transaction(() => {
       db.prepare(
         `UPDATE dienstrooster_schedule_period
@@ -105,7 +109,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           type: 'PUBLICATIE_BERICHT',
           onderwerp: `${period.naam}: publicatie ingetrokken`,
           inhoud:
-            `Het gepubliceerde rooster voor ${period.naam} is teruggetrokken door de roosteraar. ` +
+            `Het gepubliceerde rooster voor ${period.naam} is teruggetrokken door de planner. ` +
             `Beschouw je eerder getoonde diensten voorlopig niet meer als definitief. ` +
             `Je hoort opnieuw van ons zodra er een nieuwe versie gepubliceerd is.`,
         });
@@ -126,10 +130,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
         now
       );
 
+      swapMeldingen.push(...closeSwapsAfterRosterChange(periodId, now, { alle: true }).meldingen);
+
       return people.length;
     });
 
     const notificationsCreated = unpublishTx();
+    swapMeldingen.forEach((m) => m.send());
 
     return NextResponse.json({
       success: true,

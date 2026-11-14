@@ -13,18 +13,9 @@ import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { FellowWeekendNotice } from './FellowWeekendNotice';
 import { withBasePath } from '@/lib/basePath';
 import { explainBereikTekort, explainUnfilled, type BereikTekort } from '@/lib/unfilledExplanation';
-
-// Native fetch() throws a plain TypeError with a browser-specific, English,
-// technical message ("Failed to fetch", "NetworkError when attempting to
-// fetch resource.", "Load failed" on Safari) when a request never got a
-// response at all - never show that raw string to a planner, per
-// CLAUDE.md's Dutch-only UI text rule.
-function toDutchErrorMessage(err: unknown, fallback: string): string {
-  if (err instanceof TypeError) {
-    return 'Geen verbinding met de server. Controleer je internetverbinding en probeer het opnieuw.';
-  }
-  return err instanceof Error ? err.message : fallback;
-}
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
+import { opnieuwKnopTekst, opnieuwUitleg, STANDAARD_ZOEKTIJD_SECONDEN, volgendeZoektijd, zoektijdWoorden } from '@/lib/solverZoektijd';
 
 const POLL_INTERVAL_MS = 2000;
 // A dropped poll just means "ask again in a moment" - the generation itself
@@ -103,11 +94,6 @@ const DEFAULT_MAX_ATTEMPTS = 100;
 // Matches solver/greedy.py's own RuleSet-equivalent variant default.
 const DEFAULT_RANDOMIZED_VARIANT: 'medewerker' | 'dagen' = 'medewerker';
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds} seconden`;
-  const minutes = Math.round(seconds / 60);
-  return `${minutes} ${minutes === 1 ? 'minuut' : 'minuten'}`;
-}
 
 const COUNTER_LABEL: Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', string> = {
   AVOND: 'Avond',
@@ -422,7 +408,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
         setReconnecting(true);
         if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
           if (!pollCancelledRef.current) {
-            setError(toDutchErrorMessage(err, 'Status ophalen mislukt'));
+            setError(foutTekst(err, 'Status ophalen mislukt'));
             setLoading(false);
             setReconnecting(false);
           }
@@ -542,7 +528,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
       await pollJobStatus(jobId, timeLimitSeconds);
     } catch (err) {
       if (!pollCancelledRef.current) {
-        setError(toDutchErrorMessage(err, 'Genereren van rooster mislukt'));
+        setError(foutTekst(err, 'Genereren van rooster mislukt'));
         setLoading(false);
       }
     }
@@ -591,13 +577,10 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
   // and leave the generate call's result with nowhere to land.
   const dismissBackdrop = useDialogDismiss(isOpen, handleClose, !loading);
 
-  // The step-up offered after a FEASIBLE result: 120s (the default, tracked
-  // as null) -> 300s -> 600s -> no further offer. Matches the two extra
-  // steps the planner asked for (5, then 10 minutes) rather than an
-  // open-ended doubling that would eventually make "langer proberen" itself
-  // an unbounded wait.
-  const nextTimeLimitSeconds =
-    lastTimeLimitSeconds === null ? 300 : lastTimeLimitSeconds === 300 ? 600 : null;
+  // The step-up offered after a FEASIBLE result: 300s (the default, tracked
+  // as null) -> 600s -> 1800s -> no further offer, the steps the planner
+  // asked for. Each is a new run from the start (lib/solverZoektijd.ts).
+  const nextTimeLimitSeconds = volgendeZoektijd(lastTimeLimitSeconds);
 
   // Catches the mistake client-side before a round trip - the server
   // rejects the same thing (ruleset/route.ts's isValidBand), but with the
@@ -747,7 +730,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       </div>
                     </div>
                     <p className="text-xs text-neutral-500" data-testid="venster-uitleg">
-                      Het venster telt in dagen: minstens {7 * ruleset.windowWeeksAvond} dagen tussen
+                      Het venster telt in dagen: minstens {telwoord(7 * ruleset.windowWeeksAvond, 'dag', 'dagen')} tussen
                       twee avonddiensten en minstens {7 * ruleset.windowWeeksWeekendFeestdag} tussen twee
                       weekend- of feestdagdiensten van dezelfde persoon. Het kleinste van deze twee geldt
                       ook tussen een avonddienst en een weekend- of feestdagdienst.
@@ -814,7 +797,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                           <button
                             type="button"
                             onClick={applySuggestedBands}
-                            className="px-3 py-1.5 rounded text-xs font-medium bg-amber-600 text-white hover:bg-amber-700 transition-colors"
+                            className="px-3 py-1.5 rounded text-xs font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors"
                           >
                             Bereik voor de huidige leden
                           </button>
@@ -932,7 +915,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       </div>
                     )}
 
-                    {ruleset.objectiveMode === 'weighted' && (
+                    {ruleset?.objectiveMode === 'weighted' && (
                       <>
                     <p className="text-xs text-neutral-500">
                       Dit zijn de punten waarmee de solver bepaalt hoe hij diensten verdeelt: hoe
@@ -1094,9 +1077,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 <li>Niemand twee diensten binnen het venster geven</li>
               </ul>
               <p className="text-xs text-neutral-500 pt-2">
-                De solver draait maximaal 2 minuten. Bij het bereiken van de tijdslimiet kan een
-                suboptimale oplossing worden teruggegeven. Je kunt daarna alsnog langer laten
-                doorzoeken.
+                De solver zoekt hoogstens 5 minuten. Is hij dan nog niet klaar, dan krijg je het
+                beste rooster dat hij tot dan vond. Daarna kun je het rooster opnieuw laten maken
+                met 10 of 30 minuten zoektijd. De solver begint dan helemaal opnieuw.
               </p>
             </div>
           )}
@@ -1166,7 +1149,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 </p>
               ) : (
                 <p className="text-xs text-center text-neutral-500">
-                  Dit kan tot {formatDuration(pendingTimeLimitSeconds ?? 120)} duren. Je kunt dit
+                  Dit kan tot {zoektijdWoorden(pendingTimeLimitSeconds ?? STANDAARD_ZOEKTIJD_SECONDEN)} duren. Je kunt dit
                   scherm open laten staan of later terugkomen.
                 </p>
               )}
@@ -1207,10 +1190,14 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                       {SOLVER_STATUS_LABEL[result.solver_status] || result.solver_status}
                     </dd>
                   </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-700">Totale kosten:</dt>
-                    <dd className="font-semibold text-neutral-900">{result.cost.toFixed(2)}</dd>
-                  </div>
+                  {/* Only the Puntenplanner works with one score; for the other methods this number
+                      means nothing to a planner (audit 1.2.2: "Totale kosten: 0.00"). */}
+                  {ruleset?.objectiveMode === 'weighted' && (
+                    <div className="flex justify-between">
+                      <dt className="text-neutral-700">Score (lager is beter):</dt>
+                      <dd className="font-semibold text-neutral-900">{result.cost.toLocaleString('nl-NL', { maximumFractionDigits: 2 })}</dd>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <dt className="text-neutral-700">Duur:</dt>
                     <dd className="font-semibold text-neutral-900">{result.time_seconds.toFixed(2)}s</dd>
@@ -1219,8 +1206,8 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
 
                 {ruleset && (
                   <p className="text-xs text-green-800 mt-3 pt-3 border-t border-green-200">
-                    Gegenereerd met venster avond {ruleset.windowWeeksAvond} weken, weekend/feestdag{' '}
-                    {ruleset.windowWeeksWeekendFeestdag} weken · avond {ruleset.bandAvond[0]}-
+                    Gegenereerd met venster avond {telwoord(ruleset.windowWeeksAvond, 'week', 'weken')}, weekend/feestdag{' '}
+                    {telwoord(ruleset.windowWeeksWeekendFeestdag, 'week', 'weken')} · avond {ruleset.bandAvond[0]}-
                     {ruleset.bandAvond[1]} · weekend {ruleset.bandWeekend[0]}-{ruleset.bandWeekend[1]} ·
                     feestdag {ruleset.bandFeestdag[0]}-{ruleset.bandFeestdag[1]}
                   </p>
@@ -1256,17 +1243,16 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 nextTimeLimitSeconds !== null &&
                 result.attempts_tried === undefined && (
                 <div className="bg-blue-50 border border-blue-200 rounded p-4">
-                  <p className="text-sm text-blue-900">
-                    De solver had nog niet bewezen dat dit de best mogelijke oplossing is toen de
-                    tijd om was. Langer laten zoeken kan een rooster opleveren dat beter verdeeld of
-                    vollediger is, maar dat is geen garantie.
+                  <p className="text-sm text-blue-900" data-testid="opnieuw-uitleg">
+                    {opnieuwUitleg(lastTimeLimitSeconds, nextTimeLimitSeconds)} Langer zoeken kan een
+                    rooster opleveren dat beter verdeeld of vollediger is, maar dat is geen garantie.
                   </p>
                   <button
                     onClick={() => handleGenerate(nextTimeLimitSeconds)}
                     disabled={loading}
                     className="mt-3 w-full px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:bg-blue-400 transition-colors"
                   >
-                    {formatDuration(nextTimeLimitSeconds)} langer proberen
+                    {opnieuwKnopTekst(nextTimeLimitSeconds)}
                   </button>
                 </div>
               )}

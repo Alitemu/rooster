@@ -13,6 +13,7 @@ import { v4 as uuid } from 'uuid';
 import { hashToken, hashPassword, validatePasswordStrength, generateAccessToken } from '../lib/auth';
 import { generateSlotsForPeriod } from '../lib/slotGeneration';
 import { createSetupToken } from '../lib/setupToken';
+import { verschuifDagen, verschuif } from './demoKalender.mjs';
 // The planner account gets this password set directly by the seed, on
 // explicit request - a known password checked into git that's trivial to
 // type on a phone during testing, no /planner/login "first run" form or
@@ -384,6 +385,17 @@ async function createTables() {
       aangemaakt_op TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_mail_queue (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id),
+      ruil_id TEXT,
+      soort TEXT NOT NULL,
+      melding_json TEXT NOT NULL,
+      pogingen INTEGER NOT NULL DEFAULT 0,
+      laatste_poging_op TEXT,
+      aangemaakt_op TEXT NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS dienstrooster_app_setting (
       sleutel TEXT PRIMARY KEY NOT NULL,
       waarde TEXT NOT NULL,
@@ -416,7 +428,7 @@ async function createTables() {
       van_datum TEXT NOT NULL,
       tot_datum TEXT NOT NULL,
       soort TEXT NOT NULL
-        CHECK(soort IN ('VAKANTIE', 'CONGRES', 'OVERIG')),
+        CHECK(soort IN ('VAKANTIE', 'CONGRES', 'ONDERWIJS', 'OVERIG')),
       notitie TEXT,
       aangemaakt_door TEXT NOT NULL REFERENCES dienstrooster_person(id),
       aangemaakt_op TEXT NOT NULL
@@ -436,6 +448,8 @@ async function createTables() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS availability_uniq
       ON dienstrooster_availability(person_id, slot_id);
+    CREATE INDEX IF NOT EXISTS availability_slot_idx
+      ON dienstrooster_availability(slot_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_aios_wens (
       id TEXT PRIMARY KEY NOT NULL,
@@ -478,10 +492,44 @@ async function createTables() {
       period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
       person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
       doel_punten REAL NOT NULL,
-      doel_feestdagen REAL NOT NULL
+      doel_feestdagen REAL NOT NULL,
+      doel_nachten REAL,
+      doel_dagen REAL,
+      doel_weekendavonden REAL,
+      doel_weekavonden REAL,
+      doel_uitloopdiensten REAL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS aios_doel_uniq
       ON dienstrooster_aios_doel(period_id, person_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_generatie (
+      period_id TEXT PRIMARY KEY NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      gemaakt_op TEXT NOT NULL,
+      solver_status TEXT NOT NULL,
+      gevuld INTEGER NOT NULL,
+      tijd_seconden REAL NOT NULL,
+      leeg_json TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_period_factor (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
+      factor REAL NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS period_factor_uniq
+      ON dienstrooster_period_factor(period_id, person_id);
+
+    CREATE TABLE IF NOT EXISTS dienstrooster_aios_reden (
+      id TEXT PRIMARY KEY NOT NULL,
+      period_id TEXT NOT NULL REFERENCES dienstrooster_schedule_period(id) ON DELETE CASCADE,
+      person_id TEXT NOT NULL REFERENCES dienstrooster_person(id) ON DELETE CASCADE,
+      datum TEXT NOT NULL,
+      tekst TEXT NOT NULL,
+      gewijzigd_op TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS aios_reden_uniq
+      ON dienstrooster_aios_reden(period_id, person_id, datum);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_aios_beginstand (
       id TEXT PRIMARY KEY NOT NULL,
@@ -512,6 +560,9 @@ async function createTables() {
       reden_afwijzing TEXT,
       aangemaakt_op TEXT NOT NULL,
       beantwoord_op TEXT,
+      gezien_op TEXT,
+      laatste_herinnering_op TEXT,
+      laatste_herinnering_door TEXT,
       CONSTRAINT aios_ruil_status_check CHECK(status IN ('IN_BEHANDELING', 'GOEDGEKEURD', 'AFGEWEZEN', 'INGETROKKEN', 'VERVALLEN'))
     );
     CREATE INDEX IF NOT EXISTS aios_ruil_periode_idx ON dienstrooster_aios_ruil(period_id);
@@ -551,6 +602,10 @@ async function createTables() {
 
     CREATE UNIQUE INDEX IF NOT EXISTS assignment_uniq
       ON dienstrooster_assignment(schedule_version_id, slot_id);
+    CREATE INDEX IF NOT EXISTS assignment_slot_idx
+      ON dienstrooster_assignment(slot_id);
+    CREATE INDEX IF NOT EXISTS assignment_person_idx
+      ON dienstrooster_assignment(person_id);
 
     CREATE TABLE IF NOT EXISTS dienstrooster_swap_request (
       id TEXT PRIMARY KEY NOT NULL,
@@ -625,13 +680,17 @@ const SEEDED_TABLES = [
   'dienstrooster_reminder_schedule',
   'dienstrooster_reminder_run',
   'dienstrooster_period_fellow',
+  'dienstrooster_period_factor',
   'dienstrooster_aios_wens',
   'dienstrooster_aios_periode',
   'dienstrooster_aios_blokkeuze',
   'dienstrooster_aios_doel',
+  'dienstrooster_aios_generatie',
+  'dienstrooster_aios_reden',
   'dienstrooster_aios_beginstand',
   'dienstrooster_aios_ruil',
   'dienstrooster_mail_queue',
+  'dienstrooster_aios_mail_queue',
   // References a person (gewijzigd_door), so a reset clears it as well.
   'dienstrooster_app_setting',
   'dienstrooster_notification_template',
@@ -677,6 +736,20 @@ const LATER_COLUMNS: Record<string, Record<string, string>> = {
   dienstrooster_swap_request: {
     reden_afwijzing: 'TEXT',
     melding_id: 'TEXT',
+    laatste_herinnering_op: 'TEXT',
+    laatste_herinnering_door: 'TEXT',
+  },
+  dienstrooster_aios_doel: {
+    doel_nachten: 'REAL',
+    doel_dagen: 'REAL',
+    doel_weekendavonden: 'REAL',
+    doel_weekavonden: 'REAL',
+    doel_uitloopdiensten: 'REAL',
+  },
+  dienstrooster_aios_ruil: {
+    gezien_op: 'TEXT',
+    laatste_herinnering_op: 'TEXT',
+    laatste_herinnering_door: 'TEXT',
   },
   dienstrooster_schedule_period: {
     auto_herinneren: 'INTEGER NOT NULL DEFAULT 1',
@@ -737,21 +810,92 @@ const LATER_COLUMN_BACKFILL: Record<string, string> = {
 function applyMissingColumns() {
   // Backfills run once every column is there: one may fill a column added
   // after its own (definitief_op also sets definitief_door_person_id).
-  const backfills: string[] = [];
-  for (const [table, columns] of Object.entries(LATER_COLUMNS)) {
-    const existing = new Set(
-      (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name)
-    );
-    for (const [column, definition] of Object.entries(columns)) {
-      if (existing.has(column)) continue;
-      console.log(`  Adding missing column ${table}.${column}`);
-      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
-      const backfill = LATER_COLUMN_BACKFILL[`${table}.${column}`];
-      if (backfill) backfills.push(backfill);
+  // One transaction: a stop between a column and its backfill left the column there, so the next start saw
+  // nothing missing and never filled it (uitgenodigd_op, dienst_type). All of it or none of it.
+  db.transaction(() => {
+    const backfills: string[] = [];
+    for (const [table, columns] of Object.entries(LATER_COLUMNS)) {
+      const existing = new Set(
+        (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name)
+      );
+      for (const [column, definition] of Object.entries(columns)) {
+        if (existing.has(column)) continue;
+        console.log(`  Adding missing column ${table}.${column}`);
+        db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+        const backfill = LATER_COLUMN_BACKFILL[`${table}.${column}`];
+        if (backfill) backfills.push(backfill);
+      }
     }
-  }
-  for (const backfill of backfills) db.exec(backfill);
+    for (const backfill of backfills) db.exec(backfill);
+  })();
   repairDefinitiefBackfill();
+  repairRuilen();
+  repairAbsenceSoort();
+}
+
+/**
+ * The absence table of a database the seed built before 0.109.0 only allows
+ * three soorten: a CHECK cannot be altered, so the table is made again with
+ * the new one (onderwijs), rows kept. Migration 0036 does the same for a
+ * database the migrations built. Nothing to do once the table allows it.
+ */
+function repairAbsenceSoort() {
+  const rij = db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'dienstrooster_absence'`).get() as { sql: string } | undefined;
+  if (!rij || rij.sql.includes('ONDERWIJS')) return;
+  // The table as it is, with only the CHECK widened and every column it has copied: a column added later
+  // (LATER_COLUMNS runs first) must not drop out of a fixed list.
+  const nieuweSql = rij.sql
+    .replace(/'CONGRES',\s*'OVERIG'/, "'CONGRES', 'ONDERWIJS', 'OVERIG'")
+    .replace(/^CREATE TABLE\s+(IF NOT EXISTS\s+)?[`"]?dienstrooster_absence[`"]?/i, 'CREATE TABLE __new_dienstrooster_absence');
+  if (!nieuweSql.includes('ONDERWIJS') || !nieuweSql.includes('__new_dienstrooster_absence')) {
+    throw new Error('dienstrooster_absence has a definition this repair does not know: soort onderwijs cannot be added');
+  }
+  const kolommen = (db.prepare('PRAGMA table_info(dienstrooster_absence)').all() as Array<{ name: string }>).map((c) => `"${c.name}"`).join(', ');
+  console.log('  Making dienstrooster_absence again with the soort onderwijs');
+  db.pragma('foreign_keys = OFF');
+  try {
+    db.transaction(() => {
+      db.exec(`DROP TABLE IF EXISTS __new_dienstrooster_absence`);
+      db.exec(nieuweSql);
+      db.exec(`INSERT INTO __new_dienstrooster_absence (${kolommen}) SELECT ${kolommen} FROM dienstrooster_absence`);
+      db.exec('DROP TABLE dienstrooster_absence');
+      db.exec('ALTER TABLE __new_dienstrooster_absence RENAME TO dienstrooster_absence');
+      const kapot = db.prepare('PRAGMA foreign_key_check(dienstrooster_absence)').all();
+      if (kapot.length > 0) throw new Error(`foreign keys broken after remaking dienstrooster_absence: ${JSON.stringify(kapot.slice(0, 3))}`);
+    })();
+  } finally {
+    db.pragma('foreign_keys = ON');
+  }
+}
+
+/**
+ * Swapping needs a definitief roster (0.102.0), and a lapsed request is
+ * ingetrokken, there is no status vervallen. Safe on every start: what it
+ * touches is not allowed to exist, so there is nothing to find once it
+ * has run. The same two lines are in migration 0033 for a database the
+ * migrations built.
+ */
+function repairRuilen() {
+  const hasTable = (naam: string) => Boolean(db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`).get(naam));
+  if (hasTable('dienstrooster_aios_ruil')) {
+    db.exec(`UPDATE dienstrooster_aios_ruil SET status = 'INGETROKKEN' WHERE status = 'VERVALLEN'`);
+    const n = db
+      .prepare(
+        `UPDATE dienstrooster_aios_ruil SET status = 'INGETROKKEN', reden_afwijzing = 'Het rooster is nog voorlopig.', beantwoord_op = ?
+         WHERE status = 'IN_BEHANDELING' AND period_id IN (SELECT id FROM dienstrooster_schedule_period WHERE definitief_op IS NULL)`
+      )
+      .run(new Date().toISOString()).changes;
+    if (n > 0) console.log(`  Withdrew ${n} AIOS swap request(s) on a voorlopig roster`);
+  }
+  if (hasTable('dienstrooster_swap_request')) {
+    const n = db
+      .prepare(
+        `UPDATE dienstrooster_swap_request SET status = 'INGETROKKEN', reden_afwijzing = 'Het rooster is nog voorlopig.', beantwoord_op = ?
+         WHERE status = 'PENDING' AND periode_id IN (SELECT id FROM dienstrooster_schedule_period WHERE definitief_op IS NULL)`
+      )
+      .run(new Date().toISOString()).changes;
+    if (n > 0) console.log(`  Withdrew ${n} swap request(s) on a voorlopig roster`);
+  }
 }
 
 /**
@@ -802,7 +946,23 @@ const REWORDED_TEMPLATES: Array<{ sleutel: string; oud: string; nieuw: string }>
     // Publishing makes a roster voorlopig first (lib/publication.ts).
     sleutel: 'SCHEDULE_PUBLISHED',
     oud: 'Het rooster voor **{{periode}}** is definitief.',
-    nieuw: 'Het voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.',
+    nieuw: 'Het voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de planner weten als er iets niet klopt.',
+  },
+  // 0.905.3: one word for the role everywhere, "planner" (the user's choice).
+  {
+    sleutel: 'SCHEDULE_PUBLISHED',
+    oud: 'laat het de roosteraar weten als er iets niet klopt.',
+    nieuw: 'laat het de planner weten als er iets niet klopt.',
+  },
+  {
+    sleutel: 'DEADLINE_PASSED',
+    oud: 'Neem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
+    nieuw: 'Neem rechtstreeks contact op met de planner als er iets moet veranderen.',
+  },
+  {
+    sleutel: 'BLOCK_OVERRIDDEN',
+    oud: 'Neem contact op met de roosteraar als dit een probleem is.',
+    nieuw: 'Neem contact op met de planner als dit een probleem is.',
   },
 ];
 
@@ -820,12 +980,14 @@ function refreshRewordedTemplates() {
     .prepare('SELECT id, sleutel, body_md FROM dienstrooster_notification_template')
     .all() as Array<{ id: string; sleutel: string; body_md: string }>;
   for (const row of rows) {
+    // One body through every change in order, so a later change can follow an earlier one.
+    let body = row.body_md;
     for (const change of REWORDED_TEMPLATES) {
-      if (row.sleutel === change.sleutel && row.body_md.includes(change.oud)) {
-        const body = row.body_md.replace(change.oud, change.nieuw);
-        db.prepare('UPDATE dienstrooster_notification_template SET body_md = ? WHERE id = ?').run(body, row.id);
-        console.log(`  Updated notification template text ${row.sleutel}`);
-      }
+      if (row.sleutel === change.sleutel && body.includes(change.oud)) body = body.replace(change.oud, change.nieuw);
+    }
+    if (body !== row.body_md) {
+      db.prepare('UPDATE dienstrooster_notification_template SET body_md = ? WHERE id = ?').run(body, row.id);
+      console.log(`  Updated notification template text ${row.sleutel}`);
     }
   }
 }
@@ -969,17 +1131,17 @@ function createNotificationTemplates() {
     [
       'DEADLINE_PASSED',
       '{{periode}}: de deadline is verstreken',
-      'Beste {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de roosteraar als er iets moet veranderen.',
+      'Beste {{codenaam}},\n\nDe deadline voor **{{periode}}** is verstreken en voorkeuren zijn nu alleen-lezen.\n\nNeem rechtstreeks contact op met de planner als er iets moet veranderen.',
     ],
     [
       'BLOCK_OVERRIDDEN',
       '{{periode}}: een van je voorkeuren kon niet worden gehonoreerd',
-      'Beste {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de roosteraar als dit een probleem is.',
+      'Beste {{codenaam}},\n\nBij het samenstellen van **{{periode}}** konden we een van je markeringen niet honoreren:\n\n{{details}}\n\nReden: {{reden}}\n\nNeem contact op met de planner als dit een probleem is.',
     ],
     [
       'SCHEDULE_PUBLISHED',
       '{{periode}}: het rooster is gepubliceerd',
-      'Beste {{codenaam}},\n\nHet voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de roosteraar weten als er iets niet klopt.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
+      'Beste {{codenaam}},\n\nHet voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de planner weten als er iets niet klopt.\n\n{{link}}\n\nJe kunt vanuit je eigen overzicht een ruil met een collega aanvragen.',
     ],
     [
       'SWAP_REQUESTED',
@@ -1221,8 +1383,10 @@ async function seed() {
 
     // 5. Add staff to pool
     console.log('Adding staff to pool...');
-    const membershipStartDate = '2027-01-01';
-    const membershipEndDate = '2029-12-31';
+    // The demo calendar moves along with the real date (scripts/demoKalender.mjs).
+    const demoShift = verschuifDagen();
+    const membershipStartDate = verschuif('2027-01-01', demoShift);
+    const membershipEndDate = verschuif('2029-12-31', demoShift);
 
     for (const staffId of staffIds) {
       db.prepare(`
@@ -1277,14 +1441,15 @@ async function seed() {
     // each other.
     console.log('Creating period...');
     const periodId = uuid();
-    const periodStart = '2027-01-04'; // Monday
-    const periodEnd = '2027-06-06'; // Sunday (22 full ISO weeks from periodStart)
-    const deadline = '2026-12-15T17:00:00Z';
+    const periodStart = verschuif('2027-01-04', demoShift); // Monday
+    const periodEnd = verschuif('2027-06-06', demoShift); // Sunday (22 full ISO weeks from periodStart)
+    const deadline = verschuif('2026-12-15T17:00:00Z', demoShift);
+    const periodName = `${periodStart.slice(0, 4)}-1 (Jan-Jun)`;
 
     db.prepare(`
       INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(periodId, poolId, '2027-1 (Jan-Jun)', periodStart, periodEnd, deadline, now);
+    `).run(periodId, poolId, periodName, periodStart, periodEnd, deadline, now);
 
     // 8a. Generate this period's shift slots now (not just on /open) so the
     // blockade import in step 11b below has real slot_id values to attach
@@ -1345,7 +1510,10 @@ async function seed() {
       `).run(uuid(), periodId, dagen);
     }
 
-    // 8. Create some ledger entries (beginsaldi)
+    // 8. Create some ledger entries (beginsaldi). With the reason the import
+    // writes: the import replaces only rows with that reason, so a demo row
+    // with another reason stayed next to an imported one and counted twice
+    // (audit 1.3.0, Persoon-01 two avonddiensten fewer instead of one).
     console.log('Creating beginsaldi...');
     for (let i = 0; i < 10; i++) {
       const staffId = staffIds[i];
@@ -1363,7 +1531,7 @@ async function seed() {
           'AVOND',
           periodId,
           delta,
-          'Beginsaldo vanuit import',
+          'Geïmporteerd beginsaldo',
           'BEGINSALDO',
           plannerId,
           now
@@ -1416,10 +1584,10 @@ async function seed() {
     console.log('Creating absences...');
     for (let i = 5; i < 15; i++) {
       const staffId = staffIds[i];
-      const startDate = new Date('2027-02-01');
-      startDate.setDate(startDate.getDate() + Math.floor(Math.random() * 80));
+      const startDate = new Date(`${verschuif('2027-02-01', demoShift)}T00:00:00Z`);
+      startDate.setUTCDate(startDate.getUTCDate() + Math.floor(Math.random() * 80));
       const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 3 + Math.floor(Math.random() * 7));
+      endDate.setUTCDate(endDate.getUTCDate() + 3 + Math.floor(Math.random() * 7));
 
       db.prepare(`
         INSERT INTO dienstrooster_absence
@@ -1447,9 +1615,16 @@ async function seed() {
     // header's original left-to-right column order) before being checked
     // in, matching CLAUDE.md's "no real names - only codenaam" rule.
     //
-    // A marked cell in the source (whether it held a non-breaking space or
-    // the person's own initials again - both forms appeared, meaning the
-    // same thing) became a plain 'X' in the fixture; empty stayed empty.
+    // A marked cell in the source (the person's own initials) became a plain
+    // 'X' in the fixture; empty stayed empty.
+    // The first conversion also read a non-breaking space as a mark: in 14
+    // columns the source used it as filler, and those columns came out
+    // blocked on every day but the first (153 of 154). That was a conversion
+    // error, not real blockades (1.3.0, the user's call): those columns are
+    // empty now, so those 14 people have no hard blocks in the demo. Their
+    // real blocks are lost; the other 17 columns are as in the source.
+    // tests/fixtures/blokkadesFixture.test.ts fails when a column is blocked
+    // on (nearly) every day again.
     console.log('Importing real blockades (anonymized)...');
     const maandNummer: Record<string, number> = {
       Januari: 1, Februari: 2, Maart: 3, April: 4, Mei: 5, Juni: 6,
@@ -1473,7 +1648,7 @@ async function seed() {
     let blockadesImported = 0;
     for (const row of blockadesRows) {
       const [, dagStr, maand] = row;
-      const datum = `2027-${String(maandNummer[maand]).padStart(2, '0')}-${dagStr.padStart(2, '0')}`;
+      const datum = verschuif(`2027-${String(maandNummer[maand]).padStart(2, '0')}-${dagStr.padStart(2, '0')}`, demoShift);
       const slotId = slotIdByDate.get(datum);
       if (!slotId) continue; // outside the generated period, shouldn't happen given the dates match
 
@@ -1557,15 +1732,15 @@ async function seed() {
     if (adminAdded) logAdminAdded();
     if (setupToken) {
       console.log(
-        `  - Setup-token voor /planner/login's eerste-keer-formulier: ${setupToken}\n` +
-          `    (nodig om via de interactieve login-pagina zelf een wachtwoord in te stellen -\n` +
-          `    alleen hier in de log zichtbaar, nooit over HTTP. Voorkomt dat iemand anders dan\n` +
+        `  - Installatiecode voor het eerste-keer-formulier op /planner/login: ${setupToken}\n` +
+          `    (nodig om via de inlogpagina zelf een wachtwoord in te stellen. Alleen\n` +
+          `    hier in de log zichtbaar, nooit over HTTP. Voorkomt dat iemand anders dan\n` +
           `    jij het beheerdersaccount claimt voordat jij dat doet.)`
       );
     }
     console.log(`  - Staff: Persoon-01 through Persoon-31 (personal access links)`);
     console.log(`\nPool: Achterwacht (31 members)`);
-    console.log(`Period: 2027-1 (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);
+    console.log(`Period: ${periodName} (${periodStart} to ${periodEnd}, ${generatedSlots.length} slots generated)`);
     console.log(`\nPhase 1 Data:`);
     console.log(`  - Part-time patterns: 10 staff members`);
     console.log(`  - Absences: 10 vacation periods`);

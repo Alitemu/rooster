@@ -24,15 +24,15 @@
 
 import { db } from '@/db/client';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht } from '@/lib/aiosVerzendlijst';
-import { verstuurAiosVerzendlijst, aiosMailIngesteld } from '@/lib/aiosMail';
+import { verstuurAiosVerzendlijst, aiosMailIngesteld, aiosContactAdres } from '@/lib/aiosMail';
 import { aiosDeelnemers, aiosMailBasisUrl, aiosPersoonlijkeLink, type AiosUitnodigPeriode } from '@/lib/aiosUitnodigen';
 import { laadAiosRooster, type AiosRooster } from '@/lib/aiosRooster';
 import { AIOS_GENERATIE_LOOPT, aiosGeneratieLoopt } from '@/lib/aiosGenereren';
 import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
 import { writeAuditLog } from '@/lib/auditLog';
-import { formatSwapDate, periodStatusLabel } from '@/lib/aiosTeksten';
+import { aiosPeriodeInOnderwerp, formatSwapDate, periodStatusLabel } from '@/lib/aiosTeksten';
 import { BLOK_VORM_LABELS } from '@/lib/aiosDiensten';
-import { vervalOpenAiosRuilen } from '@/lib/aiosRuilen';
+import { meldAiosRuilenIngetrokken, trekAlleOpenAiosRuilenIn, type IngetrokkenRuil } from '@/lib/aiosRuilen';
 
 export interface AiosGepubliceerd {
   person_id: string;
@@ -82,6 +82,9 @@ export interface AiosPublicatieControle {
   problemen: string[];
   // Published only when confirmed.
   waarschuwingen: string[];
+  // The part of waarschuwingen that breaks a hard rule: may be published on
+  // purpose, but only after a warning that says so in those words (1.2.2).
+  harde_regels: string[];
 }
 
 export function aiosPublicatieControle(rooster: AiosRooster): AiosPublicatieControle {
@@ -89,8 +92,11 @@ export function aiosPublicatieControle(rooster: AiosRooster): AiosPublicatieCont
     rooster.leeg > 0
       ? [`${rooster.leeg === 1 ? '1 dienst is' : `${rooster.leeg} diensten zijn`} nog leeg. Vul ${rooster.leeg === 1 ? 'die' : 'ze'} eerst met de hand.`]
       : [];
+  const harde_regels = rooster.overtredingen.map(
+    (o) => `${o.wie.join(' en ')}: ${o.tekst}${o.datums.length ? ` (${o.datums.map(datumKort).join(', ')})` : ''}`
+  );
   const waarschuwingen = [
-    ...rooster.overtredingen.map((o) => `${o.wie.join(' en ')}: ${o.tekst}${o.datums.length ? ` (${o.datums.map(datumKort).join(', ')})` : ''}`),
+    ...harde_regels,
     ...rooster.per_aios
       .filter((a) => a.dienstpercentage !== null && a.dienstpercentage > PERCENTAGE_GRENS)
       .map((a) => `${a.codenaam}: dienstpercentage ${procent(a.dienstpercentage!)}, boven 25%.`),
@@ -101,7 +107,7 @@ export function aiosPublicatieControle(rooster: AiosRooster): AiosPublicatieCont
         (a) => `${a.codenaam}: dienstpercentage over ${KWARTALEN_WOORD[a.jaar_kwartalen]} kwartalen samen ${procent(a.jaar_percentage!)}, boven 25%.`
       ),
   ];
-  return { problemen, waarschuwingen };
+  return { problemen, waarschuwingen, harde_regels };
 }
 
 export interface AiosPublicatieStand {
@@ -168,23 +174,25 @@ function linkTekst(link: string | null): string {
   return link ? `\nJe rooster in de app:\n${link}\n` : '';
 }
 
+/** `contact`: the AIOS planner's contactadres, so "laat het de planner weten" says where to (R-05, 1.7.0). */
 export function aiosVoorlopigBericht(
   period: { naam: string },
   codenaam: string,
   eigen: AiosGepubliceerd[],
   percentage: number | null,
-  link: string | null
+  link: string | null,
+  contact: string | null = null
 ): VerzendlijstBericht {
   return {
     soort: 'ROOSTER_VOORLOPIG',
     codenaam,
     personen: verzendlijstPersonen(codenaam),
-    onderwerp: `Voorlopig rooster AIOS ${period.naam}`,
+    onderwerp: `Voorlopig rooster ${aiosPeriodeInOnderwerp(period.naam)}`,
     tekst: `Beste ${codenaam},
 
 Het voorlopige rooster van de AIOS voor ${period.naam} staat klaar. ${dienstenTekst(eigen, percentage)}
 
-Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten. Daarna wordt het rooster definitief. Je krijgt dan nog een bericht.
+Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten${contact ? `: mail naar ${contact}` : ''}. Daarna wordt het rooster definitief. Je krijgt dan nog een bericht.
 ${linkTekst(link)}
 Deze link is alleen voor jou. Stuur hem niet door.`,
   };
@@ -223,7 +231,7 @@ export function aiosDefinitiefBericht(
     soort: 'ROOSTER_DEFINITIEF',
     codenaam,
     personen: verzendlijstPersonen(codenaam),
-    onderwerp: `Definitief rooster AIOS ${period.naam}`,
+    onderwerp: `Definitief rooster ${aiosPeriodeInOnderwerp(period.naam)}`,
     tekst: `Beste ${codenaam},
 
 Het rooster van de AIOS voor ${period.naam} is nu definitief. ${dienstenTekst(eigen, percentage)}
@@ -245,19 +253,47 @@ async function mail(period: AiosUitnodigPeriode, soort: 'ROOSTER_VOORLOPIG' | 'R
   const rooster = aiosMomentopname(period.id);
   const percentage = new Map(laadAiosRooster(period).per_aios.map((a) => [a.person_id, a.dienstpercentage]));
   const basis = aiosMailBasisUrl(period.id);
+  const contact = aiosContactAdres();
   const berichten = db.transaction(() =>
     aiosDeelnemers(period).map((p) => {
       const eigen = rooster.filter((d) => d.person_id === p.id);
       const link = basis ? aiosPersoonlijkeLink(p.id, period.id, basis) : null;
       const pct = percentage.get(p.id) ?? null;
       return soort === 'ROOSTER_VOORLOPIG'
-        ? aiosVoorlopigBericht(period, p.codenaam, eigen, pct, link)
+        ? aiosVoorlopigBericht(period, p.codenaam, eigen, pct, link, contact)
         : aiosDefinitiefBericht(period, p.codenaam, eigen, pct, aiosWijzigingen(p.id, voorlopig, rooster), link);
     })
   )();
   if (berichten.length === 0) return { verstuurd: true, aantal: 0 };
   const uit = await verstuurAiosVerzendlijst(buildVerzendlijst({ soort, automatisch: false, periode: period.naam }, berichten));
   return uit.ok ? { verstuurd: true, aantal: uit.aantal } : { verstuurd: false, melding: `De e-mail is niet verstuurd: ${uit.message}` };
+}
+
+/**
+ * The mail of the publication once more, for when it failed: the voorlopige
+ * mail while the roster is voorlopig, the definitieve one when it is
+ * definitief. Everyone gets it again; nothing else changes but the audit row.
+ */
+export async function mailAiosRoosterOpnieuw(period: AiosUitnodigPeriode, actorId: string): Promise<AiosPublicatieUitkomst> {
+  const s = stand(period.id);
+  if (s.status !== 'GEPUBLICEERD') {
+    return nee(409, 'INVALID_STATUS', 'Alleen van een gepubliceerd rooster kan de mail opnieuw verstuurd worden.');
+  }
+  const definitief = Boolean(s.definitief_op);
+  const uitslag = await mail(period, definitief ? 'ROOSTER_DEFINITIEF' : 'ROOSTER_VOORLOPIG', definitief ? leesMomentopname(s.voorlopig_rooster_json) : []);
+  writeAuditLog({
+    actorId,
+    entiteit: 'period',
+    entiteitId: period.id,
+    actie: 'UPDATE',
+    nieuw: {
+      wijziging: 'roostermail AIOS opnieuw verstuurd',
+      soort: definitief ? 'definitief' : 'voorlopig',
+      verstuurd: uitslag.verstuurd,
+      ...(uitslag.verstuurd ? { aantal: uitslag.aantal } : {}),
+    },
+  });
+  return { ok: true, mail: uitslag };
 }
 
 /** Voorlopig publiceren: from gegenereerd, the check passed or its warnings confirmed. */
@@ -324,6 +360,7 @@ export function trekAiosPublicatieIn(period: AiosUitnodigPeriode, actorId: strin
   if (period.status !== 'GEPUBLICEERD') {
     return nee(409, 'INVALID_STATUS', `Intrekken kan alleen bij een gepubliceerd rooster, niet in status "${periodStatusLabel(period.status)}".`);
   }
+  let ingetrokken: IngetrokkenRuil[] = [];
   db.transaction(() => {
     db.prepare(
       `UPDATE dienstrooster_schedule_period
@@ -331,8 +368,8 @@ export function trekAiosPublicatieIn(period: AiosUitnodigPeriode, actorId: strin
            definitief_op = NULL, definitief_door_person_id = NULL, voorlopig_rooster_json = NULL, row_version = row_version + 1
        WHERE id = ?`
     ).run(period.id);
-    // Swaps only on a published roster: what was asked can't go through any more.
-    vervalOpenAiosRuilen(period.id);
+    // Swaps only on a definitief roster: what was asked can't go through any more. Withdrawn, told after the commit.
+    ingetrokken = trekAlleOpenAiosRuilenIn(period.id);
     writeAuditLog({
       actorId,
       entiteit: 'period',
@@ -342,6 +379,7 @@ export function trekAiosPublicatieIn(period: AiosUitnodigPeriode, actorId: strin
       nieuw: { wijziging: 'publicatie rooster AIOS ingetrokken', status: 'GEGENEREERD' },
     });
   })();
+  meldAiosRuilenIngetrokken(period, ingetrokken);
   return { ok: true, mail: { verstuurd: true, aantal: 0 } };
 }
 
@@ -362,6 +400,8 @@ export interface AiosEigenRooster {
   // Over this quarter and the ones before it (lib/aiosJaarPercentage.ts); 1 is this one alone.
   jaar_percentage: number | null;
   jaar_kwartalen: number;
+  /** Where to mail about the roster: the AIOS planner's contactadres, when the beheerder set one (R-05, 1.7.0). */
+  contact_planner: string | null;
 }
 
 /** One AIOS's own diensten of a published quarter, with their points and dienstpercentage (G12). */
@@ -388,5 +428,6 @@ export function aiosEigenRooster(period: AiosUitnodigPeriode, personId: string):
     dienstpercentage: mij?.dienstpercentage ?? null,
     jaar_percentage: mij?.jaar_percentage ?? null,
     jaar_kwartalen: mij?.jaar_kwartalen ?? 1,
+    contact_planner: aiosContactAdres(),
   };
 }

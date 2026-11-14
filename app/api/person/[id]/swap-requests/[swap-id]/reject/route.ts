@@ -8,7 +8,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { LIVE_SWAP_REQUEST_SQL } from '@/lib/periodAccess';
 import { v4 as uuid } from 'uuid';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
@@ -125,6 +126,10 @@ export async function POST(
           inhoud: rendered.inhoud,
         });
       }
+      // The colleague answered: the notice about the request is read, whatever the button in the notices says.
+      if (swapRequest.melding_id) {
+        db.prepare('UPDATE dienstrooster_notification SET gelezen = 1 WHERE id = ?').run(swapRequest.melding_id);
+      }
 
       db.prepare(
         `INSERT INTO dienstrooster_audit_log
@@ -170,6 +175,7 @@ export async function POST(
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
     });
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, personId, { wijziging: 'ruil afgewezen door planner' });
     return NextResponse.json({
       success: true,
       data: {

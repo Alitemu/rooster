@@ -30,7 +30,7 @@ import {
  *   else; a block's mark on each of its diensten, in words, with why when
  *   leave set it; the block and the feestdag named; the date a real date.
  * - Verzoeken per AIOS: a row per AIOS with what they asked (4 nachten,
- *   inwerken, the opmerking), their absences in words, the counters and,
+ *   inwerken), their absences in words, the counters and,
  *   above half, how many may still be rostered.
  * - Only the AIOS's planner and the beheerder: the achterwacht's planner
  *   and a participant get nothing, and an achterwacht period answers 404.
@@ -107,7 +107,6 @@ beforeAll(() => {
       vier_nachten: true,
       inwerken_van: q.start_datum,
       inwerken_tot: '2097-04-30',
-      opmerking: 'Graag niet twee blokken achter elkaar',
     })
   ).toEqual({ ok: true });
 });
@@ -123,9 +122,22 @@ describe('Voorkeuren per dienst', () => {
     expect(kop.slice(0, 7)).toEqual(['Datum', 'Dag', 'Week', 'Dienst', 'Tijd', 'Blok', 'Feestdag']);
     expect(kop.slice(7)).toEqual([codenaam('x'), codenaam('y'), codenaam('z')]);
     const aantal = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_shift_slot WHERE period_id = ?').get(w.period) as { n: number }).n;
-    expect(diensten).toHaveLength(aantal);
+    // The five requests and the two part-time rows come first (the file is the back-up), then the diensten.
+    expect(diensten.slice(0, 7).map((r) => r[3])).toEqual([
+      'Verzoek: 4 avonden (wo t/m za)',
+      'Verzoek: 4 nachten (wo t/m za)',
+      'Verzoek: twee dagdiensten (za en zo)',
+      'Verzoek: inwerken',
+      'Verzoek: onderbreking van de opleiding',
+      'Parttime 1',
+      'Parttime 2',
+    ]);
+    const x = kop.indexOf(codenaam('x'));
+    expect(diensten[1][x]).toBe('ja');
+    expect(diensten[3][x]).toMatch(/^\d{2}-\d{2}-2097 t\/m 30-04-2097$/);
+    expect(diensten.slice(7)).toHaveLength(aantal);
     // The date is a real date, in order from the quarter's first day.
-    expect(excelSerialToDate(Number(diensten[0][0]))).toBe(aiosQuarter(2097, 2).start_datum);
+    expect(excelSerialToDate(Number(diensten[7][0]))).toBe(aiosQuarter(2097, 2).start_datum);
   });
 
   it("puts a block's mark on each of its diensten, and says why when leave set it", async () => {
@@ -142,9 +154,9 @@ describe('Voorkeuren per dienst', () => {
     // Leave on a weekday blocks; on Koningsdag it is liever niet.
     const koningsdag = rows.slice(1).filter((r) => r[6] === 'Koningsdag');
     expect(koningsdag.length).toBeGreaterThan(0);
-    expect(new Set(koningsdag.map((r) => r[kolom('y')]))).toEqual(new Set(['liever niet (afwezig)']));
+    expect(new Set(koningsdag.map((r) => r[kolom('y')]))).toEqual(new Set(['liever niet (afwezig: vakantie)']));
     const dagErvoor = rows.slice(1).filter((r) => excelSerialToDate(Number(r[0])) === '2097-04-26');
-    expect(new Set(dagErvoor.map((r) => r[kolom('y')]))).toEqual(new Set(['geblokkeerd (afwezig)']));
+    expect(new Set(dagErvoor.map((r) => r[kolom('y')]))).toEqual(new Set(['geblokkeerd (afwezig: vakantie)']));
     // z marked nothing: an empty column, not a missing one.
     expect(rows.slice(1).every((r) => !r[kolom('z')])).toBe(true);
   });
@@ -160,12 +172,36 @@ describe('Verzoeken per AIOS', () => {
     expect(cel(x, '4 nachten (wo t/m za)')).toBe('ja');
     expect(cel(x, '4 avonden (wo t/m za)')).toBe('');
     expect(cel(x, 'Inwerken')).toMatch(/^\d+ \w+\.? 2097 t\/m 30 apr\.? 2097$/);
-    expect(cel(x, 'Opmerking')).toBe('Graag niet twee blokken achter elkaar');
+    expect(kop).not.toContain('Opmerking');
     expect(cel(x, 'Geblokkeerd (vakken)')).toBe('1');
     expect(cel(x, 'Geblokkeerd: nachtblokken')).toMatch(/^1 van de \d+$/);
     expect(cel(x, 'Boven de helft: nachtblokken')).toBe('');
     expect(cel(y, 'Afwezigheid')).toMatch(/^vakantie 26 apr\.? 2097 t\/m 27 apr\.? 2097$/);
     expect(cel(z, 'Status')).toBe('Nog niets ingevuld');
+  });
+
+  it('names the soort of the absence behind a blocked day, both when two overlap', async () => {
+    const id = insert('dienstrooster_absence', { person_id: w.y, van_datum: '2097-04-27', tot_datum: '2097-04-27', soort: 'ONDERWIJS', aangemaakt_door: w.y, aangemaakt_op: now });
+    try {
+      const rows = await blad(voorkeuren, w.period);
+      const kolom = (n: string) => rows[0].indexOf(codenaam(n));
+      const op = (datum: string) => new Set(rows.slice(1).filter((r) => excelSerialToDate(Number(r[0])) === datum).map((r) => r[kolom('y')]));
+      expect(op('2097-04-26')).toEqual(new Set(['geblokkeerd (afwezig: vakantie)']));
+      expect(op('2097-04-27')).toEqual(new Set(['liever niet (afwezig: vakantie en onderwijs)']));
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(id);
+    }
+  });
+
+  it('names an absence for onderwijs', async () => {
+    const id = insert('dienstrooster_absence', { person_id: w.z, van_datum: '2097-04-28', tot_datum: '2097-04-28', soort: 'ONDERWIJS', aangemaakt_door: w.z, aangemaakt_op: now });
+    try {
+      const [kop, ...rijen] = await blad(verzoeken, w.period);
+      const z = rijen.find((r) => r[0] === codenaam('z'))!;
+      expect(z[kop.indexOf('Afwezigheid')]).toMatch(/^onderwijs 28 apr\.? 2097 t\/m 28 apr\.? 2097$/);
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_absence WHERE id = ?').run(id);
+    }
   });
 
   it('says how many may still be rostered once someone blocked more than half', async () => {

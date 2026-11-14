@@ -14,6 +14,7 @@
  * entry.
  */
 
+import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
@@ -30,10 +31,11 @@ import { queueBlockOverriddenNotification } from '@/lib/notifications';
 import { setPendingUndo, assignmentSlotLabel, parseOnderdeel } from '@/lib/pendingUndo';
 import { isEligibleForPeriod, notMemberOnSlotDate } from '@/lib/rosterGaps';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { telwoord } from '@/lib/telwoord';
 
 const OVERRIDE_REDEN_FALLBACK: Record<string, string> = {
   BLOCKED_OVERRIDE: 'een geblokkeerde dag is toch ingepland',
-  PARTTIME_OVERRIDE: 'een parttime-vrije dag is toch ingepland',
+  PARTTIME_OVERRIDE: 'een deeltijddag is toch ingepland',
   WINDOW_OVERRIDE: 'een dienst binnen het venster is toch ingepland',
 };
 
@@ -189,17 +191,19 @@ export async function POST(
 
     const warning = blocked
       ? blocked.source === 'PARTTIME'
-        ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een parttime-vrije dag voor deze persoon.' }
+        ? { code: 'PARTTIME_OVERRIDE', message: 'Let op: dit is een deeltijddag van deze persoon.' }
         : { code: 'BLOCKED_OVERRIDE', message: 'Let op: deze persoon heeft deze dag geblokkeerd.' }
       : windowConflict
         ? {
             code: 'WINDOW_OVERRIDE',
-            message: `Let op: deze persoon heeft al een dienst binnen het ingestelde venster (avond ${windowWeeks.avond}, weekend/feestdag ${windowWeeks.weekendFeestdag} weken).`,
+            message: `Let op: deze persoon heeft al een dienst binnen het ingestelde venster (avond ${telwoord(windowWeeks.avond, 'week', 'weken')}, weekend/feestdag ${telwoord(windowWeeks.weekendFeestdag, 'week', 'weken')}).`,
           }
         : null;
 
     const newAssignmentId = uuid();
 
+    // Open swap requests about a dienst that changed hands can never be approved: withdrawn, both sides told.
+    const swapMeldingen: Array<{ send: () => void }> = [];
     const run = db.transaction(() => {
       db.prepare(
         `INSERT INTO dienstrooster_assignment_edit
@@ -285,9 +289,11 @@ export async function POST(
         // Which heading its "ongedaan maken" belongs under (lib/pendingUndo.ts).
         onderdeel: parseOnderdeel(body.onderdeel),
       });
+      swapMeldingen.push(...closeSwapsAfterRosterChange(periodId, new Date().toISOString()).meldingen);
     });
 
     run();
+    swapMeldingen.forEach((m) => m.send());
 
     // Prepared for when there's a way to reach the participant outside the
     // app - see lib/notifications.ts. A no-op today (NOTIFICATIONS_ENABLED

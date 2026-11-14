@@ -12,10 +12,11 @@ import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { ChangePasswordDialog } from '@/components/ChangePasswordDialog';
-import { TotpSettingsDialog } from '@/components/TotpSettingsDialog';
+import { MailSettingsDialog } from '@/components/MailSettingsDialog';
+import { BackupDialog } from '@/components/BackupDialog';
+import { backupWaarschuwing } from '@/lib/dbBackupWaarschuwing';
 import { withBasePath, withoutBasePath } from '@/lib/basePath';
 import { PERIODE_NAAM_MAX_LENGTH } from '@/lib/vrijeTekst';
-import { dateToISO } from '@/lib/holidays';
 import {
   aiosPreferenceDeadline,
   aiosQuarterName,
@@ -23,6 +24,9 @@ import {
   aiosQuarterWeeks,
   type AiosQuarter,
 } from '@/lib/aiosQuarter';
+import { foutTekst } from '@/lib/foutTekst';
+import { localIsoDate, localIsoMinute } from '@/lib/localDate';
+import { DatumTijdVeld, DatumVeld, DatumTekst } from '@/components/DatumVeld';
 
 interface Period {
   id: string;
@@ -74,7 +78,7 @@ const datumLang = (datum: string) =>
   new Date(`${datum}T12:00:00`).toLocaleDateString('nl-NL', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
 /** The quarters a new AIOS period can be made for (lib/aiosQuarter.ts). */
-const aiosKwartalen = () => aiosQuartersToOffer(dateToISO(new Date()));
+const aiosKwartalen = () => aiosQuartersToOffer(localIsoDate());
 
 /** The new-period form on an AIOS quarter: its name, dates and deadline. */
 function aiosFormulier(poolId: string, q: AiosQuarter) {
@@ -90,7 +94,8 @@ function aiosFormulier(poolId: string, q: AiosQuarter) {
 /** The preferences deadline as datetime-local; empty when that moment has passed. */
 function aiosDeadline(q: AiosQuarter): string {
   const datum = aiosPreferenceDeadline(q);
-  return new Date(`${datum}T17:00:00`) > new Date() ? `${datum}T17:00` : '';
+  // The deadline is a time on the ward's clock, whatever clock the browser has.
+  return `${datum}T17:00` > localIsoMinute() ? `${datum}T17:00` : '';
 }
 
 // The stakes of deleting a period differ a lot by status - a CONCEPT
@@ -147,9 +152,10 @@ export default function PlannerHomePage() {
 
   const [showTrash, setShowTrash] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showTotpSettings, setShowTotpSettings] = useState(false);
   // Only an ADMIN sees "Accounts beheren" (the API checks it too).
   const [isAdmin, setIsAdmin] = useState(false);
+  const [showMailSettings, setShowMailSettings] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
   const [trash, setTrash] = useState<TrashedPeriod[]>([]);
   const [trashLoading, setTrashLoading] = useState(false);
   const [trashActionBusy, setTrashActionBusy] = useState<string | null>(null);
@@ -218,6 +224,17 @@ export default function PlannerHomePage() {
       .catch(() => {});
   }, []);
 
+  // The beheerder sees here when no backup goes out, not only inside the Back-up dialog (lib/dbBackupWaarschuwing.ts).
+  const [backupMelding, setBackupMelding] = useState<string | null>(null);
+  const laadBackupStand = () =>
+    fetch(withBasePath('/api/admin/back-up'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setBackupMelding(data?.success ? backupWaarschuwing(data.data, new Date()) : null))
+      .catch(() => {});
+  useEffect(() => {
+    if (isAdmin) laadBackupStand();
+  }, [isAdmin]);
+
   const loadTrash = async () => {
     setTrashLoading(true);
     try {
@@ -249,7 +266,7 @@ export default function PlannerHomePage() {
       setDeletingPeriod(null);
       loadTrash();
     } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      setDeleteError(foutTekst(err, 'Verwijderen mislukt'));
     } finally {
       setDeleteBusy(false);
     }
@@ -276,7 +293,7 @@ export default function PlannerHomePage() {
       setPeriods((prev) => prev.map((p) => (p.id === renamingId ? { ...p, naam: data.data.naam } : p)));
       setRenamingId(null);
     } catch (err) {
-      setRenameError(err instanceof Error ? err.message : 'Naam wijzigen mislukt');
+      setRenameError(foutTekst(err, 'Naam wijzigen mislukt'));
     } finally {
       setRenameBusy(false);
       // Opslaan was disabled while saving, which drops the focus; back in
@@ -297,7 +314,7 @@ export default function PlannerHomePage() {
       await loadData();
     } catch (err) {
       // Leave it in the trash list - the planner can retry
-      setRestoreError(err instanceof Error ? err.message : 'Herstellen mislukt');
+      setRestoreError(foutTekst(err, 'Herstellen mislukt'));
     } finally {
       setTrashActionBusy(null);
     }
@@ -315,7 +332,7 @@ export default function PlannerHomePage() {
       setTrash((prev) => prev.filter((p) => p.id !== purgingPeriod.id));
       setPurgingPeriod(null);
     } catch (err) {
-      setPurgeError(err instanceof Error ? err.message : 'Definitief verwijderen mislukt');
+      setPurgeError(foutTekst(err, 'Definitief verwijderen mislukt'));
     } finally {
       setTrashActionBusy(null);
     }
@@ -345,14 +362,18 @@ export default function PlannerHomePage() {
       // An AIOS period has no setup wizard (yet): its own page shows its diensten.
       router.push(aiosGekozen ? `/planner/period/${data.data.id}` : `/planner/setup/${data.data.id}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Aanmaken van periode mislukt');
+      setError(foutTekst(err, 'Aanmaken van periode mislukt'));
       setCreating(false);
     }
   };
 
   const handleLogout = async () => {
-    await fetch(withBasePath('/api/auth/logout'), { method: 'POST' });
-    router.push('/');
+    // Also when the request fails (no signal): the person still leaves this page, as on the participant pages.
+    try {
+      await fetch(withBasePath('/api/auth/logout'), { method: 'POST' });
+    } finally {
+      router.push('/');
+    }
   };
 
   return (
@@ -378,19 +399,40 @@ export default function PlannerHomePage() {
           <button onClick={() => setShowChangePassword(true)} className="btn-secondary">
             Wachtwoord wijzigen
           </button>
-          <button onClick={() => setShowTotpSettings(true)} className="btn-secondary">
-            Tweestapsverificatie
-          </button>
           {isAdmin && (
             <Link href="/planner/accounts" className="btn-secondary">
               Accounts beheren
             </Link>
+          )}
+          {/* The Gmail account is the app's, not a period's: the beheerder reaches it here too (the planner's choice, 0.87.0 kept it on the period pages only). */}
+          {isAdmin && (
+            <button onClick={() => setShowMailSettings(true)} className="btn-secondary">
+              Mailinstellingen
+            </button>
+          )}
+          {/* The backup by mail and its restore (lib/dbBackupMail.ts, lib/dbBackupTerugzetten.ts): the whole database, both diensten. */}
+          {isAdmin && (
+            <button onClick={() => setShowBackup(true)} className="btn-secondary">
+              Back-up
+            </button>
           )}
           <button onClick={handleLogout} className="btn-secondary">
             Uitloggen
           </button>
         </div>
       </div>
+
+      {isAdmin && backupMelding && (
+        <div role="alert" data-testid="backup-waarschuwing" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 flex flex-wrap items-center justify-between gap-2">
+          <p>
+            <span className="font-semibold">Back-up: </span>
+            {backupMelding}
+          </p>
+          <button type="button" onClick={() => setShowBackup(true)} className="btn-secondary">
+            Back-up openen
+          </button>
+        </div>
+      )}
 
       {/* Staff/pool membership is its own thing, independent of any period
           (add/remove someone, change their dates or deelnamefactor) - this
@@ -494,20 +536,20 @@ export default function PlannerHomePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="form-group">
                 <label className="label">Startdatum</label>
-                <input
-                  type="date"
+                <DatumVeld
+                  aria-label="Startdatum"
                   className="input w-full"
                   value={form.start_datum}
-                  onChange={(e) => setForm({ ...form, start_datum: e.target.value })}
+                  onChange={(waarde) => setForm({ ...form, start_datum: waarde })}
                 />
               </div>
               <div className="form-group">
                 <label className="label">Einddatum</label>
-                <input
-                  type="date"
+                <DatumVeld
+                  aria-label="Einddatum"
                   className="input w-full"
                   value={form.eind_datum}
-                  onChange={(e) => setForm({ ...form, eind_datum: e.target.value })}
+                  onChange={(waarde) => setForm({ ...form, eind_datum: waarde })}
                 />
               </div>
             </div>
@@ -515,19 +557,17 @@ export default function PlannerHomePage() {
 
           <div className="form-group">
             <label className="label">Deadline voorkeuren</label>
-            {/* datetime-local, net als de deadline-stap in de setup wizard
-                verderop - zelfde invoerformaat, zodat deze waarde daar
-                automatisch wordt overgenomen in plaats van leeg te lijken en
-                opnieuw ingevuld te moeten worden. */}
-            <input
-              type="datetime-local"
+            {/* Same value format as the wizard's deadline step (YYYY-MM-DDTHH:MM),
+                so the wizard takes this value over instead of showing it empty. */}
+            <DatumTijdVeld
+              aria-label="Deadline voorkeuren"
               className="input w-full"
               value={form.deadline}
-              onChange={(e) => setForm({ ...form, deadline: e.target.value })}
+              onChange={(waarde) => setForm({ ...form, deadline: waarde })}
             />
           </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
           <button onClick={handleCreate} disabled={creating} className="btn-primary">
             {creating ? 'Bezig met aanmaken...' : 'Aanmaken en instellen'}
@@ -557,7 +597,7 @@ export default function PlannerHomePage() {
                 <th className="px-4 py-2 text-left text-sm font-medium">Naam</th>
                 <th className="px-4 py-2 text-left text-sm font-medium">Data</th>
                 <th className="px-4 py-2 text-left text-sm font-medium">Status</th>
-                <th className="px-4 py-2 text-left text-sm font-medium"></th>
+                <th className="relative px-4 py-2 text-left text-sm font-medium"><span className="sr-only">Acties</span></th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -605,7 +645,7 @@ export default function PlannerHomePage() {
                     )}
                   </td>
                   <td className="px-4 py-2 text-sm text-neutral-600">
-                    {p.start_datum} t/m {p.eind_datum}
+                    <DatumTekst iso={p.start_datum} /> t/m <DatumTekst iso={p.eind_datum} />
                   </td>
                   <td className="px-4 py-2 text-sm">
                     {statusLabel(p)}
@@ -677,7 +717,7 @@ export default function PlannerHomePage() {
                   <div>
                     <p className="text-sm font-medium">{p.naam}</p>
                     <p className="text-xs text-neutral-600">
-                      {p.start_datum} t/m {p.eind_datum} · was {statusLabels[p.status] || p.status} ·{' '}
+                      <DatumTekst iso={p.start_datum} /> t/m <DatumTekst iso={p.eind_datum} /> · was {statusLabels[p.status] || p.status} ·{' '}
                       {p.dagen_resterend === 0
                         ? 'wordt binnenkort definitief verwijderd'
                         : `nog ${p.dagen_resterend} dag${p.dagen_resterend === 1 ? '' : 'en'} te herstellen`}
@@ -797,9 +837,13 @@ export default function PlannerHomePage() {
         isOpen={showChangePassword}
         onClose={() => setShowChangePassword(false)}
       />
-      <TotpSettingsDialog
-        isOpen={showTotpSettings}
-        onClose={() => setShowTotpSettings(false)}
+      <MailSettingsDialog isOpen={isAdmin && showMailSettings} onClose={() => setShowMailSettings(false)} />
+      <BackupDialog
+        isOpen={isAdmin && showBackup}
+        onClose={() => {
+          setShowBackup(false);
+          laadBackupStand();
+        }}
       />
     </div>
   );

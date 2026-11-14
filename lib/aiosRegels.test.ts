@@ -74,3 +74,136 @@ describe('the compensation days per AIOS, for the roosterbureau', () => {
     expect(aiosCompensatiedagen(invoer(['2097-05-30']), rooster)).toEqual(new Map([['a', ['2097-05-29', '2097-05-31']]]));
   });
 });
+
+describe('a roster that holds someone who is no longer a participant', () => {
+  it('names their diensten as outside the membership, and does not throw', () => {
+    const invoer = {
+      periode: { van: '2097-05-25', tot: '2097-05-31' },
+      feestdagen: [],
+      diensten: [{ id: 'ND-2097-05-26', datum: '2097-05-26', code: 'ND', start_tijd: '22:30', eind_tijd: '08:30', punten: 1, blok_id: null }],
+      blokken: [],
+      aios: [],
+      tijdslimiet_seconden: 5,
+    } as unknown as AiosSolverInvoer;
+    expect(controleerAiosRooster(invoer, new Map([['ND-2097-05-26', 'weg']]))).toEqual([['1_BUITEN_LIDMAATSCHAP', 'weg', ['ND-2097-05-26']]]);
+  });
+});
+
+describe('the compensation days of the quarter before', () => {
+  it('start the quarter off: nights zo t/m di right before it give Wednesday and Thursday', () => {
+    const invoer = {
+      periode: { van: '2097-01-02', tot: '2097-01-08' },
+      feestdagen: [],
+      diensten: ['2097-01-02', '2097-01-04'].map((datum) => ({ id: `UD-${datum}`, datum, code: 'UD', start_tijd: '17:36', eind_tijd: '20:00', punten: 0.2, blok_id: null })),
+      blokken: [],
+      aios: [
+        {
+          id: 'a',
+          eerdere_diensten: ['2096-12-30', '2096-12-31', '2097-01-01'].map((datum) => ({
+            id: `ND-${datum}`,
+            datum,
+            code: 'ND',
+            start_tijd: '22:30',
+            eind_tijd: '08:30',
+            blok_id: 'oud',
+            blok_soort: 'NACHT',
+            blok_vorm: 'ZO_DI',
+          })),
+        },
+      ],
+      tijdslimiet_seconden: 5,
+    } as unknown as AiosSolverInvoer;
+    expect(aiosCompensatiedagen(invoer, new Map())).toEqual(new Map([['a', ['2097-01-02', '2097-01-03']]]));
+  });
+});
+
+describe('the rules over the boundary, forward (the quarter after)', () => {
+  const dienst = (datum: string, code: 'UD' | 'DD' | 'AD' | 'ND', blok: string | null = null) => ({
+    id: `${code}-${datum}`,
+    datum,
+    code,
+    start_tijd: code === 'ND' ? '22:30' : code === 'UD' ? '17:36' : '08:00',
+    eind_tijd: code === 'ND' ? '08:30' : code === 'UD' ? '20:00' : '17:00',
+    punten: 1,
+    blok_id: blok,
+  });
+  const grens = (d: ReturnType<typeof dienst>) => ({ ...d, blok_id: null, blok_soort: null, blok_vorm: null });
+  /** This quarter ends 2097-03-31; `latere` is what the AIOS has in the first days of the next. */
+  const invoer = (diensten: ReturnType<typeof dienst>[], latere?: ReturnType<typeof dienst>[]) =>
+    ({
+      periode: { van: '2097-01-01', tot: '2097-03-31' },
+      feestdagen: [],
+      diensten,
+      blokken: [],
+      aios: [
+        {
+          id: 'a',
+          fte: 1,
+          beschikbaar: [{ van: '2090-01-01', tot: '2099-12-31' }],
+          onderbreking: null,
+          inwerken: null,
+          parttime_dagen: [],
+          vier_avonden: false,
+          vier_nachten: false,
+          twee_dagdiensten: false,
+          markeringen: [],
+          erboven: {},
+          eerdere_diensten: [],
+          ...(latere ? { latere_diensten: latere.map(grens) } : {}),
+        },
+      ],
+      tijdslimiet_seconden: 5,
+    }) as unknown as AiosSolverInvoer;
+  const vind = (i: AiosSolverInvoer, ids: string[], regels?: string[]) =>
+    controleerAiosRooster(i, new Map(ids.map((id) => [id, 'a']))).filter((o) => !regels || regels.includes(o[0]));
+
+  it('a single night on the last day gives the next day off: a dienst there in the next quarter breaks rule 7 and 9', () => {
+    const nacht = dienst('2097-03-31', 'ND');
+    const later = dienst('2097-04-01', 'UD');
+    expect(vind(invoer([nacht]), [nacht.id], ['7_COMPENSATIEDAG', '9_RUST'])).toEqual([]);
+    const fouten = vind(invoer([nacht], [later]), [nacht.id]);
+    expect(fouten).toEqual(
+      expect.arrayContaining([
+        ['7_COMPENSATIEDAG', 'a', [nacht.id, `later:${later.id}`]],
+        ['9_RUST', 'a', [nacht.id, `later:${later.id}`]],
+      ])
+    );
+    expect(fouten).toHaveLength(2);
+  });
+
+  it('a compensation day of the next quarter\'s first dienst may fall in this quarter: the Friday before a Saturday dagdienst', () => {
+    // 2097-03-28 is a Thursday; the quarter's last Friday is 2097-03-29, and the Saturday 03-30 starts the next roster.
+    const vrijdag = dienst('2097-03-29', 'UD');
+    const zaterdag = dienst('2097-03-30', 'DD');
+    expect(vind(invoer([vrijdag]), [vrijdag.id], ['7_COMPENSATIEDAG'])).toEqual([]);
+    expect(vind(invoer([vrijdag], [zaterdag]), [vrijdag.id], ['7_COMPENSATIEDAG'])).toEqual([
+      ['7_COMPENSATIEDAG', 'a', [`later:${zaterdag.id}`, vrijdag.id]],
+    ]);
+  });
+
+  it('the next quarter\'s own diensten are not judged here: two on a day, or eight nights in a row wholly over there', () => {
+    const eigen = dienst('2097-03-01', 'UD');
+    const dubbel = [dienst('2097-04-02', 'DD'), dienst('2097-04-02', 'UD')];
+    expect(vind(invoer([eigen], dubbel), [eigen.id], ['3_TWEE_OP_EEN_DAG'])).toEqual([]);
+    const nachten = ['02', '03', '04', '05', '06', '07', '08', '09'].map((d) => dienst(`2097-04-${d}`, 'ND'));
+    expect(vind(invoer([eigen], nachten), [eigen.id])).toEqual([]);
+  });
+
+  it('a streak of nights from this quarter into the next counts: more than seven is rule 9', () => {
+    const eigen = ['28', '29', '30', '31'].map((d) => dienst(`2097-03-${d}`, 'ND'));
+    const later = ['01', '02', '03', '04'].map((d) => dienst(`2097-04-${d}`, 'ND'));
+    expect(vind(invoer(eigen), eigen.map((d) => d.id), ['9_MEER_DAN_7_NACHTEN'])).toEqual([]);
+    expect(vind(invoer(eigen, later), eigen.map((d) => d.id), ['9_MEER_DAN_7_NACHTEN'])).toEqual([['9_MEER_DAN_7_NACHTEN', 'a', ['2097-04-04']]]);
+  });
+
+  it('is nothing without the next quarter, or with an AIOS who has nothing there', () => {
+    const nacht = dienst('2097-03-31', 'ND');
+    expect(vind(invoer([nacht], []), [nacht.id])).toEqual(vind(invoer([nacht]), [nacht.id]));
+  });
+
+  it('leaves the compensation days for the roosterbureau as they are: the next quarter\'s days are that roster\'s', () => {
+    const nacht = dienst('2097-03-31', 'ND');
+    const later = dienst('2097-04-01', 'DD');
+    expect(aiosCompensatiedagen(invoer([nacht], [later]), new Map([[nacht.id, 'a']]))).toEqual(aiosCompensatiedagen(invoer([nacht]), new Map([[nacht.id, 'a']])));
+  });
+});

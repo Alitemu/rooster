@@ -7,10 +7,13 @@
  * not a change to it (docs/development/diensten.md, "Copied, not changed").
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
 import { AiosFeestdagUitleg } from '@/components/AiosFeestdagUitleg';
+import { foutTekst } from '@/lib/aiosFoutTekst';
+import { telwoord } from '@/lib/aiosTelwoord';
+import { DatumTekst, DatumVeld } from '@/components/DatumVeld';
 
 export interface Absence {
   id: string;
@@ -35,8 +38,6 @@ interface Props {
   // saved.
   periodId?: string;
   absences: Absence[];
-  defaultVanaf: string;
-  defaultTot: string;
   readOnly?: boolean; // True once the period's deadline has passed - view only
   onAbsencesChange: (absences: Absence[]) => void;
 }
@@ -44,12 +45,15 @@ interface Props {
 const SOORT_LABEL: Record<string, string> = {
   VAKANTIE: 'Vakantie',
   CONGRES: 'Congres/cursus',
+  ONDERWIJS: 'Onderwijs',
   OVERIG: 'Overig',
 };
 
-const emptyForm = (defaultVanaf: string, defaultTot: string) => ({
-  van_datum: defaultVanaf,
-  tot_datum: defaultTot,
+// Both dates start empty: the whole quarter as the start would be a wrong absence if saved as it is.
+
+const emptyForm = () => ({
+  van_datum: '',
+  tot_datum: '',
   soort: 'VAKANTIE',
   notitie: '',
 });
@@ -58,12 +62,11 @@ export function AiosAfwezigheid({
   personId,
   periodId,
   absences,
-  defaultVanaf,
-  defaultTot,
   readOnly = false,
   onAbsencesChange,
 }: Props) {
-  const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
+  const veld = useId();
+  const [form, setForm] = useState(emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -95,7 +98,7 @@ export function AiosAfwezigheid({
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(emptyForm(defaultVanaf, defaultTot));
+    setForm(emptyForm());
     setError(null);
   };
 
@@ -119,7 +122,7 @@ export function AiosAfwezigheid({
       cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan van afwezigheid mislukt');
+      setError(foutTekst(err, 'Opslaan van afwezigheid mislukt'));
     } finally {
       setSaving(false);
     }
@@ -139,7 +142,7 @@ export function AiosAfwezigheid({
       if (editingId === absenceId) cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van afwezigheid mislukt');
+      setError(foutTekst(err, 'Verwijderen van afwezigheid mislukt'));
     } finally {
       setRemovingId(null);
     }
@@ -173,7 +176,7 @@ export function AiosAfwezigheid({
               <div>
                 <span className="font-medium">{SOORT_LABEL[a.soort] || a.soort}</span>
                 <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
-                  {a.van_datum} t/m {a.tot_datum}
+                  <DatumTekst iso={a.van_datum} /> t/m <DatumTekst iso={a.tot_datum} />
                 </span>
                 {a.notitie && <span className="text-neutral-600 text-xs block sm:inline sm:ml-2">{a.notitie}</span>}
                 {typeof a.total_days_in_period === 'number' && (
@@ -183,11 +186,11 @@ export function AiosAfwezigheid({
                     </span>
                   ) : a.blocked_days_in_period === a.total_days_in_period ? (
                     <span className="text-green-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ✓ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen verwerkt in deze periode
+                      ✓ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} verwerkt in deze periode
                     </span>
                   ) : (
                     <span className="text-amber-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ⚠ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen verwerkt in deze
+                      ⚠ {a.blocked_days_in_period} van de {telwoord(a.total_days_in_period, 'dag', 'dagen')} verwerkt in deze
                       periode. De rest was al om een andere reden geblokkeerd.
                     </span>
                   )
@@ -218,7 +221,7 @@ export function AiosAfwezigheid({
       {readOnly ? (
         <div className="border-t border-neutral-200 pt-4">
           <p className="text-sm text-neutral-600">
-            De deadline voor deze periode is verstreken. Afwezigheid kun je nu alleen nog bekijken.
+            Deze periode is gesloten voor wijzigingen. Afwezigheid kun je nu alleen nog bekijken.
           </p>
         </div>
       ) : (
@@ -228,8 +231,9 @@ export function AiosAfwezigheid({
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
+              <label htmlFor={`${veld}-soort`} className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
               <select
+                id={`${veld}-soort`}
                 value={form.soort}
                 onChange={(e) => setForm({ ...form, soort: e.target.value })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -240,12 +244,12 @@ export function AiosAfwezigheid({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
-              <input
-                type="date"
+              <label htmlFor={`${veld}-van`} className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
+              <DatumVeld
+                id={`${veld}-van`}
                 value={form.van_datum}
-                onChange={(e) => {
-                  const van_datum = e.target.value;
+                onChange={(waarde) => {
+                  const van_datum = waarde;
                   // Most absences are 1-3 weeks - jump "tot en met" to the
                   // day right after "van" so there's a sensible nearby
                   // default to adjust from, instead of leaving it wherever
@@ -261,17 +265,18 @@ export function AiosAfwezigheid({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-              <input
-                type="date"
+              <label htmlFor={`${veld}-tot`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
+              <DatumVeld
+                id={`${veld}-tot`}
                 value={form.tot_datum}
-                onChange={(e) => setForm({ ...form, tot_datum: e.target.value })}
+                onChange={(waarde) => setForm({ ...form, tot_datum: waarde })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
+              <label htmlFor={`${veld}-notitie`} className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
               <input
+                id={`${veld}-notitie`}
                 type="text"
                 value={form.notitie}
                 onChange={(e) => setForm({ ...form, notitie: e.target.value })}
@@ -279,8 +284,8 @@ export function AiosAfwezigheid({
               />
             </div>
           </div>
-          {form.van_datum > form.tot_datum && (
-            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;tot&quot; liggen</p>
+          {form.van_datum && form.tot_datum && form.van_datum > form.tot_datum && (
+            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;Tot en met&quot; liggen</p>
           )}
           <div className="flex gap-3">
             <button

@@ -19,14 +19,28 @@
  * step's data was read by nothing.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { computeCoverageFactor } from '@/lib/coverageFactor';
+import { OPEN_EINDE } from '@/lib/membershipDefaults';
 import { readUploadedRows } from '@/lib/sheetUpload';
+import { leesSaldoBestand, type SaldoRegel } from '@/lib/saldoBestand';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
 import { periodRangeProblem } from '@/lib/isoDate';
+import { parseISO } from '@/lib/holidays';
 import { validateRulesetFields } from '@/lib/rulesetValidation';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
+import { beginsaldoInWoorden } from '@/lib/saldoWijzigen';
+import { CorrectieFormulier } from '@/components/CorrectieFormulier';
+import { CORRECTION_TYPE_LABELS, type Correction } from '@/lib/correctieRedenen';
+import { DatumTijdVeld, DatumVeld, DatumTekst } from '@/components/DatumVeld';
+import { BestandKiezer } from '@/components/BestandKiezer';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
+import type { VorigeInstellingen } from '@/lib/vorigeInstellingen';
+import { budgetTekst, verschilMelding } from '@/lib/vorigeInstellingenTekst';
+import { kanOpenen, streefbereikInWoorden, wizardControles, type Bereik } from './wizardControles';
 
 type Step = 'period' | 'staff' | 'window' | 'distribution' | 'balances' | 'corrections' | 'confirm';
 
@@ -69,7 +83,7 @@ interface StaffMember {
   geldig_vanaf: string;
   geldig_tot: string;
   is_active: boolean; // membership covers this period's dates
-  deelnamefactor: number; // 1.0 = fulltime; only affects targets when Verdeelmodus = "Naar rato"
+  deelnamefactor: number | null; // From their own part-time days, null (nog onbekend) until they handed in; only affects targets when Verdeelmodus = "Naar rato"
   access_link?: string;
 }
 
@@ -101,125 +115,13 @@ interface BlockBudgetConfig {
   parttimeExempt: boolean;
 }
 
-interface BalanceRow {
-  codenaam: string;
-  AVOND_delta: number;
-  WEEKEND_delta: number;
-}
-
-type CorrectionType = 'AVOND' | 'WEEKEND' | 'FEESTDAG' | 'RUIL_AVOND_VOOR_WEEKEND' | 'RUIL_WEEKEND_VOOR_AVOND';
-// What the planner picks first - "Ongelijke ruil" then expands into a
-// reden dropdown covering both RUIL_* correction types at once.
-type CorrectionTopLevel = 'RUIL' | 'AVOND' | 'WEEKEND' | 'FEESTDAG';
-
-interface Correction {
-  id: string; // local, for the pending list - not a database id
-  personId: string;
-  codenaam: string;
-  type: CorrectionType;
-  reden: string;
-  aantal: number;
-}
-
-interface CorrectionReasonOption {
-  type: CorrectionType;
-  label: string;
-  // null = the planner must fill in their own value; the field starts empty.
-  defaultAantal: number | null;
-  explain: (aantal: number) => string;
-}
-
-// Every predefined reden defaults to +-1 or +-2 (see defaultAantal above) -
-// anything at or beyond this magnitude is far more likely a typo (5 instead
-// of 2) than a real correction, so it gets flagged without blocking entry.
-const CORRECTION_AANTAL_WARNING_THRESHOLD = 3;
+type BalanceRow = SaldoRegel;
 
 const DISTRIBUTION_MODE_LABELS: Record<string, string> = {
   GELIJK: 'Gelijk',
   NAAR_RATO: 'Naar rato',
 };
 
-const CORRECTION_TOP_LEVEL_LABELS: Record<CorrectionTopLevel, string> = {
-  RUIL: 'Ongelijke ruil',
-  AVOND: 'Avonddienst',
-  WEEKEND: 'Weekenddienst',
-  FEESTDAG: 'Feestdag',
-};
-
-// Per-teller label for the pending-corrections table - distinct from
-// CORRECTION_TOP_LEVEL_LABELS because the two RUIL_* types need their own
-// text (they touch two tellers at once), not just the 4-way top-level group.
-const CORRECTION_TYPE_LABELS: Record<CorrectionType, string> = {
-  AVOND: 'Avonddienst',
-  WEEKEND: 'Weekenddienst',
-  FEESTDAG: 'Feestdag',
-  RUIL_AVOND_VOOR_WEEKEND: 'Ruil avond → weekend',
-  RUIL_WEEKEND_VOOR_AVOND: 'Ruil weekend → avond',
-};
-
-const CORRECTION_REASONS_BY_TOP_LEVEL: Record<CorrectionTopLevel, CorrectionReasonOption[]> = {
-  AVOND: [
-    {
-      type: 'AVOND',
-      label: 'Last minute avonddienst overgenomen',
-      defaultAantal: -2,
-      explain: (n) =>
-        `Heeft vorige periode last minute een avonddienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} avonddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
-    },
-    {
-      type: 'AVOND',
-      label: 'Overig',
-      defaultAantal: null,
-      explain: (n) => `Handmatige correctie: avonddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
-    },
-  ],
-  WEEKEND: [
-    {
-      type: 'WEEKEND',
-      label: 'Last minute weekenddienst overgenomen',
-      defaultAantal: -2,
-      explain: (n) =>
-        `Heeft vorige periode last minute een weekenddienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} weekenddienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
-    },
-    {
-      type: 'WEEKEND',
-      label: 'Overig',
-      defaultAantal: null,
-      explain: (n) => `Handmatige correctie: weekenddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
-    },
-  ],
-  FEESTDAG: [
-    {
-      type: 'FEESTDAG',
-      label: 'Last minute feestdag overgenomen',
-      defaultAantal: -2,
-      explain: (n) =>
-        `Heeft vorige periode last minute een feestdagdienst overgenomen en wordt daarvoor nu beloond met ${Math.abs(n)} feestdagdienst${Math.abs(n) === 1 ? '' : 'en'} minder in de huidige periode.`,
-    },
-    {
-      type: 'FEESTDAG',
-      label: 'Overig',
-      defaultAantal: null,
-      explain: (n) => `Handmatige correctie: feestdag wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}.`,
-    },
-  ],
-  RUIL: [
-    {
-      type: 'RUIL_AVOND_VOOR_WEEKEND',
-      label: 'Ruil avond- voor weekenddienst',
-      defaultAantal: 1,
-      explain: (n) =>
-        `Heeft een avonddienst geruild voor een weekenddienst: avonddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}, weekenddienst wordt ${n >= 0 ? n + ' minder' : Math.abs(n) + ' meer'}.`,
-    },
-    {
-      type: 'RUIL_WEEKEND_VOOR_AVOND',
-      label: 'Ruil weekend- voor avonddienst',
-      defaultAantal: 1,
-      explain: (n) =>
-        `Heeft een weekenddienst geruild voor een avonddienst: weekenddienst wordt ${n >= 0 ? n + ' meer' : Math.abs(n) + ' minder'}, avonddienst wordt ${n >= 0 ? n + ' minder' : Math.abs(n) + ' meer'}.`,
-    },
-  ],
-};
 
 interface Props {
   period?: any;
@@ -272,56 +174,67 @@ export function SetupWizard({ period, onComplete }: Props) {
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffError, setStaffError] = useState<string | null>(null);
-  const [newMember, setNewMember] = useState({ codenaam: '', geldig_vanaf: '', geldig_tot: '', deelnamefactor: 1 });
+  const [newMember, setNewMember] = useState({ codenaam: '', geldig_vanaf: '', geldig_tot: '' });
   const [addingMember, setAddingMember] = useState(false);
   const [editingMembershipId, setEditingMembershipId] = useState<string | null>(null);
-  const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '', deelnamefactor: 1 });
+  const [editDates, setEditDates] = useState({ geldig_vanaf: '', geldig_tot: '' });
   const [savingMembership, setSavingMembership] = useState(false);
   const [removingMembershipId, setRemovingMembershipId] = useState<string | null>(null);
   const [togglingMembershipId, setTogglingMembershipId] = useState<string | null>(null);
-  // Guards the one-time auto-activation below from re-running (and undoing
-  // a planner's manual uncheck) every time the staff step is re-entered
-  // within the same wizard session - it should only bring everyone up to
-  // date the first time this period's staff list is loaded.
-  const autoActivatedPeriodRef = useRef<string | null>(null);
+  // Each mistake of the staff step shows where it was made, as on Personeel
+  // beheren: under Toevoegen, or under the row being changed or removed. They
+  // all showed in staffError above the list, out of sight under 30 people,
+  // and the planner saw "Opslaan" do nothing (1.1.3).
+  const [addError, setAddError] = useState<string | null>(null);
+  const [rowError, setRowError] = useState<{ membershipId: string; message: string } | null>(null);
+  // A change that reaches a period with a roster asks first (lib/membershipRooster.ts):
+  // the wizard had no way to say yes, so such a change could not be saved here at all.
+  const [bevestigVraag, setBevestigVraag] = useState<{
+    membershipId: string;
+    message: string;
+    actie: 'opslaan' | 'actief' | 'verwijderen';
+  } | null>(null);
+  const addErrorRef = useRef<HTMLDivElement>(null);
+  const rowMeldingRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (addError) addErrorRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [addError]);
+  useEffect(() => {
+    if (rowError || bevestigVraag) rowMeldingRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [rowError, bevestigVraag]);
+  // A new period starts from what the pool's previous period was opened with
+  // (lib/vorigeInstellingen.ts): it always started on Gelijk and 100%, and
+  // 2027-2 lost the Naar rato of 2027-1 without a word (audit 1.3.0).
+  const vorige: VorigeInstellingen | null = period?.vorige_instellingen ?? null;
   const [windowConfig, setWindowConfig] = useState<WindowConfig>({
-    windowWeeksAvond: 2,
-    windowWeeksWeekendFeestdag: 2,
-    band_min: { AVOND: 7, WEEKEND: 2, FEESTDAG: 1 },
-    band_max: { AVOND: 8, WEEKEND: 3, FEESTDAG: 2 },
+    windowWeeksAvond: vorige?.windowWeeksAvond ?? 2,
+    windowWeeksWeekendFeestdag: vorige?.windowWeeksWeekendFeestdag ?? 2,
+    // Empty until the proposal for this period is in (the effect below, on every step since 1.6.0): the
+    // range the code started with (7 or 8 avonddiensten) was what a period opened on when step 3 was skipped.
+    band_min: { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 },
+    band_max: { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 },
   });
   const [distributionConfig, setDistributionConfig] = useState<DistributionConfig>({
-    mode: 'GELIJK',
+    mode: vorige?.distributionMode ?? 'GELIJK',
     factors: {},
   });
   const [blockBudgetConfig, setBlockBudgetConfig] = useState<BlockBudgetConfig>({
-    hardPercent: 100,
-    softPercent: 100,
+    hardPercent: vorige?.hardPercent ?? 100,
+    softPercent: vorige?.softPercent ?? 100,
     // Matches the server-side default (lib/blockBudget.ts's normalizeConfig
     // falls back to true when the field is missing, same as scripts/seed.ts)
     // - the wizard's own initial state was the one place still defaulting
     // to false, so a freshly opened wizard showed the checkbox unchecked
     // even though every other part of the app already treats "on" as the
     // default.
-    parttimeExempt: true,
+    parttimeExempt: vorige?.parttimeExempt ?? true,
   });
   const [balanceRows, setBalanceRows] = useState<BalanceRow[]>([]);
   const [balanceParseWarnings, setBalanceParseWarnings] = useState<string[]>([]);
+  // A beginsaldo that is there already is replaced by the file: asked first (the rows wait here until the planner says yes).
+  const [balanceVraag, setBalanceVraag] = useState<{ namen: string[]; rows: BalanceRow[]; warnings: string[] } | null>(null);
+  const [balanceBevestigd, setBalanceBevestigd] = useState(false);
   const [corrections, setCorrections] = useState<Correction[]>([]);
-  const [correctionFormOpen, setCorrectionFormOpen] = useState(false);
-  const [correctionForm, setCorrectionForm] = useState({
-    personId: '',
-    topLevel: 'AVOND' as CorrectionTopLevel,
-    reasonIndex: 0,
-    aantal: (CORRECTION_REASONS_BY_TOP_LEVEL.AVOND[0].defaultAantal ?? '') as number | '',
-  });
-  // Sign is a separate toggle rather than typed into the number field: most
-  // mobile on-screen numeric keypads (including iOS/Android for
-  // type="number") have no minus key, making a negative "aantal" impossible
-  // to enter on a phone otherwise.
-  const [correctionAantalSign, setCorrectionAantalSign] = useState<1 | -1>(
-    (CORRECTION_REASONS_BY_TOP_LEVEL.AVOND[0].defaultAantal ?? 0) < 0 ? -1 : 1
-  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openResult, setOpenResult] = useState<string | null>(null);
@@ -333,6 +246,12 @@ export function SetupWizard({ period, onComplete }: Props) {
   // once they've typed a value of their own, further capacity refreshes
   // (e.g. from changing the window) must not silently overwrite it.
   const [bandTouched, setBandTouched] = useState(false);
+  // The proposal in the fields is the one of the dates, window and verdeling on screen (1.6.0): step 7 lets
+  // the period open only then, or on a range the planner typed.
+  const [voorstelGeladen, setVoorstelGeladen] = useState(false);
+  const [capaciteitMislukt, setCapaciteitMislukt] = useState(false);
+  // The staff list on screen is the one of these dates: "0 actief" was what step 7 read before the list was in.
+  const [staffGeladenVoor, setStaffGeladenVoor] = useState<string | null>(null);
 
   // Guards against a slower, older request (e.g. from before the planner
   // adjusted windowWeeks or distributionMode again) resolving after a
@@ -342,11 +261,14 @@ export function SetupWizard({ period, onComplete }: Props) {
   const capacityRequestRef = useRef(0);
 
   useEffect(() => {
-    if (currentStep !== 'window' || !period?.id) return;
+    // On every step, not only while step 3 is on screen: a planner who comes back goes straight to step 7.
+    if (!period?.id) return;
 
     const loadCapacity = async () => {
       const ticket = ++capacityRequestRef.current;
       setCapacityLoading(true);
+      setVoorstelGeladen(false);
+      setCapaciteitMislukt(false);
       try {
         // The live capacity check (CLAUDE.md's floor(weeks/windowWeeks)
         // formula) only has one windowWeeks slot, not a per-teller one -
@@ -369,6 +291,8 @@ export function SetupWizard({ period, onComplete }: Props) {
 
         const result: CapacityCheckResult | null = data.success ? data.data : null;
         setCapacityCheck(result);
+        if (result?.suggested_band) setVoorstelGeladen(true);
+        else setCapaciteitMislukt(true);
         if (result?.suggested_band && !bandTouched) {
           setWindowConfig((prev) => ({
             ...prev,
@@ -385,14 +309,17 @@ export function SetupWizard({ period, onComplete }: Props) {
           }));
         }
       } catch {
-        if (ticket === capacityRequestRef.current) setCapacityCheck(null);
+        if (ticket === capacityRequestRef.current) {
+          setCapacityCheck(null);
+          setCapaciteitMislukt(true);
+        }
       } finally {
         if (ticket === capacityRequestRef.current) setCapacityLoading(false);
       }
     };
 
     loadCapacity();
-  }, [currentStep, windowConfig.windowWeeksAvond, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
+  }, [windowConfig.windowWeeksAvond, periodData.start_datum, periodData.eind_datum, period?.id, bandTouched, distributionConfig.mode]);
 
   // Membership is_active is purely date-range-based (geldig_vanaf/tot
   // overlapping the period), so "activating" someone for this period just
@@ -432,11 +359,11 @@ export function SetupWizard({ period, onComplete }: Props) {
     return patch;
   };
 
-  const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }) =>
+  const patchMembership = (membershipId: string, patch: { geldig_vanaf?: string; geldig_tot?: string }, bevestigd = false) =>
     fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
+      body: JSON.stringify(bevestigd ? { ...patch, bevestigd: true } : patch),
     });
 
   // Real pool membership (with its geldig_vanaf/geldig_tot date range) is
@@ -444,6 +371,17 @@ export function SetupWizard({ period, onComplete }: Props) {
   // and the capacity check already read it directly. Shows every member
   // (not just active ones) so a planner can see who's about to roll off or
   // who hasn't started yet, not just who's currently eligible.
+  //
+  // Loading writes nothing (1.1.3). It used to widen every membership that
+  // did not cover the whole period, "the first time this period's staff
+  // list is opened" - but that first time was kept in a ref, so it came
+  // again with every new page load. A Geldig tot the planner had set inside
+  // the period, a later Geldig vanaf and an unticked "Actief" were all undone
+  // the next time the step opened, and an open end (2099) was cut to the
+  // period's end on the way: the planner's report, "die data worden niet
+  // opgeslagen". Members get an open end now (OPEN_EINDE, as on Personeel
+  // beheren), so they take part in the next period without being widened;
+  // who has an end date before it is shown as Niet actief and ticked by hand.
   // `silent` skips the full-table "Personeel laden..." placeholder (see
   // staffLoading below) - used when refreshing after a single row's own
   // mutation (toggle active, save, remove, add), which already has its own
@@ -467,7 +405,7 @@ export function SetupWizard({ period, onComplete }: Props) {
         fetch(membersUrl),
         fetch(withBasePath(`/api/planner/period/${period.id}/staff-links`)),
       ]);
-      let membersData = await membersRes.json();
+      const membersData = await membersRes.json();
       const linksData = await linksRes.json();
       const linkedPersonIds = new Set(
         (linksData.data || [])
@@ -475,31 +413,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           .map((l: any) => l.person_id)
       );
 
-      // The first time this period's staff list is opened, everyone in the
-      // pool should default to 100% coverage of this period - matches how a
-      // newly-added member already defaults to this period's dates. Widen
-      // any membership window that doesn't already fully cover the period
-      // (whether it's currently fully inactive, or only partially
-      // overlapping - e.g. left over from an earlier period's shorter
-      // dates) instead of making the planner click/edit each one.
-      // computeActivationPatch only ever widens (never narrows), so a
-      // window a planner already stretched past this period's bounds is
-      // left alone here.
-      if (period?.id && autoActivatedPeriodRef.current !== period.id) {
-        autoActivatedPeriodRef.current = period.id;
-        const toWiden = membersData.data || [];
-        if (toWiden.length > 0) {
-          await Promise.all(
-            toWiden.map((m: any) => {
-              const patch = computeActivationPatch(m, true);
-              return patch ? patchMembership(m.id, patch) : Promise.resolve(null);
-            })
-          );
-          const refreshedRes = await fetch(membersUrl);
-          membersData = await refreshedRes.json();
-        }
-      }
-
+      setStaffGeladenVoor(`${periodData.pool_id}|${periodData.start_datum}|${periodData.eind_datum}`);
       setStaffMembers(
         (membersData.data || []).map((m: any) => ({
           id: m.id,
@@ -508,7 +422,7 @@ export function SetupWizard({ period, onComplete }: Props) {
           geldig_vanaf: m.geldig_vanaf,
           geldig_tot: m.geldig_tot,
           is_active: m.is_active,
-          deelnamefactor: typeof m.deelnamefactor === 'number' ? m.deelnamefactor : 1,
+          deelnamefactor: typeof m.deelnamefactor === 'number' ? m.deelnamefactor : null,
           access_link: linkedPersonIds.has(m.person_id) ? 'existing' : undefined,
         }))
       );
@@ -526,45 +440,42 @@ export function SetupWizard({ period, onComplete }: Props) {
   // dropdown, and a planner can reach it via the step tabs without ever
   // visiting 'staff' first.
   //
-  // The new-member date fields default to the period's dates, but a planner
-  // can go back to step 1 and change those dates after already having
+  // The new member's Geldig vanaf defaults to the period's start, but a
+  // planner can go back to step 1 and change that date after already having
   // visited 'staff' once - a plain "fill only if empty" check would then
-  // keep showing the stale original dates forever, since the fields are no
-  // longer empty. lastAutoFilledDatesRef tracks what was last auto-filled so
+  // keep showing the stale original date forever, since the field is no
+  // longer empty. lastAutoFilledStartRef tracks what was last auto-filled so
   // the default can track a period-date change, while still leaving a value
-  // the planner typed in by hand alone.
-  const lastAutoFilledDatesRef = useRef({ start: '', end: '' });
+  // the planner typed in by hand alone. Geldig tot is the open end
+  // (OPEN_EINDE, as on Personeel beheren since 0.901.0): it was the period's
+  // own end, so whoever was added here dropped out of the next period.
+  const lastAutoFilledStartRef = useRef('');
   useEffect(() => {
     if ((currentStep !== 'staff' && currentStep !== 'corrections') || !periodData.pool_id) return;
     loadStaff();
-    setNewMember((prev) => {
-      const lastAuto = lastAutoFilledDatesRef.current;
-      return {
-        ...prev,
-        geldig_vanaf:
-          !prev.geldig_vanaf || prev.geldig_vanaf === lastAuto.start
-            ? periodData.start_datum
-            : prev.geldig_vanaf,
-        geldig_tot:
-          !prev.geldig_tot || prev.geldig_tot === lastAuto.end
-            ? periodData.eind_datum
-            : prev.geldig_tot,
-      };
-    });
-    lastAutoFilledDatesRef.current = { start: periodData.start_datum, end: periodData.eind_datum };
+    setNewMember((prev) => ({
+      ...prev,
+      geldig_vanaf:
+        !prev.geldig_vanaf || prev.geldig_vanaf === lastAutoFilledStartRef.current ? periodData.start_datum : prev.geldig_vanaf,
+      geldig_tot: prev.geldig_tot || OPEN_EINDE,
+    }));
+    lastAutoFilledStartRef.current = periodData.start_datum;
+  }, [currentStep, periodData.pool_id, periodData.start_datum, periodData.eind_datum]);
+
+  // The staff of these dates on every step (1.6.0), as the proposal above: step 7 counts who is active.
+  // The effect before this one loads it for steps 2 and 6 itself.
+  useEffect(() => {
+    if (currentStep === 'staff' || currentStep === 'corrections') return;
+    loadStaff({ silent: true });
   }, [currentStep, periodData.pool_id, periodData.start_datum, periodData.eind_datum]);
 
   const handleAddMember = async () => {
     if (!newMember.codenaam.trim() || !newMember.geldig_vanaf || !newMember.geldig_tot) {
-      setStaffError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
-      return;
-    }
-    if (Number.isNaN(newMember.deelnamefactor)) {
-      setStaffError('Deelnamefactor is verplicht');
+      setAddError('Codenaam, geldig vanaf en geldig tot zijn verplicht');
       return;
     }
     setAddingMember(true);
-    setStaffError(null);
+    setAddError(null);
     try {
       const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members`), {
         method: 'POST',
@@ -574,205 +485,133 @@ export function SetupWizard({ period, onComplete }: Props) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error?.message || 'Toevoegen mislukt');
 
-      setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: periodData.eind_datum, deelnamefactor: 1 });
+      setNewMember({ codenaam: '', geldig_vanaf: periodData.start_datum, geldig_tot: OPEN_EINDE });
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Toevoegen mislukt');
+      setAddError(foutTekst(err, 'Toevoegen mislukt'));
     } finally {
       setAddingMember(false);
     }
   };
 
   const startEditMembership = (member: StaffMember) => {
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     setEditingMembershipId(member.id);
-    setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot, deelnamefactor: member.deelnamefactor });
+    setEditDates({ geldig_vanaf: member.geldig_vanaf, geldig_tot: member.geldig_tot });
   };
 
-  const handleSaveMembership = async (membershipId: string) => {
-    if (Number.isNaN(editDates.deelnamefactor)) {
-      setStaffError('Deelnamefactor is verplicht');
-      return;
-    }
+  const handleSaveMembership = async (membershipId: string, bevestigd = false) => {
     setSavingMembership(true);
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     try {
-      const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editDates),
-      });
+      const res = await patchMembership(membershipId, editDates, bevestigd);
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId, message: data.error.message, actie: 'opslaan' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Opslaan mislukt');
 
       setEditingMembershipId(null);
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setRowError({ membershipId, message: foutTekst(err, 'Opslaan mislukt') });
     } finally {
       setSavingMembership(false);
     }
   };
 
-  const handleRemoveMembership = async (membershipId: string) => {
-    if (removingMembershipId !== membershipId) {
+  const handleRemoveMembership = async (membershipId: string, bevestigd = false) => {
+    if (removingMembershipId !== membershipId && !bevestigd) {
       // First click arms the confirmation instead of deleting immediately.
       setRemovingMembershipId(membershipId);
       return;
     }
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     try {
-      const res = await fetch(withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}`), {
-        method: 'DELETE',
-      });
+      const res = await fetch(
+        withBasePath(`/api/planner/pool/${periodData.pool_id}/members/${membershipId}${bevestigd ? '?bevestigd=1' : ''}`),
+        { method: 'DELETE' }
+      );
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId, message: data.error.message, actie: 'verwijderen' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Verwijderen mislukt');
 
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Verwijderen mislukt');
+      setRowError({ membershipId, message: foutTekst(err, 'Verwijderen mislukt') });
     } finally {
       setRemovingMembershipId(null);
     }
   };
 
-  const handleToggleActive = async (member: StaffMember) => {
+  const handleToggleActive = async (member: StaffMember, bevestigd = false) => {
     const patch = computeActivationPatch(member, !member.is_active);
     if (!patch) return;
     setTogglingMembershipId(member.id);
-    setStaffError(null);
+    setRowError(null);
+    setBevestigVraag(null);
     try {
-      const res = await patchMembership(member.id, patch);
+      const res = await patchMembership(member.id, patch, bevestigd);
       const data = await res.json();
+      if (res.status === 409 && data.error?.code === 'LIDMAATSCHAP_RAAKT_ROOSTER') {
+        setBevestigVraag({ membershipId: member.id, message: data.error.message, actie: 'actief' });
+        return;
+      }
       if (!res.ok) throw new Error(data.error?.message || 'Bijwerken mislukt');
       await loadStaff({ silent: true });
     } catch (err) {
-      setStaffError(err instanceof Error ? err.message : 'Bijwerken mislukt');
+      setRowError({ membershipId: member.id, message: foutTekst(err, 'Bijwerken mislukt') });
     } finally {
       setTogglingMembershipId(null);
     }
   };
 
-  // A missing cell means "no delta" (0) - intentional and silent. A cell
-  // that's present but not a whole number (a typo like "N/A" or "1O") used
-  // to fall into the exact same `|| 0` bucket as a real, deliberate zero,
-  // with no way to tell them apart. This keeps the same fallback but
-  // reports which rows hit it, so a typo is visible instead of silently
-  // importing as nothing happened.
-  const parseOptionalInt = (cell: string | undefined): { value: number; invalid: boolean } => {
-    const trimmed = (cell ?? '').trim();
-    if (trimmed === '') return { value: 0, invalid: false };
-    const parsed = Number(trimmed);
-    if (!Number.isInteger(parsed)) return { value: 0, invalid: true };
-    return { value: parsed, invalid: false };
-  };
-
   const handleBalancesFile = async (file: File) => {
     let fileRows: string[][];
     try {
-      // An Excel workbook or a CSV (lib/sheetUpload.ts).
+      // An Excel workbook (lib/sheetUpload.ts), in the layout of the sjabloon.
       fileRows = await readUploadedRows(file);
     } catch (err) {
       setBalanceRows([]);
-      setBalanceParseWarnings([err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.']);
+      setBalanceParseWarnings([foutTekst(err, 'Het bestand kon niet worden gelezen.')]);
       return;
     }
-    const [, ...dataLines] = fileRows; // skip header row
-    const warnings: string[] = [];
-    const seenCodenamen = new Set<string>();
-    const rows: BalanceRow[] = [];
-    dataLines.forEach(([codenaam, avond, weekend], i) => {
-      const rowNum = i + 2; // header is row 1
-      if (!codenaam) return;
-      if (seenCodenamen.has(codenaam)) {
-        warnings.push(`Rij ${rowNum}: codenaam "${codenaam}" komt meerdere keren voor. Beide rijen worden bij elkaar opgeteld.`);
+    const gelezen = leesSaldoBestand(fileRows);
+    if ('fout' in gelezen) {
+      setBalanceRows([]);
+      setBalanceParseWarnings([gelezen.fout]);
+      return;
+    }
+    const { rows, warnings } = gelezen;
+    // What this period has from an earlier import: those people's saldo is replaced, a blank cell included.
+    setBalanceVraag(null);
+    setBalanceBevestigd(false);
+    let bestaand: string[] = [];
+    if (period?.id) {
+      try {
+        const res = await fetch(withBasePath(`/api/planner/period/${period.id}/import-balances`));
+        const data = await res.json();
+        if (res.ok) bestaand = (data.data.personen as Array<{ codenaam: string }>).map((p) => p.codenaam);
+      } catch {
+        // Not known: the server asks at the import itself.
       }
-      seenCodenamen.add(codenaam);
-      const avondParsed = parseOptionalInt(avond);
-      const weekendParsed = parseOptionalInt(weekend);
-      if (avondParsed.invalid) {
-        warnings.push(`Rij ${rowNum} (${codenaam}): avondwaarde "${avond}" is geen geheel getal, als 0 verwerkt`);
-      }
-      if (weekendParsed.invalid) {
-        warnings.push(`Rij ${rowNum} (${codenaam}): weekendwaarde "${weekend}" is geen geheel getal, als 0 verwerkt`);
-      }
-      rows.push({ codenaam, AVOND_delta: avondParsed.value, WEEKEND_delta: weekendParsed.value });
-    });
+    }
+    const teVervangen = [...new Set(rows.map((r) => r.codenaam))].filter((c) => bestaand.includes(c));
+    if (teVervangen.length > 0) {
+      setBalanceRows([]);
+      setBalanceParseWarnings([]);
+      setBalanceVraag({ namen: teVervangen, rows, warnings });
+      return;
+    }
     setBalanceRows(rows);
     setBalanceParseWarnings(warnings);
-  };
-
-  const correctionReasonOptions = CORRECTION_REASONS_BY_TOP_LEVEL[correctionForm.topLevel];
-  const correctionSelectedReason = correctionReasonOptions[correctionForm.reasonIndex] ?? correctionReasonOptions[0];
-
-  const applyReasonDefault = (topLevel: CorrectionTopLevel, reasonIndex: number) => {
-    const reason = CORRECTION_REASONS_BY_TOP_LEVEL[topLevel][reasonIndex];
-    if (reason.defaultAantal !== null) {
-      setCorrectionAantalSign(reason.defaultAantal < 0 ? -1 : 1);
-    }
-    setCorrectionForm((f) => ({
-      ...f,
-      topLevel,
-      reasonIndex,
-      aantal: reason.defaultAantal ?? '',
-    }));
-  };
-
-  const handleAddCorrection = () => {
-    if (
-      !correctionForm.personId ||
-      correctionForm.aantal === '' ||
-      !Number.isFinite(correctionForm.aantal) ||
-      correctionForm.aantal === 0
-    ) {
-      setError('Kies een medewerker en vul een aantal (ongelijk aan 0) in');
-      return;
-    }
-    const member = staffMembers.find((m) => m.person_id === correctionForm.personId);
-    if (!member) return;
-    const aantal = correctionForm.aantal as number;
-
-    // An ongelijke ruil touches two counters at once - show it as its two
-    // halves right away, each with the mirrored reden and the opposite
-    // counter/aantal, instead of one row that hides the second half.
-    if (correctionSelectedReason.type === 'RUIL_AVOND_VOOR_WEEKEND' || correctionSelectedReason.type === 'RUIL_WEEKEND_VOOR_AVOND') {
-      const mirror = CORRECTION_REASONS_BY_TOP_LEVEL.RUIL.find((r) => r.type !== correctionSelectedReason.type)!;
-      const eersteType: CorrectionType = correctionSelectedReason.type === 'RUIL_AVOND_VOOR_WEEKEND' ? 'AVOND' : 'WEEKEND';
-      const tweedeType: CorrectionType = eersteType === 'AVOND' ? 'WEEKEND' : 'AVOND';
-      setCorrections((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          personId: correctionForm.personId,
-          codenaam: member.codenaam,
-          type: eersteType,
-          reden: correctionSelectedReason.label,
-          aantal,
-        },
-        {
-          id: crypto.randomUUID(),
-          personId: correctionForm.personId,
-          codenaam: member.codenaam,
-          type: tweedeType,
-          reden: mirror.label,
-          aantal: -aantal,
-        },
-      ]);
-    } else {
-      setCorrections((prev) => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          personId: correctionForm.personId,
-          codenaam: member.codenaam,
-          type: correctionSelectedReason.type,
-          reden: correctionSelectedReason.label,
-          aantal,
-        },
-      ]);
-    }
-    setError(null);
-    applyReasonDefault(correctionForm.topLevel, correctionForm.reasonIndex);
   };
 
   const handleRemoveCorrection = (id: string) => {
@@ -855,7 +694,7 @@ export function SetupWizard({ period, onComplete }: Props) {
       const importWarnings: string[] = [];
       if (linksSent < toLink.length) {
         importWarnings.push(
-          `Slechts ${linksSent} van ${toLink.length} uitnodigingen zijn daadwerkelijk aangemaakt.`
+          `Slechts ${linksSent} van ${telwoord(toLink.length, 'uitnodiging', 'uitnodigingen')} ${toLink.length === 1 ? 'is' : 'zijn'} daadwerkelijk aangemaakt.`
         );
       }
 
@@ -863,16 +702,21 @@ export function SetupWizard({ period, onComplete }: Props) {
         const balancesRes = await fetch(withBasePath(`/api/planner/period/${period.id}/import-balances`), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ rows: balanceRows }),
+          body: JSON.stringify({ rows: balanceRows, ...(balanceBevestigd ? { bevestigd: true } : {}) }),
         }).catch(() => null);
-        if (!balancesRes || !balancesRes.ok) {
+        if (balancesRes && balancesRes.status === 409) {
+          const conflict = await balancesRes.json().catch(() => null);
+          importWarnings.push(
+            `Het beginsaldo is niet geïmporteerd. ${conflict?.error?.message ?? ''} Kies het bestand opnieuw bij stap Saldi en bevestig het overschrijven.`.replace('  ', ' ')
+          );
+        } else if (!balancesRes || !balancesRes.ok) {
           importWarnings.push('Importeren van beginsaldi is volledig mislukt.');
         } else {
           const balancesData = await balancesRes.json().catch(() => null);
           const rowErrors: string[] = balancesData?.data?.errors || [];
           if (rowErrors.length > 0) {
             importWarnings.push(
-              `${rowErrors.length} rij(en) in de beginsaldi zijn overgeslagen: ${rowErrors.join('; ')}`
+              `${rowErrors.length === 1 ? '1 rij in de beginsaldi is' : `${rowErrors.length} rijen in de beginsaldi zijn`} overgeslagen: ${rowErrors.join('; ')}`
             );
           }
         }
@@ -896,8 +740,8 @@ export function SetupWizard({ period, onComplete }: Props) {
       }
 
       setOpenResult(
-        `Periode geopend (${openData.data.start_datum} t/m ${openData.data.eind_datum}): ` +
-          `${openData.data.slots_generated} diensten gegenereerd, ${linksSent} uitnodigingen verstuurd.` +
+        `Periode geopend (${isoNaarInvoer(openData.data.start_datum)} t/m ${isoNaarInvoer(openData.data.eind_datum)}): ` +
+          `${telwoord(openData.data.slots_generated, 'dienst', 'diensten')} gegenereerd, ${telwoord(linksSent, 'uitnodiging', 'uitnodigingen')} verstuurd.` +
           (correctionsFailed
             ? ' Let op: de handmatige correcties zijn niet opgeslagen. Noteer ze en laat de beheerder ze alsnog verwerken.'
             : '') +
@@ -905,11 +749,28 @@ export function SetupWizard({ period, onComplete }: Props) {
       );
       onComplete?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Openen van periode mislukt');
+      setError(foutTekst(err, 'Openen van periode mislukt'));
     } finally {
       setLoading(false);
     }
   };
+
+  // Step 7 (1.6.0, components/wizardControles.ts): what the period opens with, and whether it can.
+  const staffGeladen = staffGeladenVoor === `${periodData.pool_id}|${periodData.start_datum}|${periodData.eind_datum}`;
+  const bereikKlaar = bandTouched || (voorstelGeladen && !capacityLoading);
+  const controles = wizardControles({
+    naam: periodData.naam,
+    start_datum: periodData.start_datum,
+    eind_datum: periodData.eind_datum,
+    deadline: periodData.deadline,
+    personeelGeladen: staffGeladen,
+    aantalActief: staffMembers.filter((m) => m.is_active).length,
+    capaciteitGoed: capacityLoading || !capacityCheck ? null : capacityCheck.valid,
+    capaciteitMislukt,
+    voorstelGeladen: voorstelGeladen && !capacityLoading,
+    zelfIngevuld: bandTouched,
+  });
+  const magOpenen = kanOpenen(controles);
 
   const steps: { id: Step; label: string; title: string }[] = [
     { id: 'period', label: '1. Periode', title: 'Periode en deadline' },
@@ -930,8 +791,9 @@ export function SetupWizard({ period, onComplete }: Props) {
       return 'Startdatum, einddatum en deadline zijn verplicht';
     }
 
-    const start = new Date(periodData.start_datum);
-    const end = new Date(periodData.eind_datum);
+    // Local midnight, as the server compares (a date alone is UTC midnight, an hour off on the ward's clock).
+    const start = parseISO(periodData.start_datum);
+    const end = parseISO(periodData.eind_datum);
     const deadline = new Date(periodData.deadline);
 
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || isNaN(deadline.getTime())) {
@@ -1023,8 +885,9 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'period' && (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Naam periode</label>
+              <label htmlFor="wizard-naam" className="block text-sm font-medium mb-1">Naam periode</label>
               <input
+                id="wizard-naam"
                 type="text"
                 value={periodData.naam}
                 onChange={(e) => setPeriodData({ ...periodData, naam: e.target.value })}
@@ -1035,31 +898,31 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">Startdatum</label>
-                <input
-                  type="date"
+                <label htmlFor="wizard-start" className="block text-sm font-medium mb-1">Startdatum</label>
+                <DatumVeld
+                  id="wizard-start"
                   value={periodData.start_datum}
-                  onChange={(e) => setPeriodData({ ...periodData, start_datum: e.target.value })}
+                  onChange={(waarde) => setPeriodData({ ...periodData, start_datum: waarde })}
                   className="w-full px-3 py-2 border rounded"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Einddatum</label>
-                <input
-                  type="date"
+                <label htmlFor="wizard-eind" className="block text-sm font-medium mb-1">Einddatum</label>
+                <DatumVeld
+                  id="wizard-eind"
                   value={periodData.eind_datum}
-                  onChange={(e) => setPeriodData({ ...periodData, eind_datum: e.target.value })}
+                  onChange={(waarde) => setPeriodData({ ...periodData, eind_datum: waarde })}
                   className="w-full px-3 py-2 border rounded"
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1">Deadline voorkeuren</label>
-              <input
-                type="datetime-local"
+              <label htmlFor="wizard-deadline" className="block text-sm font-medium mb-1">Deadline voorkeuren</label>
+              <DatumTijdVeld
+                id="wizard-deadline"
                 value={periodData.deadline}
-                onChange={(e) => setPeriodData({ ...periodData, deadline: e.target.value })}
+                onChange={(waarde) => setPeriodData({ ...periodData, deadline: waarde })}
                 className="w-full px-3 py-2 border rounded"
               />
               <p className="text-xs text-neutral-600 mt-1">
@@ -1078,14 +941,26 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'staff' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Iedereen in de pool doet standaard mee met deze periode (vinkje &quot;Actief&quot;
+              Wie volgens Geldig vanaf en Geldig tot in deze periode valt, doet mee (vinkje &quot;Actief&quot;
               staat aan). Na het openen verstuur je de uitnodigingen zelf. Vink iemand uit om diegene voor
-              deze periode uit te sluiten, waardoor de geldigheidsdatum automatisch wordt aangepast.
-              Voeg hieronder eventueel iemand nieuw toe.
+              deze periode uit te sluiten, waardoor de geldigheidsdatum automatisch wordt aangepast. Wat
+              je hier wijzigt, blijft staan. Voeg hieronder eventueel iemand nieuw toe.
             </p>
 
+            {!staffLoading && staffMembers.some((m) => !m.is_active) && (
+              <p className="text-sm text-neutral-700" data-testid="niet-actief-uitleg">
+                {(() => {
+                  const n = staffMembers.filter((m) => !m.is_active).length;
+                  return n === 1
+                    ? '1 persoon doet niet mee in deze periode, omdat Geldig vanaf of Geldig tot erbuiten valt.'
+                    : `${n} mensen doen niet mee in deze periode, omdat Geldig vanaf of Geldig tot erbuiten valt.`;
+                })()}{' '}
+                Vink Actief aan als iemand toch meedoet.
+              </p>
+            )}
+
             {staffError && (
-              <div className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
+              <div role="alert" className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">{staffError}</div>
             )}
 
             {staffLoading ? (
@@ -1109,8 +984,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <tbody className="divide-y">
                     {staffMembers.map((member) => {
                       const isEditing = editingMembershipId === member.id;
+                      const vraag = bevestigVraag?.membershipId === member.id ? bevestigVraag : null;
+                      const fout = rowError?.membershipId === member.id ? rowError.message : null;
                       return (
-                        <tr key={member.id} className="hover:bg-neutral-50">
+                        <Fragment key={member.id}>
+                        <tr className="hover:bg-neutral-50">
                           <td className="px-4 py-2 text-sm font-medium">{member.codenaam}</td>
                           <td className="px-4 py-2 text-sm">
                             <label className="inline-flex items-center gap-2 cursor-pointer">
@@ -1132,46 +1010,37 @@ export function SetupWizard({ period, onComplete }: Props) {
                           </td>
                           <td className="px-4 py-2 text-sm">
                             {isEditing ? (
-                              <input
-                                type="date"
+                              <DatumVeld
+                                aria-label={`Geldig vanaf van ${member.codenaam}`}
                                 value={editDates.geldig_vanaf}
-                                onChange={(e) => setEditDates({ ...editDates, geldig_vanaf: e.target.value })}
+                                onChange={(waarde) => setEditDates({ ...editDates, geldig_vanaf: waarde })}
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
-                              member.geldig_vanaf
+                              <DatumTekst iso={member.geldig_vanaf} />
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">
                             {isEditing ? (
-                              <input
-                                type="date"
+                              <DatumVeld
+                                aria-label={`Geldig tot van ${member.codenaam}`}
                                 value={editDates.geldig_tot}
-                                onChange={(e) => setEditDates({ ...editDates, geldig_tot: e.target.value })}
+                                onChange={(waarde) => setEditDates({ ...editDates, geldig_tot: waarde })}
                                 className="px-2 py-1 border rounded text-sm w-36"
                               />
                             ) : (
-                              member.geldig_tot
+                              <DatumTekst iso={member.geldig_tot} />
                             )}
                           </td>
                           <td className="px-4 py-2 text-sm">
-                            {isEditing ? (
-                              <input
-                                type="number"
-                                min="0.1"
-                                max="1"
-                                step="0.1"
-                                value={editDates.deelnamefactor}
-                                onChange={(e) =>
-                                  setEditDates({ ...editDates, deelnamefactor: parseFloat(e.target.value) })
-                                }
-                                className="px-2 py-1 border rounded text-sm w-20"
-                              />
-                            ) : (
                               <>
-                                {member.deelnamefactor < 1
-                                  ? `${Math.round(member.deelnamefactor * 100)}%`
-                                  : 'Voltijd'}
+                                {member.deelnamefactor === null ? (
+                                  <span className="text-neutral-500">nog onbekend</span>
+                                ) : member.deelnamefactor < 1 ? (
+                                  `${Math.round(member.deelnamefactor * 100)}%`
+                                ) : (
+                                  'Voltijd'
+                                )}
                                 {periodData.start_datum &&
                                   periodData.eind_datum &&
                                   (() => {
@@ -1191,7 +1060,6 @@ export function SetupWizard({ period, onComplete }: Props) {
                                     );
                                   })()}
                               </>
-                            )}
                           </td>
                           <td className="px-4 py-2 text-sm">
                             {member.access_link ? (
@@ -1213,7 +1081,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                                   {savingMembership ? 'Bezig…' : 'Opslaan'}
                                 </button>
                                 <button
-                                  onClick={() => setEditingMembershipId(null)}
+                                  onClick={() => {
+                                    setEditingMembershipId(null);
+                                    setBevestigVraag(null);
+                                    setRowError(null);
+                                  }}
                                   className="text-xs font-medium text-neutral-600 hover:text-neutral-800"
                                 >
                                   Annuleren
@@ -1237,6 +1109,57 @@ export function SetupWizard({ period, onComplete }: Props) {
                             )}
                           </td>
                         </tr>
+                        {vraag && (
+                          <tr>
+                            <td colSpan={7} className="px-4 pb-3">
+                              <div
+                                ref={rowMeldingRef}
+                                role="alert"
+                                data-testid="rooster-bevestiging"
+                                className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2"
+                              >
+                                <p>{vraag.message}</p>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      vraag.actie === 'opslaan'
+                                        ? handleSaveMembership(member.id, true)
+                                        : vraag.actie === 'actief'
+                                          ? handleToggleActive(member, true)
+                                          : handleRemoveMembership(member.id, true)
+                                    }
+                                    className="px-3 py-1 rounded bg-amber-700 text-white hover:bg-amber-800"
+                                  >
+                                    Toch doorgaan
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setBevestigVraag(null)}
+                                    className="px-3 py-1 rounded border border-neutral-300 hover:bg-neutral-50"
+                                  >
+                                    Annuleren
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {fout && (
+                          <tr>
+                            <td colSpan={7} className="px-4 pb-3">
+                              <div
+                                ref={rowMeldingRef}
+                                role="alert"
+                                data-testid="rij-fout"
+                                className="bg-red-50 border border-red-200 rounded p-2 text-sm text-red-700"
+                              >
+                                {fout}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                       );
                     })}
                     {staffMembers.length === 0 && (
@@ -1253,10 +1176,11 @@ export function SetupWizard({ period, onComplete }: Props) {
 
             <div className="border-t border-neutral-200 pt-4 space-y-3">
               <p className="text-sm font-medium text-neutral-800">Nieuw personeelslid toevoegen</p>
-              <div className="grid grid-cols-1 sm:grid-cols-5 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
+                  <label htmlFor="nieuw-lid-codenaam" className="block text-xs font-medium text-neutral-600 mb-1">Codenaam</label>
                   <input
+                    id="nieuw-lid-codenaam"
                     type="text"
                     value={newMember.codenaam}
                     onChange={(e) => setNewMember({ ...newMember, codenaam: e.target.value })}
@@ -1266,31 +1190,19 @@ export function SetupWizard({ period, onComplete }: Props) {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig vanaf</label>
-                  <input
-                    type="date"
+                  <DatumVeld
+                    aria-label="Geldig vanaf"
                     value={newMember.geldig_vanaf}
-                    onChange={(e) => setNewMember({ ...newMember, geldig_vanaf: e.target.value })}
+                    onChange={(waarde) => setNewMember({ ...newMember, geldig_vanaf: waarde })}
                     className="w-full px-2 py-2 border rounded text-sm"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-neutral-600 mb-1">Geldig tot</label>
-                  <input
-                    type="date"
+                  <DatumVeld
+                    aria-label="Geldig tot"
                     value={newMember.geldig_tot}
-                    onChange={(e) => setNewMember({ ...newMember, geldig_tot: e.target.value })}
-                    className="w-full px-2 py-2 border rounded text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-neutral-600 mb-1">Deelnamefactor</label>
-                  <input
-                    type="number"
-                    min="0.1"
-                    max="1"
-                    step="0.1"
-                    value={newMember.deelnamefactor}
-                    onChange={(e) => setNewMember({ ...newMember, deelnamefactor: parseFloat(e.target.value) })}
+                    onChange={(waarde) => setNewMember({ ...newMember, geldig_tot: waarde })}
                     className="w-full px-2 py-2 border rounded text-sm"
                   />
                 </div>
@@ -1304,9 +1216,15 @@ export function SetupWizard({ period, onComplete }: Props) {
                   </button>
                 </div>
               </div>
+              {addError && (
+                <div ref={addErrorRef} role="alert" data-testid="toevoegen-fout" className="bg-red-50 border border-red-200 rounded p-3 text-sm text-red-700">
+                  {addError}
+                </div>
+              )}
               <p className="text-xs text-neutral-500">
                 Bestaat de codenaam al (bijv. iemand die eerder in een andere pool zat), dan wordt
-                die persoon hergebruikt in plaats van dubbel aangemaakt.
+                die persoon hergebruikt in plaats van dubbel aangemaakt. Geldig tot staat open (31-12-2099):
+                vul een einddatum in als iemand weggaat.
               </p>
             </div>
           </div>
@@ -1315,12 +1233,19 @@ export function SetupWizard({ period, onComplete }: Props) {
         {/* Step 3: Window & Budgets */}
         {currentStep === 'window' && (
           <div className="space-y-4">
+            {vorige && (
+              <p className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-900" data-testid="vorige-instellingen">
+                Het venster en het blokkadebudget zijn overgenomen van {vorige.periode_naam}. Pas ze aan als het voor
+                deze periode anders moet. Het streefbereik rekent de app uit voor deze periode.
+              </p>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="venster-avond" className="block text-sm font-medium mb-1">
                   Venster avonddiensten (weken)
                 </label>
                 <input
+                  id="venster-avond"
                   type="number"
                   min="0"
                   max="8"
@@ -1338,10 +1263,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">
+                <label htmlFor="venster-weekend" className="block text-sm font-medium mb-1">
                   Venster weekend-/feestdagdiensten (weken)
                 </label>
                 <input
+                  id="venster-weekend"
                   type="number"
                   min="0"
                   max="8"
@@ -1390,7 +1316,7 @@ export function SetupWizard({ period, onComplete }: Props) {
                       {capacityCheck.distinct_people.satisfied ? '✓' : '✗'}
                     </li>
                     <li>
-                      • Totale capaciteit: {capacityCheck.total_capacity.pool_capacity ?? 'onbeperkt'} diensten beschikbaar voor{' '}
+                      • Totale capaciteit: {capacityCheck.total_capacity.pool_capacity === null ? 'onbeperkt aantal diensten' : telwoord(capacityCheck.total_capacity.pool_capacity, 'dienst', 'diensten')} beschikbaar voor{' '}
                       {capacityCheck.total_capacity.required_slots} benodigd{' '}
                       {capacityCheck.total_capacity.satisfied ? '✓' : '✗'}
                     </li>
@@ -1461,10 +1387,11 @@ export function SetupWizard({ period, onComplete }: Props) {
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-medium mb-2">
+                  <label htmlFor="budget-geblokkeerd" className="block text-xs font-medium mb-2">
                     Geblokkeerd (max % van de diensten)
                   </label>
                   <input
+                    id="budget-geblokkeerd"
                     type="number"
                     min="0"
                     max="100"
@@ -1487,10 +1414,11 @@ export function SetupWizard({ period, onComplete }: Props) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium mb-2">
+                  <label htmlFor="budget-liever-niet" className="block text-xs font-medium mb-2">
                     Liever niet (max % van de diensten)
                   </label>
                   <input
+                    id="budget-liever-niet"
                     type="number"
                     min="0"
                     max="100"
@@ -1515,14 +1443,14 @@ export function SetupWizard({ period, onComplete }: Props) {
                     setBlockBudgetConfig({ ...blockBudgetConfig, parttimeExempt: e.target.checked })
                   }
                 />
-                Parttime-vrije dagen tellen niet mee voor het budget
+                Deeltijddagen tellen niet mee voor het budget
               </label>
               <p className="text-xs text-neutral-500 mt-1">
                 Het percentage hierboven wordt altijd berekend over het totaal aantal diensten in
                 de hele periode, niet over iemands persoonlijke (lagere) aantal werkdagen. Met dit
-                vinkje uit telt een automatisch geblokkeerde parttime-dag gewoon mee als een
+                vinkje uit telt een automatisch geblokkeerde deeltijddag gewoon mee als een
                 geblokkeerde dag, zoals elke andere. Met dit vinkje aan telt die dag niet mee en
-                komt hij dus bovenop het budget. Iemand met een parttime-dag kan dan in totaal
+                komt hij dus bovenop het budget. Iemand met een deeltijddag kan dan in totaal
                 meer dagen blokkeren dan een fulltimer met hetzelfde percentage.
               </p>
             </div>
@@ -1532,6 +1460,11 @@ export function SetupWizard({ period, onComplete }: Props) {
         {/* Step 4: Distribution Mode */}
         {currentStep === 'distribution' && (
           <div className="space-y-4">
+            {vorige && (
+              <p className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-900" data-testid="vorige-verdeling">
+                De verdeling is overgenomen van {vorige.periode_naam}: {DISTRIBUTION_MODE_LABELS[vorige.distributionMode] || vorige.distributionMode}.
+              </p>
+            )}
             <div>
               <label className="block text-sm font-medium mb-2">Verdelingsstrategie</label>
               <div className="space-y-2">
@@ -1574,9 +1507,19 @@ export function SetupWizard({ period, onComplete }: Props) {
         {currentStep === 'balances' && (
           <div className="space-y-4">
             <p className="text-sm text-neutral-600">
-              Upload een Excel- of CSV-bestand met beginsaldi uit de vorige periode: hoeveel diensten iemand
-              per diensttype meer of minder heeft gedraaid dan het eigen streefaantal. Formaat:
+              Beginsaldi uit de vorige periode: hoeveel diensten iemand per diensttype meer of minder moet krijgen dan het
+              eigen streefaantal. Download het sjabloon, vul de twee kolommen in en upload het Excel-bestand weer. Er staat
+              een rij voor iedereen die meedoet. Een getal met min-teken (-1) betekent 1 dienst minder in deze periode, een
+              getal zonder teken (2) betekent 2 diensten extra. Een leeg vakje telt als 0.
             </p>
+            {period?.id && (
+              <a
+                href={withBasePath(`/api/planner/period/${period.id}/import-balances/sjabloon`)}
+                className="inline-block px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300"
+              >
+                Sjabloon downloaden (Excel)
+              </a>
+            )}
             {/* Audit 10: a planner importing the saldo of a period the app
                 rostered itself counted it twice, once by hand and once
                 through the automatic overloop. */}
@@ -1585,39 +1528,64 @@ export function SetupWizard({ period, onComplete }: Props) {
               gepubliceerd, dan neemt de app het saldo daaruit bij het openen vanzelf mee. Een import telt
               daar nog eens bij op.
             </div>
-            <div className="bg-neutral-50 p-3 rounded text-xs font-mono">
-              codenaam,AVOND_delta,WEEKEND_delta
-              <br />
-              Persoon-01,-1,0
-              <br />
-              Persoon-02,0,+2
-            </div>
             <p className="text-xs text-neutral-500 italic">
               Feestdagdiensten horen hier niet bij. Hoeveel iemand er naar verhouding heeft gehad,
               houdt de app vanaf de eerste periode hier zelf bij. Wie achterloopt, krijgt bij het
               verdelen voorrang.
             </p>
 
-            <div className="border-2 border-dashed rounded p-6 text-center">
-              <p className="text-sm text-neutral-600 mb-2">Sleep een bestand hierheen of klik om te selecteren</p>
-              <input
-                type="file"
-                accept=".xlsx,.csv"
-                className="w-full"
-                onChange={(e) => e.target.files?.[0] && handleBalancesFile(e.target.files[0])}
-              />
-            </div>
+            <BestandKiezer
+              accept=".xlsx"
+              aria-label="Beginsaldo als Excel-bestand"
+              onKies={(bestand) => bestand && handleBalancesFile(bestand)}
+              className="border-2 border-dashed rounded p-6 flex flex-col items-center gap-2"
+            >
+              <p className="text-sm text-neutral-600">Sleep een bestand hierheen of kies er een.</p>
+            </BestandKiezer>
+
+            {balanceVraag && (
+              <div role="alert" data-testid="saldo-overschrijven" className="bg-amber-50 border border-amber-300 rounded p-3 text-sm text-amber-900 space-y-2">
+                <p className="font-medium">
+                  {balanceVraag.namen.length === 1 ? 'Voor 1 persoon staat' : `Voor ${balanceVraag.namen.length} personen staat`} al een beginsaldo.
+                </p>
+                <p>
+                  Importeren overschrijft die waarden, ook als een vakje in het bestand leeg is: dat wordt 0. Wie niet in het
+                  bestand staat, houdt het eigen saldo. Weet je het zeker?
+                </p>
+                <p className="text-xs">
+                  {balanceVraag.namen.slice(0, 8).join(', ')}
+                  {balanceVraag.namen.length > 8 && ` en ${balanceVraag.namen.length - 8} anderen`}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBalanceRows(balanceVraag.rows);
+                      setBalanceParseWarnings(balanceVraag.warnings);
+                      setBalanceBevestigd(true);
+                      setBalanceVraag(null);
+                    }}
+                    className="px-3 py-1 rounded bg-amber-700 text-white hover:bg-amber-800"
+                  >
+                    Ja, overschrijven
+                  </button>
+                  <button type="button" onClick={() => setBalanceVraag(null)} className="px-3 py-1 rounded border border-neutral-300 hover:bg-neutral-50">
+                    Annuleren
+                  </button>
+                </div>
+              </div>
+            )}
 
             {balanceRows.length > 0 && (
               <div className="bg-green-50 border border-green-200 rounded p-3 text-sm text-green-800">
-                <p className="font-medium">{balanceRows.length} records klaar om te importeren</p>
+                <p className="font-medium">{telwoord(balanceRows.length, 'regel', 'regels')} klaar om te importeren</p>
                 <ul className="text-xs mt-1 space-y-0.5">
                   {balanceRows.slice(0, 5).map((r, i) => (
                     <li key={i}>
-                      {r.codenaam}: AVOND {r.AVOND_delta ?? 0}, WEEKEND {r.WEEKEND_delta ?? 0}
+                      <span className="font-medium">{r.codenaam}</span>: {beginsaldoInWoorden(r.AVOND_delta ?? 0, r.WEEKEND_delta ?? 0)}
                     </li>
                   ))}
-                  {balanceRows.length > 5 && <li>...en {balanceRows.length - 5} meer</li>}
+                  {balanceRows.length > 5 && <li>en nog {telwoord(balanceRows.length - 5, 'regel', 'regels')}</li>}
                 </ul>
               </div>
             )}
@@ -1647,144 +1615,17 @@ export function SetupWizard({ period, onComplete }: Props) {
               tussen periodes gebeurt al automatisch en hoeft hier niet.
             </p>
 
-            <button
-              onClick={() => setCorrectionFormOpen((v) => !v)}
-              className="flex items-center gap-2 px-4 py-2 rounded font-medium bg-neutral-100 text-neutral-900 hover:bg-neutral-200 transition-colors"
-            >
-              Correctie toepassen
-            </button>
-
-            {correctionFormOpen && (
-              <div className="border rounded p-4 space-y-3 bg-neutral-50">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Persoon</label>
-                    <select
-                      value={correctionForm.personId}
-                      onChange={(e) => setCorrectionForm((f) => ({ ...f, personId: e.target.value }))}
-                      className="w-full px-2 py-2 border rounded text-sm"
-                    >
-                      <option value="">Kies een medewerker...</option>
-                      {staffMembers.map((m) => (
-                        <option key={m.person_id} value={m.person_id}>
-                          {m.codenaam}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Type</label>
-                    <select
-                      value={correctionForm.topLevel}
-                      onChange={(e) => applyReasonDefault(e.target.value as CorrectionTopLevel, 0)}
-                      className="w-full px-2 py-2 border rounded text-sm"
-                    >
-                      {(Object.keys(CORRECTION_TOP_LEVEL_LABELS) as CorrectionTopLevel[]).map((tl) => (
-                        <option key={tl} value={tl}>
-                          {CORRECTION_TOP_LEVEL_LABELS[tl]}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Reden</label>
-                    <select
-                      value={correctionForm.reasonIndex}
-                      onChange={(e) => applyReasonDefault(correctionForm.topLevel, parseInt(e.target.value))}
-                      className="w-full px-2 py-2 border rounded text-sm"
-                    >
-                      {correctionReasonOptions.map((r, i) => (
-                        <option key={i} value={i}>
-                          {r.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium text-neutral-600 mb-1">Aantal</label>
-                    <div className="flex gap-2">
-                      <div className="flex rounded border overflow-hidden shrink-0" role="group" aria-label="Meer of minder diensten">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCorrectionAantalSign(-1);
-                            setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : -Math.abs(f.aantal) }));
-                          }}
-                          aria-pressed={correctionAantalSign === -1}
-                          aria-label="Minder diensten"
-                          className={`w-12 py-2 text-lg font-bold transition-colors ${
-                            correctionAantalSign === -1
-                              ? 'bg-red-600 text-white'
-                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                          }`}
-                        >
-                          −
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCorrectionAantalSign(1);
-                            setCorrectionForm((f) => ({ ...f, aantal: f.aantal === '' ? '' : Math.abs(f.aantal) }));
-                          }}
-                          aria-pressed={correctionAantalSign === 1}
-                          aria-label="Meer diensten"
-                          className={`w-12 py-2 text-lg font-bold border-l transition-colors ${
-                            correctionAantalSign === 1
-                              ? 'bg-green-600 text-white'
-                              : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
-                          }`}
-                        >
-                          +
-                        </button>
-                      </div>
-                      <input
-                        type="number"
-                        inputMode="numeric"
-                        min="0"
-                        value={correctionForm.aantal === '' ? '' : Math.abs(correctionForm.aantal)}
-                        onChange={(e) => {
-                          if (e.target.value === '') {
-                            setCorrectionForm((f) => ({ ...f, aantal: '' }));
-                            return;
-                          }
-                          const magnitude = Math.abs(parseInt(e.target.value, 10));
-                          setCorrectionForm((f) => ({
-                            ...f,
-                            aantal: Number.isNaN(magnitude) ? '' : correctionAantalSign * magnitude,
-                          }));
-                        }}
-                        placeholder={correctionSelectedReason.defaultAantal === null ? 'Zelf invullen' : undefined}
-                        className="w-full px-2 py-2 border rounded text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <p className="text-xs text-neutral-500 italic">
-                  {correctionSelectedReason.explain(
-                    correctionForm.aantal === '' ? 0 : correctionForm.aantal
-                  )}
-                </p>
-
-                {typeof correctionForm.aantal === 'number' && Math.abs(correctionForm.aantal) >= CORRECTION_AANTAL_WARNING_THRESHOLD && (
-                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
-                    Ongebruikelijk groot aantal ({correctionForm.aantal}). Weet je zeker dat dit geen typefout is?
-                  </p>
-                )}
-
-                <button
-                  onClick={handleAddCorrection}
-                  className="px-4 py-2 rounded text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-                >
-                  Toevoegen
-                </button>
-              </div>
-            )}
+            <CorrectieFormulier
+              mensen={staffMembers}
+              knopTekst="Toevoegen"
+              onToevoegen={(persoon, regels) => {
+                setCorrections((prev) => [
+                  ...prev,
+                  ...regels.map((r) => ({ id: crypto.randomUUID(), personId: persoon.person_id, codenaam: persoon.codenaam, ...r })),
+                ]);
+                return true;
+              }}
+            />
 
             {corrections.length > 0 && (
               <div className="border rounded overflow-hidden">
@@ -1839,11 +1680,23 @@ export function SetupWizard({ period, onComplete }: Props) {
                   <strong>Personeel:</strong> {staffMembers.filter((s) => s.is_active).length} actief in deze periode
                 </p>
                 <p>
-                  <strong>Venster:</strong> avond {windowConfig.windowWeeksAvond} weken · weekend/
-                  feestdag {windowConfig.windowWeeksWeekendFeestdag} weken
+                  <strong>Venster:</strong> avond {telwoord(windowConfig.windowWeeksAvond, 'week', 'weken')} · weekend/feestdag{' '}
+                  {telwoord(windowConfig.windowWeeksWeekendFeestdag, 'week', 'weken')}
+                </p>
+                <p data-testid="stap7-streefbereik">
+                  <strong>Streefbereik per persoon:</strong>{' '}
+                  {bereikKlaar
+                    ? streefbereikInWoorden(windowConfig.band_min as Bereik, windowConfig.band_max as Bereik)
+                    : capaciteitMislukt
+                      ? 'nog niet bekend'
+                      : 'wordt berekend...'}
                 </p>
                 <p>
                   <strong>Verdeling:</strong> {DISTRIBUTION_MODE_LABELS[distributionConfig.mode] || distributionConfig.mode}
+                </p>
+                <p>
+                  <strong>Blokkadebudget:</strong> geblokkeerd {budgetTekst(blockBudgetConfig.hardPercent)} · liever niet{' '}
+                  {budgetTekst(blockBudgetConfig.softPercent)}
                 </p>
                 <p>
                   <strong>Correcties:</strong> {corrections.length} klaar om toe te passen
@@ -1851,26 +1704,34 @@ export function SetupWizard({ period, onComplete }: Props) {
               </div>
             </div>
 
-            {staffMembers.filter((s) => s.is_active).length === 0 && (
-              <div className="bg-red-50 border border-red-200 rounded p-4">
-                <p className="text-sm font-semibold text-red-900">
-                  ⚠️ Nog niemand actief voor deze periode
-                </p>
-                <p className="text-sm text-red-800 mt-1">
-                  Er is geen personeel actief voor deze periode. Ga terug naar stap 2 (Personeel) om
-                  iemand toe te voegen of te activeren, want zonder actief personeel kan de periode
-                  niet geopend worden.
-                </p>
-              </div>
-            )}
+            {vorige &&
+              (() => {
+                const melding = verschilMelding(vorige, {
+                  distributionMode: distributionConfig.mode,
+                  windowWeeksAvond: windowConfig.windowWeeksAvond,
+                  windowWeeksWeekendFeestdag: windowConfig.windowWeeksWeekendFeestdag,
+                  hardPercent: blockBudgetConfig.hardPercent,
+                  softPercent: blockBudgetConfig.softPercent,
+                  parttimeExempt: blockBudgetConfig.parttimeExempt,
+                });
+                return melding ? (
+                  <div className="bg-amber-50 border border-amber-300 rounded p-4 text-sm text-amber-900" data-testid="anders-dan-vorige">
+                    ⚠️ {melding}
+                  </div>
+                ) : null;
+              })()}
 
-            <div className="bg-amber-50 border border-amber-200 rounded p-4">
-              <p className="font-semibold text-amber-900 mb-2">⚠️ Voordat je opent</p>
-              <ul className="text-sm text-amber-800 space-y-1 ml-4">
-                <li>✓ Periodedata en deadline zijn correct</li>
-                <li>✓ Personeel is toegevoegd</li>
-                <li>✓ Venster- en budgetinstellingen zijn geschikt</li>
-                <li>✓ Beginsaldi (indien van toepassing) zijn geïmporteerd</li>
+            <div
+              className={`border rounded p-4 ${magOpenen && controles.every((c) => c.goed) ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}
+              data-testid="stap7-controles"
+            >
+              <p className="font-semibold text-neutral-900 mb-2">{magOpenen ? 'Klaar om te openen' : 'Nog niet klaar om te openen'}</p>
+              <ul className="text-sm text-neutral-800 space-y-1">
+                {controles.map((c) => (
+                  <li key={c.naam}>
+                    <span aria-hidden="true">{c.goed ? '✓' : c.nodig ? '✗' : '⚠️'}</span> <strong>{c.naam}:</strong> {c.tekst}
+                  </li>
+                ))}
               </ul>
             </div>
 
@@ -1916,8 +1777,8 @@ export function SetupWizard({ period, onComplete }: Props) {
           ) : (
             <button
               onClick={handleOpenPeriod}
-              disabled={loading || staffMembers.filter((s) => s.is_active).length === 0}
-              className="flex-1 px-4 py-2 rounded font-medium bg-green-600 text-white hover:bg-green-700 disabled:bg-neutral-400 transition-colors"
+              disabled={loading || !magOpenen}
+              className="flex-1 px-4 py-2 rounded font-medium bg-green-700 text-white hover:bg-green-800 disabled:bg-neutral-400 transition-colors"
             >
               {loading ? 'Bezig met openen...' : 'Periode openen'}
             </button>

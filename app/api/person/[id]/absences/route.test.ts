@@ -129,7 +129,10 @@ describe('POST /api/person/[id]/absences', () => {
       soort: 'VAKANTIE',
     });
     expect(res.status).toBe(400);
-    expect((await res.json()).error.code).toBe('INVALID_RANGE');
+    const { error } = await res.json();
+    expect(error.code).toBe('INVALID_RANGE');
+    // The field is called "Tot en met" (1.3.0, audit 1.2.2).
+    expect(error.message).toBe('"Van" moet vóór of op "Tot en met" liggen');
   });
 });
 

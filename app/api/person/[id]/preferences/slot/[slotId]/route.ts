@@ -9,6 +9,7 @@ import { db } from '@/db/client';
 import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { periodUsableFor } from '@/lib/periodAccess';
+import { isMemberOnDate } from '@/lib/membershipWindow';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
@@ -56,7 +57,7 @@ export async function PATCH(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -102,7 +103,7 @@ export async function PATCH(
     ) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'SLOT_NOT_FOUND', message: `Dienst ${slotId} niet gevonden` },
+        error: { code: 'SLOT_NOT_FOUND', message: 'Dienst niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -125,6 +126,11 @@ export async function PATCH(
     // does want to work that day, which the pattern leaves too.
     const refuse = (code: string, message: string) =>
       NextResponse.json({ success: false, error: { code, message } } satisfies ApiErrorResponse, { status: 409 });
+    // A day outside the person's Geldig vanaf/tot (1.1.4): nobody is rostered there anyway, and
+    // the calendar shows it as "niet in dienst". Clearing an old marking stays possible.
+    if (level !== null && !isMemberOnDate(slot.pool_id, id, slot.datum)) {
+      return refuse('NIET_IN_DIENST', 'Op deze dag ben je volgens Geldig vanaf en Geldig tot niet in dienst. Daar word je niet ingeroosterd.');
+    }
     if (level === 'LIEVER_NIET' || level === 'VOORKEUR') {
       const inAbsence = db
         .prepare('SELECT 1 FROM dienstrooster_absence WHERE person_id = ? AND van_datum <= ? AND tot_datum >= ?')

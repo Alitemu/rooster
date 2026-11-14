@@ -17,6 +17,7 @@ import { clearSessionCookie } from '@/lib/session';
 import { getAuthContextFromRequest } from '@/lib/auth-context';
 import { revokeAllSessions } from '@/lib/sessionVersion';
 import { parseJsonBody } from '@/lib/api-errors';
+import { clearPendingUndoVan } from '@/lib/pendingUndo';
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   // Clearing this browser's cookie comes first and is never conditional.
@@ -33,6 +34,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // An empty body is the normal case - the UI posts nothing.
     const body = await parseJsonBody<{ alleenDezeBrowser?: boolean }>(req);
     const alleenDezeBrowser = body.alleenDezeBrowser === true;
+
+    // What this person could still undo ends with the session (lib/pendingUndo.ts).
+    if (auth) clearPendingUndoVan(auth.userId);
 
     if (auth && !alleenDezeBrowser) {
       revokeAllSessions(auth.userId);

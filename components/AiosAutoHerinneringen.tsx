@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 interface Status {
   aan: boolean;
@@ -51,7 +52,7 @@ export function AiosAutoHerinneringen({ periodId, refreshKey }: { periodId: stri
       setStatus(data.data);
       setFout(null);
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Laden mislukt');
+      setFout(foutTekst(err, 'Laden mislukt'));
     }
   }, [periodId]);
 
@@ -73,7 +74,7 @@ export function AiosAutoHerinneringen({ periodId, refreshKey }: { periodId: stri
       setStatus(data.data);
       setFout(null);
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setFout(foutTekst(err, 'Opslaan mislukt'));
     } finally {
       setBezig(false);
     }

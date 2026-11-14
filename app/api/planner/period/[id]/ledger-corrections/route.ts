@@ -21,6 +21,7 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { trashedPeriodDenial } from '@/lib/periodTrash';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { objectRows, badRequest } from '@/lib/requestFields';
 import { validateLedgerDelta } from '@/lib/ledgerDelta';
@@ -42,6 +43,36 @@ const PLAIN_TELLERS = new Set(['AVOND', 'WEEKEND', 'FEESTDAG']);
 /** Long enough for a real explanation, short enough to stay one CSV cell. */
 const CORRECTIE_REDEN_MAX_LENGTH = 200;
 
+/**
+ * GET /api/planner/period/[id]/ledger-corrections - the handmatige correcties
+ * this period has, oldest first, for the section "Import en correcties" to
+ * show what is there. Only this period's: a correction counts for the period
+ * it names (geldt_voor_periode_id). Nothing is changed.
+ */
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
+  try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
+    const correcties = db
+      .prepare(
+        `SELECT p.codenaam, l.teller, l.delta, l.reden, l.aangemaakt_op
+         FROM dienstrooster_ledger_entry l
+         JOIN dienstrooster_person p ON p.id = l.person_id
+         WHERE l.geldt_voor_periode_id = ? AND l.categorie = 'CORRECTIE'
+         ORDER BY l.aangemaakt_op, l.rowid`
+      )
+      .all(params.id) as Array<{ codenaam: string; teller: string; delta: number; reden: string; aangemaakt_op: string }>;
+    return NextResponse.json({ success: true, data: { correcties } });
+  } catch (error) {
+    return internalErrorResponse('ledger-corrections-list', error);
+  }
+}
+
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
   try {
@@ -57,6 +88,14 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // Nothing changes in the prullenbak (lib/periodTrash.ts).
     const inTrash = trashedPeriodDenial(params.id);
     if (inTrash) return inTrash;
+    // A generation that runs has read the saldo already: a change landing now would be in the
+    // ledger but not in the roster it writes, and the period is GEGENEREERD when it is done.
+    if (hasRunningJobForPeriod(params.id)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'GENERATIE_LOOPT', message: GENERATION_RUNNING_MESSAGE } },
+        { status: 409 }
+      );
+    }
 
     const periodId = params.id;
     const body = await parseJsonBody<{ corrections?: unknown }>(req);
@@ -72,7 +111,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -146,11 +185,12 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       }
       const isMember = memberStmt.get(c.person_id, period.pool_id, period.eind_datum, period.start_datum);
       if (!isMember) {
+        const naam = (db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(c.person_id) as { codenaam: string } | undefined)?.codenaam ?? 'Deze persoon';
         const response: ApiErrorResponse = {
           success: false,
           error: {
             code: 'PERSON_NOT_IN_POOL',
-            message: `Persoon ${c.person_id} is geen lid van deze pool voor deze periode`,
+            message: `${naam} is geen lid van deze pool voor deze periode`,
           },
         };
         return NextResponse.json(response, { status: 400 });

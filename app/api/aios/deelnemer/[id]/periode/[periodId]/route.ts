@@ -17,8 +17,10 @@ import {
   blokkadeTellers,
   loadAiosPeriode,
   loadAiosVoorkeurDagen,
+  markeerNietInDienst,
   loadAiosWens,
 } from '@/lib/aiosPreferences';
+import { loadAiosRedenen } from '@/lib/aiosReden';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string; periodId: string }> }): Promise<NextResponse> {
   const { id, periodId } = await props.params;
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
       );
     }
 
-    const dagen = loadAiosVoorkeurDagen(id, periodId);
+    const dagen = markeerNietInDienst(id, periodId, loadAiosVoorkeurDagen(id, periodId));
     const invoer = aiosInvoerToegestaan(period);
     const submission = db
       .prepare('SELECT status, ingediend_op FROM dienstrooster_submission WHERE person_id = ? AND schedule_period_id = ?')
@@ -54,6 +56,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
         },
         dagen,
         wens: loadAiosWens(id, periodId),
+        // The AIOS's own toelichting per day, optional (lib/aiosReden.ts).
+        redenen: loadAiosRedenen(id, periodId),
         tellers: blokkadeTellers(dagen),
         // The night before it is a fellow's: not in the AIOS's quarter (lib/aiosVoortgangstoets.ts).
         voortgangstoets: aiosVoortgangstoets(periodId),

@@ -48,9 +48,10 @@ Codenamen: aios01, aios02 enzovoort.
   pagina met de melding dat het voorlopig is. De planner corrigeert daarna met
   de hand, met een reden, en maakt het rooster definitief: iedereen krijgt de
   definitieve diensten met wat er voor hen veranderde. *Publicatie intrekken*
-  zet het rooster terug naar gemaakt, zonder mail. Twee Excelbestanden: het
-  rooster per dag, en per AIOS de punten, het dienstpercentage, de diensten
-  per soort en de compensatiedagen die het roosterbureau inplant.
+  zet het rooster terug naar gemaakt, zonder mail. Eén Excelbestand: het
+  rooster per dag. Een bestand per AIOS met de compensatiedagen was er tot
+  0.807.1 ook, en is in 0.808.0 weggehaald: het roosterbureau kiest die dagen
+  zelf, voor of na een dienst, naar de drukte en de afwezigheid van anderen.
 
 ## Diensten
 
@@ -122,7 +123,7 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   bewaard en staat bij een volgende generatie al ingevuld.
 - Een losse feestdag in een blok (zoals Koningsdag of Nieuwjaarsdag) blijft heel,
   maar de planner kan dat blok op dezelfde plek ook opknippen.
-- Daarna kan de planner een dienst nog met de hand aanpassen, zoals altijd.
+- Daarna kan de planner een dienst nog met de hand aanpassen, zoals altijd (sinds 0.101.0 in de sectie Dienstrooster, in de lijst en in de kalender).
 - In de app (0.76.0): de vragen staan op de pagina van de periode, bij
   *Rooster*, boven *Rooster maken*. Dat kan pas als elk blok bij
   aaneengesloten feestdagen een keuze heeft en de keuzes bewaard zijn. Een
@@ -130,7 +131,7 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   bij de volgende keer dat het rooster gemaakt wordt. Een opgeknipt blok
   staat in het rooster per dag.
 - Een opgeknipte nacht uit het blok zondag tot en met dinsdag is een losse
-  nacht met één compensatiedag. Die mag ook een fulltimer doen: harde regel
+  nacht met één compensatiedag. Die mag ook wie 0,9 fte of meer heeft doen: harde regel
   5 geldt voor het hele blok (een keuze bij het bouwen, oktober 2026).
 
 ## Voortgangstoets
@@ -209,8 +210,21 @@ De tijden van de vragenlijst (C1), die vorig jaar zijn gewijzigd (C9):
   harde regel 4 voor wat ze betekenen; per weekdag één tegelijk, want twee
   patronen die een dag delen telden voor de fte dubbel, 0.85.0),
   "4 avonden", "4 nachten", "twee dagdiensten", "Inwerken", een onderbreking van
-  de opleiding en algemene verzoeken (vrije tekst, hoogstens 120 tekens).
-- Geen reden per dag: die werd niet gebruikt bij het maken van het rooster.
+  de opleiding. Wat de AIOS hier kiest, wordt meteen opgeslagen. Een tekstvak
+  voor algemene verzoeken is er sinds 0.97.0 niet meer: de solver deed er niets
+  mee en het gaf de indruk dat het gelezen werd.
+- De reden bij een dag (0.91.0, de keuze van de planner in oktober 2026): bij
+  elke dag die een AIOS zelf op geblokkeerd of liever niet zet, kan de AIOS
+  een toelichting geven, niet verplicht en hoogstens 120 tekens. Dat staat
+  erbij in het scherm en zegt dat alleen de planner van de AIOS het ziet.
+  Het is privé: de planner leest het bij het met de hand aanpassen van het
+  rooster (bij elke AIOS die de dienst kan krijgen, de toelichting van die
+  dag) en in het voorkeurenoverzicht (Excel, achter de keuze: "geblokkeerd:
+  ziek kind"). Het staat nooit in een ruilverzoek, de mail daarvan, de
+  kandidaten voor een ruil of op het scherm van een andere AIOS
+  (app/api/aios/aiosRuilen.test.ts houdt dat vast). De solver gebruikt het
+  niet. Een dag zonder eigen markering heeft geen toelichting: wordt de
+  markering weggehaald, dan gaat de toelichting mee.
 - Geen voorkeur voor met wie iemand dienst doet (D6, I7).
 
 ## Inwerken
@@ -269,8 +283,19 @@ solver.
    de planner in oktober 2026; in 0.82.0 stond hij ook op liever niet). Bij
    ruilen telt het ook zo: een parttimer kan een avond of nacht op de
    parttimedag ruilen.
-5. Fulltimers (1,0 fte) nooit in het nachtblok zondag tot en met dinsdag: dat
-   is voor parttimers (F7).
+5. Wie 0,9 fte of meer heeft (een dag om de week vrij, of niets) nooit in het
+   nachtblok zondag tot en met dinsdag: dat is voor wie meer dagen vrij heeft
+   (F7; tot 0.88.1 gold dit alleen voor 1,0 fte, de keuze van de planner in
+   oktober 2026). De codenaam van de regel blijft `5_FULLTIME_NACHTBLOK`.
+   Wie geen parttimedagen heeft opgegeven, telt als 1,0 fte. Zijn er te weinig
+   AIOS met minder dan 0,9 fte bekend, dan blijven deze nachten leeg. De
+   pagina waarschuwt daarom vóór het maken (1.6.0, `lib/aiosNachtblok.ts`):
+   bij meer dan drie van deze blokken per AIOS die ze mag doen (de keuze van
+   de planner in november 2026), met de opdracht te controleren of alle AIOS
+   hun parttimedagen juist hebben opgegeven. Een opgeknipt blok telt niet mee.
+   Wie tijdens een blok wordt ingewerkt of de opleiding onderbreekt, telt voor
+   dat blok niet mee. Het is een waarschuwing: het rooster maken kan. De
+   regel zelf is niet veranderd.
 6. Inwerken: zie hierboven.
 7. Geen dienst op een compensatiedag (C8, F6, F7). De compensatie zelf regelt
    het roosterbureau na de publicatie. De app blokkeert die dagen automatisch
@@ -305,7 +330,18 @@ solver.
    altijd al uit regel 7, maar niet als regel 8 een feestdag vrijgeeft: na een
    nachtblok zo t/m di dat op woensdag Koningsdag eindigt, mag er op die
    woensdag toch geen dienst komen. Een ruil mag deze regels ook niet breken
-   (L3).
+   (L3). De regels 7, 8 en 9 lopen door over de grens van het kwartaal (sinds
+   0.111.0): wie het laatste nachtblok van het vorige kwartaal op de
+   dinsdag voor de start deed, heeft de woensdag en donderdag vrij en 46 uur
+   rust. De app geeft de solver per AIOS de diensten van de laatste acht dagen
+   van het vorige kwartaal van de pool mee.
+   Ook vooruit (sinds 0.805.0): bestaat het rooster van het volgende kwartaal
+   al (gegenereerd of gepubliceerd), dan kijkt de controle van de app ook naar
+   de eerste acht dagen daarvan. Een ruil of een wijziging met de hand in de
+   laatste dagen van dit kwartaal mag de rust of de compensatiedagen daar niet
+   breken. De solver krijgt dit niet mee: die maakt één kwartaal tegelijk.
+   Maak je een kwartaal opnieuw nadat het volgende al bestaat, dan toont de
+   roosterpagina wat er over de grens niet klopt.
 
 Het gemiddelde van 46 uur per week over een jaar (F5) bewaakt het roosterbureau
 met de compensatiedagen; de app kent de uren overdag niet (F9).
@@ -351,6 +387,19 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   na de inwerkperiode.
 - Feestdagdiensten eerlijk over de jaren, zoals bij de achterwacht: het aantal,
   niet welke feestdag (J2).
+- Hoe lang de solver zoekt, kiest de planner: 10, 15 of 30 minuten of zelf
+  een aantal minuten tot een uur, standaard 10 (0.902.0). Gemeten in oktober
+  2026 met 30 AIOS: 2 minuten gaf 5,6% tot 17,6%, 5 minuten 9,1% tot 15,6%,
+  10 minuten 10,0% tot 11,7%. Na het maken staat erbij of de solver klaar was
+  of dat de tijd op was. In *Dienstdoende* staan de punten en het percentage
+  naast het aantal diensten: eerlijk is op punten naar fte.
+- Ook elke soort apart is eerlijk verdeeld (0.103.0): nachten, dagdiensten,
+  avonden in het weekend, avonden door de week en uitloopdiensten. Sinds
+  0.903.0 toont *Dienstdoende* per AIOS en per soort het eerlijke bereik als
+  een gestippeld vak achter het balkje: de hele getallen rond het aandeel dat
+  de solver uitrekent (4,6 nachten is 4 of 5, een schuld van vroeger is 0).
+  Buiten het vak staat ▲ of ▼ en boven de tabel wie meer of minder heeft dan
+  eerlijk, in woorden.
 - De planner ziet vóór het genereren hoeveel punten het kwartaal heeft: Q3 2026
   heeft 195 punten (nachten 91, avonden 65, dagdiensten 26, uitloopdiensten 13),
   dus de AIOS hebben samen minstens 12 fte nodig om onder gemiddeld 25% te
@@ -398,11 +447,16 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   waarmee de ruil voor allebei binnen de harde regels blijft. Eigen
   blokkades met de hand tellen dan niet: die geeft de AIOS zelf op. De
   collega keurt goed of wijst af, met een reden als die wil. De aanvrager kan
-  intrekken. Een verzoek vervalt als een van de diensten intussen bij iemand
-  anders is, of als de publicatie wordt ingetrokken. De mail over een verzoek
-  noemt de aanvrager niet, zoals bij de achterwacht. Gaat de ruil door, dan
-  krijgen de planner en het roosterbureau bericht via de stroom van de AIOS.
-  De planner ziet alle verzoeken op de pagina van de periode.
+  intrekken. Een verzoek wordt ingetrokken (er is geen status vervallen meer,
+  0.102.0) als een van de diensten intussen bij iemand anders is, als de
+  planner een dienst met de hand wijzigt of als de publicatie wordt
+  ingetrokken. Ruilen kan alleen bij een definitief rooster. De mail over een
+  verzoek noemt de aanvrager niet, zoals bij de achterwacht. Gaat de ruil door,
+  dan krijgen de aanvrager en de collega een bevestiging en het Roosterbureau
+  één mail met de twee en de planner in de CC. Na 6 tot 7 dagen (09:00 naar
+  beneden afgerond) krijgt de collega een herinnering, ook met een knop voor de
+  aanvrager en de planner. De planner ziet alle verzoeken op de pagina van de
+  periode, met of de collega ze al heeft geopend.
 
 ## In de app
 
@@ -432,15 +486,20 @@ met de compensatiedagen; de app kent de uren overdag niet (F9).
   wordt liever niet) staat in een eigen kader, bij de diensten en bij de
   afwezigheid (0.73.0).
 - De planner en de beheerder downloaden twee overzichten (0.73.0):
-  voorkeuren per dienst (een rij per dienst, een kolom per AIOS) en
-  verzoeken per AIOS (4 avonden, 4 nachten, twee dagdiensten, inwerken,
-  onderbreking, opmerking, parttimedagen, afwezigheid en de tellers).
+  voorkeuren per dienst (een rij per dienst, een kolom per AIOS, sinds 0.98.0
+  met bovenaan vijf regels "Verzoek: ..." met 4 avonden, 4 nachten, twee
+  dagdiensten, inwerken en onderbreking, want het bestand is ook de back-up en
+  de import leest ze terug; sinds 0.99.0 ook de regels "Parttime 1", "Parttime 2" met
+  de parttimedagen, die de import toevoegt bij een AIOS zonder, en als probleem
+  meldt bij een AIOS met andere) en verzoeken per AIOS (4 avonden, 4 nachten, twee dagdiensten, inwerken,
+  onderbreking, parttimedagen, afwezigheid en de tellers).
 - Mail: één mailaccount voor beide roosters, hoogstens 100 tot 150 mails per dag
-  als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroom (N1, de
-  keuze van de planner in oktober 2026): de verzendlijst van de AIOS gaat naar
-  een eigen stroomadres. Dat stelt de beheerder in op de pagina van een periode
+  als beide tegelijk uitnodigen (N5). De AIOS hebben een eigen stroomadres (N1, de
+  keuze van de planner in oktober 2026). Sinds 0.105.0 kan dat hetzelfde postvak zijn
+  als dat van de achterwacht: elke bijlage zegt in het veld `dienst` van wie ze is,
+  zodat één stroom beide bedient. Dat stelt de beheerder in op de pagina van een periode
   van de AIOS. Ook de mails over ruilen gaan via die stroom (0.80.0). De lijst met adressen van de AIOS staat bij de
-  roosteraar (N2). Geen kopie voor de opleider (N4). Herinneringen gaan ook
+  planner (N2). Geen kopie voor de opleider (N4). Herinneringen gaan ook
   vanzelf, een week en een dag voor de deadline, net als bij de achterwacht
   (0.73.0). De planner kan ze per periode pauzeren.
 - Het AIOS-rooster houdt geen rekening met de achterwacht en andersom (M1 tot en

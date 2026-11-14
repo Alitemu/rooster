@@ -6,7 +6,7 @@
  */
 
 import { db } from '@/db/client';
-import { generateSlotsForPeriod, validateSlots, countWeeksInSlots } from '@/lib/slotGeneration';
+import { generateSlotsForPeriod, slotTeller, validateSlots, countWeeksInSlots } from '@/lib/slotGeneration';
 
 export interface PersistSlotsResult {
   success: true;
@@ -112,7 +112,7 @@ export function persistSlotsForPeriod(
 
   const insertAll = db.transaction((rows: typeof slots) => {
     for (const slot of rows) {
-      const teller = slot.is_feestdag ? 'FEESTDAG' : slot.weekend_id ? 'WEEKEND' : 'AVOND';
+      const teller = slotTeller(slot);
       const shiftTypeId = shiftTypeIdByTeller.get(teller)!;
 
       insertStmt.run(

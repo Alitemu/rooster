@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, getPersonalLinkUrl, loginAsPlanner } from './setup';
 
 /**
  * A period in the prullenbak, opened from a bookmark or a tab left open
- * (the full audit, 0.86.0): the page says where it is, and a step on it is
- * refused with that same message instead of going through.
+ * (the full audit, 0.86.0): the page shows nothing of it and says where to
+ * go. The refusal of a step is app/api/periodTrashGuard.test.ts's.
  */
 
 let testData: ReturnType<typeof createTestPeriod>;
@@ -19,14 +19,20 @@ test.afterAll(() => {
   cleanupTestData(testData.period.id, testData.users.map((u) => u.id));
 });
 
-test('the page says it is in the prullenbak, and Terug naar open is refused', async ({ page }) => {
+test('the planner sees only that the period is deleted, with the way back, and no step to take', async ({ page }) => {
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await expect(page.getByTestId('in-prullenbak')).toContainText('Deze periode staat in de prullenbak. Je kunt hem bekijken, maar niet wijzigen.');
+  await expect(page.getByTestId('periode-verwijderd')).toContainText('Deze periode is verwijderd');
+  await expect(page.getByTestId('periode-verwijderd')).toContainText('Zet hem terug via de Prullenbak op het overzicht.');
+  await expect(page.getByRole('button', { name: '↩️ Terug naar open' })).toHaveCount(0);
+});
 
-  await page.getByRole('button', { name: '↩️ Terug naar open' }).click();
-  await page.getByRole('button', { name: 'Zeker weten? Nogmaals klikken' }).click();
-  await expect(page.getByText('Deze periode staat in de prullenbak. Zet hem eerst terug.')).toBeVisible();
-  const status = db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(testData.period.id) as { status: string };
-  expect(status.status).toBe('GESLOTEN');
+test('a participant with a link to it is told to ask a new link on the startpagina', async ({ page }) => {
+  const token = testData.users[0].token;
+  await page.goto(getPersonalLinkUrl(token));
+  const melding = page.getByTestId('periode-verwijderd');
+  await expect(melding).toContainText('Deze periode is verwijderd');
+  await expect(melding).toContainText('Link kwijt?');
+  await melding.getByRole('link', { name: 'startpagina' }).click();
+  await expect(page.getByText('Link kwijt?').first()).toBeVisible();
 });

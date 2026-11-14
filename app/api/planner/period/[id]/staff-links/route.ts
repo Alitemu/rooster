@@ -49,7 +49,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     // believe before minting a fresh set. POST below already 404s.
     if (!db.prepare('SELECT 1 FROM dienstrooster_schedule_period WHERE id = ?').get(periodId)) {
       return NextResponse.json(
-        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` } },
+        { success: false, error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' } },
         { status: 404 }
       );
     }

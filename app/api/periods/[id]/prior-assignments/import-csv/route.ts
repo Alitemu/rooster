@@ -35,6 +35,7 @@ import { objectRows, rowText, badRequest } from '@/lib/requestFields';
 import { parseDutchOrIsoDate } from '@/lib/isoDate';
 import { withoutFormulaGuard } from '@/lib/csv';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 interface ImportRow {
   datum?: string;
@@ -94,7 +95,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -142,7 +143,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         }
         const teller = normalizeTeller(tellerRaw);
         if (!teller) {
-          errors.push(`Rij ${rowNum} (${datum}): onbekend diensttype "${row.teller}", overgeslagen`);
+          errors.push(`Rij ${rowNum} (${isoNaarInvoer(datum)}): onbekend diensttype "${row.teller}", overgeslagen`);
           return;
         }
         // The client already filters to this range for the planner to
@@ -158,7 +159,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           const person = personStmt.get(codenaam) as { id: string } | undefined;
           // Someone of the other dienst is no one to this planner (lib/dienstAccess.ts).
           if (!person || !staffMayAccessPerson(auth!, person.id)) {
-            errors.push(`Rij ${rowNum} (${datum}): onbekende codenaam "${codenaam}", als Onbekend verwerkt`);
+            errors.push(`Rij ${rowNum} (${isoNaarInvoer(datum)}): onbekende codenaam "${codenaam}", als Onbekend verwerkt`);
           } else {
             personId = person.id;
           }

@@ -11,6 +11,10 @@ import { useEffect, useState } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
 import { withBasePath } from '@/lib/basePath';
+import { MAX_WORKBOOK_BYTES, WORKBOOK_TOO_LARGE } from '@/lib/sheetUpload';
+import { telwoord } from '@/lib/telwoord';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
+import { BestandKiezer } from '@/components/BestandKiezer';
 
 interface Change {
   codenaam: string;
@@ -105,6 +109,11 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
       setError('Kies een Excel-bestand (.xlsx). Sla het bestand in Excel op als "Excel-werkmap".');
       return;
     }
+    if (file.size > MAX_WORKBOOK_BYTES) {
+      setBestandData(null);
+      setError(WORKBOOK_TOO_LARGE);
+      return;
+    }
     setBestand(file.name);
     setBestandData(toBase64(await file.arrayBuffer()));
   };
@@ -134,17 +143,16 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
             </p>
             <ul className="text-sm text-neutral-700 mb-4 list-disc pl-5 space-y-1">
               <li>Geblokkeerd, liever niet en voorkeur worden gezet alsof de planner ze invult. Een lege cel haalt zo&apos;n keuze weg.</li>
-              <li>Cellen met (parttime), (afwezig) of (fellow) worden overgeslagen. Die komen uit het deeltijdpatroon, de afwezigheid of het fellowvinkje.</li>
+              <li>Cellen met (deeltijd), (afwezig) of (fellow) worden overgeslagen. Die komen uit het deeltijdpatroon, de afwezigheid of het fellowvinkje.</li>
               <li>Het maximum aantal blokkades geldt hier niet.</li>
               <li>Controleren verandert nog niets. Je ziet eerst wat er zou veranderen.</li>
             </ul>
 
-            <input
-              type="file"
+            <BestandKiezer
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               disabled={busy}
-              onChange={(e) => pickFile(e.target.files?.[0])}
-              className="block w-full text-sm mb-4"
+              onKies={(bestand) => pickFile(bestand ?? undefined)}
+              className="mb-4"
               aria-label="Excel-bestand met voorkeuren"
             />
 
@@ -191,7 +199,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                         count looked wrong until Toepassen said 3492. */}
                     {plan.wijzigingen.length > SHOWN && (
                       <p className="text-neutral-600 mb-1" data-testid="import-lijst-uitleg">
-                        Hieronder de eerste {SHOWN} van de {plan.wijzigingen.length} wijzigingen.
+                        Hieronder de eerste {SHOWN} van de {telwoord(plan.wijzigingen.length, 'wijziging', 'wijzigingen')}.
                       </p>
                     )}
                     <table className="w-full text-left border-collapse">
@@ -208,7 +216,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                         {plan.wijzigingen.slice(0, SHOWN).map((w) => (
                           <tr key={`${w.codenaam}|${w.datum}|${w.dienst}`} className="border-b border-neutral-100">
                             <td className="py-1 pr-2">{w.codenaam}</td>
-                            <td className="py-1 pr-2">{w.datum}</td>
+                            <td className="py-1 pr-2">{isoNaarInvoer(w.datum)}</td>
                             <td className="py-1 pr-2">{w.dienst}</td>
                             <td className="py-1 pr-2">{w.van}</td>
                             <td className="py-1">{w.naar}</td>
@@ -219,7 +227,7 @@ export function PreferencesImportButton({ periodId, periodStatus, onImported }: 
                     {plan.wijzigingen.length > SHOWN && (
                       <p className="mt-1 text-neutral-600" data-testid="import-lijst-rest">
                         De andere {plan.wijzigingen.length - SHOWN} staan niet in deze lijst. Toepassen voert alle{' '}
-                        {plan.wijzigingen.length} wijzigingen door.
+                        {telwoord(plan.wijzigingen.length, 'wijziging', 'wijzigingen')} door.
                       </p>
                     )}
                   </div>

@@ -19,6 +19,9 @@ RUST_UREN = 14
 RUST_NA_NACHTBLOK_UREN = 46
 # At most 7 nights in a row.
 MAX_NACHTEN_ACHTEREEN = 7
+# Hard rule 5: from this fte on (0,9: a day every other week) no nachtblok
+# zo t/m di; that block is for who has more days off (the planner, 2026).
+GEEN_NACHTBLOK_VANAF_FTE = 0.9
 
 
 def datum(s: str) -> date:

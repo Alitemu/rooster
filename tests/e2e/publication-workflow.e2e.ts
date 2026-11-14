@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner } from './setup';
+import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner, openSecties } from './setup';
 import { db } from '@/db/client';
 
 /**
@@ -211,6 +211,12 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
       await page.waitForLoadState('networkidle');
 
+      // Foldable sections, closed to begin with: the roster and the swapping.
+      for (const [id, titel] of [['rooster', 'Jouw rooster'], ['ruilen', 'Ruilen']]) {
+        await expect(page.getByTestId(`deelnemer-sectie-${id}`).getByRole('heading', { name: titel }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+      }
+      await openSecties(page);
+
       await expect(page.getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
 
       const expected = (
@@ -240,6 +246,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
     try {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
+      await openSecties(page);
       await page.waitForLoadState('networkidle');
 
       const stored = db
@@ -252,6 +259,34 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
       await page.getByRole('button', { name: '🔔 Meldingen' }).click();
       await expect(page.getByText(stored[0].onderwerp).first()).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  });
+  // Audit 1.2.2: "Publicatie intrekken" promised every participant a melding, but the Meldingen
+  // button and panel were only there while the roster was published, so nobody could read it; and
+  // the page then said both "wijzigen kan niet meer" and "Wijzigingen die je nu opslaat, worden
+  // bewaard". Runs last: it takes the publication back.
+  test('after Publicatie intrekken the participant can read the melding, under one honest banner', async ({ page, browser }) => {
+    await gotoPlanner(page);
+    await page.getByRole('button', { name: '↩️ Publicatie intrekken' }).click();
+    const dialoog = page.getByRole('dialog', { name: 'Publicatie intrekken' });
+    await expect(dialoog).toContainText('Er gaat geen mail.');
+    await dialoog.getByRole('button', { name: 'Ja, publicatie intrekken' }).click();
+    // The status reads in the header and in the period's own block.
+    await expect(page.getByText(/Status: Gegenereerd/).first()).toBeVisible();
+
+    const context = await browser.newContext();
+    const deelnemer = await context.newPage();
+    try {
+      await deelnemer.goto(`${getBaseUrl()}/person/${testData.users[1].token}`);
+      await deelnemer.waitForLoadState('networkidle');
+      await expect(deelnemer.getByTestId('rooster-nog-niet-gepubliceerd')).toContainText('nog niet gepubliceerd');
+      // One banner: not also "De planner heeft deze periode gesloten" (audit 1.3.0).
+      await expect(deelnemer.getByText(/De planner heeft deze periode gesloten/)).toHaveCount(0);
+      await expect(deelnemer.getByText(/Wijzigingen die je nu opslaat/)).toHaveCount(0);
+      await deelnemer.getByRole('button', { name: '🔔 Meldingen' }).click();
+      await expect(deelnemer.getByText(/publicatie ingetrokken/).first()).toBeVisible();
     } finally {
       await context.close();
     }

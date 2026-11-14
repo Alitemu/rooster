@@ -11,8 +11,12 @@ import type { Verzendlijst, VerzendlijstBerichtUit } from '@/lib/verzendlijst';
 
 export const SMTP_SINK_USER = 'rooster@example.test';
 export const SMTP_SINK_PASSWORD = 'app-wachtwoord';
-/** A second account shaped like what the app's Mailinstellingen accept: a Gmail address and a 16-letter app password. */
-export const SMTP_SINK_GMAIL_USER = 'dienstrooster.test@gmail.com';
+/**
+ * A second account shaped like what the app's Mailinstellingen accept: a Gmail address and a 16-letter app
+ * password. With an underscore, which Gmail does not allow in a username: it can be nobody's real account
+ * (the repository holds no e-mail address of anyone, app/geenEchteAdressen.test.ts).
+ */
+export const SMTP_SINK_GMAIL_USER = 'dienstrooster_test@gmail.com';
 export const SMTP_SINK_GMAIL_PASSWORD = 'abcdefghijklmnop';
 
 export interface ReceivedMail {

@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import {
@@ -16,13 +17,16 @@ import {
   removePatternAvailability,
   getOpenPeriodsForPerson,
   findDeadlinePassedOverlappingPeriods,
+  overlappingPatternOf,
   PARTTIME_WEEKDAGEN,
+  PATTERN_OVERLAPS_MESSAGE,
+  type PatternRule,
 } from '@/lib/parttimeSync';
 import { syncAbsencesForPerson } from '@/lib/absenceSync';
 import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isPlausibleIsoDate, isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface UpdatePatternRequest {
@@ -54,7 +58,7 @@ export async function PATCH(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -69,7 +73,7 @@ export async function PATCH(
     if (!pattern) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PATTERN_NOT_FOUND', message: `Patroon ${patternId} niet gevonden` },
+        error: { code: 'PATTERN_NOT_FOUND', message: 'Patroon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -96,7 +100,7 @@ export async function PATCH(
       return NextResponse.json(response, { status: 400 });
     }
     for (const value of [body.geldig_vanaf, body.geldig_tot]) {
-      if (value && !isValidIsoDate(value)) {
+      if (value && (!isValidIsoDate(value) || !isPlausibleIsoDate(value))) {
         const response: ApiErrorResponse = {
           success: false,
           error: { code: 'INVALID_DATE', message: 'Gebruik een geldige datum (JJJJ-MM-DD)' },
@@ -130,6 +134,26 @@ export async function PATCH(
         error: { code: 'INVALID_RANGE', message: '"Vanaf" moet vóór of op "tot en met" liggen' },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // The same refusal as adding one (the factor of the person counts each pattern).
+    if (
+      overlappingPatternOf(
+        id,
+        {
+          weekdag: updates.weekdag ?? pattern.weekdag,
+          frequentie: updates.frequentie ?? pattern.frequentie,
+          geldig_vanaf: newVanaf,
+          geldig_tot: newTot,
+        } as PatternRule,
+        patternId
+      )
+    ) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PATTERN_OVERLAPS', message: PATTERN_OVERLAPS_MESSAGE },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // Build UPDATE statement dynamically
@@ -177,6 +201,7 @@ export async function PATCH(
       data: { updated: true, availability_generated: syncResult.inserted, ...(warning ? { warning } : {}) },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'deeltijdpatroon gewijzigd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     // Moving a pattern onto a weekday the same person already has collides
@@ -215,7 +240,7 @@ export async function DELETE(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -232,7 +257,7 @@ export async function DELETE(
     if (!owned) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PATTERN_NOT_FOUND', message: `Patroon ${patternId} niet gevonden` },
+        error: { code: 'PATTERN_NOT_FOUND', message: 'Patroon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -267,6 +292,7 @@ export async function DELETE(
       data: { deleted: true },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'deeltijdpatroon verwijderd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     return internalErrorResponse('parttime-pattern-delete', error);

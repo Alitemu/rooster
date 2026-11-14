@@ -7,6 +7,10 @@ import { getSessionVersion } from '@/lib/sessionVersion';
 import { PATCH as markSlot } from './preferences/slot/[slotId]/route';
 import { PUT as parttimeCheck } from './parttime-check/route';
 import { POST as submit } from './preferences/submission/route';
+import { POST as addAbsence } from './absences/route';
+import { PATCH as editAbsence, DELETE as deleteAbsence } from './absences/[absenceId]/route';
+import { POST as addPattern } from './parttime-patterns/route';
+import { PATCH as editPattern, DELETE as deletePattern } from './parttime-patterns/[patternId]/route';
 
 /**
  * The rule: a planner changing a participant's own input for them is in
@@ -48,6 +52,19 @@ async function call(handler: unknown, method: string, cookie: string, params: Re
     { params: Promise.resolve({ id: ids.person, ...params }) }
   );
   return res.status;
+}
+
+/** Like call(), with the answer: the new rows are needed to change and delete them. */
+async function callJson(handler: unknown, method: string, cookie: string, params: Record<string, string>, body?: unknown) {
+  const res = await (handler as Handler)(
+    new NextRequest('http://localhost/api/person/x', {
+      method,
+      headers: { Cookie: cookie, 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+    { params: Promise.resolve({ id: ids.person, ...params }) }
+  );
+  return { status: res.status, body: await res.json() };
 }
 
 const auditRows = () =>
@@ -110,4 +127,43 @@ describe('a planner acting for someone is logged, the person acting for themselv
       'ingediend door planner',
     ]);
   });
+
+  // The absence and part-time routes had no row about the planner at all (the audit of 0.111.0); a sweep only
+  // sees that the call is in the source, so this one watches the row itself: written, naming the planner.
+  it.each([['participant', false], ['planner', true]] as const)(
+    'absences and part-time patterns, by the %s',
+    async (_wie, isPlanner) => {
+      const cookie = isPlanner ? cookieOf('staff', ids.planner) : cookieOf('person', ids.person);
+      const voor = auditRows().length;
+
+      const afw = await callJson(addAbsence, 'POST', cookie, {}, { van_datum: '2099-03-04', tot_datum: '2099-03-05', soort: 'VAKANTIE' });
+      expect(afw.status, JSON.stringify(afw.body)).toBe(201);
+      const absenceId = afw.body.data.id as string;
+      const afwPatch = await callJson(editAbsence, 'PATCH', cookie, { absenceId }, { van_datum: '2099-03-04', tot_datum: '2099-03-06' });
+      expect(afwPatch.status, JSON.stringify(afwPatch.body)).toBe(200);
+      expect((await callJson(deleteAbsence, 'DELETE', cookie, { absenceId })).status).toBe(200);
+
+      const pat = await callJson(addPattern, 'POST', cookie, {}, { weekdag: 'MA', frequentie: 'ELKE_WEEK', geldig_vanaf: '2099-03-02', geldig_tot: '2099-03-08' });
+      expect(pat.status, JSON.stringify(pat.body)).toBe(201);
+      const patternId = pat.body.data.id as string;
+      const patPatch = await callJson(editPattern, 'PATCH', cookie, { patternId }, { weekdag: 'DI' });
+      expect(patPatch.status, JSON.stringify(patPatch.body)).toBe(200);
+      expect((await callJson(deletePattern, 'DELETE', cookie, { patternId })).status).toBe(200);
+
+      const nieuw = auditRows().slice(voor);
+      if (!isPlanner) {
+        expect(nieuw).toEqual([]);
+        return;
+      }
+      expect(nieuw.map((r) => r.actor_id)).toEqual(Array(6).fill(ids.planner));
+      expect(nieuw.map((r) => JSON.parse(r.nieuw_json).wijziging)).toEqual([
+        'afwezigheid toegevoegd door planner',
+        'afwezigheid gewijzigd door planner',
+        'afwezigheid verwijderd door planner',
+        'deeltijdpatroon toegevoegd door planner',
+        'deeltijdpatroon gewijzigd door planner',
+        'deeltijdpatroon verwijderd door planner',
+      ]);
+    }
+  );
 });

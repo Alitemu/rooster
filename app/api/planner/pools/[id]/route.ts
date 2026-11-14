@@ -39,12 +39,20 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       };
       return NextResponse.json(response, { status: 400 });
     }
+    // "false" or 0 as text would switch the pool on: only a real true or false is a value.
+    if (typeof body.actief !== 'boolean') {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'INVALID_ACTIEF', message: 'Geef aan of de pool aan of uit moet staan.' },
+      };
+      return NextResponse.json(response, { status: 400 });
+    }
 
     const pool = db.prepare('SELECT id FROM dienstrooster_pool WHERE id = ?').get(poolId);
     if (!pool) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'POOL_NOT_FOUND', message: `Pool ${poolId} niet gevonden` },
+        error: { code: 'POOL_NOT_FOUND', message: 'Pool niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }

@@ -38,7 +38,6 @@ export interface Person {
   rol: Role;
   actief: boolean;
   wachtwoord_hash?: string | null;
-  totp_secret?: string | null;
   aangemaakt_op: string;
 }
 

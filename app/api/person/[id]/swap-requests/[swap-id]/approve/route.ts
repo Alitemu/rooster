@@ -9,12 +9,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { LIVE_SWAP_REQUEST_SQL } from '@/lib/periodAccess';
 import { v4 as uuid } from 'uuid';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
 import { formatSwapDate, swapMailDetails } from '@/lib/swapMailDetails';
-import { mailMelding } from '@/lib/meldingMail';
+import { mailMelding, SWAP_APPROVED_COLLEAGUE_TEMPLATE } from '@/lib/meldingMail';
 import { closeLapsedSwaps } from '@/lib/swapLifecycle';
 import { checkSwapAllowed } from '@/lib/swapEligibility';
 import { swapMembershipProblem } from '@/lib/membershipWindow';
@@ -117,14 +118,15 @@ export async function POST(
       .prepare('SELECT datum FROM dienstrooster_shift_slot WHERE id = ?')
       .get(swapRequest.gevraagde_slot_id) as { datum: string } | undefined;
     const period = db
-      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ?')
-      .get(swapRequest.periode_id) as { status: string; pool_id: string } | undefined;
+      .prepare('SELECT status, pool_id, definitief_op FROM dienstrooster_schedule_period WHERE id = ?')
+      .get(swapRequest.periode_id) as { status: string; pool_id: string; definitief_op: string | null } | undefined;
 
     // Re-checked here, not just at creation: a request can sit PENDING
     // while the planner reopens/regenerates the period, or simply until
     // one of the two shifts has already been worked.
     const eligibility = checkSwapAllowed({
       periodStatus: period?.status ?? '',
+      definitiefOp: period?.definitief_op,
       slotDates: [offeredSlotForCheck?.datum, requestedSlotForCheck?.datum],
     });
     if (!eligibility.allowed) {
@@ -195,6 +197,19 @@ export async function POST(
         'UPDATE dienstrooster_assignment SET person_id = ?, bron = ? WHERE id = ?'
       ).run(requesterAssignment.person_id, 'MANUAL', respondentAssignment.id);
 
+      // In the wijzigingsgeschiedenis, as the AIOS's swaps are (1.1.5): a swap changed the roster without a trace
+      // there, so the download showed only the planner's own changes. One row per shift that changed hands, by the
+      // colleague who approved it.
+      const ruilRegel = db.prepare(
+        `INSERT INTO dienstrooster_assignment_edit
+           (id, toewijzing_id, periode_id, person_id, slot_id, edit_type, oorspronkelijke_person_id, reden, bewerkt_door_person_id, aangemaakt_op, row_version)
+         VALUES (?, ?, ?, ?, ?, 'RUIL', ?, ?, ?, ?, 1)`
+      );
+      const collega = db.prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?').get(respondentAssignment.person_id) as { codenaam: string } | undefined;
+      const ruilReden = `ruil tussen ${aanvrager?.codenaam ?? ''} en ${collega?.codenaam ?? ''}`;
+      ruilRegel.run(uuid(), requesterAssignment.id, swapRequest.periode_id, respondentAssignment.person_id, requesterAssignment.slot_id, requesterAssignment.person_id, ruilReden, personId, now);
+      ruilRegel.run(uuid(), respondentAssignment.id, swapRequest.periode_id, requesterAssignment.person_id, respondentAssignment.slot_id, respondentAssignment.person_id, ruilReden, personId, now);
+
       // WHERE status='PENDING' makes this the actual guard against a
       // double-approve race, not just the earlier SELECT-based check
       // (harmless today under single-threaded, no-await execution, but a
@@ -217,6 +232,10 @@ export async function POST(
           onderwerp: rendered.onderwerp,
           inhoud: rendered.inhoud,
         });
+      }
+      // The colleague answered: the notice about the request is read, whatever the button in the notices says.
+      if (swapRequest.melding_id) {
+        db.prepare('UPDATE dienstrooster_notification SET gelezen = 1 WHERE id = ?').run(swapRequest.melding_id);
       }
 
       db.prepare(
@@ -269,9 +288,32 @@ export async function POST(
       soort: 'RUIL_UITKOMST',
       linkIntro: 'Bekijk je rooster via je persoonlijke link:',
     });
-    // And to the planner and the roster office, with both names.
+    // The colleague who approved gets a confirmation as well.
+    void mailMelding({
+      swapId,
+      personId: swapRequest.respondent_person_id,
+      periodId: swapRequest.periode_id,
+      template: SWAP_APPROVED_COLLEAGUE_TEMPLATE,
+      placeholders: {
+        codenaam: collega?.codenaam ?? '',
+        aanvrager: aanvrager?.codenaam ?? '',
+        details: swapMailDetails({
+          lezer: 'collega',
+          aanvrager: aanvrager?.codenaam ?? '',
+          collega: collega?.codenaam ?? '',
+          aangeboden: offeredSlot ?? { datum: '', teller: '' },
+          gevraagd: requestedSlot ?? { datum: '', teller: '' },
+          goedgekeurd: true,
+        }),
+      },
+      anderen: [aanvrager?.codenaam ?? ''],
+      soort: 'RUIL_UITKOMST',
+      linkIntro: 'Bekijk je rooster via je persoonlijke link:',
+    });
+    // And to the roster office, with the two who swapped and the Planner in the CC.
     void mailMelding({ doorgeven: true, soort: 'RUIL_DOORGEVEN', swapId, periodId: swapRequest.periode_id });
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, personId, { wijziging: 'ruil goedgekeurd door planner' });
     return NextResponse.json({
       success: true,
       data: {

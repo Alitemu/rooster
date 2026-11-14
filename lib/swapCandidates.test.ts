@@ -1,4 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import { db } from '@/db/client';
 import { getSwapCandidates } from './swapCandidates';
 
@@ -37,8 +39,8 @@ function createFixture(windowWeeks: number) {
   const periodId = crypto.randomUUID();
   db.prepare(
     `INSERT INTO dienstrooster_schedule_period
-       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, aangemaakt_op)
-     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', ?, datetime('now'))`
+       (id, pool_id, naam, start_datum, eind_datum, deadline, status, bevroren_ruleset_json, definitief_op, aangemaakt_op)
+     VALUES (?, ?, 'P', '2099-03-02', '2099-04-26', '2099-01-01T00:00', 'GEPUBLICEERD', ?, datetime('now'), datetime('now'))`
   ).run(periodId, poolId, JSON.stringify({ windowWeeks }));
 
   // Everyone takes part for the whole period unless a test says otherwise.
@@ -195,6 +197,29 @@ describe('getSwapCandidates', () => {
     const theirs = f.shift(other, '2099-04-06', 15);
     const result = getSwapCandidates(f.requester, f.periodId, theirs);
     expect(result.ok).toBe(false);
+  });
+
+  // 1.3.0, the planner's choice: warn, do not refuse (lib/swapEigenBlokkade.ts).
+  it("keeps a shift on a day the requester blocked, marked for the warning; liever niet is not marked", () => {
+    const f = createFixture(2);
+    const ander = f.person('Ander');
+    const geblokkeerd = f.shift(ander, '2099-04-06', 15);
+    const lieverNiet = f.shift(ander, '2099-04-13', 16);
+    const vrij = f.shift(ander, '2099-04-20', 17);
+    f.mark(f.requester, geblokkeerd, 'ABSOLUUT');
+    f.mark(f.requester, lieverNiet, 'LIEVER_NIET');
+    const result = getSwapCandidates(f.requester, f.periodId, f.offered);
+    if (!result.ok) throw new Error(result.message);
+    const merk = new Map(result.candidates.map((c) => [c.slot_id, c.requester_geblokkeerd]));
+    expect(merk.get(geblokkeerd)).toBe(true);
+    expect(merk.get(lieverNiet)).toBe(false);
+    expect(merk.get(vrij)).toBe(false);
+  });
+
+  it('the dialog names it next to the shift and warns before the request goes out', () => {
+    const bron = fs.readFileSync(path.resolve(__dirname, '../components/SwapRequestDialog.tsx'), 'utf-8');
+    expect(bron).toContain("? ' (jij hebt die dag zelf geblokkeerd)'");
+    expect(bron).toMatch(/requester_geblokkeerd && \(\s*<p[^>]*data-testid="eigen-blokkade">\s*⚠️ \{EIGEN_BLOKKADE_WAARSCHUWING\}/);
   });
 
   it('marks a colleague already asked for this shift, so they are not asked twice', () => {

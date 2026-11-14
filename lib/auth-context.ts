@@ -4,7 +4,7 @@
  * Extracts the authenticated identity from the signed session cookie
  * (see lib/session.ts). There are two kinds of session:
  * - person: issued when a personal access link token is verified
- * - staff: issued when an ADMIN/PLANNER logs in with password(+TOTP)
+ * - staff: issued when an ADMIN/PLANNER logs in with a password
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -13,6 +13,8 @@ import { unauthorizedResponse, forbiddenResponse } from '@/lib/api-errors';
 import { db } from '@/db/client';
 import type { DienstType } from '@/lib/staffAccounts';
 import { notThisDienstResponse, staffMayAccessPerson } from '@/lib/dienstAccess';
+import { LINK_NIET_VERLOPEN_SQL } from '@/lib/linkGeldigheid';
+import { localIsoDate } from '@/lib/localDate';
 
 export interface AuthContext {
   userId: string;
@@ -80,8 +82,9 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
       role: current.rol as 'ADMIN' | 'PLANNER',
       timestamp: new Date().toISOString(),
       wachtwoordWijzigen: session.wachtwoordWijzigen === true,
-      // Read live like the role, so moving an account to the other dienst
-      // takes effect at its next request. Every staff account got
+      // Read live like the role, so a change takes effect at its next
+      // request (there is no route that moves an account to the other
+      // dienst: dienst_type is set when it is created). Every staff account got
       // ACHTERWACHT when the column came (migration 0022), and that is what
       // an account is created with unless the beheerder picks otherwise.
       dienst: current.dienst_type ?? 'ACHTERWACHT',
@@ -105,9 +108,10 @@ export function getAuthContextFromRequest(request: NextRequest): AuthContext | n
     .prepare(
       `SELECT p.sessie_versie FROM dienstrooster_person_access_link pal
        JOIN dienstrooster_person p ON p.id = pal.person_id
-       WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1 LIMIT 1`
+       WHERE pal.person_id = ? AND pal.ingetrokken_op IS NULL AND p.actief = 1
+         AND ${LINK_NIET_VERLOPEN_SQL} LIMIT 1`
     )
-    .get(session.personId) as { sessie_versie: number } | undefined;
+    .get(session.personId, localIsoDate()) as { sessie_versie: number } | undefined;
   if (!stillValid) return null;
   if (!sessionVersionMatches(session, stillValid.sessie_versie)) return null;
 

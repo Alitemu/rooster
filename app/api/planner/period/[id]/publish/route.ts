@@ -8,7 +8,9 @@
  * Prerequisites: publication-check must pass.
  */
 
+import { zinnenLijst } from '@/lib/zinnenLijst';
 import { NextRequest, NextResponse } from 'next/server';
+import { vorigePeriodeDenial } from '@/lib/periodVolgorde';
 import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { v4 as uuid } from 'uuid';
@@ -81,6 +83,10 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       );
     }
 
+    // The saldo this period hands on is worked out from the one before it: that one goes first (lib/periodVolgorde.ts).
+    const vorige = vorigePeriodeDenial(periodId);
+    if (vorige) return vorige;
+
     // Enforce the same validation the planner saw, rather than assuming the
     // dialog ran it. Publishing freezes the roster and tells every pool
     // member these are their shifts, so a direct POST must not be able to
@@ -91,7 +97,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       return NextResponse.json(
         {
           success: false,
-          error: `Rooster is nog niet klaar om te publiceren: ${check.issues.join('; ')}`,
+          error: `Rooster is nog niet klaar om te publiceren: ${zinnenLijst(check.issues)}`,
           data: { issues: check.issues, checks: check.checks },
         },
         { status: 400 }
@@ -112,7 +118,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
           success: false,
           error: {
             code: 'CONFIRMATION_REQUIRED',
-            message: `Dit rooster bevat bewuste uitzonderingen: ${check.warnings.join('; ')}`,
+            message: `Dit rooster bevat bewuste uitzonderingen: ${zinnenLijst(check.warnings)}`,
           },
           data: { warnings: check.warnings, checks: check.checks },
         },

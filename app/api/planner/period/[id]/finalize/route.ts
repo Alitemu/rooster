@@ -14,6 +14,7 @@
  * reported back; a failed mail does not undo the step.
  */
 
+import { zinnenLijst } from '@/lib/zinnenLijst';
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
@@ -57,13 +58,13 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
 
     const check = runPublicationCheck(period);
     if (!check.valid) {
-      return fail(400, 'NOT_READY', `Het rooster is nog niet compleet: ${check.issues.join('; ')}`, {
+      return fail(400, 'NOT_READY', `Het rooster is nog niet compleet: ${zinnenLijst(check.issues)}`, {
         issues: check.issues,
         checks: check.checks,
       });
     }
     if (check.requiresConfirmation && body.confirmOverrides !== true) {
-      return fail(409, 'CONFIRMATION_REQUIRED', `Dit rooster bevat bewuste uitzonderingen: ${check.warnings.join('; ')}`, {
+      return fail(409, 'CONFIRMATION_REQUIRED', `Dit rooster bevat bewuste uitzonderingen: ${zinnenLijst(check.warnings)}`, {
         warnings: check.warnings,
         checks: check.checks,
       });

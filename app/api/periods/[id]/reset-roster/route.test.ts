@@ -105,9 +105,12 @@ describe('POST /api/periods/[id]/reset-roster', () => {
     const id = period('GEGENEREERD');
     const before = periodRow(id).row_version;
     setPendingUndo({ scope: 'PERIOD_ASSIGNMENT', scopeId: id, actionType: 'REMOVE', payload: {}, label: 'x', actorId: ids.planner });
+    // The factors held with the roster (lib/deelnamefactor.ts) go with it.
+    insert('dienstrooster_period_factor', { period_id: id, person_id: ids.member, factor: 0.8 });
 
     const res = await call(id);
     expect(res.status).toBe(200);
+    expect(db.prepare('SELECT 1 FROM dienstrooster_period_factor WHERE period_id = ?').get(id)).toBeUndefined();
     expect((await res.json()).data).toEqual({ status: 'GESLOTEN', verwijderd: 2, handmatig_verwijderd: 0 });
     expect(assignments(id)).toEqual(['MANUAL']);
     expect(periodRow(id)).toEqual({ status: 'GESLOTEN', row_version: before + 1 });

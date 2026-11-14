@@ -11,9 +11,12 @@
  * ABSOLUUT blocks on the relevant shifts) had nothing to sync.
  */
 
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { addDays } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { afwezigheidKaartTekst } from '@/lib/afwezigheidTelling';
+import { DatumVeld, DatumTekst } from '@/components/DatumVeld';
 
 export interface Absence {
   id: string;
@@ -38,8 +41,6 @@ interface Props {
   // saved.
   periodId?: string;
   absences: Absence[];
-  defaultVanaf: string;
-  defaultTot: string;
   readOnly?: boolean; // True once the period's deadline has passed - view only
   onAbsencesChange: (absences: Absence[]) => void;
 }
@@ -50,9 +51,15 @@ const SOORT_LABEL: Record<string, string> = {
   OVERIG: 'Overig',
 };
 
-const emptyForm = (defaultVanaf: string, defaultTot: string) => ({
-  van_datum: defaultVanaf,
-  tot_datum: defaultTot,
+/**
+ * A new absence starts without dates (1.5.0). It started on the whole
+ * period: one tap on Toevoegen and every day of it was blocked. Picking
+ * "Van" sets "Tot en met" to the day after (below). The AIOS's copy
+ * (components/AiosAfwezigheid.tsx) has done this since 0.109.0.
+ */
+export const leegAfwezigheidFormulier = () => ({
+  van_datum: '',
+  tot_datum: '',
   soort: 'VAKANTIE',
   notitie: '',
 });
@@ -61,12 +68,11 @@ export function AbsenceManager({
   personId,
   periodId,
   absences,
-  defaultVanaf,
-  defaultTot,
   readOnly = false,
   onAbsencesChange,
 }: Props) {
-  const [form, setForm] = useState(emptyForm(defaultVanaf, defaultTot));
+  const veldId = useId();
+  const [form, setForm] = useState(leegAfwezigheidFormulier());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -98,7 +104,7 @@ export function AbsenceManager({
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(emptyForm(defaultVanaf, defaultTot));
+    setForm(leegAfwezigheidFormulier());
     setError(null);
   };
 
@@ -122,7 +128,7 @@ export function AbsenceManager({
       cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan van afwezigheid mislukt');
+      setError(foutTekst(err, 'Opslaan van afwezigheid mislukt'));
     } finally {
       setSaving(false);
     }
@@ -142,7 +148,7 @@ export function AbsenceManager({
       if (editingId === absenceId) cancelEdit();
       await refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Verwijderen van afwezigheid mislukt');
+      setError(foutTekst(err, 'Verwijderen van afwezigheid mislukt'));
     } finally {
       setRemovingId(null);
     }
@@ -176,7 +182,7 @@ export function AbsenceManager({
               <div>
                 <span className="font-medium">{SOORT_LABEL[a.soort] || a.soort}</span>
                 <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
-                  {a.van_datum} t/m {a.tot_datum}
+                  <DatumTekst iso={a.van_datum} /> t/m <DatumTekst iso={a.tot_datum} />
                 </span>
                 {a.notitie && <span className="text-neutral-600 text-xs block sm:inline sm:ml-2">{a.notitie}</span>}
                 {typeof a.total_days_in_period === 'number' && (
@@ -184,15 +190,14 @@ export function AbsenceManager({
                     <span className="text-neutral-500 text-xs block sm:inline sm:ml-2">
                       (buiten deze periode)
                     </span>
-                  ) : a.blocked_days_in_period === a.total_days_in_period ? (
-                    <span className="text-green-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ✓ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen geblokkeerd in deze periode
-                    </span>
                   ) : (
-                    <span className="text-amber-700 text-xs font-medium block sm:inline sm:ml-2">
-                      ⚠ {a.blocked_days_in_period} van de {a.total_days_in_period} dagen geblokkeerd in deze
-                      periode. De rest was al om een andere reden geblokkeerd.
-                    </span>
+                    // The same days as the line under the calendar counts (lib/afwezigheidTelling.ts).
+                    (() => {
+                      const kaart = afwezigheidKaartTekst(a.blocked_days_in_period ?? 0, a.total_days_in_period);
+                      return (
+                        <span className={`${kaart.volledig ? 'text-green-700' : 'text-amber-700'} text-xs font-medium block sm:inline sm:ml-2`}>{kaart.tekst}</span>
+                      );
+                    })()
                   )
                 )}
               </div>
@@ -221,7 +226,7 @@ export function AbsenceManager({
       {readOnly ? (
         <div className="border-t border-neutral-200 pt-4">
           <p className="text-sm text-neutral-600">
-            De deadline voor deze periode is verstreken. Afwezigheid kun je nu alleen nog bekijken.
+            Deze periode is gesloten voor wijzigingen. Afwezigheid kun je nu alleen nog bekijken.
           </p>
         </div>
       ) : (
@@ -231,8 +236,8 @@ export function AbsenceManager({
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
-              <select
+              <label htmlFor={`${veldId}-0`} className="block text-xs font-medium text-neutral-600 mb-1">Soort</label>
+              <select id={`${veldId}-0`}
                 value={form.soort}
                 onChange={(e) => setForm({ ...form, soort: e.target.value })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
@@ -243,12 +248,11 @@ export function AbsenceManager({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
-              <input
-                type="date"
+              <label htmlFor={`${veldId}-1`} className="block text-xs font-medium text-neutral-600 mb-1">Van</label>
+              <DatumVeld id={`${veldId}-1`}
                 value={form.van_datum}
-                onChange={(e) => {
-                  const van_datum = e.target.value;
+                onChange={(waarde) => {
+                  const van_datum = waarde;
                   // Most absences are 1-3 weeks - jump "tot en met" to the
                   // day right after "van" so there's a sensible nearby
                   // default to adjust from, instead of leaving it wherever
@@ -264,17 +268,16 @@ export function AbsenceManager({
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
-              <input
-                type="date"
+              <label htmlFor={`${veldId}-2`} className="block text-xs font-medium text-neutral-600 mb-1">Tot en met</label>
+              <DatumVeld id={`${veldId}-2`}
                 value={form.tot_datum}
-                onChange={(e) => setForm({ ...form, tot_datum: e.target.value })}
+                onChange={(waarde) => setForm({ ...form, tot_datum: waarde })}
                 className="w-full px-2 py-2 border border-neutral-300 rounded text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
-              <input
+              <label htmlFor={`${veldId}-3`} className="block text-xs font-medium text-neutral-600 mb-1">Notitie (optioneel)</label>
+              <input id={`${veldId}-3`}
                 type="text"
                 value={form.notitie}
                 onChange={(e) => setForm({ ...form, notitie: e.target.value })}
@@ -282,8 +285,8 @@ export function AbsenceManager({
               />
             </div>
           </div>
-          {form.van_datum > form.tot_datum && (
-            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;tot&quot; liggen</p>
+          {form.van_datum && form.tot_datum && form.van_datum > form.tot_datum && (
+            <p className="text-xs text-red-600">&quot;Van&quot; moet vóór of op &quot;Tot en met&quot; liggen</p>
           )}
           <div className="flex gap-3">
             <button

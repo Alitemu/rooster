@@ -298,3 +298,44 @@ describe('PATCH /api/person/[id]/preferences/slot/[slotId]', () => {
     expect((await res.json()).error.code).toBe('INVALID_LEVEL');
   });
 });
+
+describe('a day outside Geldig vanaf/tot (1.1.4)', () => {
+  // Nobody is rostered there (generate-roster blocks it); the calendar shows it as niet in dienst.
+  async function preferences(personId: string, periodId: string) {
+    const { GET } = await import('../../[periodId]/route');
+    const token = createSessionToken(
+      { kind: 'person', personId, sessionVersion: getSessionVersion(personId)! } as never,
+      PERSON_SESSION_MAX_AGE_SECONDS
+    );
+    const res = await GET(
+      new NextRequest(`http://localhost/api/person/${personId}/preferences/${periodId}`, {
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
+      }),
+      { params: Promise.resolve({ id: personId, periodId }) }
+    );
+    return (await res.json()).data.preferences as Array<{ datum: string; slot_id: string; niet_in_dienst: boolean }>;
+  }
+
+  it('is marked niet in dienst, takes no marking, and an old marking can still be cleared', async () => {
+    const f = createFixture();
+    // Leaves on Sunday 10 January: Monday the 11th is outside.
+    db.prepare(`UPDATE dienstrooster_pool_membership SET geldig_tot = '2027-01-10' WHERE person_id = ?`).run(f.personId);
+    const prefs = await preferences(f.personId, f.periodId);
+    expect(Object.fromEntries(prefs.map((p) => [p.datum, p.niet_in_dienst]))).toEqual({
+      '2027-01-04': false,
+      '2027-01-05': false,
+      '2027-01-11': true,
+    });
+
+    const buiten = prefs.find((p) => p.datum === '2027-01-11')!.slot_id;
+    for (const level of ['ABSOLUUT', 'LIEVER_NIET', 'VOORKEUR']) {
+      const res = await patch(f.personId, buiten, level);
+      expect(res.status, level).toBe(409);
+      expect((await res.json()).error.code).toBe('NIET_IN_DIENST');
+    }
+    expect((await patch(f.personId, buiten, null)).status).toBe(200);
+    // Inside the membership nothing changes.
+    const binnen = prefs.find((p) => p.datum === '2027-01-05')!.slot_id;
+    expect((await patch(f.personId, binnen, 'VOORKEUR')).status).toBe(200);
+  });
+});

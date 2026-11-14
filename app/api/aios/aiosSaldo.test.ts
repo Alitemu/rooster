@@ -165,6 +165,26 @@ describe('after a published quarter', () => {
     }
   });
 
+  it("sends what each AIOS did in the last days of it, for the rest and compensation days (0.111.0)", async () => {
+    const laatste = nachten(w.a).at(-1)!.id;
+    const toewijzing = insert('dienstrooster_assignment', { schedule_version_id: w.a, person_id: w.z, slot_id: laatste, bron: 'SOLVER', row_version: 1, aangemaakt_op: now });
+    try {
+      await maakB();
+      const verstuurd = new Map<string, Array<Record<string, unknown>>>(opgevangen[0].aios.map((a: any) => [a.id, a.eerdere_diensten]));
+      expect(verstuurd.get(w.z)).toHaveLength(1);
+      expect(verstuurd.get(w.z)![0]).toMatchObject({ id: laatste, datum: '2094-07-20', code: 'ND', start_tijd: '22:30', eind_tijd: '08:30' });
+      // In a block, so the solver knows which: its soort and form.
+      const dienst = verstuurd.get(w.z)![0];
+      expect(dienst.blok_id).not.toBeNull();
+      expect(['AVOND', 'NACHT']).toContain(dienst.blok_soort);
+      expect(['ZO_DI', 'WO_VR', 'ZA', 'LOS']).toContain(dienst.blok_vorm);
+      // x's nights lie before the last days (beyond any rest or compensation): nothing sent.
+      expect(verstuurd.get(w.x)).toEqual([]);
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(toewijzing);
+    }
+  });
+
   it('a quarter not published does not count', async () => {
     zetStatus(w.a, 'GEGENEREERD');
     try {
@@ -238,6 +258,12 @@ describe('the history from before the app', () => {
     expect((await kolommen.json()).data.plan.problemen[0]).toMatch(/^De kolommen kloppen niet/);
   });
 
+  it('names the row as Excel numbers it, empty rows counted', async () => {
+    const met_lege_rij = bestand([KOP, [], [], ['niemand', 1, 0, 0, 0, 0, 0, 1, 12]]);
+    const check = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: met_lege_rij, toepassen: false }), ctx(w.b));
+    expect((await check.json()).data.plan.problemen).toEqual(['Rij 4: "niemand" is geen AIOS van deze pool.']);
+  });
+
   it('checked, then saved: per AIOS in words what it means', async () => {
     // x did 20 points at 0,5 fte, z 10 at 1,0 fte, both 12 months: x did more than their share.
     const goed = bestand([KOP, [cn('x'), 20, 0, 0, 0, 0, 2, '0,5', 12], [cn('z'), 10, 0, 0, 0, 0, 0, 1, 12], [cn('y'), null, null, null, null, null, null, null, null]]);
@@ -246,8 +272,8 @@ describe('the history from before the app', () => {
     expect(check.data.plan.problemen).toEqual([]);
     const gevolg = Object.fromEntries(check.data.plan.rijen.map((r: any) => [r.codenaam, r.gevolg]));
     expect(gevolg).toEqual({
-      [cn('x')]: '10 punten minder en 1,3 feestdagdiensten minder',
-      [cn('z')]: '10 punten extra en 1,3 feestdagdiensten extra',
+      [cn('x')]: '10 punten minder, 10 nachtdiensten minder en 1,3 feestdagdiensten minder',
+      [cn('z')]: '10 punten extra, 10 nachtdiensten extra en 1,3 feestdagdiensten extra',
     });
     const res = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: goed, toepassen: true }), ctx(w.b));
     expect(res.status).toBe(200);
@@ -271,10 +297,46 @@ describe('the history from before the app', () => {
     expect(laadAiosRooster(aiosUitnodigPeriode(w.b)!).per_aios.find((a) => a.person_id === w.z)!.saldo_bron).toBe('BEGINSTAND');
   });
 
-  it('a new file replaces what was', async () => {
-    await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: bestand([KOP, [cn('y'), 4, 0, 0, 0, 0, 0, 1, 6]]), toepassen: true }), ctx(w.b));
-    const stand = (await (await geschiedenis(req(`${w.b}/geschiedenis`), ctx(w.b))).json()).data;
-    expect(stand.rijen.map((r: any) => [r.codenaam, r.gevolg])).toEqual([[cn('y'), 'niets in te halen']]);
+  it('a new file replaces what was, but only after a yes: the check names who is left without', async () => {
+    const nieuw = bestand([KOP, [cn('y'), 4, 0, 0, 0, 0, 0, 1, 6]]);
+    const stand = async () => (await (await geschiedenis(req(`${w.b}/geschiedenis`), ctx(w.b))).json()).data.rijen.map((r: any) => r.codenaam).sort();
+    const voor = await stand();
+    expect(voor.length).toBeGreaterThan(1);
+
+    // The check already says who would have none.
+    const check = (await (await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: false }), ctx(w.b))).json()).data.plan;
+    expect(check.vervalt.sort()).toEqual(voor.filter((n: string) => n !== cn('y')));
+
+    // Saving asks first: 409, nothing changed, the question names them.
+    const vraag = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: true }), ctx(w.b));
+    expect(vraag.status).toBe(409);
+    const fout = (await vraag.json()).error;
+    expect(fout.code).toBe('GESCHIEDENIS_BESTAAT');
+    expect(fout.message).toContain(`Er staat al een geschiedenis voor ${voor.length} AIOS. Bewaren vervangt die.`);
+    expect(fout.message).toContain('daarna geen geschiedenis meer');
+    expect(fout.message).toContain(voor.find((n: string) => n !== cn('y')));
+    expect([...fout.plan.vervalt].sort()).toEqual(voor.filter((n: string) => n !== cn('y')));
+    expect(await stand()).toEqual(voor);
+    // Only a literal true counts.
+    expect((await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: true, bevestigd: 'ja' }), ctx(w.b))).status).toBe(409);
+    expect(await stand()).toEqual(voor);
+
+    // Yes: replaced.
+    const ja = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: nieuw, toepassen: true, bevestigd: true }), ctx(w.b));
+    expect(ja.status).toBe(200);
+    const na = (await (await geschiedenis(req(`${w.b}/geschiedenis`), ctx(w.b))).json()).data;
+    expect(na.rijen.map((r: any) => [r.codenaam, r.gevolg])).toEqual([[cn('y'), 'niets in te halen']]);
+  });
+
+  it('asks nothing when there is no history yet, and a file with problems is refused before the question', async () => {
+    db.prepare('DELETE FROM dienstrooster_aios_beginstand WHERE pool_id = ?').run(w.pool);
+    const goed = bestand([KOP, [cn('y'), 4, 0, 0, 0, 0, 0, 1, 6]]);
+    expect((await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: goed, toepassen: true }), ctx(w.b))).status).toBe(200);
+    // Now there is one: a file with a mistake answers 400 with the problems, not the question.
+    const fout = bestand([KOP, [cn('y'), -1, 0, 0, 0, 0, 0, 1, 6]]);
+    const res = await inlezen(req(`${w.b}/geschiedenis`, 'POST', { bestand: fout, toepassen: true }), ctx(w.b));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe('IMPORT_PROBLEMS');
   });
 
   it("is the AIOS's planner's: the achterwacht's planner gets nothing, nor an achterwacht period", async () => {
@@ -311,8 +373,8 @@ describe('over more quarters', () => {
     try {
       const s = aiosSaldi({ id: c, pool_id: w.pool, start_datum: '2094-08-04' }, [w.x, w.y]);
       // B's share already held what A left: counted again, x would get a point extra in C.
-      expect(s.get(w.x)).toEqual({ saldo_punten: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
-      expect(s.get(w.y)).toEqual({ saldo_punten: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
+      expect(s.get(w.x)).toEqual({ saldo_punten: 0, saldo_nachten: 0, saldo_dagen: 0, saldo_weekendavonden: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
+      expect(s.get(w.y)).toEqual({ saldo_punten: 0, saldo_nachten: 0, saldo_dagen: 0, saldo_weekendavonden: 0, feestdag_achterstand: 0, bron: 'VORIG_KWARTAAL' });
       // One night less in B for x: one point to make up in C, not two.
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ? AND slot_id = ?').run(w.b, n[0].id);
       expect(aiosSaldi({ id: c, pool_id: w.pool, start_datum: '2094-08-04' }, [w.x]).get(w.x)!.saldo_punten).toBe(1);
@@ -320,5 +382,108 @@ describe('over more quarters', () => {
       db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(w.b);
       zetStatus(w.b, 'GESLOTEN');
     }
+  });
+});
+
+describe('the nights saldo', () => {
+  const gedaan = (wie: string) =>
+    (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM dienstrooster_assignment a JOIN dienstrooster_shift_slot sl ON sl.id = a.slot_id
+           JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+           WHERE a.schedule_version_id = ? AND a.person_id = ? AND st.code = 'ND'`
+        )
+        .get(w.a, wie) as { n: number }
+    ).n;
+
+  it("is the quarter's target of nights minus the nights done, and the solver is sent it", async () => {
+    const dx = gedaan(w.x);
+    const dy = gedaan(w.y);
+    expect(dx + dy).toBeGreaterThan(0);
+    db.prepare('UPDATE dienstrooster_aios_doel SET doel_nachten = ? WHERE period_id = ? AND person_id = ?').run(dx + 2, w.a, w.x);
+    db.prepare('UPDATE dienstrooster_aios_doel SET doel_nachten = ? WHERE period_id = ? AND person_id = ?').run(dy - 1, w.a, w.y);
+    try {
+      await maakB();
+      const verstuurd = new Map<string, { saldo_nachten: number }>(opgevangen[0].aios.map((a: any) => [a.id, a]));
+      expect(verstuurd.get(w.x)!.saldo_nachten).toBe(2);
+      expect(verstuurd.get(w.y)!.saldo_nachten).toBe(-1);
+      // z had no share in A.
+      expect(verstuurd.get(w.z)!.saldo_nachten).toBe(0);
+      // And in words on the roster page.
+      const rooster = laadAiosRooster(aiosUitnodigPeriode(w.b)!);
+      expect(rooster.per_aios.find((a) => a.person_id === w.x)!.saldo).toContain('2 nachtdiensten extra');
+      expect(rooster.per_aios.find((a) => a.person_id === w.y)!.saldo).toContain('1 nachtdienst minder');
+    } finally {
+      db.prepare('UPDATE dienstrooster_aios_doel SET doel_nachten = NULL WHERE period_id = ?').run(w.a);
+    }
+  });
+
+  it('is none for a quarter made before the nights had a target, whatever was done', async () => {
+    expect(db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_aios_doel WHERE period_id = ? AND doel_nachten IS NOT NULL').get(w.a)).toEqual({ n: 0 });
+    await maakB();
+    for (const a of opgevangen[0].aios) expect(a.saldo_nachten, a.id).toBe(0);
+  });
+
+  it("keeps the solver's target of nights with the roster, for the quarter after", async () => {
+    perAios = (invoer) => invoer.aios.map((a: any) => ({ aios_id: a.id, doel_punten: 3, doel_feestdagdiensten: 0, doel_nachten: a.id === w.x ? 4.4 : 2.2 }));
+    await maakB();
+    const rij = (wie: string) => db.prepare('SELECT doel_nachten FROM dienstrooster_aios_doel WHERE period_id = ? AND person_id = ?').get(w.b, wie);
+    expect(rij(w.x)).toEqual({ doel_nachten: 4.4 });
+    expect(rij(w.y)).toEqual({ doel_nachten: 2.2 });
+  });
+});
+
+describe('the saldo of the dagdiensten and the weekend evenings', () => {
+  const gedaan = (wie: string, code: string) =>
+    (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM dienstrooster_assignment a JOIN dienstrooster_shift_slot sl ON sl.id = a.slot_id
+           JOIN dienstrooster_shift_type st ON st.id = sl.shift_type_id
+           WHERE a.schedule_version_id = ? AND a.person_id = ? AND st.code = ?`
+        )
+        .get(w.a, wie, code) as { n: number }
+    ).n;
+
+  it("is the quarter's target minus what was done, and the solver is sent it", async () => {
+    const [dx, ex, dy, ey] = [gedaan(w.x, 'DD'), gedaan(w.x, 'ADW'), gedaan(w.y, 'DD'), gedaan(w.y, 'ADW')];
+    const zet = (wie: string, dagen: number, avonden: number) =>
+      db.prepare('UPDATE dienstrooster_aios_doel SET doel_dagen = ?, doel_weekendavonden = ? WHERE period_id = ? AND person_id = ?').run(dagen, avonden, w.a, wie);
+    zet(w.x, dx + 2, ex - 0);
+    zet(w.y, dy + 0, ey + 3);
+    try {
+      await maakB();
+      const verstuurd = new Map<string, { saldo_dagen: number; saldo_weekendavonden: number }>(opgevangen[0].aios.map((a: any) => [a.id, a]));
+      expect(verstuurd.get(w.x)).toMatchObject({ saldo_dagen: 2, saldo_weekendavonden: 0 });
+      expect(verstuurd.get(w.y)).toMatchObject({ saldo_dagen: 0, saldo_weekendavonden: 3 });
+      expect(verstuurd.get(w.z)).toMatchObject({ saldo_dagen: 0, saldo_weekendavonden: 0 });
+      const rooster = laadAiosRooster(aiosUitnodigPeriode(w.b)!);
+      expect(rooster.per_aios.find((a) => a.person_id === w.x)!.saldo).toContain('2 dagdiensten extra');
+      expect(rooster.per_aios.find((a) => a.person_id === w.y)!.saldo).toContain('3 weekendavonddiensten extra');
+    } finally {
+      db.prepare('UPDATE dienstrooster_aios_doel SET doel_dagen = NULL, doel_weekendavonden = NULL WHERE period_id = ?').run(w.a);
+    }
+  });
+
+  it('is none for a quarter made before they had a target, whatever was done', async () => {
+    await maakB();
+    for (const a of opgevangen[0].aios) expect([a.saldo_dagen, a.saldo_weekendavonden], a.id).toEqual([0, 0]);
+  });
+
+  it("keeps the solver's targets with the roster, for the quarter after", async () => {
+    perAios = (invoer) =>
+      invoer.aios.map((a: any) => ({
+        aios_id: a.id,
+        doel_punten: 3,
+        doel_feestdagdiensten: 0,
+        doel_dagen: a.id === w.x ? 1.4 : 0.6,
+        doel_weekendavonden: a.id === w.x ? 2.4 : 0.8,
+      }));
+    await maakB();
+    const rij = (wie: string) =>
+      db.prepare('SELECT doel_dagen, doel_weekendavonden FROM dienstrooster_aios_doel WHERE period_id = ? AND person_id = ?').get(w.b, wie);
+    expect(rij(w.x)).toEqual({ doel_dagen: 1.4, doel_weekendavonden: 2.4 });
+    expect(rij(w.y)).toEqual({ doel_dagen: 0.6, doel_weekendavonden: 0.8 });
   });
 });

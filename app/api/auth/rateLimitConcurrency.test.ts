@@ -7,7 +7,6 @@ import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS 
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { POST as staffLogin } from './staff-login/route';
 import { POST as changePassword } from './change-password/route';
-import { POST as disableTotp } from './totp/disable/route';
 
 /**
  * The rule: ten wrong guesses per account, then a quarter of an hour of
@@ -98,12 +97,6 @@ describe('the guessing limit holds for guesses sent at the same moment', () => {
     const result = await burst((i) =>
       post(changePassword as never, { huidig_wachtwoord: `Fout-${i}-Wachtw00rd!`, nieuw_wachtwoord: 'Nieuw-Wachtw00rd!' }, cookie)
     );
-    expect(result.compared, JSON.stringify(result.statuses)).toBeLessThanOrEqual(LIMIT);
-  }, 60_000);
-
-  it('turning two-step verification off: thirty wrong passwords at once, at most ten compared', async () => {
-    const { cookie } = await staff();
-    const result = await burst((i) => post(disableTotp as never, { wachtwoord: `Fout-${i}-Wachtw00rd!` }, cookie));
     expect(result.compared, JSON.stringify(result.statuses)).toBeLessThanOrEqual(LIMIT);
   }, 60_000);
 

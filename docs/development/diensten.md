@@ -50,11 +50,48 @@ temporary password to the AIOS pool).
 - The active period is per pool (lib/activePeriod.ts getActivePeriod(poolId),
   getActivePeriods): one for the app kept the AIOS planner from inviting
   while the achterwacht's period was open, and the refusal named it.
-  "Link kwijt?" offers the links of every pool's active period.
-- One shared Mailinstellingen and flow for both (the planner's choice), so
-  only the beheerder saves or removes them (403 for a planner, who sees
-  them read-only): a planner who could point the flow mailbox elsewhere
-  would get the other dienst's personal links.
+  "Link kwijt?" offers the links of the achterwacht's pools' active periods
+  only (getActivePeriods('ACHTERWACHT')); the AIOS asks its own way
+  (app/api/aios/link-aanvragen).
+- Mail settings (0.106.0): the Gmail account and its password are the one
+  thing shared. Each dienst has its own flow address and contact address
+  (`mail.*` and `aios.mail.*` / `aios.contact.planner` in app_setting), seen
+  by its own planner only (GET planner/mail-settings answers an AIOS planner
+  404, GET aios/mail-instellingen the achterwacht's; exports/verzendlijst-status
+  too, lib/dienstAccess.ts eigenDienstDenial) and changed by the beheerder
+  only (403 for a planner): one who could point the flow mailbox elsewhere
+  would get the other dienst's personal links. One flow and one mailbox can
+  serve both since 0.105.0: every verzendlijst carries `dienst`, set by
+  buildVerzendlijst in each copy and never by a caller, and the operator's
+  flow reads the Excel file of that dienst (docs/verzendlijst-power-automate.md).
+  Beyond that point the app cannot keep them apart: that is the operator's.
+- A person belongs to one dienst by anything of theirs, not by a membership
+  alone (0.106.0): lib/dienstAccess.ts dienstenVan reads the pools and
+  periods of the membership, a link, a mark, a dienst, a hand-in, a swap, a
+  balance, a fellow, a prior assignment, a notice and the AIOS's wishes,
+  reasons, targets, balances and swaps. staffMayAccessPerson, isAiosPerson
+  and personHasOtherDienst all use it, so someone removed from every pool
+  stays in the dienst they were in. Undoing a removal of a member refuses
+  when the other dienst took the person over in between.
+- A codenaam is unique over both diensten, so adding one that belongs to the
+  other dienst answers 409 ANDERE_DIENST: that tells it exists, and cannot be
+  avoided without a codenaam per dienst. The imports answer "geen deelnemer"
+  for the other dienst's names as for unknown ones. An id of the other dienst
+  in a path answers the 404 "Niet gevonden", an unknown one the route's own
+  404 (the ids are uuids, nothing to guess).
+- The prullenbak purges per dienst (purgeExpiredPeriods(actor, dienst)), and
+  every table with a foreign key to a period is in cascadeDeletePeriod or
+  cascades itself (lib/periodTrash.test.ts holds that).
+- The hourly work runs task by task (lib/taakUitvoerder.ts), so a failing
+  task of the achterwacht never holds up the AIOS's, nor the other way round.
+- Undoing a manual change (lib/pendingUndo.ts) is for the acute moment: two
+  minutes, for the button and for a request alike. The pages do not read it
+  when they open (what was there stays hidden, by the id of the row), and
+  logging out removes it. The button is where the change is made: the period
+  dashboard (the roster, the redistribution), the page "Rooster vooraf
+  invullen" (components/FillGapsPanel.tsx, which has its own now: the change is
+  made there, no longer on the dashboard), the staff page of a pool, and the AIOS's
+  Dienstrooster (its notice lives in the page's state only).
 - Codenamen: staf01, staf02, ... for the achterwacht and aios01, ... for
   the AIOS (lib/startParticipants.ts). A production start creates
   staf01..staf30; an installation from before had Persoon-01..30, renamed
@@ -70,8 +107,10 @@ temporary password to the AIOS pool).
   refused (lib/aiosPeriod.ts, swept by app/api/aiosNotYet.test.ts). Step 2
   (0.72.0), the AIOS's preferences, is built on the AIOS's own code, see
   "Copied, not changed" below. The staff page of the AIOS pool suggests
-  aios01 as a codenaam and has no deelnamefactor: an AIOS's fte follows
-  from their part-time days. The pool list sorts without regard to
+  aios01 as a codenaam. Neither dienst has a typed deelnamefactor any more
+  (0.93.0): the list shows the one derived from the part-time days, "nog
+  onbekend" until the AIOS handed in (docs/development/roster-rules.md,
+  "Deelnamefactor"). The pool list sorts without regard to
   capitals, or "AIOS" came before "Achterwacht" in the beheerder's
   new-period form.
 - app/api/dienstSeparationOwn.test.ts holds it from inside each dienst
@@ -84,9 +123,10 @@ temporary password to the AIOS pool).
   sends the solver only its own pool; "Link kwijt?" pairs everyone with a
   period of their own pool. Both separation tests build their two worlds
   with tests/fixtures/dienstWorlds.ts.
-- The participant's swap dialog names the achterwacht's flow mailbox for a
-  swap the app cannot make (lib/appSettings.ts getSwapContacts). The AIOS
-  swap later on their own screen, with their own flow (docs/aios-rooster.md).
+- The participant's swap dialog names the contact address of the dienst for a
+  swap the app cannot make (lib/appSettings.ts getSwapContacts, since 0.102.0 the
+  contact address and not the flow mailbox). The AIOS's own screen names theirs
+  (docs/aios-rooster.md).
 - app/api/dienstSeparation.test.ts holds it: two complete worlds, every
   route file called by each world's planner with the other's ids (and
   for participant routes their own participant with the other's period,
@@ -100,6 +140,36 @@ temporary password to the AIOS pool).
 
 ## Copied, not changed
 
+Shared on purpose, like components/DatumVeld.tsx: components/BestandKiezer.tsx
+(1.3.0), the file field in Dutch for all seven file inputs of both diensten.
+The browser's own said "Choose File" on an English Chrome. It imports nothing
+but React, and app/dienstImports.test.ts lists it with the shared parts;
+components/bestandKiezer.test.ts fails on a native file input anywhere else.
+The AIOS's mail subjects name the period once (lib/aiosTeksten.ts
+aiosPeriodeInOnderwerp: no "AIOS AIOS 2027 Q1"), its absences read dd-mm-jjjj
+and an empty block box carries its days in its label (blokTitel).
+
+(0.92.0: "Exporteren & communicatie" of an AIOS period is a copy of the
+achterwacht's section: components/AiosExporteren.tsx, its dialog
+components/AiosExportDialog.tsx (invitations, reminders, links,
+wijzigingsgeschiedenis: lib/aiosWijzigingen.ts, download-wijzigingen), the
+beheerder's import components/AiosVoorkeurenImport.tsx with
+lib/aiosVoorkeurImport.ts (voorkeuren-import; checking is applying in a
+transaction that is rolled back), and the dialog hooks lib/aiosDialoog.ts, a
+copy of useBodyScrollLock and useDialogDismiss; since 0.804.0 also of
+lib/dialogFocus.ts: a modal dialog takes focus, Tab stays inside, focus goes
+back to the button on closing, and focus that falls out of it (its button was
+replaced while the content loaded) is pulled back. The rule is
+focusSprong, tested in lib/dialogFocus.test.ts for both copies; the DOM side in
+tests/e2e/dialog-focus.e2e.ts and tests/e2e/aios-audit.e2e.ts.)
+
+(0.802.0: "Persoonlijke links", the beheerder's list of the links of a
+period and revoking one, is a copy as well: lib/aiosToegangslinks.ts,
+components/AiosToegangslinks.tsx and app/api/aios/periode/[id]/toegangslinks
+next to lib/toegangslinks.ts, components/ToegangslinksBeheer.tsx and
+app/api/planner/period/[id]/toegangslinks. Not shared; app/api/toegangslinks.test.ts
+runs the same cases on both.)
+
 The planner's rule (October 2026): after the login page, the AIOS goes its
 own way. Code that works for the achterwacht is not changed for the AIOS;
 what the AIOS needs is copied into files of its own, so the achterwacht
@@ -109,6 +179,11 @@ same tables; an AIOS's rows are apart through the AIOS pool) and the
 Gmail account of Mailinstellingen. The AIOS's solver is its own container
 (aios-solver/, 0.74.0, docs/development/aios-solver.md); the achterwacht's
 solver stays as it is.
+
+(0.112.0: lib/aiosFoutTekst.ts and lib/aiosTelwoord.ts are copies of
+lib/foutTekst.ts and lib/telwoord.ts, the Dutch text of a caught error and
+"1 dienst" against "2 diensten". The sweeps in lib/foutTekst.test.ts and
+lib/telwoord.test.ts hold the copies apart: an AIOS file imports its own.)
 
 Since 0.71.0 the achterwacht's code is unchanged but for what refuses
 the AIOS and a few lines where both meet, each named in
@@ -121,7 +196,9 @@ part-time days and leave in it), the hourly check and the start. The
 test reads every import: one outside that list fails, and so does AIOS
 code that imports the achterwacht's beyond the shared parts (login and
 sessions, the database, the mail account, the dienst checks, input checks,
-dates, file formats, the HTTP call to a solver). Where the AIOS needed
+dates (since 1.2.0 also the date fields, components/DatumVeld.tsx with
+lib/datumInvoer.ts: new code for both, not achterwacht code reused), file
+formats, the HTTP call to a solver). Where the AIOS needed
 the achterwacht's behaviour it has a copy (0.84.0): lib/aiosInvoer.ts
 (the deadline rules), lib/aiosVerzendlijst.ts (the verzendlijst, the same
 format for the AIOS's flow), lib/aiosTeksten.ts (status words, dates), the
@@ -140,6 +217,28 @@ in lib/aiosToegang.ts. The AIOS's:
   loaded while closed (`blijfGeladen`: the roster with its feestdag
   choices, the toets, Status voorkeuren, ruilen, the history). The e2e
   tests open a part with openAiosSectie (tests/e2e/setup.ts).
+  The participant's pages fold the same way once the roster is published
+  (0.110.0, layout only): the AIOS's page into "Jouw rooster", "Ruilen" and
+  "Voorkeuren" (the steps, kept loaded while closed, with `inSectie` on
+  AiosMijnRooster and AiosRuilen so the section brings the title and the
+  frame), the achterwacht's into "Jouw rooster" and "Ruilen" inside
+  PersonalRosterView, with its own copy of the folding,
+  components/DeelnemerSectie.tsx (the achterwacht may not import AiosSectie).
+  All closed at first; a page whose roster is not published is as it was.
+  The e2e tests open them with openSecties (tests/e2e/setup.ts), also after
+  a reload, which closes them again.
+  A colleague's swap request that waits for an answer shows on the closed
+  page (1.5.0, the achterwacht, lib/ruilWachtend.ts): the header of Ruilen
+  says "1 verzoek wacht op je antwoord" and the list is open by itself. It
+  sat behind two taps with nothing pointing at it. Goedkeuren asks first
+  what you give, to whom and what comes back ("Ja, ruilen"): one tap moved
+  both shifts and there is no way back. The e2e tests open the list with
+  toonRuilverzoeken (tests/e2e/setup.ts), which takes either state. The
+  AIOS's page has its two lists open under Ruilen and is left as it is.
+  A new absence of the achterwacht starts without dates (1.5.0,
+  components/AbsenceManager.tsx `leegAfwezigheidFormulier`), as the AIOS's
+  has since 0.109.0: it started on the whole period and one tap on
+  Toevoegen blocked every day of it.
   A primary button of the AIOS's dims when off (`disabled:opacity-50`;
   globals.css's btn-primary has no disabled look, and the achterwacht's is
   left as it is): "Uitnodigingen versturen" without the mail was off but

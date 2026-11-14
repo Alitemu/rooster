@@ -16,10 +16,12 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from 'react';
+import { sorteerOpRuimte } from '@/lib/vooraf';
 import { useContextMenuDismiss } from '@/lib/useContextMenuDismiss';
 import { parseISO, getHolidayInfo } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface SlotAssignment {
   id: string;
@@ -118,7 +120,7 @@ const CATEGORY_GROUP_LABELS: Record<EligibilityCategory, string> = {
   BESCHIKBAAR: 'Beschikbaar',
   LIEVER_NIET: 'Liever niet op deze dag',
   VENSTERBLOK: 'Dienst valt in vensterblok',
-  PARTTIME: 'Part-time dag',
+  PARTTIME: 'Deeltijddag',
   FELLOW: 'Fellow (AIOS-ondersteuning in het weekend)',
   GEBLOKKEERD: 'Geblokkeerd',
 };
@@ -129,7 +131,7 @@ function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, 
     if (!groups.has(person.category)) groups.set(person.category, []);
     groups.get(person.category)!.push(person);
   }
-  return CATEGORY_ORDER.filter((c) => groups.has(c)).map((c) => [c, groups.get(c)!]);
+  return CATEGORY_ORDER.filter((c) => groups.has(c)).map((c) => [c, sorteerOpRuimte(groups.get(c)!)]);
 }
 
 export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props) {
@@ -290,7 +292,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
         await loadSlots(true);
         onChanged?.();
       } catch (err) {
-        setActionError(err instanceof Error ? err.message : 'Bijwerken van toewijzing mislukt');
+        setActionError(foutTekst(err, 'Bijwerken van toewijzing mislukt'));
       } finally {
         setActionBusy(false);
       }
@@ -397,7 +399,7 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
                                 {parseISO(datum).getDate()}
                               </span>
                               {tag && (
-                                <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-500 truncate w-full text-left" title={tag}>
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-neutral-600 truncate w-full text-left" title={tag}>
                                   {tag}
                                 </span>
                               )}

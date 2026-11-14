@@ -7,10 +7,10 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 ## Datamodel Overview
 
 **Core Tables:**
-- `person` - staff members (codenaam, role, password_hash, totp_secret, sessie_versie)
+- `person` - staff members (codenaam, role, password_hash, sessie_versie; the column totp_secret is no longer used since 0.805.0)
 - `person_access_link` - personal links for participants
 - `pool` - shift pool (name, type, settings reference)
-- `pool_membership` - who's in which pool when
+- `pool_membership` - who's in which pool when (its `deelnamefactor` column is no longer read or written since 0.93.0: the factor follows from the part-time days, docs/development/roster-rules.md)
 - `ruleset` - configuration and rules (frozen when period opens)
 - `schedule_period` - time periods (CONCEPT, OPEN, GESLOTEN, GEGENEREERD, GEPUBLICEERD)
 - `shift_type` - shift definitions (evening, weekend, holiday). An AIOS
@@ -48,18 +48,64 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   (its availability copied from the block's night), taken away with one
   chosen or when the period is reopened. An ND without shift_block_id is
   always that one. Taken away, its assignment_edit rows go with it.
+- `absence.soort` (0.109.0, migration 0036): VAKANTIE, CONGRES, ONDERWIJS or
+  OVERIG. Only the AIOS's screens offer ONDERWIJS; the achterwacht's routes
+  and screen are not changed. A CHECK cannot be altered, so migration 0036
+  makes the table again, and seed.ts repairAbsenceSoort does the same for a
+  database the seed built (upgrade-drift checks both).
 - `aios_doel` (0.79.0, migration 0027) - per AIOS quarter and AIOS the
-  solver's fair share (doel_punten, doel_feestdagen), written with the
-  roster, removed with it; the next quarter's saldo is measured against it
-  (lib/aiosSaldo.ts). Cascades with the period and the person.
+  solver's fair share (doel_punten, doel_feestdagen, and since 0.107.0,
+  migration 0034, doel_nachten: NULL for a quarter made before, whose nights
+  saldo is then none, and since 0.108.0, migration 0035, doel_dagen and
+  doel_weekendavonden, the same for the dagdiensten and the weekend evenings,
+  and since 0.903.0, migration 0038, doel_weekavonden and
+  doel_uitloopdiensten, for the fair range in Dienstdoende only: no saldo),
+  written with the roster, removed with it; the next
+  quarter's saldo is measured against it (lib/aiosSaldo.ts). Cascades with
+  the period and the person.
+- `aios_generatie` (0.90.0, migration 0030) - per AIOS period what the last
+  generation told: when, the solver's status, how many diensten it filled
+  and which stayed empty with the reasons (leeg_json). Written with the
+  roster in the same transaction, removed with it (Rooster verwijderen);
+  lib/aiosGenereren.ts laatsteAiosGeneratie gives it back with the
+  diensten empty now, counted from the roster itself (0.94.0: one filled by
+  hand is gone from the list, one made empty by hand is in it without a
+  reason of the solver's, a dienst that no longer exists is not), so the
+  planner sees it again after a refresh. What the solver filled and left is
+  history. Cascades with the period.
+- `period_factor` (0.95.0, migration 0032) - per period and person the
+  deelnamefactor (the AIOS's fte) the roster was made with. Written when the
+  roster is made (achterwacht: generate-roster before the solver, lib/
+  deelnamefactor.ts; AIOS: in the generation's transaction, lib/aiosFteVast.ts),
+  replaced by a new one, removed with the roster. Counts only while the
+  period is gegenereerd or gepubliceerd. Cascades with the period and the person.
+- `aios_reden` (0.91.0, migration 0031) - the optional toelichting an AIOS
+  gives for a day they marked geblokkeerd or liever niet by hand (tekst, at
+  most REDEN_MAX_LENGTH characters), per period, person and day. Private to
+  the AIOS's planner (lib/aiosReden.ts says where it is read). It counts
+  only while the day has such a mark: reading checks that, and a cleared
+  mark deletes it. Cascades with the period and the person.
 - `aios_beginstand` (0.79.0, migration 0027) - per AIOS pool and AIOS what
   they did before the app, read in from the old Excel
   (lib/aiosGeschiedenis.ts): the diensten per soort, the feestdagdiensten
   among them, fte and maanden. A file read in replaces the pool's rows.
+  It can be read in at any status, also after the invitations; it counts
+  from the next roster made. Since 1.1.1 never silently not: saving is
+  refused (409, AIOS_GENERATIE_LOOPT) while a roster of any quarter of the
+  pool is being made (lib/aiosGenereren.ts aiosGeneratieLooptInPool: the
+  history is the pool's and that run read it when it started), and the
+  check and the save name each quarter of the pool with a made roster
+  that does not have it, and a published one that it does not change
+  (geschiedenisWaarschuwingen). The AIOS has no handmatige correcties
+  (its saldo is points, nights and weekend diensten, not counters); that
+  is a design question, left until a real case asks for it.
+  Proof: app/api/aios/aiosGeschiedenisAchteraf.test.ts.
 - `aios_ruil` (0.80.0, migration 0028) - a swap between two AIOS
   (lib/aiosRuilen.ts): the diensten of each side as a JSON array of slot
   ids (a whole block, or one dienst), status IN_BEHANDELING, GOEDGEKEURD,
-  AFGEWEZEN, INGETROKKEN or VERVALLEN. Approved, the assignments change
+  AFGEWEZEN or INGETROKKEN (VERVALLEN is no longer written, 0.102.0: what lapses is
+  INGETROKKEN; the value stays allowed in the check). Also gezien_op, laatste_herinnering_op
+  and laatste_herinnering_door. Approved, the assignments change
   hands with assignment_edit rows of type RUIL.
 - `assignment_edit` holds the AIOS's changes by hand too (0.77.0,
   lib/aiosHandmatig.ts), with the same edit types as the achterwacht's.
@@ -72,6 +118,21 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   BEGINSALDO (the wizard's "Beginsaldi importeren") is for a pool's first
   period in the app only; after a period published here the carry-over is
   booked by itself, and the wizard warns that an import counts on top.
+  Since 1.1.0 a beginsaldo and a CORRECTIE can also be added after the
+  opening, in the section "Import en correcties", the first section of the
+  achterwacht's period page (components/ImportEnCorrecties.tsx): the wizard
+  only sends both when the period opens, and a planner who forgot it there
+  had no way back. Both routes take them while the period is OPEN or
+  GESLOTEN and refuse once a roster is generated (400) and while a
+  generation runs (409, GENERATIE_LOOPT): generate-roster reads the ledger
+  when it starts, so a row landing during the run would be in the saldo but
+  not in the roster. The wizard and the section share the reading of the
+  file (lib/saldoBestand.ts), the correction reasons and the split of an
+  ongelijke ruil (lib/correctieRedenen.ts) and the form
+  (components/CorrectieFormulier.tsx). GET ledger-corrections lists the
+  period's own CORRECTIE rows. The proof that it lands per person:
+  import-balances/achteraf.test.ts (the band the solver is told) and
+  tests/e2e/import-correcties.e2e.ts (the real solver gives 3, 1, 2 and 2).
 - `audit_log` - all actions by admins/planners (lib/auditLog.ts
   `writeAuditLog`; never passwords, tokens or link hashes). Since audit 6
   also creating, opening and closing a period, its deadline, rules,
@@ -128,7 +189,11 @@ before.
 - Pool: 2-week window (default)
 - Period: 2027-01-04 to 2027-06-06 (22 weeks)
 - Various part-time patterns
-- Mixed balances (some -1, +1, 0)
+- Mixed balances (some -1, +1, 0), with the reason the import writes
+  ("Geïmporteerd beginsaldo"): the import replaces a person's beginsaldo
+  found by that reason, and the seed's own reason "Beginsaldo vanuit import"
+  stayed next to an imported one and counted twice (audit 1.3.0,
+  scripts/seedBeginsaldo.test.ts)
 - Holiday history for 2025-2028
 - Creates the audit_log table, but does not insert any rows into it - a
   fresh seed has an empty audit trail until real actions happen
@@ -138,6 +203,15 @@ before.
   page.
 
 All data uses codenamen only, no real personal data.
+
+**The blokkades fixture (tests/fixtures/blokkades-2027-h1.csv).** Until 1.3.0,
+14 of the 31 columns were blocked on 153 of the 154 days: converting the
+original form read a non-breaking space in an empty cell as a mark. The
+seed then had 17 people really available and the solver left 33 shifts
+open, so every browser check tested with half a roster. Only initials count
+as a mark; those 14 columns are now empty. tests/blokkadesFixture.test.ts
+holds the shape (31 people, 154 days, X or empty, nobody blocked on more
+than 75% of the days).
 
 **The seed builds the schema with its own raw SQL**, and db/client.ts then
 skips migrations for a database that came out of it (migration 0000 would

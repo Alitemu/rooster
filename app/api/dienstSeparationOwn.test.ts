@@ -259,8 +259,14 @@ describe('"Link kwijt?" pairs everyone with a period of their own dienst', () =>
       ).run(new Date().toISOString(), w.period);
     }
     const { kandidaten } = linkAanvraagKandidaten();
+    // The achterwacht's request carries the achterwacht's pools only, whatever an AIOS period says about its
+    // invitations (0.106.0): the AIOS asks its own way (app/api/aios/link-aanvragen).
     for (const [mine, theirs] of PAIRS) {
       const eigen = kandidaten.filter((k) => k.codenaam === worlds[mine].xCodenaam || k.codenaam === worlds[mine].yCodenaam);
+      if (mine === 'AIOS') {
+        expect(eigen, mine).toEqual([]);
+        continue;
+      }
       expect(eigen.length, mine).toBeGreaterThan(0);
       for (const k of eigen) expect(leaks(JSON.stringify(k), worlds[theirs])).toEqual([]);
     }

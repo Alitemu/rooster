@@ -10,13 +10,24 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
-import { AiosSectie } from '@/components/AiosSectie';
 import type { AiosPublicatieControle, AiosPublicatieStand } from '@/lib/aiosPublicatie';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 const moment = (iso: string) => new Date(iso).toLocaleString('nl-NL', { dateStyle: 'long', timeStyle: 'short' });
 
-type Actie = 'publiceren' | 'definitief' | 'intrekken';
-const ROUTE: Record<Actie, string> = { publiceren: 'publiceren', definitief: 'definitief-maken', intrekken: 'publicatie-intrekken' };
+type Actie = 'publiceren' | 'definitief' | 'intrekken' | 'opnieuw';
+const ROUTE: Record<Actie, string> = { publiceren: 'publiceren', definitief: 'definitief-maken', intrekken: 'publicatie-intrekken', opnieuw: 'rooster-mail' };
+
+/**
+ * What the planner does after a roster mail went out (1.6.0, the user's
+ * wording; the AIOS's copy of the achterwacht's mailControleZin in
+ * components/RosterPublicationDialog.tsx). The app knows the verzendlijst
+ * reached the mailbox of the AIOS's flow, not that the flow mailed everyone.
+ */
+export function aiosMailControleZin(adres: string | null | undefined): string {
+  const mailbox = adres?.trim() ? `de mailbox ${adres.trim()}` : 'de mailbox van de Power Automate-stroom van de AIOS';
+  return `Controleer over 30 minuten of de e-mails zichtbaar zijn in de verzonden items van ${mailbox}.`;
+}
 
 export function AiosPubliceren({ periodId, status, onChanged }: { periodId: string; status: string; onChanged: () => void }) {
   const [stand, setStand] = useState<AiosPublicatieStand | null>(null);
@@ -24,6 +35,14 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
   const [bezig, setBezig] = useState(false);
   const [melding, setMelding] = useState<{ fout: boolean; tekst: string } | null>(null);
   const [controle, setControle] = useState<AiosPublicatieControle | null>(null);
+  // Where the AIOS's verzendlijst goes (Mail naar de AIOS): the sentence after a mail names that mailbox.
+  const [verzendlijstAan, setVerzendlijstAan] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(withBasePath('/api/aios/mail-instellingen'))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setVerzendlijstAan(data?.success ? (data.data?.verzendlijst_aan ?? null) : null))
+      .catch(() => {});
+  }, []);
 
   const laad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${periodId}/publicatie`))
@@ -33,7 +52,7 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
         setStand(data.data);
         setControle(data.data.controle);
       })
-      .catch((err) => setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt' }));
+      .catch((err) => setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt') }));
   }, [periodId]);
   useEffect(() => laad(), [laad, status]);
 
@@ -52,32 +71,52 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
         throw new Error(data?.error?.message || 'Dat is mislukt');
       }
       const mail = data.data.mail as { verstuurd: boolean; aantal?: number; melding?: string };
-      const wat = actie === 'publiceren' ? 'Voorlopig gepubliceerd.' : actie === 'definitief' ? 'Het rooster is definitief.' : 'De publicatie is ingetrokken.';
+      const wat =
+        actie === 'publiceren'
+          ? 'Voorlopig gepubliceerd.'
+          : actie === 'definitief'
+            ? 'Het rooster is definitief.'
+            : actie === 'opnieuw'
+              ? 'De mail is opnieuw verstuurd.'
+              : 'De publicatie is ingetrokken.';
       setMelding({
         fout: !mail.verstuurd,
-        tekst: actie === 'intrekken' ? wat : mail.verstuurd ? `${wat} De mail aan ${mail.aantal} AIOS is verstuurd.` : `${wat} ${mail.melding}`,
+        tekst: actie === 'intrekken' ? wat : mail.verstuurd ? `${wat} De mail aan ${mail.aantal} AIOS is verstuurd. ${aiosMailControleZin(verzendlijstAan)}` : `${wat} ${mail.melding}`,
       });
       setZeker(null);
       onChanged();
       laad();
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Dat is mislukt' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Dat is mislukt') });
     } finally {
       setBezig(false);
     }
   };
 
-  if (!stand) return null;
+  if (!stand) {
+    // Still loading: nothing to say yet. Failed: say so, with a way to try again (the message was set but never shown).
+    if (!melding) return null;
+    return (
+      <div role="alert" className="text-sm text-red-700 space-y-2">
+        <p>{melding.tekst}</p>
+        <button type="button" onClick={() => { setMelding(null); laad(); }} className="px-3 py-1 rounded border border-red-300 bg-white text-red-700 font-medium hover:bg-red-100">
+          Opnieuw proberen
+        </button>
+      </div>
+    );
+  }
   const knop = 'px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50';
   const gepubliceerd = stand.status === 'GEPUBLICEERD';
   const c = controle ?? stand.controle;
   const kan = c.problemen.length === 0;
   const metWaarschuwing = c.waarschuwingen.length > 0;
-
-  const hint = gepubliceerd ? (stand.definitief_op ? 'Definitief' : 'Voorlopig gepubliceerd') : 'Nog niet gepubliceerd';
+  const harde = c.harde_regels ?? [];
+  const overige = c.waarschuwingen.filter((w) => !harde.includes(w));
+  const hardeZin = harde.length === 1 ? 'Dit rooster breekt een harde regel.' : `Dit rooster breekt ${harde.length} keer een harde regel.`;
 
   return (
-    <AiosSectie sleutel="publiceren" titel="Publiceren" testId="aios-publiceren" hint={hint}>
+    // A block of the card at the top of the page (components/AiosRoosterMaken.tsx), not a section of its own.
+    <div className="border-t pt-3 space-y-3" data-testid="aios-publiceren">
       {!gepubliceerd && (
         <p className="text-sm text-neutral-700">
           Voorlopig publiceren: elke AIOS krijgt een mail met de eigen diensten om na te kijken en ziet ze in de app. Daarna maak je het rooster
@@ -109,11 +148,21 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
           </ul>
         </div>
       )}
-      {metWaarschuwing && (
+      {harde.length > 0 && (
+        <div className="rounded border-2 border-red-700 p-3 text-sm text-red-900" data-testid="aios-publicatie-harde-regels">
+          <p className="font-bold">⛔ {hardeZin} Je kunt het toch publiceren, maar alleen als je dat bewust doet:</p>
+          <ul className="list-disc pl-5">
+            {harde.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {overige.length > 0 && (
         <div className="rounded border-2 border-dashed border-neutral-800 p-3 text-sm" data-testid="aios-publicatie-waarschuwingen">
           <p className="font-medium">⚠ Waarschuwingen:</p>
           <ul className="list-disc pl-5">
-            {c.waarschuwingen.map((w) => (
+            {overige.map((w) => (
               <li key={w}>{w}</li>
             ))}
           </ul>
@@ -124,12 +173,24 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
           <p>
             {zeker === 'publiceren' && 'Alle AIOS krijgen nu tegelijk een mail met hun voorlopige diensten.'}
             {zeker === 'definitief' && 'Alle AIOS krijgen nu tegelijk een mail met hun definitieve diensten.'}
+            {zeker === 'opnieuw' && 'Alle AIOS krijgen de mail met hun diensten nog een keer, ook wie hem al had.'}
             {zeker === 'intrekken' && 'Het rooster gaat terug naar gemaakt. De AIOS zien het niet meer, maar er gaat geen mail. Alle diensten blijven staan.'}
-            {zeker !== 'intrekken' && metWaarschuwing && ' Het rooster heeft waarschuwingen.'}
+            {(zeker === 'publiceren' || zeker === 'definitief') && harde.length > 0 && ` ${hardeZin} Weet je zeker dat je dat bewust zo wilt?`}
+            {(zeker === 'publiceren' || zeker === 'definitief') && harde.length === 0 && metWaarschuwing && ' Het rooster heeft waarschuwingen.'}
           </p>
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => doe(zeker, metWaarschuwing)}>
-              {zeker === 'publiceren' ? (metWaarschuwing ? 'Ja, toch publiceren' : 'Ja, publiceren') : zeker === 'definitief' ? 'Ja, definitief maken' : 'Ja, intrekken'}
+              {zeker === 'publiceren'
+                ? metWaarschuwing
+                  ? 'Ja, toch publiceren'
+                  : 'Ja, publiceren'
+                : zeker === 'definitief'
+                  ? harde.length > 0
+                    ? 'Ja, toch definitief maken'
+                    : 'Ja, definitief maken'
+                  : zeker === 'opnieuw'
+                    ? 'Ja, opnieuw mailen'
+                    : 'Ja, intrekken'}
             </button>
             <button type="button" className={knop} disabled={bezig} onClick={() => setZeker(null)}>
               Annuleren
@@ -154,6 +215,11 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
               Publicatie intrekken
             </button>
           )}
+          {gepubliceerd && (
+            <button type="button" className={knop} disabled={bezig} onClick={() => setZeker('opnieuw')}>
+              Rooster opnieuw mailen
+            </button>
+          )}
         </div>
       )}
       {melding && (
@@ -162,16 +228,22 @@ export function AiosPubliceren({ periodId, status, onChanged }: { periodId: stri
         </p>
       )}
       <div className="border-t pt-3 space-y-2">
-        <p className="text-sm text-neutral-700">Het rooster als Excel, voor het roosterbureau, de opleider en de afdeling:</p>
-        <div className="flex flex-wrap gap-2">
-          <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-rooster`)}>
-            Rooster per dag
-          </a>
-          <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-per-aios`)}>
-            Per AIOS met compensatiedagen
-          </a>
-        </div>
+        {gepubliceerd && stand.definitief_op ? (
+          <>
+            <p className="text-sm text-neutral-700">Het rooster als Excel, voor het roosterbureau, de opleider en de afdeling:</p>
+            <div className="flex flex-wrap gap-2">
+              <a className={knop} href={withBasePath(`/api/aios/periode/${periodId}/download-rooster`)}>
+                Rooster per dag
+              </a>
+            </div>
+          </>
+        ) : (
+          <p className="text-sm text-neutral-700" data-testid="aios-excel-pas-definitief">
+            De Excel voor het roosterbureau, de opleider en de afdeling komt beschikbaar als het rooster definitief is. Een voorlopig rooster gaat nergens
+            heen.
+          </p>
+        )}
       </div>
-    </AiosSectie>
+    </div>
   );
 }

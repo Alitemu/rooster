@@ -152,8 +152,8 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     // already in the audit trail. Blocking publication on it would mean
     // that override could never actually be shipped.
     warnings.push(
-      `${blockingViolations.count} toewijzing(en) staan op een dag die geblokkeerd is voor die persoon. ` +
-        `Controleer of dit bewust is afgesproken met de betrokkene(n).`
+      `${blockingViolations.count === 1 ? '1 toewijzing staat' : `${blockingViolations.count} toewijzingen staan`} op een dag die geblokkeerd is voor die persoon. ` +
+        `Controleer of dit bewust is afgesproken met ${blockingViolations.count === 1 ? 'de betrokkene' : 'de betrokkenen'}.`
     );
   }
 
@@ -165,7 +165,7 @@ export function runPublicationCheck(period: PeriodRow): PublicationCheckResult {
     // to themselves (see lib/swapWindowRule.ts).
     warnings.push(
       `${windowViolations}x staat iemand twee diensten binnen het venster van elkaar. ` +
-        `Controleer of dit bewust is afgesproken met de betrokkene(n).`
+        `Controleer of dit bewust is afgesproken met de betrokkenen.`
     );
   }
 

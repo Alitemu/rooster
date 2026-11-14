@@ -39,7 +39,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // Lazy sweep: there's no scheduler service in this deployment, so a
     // period past its 30-day trash retention gets purged the next time
     // anyone loads the periods list, rather than on a fixed schedule.
-    purgeExpiredPeriods(auth!.userId);
+    purgeExpiredPeriods(auth!.userId, visibleDienst(auth!));
 
     // Every non-deleted period of the planner's own dienst (a beheerder:
     // every dienst, lib/dienstAccess.ts), newest first.

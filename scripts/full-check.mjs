@@ -21,6 +21,10 @@ import { execFileSync } from 'child_process';
 import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
+import { verschuifDagen, verschuif } from './demoKalender.mjs';
+
+// The seeded calendar moves along with the real date (scripts/demoKalender.mjs).
+const SHIFT = verschuifDagen();
 
 // This script lives in scripts/, and one check below shells out to tsx to
 // reuse a TypeScript module from the app itself.
@@ -82,7 +86,11 @@ async function generateRoster(periodId, jar, body) {
   }
 
   const jobId = start.json.data.job_id;
-  const deadline = Date.now() + 5 * 60 * 1000;
+  // The solver's first search takes up to 5 minutes (lib/solverZoektijd.ts
+  // STANDAARD_ZOEKTIJD_SECONDEN), all of it when it cannot prove the roster
+  // best: waiting exactly 5 minutes timed out on a solve of 301 seconds.
+  const WACHT_MINUTEN = 8;
+  const deadline = Date.now() + WACHT_MINUTEN * 60 * 1000;
   while (Date.now() < deadline) {
     const poll = await req(
       'GET',
@@ -105,7 +113,7 @@ async function generateRoster(periodId, jar, body) {
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
-  return { ok: false, detail: 'timed out after 5 minutes', startStatus: 200 };
+  return { ok: false, detail: `timed out after ${WACHT_MINUTEN} minutes`, startStatus: 200 };
 }
 
 /**
@@ -200,7 +208,7 @@ async function main() {
   });
   rec('Open period → OPEN + 154 slots / 22 weeks', open.status === 200 && open.json?.data?.slots_generated === 154 && open.json?.data?.weeks_covered === 22,
       `${open.json?.data?.slots_generated} slots, ${open.json?.data?.weeks_covered} weeks`);
-  rec('Dates auto-rounded to full ISO weeks', open.json?.data?.start_datum === '2027-01-04');
+  rec('Dates auto-rounded to full ISO weeks', open.json?.data?.start_datum === period.start_datum);
 
   // ---------- PARTICIPANT FLOW ----------
   console.log('\n━━ PARTICIPANT FLOW ━━');
@@ -244,7 +252,7 @@ async function main() {
   const freeDay = ['MA', 'DI', 'WO', 'DO', 'VR'].find((d) => !usedDays.includes(d));
 
   const pt = await req('POST', `/api/person/${s1.id}/parttime-patterns`, {
-    jar: person, body: { weekdag: freeDay, frequentie: 'ELKE_WEEK', geldig_vanaf: '2027-01-04', geldig_tot: '2027-09-05' },
+    jar: person, body: { weekdag: freeDay, frequentie: 'ELKE_WEEK', geldig_vanaf: period.start_datum, geldig_tot: verschuif('2027-09-05', SHIFT) },
   });
   rec('Create part-time pattern', eq(pt.status, 201), `weekdag=${freeDay}`);
   const patternId = pt.json?.data?.id;
@@ -259,7 +267,7 @@ async function main() {
   const orphans = db.prepare(`SELECT COUNT(*) c FROM dienstrooster_availability WHERE bron_pattern_id=?`).get(patternId);
   rec('Zero orphaned availability rows', orphans.c === 0);
 
-  const abs = await req('POST', `/api/person/${s1.id}/absences`, { jar: person, body: { van_datum: '2027-02-01', tot_datum: '2027-02-07', soort: 'VAKANTIE' } });
+  const abs = await req('POST', `/api/person/${s1.id}/absences`, { jar: person, body: { van_datum: verschuif('2027-02-01', SHIFT), tot_datum: verschuif('2027-02-07', SHIFT), soort: 'VAKANTIE' } });
   rec('Create absence', eq(abs.status, 201));
   rec('Delete absence', eq((await req('DELETE', `/api/person/${s1.id}/absences/${abs.json?.data?.id}`, { jar: person })).status, 200));
   rec('Notifications', eq((await req('GET', `/api/person/${s1.id}/notifications`, { jar: person })).status, 200));
@@ -277,13 +285,21 @@ async function main() {
   const weekendDays = db.prepare(
     `SELECT COUNT(*) c FROM dienstrooster_shift_slot WHERE period_id=? AND strftime('%w', datum) IN ('0','6')`
   ).get(period.id).c;
+  // Every weekend day they had not marked themselves (lib/fellows.ts setFellow): a day they marked, such as a
+  // liever niet, stays theirs and counts as released (docs/development/roster-rules.md "Fellows"). Until 1.3.0
+  // this asked for every weekend day, which held only because the seed's blokkades had Persoon-02 blocked on
+  // nearly every day (a conversion error, docs/development/data-model.md).
   const unblockedWeekend = db.prepare(`
     SELECT COUNT(*) c FROM dienstrooster_shift_slot s
     WHERE s.period_id=? AND strftime('%w', s.datum) IN ('0','6')
-      AND NOT EXISTS (SELECT 1 FROM dienstrooster_availability a
-                      WHERE a.person_id=? AND a.slot_id=s.id AND a.blocking_level='ABSOLUUT')`).get(period.id, s2.id).c;
-  rec('…every weekend day of the period is blocked for them', weekendDays > 0 && unblockedWeekend === 0,
-      `${weekendDays} weekend days, ${unblockedWeekend} open`);
+      AND NOT EXISTS (SELECT 1 FROM dienstrooster_availability a WHERE a.person_id=? AND a.slot_id=s.id)`).get(period.id, s2.id).c;
+  const ownMarks = db.prepare(`
+    SELECT COUNT(*) c FROM dienstrooster_shift_slot s
+    WHERE s.period_id=? AND strftime('%w', s.datum) IN ('0','6')
+      AND EXISTS (SELECT 1 FROM dienstrooster_availability a
+                  WHERE a.person_id=? AND a.slot_id=s.id AND a.blocking_level!='ABSOLUUT')`).get(period.id, s2.id).c;
+  rec('…every weekend day they had not marked themselves is blocked for them', weekendDays > 0 && unblockedWeekend === 0,
+      `${weekendDays} weekend days, ${unblockedWeekend} open without a marking, ${ownMarks} kept as they marked them`);
   const fellowSummary = await req('GET', `/api/planner/period/${period.id}/fellows`, { jar: planner });
   const wk = fellowSummary.json?.data?.weekend;
   rec('…and the others\' weekend band goes up', fellowSummary.status === 200 &&
@@ -417,15 +433,18 @@ async function main() {
     // labelled, never quietly mixed in with genuinely free candidates.
     // This used to assert the opposite - that the list excluded them - and
     // had been failing ever since the category was introduced.
+    // A fellow's weekend block has its own label, FELLOW (lib/rosterGaps.ts, docs/development/roster-rules.md
+    // "Fellows"). Until 1.3.0 none showed up here: the seed had the fellow, Persoon-02, blocked on nearly every
+    // day by a conversion error, so their weekend days were plain blocks, not fellow blocks.
     const hardBlocked = db.prepare(
-      `SELECT person_id, source FROM dienstrooster_availability
+      `SELECT person_id, source, fellow_blok FROM dienstrooster_availability
        WHERE slot_id=? AND blocking_level='ABSOLUUT'`
     ).all(gap.slot_id);
     const categoryById = new Map(gap.eligible_people.map((p) => [p.id, p.category]));
     const mislabelled = hardBlocked.filter((row) => {
       const category = categoryById.get(row.person_id);
       if (category === undefined) return false; // not offered at all is fine too
-      return category !== (row.source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD');
+      return category !== (row.fellow_blok ? 'FELLOW' : row.source === 'PARTTIME' ? 'PARTTIME' : 'GEBLOKKEERD');
     });
     rec('Anyone who blocked that slot is labelled, not offered as free',
         mislabelled.length === 0, `${hardBlocked.length} blocked, ${mislabelled.length} mislabelled`);

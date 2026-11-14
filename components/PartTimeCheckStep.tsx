@@ -22,6 +22,9 @@ import { useState, useEffect } from 'react';
 import { parseISO, dateToISO } from '@/lib/holidays';
 import { buildMonthGroups } from '@/lib/calendarMonths';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
+import { telwoord } from '@/lib/telwoord';
+import { afwezigheidsdagenInPeriode } from '@/lib/afwezigheidTelling';
 
 interface ParttimePattern {
   id: string;
@@ -113,7 +116,7 @@ export function PartTimeCheckStep({
         // actually verified. Surface the failure instead of hiding it.
         setGeneratedDays([]);
         setBlockedElsewhereDays([]);
-        setLoadError(err instanceof Error ? err.message : 'Ophalen van deeltijddagen mislukt');
+        setLoadError(foutTekst(err, 'Ophalen van deeltijddagen mislukt'));
       } finally {
         setLoading(false);
       }
@@ -135,13 +138,12 @@ export function PartTimeCheckStep({
       absenceDates.add(datum);
     }
   }
-  // Only the absence days the two pattern-derived lists above don't already
-  // account for - counting all of absenceDates here would double-count a
-  // day that also happens to be a pattern day (already in generatedDays or
-  // blockedElsewhereDays).
-  const absenceOnlyCount = [...absenceDates].filter(
-    (d) => !byDate.has(d) && !blockedElsewhereByDate.has(d)
-  ).length;
+  // Only days inside the period: an absence in February listed on a
+  // July-December period counted 7 days nobody could see (audit 1.2.1).
+  // Every absence day, as the card of each absence counts them; the days
+  // that are also a deeltijddag are said apart, not left out (audit 1.2.2:
+  // "10 afwezigheidsdagen" under a card that said 12).
+  const afwezig = afwezigheidsdagenInPeriode(absenceDates, periodStart, periodEnd, (d) => byDate.has(d) || blockedElsewhereByDate.has(d));
 
   const startDate = parseISO(periodStart);
   const endDate = parseISO(periodEnd);
@@ -347,10 +349,16 @@ export function PartTimeCheckStep({
 
       {/* Summary */}
       <div className="text-xs text-neutral-500 italic">
-        Totaal: {generatedDays.length} deeltijddagen
-        {absenceOnlyCount > 0 && <> • {absenceOnlyCount} afwezigheidsdagen</>}
-        {boundaryDays.length > 0 && <> • Jaarwisseling: {boundaryDays.length} dagen</>}
-        {blockedElsewhereDays.length > 0 && <> • Al elders geblokkeerd: {blockedElsewhereDays.length} dagen</>}
+        Totaal: {telwoord(generatedDays.length, 'deeltijddag', 'deeltijddagen')}
+        {afwezig.totaal > 0 && (
+          <>
+            {' '}
+            • {telwoord(afwezig.totaal, 'afwezigheidsdag', 'afwezigheidsdagen')}
+            {afwezig.ookDeeltijd > 0 && `, waarvan ${afwezig.ookDeeltijd} op een deeltijddag`}
+          </>
+        )}
+        {boundaryDays.length > 0 && <> • Jaarwisseling: {telwoord(boundaryDays.length, 'dag', 'dagen')}</>}
+        {blockedElsewhereDays.length > 0 && <> • Al elders geblokkeerd: {telwoord(blockedElsewhereDays.length, 'dag', 'dagen')}</>}
       </div>
     </div>
   );

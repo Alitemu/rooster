@@ -2,7 +2,10 @@
 
 Dienstrooster kent geen e-mailadressen, alleen codenamen (staf01, staf02
 ... voor de achterwacht en aios01, aios02 ... voor de AIOS). Het koppelen van codenaam aan e-mailadres gebeurt daarom
-buiten de app, in een Excel-lijst die alleen jij beheert. Zo gaat het:
+buiten de app, in een Excel-lijst die alleen jij beheert. **Eén stroom bedient beide
+diensten, elk met een eigen Excel-bestand.** Elke bijlage zegt in het veld
+`dienst` van wie ze is (`ACHTERWACHT` of `AIOS`), en de stroom leest dan het
+bestand van die dienst. Zo gaat het:
 
 1. In Dienstrooster kies je bij **Exporteren & communicatie** voor
    *Uitnodigingen versturen* of *Herinneringen versturen*. Herinneringen kun
@@ -20,7 +23,9 @@ buiten de app, in een Excel-lijst die alleen jij beheert. Zo gaat het:
    persoon het eigen bericht.
 
 Eerder verstuurde links blijven werken. Elke verzending maakt alleen een
-extra link aan.
+extra link aan. Alle links van een medewerker openen dezelfde pagina met
+dezelfde gegevens. Is een link bij de verkeerde persoon terechtgekomen, dan
+trekt de beheerder hem in bij *Persoonlijke links* op de periodepagina.
 
 ### Ruilverzoeken
 
@@ -29,10 +34,22 @@ mail. Daar hoef je niets voor te doen, want het gaat via dezelfde stroom:
 
 - Bij een nieuw ruilverzoek krijgt de collega een mail met het verzoek. De
   aanvrager krijgt een bevestiging.
-- Bij goedkeuren of afwijzen krijgt de aanvrager de uitkomst. Bij een
-  afwijzing staat de reden erbij.
+- Bij goedkeuren krijgen de aanvrager en de collega die goedkeurde allebei
+  een bevestiging. Bij afwijzen krijgt de aanvrager de uitkomst, met de
+  reden als die is ingevuld.
 - Trekt de aanvrager een verzoek in, dan krijgt de collega een mail dat het
   verzoek is ingetrokken en dat er niets meer hoeft te gebeuren.
+- Ruilen kan alleen bij een definitief rooster. Bij een voorlopig rooster
+  gaat er dus geen ruilmail uit.
+- Een verzoek dat na 6 tot 7 dagen nog openstaat, krijgt vanzelf een
+  herinnering, om 09:00 afgerond naar beneden. Een verzoek op vrijdagmiddag
+  wordt dus de vrijdag erna herinnerd, nooit op zaterdag. De aanvrager of de
+  planner kan ook zelf een herinnering sturen, na een bevestiging en niet
+  vaker dan eens per 24 uur. De collega krijgt de herinnering (soort
+  `RUIL_HERINNERING`, zonder naam van de aanvrager). De aanvrager krijgt een
+  bericht dat er een herinnering is gestuurd (soort
+  `RUIL_HERINNERING_BEVESTIGING`). Je stroom hoeft hiervoor niets te weten:
+  de mail gaat naar de codenaam, net als de andere ruilmails.
 
 **Anoniem tot de ruil doorgaat.** Zolang een ruil niet is goedgekeurd, noemt
 geen enkele mail de ander. De collega leest "Er is een ruilverzoek voor je
@@ -42,15 +59,24 @@ tegen wie. In de app zien beide wel elkaars codenaam: dat is een
 pseudoniem. In `personen` staat dan alleen de lezer zelf, dus de stroom kan
 er ook geen echte naam van maken.
 
-Gaat de ruil door, dan noemt de mail aan de aanvrager de collega. De
-planner en het roosterbureau krijgen dan een bevestiging met beide
-dienstdoenden: "staf03 neemt de avonddienst op woensdag 3 maart 2027
-over van staf07." Met stap 5 staan daar de volledige namen. Die
-bevestiging gaat naar twee vaste codenamen, `Planner` en `Roosterbureau`
-(soort `RUIL_DOORGEVEN`). Zet die twee als rij in je Excel-lijst, met het
-adres van de planner en van het roosterbureau (stap 3). Dienstrooster zet zelf nooit een e-mailadres in de verzendlijst.
-Zo kan een nagemaakte verzendlijst alleen mensen uit jouw lijst bereiken.
-De stroom hoeft hiervoor niet te veranderen.
+Gaat de ruil door, dan noemt de mail aan de aanvrager de collega, en de mail
+aan de collega de aanvrager. Het roosterbureau krijgt dan een bevestiging
+met beide dienstdoenden: "staf03 neemt de avonddienst op woensdag 3 maart
+2027 over van staf07." Met stap 5 staan daar de volledige namen. Dat is één
+bericht aan de vaste codenaam `Roosterbureau` (soort `RUIL_DOORGEVEN`). Zet
+`Planner` en `Roosterbureau` als rij in je Excel-lijst, met het adres van de
+planner en van het roosterbureau (stap 3). Dienstrooster zet zelf nooit een
+e-mailadres in de verzendlijst. Zo kan een nagemaakte verzendlijst alleen
+mensen uit jouw lijst bereiken.
+
+**Eén wijziging in de stroom: de CC.** Bij `RUIL_DOORGEVEN` staat in het
+bericht een veld `cc` met drie codenamen: de twee die geruild hebben en
+`Planner`. Laat de stroom die in jouw lijst opzoeken, zoals de `codenaam`, en
+in de CC van de mail aan het Roosterbureau zetten. Zo weten beide
+collega's en de planner dat het Roosterbureau de ruil heeft gekregen. Dat
+betekent ook dat zij elkaars adres zien in die mail. Kent je stroom het veld
+niet, dan werkt alles gewoon door en gaat de mail zonder CC naar het
+Roosterbureau.
 
 **Eén dienst aan meerdere collega's aanbieden.** Een deelnemer mag dezelfde
 dienst tegelijk aan meerdere collega's aanbieden, om de kans op een ruil zo
@@ -68,8 +94,13 @@ groot mogelijk te maken. Wie het eerst goedkeurt, ruilt:
   aan wie het gericht was, krijgt een mail. Wie goedkeurt, ziet het meteen
   op het scherm.
 - Had iemand anders ook een verzoek lopen voor een van de twee geruilde
-  diensten, dan vervalt dat verzoek. De aanvrager en de collega van dat
-  verzoek krijgen er allebei bericht van.
+  diensten, dan wordt dat verzoek ook ingetrokken. De aanvrager en de collega
+  van dat verzoek krijgen er allebei bericht van. Bij de achterwacht stond dat
+  eerst als afgewezen, nu als ingetrokken.
+- Wijzigt de planner een dienst met de hand of trekt hij de publicatie in,
+  dan worden de verzoeken die daardoor niet meer kunnen ingetrokken. De
+  aanvrager en de collega krijgen een mail met de reden "Het rooster is
+  aangepast." Dat geldt voor de achterwacht en de AIOS.
 
 Dezelfde collega twee keer vragen voor dezelfde dienst kan niet. In het
 venster voor een ruilverzoek staat wie al gevraagd is. Die collega is niet
@@ -171,9 +202,8 @@ stroom loopt dan over de lege `berichten` en stuurt geen mail. Dat is zo
 gemaakt, zodat een stroom die nog niet is aangepast niet iedereen een link
 stuurt.
 
-Schrijf de adressen in de Excel-lijst in kleine letters. Dienstrooster
-stuurt het ingevulde adres ook in kleine letters, en de stroom zoekt op
-precies die tekst.
+Het maakt niet uit of de adressen in de Excel-lijst met hoofdletters zijn
+geschreven. De stroom zet bij het zoeken beide kanten om naar kleine letters.
 
 ## Stap 1. Gmail klaarzetten
 
@@ -196,6 +226,9 @@ Open een periode en klik onder *Exporteren & communicatie* op
 - **Gmail-adres**: het account uit stap 1. De app werkt alleen met Gmail.
 - **App-wachtwoord**: de 16 letters uit stap 1, met of zonder spaties.
 - **Verzendlijst sturen naar**: het adres waar je stroom in stap 4 op let.
+  Je stelt dit apart in voor de achterwacht en voor de AIOS. Gebruik voor
+  beide hetzelfde adres: je hebt één stroom, en die let op één postvak. De
+  bijlage zegt zelf van welke dienst ze is.
 
 Via de app kan alleen een gelijkwaardige ruil: één dienst tegen één dienst
 van dezelfde soort. Een andere ruil regelen collega's zelf. Daarna sturen
@@ -223,37 +256,73 @@ De server moet naar buiten kunnen verbinden met `smtp.gmail.com` op poort
 465. Een melding "Gmail is niet bereikbaar" betekent meestal dat een
 firewall dat tegenhoudt.
 
-## Stap 3. De Excel-lijst
+## Stap 3. De twee Excel-lijsten
 
-Maak in OneDrive of SharePoint een Excel-bestand, bijvoorbeeld
-`Dienstrooster-adressen.xlsx`, met twee kolommen:
+Maak twee Excel-bestanden, op twee verschillende plekken in OneDrive of
+SharePoint, elk met een eigen tabel. Zo hebben de twee diensten niets met
+elkaar gemeen, ook niet in wie de lijst mag lezen.
 
-| Codenaam   | Email                   |
-|------------|-------------------------|
-| staf01     | iemand@ziekenhuis.nl    |
-| staf02     | iemand.anders@ziekenhuis.nl |
+1. `Dienstrooster-adressen-achterwacht.xlsx` voor de achterwacht
+2. `Dienstrooster-adressen-aios.xlsx` voor de AIOS
 
-Deze lijst is voor de achterwacht: staf01, staf02 enzovoort. De AIOS hebben
-een eigen stroom met een eigen lijst, zie "De stroom voor de AIOS" onderaan.
+Beide bestanden hebben een tabel met de naam `Adressen` en dezelfde kolommen:
 
-Had je een lijst met Persoon-01, Persoon-02 ...? Vanaf versie 0.25.0 heten
-die deelnemers staf01, staf02 ... in de app. Pas de codenamen in de lijst
-op hetzelfde moment aan, anders vindt de stroom hun adres niet.
+| Codenaam      | Voornaam | E-mail                             |
+|---------------|----------|------------------------------------|
+| staf01        | Anna     | iemand@organisatie.example         |
+| staf02        | Bram     | iemand.anders@organisatie.example  |
+| Planner       |          | planner@organisatie.example        |
+| Roosterbureau |          | roosterbureau@organisatie.example  |
 
-Zet er ook twee rijen in voor de bevestiging van een goedgekeurde ruil:
-codenaam `Planner` met het adres van de planner (bijvoorbeeld het gedeelde
-postvak) en codenaam `Roosterbureau` met het adres van het roosterbureau.
-Precies zo gespeld.
+De adressen hierboven zijn voorbeelden. Vul de echte werkadressen in.
+
+In het bestand van de AIOS staan aios01, aios02 enzovoort.
+
+- **Codenaam** is precies zo geschreven als in Dienstrooster.
+- **E-mail** is het adres. Hoofdletters maken niet uit. De stroom begrijpt
+  ook de kolomnaam `Email`.
+- **Voornaam** is alleen nodig als je stap 5 volgt. Laat de cel anders leeg.
+- **Tussenvoegsel en achternaam** mag erbij, als extra kolom met precies die
+  naam. De stroom zet die achter de voornaam in de bevestiging aan het
+  roosterbureau (stap 5).
+- Zet er in elk bestand twee rijen in, precies zo gespeld: `Planner` (adres van
+  de planner van die dienst, bijvoorbeeld een gedeeld postvak) en
+  `Roosterbureau` (adres van het roosterbureau). Die zijn nodig voor de
+  bevestiging van een goedgekeurde ruil. Omdat elke dienst een eigen bestand
+  heeft, kan de planner van de AIOS een ander zijn dan die van de
+  achterwacht.
+- Had je een lijst met Persoon-01, Persoon-02 ...? Vanaf versie 0.25.0 heten
+  die deelnemers staf01, staf02 ... Pas de codenamen in de lijst op hetzelfde
+  moment aan.
+
+**Twee bestanden, twee beheerders.** Elke planner beheert het bestand van de
+eigen dienst. De stroom leest beide bestanden met het account waarmee hij
+draait. Dat account moet dus leesrechten hebben op beide plekken. Geeft een
+planner de map niet vrij, verplaatst of hernoemt hij het bestand, of
+verandert hij de kolomnamen of de naam van de tabel, dan kan de stroom het
+niet meer lezen. Je krijgt dan een mail dat het adressenbestand van die dienst
+leeg of niet te lezen is. Er gaat voor die dienst niets uit. Kies het
+bestand in de stap `Adressen achterwacht` of `Adressen AIOS` dan opnieuw. De
+andere dienst merkt hier niets van.
+
+**Contactadres van de planner.** Dat is iets anders dan het adres van de
+stroom. Het adres van de stroom is het postvak waar je stroom op let. Het
+contactadres is het adres dat deelnemers zien als er iets niet klopt in hun
+voorlopige rooster, en dat ze mailen voor een ruil die niet via de app kan. De
+beheerder vult het in bij Mailinstellingen, per dienst. Zonder contactadres
+staat er "Meld dat bij de planner" en geen adres.
 
 Selecteer de cellen en kies **Opmaken als tabel**. Geef de tabel de naam
 `Adressen`. Power Automate kan alleen rijen uit een tabel lezen, niet uit
-losse cellen. De codenaam moet precies zo geschreven zijn als in
-Dienstrooster.
+losse cellen.
 
 ## Stap 4. De stroom in Power Automate
 
-Maak een **Geautomatiseerde cloudstroom**. De namen van de acties kunnen per
-versie iets verschillen.
+Maak één **Geautomatiseerde cloudstroom**. De namen van de acties kunnen per
+versie iets verschillen. Heet een stap bij jou anders, gebruik dan die naam in
+de expressies. De stroom leest eerst het bestand van de juiste dienst in een
+variabele. Daarna zoekt hij alle adressen in die variabele op, dus de rest van
+de stroom is voor beide diensten hetzelfde.
 
 1. **Trigger: Wanneer een nieuwe e-mail binnenkomt (V3)** (Office 365
    Outlook). Bij *Geavanceerde opties*:
@@ -267,14 +336,22 @@ versie iets verschillen.
    Map: bijvoorbeeld `Dienstrooster verwerkt` (maak die map eerst aan in
    Outlook).
 
-3. **Toepassen op elk** over *Bijlagen* uit de trigger. Daarbinnen:
+3. **Variabele initialiseren**, zes keer, direct onder de trigger en buiten elke
+   lus: `adressen`, `rapport` en `teVerplaatsen` (alle drie *Matrix*, leeg)
+   en `onderwerp`, `tekst` en `ccadressen` (alle drie *Tekenreeks*, leeg).
+
+4. **Toepassen op elk** over *Bijlagen* uit de trigger. Noem de lus
+   `Bijlagen`. Zet onder
+   *Instellingen* het **Gelijktijdigheidsbeheer aan** met **Mate van
+   parallelle uitvoering 1**, omdat de variabele gedeeld wordt. Daarbinnen:
 
    a. **JSON parseren**. Inhoud (als expressie):
-      `base64ToString(items('Toepassen_op_elk')?['contentBytes'])`.
+      `base64ToString(items('Bijlagen')?['contentBytes'])`.
       De bijlage ziet er bijvoorbeeld zo uit:
 
       ```json
       {
+        "dienst": "AIOS",
         "soort": "LAATSTE_HERINNERING",
         "automatisch": true,
         "periode": "Voorjaar 2027",
@@ -287,22 +364,29 @@ versie iets verschillen.
         "berichten": [
           {
             "soort": "LAATSTE_HERINNERING",
-            "codenaam": "staf03",
-            "personen": ["staf03"],
+            "codenaam": "aios03",
+            "personen": ["aios03"],
             "onderwerp": "Laatste herinnering: geef je voorkeuren voor Voorjaar 2027 door",
-            "tekst": "Beste staf03, ...",
-            "html": "Beste staf03,<br><br>..."
+            "tekst": "Beste aios03, ...",
+            "html": "Beste aios03,<br><br>..."
           }
         ]
       }
       ```
 
+      - `dienst`: `ACHTERWACHT` of `AIOS`. Alle berichten in de bijlage horen
+        bij die dienst. Hiermee kiest de stroom het Excel-bestand (stap b).
       - `soort`: `UITNODIGING`, `HERINNERING`, `LAATSTE_HERINNERING`,
         `RUILVERZOEK`, `RUIL_BEVESTIGING`, `RUIL_UITKOMST`,
-        `RUIL_INGETROKKEN`, `LINK_AANVRAAG`, `ROOSTER_VOORLOPIG`,
+        `RUIL_INGETROKKEN`, `RUIL_HERINNERING`,
+        `RUIL_HERINNERING_BEVESTIGING`, `LINK_AANVRAAG`, `ROOSTER_VOORLOPIG`,
         `ROOSTER_DEFINITIEF` of `RUIL_DOORGEVEN`.
+      - `cc` (bij `RUIL_DOORGEVEN`, anders afwezig): de codenamen die in
+        de CC horen, de twee die geruild hebben en `Planner`. Zoek ze op
+        zoals `codenaam`, in dezelfde lijst. Kent je stroom dit veld niet,
+        dan gaat de mail zonder CC naar het Roosterbureau.
       - `aanvraag_email` en `kandidaten` zijn alleen gevuld bij
-        `LINK_AANVRAAG` (stap 4d), anders `null`.
+        `LINK_AANVRAAG` (stap e), anders `null`.
       - `html` is dezelfde tekst, klaar om als hoofdtekst van de mail te
         gebruiken: regels als `<br>` en alle tekens veilig gemaakt. Gebruik
         altijd `html` als hoofdtekst en nooit zelf `tekst` met een
@@ -323,6 +407,7 @@ versie iets verschillen.
       {
         "type": "object",
         "properties": {
+          "dienst": { "type": "string" },
           "soort": { "type": "string" },
           "automatisch": { "type": "boolean" },
           "periode": { "type": "string" },
@@ -342,6 +427,7 @@ versie iets verschillen.
                 "soort": { "type": "string" },
                 "codenaam": { "type": "string" },
                 "personen": { "type": "array", "items": { "type": "string" } },
+                "cc": { "type": "array", "items": { "type": "string" } },
                 "onderwerp": { "type": "string" },
                 "tekst": { "type": "string" },
                 "html": { "type": "string" }
@@ -350,147 +436,295 @@ versie iets verschillen.
             }
           }
         },
-        "required": ["soort", "aantal", "berichten"]
+        "required": ["dienst", "soort", "aantal", "berichten"]
       }
       ```
 
-   b. **Toepassen op elk** over *berichten* van *JSON parseren*. Daarbinnen:
+   b. **Het bestand van de juiste dienst lezen.** Zet direct na *JSON
+      parseren* een **Variabele instellen** die `adressen` leeg maakt (een
+      lege matrix, `[]`). Bij een mail met twee bijlagen blijft de lijst van
+      de eerste bijlage zo niet hangen. Zet daarna een **Overschakelen**
+      (Switch), noem hem `Bestand van dienst`, met als *Aan* de expressie
+      `body('JSON_parseren')?['dienst']`.
+      - *Geval* `ACHTERWACHT`: **Rijen weergeven die in een tabel voorkomen**
+        (Excel Online (Business)) met het bestand van de achterwacht en de
+        tabel `Adressen`, zonder filter. Zet bij *Instellingen* de
+        **Paginering** aan met een drempel van 1000. Noem de stap
+        `Adressen achterwacht`. Dan **Variabele instellen**: `adressen` =
+        `body('Adressen_achterwacht')?['value']`.
+      - *Geval* `AIOS`: hetzelfde, met het bestand van de AIOS. Noem de stap
+        `Adressen AIOS`. Kies bij het bestand de eigen plek van dat bestand:
+        dan kiest de stap ook de bijbehorende schijf en tabel.
+      - *Standaard*: laat leeg. Een onbekende of ontbrekende `dienst` laat
+        `adressen` dan leeg, en de controle hieronder vangt dat op.
 
-      - **Een rij ophalen** (Excel Online (Business)): het bestand uit stap
-        3, tabel `Adressen`, sleutelkolom `Codenaam`, sleutelwaarde
-        *codenaam*.
-      - **Voorwaarde**, zodat een lege of onzinnige cel *Email* geen
-        mislukte run geeft ("To Field cannot be null or empty"). Links de
-        expressie
-        `and(not(empty(trim(string(coalesce(body('Een_rij_ophalen')?['Email'], ''))))), contains(string(coalesce(body('Een_rij_ophalen')?['Email'], '')), '@'))`,
-        dan `is gelijk aan`, rechts de expressie `true`. Gebruik in de
-        expressie de naam van je eigen stap en kolom.
-      - In *Indien ja*: **Een e-mail verzenden (V2)**: Aan = *Email* uit
-        *Een rij ophalen*, Onderwerp = *onderwerp*, Hoofdtekst = *html*.
-      - In *Indien nee*: **Een e-mail verzenden (V2)** aan jezelf, met de
-        *codenaam* die niet in de lijst staat of waarbij geen geldig adres
-        staat. Een adres met een typfout dat er wel geldig uitziet, gaat
-        gewoon de deur uit. Daarvan krijg je een onbestelbaar-bericht van
-        Outlook terug.
-      - Zet bij de stap direct onder *Een rij ophalen* (de *Voorwaarde*, of
-        *Variabele instellen* als je stap 5 volgt) onder **Uitvoeren na**
-        zowel *is geslaagd* als *is mislukt* aan. Staat een codenaam niet in
-        de lijst, dan mislukt *Een rij ophalen*. De stappen eronder lopen dan
-        toch, de voorwaarde komt op *Nee* uit en de lus gaat gewoon verder
-        met het volgende bericht. Zonder dit vinkje telt Power Automate die
-        ronde als mislukt, en daarmee de hele lus. Alles wat na de lus komt
-        (een samenvatting, een rapport, het opruimen) wordt dan
-        overgeslagen.
+      Zet daarna een **Voorwaarde**, noem hem `Adressen controle`, die ook
+      loopt als het lezen mislukte of is overgeslagen (*Uitvoeren na*:
+      geslaagd, mislukt, overgeslagen en time-out van `Bestand van dienst`,
+      en geslaagd van het leegmaken van `adressen`). De voorwaarde is
+      `length(variables('adressen'))` is gelijk aan `0`.
+      - In de *Ja*-tak: alleen een **E-mail verzenden (V2)** aan jezelf ("Let
+        op: verzendlijst niet verstuurd, het adressenbestand is leeg of niet
+        te lezen of de dienst is onbekend"), met de dienst, de soort en de
+        periode in de tekst. Er gebeurt verder niets. Zo verdwijnt er nooit
+        stil een verzendlijst als een bestand niet bereikbaar is, bijvoorbeeld
+        omdat de eigenaar het verplaatste of het account van de stroom geen
+        rechten meer heeft.
+      - In de *Nee*-tak: **alles uit de stappen c tot en met f hieronder**.
+        Zet de lus `Berichten`, de voorwaarde `Link aanvraag`, het rapport
+        en het opruimen dus binnen deze tak.
 
-   c. Optioneel: **een samenvatting voor jezelf**. Zet ná de lus van stap b
-      (dus nog binnen de lus over de bijlagen) een **Voorwaarde**, bijvoorbeeld
-      *soort* van *JSON parseren* `bevat` `HERINNERING`. Dat geldt voor gewone
-      en laatste herinneringen. Zet in de *Ja*-tak **Een e-mail verzenden
-      (V2)** aan jezelf, met als onderwerp
-      `@{body('JSON_parseren')?['soort']} verstuurd voor @{body('JSON_parseren')?['periode']}`
-      en in de tekst *aantal*, *nog_niets_ingevuld*, *nog_niet_ingediend*,
-      *deadline_tekst* en *automatisch*. Wil je voor elke verzending een
-      samenvatting, laat de voorwaarde dan weg.
+      Gebruik hier bewust geen **Beëindigen**: Power Automate staat die stap
+      niet toe binnen een lus en weigert dan de hele stroom bij het opslaan
+      of importeren.
 
-   d. **Link opnieuw aanvragen.** Zet ná de lus van stap b (nog binnen de
-      lus over de bijlagen) een **Voorwaarde**: *soort* van *JSON parseren*
-      `is gelijk aan` `LINK_AANVRAAG`. In de *Ja*-tak:
+      Omdat de lijst nu in één variabele staat, hoeft de rest van de stroom
+      niet meer naar Excel te kijken. Dat is sneller en maakt elke stap
+      hierna hetzelfde voor beide diensten.
 
-      - **Een rij ophalen** (Excel Online (Business)): het bestand uit stap
-        3, tabel `Adressen`, sleutelkolom `Email`, sleutelwaarde
-        *aanvraag_email*. Staat het adres niet in de lijst, dan mislukt deze
-        actie en gaat er niets weg. Dat is de bedoeling.
-      - **Matrix filteren** (Gegevensbewerking). Van: *kandidaten* van *JSON
-        parseren*. Voorwaarde: `item()?['codenaam']` `is gelijk aan`
-        *Codenaam* uit *Een rij ophalen*.
-      - **Een e-mail verzenden (V2)**: Aan = *Email* uit *Een rij ophalen*
-        (niet *aanvraag_email*), Onderwerp =
-        `first(body('Matrix_filteren'))?['onderwerp']`, Hoofdtekst =
-        `first(body('Matrix_filteren'))?['html']`.
+   c. **Toepassen op elk** over *berichten* van *JSON parseren*. Noem de lus
+      `Berichten` en zet de **Mate van parallelle uitvoering** op 1. De
+      volgende stappen gebruiken de naam van de lus in hun expressies.
+      Daarbinnen, in deze volgorde:
 
-      Gebruik je echte namen (stap 5)? Vervang de codenaam dan op dezelfde
-      manier in dat ene bericht.
+      1. **Matrix filteren** (Gegevensbewerking), noem de stap `Adres
+         ophalen`. Van: `variables('adressen')`. Voorwaarde in de
+         geavanceerde modus:
+         `@equals(item()?['Codenaam'], items('Berichten')['codenaam'])`.
+      2. **Opstellen**, noem de stap `Adres email`, met de expressie
+         `if(empty(body('Adres_ophalen')), '', coalesce(first(body('Adres_ophalen'))?['E-mail'], first(body('Adres_ophalen'))?['Email'], ''))`.
+         Staat iemand niet in de lijst, dan is dit een lege tekst. De stroom
+         begrijpt zowel de kolomnaam `E-mail` als `Email`.
+      3. Twee keer **Variabele instellen**: `onderwerp` = *onderwerp* van het
+         bericht, en `tekst` = *html* van het bericht.
+      4. **Toepassen op elk** over *personen* van het bericht. Noem de lus
+         `Personen` en zet de parallelle uitvoering op 1. Binnenin:
+         - **Matrix filteren**, noem de stap `Naam ophalen`. Van:
+           `variables('adressen')`. Voorwaarde:
+           `@equals(item()?['Codenaam'], items('Personen'))`.
+         - **Opstellen**, noem de stap `Naam`, met de expressie
+           `if(empty(body('Naam_ophalen')), items('Personen'), if(empty(coalesce(first(body('Naam_ophalen'))?['Voornaam'], '')), items('Personen'), if(equals(items('Berichten')?['soort'], 'RUIL_DOORGEVEN'), trim(concat(string(first(body('Naam_ophalen'))?['Voornaam']), ' ', string(coalesce(first(body('Naam_ophalen'))?['Tussenvoegsel en achternaam'], '')))), first(body('Naam_ophalen'))?['Voornaam'])))`.
+           Is er geen voornaam, dan blijft de codenaam staan. Met `coalesce`
+           alleen zou een lege cel de codenaam door niets vervangen. In de
+           bevestiging aan het roosterbureau (`RUIL_DOORGEVEN`) staat de
+           voornaam met de achternaam, in alle andere mails alleen de
+           voornaam.
+         - **Opstellen** `Nieuw onderwerp` met
+           `replace(variables('onderwerp'), items('Personen'), outputs('Naam'))`,
+           daarna **Variabele instellen** `onderwerp` = uitvoer daarvan.
+         - Hetzelfde voor de tekst: **Opstellen** `Nieuwe tekst` met
+           `concat(replace(first(split(variables('tekst'), 'http')), items('Personen'), outputs('Naam')), if(contains(variables('tekst'), 'http'), concat('http', join(skip(split(variables('tekst'), 'http'), 1), 'http')), ''))`,
+           daarna **Variabele instellen** `tekst` = uitvoer daarvan. Dit
+           vervangt de codenaam alleen in de tekst vóór de persoonlijke link.
+           Een link bestaat uit cijfers en de letters a tot en met f. Een
+           codenaam als `04` kan daarin voorkomen, en een gewone `replace`
+           zou de link dan kapotmaken.
 
-      Een mislukte *Een rij ophalen* laat de hele run als mislukt zien in
-      Power Automate. Hier is dat onschuldig: er gaat dan niets weg. Een
-      parallelle tak met *Uitvoeren na* > *is mislukt* verandert daar
-      niets aan. Power Automate kijkt naar de laatste stap van elke tak, en
-      de overgeslagen hoofdtak telt als mislukt.
+         Het tussenstuk met *Opstellen* is nodig, omdat Power Automate niet
+         toestaat dat een variabele in één stap naar zichzelf verwijst. Zie
+         ook stap 5.
+      5. **De CC bij een goedgekeurde ruil (`RUIL_DOORGEVEN`).** Het bericht
+         aan `Roosterbureau` heeft dan een veld `cc` met drie codenamen:
+         de twee die geruild hebben en `Planner`. Doe dit voor elk bericht,
+         dan hoef je geen aparte tak te bouwen:
+         - **Variabele instellen** `ccadressen` = lege tekst. Dit moet voor
+           elk bericht opnieuw, anders neemt het volgende bericht de CC van
+           het vorige mee. De ontwerper weigert een leeg veld. Zet daarom
+           via het tabblad *Expressie* `string('')` in het veld. Typ je
+           `string('')` als gewone tekst, dan krijgt elke mail die tekst als
+           CC-adres en weigert Outlook de mail. In de code van de stroom zie
+           je het verschil aan het apenstaartje: `@string('')` is goed,
+           `string('')` zonder apenstaartje is fout.
+         - **Toepassen op elk** over
+           `coalesce(items('Berichten')?['cc'], json('[]'))`. Noem de lus
+           `Cc adressen`, parallelle uitvoering 1. Binnenin een **Matrix
+           filteren** `Cc ophalen` van `variables('adressen')` met voorwaarde
+           `@equals(item()?['Codenaam'], items('Cc_adressen'))`, en een
+           **Toevoegen aan tekenreeksvariabele** `ccadressen` met
+           `if(empty(body('Cc_ophalen')), '', if(contains(string(coalesce(first(body('Cc_ophalen'))?['E-mail'], first(body('Cc_ophalen'))?['Email'], '')), '@'), concat(coalesce(first(body('Cc_ophalen'))?['E-mail'], first(body('Cc_ophalen'))?['Email']), ';'), ''))`.
+           Een codenaam die niet in de lijst staat, wordt gewoon overgeslagen.
+         Bij alle andere berichten is `ccadressen` leeg.
+      6. **Voorwaarde**, zodat een lege of onzinnige cel *E-mail* of een
+         ontbrekende codenaam geen mislukte run geeft ("To Field cannot be
+         null or empty"). Laat hem lopen na de lus `Cc adressen` met
+         *Uitvoeren na* geslaagd en mislukt. Links de expressie
+         `and(not(empty(trim(outputs('Adres_email')))), contains(outputs('Adres_email'), '@'))`,
+         dan `is gelijk aan`, rechts de expressie `true`.
+         - In *Indien ja*: **Een e-mail verzenden (V2)** met Aan =
+           `outputs('Adres_email')`, CC = `variables('ccadressen')`,
+           Onderwerp = `variables('onderwerp')` en Hoofdtekst =
+           `variables('tekst')`. Daarna twee keer **Toevoegen aan
+           matrixvariabele**: `rapport` met
+           `addProperty(addProperty(addProperty(json('{}'), 'Codenaam', items('Berichten')?['codenaam']), 'Uitkomst', 'Verstuurd'), 'Onderwerp', variables('onderwerp'))`
+           en `teVerplaatsen` met
+           `concat(variables('onderwerp'), '|', toLower(trim(outputs('Adres_email'))))`.
+           Voeg ook een **Toevoegen aan matrixvariabele** `rapport` toe die
+           alleen loopt als het versturen *mislukt* (*Uitvoeren na*: is
+           mislukt van *Een e-mail verzenden*), met dezelfde expressie maar
+           `'Versturen mislukt'` als `Uitkomst`.
+         - In *Indien nee*: **Toevoegen aan matrixvariabele** `rapport`
+           met dezelfde expressie en `'Niet in de Namenlijst of geen geldig
+           e-mailadres'` als `Uitkomst`. Een adres met een typfout dat er
+           wel geldig uitziet, gaat gewoon de deur uit. Daarvan krijg je een
+           onbestelbaar-bericht van Outlook terug.
 
-4. Een ontbrekende codenaam meld je via de *Nee*-tak van stap 4b, niet via
-   een aparte parallelle tak die alleen bij **mislukt** draait. Zo'n tak
-   doet wel zijn werk, maar de lus mislukt toch: de hoofdtak is
-   overgeslagen en Power Automate telt dat als mislukt. Zet daarnaast bij
-   de eerste stap ná de lus over de berichten onder **Uitvoeren na** zowel
-   *is geslaagd* als *is mislukt* aan. Weigert Outlook een enkele mail,
-   dan lopen een samenvatting en het opruimen dan nog steeds.
+      Omdat het filter in een variabele zoekt en niet in Excel zelf, mislukt
+      er niets als iemand ontbreekt. Een bericht verdwijnt daarom nooit stil:
+      het is verstuurd of het staat met de reden in het rapport (stap e).
 
-Test de stroom eerst met een Excel-lijst waarin alleen jouw eigen adres
-staat, bij één of twee codenamen.
+   d. **Link opnieuw aanvragen.** Zet ná de lus van c (nog binnen de lus
+      over de bijlagen) een **Voorwaarde**, noem hem `Link aanvraag`:
+      *soort* van *JSON parseren* `is gelijk aan` `LINK_AANVRAAG`, met
+      *Uitvoeren na* geslaagd en mislukt van de lus `Berichten`. In de
+      *Ja*-tak, in deze volgorde:
 
-## Stap 5 (optioneel). Echte namen in plaats van codenamen
+      1. **Matrix filteren** `Aanvrager` op `variables('adressen')` met
+         voorwaarde
+         `@and(not(empty(trim(string(coalesce(body('JSON_parseren')?['aanvraag_email'], ''))))), equals(toLower(trim(string(coalesce(item()?['E-mail'], item()?['Email'], '')))), toLower(trim(string(body('JSON_parseren')?['aanvraag_email'])))))`.
+         Omdat `adressen` het bestand van de eigen dienst is, vindt een adres
+         dat alleen bij de andere dienst staat niets. Het eerste deel zorgt
+         dat een lege aanvraag nooit een rij met een lege cel vindt.
+      2. **Opstellen** `Aanvrager rij`:
+         `if(empty(body('Aanvrager')), json('{}'), first(body('Aanvrager')))`.
+      3. **Opstellen** `Aanvrager email`:
+         `coalesce(outputs('Aanvrager_rij')?['E-mail'], outputs('Aanvrager_rij')?['Email'], '')`.
+      4. **Matrix filteren** `Kandidaat` op *kandidaten* van *JSON parseren*
+         met voorwaarde
+         `@equals(item()?['codenaam'], outputs('Aanvrager_rij')?['Codenaam'])`.
+      5. **Voorwaarde**: `length(body('Kandidaat'))` is groter dan `0`. Alleen
+         in de *Ja*-tak verder. Staat het adres niet in de lijst, dan gaat er
+         niets weg. Dat is de bedoeling. In de *Ja*-tak:
+         - **Opstellen** `Link naam`:
+           `if(empty(string(coalesce(outputs('Aanvrager_rij')?['Voornaam'], ''))), outputs('Aanvrager_rij')?['Codenaam'], string(outputs('Aanvrager_rij')?['Voornaam']))`.
+         - **Opstellen** `Link onderwerp`:
+           `replace(first(body('Kandidaat'))?['onderwerp'], first(body('Kandidaat'))?['codenaam'], outputs('Link_naam'))`,
+           en **Opstellen** `Link tekst` met hetzelfde voor
+           `first(body('Kandidaat'))?['html']`.
+         - **Een e-mail verzenden (V2)**: Aan = `outputs('Aanvrager_email')`
+           (niet *aanvraag_email*), Onderwerp = `outputs('Link_onderwerp')`,
+           Hoofdtekst = `outputs('Link_tekst')`.
+         - Twee keer **Toevoegen aan matrixvariabele**: `rapport` (zoals
+           hierboven, met `first(body('Kandidaat'))?['codenaam']` als
+           `Codenaam`) en `teVerplaatsen` met
+           `concat(outputs('Link_onderwerp'), '|', toLower(trim(outputs('Aanvrager_email'))))`.
+           Ook hier een `rapport`-rij `Versturen mislukt` als het versturen
+           mislukt.
+         In *Indien nee*: een `rapport`-rij met `Codenaam` =
+         `outputs('Aanvrager_rij')?['Codenaam']`, `Uitkomst` = `Link
+         aangevraagd, maar adres onbekend of geen deelnemer in deze periode`
+         en `Onderwerp` = `-`.
 
-Zonder deze stap staat er in de mail bijvoorbeeld "Beste staf07,
-staf07 neemt de avonddienst op 3 maart over van staf03." Met deze
-stap vervangt de stroom elke codenaam door de naam uit je Excel-lijst:
-"Beste Anna, Anna neemt de avonddienst op 3 maart over van Bram."
-Dienstrooster zelf kent die namen nooit.
+      Bij een onbekend adres loopt de stap `Aanvrager` niet fout: een filter
+      geeft gewoon een lege lijst. In de uitvoergeschiedenis zie je dus geen
+      rood blokje.
 
-1. Geef de tabel `Adressen` een derde kolom `Naam`.
+   e. **Een rapport voor jezelf.** Zet na de voorwaarde van d (*Uitvoeren na*:
+      geslaagd en mislukt):
+      - **Matrix filteren** `Mislukt` op `variables('rapport')` met voorwaarde
+        `@not(equals(item()?['Uitkomst'], 'Verstuurd'))`.
+      - **HTML-tabel maken** `HTML-tabel maken` van `variables('rapport')`.
+      - **Een e-mail verzenden (V2)** aan jezelf. Onderwerp:
+        `concat(if(greater(length(body('Mislukt')), 0), 'Let op: ', ''), 'Dienstrooster ', coalesce(body('JSON_parseren')?['dienst'], '?'), ' ', body('JSON_parseren')?['soort'], ': ', string(length(variables('rapport'))), ' berichten, ', string(length(body('Mislukt'))), ' mislukt')`.
+        Hoofdtekst: de periode en daaronder de uitvoer van `HTML-tabel
+        maken`. Zo zie je per verzending voor welke dienst het was, hoeveel
+        berichten er waren. Bij "Let op" zie je welke codenamen niet zijn
+        aangekomen en waarom.
 
-2. Voeg direct onder de trigger (dus niet in een lus) twee keer
-   **Variabele initialiseren** toe: `onderwerp` en `tekst`, allebei van
-   het type *Tekenreeks* en leeg.
+   f. **Verzonden items opruimen (optioneel).** De stroom verstuurt vanuit je
+      eigen mailbox, dus elk bericht staat daarna in *Verzonden items*. Met
+      deze stap gaan alleen de berichten van Dienstrooster naar een eigen
+      map (maak bijvoorbeeld `Dienstrooster verstuurd` aan in Outlook).
+      Zet na het rapport, *Uitvoeren na* geslaagd en mislukt:
+      - **Uitstellen** (Delay) van 3 minuten, zodat Outlook de berichten
+        spoort.
+      - **Totdat** (Until) met de voorwaarde
+        `length(body('Te_verplaatsen'))` is gelijk aan `0`, met de limiet op
+        10 keer en 10 minuten. Binnenin: **E-mails ophalen (V3)** uit *Verzonden
+        items* (top 50, zonder bijlagen), een **Matrix filteren** `Te
+        verplaatsen` op `body('Verzonden_ophalen')?['value']` met voorwaarde
+        `@contains(variables('teVerplaatsen'), concat(item()?['subject'], '|', toLower(trim(string(item()?['toRecipients'])))))`
+        en een **Toepassen op elk** over `Te verplaatsen` die elk bericht
+        met **E-mail verplaatsen (V2)** naar de map zet. Het rapport voor
+        jezelf blijft in *Verzonden items* staan.
 
-3. Zet in de binnenste lus (over de berichten), vóór *Een e-mail verzenden*:
+      Een bericht dat na die 3 minuten nog niet in *Verzonden items* staat,
+      blijft daar staan. Dat is geen verlies, alleen rommel.
 
-   a. **Variabele instellen**: `onderwerp` = *onderwerp* van het bericht.
-      Nog een keer: `tekst` = *html* van het bericht.
+5. Zet bij de eerste stap ná de lus over de berichten onder **Uitvoeren na**
+   zowel *is geslaagd* als *is mislukt* aan. Weigert Outlook een enkele mail,
+   dan lopen het rapport en het opruimen dan nog steeds.
 
-   b. **Toepassen op elk** over *personen* van het bericht. Daarbinnen:
+Test de stroom eerst met twee lijsten waarin alleen jouw eigen adres staat,
+bij één of twee codenamen van elke dienst.
 
-      - **Rijen weergeven die in een tabel voorkomen** (Excel Online
-        (Business)): tabel `Adressen`, filterquery
-        `Codenaam eq '@{replace(items('Toepassen_op_elk_3'), '''', '''''')}'`.
-        Anders dan *Een rij ophalen* mislukt dit niet als iemand ontbreekt.
-        Het geeft dan gewoon niets terug. Het `replace`-deel verdubbelt elke
-        apostrof in de codenaam, zoals het filter dat verwacht. Zonder dat
-        breekt een codenaam als `Persoon-O'Brien` het filter, en kan een
-        slim gekozen codenaam zelfs een verkeerde rij opleveren.
-      - **Opstellen**, met als expressie de naam, of de codenaam als er geen
-        naam is:
-        `if(empty(first(outputs('Rijen_weergeven_die_in_een_tabel_voorkomen')?['body/value'])?['Naam']), items('Toepassen_op_elk_3'), first(outputs('Rijen_weergeven_die_in_een_tabel_voorkomen')?['body/value'])?['Naam'])`
-        Excel geeft bij een lege naamcel een lege tekst terug. Met
-        `coalesce` zou de codenaam dan door niets vervangen worden.
-      - **Opstellen** (tweede), expressie
-        `replace(variables('onderwerp'), items('Toepassen_op_elk_3'), outputs('Opstellen'))`
-        en daarna **Variabele instellen** `onderwerp` = uitvoer van die
-        stap.
-      - Hetzelfde voor `tekst`: een **Opstellen** met
-        `replace(variables('tekst'), items('Toepassen_op_elk_3'), outputs('Opstellen'))`
-        en **Variabele instellen** `tekst` = uitvoer daarvan.
+## Stap 5. Echte voornamen in plaats van codenamen
 
-      Het tussenstuk met *Opstellen* is nodig, omdat Power Automate niet
-      toestaat dat een variabele in één stap naar zichzelf verwijst.
+De stap om codenamen door voornamen te vervangen zit in de stroom van stap 4
+(onder c, punt 4). Zonder voornamen in het Excel-bestand staat er in de mail
+bijvoorbeeld "Beste staf07, staf07 neemt de avonddienst op 3 maart over van
+staf03." Met voornamen: "Beste Anna, Anna neemt de avonddienst op 3 maart
+over van Bram." Dienstrooster zelf kent die namen nooit.
 
-   c. Gebruik in **Een e-mail verzenden (V2)** voortaan de variabelen:
-      Onderwerp = `variables('onderwerp')`, Hoofdtekst = `variables('tekst')`.
+1. Vul de kolom `Voornaam` van de tabel `Adressen` (stap 3) in, in beide
+   bestanden. Laat een cel leeg als je voor iemand de codenaam wilt houden.
+2. Er is verder niets in te stellen. Voor `Planner` en `Roosterbureau` mag
+   je ook een voornaam invullen, bijvoorbeeld de naam van het bureau. In de
+   tekst van de bevestiging van een goedgekeurde ruil staat die dan in
+   plaats van de codenaam.
+3. Wil je dat het roosterbureau de volledige namen ziet, vul dan ook de
+   kolom `Tussenvoegsel en achternaam` in. In de bevestiging van een
+   goedgekeurde ruil staat dan "Anna van den Berg neemt de avonddienst over
+   van Bram de Vries". De andere mails blijven bij de voornaam.
 
-   Gebruik in de kolom `Naam` gewone namen, zonder tekens als `<` of `>`: de
-   naam komt zo in de HTML-tekst.
-
-4. Zet bij beide *Toepassen op elk*-lussen die berichten en personen
-   verwerken onder *Instellingen* het **Gelijktijdigheidsbeheer aan** en de
-   **Mate van parallelle uitvoering** op **1**. De variabelen worden
-   gedeeld, dus de lussen moeten één voor één lopen. Staat
-   gelijktijdigheidsbeheer uit, dan lopen ze juist parallel.
+Gebruik in de kolom `Voornaam` gewone namen, zonder tekens als `<` of `>`: de
+naam komt zo in de HTML-tekst.
 
 De volgorde van `personen` is al goed: Dienstrooster zet langere codenamen
-vooraan. Zo wordt "Persoon-10" altijd vervangen voordat "Persoon-1" erin
-gevonden zou kunnen worden. Staat iemand niet in de lijst of heeft iemand
-geen naam, dan blijft de codenaam gewoon staan.
+vooraan. Zo wordt "staf10" altijd vervangen voordat "staf1" erin gevonden
+zou kunnen worden. Staat iemand niet in de lijst of heeft iemand geen
+voornaam, dan blijft de codenaam gewoon staan.
 
 ## Had je de stroom al gebouwd?
+
+**Een stroom uit een eerdere versie van deze handleiding of een eigen
+stroom.** Stap 4 beschrijft de stroom zoals hij nu is getest. Het verschil met
+een oudere stroom:
+
+- Per bericht zoekt de stroom het adres in een lijst die hij één keer per
+  bijlage uit het bestand van de dienst leest (stap 4b), in plaats van per
+  bericht een rij in Excel op te halen. Dat maakt de stroom veel sneller, en
+  dezelfde stappen werken voor beide diensten.
+- De kolommen heten `Voornaam` en `E-mail` (ook `Email` wordt begrepen).
+- Er is een controle op een lege of onleesbare lijst, op een onbekende
+  `dienst` en op een bijlage die geen geldige JSON is.
+- De CC bij een goedgekeurde ruil wordt voor elk bericht opnieuw opgebouwd.
+- Er komt een rapport per verzending. Het opruimen van *Verzonden items*
+  is erbij gekomen.
+
+Een bestaande stroom ombouwen is meer werk dan hem opnieuw opbouwen met stap
+4. Gebruik daarbij de namen van de stappen zoals ze in stap 4 staan, want de
+expressies verwijzen ernaar.
+
+**Vanaf versie 0.105.0 staat er een veld `dienst` in de bijlage.** Je hoeft
+daarvoor niets te veranderen zolang je stroom alleen voor de achterwacht is: het
+extra veld wordt genegeerd. Wil je dezelfde stroom ook voor de AIOS gebruiken,
+pas dan het volgende aan:
+
+1. Maak het Excel-bestand voor de AIOS (stap 3), op een eigen plek, met een
+   tabel `Adressen` en de rijen `Planner` en `Roosterbureau`.
+2. Zet bij JSON parseren het schema uit stap 4a (met `dienst`).
+3. Voeg direct onder de trigger **Variabele initialiseren** `adressen`
+   (Matrix) toe. Zet in de lus over de bijlagen na *JSON parseren* de
+   **Overschakelen** uit stap 4b, met het bestand van de achterwacht in het
+   eerste geval en dat van de AIOS in het tweede.
+4. Vervang in de lus over de berichten *Een rij ophalen* door **Matrix
+   filteren** op `variables('adressen')` en gebruik het adres uit de eerste
+   rij (stap 4c). Doe hetzelfde bij de link-aanvraag (stap 4d) en stap 5.
+5. Zet bij Mailinstellingen hetzelfde postvak voor de achterwacht en voor de
+   AIOS.
+
+Hieronder staat wat je nodig had bij versies vóór oktober 2026.
+
 
 Tot en met september 2026 was de bijlage een losse lijst berichten. Nu staat
 die lijst in `berichten`, met de samenvatting eromheen. Pas in een bestaande
@@ -512,6 +746,42 @@ Dienstrooster installeert:
 De stappen binnen de lus (rij ophalen, mail versturen, echte namen) blijven
 gewoon werken.
 
+## Een gedeeld postvak gebruiken
+
+Wil je dat de stroom let op een gedeeld postvak en ook vanuit dat postvak
+verstuurt, dan verandert er op vier plekken iets. De rest van de stroom blijft
+hetzelfde.
+
+1. **Rechten.** Het account van de stroom heeft *Volledige toegang* en
+   *Verzenden als* nodig op het gedeelde postvak. Dat regelt de beheerder van
+   Exchange.
+2. **Trigger.** Gebruik **Wanneer een nieuwe e-mail binnenkomt in een gedeeld
+   postvak (V2)** met hetzelfde Van-filter, onderwerpfilter en dezelfde
+   instellingen voor bijlagen als in stap 4. Vul bij *Oorspronkelijk
+   postvakadres* het adres van het gedeelde postvak in.
+3. **Eén variabele met het adres.** Zet onder de andere variabelen een
+   **Variabele initialiseren** `postvak` (*Tekenreeks*) met het adres van het
+   gedeelde postvak. Gebruik `variables('postvak')` overal waar hieronder
+   het postvak gevraagd wordt.
+4. **Verplaatsen, ophalen en verzenden.**
+   - Zet bij **E-mail verplaatsen (V2)** (stap 2) en bij de stappen van 4f
+     *Oorspronkelijk postvakadres* op `variables('postvak')`. Kies daarna de
+     mappen opnieuw: de mappen van het gedeelde postvak hebben andere id's
+     dan die van je eigen postvak. Maak `Dienstrooster verwerkt` en
+     `Dienstrooster verstuurd` eerst aan in het gedeelde postvak.
+   - Vervang elke **Een e-mail verzenden (V2)** door **Een e-mail verzenden
+     vanuit een gedeeld postvak (V2)**, met `variables('postvak')` als
+     postvak en verder dezelfde velden.
+   - Zet bij **Bericht-id** van stap 2 de expressie
+     `triggerOutputs()?['body/id']`. De ontwerper haalt het veld weg als je
+     de trigger vervangt, maar de nieuwe trigger levert het id op dezelfde
+     plek.
+
+Zet in Dienstrooster bij Mailinstellingen het adres van de stroom op het
+gedeelde postvak, voor beide diensten. Iedereen met toegang tot het gedeelde
+postvak kan de verzendlijsten lezen en de mappen veranderen. Houd die groep
+dus klein.
+
 ## Veiligheid
 
 - Het Van-filter in de trigger zorgt dat alleen mail van jouw
@@ -519,6 +789,13 @@ gewoon werken.
   Wil je extra zekerheid, zet dan in de lus een **Voorwaarde** dat *tekst*
   het adres van jouw Dienstrooster bevat (bijvoorbeeld
   `https://rooster.local:8010/person/`) en verstuur anders niets.
+- Een extra geheim woord in de bijlage is overwogen en niet gebouwd. Het
+  beschermt alleen tegen een vervalste afzender. Een vervalste mail met het
+  adres van de Dienstrooster-Gmail hoort bij een goed ingerichte
+  mailomgeving in de ongewenste mail terecht te komen. De stroom kijkt
+  alleen naar *Postvak IN*. Laat de IT-afdeling dat controleren. Een
+  geheim woord helpt niet als het Gmail-account zelf wordt overgenomen,
+  omdat de bijlagen in de verzonden items van dat account staan.
 - De persoonlijke links gaan via Gmail en jouw mailbox. Dat is hetzelfde
   pad als elke mail die je met de hand zou sturen. Een link werkt alleen
   voor de eigen periode.
@@ -532,22 +809,53 @@ gewoon werken.
   wachtwoord zelf. Denk je dat iemand anders het wachtwoord heeft? Trek het
   dan in bij Google en maak een nieuw aan.
 
-## De stroom voor de AIOS
+## De AIOS in dezelfde stroom
 
-De AIOS hebben een eigen Power Automate-stroom met een eigen Excel-lijst
-(aios01, aios02 enzovoort). Bouw die op dezelfde manier als hierboven, met:
+De AIOS gebruiken dezelfde stroom en hetzelfde postvak als de achterwacht, maar
+een eigen Excel-bestand op een eigen plek. Een tweede stroom is niet nodig. De
+app houdt de twee diensten wel uit elkaar: het veld `dienst` in elke bijlage
+zegt van wie ze is, en de stroom leest dan alleen het bestand van die dienst.
 
-- een eigen adres waar de stroom op let. Dat vult de beheerder in op de
-  pagina van een periode van de AIOS, bij *Mail naar de AIOS*. Het
-  Gmail-account is hetzelfde als dat van de achterwacht, uit
-  Mailinstellingen;
-- een eigen Excel-lijst met de codenamen van de AIOS en hun adres, plus de
-  rijen `Planner` en `Roosterbureau`.
+**Instellen, in vier stappen.**
 
-De verzendlijst van de AIOS ziet er precies zo uit als die van de
-achterwacht. De persoonlijke links erin gaan naar het eigen scherm van de
-AIOS. Zolang het adres voor de AIOS leeg is, gaat er geen mail naar de AIOS.
+1. Gmail is al klaar (stap 1 en 2) en is voor beide diensten hetzelfde.
+2. Vul bij Mailinstellingen onder het kopje **AIOS** hetzelfde adres in als
+   bij de achterwacht: het postvak waar je ene stroom op let. Vul het
+   contactadres van de AIOS-planner in. Dat staat in de melding "Meld dat bij
+   de planner" en in de ruilmeldingen.
+3. Maak `Dienstrooster-adressen-aios.xlsx` (stap 3) met een tabel `Adressen`:
+   elke AIOS (aios01, aios02 ...) met het adres, plus `Planner` en
+   `Roosterbureau` met de adressen die voor de AIOS gelden.
+4. Zet in de stroom de **Overschakelen** uit stap 4b met voor `AIOS` dat
+   bestand. Verder is er niets aan de stroom te veranderen.
 
-Vanaf versie 0.73.0 krijgen de AIOS ook vanzelf een herinnering, een week en
-een dag voor de deadline, net als bij de achterwacht. Die verzendlijst heeft
-`"automatisch": true`. De stroom hoeft daarvoor niets anders te doen.
+**Wat de AIOS krijgen, en wanneer.**
+
+- Uitnodigingen en herinneringen voor de voorkeuren. Vanzelf een week en een
+  dag voor de deadline, om 09:00 (`"automatisch": true`).
+- Voorlopig publiceren: elke AIOS krijgt de eigen diensten
+  (`ROOSTER_VOORLOPIG`). Definitief maken: de definitieve diensten met wat er
+  voor hen veranderde (`ROOSTER_DEFINITIEF`). Dat gebeurt nooit vanzelf.
+- Ruilen kan alleen bij een definitief rooster. Verzoek, bevestiging,
+  uitkomst, intrekken en herinneringen werken zoals bij de achterwacht
+  (zie Ruilverzoeken hierboven). De herinnering gaat automatisch na 6 tot 7
+  dagen om 09:00. De AIOS of de planner kan er zelf een sturen, niet vaker dan
+  eens per 24 uur.
+- Een goedgekeurde ruil gaat als één bericht aan de codenaam `Roosterbureau`
+  (soort `RUIL_DOORGEVEN`), met in `cc` de twee AIOS en `Planner`.
+- Op de startpagina van de AIOS kan iemand de link opnieuw aanvragen
+  (`LINK_AANVRAAG`). De stroom zoekt het adres in het bestand van de AIOS,
+  zoals bij stap 4e. Een adres dat alleen bij de achterwacht staat, krijgt dan
+  niets.
+- Lukt versturen niet, dan wacht de mail in de wachtrij van de AIOS. Elk uur
+  wordt het opnieuw geprobeerd, en meteen na het opslaan van de
+  Mailinstellingen. Na 7 dagen vervalt een wachtende mail.
+
+**Testen.** Zet in elk bestand eerst alleen jouw eigen adres bij twee
+codenamen en verstuur een uitnodiging voor een periode van elke dienst.
+Controleer dan dat (a) elke mail aankomt, (b) een codenaam die niet in het
+bestand staat in de Nee-tak belandt, (c) een goedgekeurde testruil één mail aan
+het Roosterbureau van die dienst geeft, met de CC erbij, (d) een link-aanvraag
+met jouw adres alleen jouw eigen bericht oplevert, en alleen van de dienst
+waar je de aanvraag deed, en (e) een bijlage met een onbekende `dienst` niets
+verstuurt.

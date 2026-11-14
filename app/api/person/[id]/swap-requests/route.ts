@@ -8,11 +8,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { renderNotificationTemplate, insertNotification } from '@/lib/notifications';
-import { swapMailDetails } from '@/lib/swapMailDetails';
+import { ruilverzoekDetails, swapMailDetails } from '@/lib/swapMailDetails';
 import { mailMelding, queuedMailCount, SWAP_REQUESTED_MAIL_TEMPLATE, SWAP_SUBMITTED_TEMPLATE } from '@/lib/meldingMail';
 import { verzendlijstMailConfigured } from '@/lib/verzendlijstMail';
 import { getMailFailure } from '@/lib/appSettings';
@@ -22,11 +23,6 @@ import { swapWindowConflicts } from '@/lib/swapWindowRule';
 import { swapQuotaReached, RUILVERZOEK_LIMIET_MELDING } from '@/lib/swapQuota';
 import { swapMembershipProblem } from '@/lib/membershipWindow';
 
-const TELLER_LABELS: Record<string, string> = {
-  AVOND: 'avonddienst',
-  WEEKEND: 'weekenddienst',
-  FEESTDAG: 'feestdagdienst',
-};
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
@@ -43,7 +39,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     // swap requests" rather than "no such person".
     if (!db.prepare('SELECT 1 FROM dienstrooster_person WHERE id = ?').get(personId)) {
       return NextResponse.json(
-        { success: false, error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${personId} niet gevonden` } },
+        { success: false, error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' } },
         { status: 404 }
       );
     }
@@ -55,7 +51,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     // Build query
     let query = `
       SELECT
-        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op, sr.opmerkingen, sr.reden_afwijzing,
+        sr.id, sr.periode_id, sr.status, sr.aangemaakt_op, sr.beantwoord_op, sr.opmerkingen, sr.reden_afwijzing,
+        sr.laatste_herinnering_op, sr.laatste_herinnering_door,
         sr.aanvrager_person_id, ap.codenaam as aanvrager_codenaam,
         sr.respondent_person_id, rp.codenaam as respondent_codenaam,
         sr.aangeboden_slot_id, sr.gevraagde_slot_id,
@@ -68,7 +65,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       JOIN dienstrooster_shift_type ast ON aos.shift_type_id = ast.id
       JOIN dienstrooster_shift_slot gvs ON sr.gevraagde_slot_id = gvs.id
       JOIN dienstrooster_shift_type gst ON gvs.shift_type_id = gst.id
+      JOIN dienstrooster_schedule_period per ON per.id = sr.periode_id
       WHERE (sr.aanvrager_person_id = ? OR sr.respondent_person_id = ?)
+        AND per.verwijderd_op IS NULL
     `;
     const params_list: any[] = [personId, personId];
 
@@ -85,6 +84,19 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
     query += ' ORDER BY sr.aangemaakt_op DESC';
 
     const rows = db.prepare(query).all(...params_list) as any[];
+
+    // The colleague opened their requests: the notices about them count as
+    // read. Until now only the button in the notices set it, so a request
+    // answered or looked at long ago still showed "Nog niet gelezen" to the
+    // planner.
+    db.prepare(
+      `UPDATE dienstrooster_notification SET gelezen = 1
+       WHERE gelezen = 0 AND id IN (
+         SELECT melding_id FROM dienstrooster_swap_request
+         WHERE respondent_person_id = ? AND melding_id IS NOT NULL ${periodId ? 'AND periode_id = ?' : ''}
+           AND periode_id IN (SELECT id FROM dienstrooster_schedule_period WHERE verwijderd_op IS NULL)
+       )`
+    ).run(...(periodId ? [personId, periodId] : [personId]));
 
     // For a request still waiting: would it leave either of them with two
     // shifts close together? Not a reason to refuse (their own call), but
@@ -197,13 +209,14 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     // time too, since a period can move on while a request sits pending.
     // Not in the prullenbak: a period there is gone for its participants (audit 13).
     const period = db
-      .prepare('SELECT status, pool_id FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
-      .get(period_id as string) as { status: string; pool_id: string } | undefined;
+      .prepare('SELECT status, pool_id, definitief_op FROM dienstrooster_schedule_period WHERE id = ? AND verwijderd_op IS NULL')
+      .get(period_id as string) as { status: string; pool_id: string; definitief_op: string | null } | undefined;
     if (!period) {
       return NextResponse.json({ success: false, error: 'Periode niet gevonden' }, { status: 404 });
     }
     const eligibility = checkSwapAllowed({
       periodStatus: period.status,
+      definitiefOp: period.definitief_op,
       slotDates: [offeredSlot?.datum, requestedSlot?.datum],
     });
     if (!eligibility.allowed) {
@@ -239,6 +252,8 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
     if (buitenLidmaatschap) {
       return NextResponse.json({ success: false, error: buitenLidmaatschap }, { status: 400 });
     }
+
+    // A day the requester blocked themselves is allowed: the dialog warned them (lib/swapEigenBlokkade.ts).
 
     // No window-rule check here on purpose: someone who wants two shifts
     // close together may agree to that themselves (see
@@ -279,7 +294,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       .prepare('SELECT codenaam FROM dienstrooster_person WHERE id = ?')
       .get(respondentAssignment.person_id) as { codenaam: string } | undefined;
 
-    const details = `Aangeboden: ${offeredSlot?.datum} (${TELLER_LABELS[offeredSlot?.teller ?? ''] ?? offeredSlot?.teller})\nGevraagd: ${requestedSlot?.datum} (${TELLER_LABELS[requestedSlot?.teller ?? ''] ?? requestedSlot?.teller})`;
+    const details = ruilverzoekDetails(offeredSlot, requestedSlot);
 
     const placeholders = {
       codenaam: respondent?.codenaam ?? '',
@@ -381,6 +396,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ id: 
       linkIntro: 'Je kunt het verzoek volgen of intrekken via je persoonlijke link:',
     });
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, personId, { wijziging: 'ruilverzoek aangemaakt door planner' });
     return NextResponse.json({
       success: true,
       data: {

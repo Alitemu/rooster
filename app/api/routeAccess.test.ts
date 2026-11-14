@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { NextRequest } from 'next/server';
 import crypto from 'crypto';
+import fs from 'fs';
+import nodePath from 'path';
 import { db } from '@/db/client';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
@@ -33,6 +35,7 @@ const PUBLIC = new Set([
   'auth/first-run-status',
   'auth/verify-link',
   'auth/logout',
+  'auth/wachtwoord-herstel',
   'auth/me',
   'link-aanvragen',
   'aios/link-aanvragen',
@@ -62,6 +65,19 @@ const routes: Route[] = Object.entries(routeModules).flatMap(([file, mod]) => {
     handler: mod[method] as Handler,
   }));
 });
+
+/**
+ * Handlers that ask requireAdminAccess in their own source, wherever the route lives: the AIOS's and the
+ * achterwacht's mail settings are the beheerder's to change although they are not under admin/ (0.111.0: a DELETE
+ * there was in no sweep and had no test).
+ */
+function vraagtBeheerder(route: Route): boolean {
+  if (route.path.startsWith('admin/')) return true;
+  const bron = fs.readFileSync(nodePath.join(process.cwd(), 'app/api', route.path, 'route.ts'), 'utf8');
+  const deel = bron.split(/(?=export async function )/).find((d) => new RegExp(`^export async function ${route.method}\\b`).test(d));
+  // The refusing form (`if (!requireAdminAccess(auth)) ...`); the beheerder merely seeing more is not a refusal.
+  return Boolean(deel && /!\s*requireAdminAccess\(/.test(deel));
+}
 
 const ids: Record<string, string> = {};
 const created: string[] = [];
@@ -134,7 +150,7 @@ afterAll(() => {
 describe('every API route refuses who may not use it', () => {
   it('finds the routes', () => {
     // A glob that silently matched nothing would make every test below pass.
-    expect(routes.length).toBeGreaterThan(100);
+    expect(routes.length).toBeGreaterThan(180);
   });
 
   const guarded = routes.filter((r) => !PUBLIC.has(r.path));
@@ -165,7 +181,39 @@ describe('every API route refuses who may not use it', () => {
     expect(refused(route, status, true), `status ${status}`).toBe(true);
   });
 
-  it.each(routes.filter((r) => r.path.startsWith('admin/')).map((r) => [`${r.method} ${r.path}`, r] as const))(
+  // The beheerder's routes outside admin/, listed here and not only read from the source: a source that lost its
+  // check would drop out of a sweep that reads it. A new one outside admin/ must be added here (the next test).
+  const BEHEERDER_BUITEN_ADMIN = [
+    'PUT aios/mail-instellingen',
+    'DELETE aios/mail-instellingen',
+    'PUT planner/mail-settings',
+    'DELETE planner/mail-settings',
+    'PUT planner/mail-settings/contact',
+    'POST aios/periode/[id]/voorkeuren-import',
+    'GET aios/periode/[id]/toegangslinks',
+    'POST aios/periode/[id]/toegangslinks/[linkId]/intrekken',
+    'GET planner/period/[id]/toegangslinks',
+    'POST planner/period/[id]/toegangslinks/[linkId]/intrekken',
+    'POST aios/periode/[id]/toegangslinks/alles-intrekken',
+    'POST planner/period/[id]/toegangslinks/alles-intrekken',
+    'POST aios/periode/[id]/toegangslinks/persoon/[personId]/intrekken',
+    'POST planner/period/[id]/toegangslinks/persoon/[personId]/intrekken',
+  ];
+
+  it('lists every beheerder route outside admin/ that the source says is the beheerder\'s', () => {
+    const gevonden = routes.filter((r) => !r.path.startsWith('admin/') && vraagtBeheerder(r)).map((r) => `${r.method} ${r.path}`);
+    expect(gevonden.filter((r) => !BEHEERDER_BUITEN_ADMIN.includes(r))).toEqual([]);
+  });
+
+  it.each(BEHEERDER_BUITEN_ADMIN.map((naam) => [naam, routes.find((r) => `${r.method} ${r.path}` === naam)] as const))(
+    'a planner, on a beheerder route outside admin/: %s',
+    async (naam, route) => {
+      expect(route, `${naam} is no route (renamed?)`).toBeDefined();
+      expect([401, 403]).toContain(await call(route!, cookie('staff', ids.planner)));
+    }
+  );
+
+  it.each(routes.filter(vraagtBeheerder).map((r) => [`${r.method} ${r.path}`, r] as const))(
     'a planner, on the beheerder routes: %s',
     async (_, route) => {
       expect([401, 403]).toContain(await call(route, cookie('staff', ids.planner)));

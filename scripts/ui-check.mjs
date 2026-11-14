@@ -20,6 +20,12 @@ import Database from 'better-sqlite3';
 import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
+import { verschuifDagen, verschuif } from './demoKalender.mjs';
+import { buildXlsx } from './buildXlsx.mjs';
+
+// The seeded calendar moves along with the real date (scripts/demoKalender.mjs).
+const SHIFT = verschuifDagen();
+const SEED_JAAR = verschuif('2027-01-04', SHIFT).slice(0, 4);
 
 // APP_URL includes the app's sub-folder when it was built with one (lib/basePath.ts).
 const BASE = process.env.APP_URL || 'http://localhost:3000';
@@ -148,7 +154,7 @@ await page.goto(`${BASE}/planner`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1500);
 rec('Planner reaches the period list', loginStatus === 200 && page.url().endsWith('/planner'), page.url());
 
-rec('Period list shows periods', (await page.locator('text=/2027|Periodes/').count()) > 0);
+rec('Period list shows periods', (await page.locator(`text=/${SEED_JAAR}|Periodes/`).count()) > 0);
 
 // the new password dialog
 await page.click('button:has-text("Wachtwoord wijzigen")');
@@ -171,12 +177,12 @@ rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(aw
 // Accordion sections (PlannerDashboard's Section component): opening one
 // closes any other open-but-unpinned section, and pinning (📌, shown only
 // while a section is open) keeps it open even when another section opens.
-await page.click('[role="button"]:has-text("Status voorkeuren")');
+await page.click('h2:has-text("Status voorkeuren") > button');
 await page.waitForTimeout(300);
 const staffTableVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 rec('Opening "Status voorkeuren" shows its content', staffTableVisible);
 
-await page.click('[role="button"]:has-text("Exporteren & communicatie")');
+await page.click('h2:has-text("Exporteren & communicatie") > button');
 await page.waitForTimeout(300);
 const staffTableStillVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 const exportVisible = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
@@ -187,11 +193,11 @@ rec(
 );
 
 // Reopen "Status voorkeuren" and pin it before opening the export section again.
-await page.click('[role="button"]:has-text("Status voorkeuren")');
+await page.click('h2:has-text("Status voorkeuren") > button');
 await page.waitForTimeout(300);
-await page.click('[role="button"]:has-text("Status voorkeuren") button[aria-pressed]');
+await page.click('.card:has(h2:has-text("Status voorkeuren")) button[aria-pressed]');
 await page.waitForTimeout(200);
-await page.click('[role="button"]:has-text("Exporteren & communicatie")');
+await page.click('h2:has-text("Exporteren & communicatie") > button');
 await page.waitForTimeout(300);
 const staffTableVisibleAfterPin = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 const exportVisibleToo = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
@@ -217,7 +223,7 @@ page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) calendarN
 // Section component), same mechanism as "Status voorkeuren" etc. -
 // there's no separate "Tonen" button anymore, clicking the header itself
 // opens it.
-await page.click('[role="button"]:has-text("Dienstrooster")');
+await page.click('h2:has-text("Dienstrooster") > button');
 await page.waitForTimeout(500);
 await page.click('button:has-text("Kalender")');
 await page.waitForTimeout(800);
@@ -256,7 +262,7 @@ rec('The undo banner disappears once used', !(await undoBanner.isVisible().catch
 // swap that happened in real life after a CSV was made can still be
 // corrected by hand.
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await page.click('[role="button"]:has-text("Eerdere toewijzingen")');
+await page.click('h2:has-text("Eerdere toewijzingen") > button');
 await page.waitForTimeout(300);
 rec(
   'The "Eerdere toewijzingen" section explains why it is needed',
@@ -296,20 +302,26 @@ rec(
   `type=${rosterDownload.type} toewijzingen=${assignmentTotal}`
 );
 
-const csvContent = [
-  'Datum,Week,Diensttype,Codenaam',
-  `"${rangeStart}",1,"Avond","Persoon-01"`,
-  `"1999-01-01",1,"Avond","Persoon-02"`, // well before the window - must be ignored
-].join('\n');
+// The file field takes a workbook only (lib/sheetUpload.ts), in the layout of the sjabloon.
+const sjabloonRows = [
+  ['Datum', 'Week', 'Diensttype', 'Codenaam'],
+  [rangeStart, 1, 'Avond', 'Persoon-01'],
+  ['1999-01-01', 1, 'Avond', 'Persoon-02'], // well before the window - must be ignored
+  [rangeStart, 1, 'Avond', ''], // a row of the sjabloon nobody filled in - left out without a word
+];
 const priorCountBefore = db.prepare('SELECT COUNT(*) c FROM dienstrooster_prior_assignment WHERE period_id = ?').get(period.id).c;
 await page.setInputFiles('input[type="file"]', {
   name: 'overloop.csv',
   mimeType: 'text/csv',
-  buffer: Buffer.from(csvContent),
+  buffer: Buffer.from('Datum,Week,Diensttype,Codenaam\n2000-01-01,1,Avond,A'),
 });
+await page.waitForTimeout(400);
+rec('A CSV is refused with the way to the sjabloon', await page.locator('text=Alleen Excel-bestanden (.xlsx) kunnen worden ingelezen').isVisible().catch(() => false));
+rec('The sjabloon to download is there', await page.locator('a:has-text("Sjabloon downloaden (Excel)")').isVisible().catch(() => false));
+await page.setInputFiles('input[type="file"]', { name: 'overloop.xlsx', mimeType: XLSX_TYPE, buffer: buildXlsx(sjabloonRows) });
 await page.waitForTimeout(500);
 rec(
-  'Uploading a CSV previews only the row(s) inside the carry-over window',
+  'Uploading a workbook of the sjabloon\'s layout previews only the row(s) inside the carry-over window',
   await page.locator('text=1 regel binnen het overloopvenster gevonden, 1 daarbuiten genegeerd').isVisible().catch(() => false)
 );
 await page.click('button:has-text("regel importeren")');
@@ -360,7 +372,8 @@ await page.locator('button', { hasText: /Rooster.*genereren/i }).first().click()
 await page.waitForTimeout(500);
 const draftWarning = page.locator('[role="dialog"][aria-label="Niet-toegepaste toewijzingen"]');
 rec('Generating with an unapplied "Rooster vooraf invullen" draft warns first', await draftWarning.isVisible().catch(() => false));
-await page.click('text=Ga naar Rooster vooraf invullen');
+// The name follows the period's status (lib/vooraf.ts voorafNaam, 1.7.0).
+await page.click('text=/Ga naar (Rooster vooraf invullen|Lege diensten aanvullen)/');
 await page.waitForTimeout(500);
 rec(
   '"Ga naar Rooster vooraf invullen" navigates to the fill-gaps page',
@@ -408,7 +421,7 @@ await (async () => {
 })();
 
 await mpage.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await mpage.click('[role="button"]:has-text("Dienstrooster")');
+await mpage.click('h2:has-text("Dienstrooster") > button');
 await mpage.waitForTimeout(500);
 const mobileScrollWidth = await mpage.evaluate(() => document.documentElement.scrollWidth);
 rec('No horizontal page overflow at 375px once the roster panel is shown', mobileScrollWidth === 375, `scrollWidth=${mobileScrollWidth}`);
@@ -450,15 +463,15 @@ const wizardPeriodId = nodeCrypto.randomUUID();
 db.prepare(
   `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)
    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-).run(wizardPeriodId, wizardPoolId, 'UI-check wizard periode', '2028-01-03', '2028-01-16', '2027-12-20T00:00:00Z');
+).run(wizardPeriodId, wizardPoolId, 'UI-check wizard periode', verschuif('2028-01-03', SHIFT), verschuif('2028-01-16', SHIFT), verschuif('2027-12-20T00:00:00Z', SHIFT));
 
 await page.goto(`${BASE}/planner/setup/${wizardPeriodId}`, { waitUntil: 'networkidle' });
 await page.click('button:has-text("3. Venster")');
-await page.waitForSelector('text=Parttime-vrije dagen tellen niet mee voor het budget', { timeout: 5000 });
+await page.waitForSelector('text=Deeltijddagen tellen niet mee voor het budget', { timeout: 5000 });
 const exemptChecked = await page
-  .locator('label:has-text("Parttime-vrije dagen tellen niet mee voor het budget") input[type=checkbox]')
+  .locator('label:has-text("Deeltijddagen tellen niet mee voor het budget") input[type=checkbox]')
   .isChecked();
-rec('"Parttime-vrije dagen tellen niet mee voor het budget" is checked by default', exemptChecked);
+rec('"Deeltijddagen tellen niet mee voor het budget" is checked by default', exemptChecked);
 db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(wizardPeriodId);
 
 // "Personeel beheren" (medewerkers): removing someone from the pool is a
@@ -474,6 +487,11 @@ await page.click('button:has-text("Verwijderen")');
 await page.waitForTimeout(300);
 await page.click('button:has-text("Zeker weten?")');
 await page.waitForTimeout(800);
+// A membership that reaches a period with a roster asks once more (lib/membershipRooster.ts).
+if (await page.locator('[data-testid="rooster-bevestiging"]').isVisible().catch(() => false)) {
+  await page.click('button:has-text("Toch doorgaan")');
+  await page.waitForTimeout(800);
+}
 const membershipCountAfter = db
   .prepare('SELECT COUNT(*) c FROM dienstrooster_pool_membership WHERE pool_id = ?')
   .get(wizardPoolId).c;
@@ -519,7 +537,7 @@ await ppage.goto(`${BASE}/person/${token}`, { waitUntil: 'networkidle' });
 await ppage.waitForTimeout(1500);
 const body = await ppage.content();
 rec('Participant page loads without the link error', !/Ongeldige of verlopen toegangslink/.test(body));
-rec('Participant page shows the period name and dates', /2027/.test(body));
+rec('Participant page shows the period name and dates', new RegExp(SEED_JAAR).test(body));
 rec('The new "Uitloggen" button is there', (await ppage.locator('button:has-text("Uitloggen")').count()) > 0);
 
 await ppage.click('button:has-text("Uitloggen")');
@@ -550,7 +568,7 @@ if (rosterPeriod) {
     );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${BASE}/planner/period/${rosterPeriod.id}`, { waitUntil: 'networkidle' });
-  await page.locator('[role="button"]:has-text("Dienstrooster")').first().click();
+  await page.locator('h2:has-text("Dienstrooster") > button').first().click();
   await page.waitForSelector('button:has-text("Wisselen")');
 
   const row = page.locator('table tbody tr').nth(15);
@@ -607,10 +625,12 @@ for (const f of failedRequests) console.log('   ' + f);
 // and every 404 by message text - which also covered the favicon 404 this
 // project once had, and would have hidden any genuine failing request
 // behind the same two patterns.
-const unexpected = consoleErrors.filter((e) => !/\/api\/auth\/change-password/.test(e));
+// The second expected entry: removing a member that reaches a roster is answered 409 once (lib/membershipRooster.ts), then confirmed.
+const verwacht = (e) => /\/api\/auth\/change-password/.test(e) || /409.*\/api\/planner\/pool\/[^/]+\/members\/|\/api\/planner\/pool\/[^/]+\/members\/.*status of 409/.test(e);
+const unexpected = consoleErrors.filter((e) => !verwacht(e));
 rec('No unexpected page errors', unexpected.length === 0, unexpected.slice(0, 2).join(' | '));
 rec('The only >=400 is this script\'s own weak-password test',
-    failedRequests.every((f) => /change-password/.test(f)),
+    failedRequests.every((f) => /change-password/.test(f) || /409 DELETE \/api\/planner\/pool\/[^/]+\/members\//.test(f)),
     failedRequests.join(' | ') || 'none');
 
 // app/tab-icon/route.tsx generates the browser-tab icon, so the

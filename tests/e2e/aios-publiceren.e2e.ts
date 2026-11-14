@@ -3,7 +3,7 @@ import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
 import { aiosPersoonlijkeLink } from '@/lib/aiosUitnodigen';
-import { getBaseUrl, loginAsBeheerder, openAiosSectie } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, openSecties } from './setup';
 import { buildXlsx } from '../fixtures/buildXlsx';
 
 /**
@@ -101,16 +101,31 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   });
   await geschiedenis.getByRole('button', { name: 'Controleren' }).click();
   const voorbeeld = geschiedenis.getByTestId('aios-geschiedenis-voorbeeld');
-  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap0-${stamp % 100000} .*5 punten minder$`) })).toBeVisible();
-  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap1-${stamp % 100000} .*5 punten extra$`) })).toBeVisible();
+  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap0-${stamp % 100000} .*5 punten minder en 5 nachtdiensten minder$`) })).toBeVisible();
+  await expect(voorbeeld.getByRole('row', { name: new RegExp(`^ap1-${stamp % 100000} .*5 punten extra en 5 nachtdiensten extra$`) })).toBeVisible();
   await geschiedenis.getByRole('button', { name: 'Bewaren' }).click();
   await expect(geschiedenis.getByText(/^Bewaard\./)).toBeVisible();
+  await expect(geschiedenis.getByText('Ingelezen voor 2 AIOS.')).toBeVisible();
+
+  // A second file with only one of them: saving asks first and names who is left without; no keeps all.
+  await geschiedenis.getByLabel('Excel-bestand met de geschiedenis').setInputFiles({
+    name: 'geschiedenis2.xlsx',
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    buffer: buildXlsx([kop, [`ap0-${stamp % 100000}`, 20, 0, 0, 0, 0, 0, 1, 12]]),
+  });
+  await geschiedenis.getByRole('button', { name: 'Controleren' }).click();
+  await geschiedenis.getByRole('button', { name: 'Bewaren' }).click();
+  const vervangen = geschiedenis.getByTestId('aios-geschiedenis-vervangen');
+  await expect(vervangen).toContainText('Er staat al een geschiedenis voor 2 AIOS. Bewaren vervangt die.');
+  await expect(vervangen).toContainText(`ap1-${stamp % 100000}`);
+  await expect(vervangen).toContainText('daarna geen geschiedenis meer');
+  await vervangen.getByRole('button', { name: 'Annuleren' }).click();
+  await expect(vervangen).toHaveCount(0);
+  await geschiedenis.getByLabel('Excel-bestand met de geschiedenis').setInputFiles([]);
   await expect(geschiedenis.getByText('Ingelezen voor 2 AIOS.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
   const paneel = page.getByTestId('aios-publiceren');
-  await expect(paneel.getByRole('heading', { name: 'Publiceren' })).toBeVisible();
-  await openAiosSectie(page, 'Publiceren');
   await paneel.getByRole('button', { name: 'Voorlopig publiceren' }).click();
   await paneel.getByRole('button', { name: /^Ja, (toch )?publiceren$/ }).click();
   await expect(paneel.getByText(/^Voorlopig gepubliceerd\. Er is geen e-mail verstuurd/)).toBeVisible();
@@ -118,17 +133,24 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   expect((db.prepare('SELECT status FROM dienstrooster_schedule_period WHERE id = ?').get(ids.period) as { status: string }).status).toBe('GEPUBLICEERD');
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
-  // The workbook, as the planner downloads it.
-  const excel = await page.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-rooster`);
-  expect(excel.status()).toBe(200);
-  expect(excel.headers()['content-type']).toContain('spreadsheetml');
+  // Voorlopig goes nowhere: the bar says so, and the Excel for the roosterbureau is not there yet.
+  await expect(page.getByTestId('aios-periode-status')).toContainText('Status: Voorlopig gepubliceerd');
+  await expect(paneel.getByTestId('aios-excel-pas-definitief')).toBeVisible();
+  await expect(paneel.getByRole('link', { name: 'Rooster per dag' })).toHaveCount(0);
+  const nog = await page.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-rooster`);
+  expect(nog.status()).toBe(409);
 
   // The AIOS, on their own link, in a browser of their own.
   const aiosContext = await browser.newContext({ viewport: { width: 375, height: 800 } });
   const aios = await aiosContext.newPage();
   await aios.goto(ids.link);
+  // Once published: three foldable sections, all closed to begin with.
+  for (const [id, titel] of [['rooster', 'Jouw rooster'], ['ruilen', 'Ruilen'], ['voorkeuren', 'Voorkeuren']]) {
+    await expect(aios.getByTestId(`aios-sectie-${id}`).getByRole('heading', { name: titel }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  }
+  await openSecties(aios);
   const mijn = aios.getByTestId('aios-mijn-rooster');
-  await expect(mijn.getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
+  await expect(aios.getByTestId('aios-sectie-rooster').getByRole('heading', { name: 'Jouw rooster' })).toBeVisible();
   await expect(mijn.getByTestId('aios-voorlopig')).toContainText('Dit is het voorlopige rooster.');
   await expect(mijn.getByText(/Je dienstpercentage dit kwartaal: \d+(,\d)?%/)).toBeVisible();
   const eigen = (db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ? AND person_id = ?').get(ids.period, ids.mensen[0]) as { n: number }).n;
@@ -136,9 +158,16 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   expect(await aios.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
   await paneel.getByRole('button', { name: 'Definitief maken' }).click();
-  await paneel.getByRole('button', { name: 'Ja, definitief maken' }).click();
+  await paneel.getByRole('button', { name: /^Ja, (toch )?definitief maken$/ }).click();
   await expect(paneel.getByText(/^Het rooster is definitief\./)).toBeVisible();
+  await expect(page.getByTestId('aios-periode-status')).toContainText('Status: Definitief');
+  // Now the workbook, as the planner downloads it for the roosterbureau.
+  await expect(paneel.getByRole('link', { name: 'Rooster per dag' })).toBeVisible();
+  const excel = await page.request.get(`${getBaseUrl()}/api/aios/periode/${ids.period}/download-rooster`);
+  expect(excel.status()).toBe(200);
+  expect(excel.headers()['content-type']).toContain('spreadsheetml');
   await aios.reload();
+  await openSecties(aios);
   await expect(mijn.getByText('Dit rooster is definitief.')).toBeVisible();
   await expect(mijn.getByTestId('aios-voorlopig')).toHaveCount(0);
   await aiosContext.close();

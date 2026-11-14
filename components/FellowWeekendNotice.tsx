@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { telwoord } from '@/lib/telwoord';
 
 interface Summary {
   fellows: Array<{ person_id: string; codenaam: string; vrije_weekenddagen: number }>;
@@ -26,9 +27,10 @@ interface Summary {
   };
 }
 
-const weken = (n: number) => (n === 1 ? '1 week' : `${n} weken`);
+const weken = (n: number) => telwoord(n, 'week', 'weken');
+const personen = (n: number) => telwoord(n, 'persoon', 'mensen');
 const bereikTekst = ([min, max]: [number, number]) =>
-  min === max ? `${min} weekenddiensten` : `${min} tot ${max} weekenddiensten`;
+  min === max ? telwoord(min, 'weekenddienst', 'weekenddiensten') : `${min} tot ${max} weekenddiensten`;
 
 export function FellowWeekendNotice({ periodId, vensterWeekend }: { periodId: string; vensterWeekend: number }) {
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -67,10 +69,10 @@ export function FellowWeekendNotice({ periodId, vensterWeekend }: { periodId: st
       </p>
       <p className={weekend.past ? '' : 'font-semibold'}>
         {weekend.past
-          ? `Een weekendvenster van ${weken(weekend.venster)} past bij de ${weekend.mensen} mensen die weekenden doen.`
+          ? `Een weekendvenster van ${weken(weekend.venster)} past bij de ${personen(weekend.mensen)} die weekenden ${weekend.mensen === 1 ? 'doet' : 'doen'}.`
           : weekend.voorgesteld_venster !== null
-            ? `Een weekendvenster van ${weken(weekend.venster)} past niet bij ${weekend.mensen} mensen voor ${weekend.diensten} weekenddagen. Een venster van ${weken(weekend.voorgesteld_venster)} past wel.`
-            : `Ook met een weekendvenster van 1 week zijn ${weekend.mensen} mensen te weinig voor ${weekend.diensten} weekenddagen.`}
+            ? `Een weekendvenster van ${weken(weekend.venster)} past niet bij ${personen(weekend.mensen)} voor ${telwoord(weekend.diensten, 'weekenddag', 'weekenddagen')}. Een venster van ${weken(weekend.voorgesteld_venster)} past wel.`
+            : `Ook met een weekendvenster van 1 week ${weekend.mensen === 1 ? 'is' : 'zijn'} ${personen(weekend.mensen)} te weinig voor ${telwoord(weekend.diensten, 'weekenddag', 'weekenddagen')}.`}
       </p>
     </div>
   );

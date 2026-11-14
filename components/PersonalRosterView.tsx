@@ -12,8 +12,12 @@
 
 import { useState, useEffect } from 'react';
 import { parseISO } from '@/lib/holidays';
+import { withBasePath } from '@/lib/basePath';
 import { SwapRequestDialog } from './SwapRequestDialog';
+import { DeelnemerHarmonica, DeelnemerSectie } from '@/components/DeelnemerSectie';
 import { SwapManagementPanel } from './SwapManagementPanel';
+import { telwoord } from '@/lib/telwoord';
+import { aantalWachtend, wachtHint, type RuilVerzoekKort } from '@/lib/ruilWachtend';
 
 interface AssignedShift {
   datum: string;
@@ -50,6 +54,8 @@ interface Props {
   blockedOverrideViolations?: SoftBlockViolation[];
   /** Reload the roster itself - an approved swap moves shifts. */
   onRosterChanged?: () => void;
+  /** Swapping only on a definitief roster: a voorlopig one says why not, and where to report what is wrong. */
+  definitief?: boolean;
 }
 
 interface WeekGroup {
@@ -66,13 +72,53 @@ export function PersonalRosterView({
   softBlockViolations = [],
   blockedOverrideViolations = [],
   onRosterChanged,
+  definitief = true,
 }: Props) {
+  // The planner's contact address, set by the beheerder: where to report a mistake in a voorlopig roster,
+  // and where to go with a question about any roster (audit per role R-05, 1.7.0: it was read only for a
+  // voorlopig one, while "Vragen over je rooster?" named no address at all).
+  const [contactPlanner, setContactPlanner] = useState<string | null>(null);
+  useEffect(() => {
+    fetch(withBasePath(`/api/person/${personId}/swap-contacts`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => data?.success && setContactPlanner(data.data.planner ?? null))
+      .catch(() => {});
+  }, [personId]);
+  const plannerAdres = contactPlanner ? (
+    <>
+      {' ('}
+      <a className="underline font-medium break-all" href={`mailto:${contactPlanner}`}>
+        {contactPlanner}
+      </a>
+      {')'}
+    </>
+  ) : null;
   const [weekView, setWeekView] = useState<Map<string, WeekGroup>>(new Map());
   const [swapDialogOpen, setSwapDialogOpen] = useState(false);
   const [showSwapManagement, setShowSwapManagement] = useState(false);
   // 'vertraagd': created, but the mail to the colleague follows later.
   const [swapSuccessMessage, setSwapSuccessMessage] = useState<'ok' | 'vertraagd' | null>(null);
   const [swapListRefreshKey, setSwapListRefreshKey] = useState(0);
+  // A colleague's request that waits for an answer (1.5.0): the header of Ruilen says so and the list is
+  // open, so it is not two taps away with nothing pointing at it. Read here because the list itself is
+  // only on the page once it is opened. While it is, it reports every change (onWachtend below).
+  const [wachtend, setWachtend] = useState(0);
+  useEffect(() => {
+    if (!definitief) return;
+    let actueel = true;
+    fetch(withBasePath(`/api/person/${personId}/swap-requests?period_id=${periodId}`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!actueel || !data?.success) return;
+        const aantal = aantalWachtend(data.data.swap_requests as RuilVerzoekKort[], personId);
+        setWachtend(aantal);
+        if (aantal > 0) setShowSwapManagement(true);
+      })
+      .catch(() => {});
+    return () => {
+      actueel = false;
+    };
+  }, [definitief, personId, periodId]);
 
   // Group shifts by ISO week - keyed on (iso_jaar, iso_week) together, not
   // iso_week alone: a period spanning a year boundary (e.g. October to
@@ -133,10 +179,13 @@ export function PersonalRosterView({
   );
 
   return (
+    // Two foldable sections, closed to begin with (0.110.0, layout only): the roster and the swapping.
+    <DeelnemerHarmonica>
+    <div className="space-y-4">
+    <DeelnemerSectie sleutel="rooster" titel="Jouw rooster" testId="deelnemer-sectie-rooster" printOpen>
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold text-neutral-900 mb-2">Jouw rooster</h2>
         <p className="text-neutral-600">
           Toegewezen diensten voor deze periode, op basis van je voorkeuren en beschikbaarheid
         </p>
@@ -181,9 +230,9 @@ export function PersonalRosterView({
                 Ingedeeld op een dag die je had geblokkeerd
               </p>
               <p className="text-sm text-red-800 mt-1">
-                De roosteraar heeft je bewust ingedeeld op {blockedOverrideViolations.length}{' '}
-                dag(en) die je had geblokkeerd. Neem contact op met de roosteraar als dit niet
-                klopt.
+                De planner heeft je bewust ingedeeld op{' '}
+                {telwoord(blockedOverrideViolations.length, 'dag', 'dagen')} die je had geblokkeerd. Neem contact op met de planner
+                {plannerAdres} als dit niet klopt.
               </p>
               <ul className="text-sm text-red-800 mt-2 space-y-1">
                 {blockedOverrideViolations.slice(0, 5).map((v) => (
@@ -210,7 +259,7 @@ export function PersonalRosterView({
                 Ingedeeld op dagen met voorkeur "liever niet"
               </p>
               <p className="text-sm text-amber-800 mt-1">
-                Je bent ingedeeld op {softBlockViolations.length} dag(en) die je hebt
+                Je bent ingedeeld op {telwoord(softBlockViolations.length, 'dag', 'dagen')} die je hebt
                 gemarkeerd als "liever niet":
               </p>
               <ul className="text-sm text-amber-800 mt-2 space-y-1">
@@ -278,9 +327,24 @@ export function PersonalRosterView({
         </div>
       </div>
 
+      {/* Help text */}
+      <div className="bg-neutral-50 p-4 rounded text-sm text-neutral-600 space-y-2">
+        <p>
+          <strong>A</strong> = Avonddienst | <strong>W</strong> = Weekenddienst |{' '}
+          <strong>F</strong> = Feestdagdienst
+        </p>
+        <p data-testid="vragen-rooster">
+          Vragen over je rooster? Neem contact op met de planner{plannerAdres}.
+        </p>
+      </div>
+    </div>
+    </DeelnemerSectie>
+
+    <DeelnemerSectie sleutel="ruilen" titel="Ruilen" hint={wachtHint(wachtend)} testId="deelnemer-sectie-ruilen" blijfGeladen>
+    <div className="space-y-8">
       {/* Shift Swap Management - not on paper: a printed roster is for
           reading, the buttons do nothing there. */}
-      <div className="card p-6 space-y-4 print:hidden">
+      <div className="space-y-4 print:hidden">
         {/* Stacks on narrow screens: side by side, the button cannot shrink
             and pushed this row ~18px past the viewport at 375px, which
             CLAUDE.md rules out ("readable on 375px width"). */}
@@ -291,13 +355,32 @@ export function PersonalRosterView({
               Vraag een collega om een dienst te ruilen
             </p>
           </div>
-          <button
-            onClick={() => setSwapDialogOpen(true)}
-            className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
-          >
-            + Ruilverzoek
-          </button>
+          {definitief && (
+            <button
+              onClick={() => setSwapDialogOpen(true)}
+              className="shrink-0 px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+            >
+              + Ruilverzoek
+            </button>
+          )}
         </div>
+
+        {!definitief && (
+          <p className="text-sm text-neutral-800" data-testid="ruilen-voorlopig">
+            Ruilen kan pas als het rooster definitief is. Klopt er iets niet in je voorlopige rooster? Meld dat bij de planner
+            {contactPlanner ? (
+              <>
+                {': mail naar '}
+                <a className="underline font-medium break-all" href={`mailto:${contactPlanner}`}>
+                  {contactPlanner}
+                </a>
+                .
+              </>
+            ) : (
+              '.'
+            )}
+          </p>
+        )}
 
         {swapSuccessMessage && (
           <div role="status" className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
@@ -325,6 +408,7 @@ export function PersonalRosterView({
               periodId={periodId}
               refreshKey={swapListRefreshKey}
               onSwapsChanged={onRosterChanged}
+              onWachtend={setWachtend}
             />
           </div>
         )}
@@ -338,16 +422,9 @@ export function PersonalRosterView({
         )}
       </div>
 
-      {/* Help text */}
-      <div className="bg-neutral-50 p-4 rounded text-sm text-neutral-600 space-y-2">
-        <p>
-          <strong>A</strong> = Avonddienst | <strong>W</strong> = Weekenddienst |{' '}
-          <strong>F</strong> = Feestdagdienst
-        </p>
-        <p>
-          Vragen over je rooster? Neem contact op met de roosteraar.
-        </p>
-      </div>
+    </div>
+    </DeelnemerSectie>
+    </div>
 
       {/* Swap Request Dialog */}
       <SwapRequestDialog
@@ -364,6 +441,6 @@ export function PersonalRosterView({
           setTimeout(() => setSwapSuccessMessage(null), mailVertraagd ? 15000 : 5000);
         }}
       />
-    </div>
+    </DeelnemerHarmonica>
   );
 }
