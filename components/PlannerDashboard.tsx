@@ -13,7 +13,8 @@
  * - Generate roster button
  */
 
-import { useState, useEffect, useRef, useId, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useId, type ReactNode } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
@@ -43,6 +44,7 @@ import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
 import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
 import { voorafNaam } from '@/lib/vooraf';
 import { volgendeStap, type StapDoel } from '@/lib/volgendeStap';
+import { ADRES, GROEPEN, actiefOnderdeel, nieuweIndeling, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from '@/lib/periodeIndeling';
 
 interface PersonProgress {
   person_id: string;
@@ -100,38 +102,55 @@ interface DashboardData {
  * "keep this open too" decision, meaningless on a section that's already
  * closed.
  */
+/** What every Section reads: the layout, the sections with their titles and summaries, and the state of each layout. */
+interface IndelingWaarde {
+  modus: 'harmonica' | 'zijbalk';
+  onderdelen: Record<SectionKey, { titel: string; hint?: string }>;
+  // The accordion.
+  openSections: Set<SectionKey>;
+  pinnedSections: Set<SectionKey>;
+  toggleOpen: (key: SectionKey) => void;
+  togglePin: (key: SectionKey) => void;
+  // The new layout (lib/periodeIndeling.ts).
+  actief: SectionKey;
+  gekozen: SectionKey | null;
+  inLijst: ReadonlySet<SectionKey>;
+  adresVoor: (key: SectionKey | null) => string;
+}
+const IndelingContext = createContext<IndelingWaarde | null>(null);
+
 function Section({
-  title,
-  hint,
-  isOpen,
-  pinned,
-  onToggleOpen,
-  onTogglePin,
+  sleutel,
   keepMounted = false,
   children,
 }: {
-  title: string;
-  hint?: string;
-  isOpen: boolean;
-  pinned: boolean;
-  onToggleOpen: () => void;
-  onTogglePin: () => void;
-  /**
-   * Keep the body mounted (visually hidden via `hidden`, not unmounted)
-   * while closed. Needed when a child fetches data this section's own
-   * `hint` depends on (or, for "Voorstellen voor herverdeling", data that
-   * decides whether the section should even render at all) - a child that
-   * only mounts once the planner opens the section would never get the
-   * chance to report anything before that, so the hint would stay blank
-   * (or an empty-state section would never learn it's empty) until opened
-   * at least once. Left false everywhere else, so heavier content
-   * (Dienstrooster's AssignmentGrid/Calendar) still only loads once
-   * actually opened.
-   */
+  sleutel: SectionKey;
   keepMounted?: boolean;
   children: ReactNode;
 }) {
   const bodyId = useId();
+  const ctx = useContext(IndelingContext)!;
+  const { titel, hint } = ctx.onderdelen[sleutel];
+
+  // The new layout (1.9.0): only the section that is chosen, with its title on top; one that reports its
+  // summary (keepMounted) stays on the page unseen, as it does closed in the accordion.
+  if (ctx.modus === 'zijbalk') {
+    if (ctx.actief === sleutel) {
+      return (
+        <div className="card p-4 sm:p-6" data-testid={`onderdeel-${ADRES[sleutel]}`}>
+          <h2 className="text-xl font-bold text-neutral-900">{titel}</h2>
+          {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
+          <div className="mt-4">{children}</div>
+        </div>
+      );
+    }
+    return keepMounted ? <div hidden>{children}</div> : null;
+  }
+
+  const isOpen = ctx.openSections.has(sleutel);
+  const pinned = ctx.pinnedSections.has(sleutel);
+  const onToggleOpen = () => ctx.toggleOpen(sleutel);
+  const onTogglePin = () => ctx.togglePin(sleutel);
   const bodyExists = isOpen || keepMounted;
   return (
     <div className="card overflow-hidden">
@@ -155,7 +174,7 @@ function Section({
                 clipRule="evenodd"
               />
             </svg>
-            {title}
+            {titel}
           </button>
         </h2>
         {/* On a phone the summary goes under the title instead of being cut off at the card's edge (1.6.1). */}
@@ -203,7 +222,58 @@ function Section({
 /** Why a button that sends is off (0.87.0). */
 const GEEN_MAIL = 'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.';
 
-type SectionKey = 'importcorrecties' | 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'links' | 'voorstellen' | 'rooster';
+type SectionKey = OnderdeelSleutel;
+
+/**
+ * The frame of the sections. The accordion: the sections as they were. The new layout (1.9.0): the list
+ * on the left, the chosen section on the right; on a phone the list until one is chosen, then that one
+ * with a way back. The items are links, so a section has an address and the back button steps back.
+ */
+function Onderdelen({ children }: { children: ReactNode }) {
+  const ctx = useContext(IndelingContext)!;
+  if (ctx.modus === 'harmonica') return <>{children}</>;
+  const gekozen = ctx.gekozen !== null;
+  return (
+    <div className="md:grid md:grid-cols-[16rem_minmax(0,1fr)] md:gap-4 md:items-start" data-testid="indeling-nieuw">
+      <nav aria-label="Onderdelen van de periode" className={`card p-2 md:sticky md:top-4 ${gekozen ? 'hidden md:block' : ''}`}>
+        {GROEPEN.map((groep) => {
+          const items = groep.onderdelen.filter((k) => ctx.inLijst.has(k));
+          if (items.length === 0) return null;
+          return (
+            <div key={groep.naam}>
+              <p className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">{groep.naam}</p>
+              {items.map((k) => {
+                const { titel, hint } = ctx.onderdelen[k];
+                const actief = k === ctx.actief;
+                return (
+                  <Link
+                    key={k}
+                    href={ctx.adresVoor(k)}
+                    scroll={false}
+                    aria-current={actief ? 'page' : undefined}
+                    className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg ${actief ? 'md:bg-blue-700 md:text-white' : 'hover:bg-neutral-50'}`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium">{titel}</span>
+                      {hint && <span className={`block text-xs text-neutral-600 ${actief ? 'md:text-blue-100' : ''}`}>{hint}</span>}
+                    </span>
+                    <span aria-hidden="true" className="md:hidden text-xl text-neutral-400">›</span>
+                  </Link>
+                );
+              })}
+            </div>
+          );
+        })}
+      </nav>
+      <div className={`min-w-0 ${gekozen ? '' : 'hidden md:block'}`}>
+        <Link href={ctx.adresVoor(null)} scroll={false} className="md:hidden inline-block mb-3 text-sm font-semibold text-blue-700">
+          ‹ Alle onderdelen
+        </Link>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 /** Where each next step is on the page (lib/volgendeStap.ts): the section to open first, and the button to go to. */
 const STAP_PLEK: Record<StapDoel, { sectie?: SectionKey; element: string }> = {
@@ -293,6 +363,19 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   // section closed, nothing pinned) so the page loads as short as possible.
   const [openSections, setOpenSections] = useState<Set<SectionKey>>(() => new Set());
   const [pinnedSections, setPinnedSections] = useState<Set<SectionKey>>(() => new Set());
+  // The new layout (1.9.0, lib/periodeIndeling.ts): ?indeling=nieuw while the accordion is the default,
+  // ?onderdeel=... for the section on screen, so the back button and a link work.
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const zijbalk = nieuweIndeling(searchParams.get('indeling'));
+  const gekozenOnderdeel = sleutelUitAdres(searchParams.get('onderdeel'));
+  const adresVoor = (key: SectionKey | null): string => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (key) params.set('onderdeel', ADRES[key]);
+    else params.delete('onderdeel');
+    return `${pathname}?${params.toString()}`;
+  };
 
   const toggleSectionOpen = (key: SectionKey) => {
     setOpenSections((prev) => {
@@ -781,9 +864,67 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     lege_diensten: fillGapsCount,
     mail_ingesteld: mailIngesteld,
   });
+  // One list of the sections: the accordion and the new layout read title, summary and whether it is
+  // there from here, so the two cannot drift apart.
+  const naStart = ['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status);
+  const onderdelen: Record<SectionKey, { titel: string; hint?: string; zichtbaar: boolean }> = {
+    importcorrecties: {
+      titel: 'Import en correcties',
+      hint: kanSaldoWijzigen(dashboard.status) ? 'kan tot het genereren' : 'alleen vóór het genereren',
+      zichtbaar: naStart,
+    },
+    overloop: { titel: 'Eerdere toewijzingen', zichtbaar: naStart },
+    vooraf: {
+      titel: voorafNaam(dashboard.status),
+      hint:
+        fillGapsCount === null
+          ? undefined
+          : fillGapsCount === 0
+            ? 'alles ingevuld'
+            : `${fillGapsCount} dienst${fillGapsCount === 1 ? '' : 'en'} nog niet ingevuld`,
+      zichtbaar: naStart,
+    },
+    personeel: {
+      titel: 'Status voorkeuren',
+      hint: `${telwoord(dashboard.total_staff, 'persoon', 'personen')} · ${stats.confirmed} bevestigd, ${stats.in_progress} bezig, ${stats.not_started} niet begonnen`,
+      zichtbaar: true,
+    },
+    personeelbeheren: { titel: 'Personeel beheren', zichtbaar: true },
+    export: {
+      titel: 'Exporteren & communicatie',
+      hint: `uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, wijzigingsgeschiedenis, ${beheerder ? 'mailinstellingen' : 'mail'}`,
+      zichtbaar: true,
+    },
+    links: { titel: 'Persoonlijke links', hint: 'uitgegeven links en intrekken', zichtbaar: beheerder },
+    // Mounted (keepMounted) until it reports nothing to suggest, as before; in the list only with something in it.
+    voorstellen: {
+      titel: 'Voorstellen voor herverdeling',
+      hint: suggestionCount ? `${suggestionCount} voorstel${suggestionCount === 1 ? '' : 'len'}` : undefined,
+      zichtbaar: dashboard.assignment_count > 0 && suggestionCount !== 0,
+    },
+    rooster: { titel: rosterHeading[rosterFillState], zichtbaar: naStart },
+  };
+  const zichtbaar = new Set((Object.keys(onderdelen) as SectionKey[]).filter((k) => onderdelen[k].zichtbaar));
+  const inLijst = new Set([...zichtbaar].filter((k) => k !== 'voorstellen' || Boolean(suggestionCount)));
+  const actiefOnderdeelNu = actiefOnderdeel(gekozenOnderdeel, startOnderdeel(stapNu?.doel, dashboard.status), inLijst);
+  const indeling = {
+    modus: zijbalk ? ('zijbalk' as const) : ('harmonica' as const),
+    onderdelen,
+    openSections,
+    pinnedSections,
+    toggleOpen: toggleSectionOpen,
+    togglePin: toggleSectionPin,
+    actief: actiefOnderdeelNu,
+    gekozen: gekozenOnderdeel,
+    inLijst,
+    adresVoor,
+  };
+
   const gaNaarStap = (doel: StapDoel) => {
     const { sectie, element } = STAP_PLEK[doel];
-    if (sectie && !openSections.has(sectie)) toggleSectionOpen(sectie);
+    // The new layout shows the section by its address; the accordion opens it.
+    if (sectie && zijbalk) router.push(adresVoor(sectie), { scroll: false });
+    else if (sectie && !openSections.has(sectie)) toggleSectionOpen(sectie);
     // After the section has opened: the button there gets the focus, so Enter does it.
     window.setTimeout(() => {
       const doelElement = document.getElementById(element);
@@ -942,17 +1083,12 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         )}
       </div>
 
+      <IndelingContext.Provider value={indeling}>
+      <Onderdelen>
       {/* The first section (1.1.0): a beginsaldo or correctie forgotten in the
           wizard can still go in until the roster is generated. */}
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
-        <Section
-          title="Import en correcties"
-          hint={kanSaldoWijzigen(dashboard.status) ? 'kan tot het genereren' : 'alleen vóór het genereren'}
-          isOpen={openSections.has('importcorrecties')}
-          pinned={pinnedSections.has('importcorrecties')}
-          onToggleOpen={() => toggleSectionOpen('importcorrecties')}
-          onTogglePin={() => toggleSectionPin('importcorrecties')}
-        >
+      {onderdelen.importcorrecties.zichtbaar && (
+        <Section sleutel="importcorrecties">
           <ImportEnCorrecties
             periodId={periodId}
             status={dashboard.status}
@@ -965,14 +1101,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       {/* Same status gate as the page's old link used ("niet CONCEPT") -
           equivalent to Dienstrooster's own gate below, since a CONCEPT
           period has no shift_slot rows yet either. */}
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
-        <Section
-          title="Eerdere toewijzingen"
-          isOpen={openSections.has('overloop')}
-          pinned={pinnedSections.has('overloop')}
-          onToggleOpen={() => toggleSectionOpen('overloop')}
-          onTogglePin={() => toggleSectionPin('overloop')}
-        >
+      {onderdelen.overloop.zichtbaar && (
+        <Section sleutel="overloop">
           <p className="text-sm text-neutral-600 mb-3">
             De vensterregel (niemand twee keer binnen het ingestelde venster) geldt ook over de
             grens van de vorige periode heen. De solver moet dus weten wie aan het eind daarvan
@@ -994,20 +1124,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
       {/* Same status gate as Dienstrooster below - a CONCEPT period has no
           shift_slot rows yet, so "unfilled slots" is meaningless there. */}
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
+      {onderdelen.vooraf.zichtbaar && (
         <Section
-          title={voorafNaam(dashboard.status)}
-          hint={
-            fillGapsCount === null
-              ? undefined
-              : fillGapsCount === 0
-                ? 'alles ingevuld'
-                : `${fillGapsCount} dienst${fillGapsCount === 1 ? '' : 'en'} nog niet ingevuld`
-          }
-          isOpen={openSections.has('vooraf')}
-          pinned={pinnedSections.has('vooraf')}
-          onToggleOpen={() => toggleSectionOpen('vooraf')}
-          onTogglePin={() => toggleSectionPin('vooraf')}
+          sleutel="vooraf"
           keepMounted
         >
           {undoBanner('VOORAF')}
@@ -1015,14 +1134,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         </Section>
       )}
 
-      <Section
-        title="Status voorkeuren"
-        hint={`${telwoord(dashboard.total_staff, 'persoon', 'personen')} · ${stats.confirmed} bevestigd, ${stats.in_progress} bezig, ${stats.not_started} niet begonnen`}
-        isOpen={openSections.has('personeel')}
-        pinned={pinnedSections.has('personeel')}
-        onToggleOpen={() => toggleSectionOpen('personeel')}
-        onTogglePin={() => toggleSectionPin('personeel')}
-      >
+      <Section sleutel="personeel">
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div className="text-center">
             <div className="text-3xl font-bold text-blue-600">{stats.not_started}</div>
@@ -1295,13 +1407,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           dropping a planner into it mid-tab for an already-open period
           made it look like part of a multi-step flow they still needed to
           click through, rather than a direct edit. */}
-      <Section
-        title="Personeel beheren"
-        isOpen={openSections.has('personeelbeheren')}
-        pinned={pinnedSections.has('personeelbeheren')}
-        onToggleOpen={() => toggleSectionOpen('personeelbeheren')}
-        onTogglePin={() => toggleSectionPin('personeelbeheren')}
-      >
+      <Section sleutel="personeelbeheren">
         {/* Text and button stacked, not side-by-side - this paragraph is
             long enough to wrap at normal card widths, and a wrapped
             justify-between row drops the button onto its own line flush
@@ -1325,14 +1431,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         </div>
       </Section>
 
-      <Section
-        title="Exporteren & communicatie"
-        hint={`uitnodigingen, herinneringen, statusrapport, voorkeurenoverzicht, wijzigingsgeschiedenis, ${beheerder ? 'mailinstellingen' : 'mail'}`}
-        isOpen={openSections.has('export')}
-        pinned={pinnedSections.has('export')}
-        onToggleOpen={() => toggleSectionOpen('export')}
-        onTogglePin={() => toggleSectionPin('export')}
-      >
+      <Section sleutel="export">
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => {
@@ -1420,15 +1519,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
       </Section>
 
       {/* The beheerder only: the personal links of this period and revoking one (lib/toegangslinks.ts). */}
-      {beheerder && (
-        <Section
-          title="Persoonlijke links"
-          hint="uitgegeven links en intrekken"
-          isOpen={openSections.has('links')}
-          pinned={pinnedSections.has('links')}
-          onToggleOpen={() => toggleSectionOpen('links')}
-          onTogglePin={() => toggleSectionPin('links')}
-        >
+      {onderdelen.links.zichtbaar && (
+        <Section sleutel="links">
           <ToegangslinksBeheer periodId={periodId} />
         </Section>
       )}
@@ -1440,14 +1532,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           was exactly the kind of clutter this reorganization removes
           elsewhere; suggestionCount stays null (so this stays visible)
           while that hasn't been confirmed yet, including on a load error. */}
-      {dashboard.assignment_count > 0 && suggestionCount !== 0 && (
+      {onderdelen.voorstellen.zichtbaar && (
         <Section
-          title="Voorstellen voor herverdeling"
-          hint={suggestionCount ? `${suggestionCount} voorstel${suggestionCount === 1 ? '' : 'len'}` : undefined}
-          isOpen={openSections.has('voorstellen')}
-          pinned={pinnedSections.has('voorstellen')}
-          onToggleOpen={() => toggleSectionOpen('voorstellen')}
-          onTogglePin={() => toggleSectionPin('voorstellen')}
+          sleutel="voorstellen"
           keepMounted
         >
           {undoBanner('HERVERDELING')}
@@ -1464,14 +1551,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           solver has run) so a planner can pre-fill strong preferences by
           hand before generating; CONCEPT stays excluded since no
           shift_slot rows exist yet at that point. */}
-      {['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status) && (
-        <Section
-          title={rosterHeading[rosterFillState]}
-          isOpen={openSections.has('rooster')}
-          pinned={pinnedSections.has('rooster')}
-          onToggleOpen={() => toggleSectionOpen('rooster')}
-          onTogglePin={() => toggleSectionPin('rooster')}
-        >
+      {onderdelen.rooster.zichtbaar && (
+        <Section sleutel="rooster">
           {undoBanner('ROOSTER')}
           {/* overflow-x-auto on its own is enough here (unlike the old
               header-row version of this button group) - this is a plain
@@ -1566,6 +1647,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           )}
         </Section>
       )}
+      </Onderdelen>
+      </IndelingContext.Provider>
 
       {/* Roster Generation Dialog */}
       <RosterGenerationDialog

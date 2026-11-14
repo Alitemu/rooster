@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { AiosPeriodOverview } from '@/components/AiosPeriodOverview';
@@ -582,7 +582,10 @@ export default function PlannerPeriodPage() {
       )}
 
       {/* Dashboard */}
-      <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} periodStatus={period.status} />
+      {/* Suspense: the dashboard reads the address (?indeling, ?onderdeel; lib/periodeIndeling.ts). */}
+      <Suspense fallback={<p className="text-sm text-neutral-600">Laden...</p>}>
+        <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} periodStatus={period.status} />
+      </Suspense>
     </div>
   );
 }

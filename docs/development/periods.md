@@ -294,3 +294,23 @@ page header, knop-genereren and so on); lib/volgendeStap.test.ts fails when an i
 The AIOS gets its own copy only when the planner of the achterwacht finds it useful. A different layout
 of the page (the sections as a list on the left) is on docs/todo.md.
 
+## The new layout of the period page (1.9.0)
+
+The planner found the accordion awkward. Next to it, not instead of it, a layout with the sections as a
+list on the left (four groups: Voorbereiden, Deelnemers, Communicatie, Rooster) and one section on the
+right; the status and Volgende stap stay on top. Opt-in with `?indeling=nieuw`; 2.0.0 makes it the default
+(docs/todo.md) once the planners have tried it.
+
+One list feeds both: `onderdelen` in components/PlannerDashboard.tsx holds per section its title,
+summary and whether it is there, and `Section` takes only `sleutel` and reads the rest from
+IndelingContext, drawing the accordion exactly as before or, in the new layout, only the chosen section
+(a keepMounted one stays mounted unseen, so FillGapsSummary and the herverdeling still report their
+counts). The groups, the address of each section (`?onderdeel=status-voorkeuren` and so on) and which one
+opens first (where Volgende stap points) are lib/periodeIndeling.ts. The items are `Link`s: the back
+button steps back and a section can be linked to. On a phone the list shows until a section is chosen,
+then that section with "‹ Alle onderdelen". The page wraps the dashboard in Suspense for
+useSearchParams.
+
+Every browser test but tests/e2e/indeling-nieuw.e2e.ts still uses the accordion, which is how 1.9.0 shows
+that nothing changed for it (139 of 139). Switching the default means moving those tests' section helpers.
+

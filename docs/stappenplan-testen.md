@@ -55,6 +55,11 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   bovenaan de periodepagina. Je ziet: steeds de stap die nu aan de beurt is, in
   de volgorde uitnodigen, herinneren, sluiten, genereren, aanvullen, voorlopig,
   definitief. De knop eronder gaat naar de goede knop en voert zelf niets uit.
+- [ ] **C0a.** Open de periodepagina met `?indeling=nieuw` achter het adres. Je ziet:
+  de onderdelen links in vier groepjes en rechts het onderdeel waar *Volgende stap*
+  naar wijst. Elk onderdeel opent met een klik. De terugknop van de browser gaat
+  naar het vorige onderdeel. Op een telefoon zie je eerst de lijst en brengt
+  *‹ Alle onderdelen* je terug. Zonder `?indeling=nieuw` is de pagina zoals altijd.
 - [ ] **C1a.** Open de periodepagina van een open periode en klik op *Aanpassen*
   naast het streefbereik. Vul een ander bereik in en sla het op. Je ziet: het
   nieuwe bereik in woorden. Waren de uitnodigingen al verstuurd, dan zegt de

@@ -6585,8 +6585,8 @@ const MUTATIONS = [
   {
     name: "periodepagina: Import en correcties is not the first section",
     file: "components/PlannerDashboard.tsx",
-    find: "          title=\"Import en correcties\"",
-    replace: "          title=\"Import en correcties \"",
+    find: "      titel: 'Import en correcties',",
+    replace: "      titel: 'Import en correcties ',",
     tests: ["components/importEnCorrectiesSectie"],
   },
   // 1.0.1
@@ -7374,8 +7374,8 @@ const MUTATIONS = [
   {
     name: "1.7.0: the section on the period page has a fixed name again",
     file: "components/PlannerDashboard.tsx",
-    find: "          title={voorafNaam(dashboard.status)}",
-    replace: "          title=\"Rooster vooraf invullen\"",
+    find: "      titel: voorafNaam(dashboard.status),",
+    replace: "      titel: 'Rooster vooraf invullen',",
     tests: ["lib/vooraf"],
   },
   {
@@ -7525,6 +7525,41 @@ const MUTATIONS = [
     find: "      if (p.mail_ingesteld === false) return stap(`${wie} De deadline",
     replace: "      if (false) return stap(`${wie} De deadline",
     tests: ["lib/volgendeStap"],
+  },
+  {
+    name: "1.9.0: the new layout becomes the default before its time",
+    file: "lib/periodeIndeling.ts",
+    find: "  return indeling === 'nieuw';",
+    replace: "  return indeling !== 'oud';",
+    tests: ["lib/periodeIndeling"],
+  },
+  {
+    name: "1.9.0: the period page opens on the preferences when Volgende stap points at the invitations",
+    file: "lib/periodeIndeling.ts",
+    find: "    case 'uitnodigingen':\n    case 'herinneringen':\n      return 'export';",
+    replace: "    case 'uitnodigingen':\n    case 'herinneringen':\n      return 'personeel';",
+    tests: ["lib/periodeIndeling"],
+  },
+  {
+    name: "1.9.0: a chosen section is ignored",
+    file: "lib/periodeIndeling.ts",
+    find: "  if (gekozen && zichtbaar.has(gekozen)) return gekozen;",
+    replace: "",
+    tests: ["lib/periodeIndeling"],
+  },
+  {
+    name: "1.9.0: an address does not lead to its section",
+    file: "lib/periodeIndeling.ts",
+    find: "  return gevonden ?? null;",
+    replace: "  return null;",
+    tests: ["lib/periodeIndeling"],
+  },
+  {
+    name: "1.9.0: the new layout shows every section at once",
+    file: "components/PlannerDashboard.tsx",
+    find: "    if (ctx.actief === sleutel) {",
+    replace: "    if (true) {",
+    tests: ["lib/periodeIndeling"],
   },
 ];
 

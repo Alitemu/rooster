@@ -73,7 +73,7 @@ describe('voorafNaam', () => {
   it('is the name of the section, its button, the page and the warning before generating', () => {
     const lees = (f: string) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8');
     const dashboard = lees('components/PlannerDashboard.tsx');
-    expect(dashboard).toContain('title={voorafNaam(dashboard.status)}');
+    expect(dashboard).toContain('titel: voorafNaam(dashboard.status),');
     expect(dashboard).toContain('📝 Ga naar {voorafNaam(dashboard.status)}');
     expect(dashboard).toContain('status={dashboard.status}');
     expect(lees('components/FillGapsSummary.tsx')).toContain('📝 {voorafNaam(status)}');

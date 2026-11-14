@@ -651,6 +651,9 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 1.9.0:**
+- *Nieuwe indeling van de periodepagina (achterwacht), om uit te proberen:* zet `?indeling=nieuw` achter het adres van een periode. De onderdelen staan dan als lijst links, in vier groepjes (Voorbereiden, Deelnemers, Communicatie en Rooster). Een klik toont dat onderdeel rechts. De status en *Volgende stap* blijven bovenaan staan. Elk onderdeel heeft een eigen adres, dus de terugknop van de browser werkt en je kunt een link naar een onderdeel sturen. De pagina opent bij het onderdeel waar *Volgende stap* naar wijst. Op een telefoon zie je eerst de lijst en een tik opent het onderdeel. Zonder `?indeling=nieuw` is alles zoals het was. In 2.0.0 wordt de nieuwe indeling de standaard.
+
 **Vanaf versie 1.8.0:**
 - *Volgende stap (achterwacht):* bovenaan de periodepagina staat wat de planner nu moet doen, met een knop naar de plek waar dat gebeurt. Bijvoorbeeld "Verstuur de uitnodigingen", "21 van de 31 deelnemers hebben hun voorkeuren nog niet bevestigd" of "Komen er geen reacties meer, maak het rooster dan definitief". De knop voert zelf niets uit: hij opent het juiste onderdeel en zet de bestaande knop klaar.
 
