@@ -278,3 +278,19 @@ From the functional audit and the audit per role (all of section 2 of the overvi
   and its list of names stack (components/voorafOpTelefoon.test.ts, measured at 375 pixels in
   tests/e2e/lege-diensten.e2e.ts).
 
+## Volgende stap (1.8.0)
+
+One line at the top of the period page of the achterwacht, always there (the planner's wish), with what
+to do now: lib/volgendeStap.ts picks it from what the dashboard already reads (status, deadline,
+submission_stats, the empty diensten of FillGapsSummary, whether mail is set up) plus two dates the
+dashboard route now returns, `uitgenodigd_op` and `gepubliceerd_op`. The order is the planner's: invite,
+remind until the deadline, close, generate, fill what stayed empty, voorlopig, definitief. Nothing for a
+concept (the wizard's) or a status it does not know, and no button where nothing can be done (mail not
+set up, a definitief roster).
+
+The button is a signpost, never an action: STAP_PLEK in components/PlannerDashboard.tsx opens the section
+the step is in and gives the existing button the focus (knop-uitnodigingen, knop-periode-sluiten in the
+page header, knop-genereren and so on); lib/volgendeStap.test.ts fails when an id it points to is gone.
+The AIOS gets its own copy only when the planner of the achterwacht finds it useful. A different layout
+of the page (the sections as a list on the left) is on docs/todo.md.
+

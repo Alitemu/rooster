@@ -7477,6 +7477,55 @@ const MUTATIONS = [
     replace: "  if (/^(gmail|googlemail)\\.com$/.test(domein)) return true;",
     tests: ["app/geenEchteAdressen"],
   },
+  {
+    name: "1.8.0: the next step forgets that the invitations have not gone out",
+    file: "lib/volgendeStap.ts",
+    find: "      if (!p.uitgenodigd_op) {",
+    replace: "      if (false) {",
+    tests: ["lib/volgendeStap"],
+  },
+  {
+    name: "1.8.0: the next step keeps asking for reminders after the deadline",
+    file: "lib/volgendeStap.ts",
+    find: "      if (deadlinePassed(p.deadline, nu)) return stap(",
+    replace: "      if (false) return stap(",
+    tests: ["lib/volgendeStap"],
+  },
+  {
+    name: "1.8.0: the next step asks to publish while diensten are empty",
+    file: "lib/volgendeStap.ts",
+    find: "      if (p.lege_diensten > 0) {",
+    replace: "      if (false) {",
+    tests: ["lib/volgendeStap"],
+  },
+  {
+    name: "1.8.0: the next step asks for definitief on a definitief roster",
+    file: "lib/volgendeStap.ts",
+    find: "      if (p.definitief_op) return stap(",
+    replace: "      if (false) return stap(",
+    tests: ["lib/volgendeStap"],
+  },
+  {
+    name: "1.8.0: the button to Periode sluiten has nowhere to go",
+    file: "app/planner/period/[id]/page.tsx",
+    find: "                    id=\"knop-periode-sluiten\"\n",
+    replace: "",
+    tests: ["lib/volgendeStap"],
+  },
+  {
+    name: "1.8.0: the dashboard no longer says whether the invitations went out",
+    file: "app/api/planner/period/[id]/dashboard/route.ts",
+    find: "        uitgenodigd_op: period.uitgenodigd_op ?? null,\n",
+    replace: "",
+    tests: ["lib/volgendeStap"],
+  },
+  {
+    name: "1.8.0: the next step points to reminders that cannot go out without mail",
+    file: "lib/volgendeStap.ts",
+    find: "      if (p.mail_ingesteld === false) return stap(`${wie} De deadline",
+    replace: "      if (false) return stap(`${wie} De deadline",
+    tests: ["lib/volgendeStap"],
+  },
 ];
 
 const args = process.argv.slice(2);

@@ -51,6 +51,10 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   hem opnieuw en ga direct naar stap 7. Je ziet: het juiste aantal actieve mensen,
   het streefbereik in woorden en *Klaar om te openen*. De bereiken
   (streefaantallen) staan in woorden, nooit als `[7,8]` of `-1`.
+- [ ] **C0.** Loop een periode door en lees bij elke stap de regel *Volgende stap*
+  bovenaan de periodepagina. Je ziet: steeds de stap die nu aan de beurt is, in
+  de volgorde uitnodigen, herinneren, sluiten, genereren, aanvullen, voorlopig,
+  definitief. De knop eronder gaat naar de goede knop en voert zelf niets uit.
 - [ ] **C1a.** Open de periodepagina van een open periode en klik op *Aanpassen*
   naast het streefbereik. Vul een ander bereik in en sla het op. Je ziet: het
   nieuwe bereik in woorden. Waren de uitnodigingen al verstuurd, dan zegt de

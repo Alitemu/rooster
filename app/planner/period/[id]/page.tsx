@@ -446,6 +446,7 @@ export default function PlannerPeriodPage() {
               <div className="flex flex-col items-start gap-2">
                 <div className="flex flex-wrap gap-3">
                   <button
+                    id="knop-periode-sluiten"
                     onClick={handleClosePeriod}
                     disabled={closing}
                     className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:bg-neutral-100 transition-colors"

@@ -42,6 +42,7 @@ import { telwoord } from '@/lib/telwoord';
 import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
 import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
 import { voorafNaam } from '@/lib/vooraf';
+import { volgendeStap, type StapDoel } from '@/lib/volgendeStap';
 
 interface PersonProgress {
   person_id: string;
@@ -72,6 +73,8 @@ interface DashboardData {
   pool_id: string;
   /** GEPUBLICEERD only: null while the roster is still voorlopig. */
   definitief_op: string | null;
+  gepubliceerd_op: string | null;
+  uitgenodigd_op: string | null;
   submission_stats: {
     not_started: number;
     in_progress: number;
@@ -201,6 +204,18 @@ function Section({
 const GEEN_MAIL = 'Versturen kan pas als de mail is ingesteld. Dat doet de beheerder bij Mailinstellingen.';
 
 type SectionKey = 'importcorrecties' | 'overloop' | 'vooraf' | 'personeel' | 'personeelbeheren' | 'export' | 'links' | 'voorstellen' | 'rooster';
+
+/** Where each next step is on the page (lib/volgendeStap.ts): the section to open first, and the button to go to. */
+const STAP_PLEK: Record<StapDoel, { sectie?: SectionKey; element: string }> = {
+  uitnodigingen: { sectie: 'export', element: 'knop-uitnodigingen' },
+  herinneringen: { sectie: 'export', element: 'knop-herinneringen' },
+  // In the header of the period page (app/planner/period/[id]/page.tsx).
+  sluiten: { element: 'knop-periode-sluiten' },
+  genereren: { element: 'knop-genereren' },
+  'lege-diensten': { sectie: 'vooraf', element: 'knop-lege-diensten' },
+  publiceren: { element: 'knop-voorlopig-publiceren' },
+  definitief: { element: 'knop-definitief-maken' },
+};
 
 interface Props {
   periodId: string;
@@ -755,8 +770,47 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     AUTOMATISCH: '🔄 Rooster opnieuw genereren met solver',
   };
 
+  // "Volgende stap" (1.8.0): what the planner does now, and the button that takes them there.
+  const stapNu = volgendeStap({
+    status: dashboard.status,
+    deadline: dashboard.deadline,
+    uitgenodigd_op: dashboard.uitgenodigd_op,
+    gepubliceerd_op: dashboard.gepubliceerd_op,
+    definitief_op: dashboard.definitief_op,
+    submission_stats: dashboard.submission_stats,
+    lege_diensten: fillGapsCount,
+    mail_ingesteld: mailIngesteld,
+  });
+  const gaNaarStap = (doel: StapDoel) => {
+    const { sectie, element } = STAP_PLEK[doel];
+    if (sectie && !openSections.has(sectie)) toggleSectionOpen(sectie);
+    // After the section has opened: the button there gets the focus, so Enter does it.
+    window.setTimeout(() => {
+      const doelElement = document.getElementById(element);
+      doelElement?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      doelElement?.focus();
+    }, 50);
+  };
+
   return (
     <div className="space-y-4">
+      {stapNu && (
+        <div className="card p-4 border-l-4 border-blue-700 bg-blue-50" data-testid="volgende-stap" role="status">
+          <p className="text-sm text-neutral-900">
+            <span className="font-semibold">Volgende stap: </span>
+            {stapNu.tekst}
+          </p>
+          {stapNu.doel && (
+            <button
+              onClick={() => gaNaarStap(stapNu.doel!)}
+              className="mt-2 text-sm font-medium text-blue-800 underline hover:text-blue-900"
+            >
+              {stapNu.knop}
+            </button>
+          )}
+        </div>
+      )}
+
       {/* No separate stats-summary card here anymore - it duplicated
           exactly what "Status voorkeuren" already shows in its own
           section hint below (visible whether that section is open or
@@ -815,6 +869,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                   ? 'Sluit de periode eerst. Dan staan voorkeuren en afwezigheid vast.'
                   : undefined
             }
+            id="knop-genereren"
             className="px-4 py-2 rounded font-medium bg-purple-600 text-white hover:bg-purple-700 disabled:bg-neutral-400 transition-colors"
           >
             {generateButtonLabel[rosterFillState]}
@@ -825,6 +880,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setPublicationStap('voorlopig');
                 setPublicationDialogOpen(true);
               }}
+              id="knop-voorlopig-publiceren"
               className="px-4 py-2 rounded font-medium bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
             >
               ✅ Voorlopig publiceren
@@ -836,6 +892,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setPublicationStap('definitief');
                 setPublicationDialogOpen(true);
               }}
+              id="knop-definitief-maken"
               className="px-4 py-2 rounded font-medium bg-emerald-700 text-white hover:bg-emerald-800 transition-colors"
             >
               🔏 Definitief maken
@@ -1282,6 +1339,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               setExportInitialType(null);
               setExportDialogOpen(true);
             }}
+            id="knop-uitnodigingen"
             className="px-4 py-2 rounded font-medium bg-green-700 text-white hover:bg-green-800 transition-colors"
           >
             📧 Uitnodigingen en herinneringen
@@ -1295,6 +1353,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setExportInitialType('reminders');
                 setExportDialogOpen(true);
               }}
+              id="knop-herinneringen"
               disabled={mailIngesteld === false}
               title={mailIngesteld === false ? GEEN_MAIL : undefined}
               className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"

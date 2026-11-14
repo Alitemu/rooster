@@ -7,6 +7,7 @@ bij dat toch niet hoeft, haal het dan weg.
 |---|---|---|---|
 | Diensten in de eigen agenda zetten (een agendabestand of een abonnement) | Deelnemers van de achterwacht en de AIOS | De eigen agenda is de verantwoordelijkheid van de deelnemer zelf. Een fout in een agenda-uitnodiging zou dan bij de app liggen, en dat is voorlopig niet gewenst | 1.5.0 |
 | Het rooster afdrukken vanaf de periodepagina van de planner | Planner van de achterwacht | Nu geen prioriteit. Afdrukken geeft alle knoppen mee en alleen de eerste pagina van de lijst. De rest van het rooster ontbreekt dan zonder waarschuwing. Wie het op papier wil, gebruikt de Excel-download van het rooster | 1.6.1 |
+| Een andere indeling van de periodepagina: de onderdelen als lijst links in beeld, een klik toont dat onderdeel, de status blijft bovenin staan | Planner van de achterwacht | De harmonica met inklapbare onderdelen werkt niet fijn. Eerst samen nadenken over de opzet voordat er iets gebouwd wordt | 1.8.0 |
 
 Wat er voor het rooster van de AIOS nog openstaat, staat onderaan
 `docs/aios-rooster.md`.

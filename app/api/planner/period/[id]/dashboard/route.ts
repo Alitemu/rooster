@@ -34,6 +34,9 @@ interface DashboardData {
   pool_id: string;
   /** GEPUBLICEERD only: when the roster was made definitief; null = still voorlopig. */
   definitief_op: string | null;
+  // For "Volgende stap" (lib/volgendeStap.ts, 1.8.0): since when voorlopig, and whether the invitations went out.
+  gepubliceerd_op: string | null;
+  uitgenodigd_op: string | null;
   submission_stats: SubmissionStats;
   large_imbalances: ImbalanceItem[];
   large_balance_threshold: number;
@@ -61,7 +64,7 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
 
     // Get period info
     const periodStmt = db.prepare(
-      'SELECT id, naam, status, deadline, pool_id, bevroren_ruleset_json, definitief_op FROM dienstrooster_schedule_period WHERE id = ?'
+      'SELECT id, naam, status, deadline, pool_id, bevroren_ruleset_json, definitief_op, gepubliceerd_op, uitgenodigd_op FROM dienstrooster_schedule_period WHERE id = ?'
     );
     const period = periodStmt.get(periodId) as any;
 
@@ -176,6 +179,8 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
         deadline: period.deadline,
         pool_id: period.pool_id,
         definitief_op: period.definitief_op ?? null,
+        gepubliceerd_op: period.gepubliceerd_op ?? null,
+        uitgenodigd_op: period.uitgenodigd_op ?? null,
         submission_stats: {
           not_started: stats.not_started || 0,
           in_progress: stats.in_progress || 0,

@@ -102,6 +102,7 @@ export function FillGapsSummary({ periodId, onCountChange, refreshKey, status }:
       </div>
       <Link
         href={`/planner/period/${periodId}/fill-gaps`}
+        id="knop-lege-diensten"
         className="shrink-0 px-4 py-2 rounded font-medium bg-amber-700 text-white hover:bg-amber-800 transition-colors"
       >
         📝 {voorafNaam(status)}

@@ -651,6 +651,9 @@ achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
+**Vanaf versie 1.8.0:**
+- *Volgende stap (achterwacht):* bovenaan de periodepagina staat wat de planner nu moet doen, met een knop naar de plek waar dat gebeurt. Bijvoorbeeld "Verstuur de uitnodigingen", "21 van de 31 deelnemers hebben hun voorkeuren nog niet bevestigd" of "Komen er geen reacties meer, maak het rooster dan definitief". De knop voert zelf niets uit: hij opent het juiste onderdeel en zet de bestaande knop klaar.
+
 **Vanaf versie 1.7.0:**
 - *Lege diensten in de lijst (achterwacht):* zodra het rooster gemaakt is, staat in het tabblad *Lijst* van het dienstrooster elke lege dienst als eigen rij, met "nog niemand" en de knop *Iemand toewijzen*. Eerder ontbrak zo'n dienst gewoon in de lijst.
 - *Lege diensten aanvullen:* het scherm *Rooster vooraf invullen* heet na het genereren *Lege diensten aanvullen*. Op een telefoon staat de keuzelijst nu onder de dienst, zodat de datum op één regel blijft.
