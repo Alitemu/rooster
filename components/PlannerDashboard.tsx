@@ -13,8 +13,8 @@
  * - Generate roster button
  */
 
-import { createContext, useContext, useState, useEffect, useRef, useId, type ReactNode } from 'react';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { createContext, useContext, useState, useEffect, useRef, useId, useSyncExternalStore, type MouseEvent, type ReactNode, type RefObject } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
@@ -44,7 +44,8 @@ import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
 import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
 import { voorafNaam } from '@/lib/vooraf';
 import { volgendeStap, type StapDoel } from '@/lib/volgendeStap';
-import { ADRES, GROEPEN, actiefOnderdeel, nieuweIndeling, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from '@/lib/periodeIndeling';
+import { ADRES, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from '@/lib/periodeIndeling';
+import { bewaarIndeling, leesIndeling, volgIndeling } from '@/lib/indelingOnthouden';
 
 interface PersonProgress {
   person_id: string;
@@ -113,9 +114,10 @@ interface IndelingWaarde {
   togglePin: (key: SectionKey) => void;
   // The new layout (lib/periodeIndeling.ts).
   actief: SectionKey;
-  gekozen: SectionKey | null;
   inLijst: ReadonlySet<SectionKey>;
-  adresVoor: (key: SectionKey | null) => string;
+  adresVoor: (key: SectionKey) => string;
+  kies: (key: SectionKey) => void;
+  naarHarmonica: () => void;
 }
 const IndelingContext = createContext<IndelingWaarde | null>(null);
 
@@ -136,9 +138,13 @@ function Section({
   // summary (keepMounted) stays on the page unseen, as it does closed in the accordion.
   if (ctx.modus === 'zijbalk') {
     if (ctx.actief === sleutel) {
+      // scroll-mt: under the bar with the menu, which sticks to the top below 1100 px. The title takes the
+      // focus after a choice (toonOnderdeel), so a keyboard and a screen reader are in the section at once.
       return (
-        <div className="card p-4 sm:p-6" data-testid={`onderdeel-${ADRES[sleutel]}`}>
-          <h2 className="text-xl font-bold text-neutral-900">{titel}</h2>
+        <div className="card p-4 sm:p-6 scroll-mt-24 min-[1100px]:scroll-mt-4" data-testid={`onderdeel-${ADRES[sleutel]}`}>
+          <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
+            {titel}
+          </h2>
           {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
           <div className="mt-4">{children}</div>
         </div>
@@ -225,52 +231,177 @@ const GEEN_MAIL = 'Versturen kan pas als de mail is ingesteld. Dat doet de behee
 type SectionKey = OnderdeelSleutel;
 
 /**
- * The frame of the sections. The accordion: the sections as they were. The new layout (1.9.0): the list
- * on the left, the chosen section on the right; on a phone the list until one is chosen, then that one
- * with a way back. The items are links, so a section has an address and the back button steps back.
+ * Brings the chosen section on screen with its title (1.10.0): the page stays where it was scrolled to,
+ * so after a long section the next one began above the screen. Then the focus: the button a next step
+ * points to, else the title.
  */
-function Onderdelen({ children }: { children: ReactNode }) {
+function toonOnderdeel(adres: string, elementId?: string, poging = 0) {
+  const sectie = document.querySelector<HTMLElement>(`[data-testid="onderdeel-${adres}"]`);
+  if (!sectie) return;
+  const knop = elementId ? document.getElementById(elementId) : null;
+  // The button of a section that still loads: a moment later, then the title after all.
+  if (elementId && !knop && poging < 5) {
+    window.setTimeout(() => toonOnderdeel(adres, elementId, poging + 1), 100);
+    return;
+  }
+  if (knop) {
+    knop.scrollIntoView({ block: 'center' });
+    knop.focus({ preventScroll: true });
+    return;
+  }
+  const marge = parseFloat(getComputedStyle(sectie).scrollMarginTop) || 0;
+  const top = sectie.getBoundingClientRect().top;
+  if (top < marge || top > window.innerHeight * 0.6) sectie.scrollIntoView({ block: 'start' });
+  sectie.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+}
+
+/** A click that opens the link elsewhere (new tab, new window) is the browser's. */
+const gewoneKlik = (e: MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
+/** The sections in their groups: the list on the left on a wide screen, the menu behind the button on a narrow one. */
+function OnderdelenLijst({ naKeuze }: { naKeuze?: () => void }) {
   const ctx = useContext(IndelingContext)!;
-  if (ctx.modus === 'harmonica') return <>{children}</>;
-  const gekozen = ctx.gekozen !== null;
   return (
-    <div className="md:grid md:grid-cols-[16rem_minmax(0,1fr)] md:gap-4 md:items-start" data-testid="indeling-nieuw">
-      <nav aria-label="Onderdelen van de periode" className={`card p-2 md:sticky md:top-4 ${gekozen ? 'hidden md:block' : ''}`}>
-        {GROEPEN.map((groep) => {
-          const items = groep.onderdelen.filter((k) => ctx.inLijst.has(k));
-          if (items.length === 0) return null;
-          return (
-            <div key={groep.naam}>
-              <p className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">{groep.naam}</p>
-              {items.map((k) => {
-                const { titel, hint } = ctx.onderdelen[k];
-                const actief = k === ctx.actief;
-                return (
-                  <Link
-                    key={k}
-                    href={ctx.adresVoor(k)}
-                    scroll={false}
-                    aria-current={actief ? 'page' : undefined}
-                    className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg ${actief ? 'md:bg-blue-700 md:text-white' : 'hover:bg-neutral-50'}`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block font-medium">{titel}</span>
-                      {hint && <span className={`block text-xs text-neutral-600 ${actief ? 'md:text-blue-100' : ''}`}>{hint}</span>}
-                    </span>
-                    <span aria-hidden="true" className="md:hidden text-xl text-neutral-400">›</span>
-                  </Link>
-                );
-              })}
-            </div>
-          );
-        })}
-      </nav>
-      <div className={`min-w-0 ${gekozen ? '' : 'hidden md:block'}`}>
-        <Link href={ctx.adresVoor(null)} scroll={false} className="md:hidden inline-block mb-3 text-sm font-semibold text-blue-700">
-          ‹ Alle onderdelen
-        </Link>
-        {children}
+    <>
+      {GROEPEN.map((groep) => {
+        const items = groep.onderdelen.filter((k) => ctx.inLijst.has(k));
+        if (items.length === 0) return null;
+        return (
+          <div key={groep.naam}>
+            <p className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">{groep.naam}</p>
+            {items.map((k) => {
+              const { titel, hint } = ctx.onderdelen[k];
+              const actief = k === ctx.actief;
+              // A link with the section's address, so it opens in a new tab too. A plain click changes the
+              // address in the browser itself (ctx.kies): no request to the server.
+              return (
+                <a
+                  key={k}
+                  href={ctx.adresVoor(k)}
+                  aria-current={actief ? 'page' : undefined}
+                  onClick={(e) => {
+                    if (!gewoneKlik(e)) return;
+                    e.preventDefault();
+                    naKeuze?.();
+                    ctx.kies(k);
+                  }}
+                  className={`block px-3 py-2.5 rounded-lg ${actief ? 'bg-blue-700 text-white' : 'hover:bg-neutral-50'}`}
+                >
+                  <span className="block font-medium">{titel}</span>
+                  {hint && <span className={`block text-xs ${actief ? 'text-blue-100' : 'text-neutral-600'}`}>{hint}</span>}
+                </a>
+              );
+            })}
+          </div>
+        );
+      })}
+      <div className="mt-2 pt-1 border-t border-neutral-200">
+        <button
+          type="button"
+          data-testid="indeling-wissel"
+          onClick={ctx.naarHarmonica}
+          className="w-full px-3 py-2.5 text-left text-sm font-medium text-blue-800 underline hover:text-blue-900"
+        >
+          Terug naar de oude indeling
+        </button>
       </div>
+    </>
+  );
+}
+
+/**
+ * The frame of the sections. The accordion: the sections as they were. The new layout (1.9.0): the list
+ * on the left, the chosen section on the right. Below 1100 px (1.10.0, the planner's wish) the list is a
+ * menu behind a button in a bar that sticks to the top of the screen: next to the list the tables had
+ * too little room there, and a list first put every section a screen further down.
+ */
+function Onderdelen({ naWisselRef, children }: { naWisselRef: RefObject<{ sectie: SectionKey; element?: string } | null>; children: ReactNode }) {
+  const ctx = useContext(IndelingContext)!;
+  const [menuOpen, setMenuOpen] = useState(false);
+  // The room under the bar when the menu opened: the menu never runs off the screen, it scrolls by itself.
+  const [menuHoogte, setMenuHoogte] = useState<number | null>(null);
+  const balkRef = useRef<HTMLDivElement>(null);
+  const menuKnopRef = useRef<HTMLButtonElement>(null);
+  const menuId = useId();
+
+  // After the chosen section is on the page: its title in view and the focus there.
+  useEffect(() => {
+    const wacht = naWisselRef.current;
+    if (!wacht || wacht.sectie !== ctx.actief) return;
+    naWisselRef.current = null;
+    toonOnderdeel(ADRES[wacht.sectie], wacht.element);
+  }, [ctx.actief, naWisselRef]);
+
+  // The open menu closes on Escape and on a tap next to it.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const toets = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuKnopRef.current?.focus();
+    };
+    const ernaast = (e: PointerEvent) => {
+      if (!balkRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('keydown', toets);
+    document.addEventListener('pointerdown', ernaast);
+    return () => {
+      document.removeEventListener('keydown', toets);
+      document.removeEventListener('pointerdown', ernaast);
+    };
+  }, [menuOpen]);
+
+  if (ctx.modus === 'harmonica') return <>{children}</>;
+  return (
+    <div className="min-[1100px]:grid min-[1100px]:grid-cols-[16rem_minmax(0,1fr)] min-[1100px]:gap-4 min-[1100px]:items-start" data-testid="indeling-nieuw">
+      <div ref={balkRef} className="min-[1100px]:hidden sticky top-0 z-20 mb-3">
+        <div className="card shadow-md relative">
+          <button
+            ref={menuKnopRef}
+            type="button"
+            data-testid="onderdelen-menu"
+            aria-expanded={menuOpen}
+            aria-controls={menuOpen ? menuId : undefined}
+            onClick={() => {
+              // Opening brings the bar to the top of the screen when the page can scroll that far, and the
+              // menu takes the room that is left under it.
+              if (!menuOpen && balkRef.current) {
+                balkRef.current.scrollIntoView({ block: 'start' });
+                setMenuHoogte(Math.max(200, window.innerHeight - balkRef.current.getBoundingClientRect().bottom - 16));
+              }
+              setMenuOpen(!menuOpen);
+            }}
+            className="w-full flex items-center gap-3 px-4 py-3 text-left"
+          >
+            <svg className="w-6 h-6 shrink-0 text-neutral-700" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M3 5h14M3 10h14M3 15h14" />
+            </svg>
+            <span className="min-w-0 flex-1">
+              <span className="block text-xs font-semibold uppercase tracking-wide text-neutral-600">Onderdelen</span>
+              <span className="block font-bold text-neutral-900 truncate">{ctx.onderdelen[ctx.actief].titel}</span>
+            </span>
+            <svg className={`w-5 h-5 shrink-0 text-neutral-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
+            </svg>
+          </button>
+          {menuOpen && (
+            <nav
+              id={menuId}
+              aria-label="Onderdelen van de periode"
+              className="absolute left-0 right-0 top-full mt-1 card shadow-lg p-2 overflow-y-auto"
+              style={{ maxHeight: menuHoogte ?? undefined }}
+            >
+              <OnderdelenLijst naKeuze={() => setMenuOpen(false)} />
+            </nav>
+          )}
+        </div>
+      </div>
+      {/* Its own scroll bar: with nine sections the list is higher than a laptop screen, and stuck to the
+          top its last items (the roster) could not be reached (1.10.0). */}
+      <nav aria-label="Onderdelen van de periode" className="hidden min-[1100px]:block card p-2 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <OnderdelenLijst />
+      </nav>
+      <div className="min-w-0">{children}</div>
     </div>
   );
 }
@@ -366,16 +497,33 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   // The new layout (1.9.0, lib/periodeIndeling.ts): ?indeling=nieuw while the accordion is the default,
   // ?onderdeel=... for the section on screen, so the back button and a link work.
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
-  const zijbalk = nieuweIndeling(searchParams.get('indeling'));
+  // The layout: what the address says, else what this browser remembers (1.10.0, lib/indelingOnthouden.ts).
+  const indelingOnthouden = useSyncExternalStore(volgIndeling, leesIndeling, () => null);
+  const indelingInAdres = searchParams.get('indeling');
+  const zijbalk = nieuweIndeling(indelingInAdres, indelingOnthouden);
+  useEffect(() => {
+    const keuze = keuzeUitAdres(indelingInAdres);
+    if (keuze) bewaarIndeling(keuze);
+  }, [indelingInAdres]);
   const gekozenOnderdeel = sleutelUitAdres(searchParams.get('onderdeel'));
-  const adresVoor = (key: SectionKey | null): string => {
+  // Only the question mark and what follows: the browser keeps the page's own address, sub-folder included.
+  const adresVoor = (key: SectionKey): string => {
     const params = new URLSearchParams(searchParams.toString());
-    if (key) params.set('onderdeel', ADRES[key]);
-    else params.delete('onderdeel');
-    return `${pathname}?${params.toString()}`;
+    params.set('onderdeel', ADRES[key]);
+    return `?${params.toString()}`;
   };
+  // The switch between the two layouts. The address may still name the other one or a section, which
+  // would win over the choice just made.
+  const wisselIndeling = (keuze: 'nieuw' | 'oud') => {
+    bewaarIndeling(keuze);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('indeling');
+    if (keuze === 'oud') params.delete('onderdeel');
+    const rest = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+  };
+  // The section a click just chose, and the button a next step points to in it (Onderdelen, toonOnderdeel).
+  const naWisselRef = useRef<{ sectie: SectionKey; element?: string } | null>(null);
 
   const toggleSectionOpen = (key: SectionKey) => {
     setOpenSections((prev) => {
@@ -907,6 +1055,17 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   const zichtbaar = new Set((Object.keys(onderdelen) as SectionKey[]).filter((k) => onderdelen[k].zichtbaar));
   const inLijst = new Set([...zichtbaar].filter((k) => k !== 'voorstellen' || Boolean(suggestionCount)));
   const actiefOnderdeelNu = actiefOnderdeel(gekozenOnderdeel, startOnderdeel(stapNu?.doel, dashboard.status), inLijst);
+  // Another section: the address changes in the browser itself (Next follows history.pushState), so
+  // nothing waits for the server. Until 1.10.0 it was a navigation: every click asked the server for the
+  // page again, a slow one made each section slow and without a connection the whole page was gone.
+  const kiesOnderdeel = (key: SectionKey, element?: string) => {
+    if (key === actiefOnderdeelNu) {
+      toonOnderdeel(ADRES[key], element);
+      return;
+    }
+    naWisselRef.current = { sectie: key, element };
+    window.history.pushState(null, '', adresVoor(key));
+  };
   const indeling = {
     modus: zijbalk ? ('zijbalk' as const) : ('harmonica' as const),
     onderdelen,
@@ -915,16 +1074,21 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     toggleOpen: toggleSectionOpen,
     togglePin: toggleSectionPin,
     actief: actiefOnderdeelNu,
-    gekozen: gekozenOnderdeel,
     inLijst,
     adresVoor,
+    kies: (key: SectionKey) => kiesOnderdeel(key),
+    naarHarmonica: () => wisselIndeling('oud'),
   };
 
   const gaNaarStap = (doel: StapDoel) => {
     const { sectie, element } = STAP_PLEK[doel];
-    // The new layout shows the section by its address; the accordion opens it.
-    if (sectie && zijbalk) router.push(adresVoor(sectie), { scroll: false });
-    else if (sectie && !openSections.has(sectie)) toggleSectionOpen(sectie);
+    // The new layout shows the section by its address and gives the button the focus once it is there
+    // (a timer lost that race against any real network, 1.10.0). The accordion opens it.
+    if (sectie && zijbalk) {
+      kiesOnderdeel(sectie, element);
+      return;
+    }
+    if (sectie && !openSections.has(sectie)) toggleSectionOpen(sectie);
     // After the section has opened: the button there gets the focus, so Enter does it.
     window.setTimeout(() => {
       const doelElement = document.getElementById(element);
@@ -1083,8 +1247,22 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         )}
       </div>
 
+      {/* The way into the new layout while the accordion is the default (1.10.0); the way back is in its list. */}
+      {!zijbalk && (
+        <div className="flex justify-end -my-2">
+          <button
+            type="button"
+            data-testid="indeling-wissel"
+            onClick={() => wisselIndeling('nieuw')}
+            className="px-2 py-2 text-sm font-medium text-blue-800 underline hover:text-blue-900"
+          >
+            Nieuwe indeling proberen
+          </button>
+        </div>
+      )}
+
       <IndelingContext.Provider value={indeling}>
-      <Onderdelen>
+      <Onderdelen naWisselRef={naWisselRef}>
       {/* The first section (1.1.0): a beginsaldo or correctie forgotten in the
           wizard can still go in until the roster is generated. */}
       {onderdelen.importcorrecties.zichtbaar && (

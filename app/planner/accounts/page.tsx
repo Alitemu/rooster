@@ -3,8 +3,9 @@
 /**
  * Accounts beheren: the staff accounts, for an ADMIN (lib/staffAccounts.ts).
  * Add a planner or beheerder, give an account a temporary password,
- * switch an account off or change its role. One's own account is shown but
- * managed with "Wachtwoord wijzigen" on the period list.
+ * switch an account off or change its role, and delete one that has left no
+ * trace in a roster (1.10.0; the server says which, `verwijderbaar`). One's
+ * own account is shown but managed with "Wachtwoord wijzigen" on the period list.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -19,6 +20,7 @@ interface Account {
   wachtwoord_ingesteld: boolean;
   wachtwoord_moet_wijzigen: boolean;
   dienst_type: 'ACHTERWACHT' | 'AIOS' | null;
+  verwijderbaar: boolean;
 }
 
 // Mirrors lib/staffAccounts.ts DIENST_TYPES (that module reads the
@@ -69,6 +71,8 @@ export default function AccountsPage() {
   // The temporary password just set, shown once so it can be passed on.
   const [getoond, setGetoond] = useState<{ codenaam: string; wachtwoord: string } | null>(null);
   const [resetVoor, setResetVoor] = useState<{ id: string; wachtwoord: string } | null>(null);
+  // Deleting cannot be undone: the first click asks, the second does it.
+  const [verwijderVraag, setVerwijderVraag] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -259,6 +263,23 @@ export default function AccountsPage() {
                             Annuleren
                           </button>
                         </div>
+                      ) : verwijderVraag === a.id ? (
+                        <div className="flex flex-wrap items-center gap-2" role="alert">
+                          <span className="text-xs text-neutral-800">{a.codenaam} verwijderen? Dit kan niet ongedaan worden gemaakt.</span>
+                          <button
+                            className="px-2 py-1 rounded text-xs font-medium bg-red-700 text-white hover:bg-red-800"
+                            disabled={busy}
+                            onClick={async () => {
+                              await run(() => send(`/api/admin/accounts/${a.id}`, 'DELETE'), `${a.codenaam} is verwijderd.`);
+                              setVerwijderVraag(null);
+                            }}
+                          >
+                            Ja, verwijderen
+                          </button>
+                          <button className="btn-secondary" disabled={busy} onClick={() => setVerwijderVraag(null)}>
+                            Annuleren
+                          </button>
+                        </div>
                       ) : (
                         <div className="flex flex-wrap gap-3">
                           <button
@@ -280,6 +301,11 @@ export default function AccountsPage() {
                           >
                             {a.actief ? 'Uitschakelen' : 'Inschakelen'}
                           </button>
+                          {a.verwijderbaar && (
+                            <button className="text-xs font-medium text-red-700 hover:underline" disabled={busy} onClick={() => setVerwijderVraag(a.id)}>
+                              Verwijderen
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -289,6 +315,10 @@ export default function AccountsPage() {
             </tbody>
           </table>
         </div>
+        <p className="text-xs text-neutral-600" data-testid="uitleg-verwijderen">
+          Verwijderen kan alleen bij een account dat nog niets in een rooster of in de instellingen heeft gewijzigd. Een ander account
+          schakel je uit. Zo blijft in de geschiedenis staan wie wat heeft gedaan.
+        </p>
 
         <div className="card p-6 space-y-3">
           <p className="text-sm font-medium text-neutral-800">Nieuw account</p>

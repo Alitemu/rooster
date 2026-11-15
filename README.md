@@ -652,7 +652,8 @@ te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet.
 
 **Vanaf versie 1.9.0:**
-- *Nieuwe indeling van de periodepagina (achterwacht), om uit te proberen:* zet `?indeling=nieuw` achter het adres van een periode. De onderdelen staan dan als lijst links, in vier groepjes (Voorbereiden, Deelnemers, Communicatie en Rooster). Een klik toont dat onderdeel rechts. De status en *Volgende stap* blijven bovenaan staan. Elk onderdeel heeft een eigen adres, dus de terugknop van de browser werkt en je kunt een link naar een onderdeel sturen. De pagina opent bij het onderdeel waar *Volgende stap* naar wijst. Op een telefoon zie je eerst de lijst en een tik opent het onderdeel. Zonder `?indeling=nieuw` is alles zoals het was. In 2.0.0 wordt de nieuwe indeling de standaard.
+- *Nieuwe indeling van de periodepagina (achterwacht), om uit te proberen:* klik op de periodepagina op *Nieuwe indeling proberen*, rechts boven de onderdelen. De onderdelen staan dan als lijst links, in vier groepjes (Voorbereiden, Deelnemers, Communicatie en Rooster). Een klik toont dat onderdeel rechts. De status en *Volgende stap* blijven bovenaan staan. Elk onderdeel heeft een eigen adres, dus de terugknop van de browser werkt en je kunt een link naar een onderdeel sturen. De pagina opent bij het onderdeel waar *Volgende stap* naar wijst. De browser onthoudt je keuze (vanaf 1.10.0). Onderaan de lijst staat *Terug naar de oude indeling*. Een link met `?indeling=nieuw` erachter zet de nieuwe indeling ook aan. Zolang je niets kiest, is alles zoals het was. In 2.0.0 wordt de nieuwe indeling de standaard.
+- *Op een telefoon, een tablet of een smal venster (smaller dan 1100 px, vanaf 1.10.0):* de lijst is dan een menu. Boven het onderdeel staat een balk met drie streepjes en de naam van het onderdeel dat je ziet. Een tik opent de lijst en een keuze sluit hem weer. De balk blijft bovenaan staan als je naar beneden scrolt.
 
 **Vanaf versie 1.8.0:**
 - *Volgende stap (achterwacht):* bovenaan de periodepagina staat wat de planner nu moet doen, met een knop naar de plek waar dat gebeurt. Bijvoorbeeld "Verstuur de uitnodigingen", "21 van de 31 deelnemers hebben hun voorkeuren nog niet bevestigd" of "Komen er geen reacties meer, maak het rooster dan definitief". De knop voert zelf niets uit: hij opent het juiste onderdeel en zet de bestaande knop klaar.
@@ -1318,6 +1319,10 @@ de stroom al gebouwd?".
   een planner of beheerder toevoegen, iemand een tijdelijk wachtwoord geven,
   een account uitschakelen of de rol wijzigen. Bij een nieuw account kies je ook de dienst: Achterwacht of
   AIOS.
+  Een account dat nog niets heeft gewijzigd, kun je ook verwijderen (vanaf 1.10.0). Dat is bedoeld voor
+  een account dat per ongeluk of om iets uit te proberen is gemaakt. De codenaam komt daarna weer vrij.
+  Heeft het account iets in een rooster of in de instellingen gewijzigd, dan staat er geen *Verwijderen*.
+  Zo'n account schakel je uit, zodat in de geschiedenis blijft staan wie wat heeft gedaan.
   Een planner ziet alleen de pools, periodes, roosters en voorkeuren van de
   eigen dienst. De planner van de achterwacht en die van de AIOS zien dus
   niets van elkaar. De beheerder ziet beide diensten. Een deelnemer hoort

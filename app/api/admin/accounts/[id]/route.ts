@@ -2,12 +2,16 @@
  * PATCH /api/admin/accounts/[id] - { actief?, rol? }: switch a staff account
  * off or on, or make it planner or beheerder (ADMIN only, never one's own,
  * never the last active admin; lib/staffAccounts.ts).
+ *
+ * DELETE /api/admin/accounts/[id] - deletes a staff account that has left no
+ * trace in a roster or its history (1.10.0); any other answers 409 and is
+ * switched off instead. The audit row is written by deleteStaffAccount.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContextFromRequest, requireAdminAccess } from '@/lib/auth-context';
 import { internalErrorResponse, parseJsonBody, unauthorizedResponse } from '@/lib/api-errors';
-import { updateStaffAccount } from '@/lib/staffAccounts';
+import { deleteStaffAccount, updateStaffAccount } from '@/lib/staffAccounts';
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
@@ -22,5 +26,20 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     return NextResponse.json({ success: true, data: { id } });
   } catch (error) {
     return internalErrorResponse('admin-accounts-update', error);
+  }
+}
+
+export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const { id } = await props.params;
+  try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requireAdminAccess(auth)) return unauthorizedResponse();
+    const result = deleteStaffAccount(auth!.userId, id);
+    if (!result.ok) {
+      return NextResponse.json({ success: false, error: { code: result.code, message: result.message } }, { status: result.status });
+    }
+    return NextResponse.json({ success: true, data: { id } });
+  } catch (error) {
+    return internalErrorResponse('admin-accounts-delete', error);
   }
 }

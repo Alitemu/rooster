@@ -70,8 +70,10 @@ export function volgendeStap(p: PeriodeStand, nu: Date = new Date()): VolgendeSt
     case 'GEGENEREERD':
       if (p.lege_diensten === null) return stap('Het rooster is gemaakt. Kijk het na en publiceer het voorlopig.', 'publiceren');
       if (p.lege_diensten > 0) {
-        const leeg = p.lege_diensten === 1 ? '1 dienst is nog leeg.' : `${p.lege_diensten} diensten zijn nog leeg.`;
-        return stap(`${leeg} Vul ze aan of publiceer het rooster met lege diensten.`, 'lege-diensten');
+        const leeg = p.lege_diensten === 1 ? '1 dienst is nog leeg. Vul die eerst aan.' : `${p.lege_diensten} diensten zijn nog leeg. Vul ze eerst aan.`;
+        // Publishing refuses a roster with an empty dienst (lib/publicationCheck.ts). Until 1.10.0 this line
+        // offered "of publiceer het rooster met lege diensten", which the app then refused.
+        return stap(`${leeg} Publiceren kan pas als elke dienst is ingevuld.`, 'lege-diensten');
       }
       return stap('Het rooster is klaar. Publiceer het voorlopig, zodat iedereen het kan nakijken.', 'publiceren');
     case 'GEPUBLICEERD':

@@ -298,19 +298,59 @@ of the page (the sections as a list on the left) is on docs/todo.md.
 
 The planner found the accordion awkward. Next to it, not instead of it, a layout with the sections as a
 list on the left (four groups: Voorbereiden, Deelnemers, Communicatie, Rooster) and one section on the
-right; the status and Volgende stap stay on top. Opt-in with `?indeling=nieuw`; 2.0.0 makes it the default
-(docs/todo.md) once the planners have tried it.
+right; the status and Volgende stap stay on top. Opt-in with the switch on the page ("Nieuwe indeling
+proberen") or `?indeling=nieuw`; 2.0.0 makes it the default (docs/todo.md) once the planners have tried it.
 
 One list feeds both: `onderdelen` in components/PlannerDashboard.tsx holds per section its title,
 summary and whether it is there, and `Section` takes only `sleutel` and reads the rest from
 IndelingContext, drawing the accordion exactly as before or, in the new layout, only the chosen section
 (a keepMounted one stays mounted unseen, so FillGapsSummary and the herverdeling still report their
 counts). The groups, the address of each section (`?onderdeel=status-voorkeuren` and so on) and which one
-opens first (where Volgende stap points) are lib/periodeIndeling.ts. The items are `Link`s: the back
-button steps back and a section can be linked to. On a phone the list shows until a section is chosen,
-then that section with "‹ Alle onderdelen". The page wraps the dashboard in Suspense for
-useSearchParams.
+opens first (where Volgende stap points) are lib/periodeIndeling.ts. Each item is a link with the
+section's address: the back button steps back and a section can be linked to. The page wraps the
+dashboard in Suspense for useSearchParams.
 
 Every browser test but tests/e2e/indeling-nieuw.e2e.ts still uses the accordion, which is how 1.9.0 shows
 that nothing changed for it (139 of 139). Switching the default means moving those tests' section helpers.
+
+### What the audit of 1.9.0 found (1.10.0)
+
+Measured in the browser on the demo of 31 people, in every status, on a large screen, a laptop
+(1366 x 650 visible), a tablet and a phone. Section by section the two layouts had the same buttons,
+fields and text: nothing was lost. What was wrong, and how it is now:
+
+- **A section went through the server.** The items were Next `Link`s (and Volgende stap a
+  `router.push`): a change of `?onderdeel=` asks the server for the page again. Behind a server 1.5 s
+  slow a click took 1.8 s (the accordion 78 ms), and without a connection the browser replaced the whole
+  page by its own error page. Now `window.history.pushState` with only the query (Next follows it in
+  useSearchParams; the browser keeps the path, sub-folder included): no request. Do not go back to
+  `Link` or the router for this.
+- **Volgende stap lost its focus.** It pushed the address and looked for the button 50 ms later. That
+  works on one machine only: 20 ms of network and the button was not there yet. The browser test passed
+  for that reason alone. Now the click leaves what it wants in `naWisselRef`, and `Onderdelen` acts in an
+  effect once that section is the one on screen (`toonOnderdeel`). The test delays the server.
+- **The layout was lost on every way back.** It lived in the address only, and "Terug naar periode"
+  and the list of periods name no layout. lib/indelingOnthouden.ts keeps the choice in the browser
+  (localStorage; a browser that refuses it keeps it for the tab), read with useSyncExternalStore. The
+  address still wins when it names one, and is then remembered (`keuzeUitAdres`). Per browser, not per
+  account: it is a way of looking.
+- **The list was higher than a laptop screen** (666 to 750 px in 650) and stuck to the top, so the roster,
+  its last item, could not be reached while scrolled down. It has its own scroll bar now.
+- **A chosen section began above the screen** when the page was scrolled down (757 px in the
+  measurement). `toonOnderdeel` scrolls it to its title and gives the title the focus, which also puts
+  a keyboard and a screen reader in the section (it took 8 tabs).
+- **Below 1100 px two columns left the tables too little room** (464 px for a section at 768, where the
+  accordion has 704), and on a phone the list came first, a screen above every section. The planner
+  asked for a menu there: a bar that sticks to the top with a button (three lines, the name of the
+  section on screen), the list under it when open. It closes on a choice, on Escape and on a tap next
+  to it, and takes the room under the bar so it never runs off the screen. 1100 px is where the widest
+  table (Dienstdoende, 725 px) fits next to the list of 16 rem.
+
+Not changed, on docs/todo.md: the block above the sections (the header of the period, Volgende stap, the
+row of buttons) is 430 to 660 px on a laptop and over 800 px on a phone, so the sections begin at or
+below the edge of the first screen. The planner asked to keep the status on top as it is.
+
+Also from that audit, in both layouts: Volgende stap said "of publiceer het rooster met lege diensten"
+for a roster with empty diensten, which publishing refuses (lib/publicationCheck.ts). The sentence now
+says publishing needs every dienst filled, and its test reads that rule so the two stay together.
 

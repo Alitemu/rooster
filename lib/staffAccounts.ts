@@ -3,7 +3,8 @@
  *
  * An ADMIN can do everything a planner can, and here also: add a planner or
  * admin account, give an account a temporary password, turn off someone's
- * two-step verification and switch an account off. A temporary password
+ * two-step verification, switch an account off and delete one that has left
+ * no trace (deleteStaffAccount, 1.10.0). A temporary password
  * sets `wachtwoord_moet_wijzigen`, so the next login can only choose a new
  * one (like a login with the seed password): the admin knows the temporary
  * one, only its owner should know the one the account goes on with.
@@ -39,6 +40,8 @@ export interface StaffAccount {
   wachtwoord_ingesteld: boolean;
   wachtwoord_moet_wijzigen: boolean;
   dienst_type: DienstType | null;
+  /** Nothing in a roster or its history refers to it: the beheerder may delete it (heeftSporen). */
+  verwijderbaar: boolean;
 }
 
 export type AccountResult = { ok: true } | { ok: false; status: number; code: string; message: string };
@@ -69,7 +72,37 @@ export function listStaffAccounts(): StaffAccount[] {
     wachtwoord_ingesteld: Boolean(r.wachtwoord_hash),
     wachtwoord_moet_wijzigen: Boolean(r.wachtwoord_moet_wijzigen),
     dienst_type: r.dienst_type,
+    verwijderbaar: !heeftSporen(r.id),
   }));
+}
+
+/**
+ * Every column in the database that points to a person, read from the database itself: a table added
+ * later counts without anyone remembering to add it here. The schema does not change while the app runs.
+ */
+let naarPersoon: Array<{ tabel: string; kolom: string }> | null = null;
+function verwijzingenNaarPersoon(): Array<{ tabel: string; kolom: string }> {
+  if (naarPersoon) return naarPersoon;
+  const tabellen = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'dienstrooster_%'`).all() as Array<{ name: string }>;
+  naarPersoon = tabellen.flatMap(({ name }) =>
+    (db.prepare(`PRAGMA foreign_key_list(${name})`).all() as Array<{ table: string; from: string }>)
+      .filter((fk) => fk.table === 'dienstrooster_person')
+      .map((fk) => ({ tabel: name, kolom: fk.from }))
+  );
+  return naarPersoon;
+}
+
+/**
+ * Whether anything refers to this account besides what it did to itself. A person is never deleted
+ * from this app, because the roster and its history name them: who published, who assigned, who
+ * changed a setting. An account that did any of that stays (switched off); one that did not can go.
+ * What it did to itself (its own password, its own two-step verification) are audit rows that go with it.
+ */
+function heeftSporen(personId: string): boolean {
+  return verwijzingenNaarPersoon().some(({ tabel, kolom }) => {
+    const eigen = tabel === 'dienstrooster_audit_log' && kolom === 'actor_id' ? ` AND NOT (entiteit = 'person' AND entiteit_id = @id)` : '';
+    return Boolean(db.prepare(`SELECT 1 FROM ${tabel} WHERE ${kolom} = @id${eigen} LIMIT 1`).get({ id: personId }));
+  });
 }
 
 /** Dutch reasons a password can't be used, empty when it can. */
@@ -80,11 +113,11 @@ export function temporaryPasswordProblems(password: unknown): string[] {
   return problems;
 }
 
-function audit(actorId: string, targetId: string, wijziging: Record<string, unknown>) {
+function audit(actorId: string, targetId: string, wijziging: Record<string, unknown>, actie: 'UPDATE' | 'DELETE' = 'UPDATE') {
   db.prepare(
     `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip)
-     VALUES (?, ?, 'person', ?, 'UPDATE', ?, ?)`
-  ).run(crypto.randomUUID(), actorId, targetId, JSON.stringify(wijziging), new Date().toISOString());
+     VALUES (?, ?, 'person', ?, ?, ?, ?)`
+  ).run(crypto.randomUUID(), actorId, targetId, actie, JSON.stringify(wijziging), new Date().toISOString());
 }
 
 function staffTarget(
@@ -186,4 +219,35 @@ export function updateStaffAccount(
     audit(actorId, targetId, { wijziging: 'account aangepast door beheerder', actief, rol });
   })();
   return { ok: true };
+}
+
+/**
+ * Deletes a staff account that has left no trace (1.10.0, the beheerder's wish: an account made by
+ * mistake or to try something could only be switched off, and stayed in the list for good).
+ *
+ * Only such an account: one that published a roster, assigned a dienst or changed a setting is named in
+ * the history, which must keep saying who did it. That one is switched off instead (heeftSporen).
+ * Never one's own account, so another active beheerder is always left.
+ *
+ * The audit log keeps that it existed: the row of its creation stays, and the row written here names the
+ * codenaam, which is then free again.
+ */
+export function deleteStaffAccount(actorId: string, targetId: string): AccountResult {
+  const target = staffTarget(actorId, targetId);
+  if (isFailure(target)) return target;
+  return db.transaction((): AccountResult => {
+    if (heeftSporen(targetId)) {
+      return fail(
+        409,
+        'IN_GEBRUIK',
+        'Dit account staat in de geschiedenis van een rooster of van de instellingen. Het kan daarom niet worden verwijderd. Schakel het uit. Dan kan niemand er meer mee inloggen.'
+      );
+    }
+    const eigen = db
+      .prepare(`DELETE FROM dienstrooster_audit_log WHERE actor_id = ? AND entiteit = 'person' AND entiteit_id = ?`)
+      .run(targetId, targetId).changes;
+    db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(targetId);
+    audit(actorId, targetId, { wijziging: 'account verwijderd door beheerder', codenaam: target.codenaam, rol: target.rol, eigen_wijzigingen_verwijderd: eigen }, 'DELETE');
+    return { ok: true };
+  })();
 }

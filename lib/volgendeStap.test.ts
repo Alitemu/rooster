@@ -55,10 +55,22 @@ describe('volgendeStap', () => {
   });
 
   it('made: fill what stayed empty, or publish when nothing did', () => {
-    expect(met({ status: 'GEGENEREERD', lege_diensten: 4 })).toMatchObject({ doel: 'lege-diensten', tekst: '4 diensten zijn nog leeg. Vul ze aan of publiceer het rooster met lege diensten.' });
-    expect(met({ status: 'GEGENEREERD', lege_diensten: 1 })?.tekst).toMatch(/^1 dienst is nog leeg\./);
+    expect(met({ status: 'GEGENEREERD', lege_diensten: 4 })).toMatchObject({
+      doel: 'lege-diensten',
+      tekst: '4 diensten zijn nog leeg. Vul ze eerst aan. Publiceren kan pas als elke dienst is ingevuld.',
+    });
+    expect(met({ status: 'GEGENEREERD', lege_diensten: 1 })?.tekst).toBe('1 dienst is nog leeg. Vul die eerst aan. Publiceren kan pas als elke dienst is ingevuld.');
     expect(met({ status: 'GEGENEREERD', lege_diensten: 0 })).toMatchObject({ doel: 'publiceren', tekst: expect.stringMatching(/^Het rooster is klaar\./) });
     expect(met({ status: 'GEGENEREERD', lege_diensten: null })?.doel).toBe('publiceren');
+  });
+
+  it('never offers to publish a roster with an empty dienst, which publishing refuses', () => {
+    // Until 1.10.0 the line said "of publiceer het rooster met lege diensten" and the app answered
+    // "Nog niet alle diensten zijn ingedeeld". The rule is in lib/publicationCheck.ts: when an empty
+    // dienst stops being a reason to refuse there, this sentence changes with it.
+    for (const leeg of [1, 2, 40]) expect(met({ status: 'GEGENEREERD', lege_diensten: leeg })?.tekst).not.toMatch(/publiceer het rooster met lege|of publiceer/i);
+    const controle = fs.readFileSync(path.resolve(__dirname, 'publicationCheck.ts'), 'utf8');
+    expect(controle).toMatch(/if \(!slotsFilled\) \{\s*issues\.push\(/);
   });
 
   it('voorlopig: since when, and make it definitief', () => {

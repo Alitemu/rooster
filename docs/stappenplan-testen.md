@@ -35,6 +35,9 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
 - [ ] **B3.** *Accounts beheren*: maak een planner voor de achterwacht en een
   planner voor de AIOS. Je ziet: elk met het tijdelijke wachtwoord en de
   juiste dienst.
+- [ ] **B3a.** Maak een account om uit te proberen en klik op *Verwijderen*.
+  Je ziet: eerst de vraag of je het zeker weet, daarna is het account weg.
+  Bij een account dat al iets heeft gewijzigd staat geen *Verwijderen*.
 - [ ] **B4.** Log in als elke planner. De planner van de achterwacht ziet niets
   van de AIOS, en andersom.
 - [ ] **B5.** Wachtwoord wijzigen werkt. Uitloggen werkt, ook in een tweede
@@ -55,11 +58,16 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   bovenaan de periodepagina. Je ziet: steeds de stap die nu aan de beurt is, in
   de volgorde uitnodigen, herinneren, sluiten, genereren, aanvullen, voorlopig,
   definitief. De knop eronder gaat naar de goede knop en voert zelf niets uit.
-- [ ] **C0a.** Open de periodepagina met `?indeling=nieuw` achter het adres. Je ziet:
+- [ ] **C0a.** Klik op de periodepagina op *Nieuwe indeling proberen*. Je ziet:
   de onderdelen links in vier groepjes en rechts het onderdeel waar *Volgende stap*
   naar wijst. Elk onderdeel opent met een klik. De terugknop van de browser gaat
-  naar het vorige onderdeel. Op een telefoon zie je eerst de lijst en brengt
-  *‹ Alle onderdelen* je terug. Zonder `?indeling=nieuw` is de pagina zoals altijd.
+  naar het vorige onderdeel. Klik op de naam van een persoon en daarna op
+  *Terug naar periode*: de nieuwe indeling staat er nog. *Terug naar de oude
+  indeling* staat onderaan de lijst.
+- [ ] **C0b.** Doe hetzelfde op een telefoon. Je ziet meteen een onderdeel, met
+  erboven een balk met drie streepjes en de naam van dat onderdeel. Een tik op de
+  balk toont de lijst. Kies een onderdeel: de lijst sluit en het onderdeel staat
+  er vanaf de titel. Scrol naar beneden: de balk blijft bovenaan staan.
 - [ ] **C1a.** Open de periodepagina van een open periode en klik op *Aanpassen*
   naast het streefbereik. Vul een ander bereik in en sla het op. Je ziet: het
   nieuwe bereik in woorden. Waren de uitnodigingen al verstuurd, dan zegt de

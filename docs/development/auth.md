@@ -108,6 +108,18 @@ is not read as one: verifySessionToken accepts only kind staff and person.
      "tijdelijk wachtwoord"), change-password clears it. Every change
      revokes that account's sessions and is audit-logged without password
      material. Never one's own account (409), never the last active admin.
+     Deleting (1.10.0, the beheerder's wish, `deleteStaffAccount`): only an
+     account nothing refers to. A person is otherwise never deleted from
+     this app, because some 36 columns point to one (who published, who
+     assigned, who changed a setting, the audit log). `heeftSporen` reads
+     those columns from the database itself (PRAGMA foreign_key_list), so
+     a table added later blocks a deletion instead of failing it on a
+     foreign key. The one exception is what the account did to itself (it
+     chose its own password): those audit rows go with it. The rows about
+     it stay, and a DELETE row names the codenaam, which is free again.
+     The list says per account whether it can go (`verwijderbaar`); the
+     page shows Verwijderen only then and explains the rest. Any other
+     account is switched off (tests/e2e/account-verwijderen.e2e.ts).
      A staff account has a `dienst_type` (migration 0022; DIENST_TYPES
      ACHTERWACHT | AIOS, lib/staffAccounts.ts): the admin picks it when
      adding an account (until 0.81.0, step 5 of docs/aios-rooster.md, AIOS

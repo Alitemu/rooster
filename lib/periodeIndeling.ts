@@ -4,7 +4,12 @@
  * the right, the status on top as now. Each section has its own address, so the browser's back button
  * steps back and a link can point to one. On a phone the list comes first and a tap opens the section.
  *
- * Opt-in with ?indeling=nieuw while both exist. Pure: components/PlannerDashboard.tsx renders it.
+ * While both exist the accordion is the default. The planner turns the new layout on with the switch on
+ * the page or with ?indeling=nieuw, and the browser remembers it (lib/indelingOnthouden.ts, 1.10.0):
+ * until then every "Terug naar periode" led back to the accordion. Below 1100 px the list is a menu
+ * behind a button (1.10.0, the planner's wish), where two columns left the tables too little room.
+ *
+ * Pure: components/PlannerDashboard.tsx renders it.
  */
 import type { StapDoel } from './volgendeStap';
 
@@ -46,9 +51,19 @@ export function sleutelUitAdres(adres: string | null): OnderdeelSleutel | null {
   return gevonden ?? null;
 }
 
-/** Whether the address asks for the new layout. */
-export function nieuweIndeling(indeling: string | null): boolean {
-  return indeling === 'nieuw';
+/**
+ * Whether the page shows the new layout. The address decides when it says so (?indeling=nieuw or
+ * ?indeling=oud), else what this browser remembers; without either, the accordion.
+ */
+export function nieuweIndeling(indeling: string | null, onthouden: string | null = null): boolean {
+  if (indeling === 'nieuw') return true;
+  if (indeling === 'oud') return false;
+  return onthouden === 'nieuw';
+}
+
+/** What the address asks to remember: only a choice it names. */
+export function keuzeUitAdres(indeling: string | null): 'nieuw' | 'oud' | null {
+  return indeling === 'nieuw' || indeling === 'oud' ? indeling : null;
 }
 
 /**
