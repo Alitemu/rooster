@@ -163,6 +163,21 @@ replaced while the content loaded) is pulled back. The rule is
 focusSprong, tested in lib/dialogFocus.test.ts for both copies; the DOM side in
 tests/e2e/dialog-focus.e2e.ts and tests/e2e/aios-audit.e2e.ts.)
 
+(1.13.0: the new layout of the period page is a copy for the AIOS too:
+lib/aiosIndeling.ts (groups, addresses, first section), lib/aiosIndelingOnthouden.ts
+(the remembered choice, with the same key as the achterwacht's: one choice for
+both diensten), components/AiosInPlek.tsx (the slots of the blue bar). Unlike the
+achterwacht's page, whose sections are one list in one component, the AIOS's
+sections live in seven components: each AiosSectie tells the list itself that it
+is there (`meld` in components/AiosSectie.tsx), so the list holds what the page
+has for this status and account. The feestdag blocks are a section inside the card
+that makes the roster, which is inside "Periode": in the new layout they render
+through a portal to a place of their own, else they would be hidden with
+"Periode". The participant's page has no AiosIndeling and folds as it did. The
+links per person (lib/aiosLinksPerPersoon.ts) and the second tab of the
+wijzigingsgeschiedenis (lib/aiosPeriodeLogboek.ts) are copies as well, held word
+for word to the achterwacht's by their tests.)
+
 (0.802.0: "Persoonlijke links", the beheerder's list of the links of a
 period and revoking one, is a copy as well: lib/aiosToegangslinks.ts,
 components/AiosToegangslinks.tsx and app/api/aios/periode/[id]/toegangslinks

@@ -25,35 +25,32 @@
  * published found an empty file.
  */
 
-import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db/client";
-import {
-  getAuthContextFromRequest,
-  requirePlannerAccess,
-} from "@/lib/auth-context";
-import { periodDienstDenial } from "@/lib/dienstAccess";
-import { unauthorizedResponse, internalErrorResponse } from "@/lib/api-errors";
-import { xlsxDownload } from "@/lib/xlsxWrite";
-import { periodeLogboekSheet } from "@/lib/periodeLogboek";
-import type { ApiErrorResponse } from "@/types";
+import { NextRequest, NextResponse } from 'next/server';
+import { db } from '@/db/client';
+import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
+import { periodDienstDenial } from '@/lib/dienstAccess';
+import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
+import { xlsxDownload } from '@/lib/xlsxWrite';
+import { periodeLogboekSheet } from '@/lib/periodeLogboek';
+import type { ApiErrorResponse } from '@/types';
 
 const TELLER_LABELS: Record<string, string> = {
-  AVOND: "avonddienst",
-  WEEKEND: "weekenddienst",
-  FEESTDAG: "feestdagdienst",
+  AVOND: 'avonddienst',
+  WEEKEND: 'weekenddienst',
+  FEESTDAG: 'feestdagdienst',
 };
 
 const EDIT_TYPE_LABELS: Record<string, string> = {
-  HANDMATIG_TOEWIJZEN: "Toegewezen",
-  HANDMATIG_VERWIJDEREN: "Verwijderd",
-  RUIL: "Geruild",
-  OVERRIDE: "Overschreven",
+  HANDMATIG_TOEWIJZEN: 'Toegewezen',
+  HANDMATIG_VERWIJDEREN: 'Verwijderd',
+  RUIL: 'Geruild',
+  OVERRIDE: 'Overschreven',
 };
 
 const OVERRIDE_LABELS: Record<string, string> = {
-  BLOCKED_OVERRIDE: "Geblokkeerde dag overschreven",
-  PARTTIME_OVERRIDE: "Deeltijddag toch ingepland",
-  WINDOW_OVERRIDE: "Vensterregel overschreven",
+  BLOCKED_OVERRIDE: 'Geblokkeerde dag overschreven',
+  PARTTIME_OVERRIDE: 'Deeltijddag toch ingepland',
+  WINDOW_OVERRIDE: 'Vensterregel overschreven',
 };
 
 interface Row {
@@ -70,40 +67,33 @@ interface Row {
 function extractOverride(nieuwJson: string | null): string | null {
   if (!nieuwJson) return null;
   try {
-    const parsed = JSON.parse(nieuwJson) as {
-      override?: { code: string } | null;
-    };
-    return parsed.override
-      ? (OVERRIDE_LABELS[parsed.override.code] ?? parsed.override.code)
-      : null;
+    const parsed = JSON.parse(nieuwJson) as { override?: { code: string } | null };
+    return parsed.override ? OVERRIDE_LABELS[parsed.override.code] ?? parsed.override.code : null;
   } catch {
     return null;
   }
 }
 
-export async function GET(
-  req: NextRequest,
-  props: { params: Promise<{ "period-id": string }> },
-): Promise<NextResponse> {
+export async function GET(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
   const params = await props.params;
   try {
     const auth = getAuthContextFromRequest(req);
     if (!requirePlannerAccess(auth)) {
       return unauthorizedResponse();
     }
-    const otherDienst = periodDienstDenial(auth, params["period-id"]);
+    const otherDienst = periodDienstDenial(auth, params['period-id']);
     if (otherDienst) return otherDienst;
 
-    const periodId = params["period-id"];
+    const periodId = params['period-id'];
 
     const period = db
-      .prepare("SELECT naam FROM dienstrooster_schedule_period WHERE id = ?")
+      .prepare('SELECT naam FROM dienstrooster_schedule_period WHERE id = ?')
       .get(periodId) as { naam: string } | undefined;
 
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: "NOT_FOUND", message: "Periode niet gevonden" },
+        error: { code: 'NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -131,7 +121,7 @@ export async function GET(
          JOIN dienstrooster_shift_slot s ON s.id = ae.slot_id
          JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
          WHERE ae.periode_id = ?
-         ORDER BY ae.aangemaakt_op`,
+         ORDER BY ae.aangemaakt_op`
       )
       .all(periodId) as Array<{
       edit_type: string;
@@ -183,29 +173,22 @@ export async function GET(
          JOIN dienstrooster_shift_slot s ON s.id = json_extract(al.nieuw_json, '$.slot_id')
          JOIN dienstrooster_shift_type st ON st.id = s.shift_type_id
          JOIN dienstrooster_person p ON p.id = json_extract(al.nieuw_json, '$.person_id')
-         WHERE al.entiteit = 'assignment' AND al.actie = 'MANUAL_ASSIGN' AND s.period_id = ?`,
+         WHERE al.entiteit = 'assignment' AND al.actie = 'MANUAL_ASSIGN' AND s.period_id = ?`
       )
       .all(periodId) as Array<{
-      tijdstip: string;
-      door: string;
-      persoon: string;
-      dienst_datum: string;
-      teller: string;
-      reden: string | null;
-      override_code: string | null;
-    }>;
+        tijdstip: string; door: string; persoon: string; dienst_datum: string;
+        teller: string; reden: string | null; override_code: string | null;
+      }>;
 
     for (const r of manualAssignRows) {
       rows.push({
         wijziging_op: r.tijdstip,
-        actie: "Toegewezen (open plek ingevuld)",
+        actie: 'Toegewezen (open plek ingevuld)',
         persoon: r.persoon,
         dienst_datum: r.dienst_datum,
         teller: TELLER_LABELS[r.teller] ?? r.teller,
         reden: r.reden,
-        overrule: r.override_code
-          ? (OVERRIDE_LABELS[r.override_code] ?? r.override_code)
-          : null,
+        overrule: r.override_code ? OVERRIDE_LABELS[r.override_code] ?? r.override_code : null,
         door: r.door,
       });
     }
@@ -215,16 +198,16 @@ export async function GET(
     return xlsxDownload(
       [
         {
-          name: "Wijzigingsgeschiedenis",
+          name: 'Wijzigingsgeschiedenis',
           columns: [
-            { header: "Datum wijziging" },
-            { header: "Actie" },
-            { header: "Betreft" },
-            { header: "Dienstdatum" },
-            { header: "Diensttype" },
-            { header: "Reden" },
-            { header: "Afwijking" },
-            { header: "Aangepast door" },
+            { header: 'Datum wijziging' },
+            { header: 'Actie' },
+            { header: 'Betreft' },
+            { header: 'Dienstdatum' },
+            { header: 'Diensttype' },
+            { header: 'Reden' },
+            { header: 'Afwijking' },
+            { header: 'Aangepast door' },
           ],
           rows: rows.map((r) => [
             { moment: r.wijziging_op },
@@ -239,10 +222,10 @@ export async function GET(
         },
         periodeLogboekSheet(periodId),
       ],
-      "wijzigingsgeschiedenis",
-      period.naam,
+      'wijzigingsgeschiedenis',
+      period.naam
     );
   } catch (error) {
-    return internalErrorResponse("export-audit-trail", error);
+    return internalErrorResponse('export-audit-trail', error);
   }
 }

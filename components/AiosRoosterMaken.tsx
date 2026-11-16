@@ -11,9 +11,10 @@
  * before they are answered and saved.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
-import { AiosSectie } from '@/components/AiosSectie';
+import { AiosIndelingContext, AiosSectie } from '@/components/AiosSectie';
+import { AiosInPlek } from '@/components/AiosInPlek';
 import { AiosFeestdagBlokken, type FeestdagStaat } from '@/components/AiosFeestdagBlokken';
 import { AiosPubliceren } from '@/components/AiosPubliceren';
 import { KWARTALEN_WOORD, PERCENTAGE_GRENS } from '@/lib/aiosFte';
@@ -165,6 +166,8 @@ export function AiosRoosterMaken({
   const [zeker, setZeker] = useState<'opnieuw' | 'verwijderen' | null>(null);
   const [feestdag, setFeestdag] = useState<FeestdagStaat>({ open: 0, gewijzigd: false });
   const actief = useRef(true);
+  // The new layout of the page (1.13.0): the feestdag blocks go to their own place (see below).
+  const indeling = useContext(AiosIndelingContext);
 
   const laad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${periodId}/rooster`))
@@ -246,6 +249,11 @@ export function AiosRoosterMaken({
   // The roster can be made once the period is closed (and made again until it is published).
   const kanMaken = !gepubliceerd && (status === 'GESLOTEN' || gemaakt);
   const feestdagHint = feestdag.open > 0 ? 'nog te beantwoorden' : feestdag.gewijzigd ? 'nog te bewaren' : 'beantwoord';
+  const feestdagSectie = (
+    <AiosSectie sleutel="feestdagblokken" titel="Blokken rond de feestdagen" hint={feestdagHint} blijfGeladen>
+      <AiosFeestdagBlokken periodId={periodId} status={status} disabled={bezig || !!rooster?.loopt} onStaat={setFeestdag} />
+    </AiosSectie>
+  );
 
   return (
     <>
@@ -354,12 +362,15 @@ export function AiosRoosterMaken({
         {zichtbaar && <AiosPubliceren periodId={periodId} status={status} onChanged={onChanged} />}
       </div>
 
-      {/* Kept loaded while closed: the choices about the feestdag blocks are not lost, and the button above waits for them. */}
-      {kanMaken && (
-        <AiosSectie sleutel="feestdagblokken" titel="Blokken rond de feestdagen" hint={feestdagHint} blijfGeladen>
-          <AiosFeestdagBlokken periodId={periodId} status={status} disabled={bezig || !!rooster?.loopt} onStaat={setFeestdag} />
-        </AiosSectie>
-      )}
+      {/* Kept loaded while closed: the choices about the feestdag blocks are not lost, and the button above waits for them.
+          In the new layout (1.13.0) this card is inside the section "Periode", and the blocks are a section of their
+          own: they go to their own place on the page, not inside a section that is hidden while another is chosen. */}
+      {kanMaken &&
+        (indeling ? (
+          <AiosInPlek plek="aios-feestdagblokken">{feestdagSectie}</AiosInPlek>
+        ) : (
+          feestdagSectie
+        ))}
 
     </>
   );

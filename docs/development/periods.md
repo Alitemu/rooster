@@ -410,3 +410,7 @@ laptop's 650 for good).
 
 Not in the bar yet: the pages behind the period (a person, fill-gaps, prior assignments) keep their own
 header (docs/todo.md).
+
+The AIOS's period page got the same layout in 1.13.0 (docs/development/diensten.md, "Copied, not
+changed"). Measured on a concept quarter of 13 weeks: a section begins at 100 to 124 px on a laptop of
+650, where the header card and the card that makes the roster stood above the first section.

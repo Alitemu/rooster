@@ -10,11 +10,18 @@
  * Generating, the roster per block and publishing come in the next steps;
  * until then the achterwacht's steps after closing refuse an AIOS period
  * (lib/aiosPeriod.ts).
+ *
+ * The new layout (1.13.0, the planner's wish, lib/aiosIndeling.ts), as the
+ * achterwacht's page has it: the list of sections all the way left, one
+ * section at a time, the header and the card that makes the roster as the
+ * section "Periode", the period's name and status in the blue bar. The
+ * accordion stays the default; "Nieuwe indeling proberen" turns it on.
  */
 
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type MouseEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
 import { AiosExporteren } from '@/components/AiosExporteren';
@@ -24,7 +31,21 @@ import { AiosGeschiedenis } from '@/components/AiosGeschiedenis';
 import { AiosDienstrooster } from '@/components/AiosDienstrooster';
 import { AiosVoortgangstoets } from '@/components/AiosVoortgangstoets';
 import { AiosPeriodeStatus } from '@/components/AiosPeriodeStatus';
-import { AiosHarmonica, AiosSectie } from '@/components/AiosSectie';
+import { AiosHarmonica, AiosIndelingContext, AiosSectie, type AiosMelding } from '@/components/AiosSectie';
+import { AiosInPlek } from '@/components/AiosInPlek';
+import {
+  AIOS_ADRES,
+  AIOS_BOVENAAN,
+  AIOS_GROEPEN,
+  aiosActiefOnderdeel,
+  aiosKeuzeUitAdres,
+  aiosNieuweIndeling,
+  aiosOnderdeelUitAdres,
+  aiosStartOnderdeel,
+  aiosStatusTekst,
+  type AiosOnderdeel,
+} from '@/lib/aiosIndeling';
+import { bewaarIndeling, leesIndeling, volgIndeling } from '@/lib/aiosIndelingOnthouden';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { benodigdeFte, SOORT_LABELS } from '@/lib/aiosDiensten';
@@ -298,16 +319,254 @@ function StatusLijst({ deelnemers, ingediend, laad }: { deelnemers: Deelnemer[];
   );
 }
 
-// Every part folds, as on the achterwacht's period page (components/AiosSectie.tsx).
+// Every part folds, as on the achterwacht's period page (components/AiosSectie.tsx), or, in the new
+// layout, is one item of the list. Suspense: the page reads the address (?indeling, ?onderdeel).
 export function AiosPeriodOverview({ period }: { period: Period }) {
   return (
-    <AiosHarmonica>
-      <Pagina period={period} />
-    </AiosHarmonica>
+    <Suspense fallback={<div className="container-main py-8 text-sm text-neutral-600">Laden...</div>}>
+      <AiosHarmonica>
+        <Kader period={period} />
+      </AiosHarmonica>
+    </Suspense>
   );
 }
 
-function Pagina({ period: begin }: { period: Period }) {
+/** A click that opens the link elsewhere (new tab, new window) is the browser's. */
+const gewoneKlik = (e: MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+
+/** The chosen section on screen with its title, and the focus there, so a keyboard is in it at once. */
+function toonOnderdeel(sleutel: AiosOnderdeel) {
+  const sectie = document.querySelector<HTMLElement>(`[data-onderdeel="${sleutel}"]`);
+  if (!sectie) return;
+  const marge = parseFloat(getComputedStyle(sectie).scrollMarginTop) || 0;
+  const top = sectie.getBoundingClientRect().top;
+  if (top < marge || top > window.innerHeight * 0.6) sectie.scrollIntoView({ block: 'start' });
+  sectie.querySelector<HTMLElement>('h2')?.focus({ preventScroll: true });
+}
+
+/**
+ * The layout around the page: the accordion as it was, or the new layout with the list of sections. Each
+ * section tells the list itself that it is there (AiosSectie, `meld`), so the list holds exactly what the
+ * page has for this status and this account.
+ */
+function Kader({ period }: { period: Period }) {
+  const searchParams = useSearchParams();
+  const onthouden = useSyncExternalStore(volgIndeling, leesIndeling, () => null);
+  const indelingInAdres = searchParams.get('indeling');
+  const zijbalk = aiosNieuweIndeling(indelingInAdres, onthouden);
+  useEffect(() => {
+    const keuze = aiosKeuzeUitAdres(indelingInAdres);
+    if (keuze) bewaarIndeling(keuze);
+  }, [indelingInAdres]);
+
+  // The switch between the two layouts. The address may still name the other one or a section.
+  const wisselIndeling = (keuze: 'nieuw' | 'oud') => {
+    bewaarIndeling(keuze);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('indeling');
+    if (keuze === 'oud') params.delete('onderdeel');
+    const rest = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+  };
+
+  // What the sections said about themselves, and the status the page last read (for the first section).
+  const [meldingen, setMeldingen] = useState<ReadonlyMap<AiosOnderdeel, AiosMelding>>(() => new Map());
+  const meld = useCallback((sleutel: AiosOnderdeel, melding: AiosMelding | null) => {
+    setMeldingen((nu) => {
+      const was = nu.get(sleutel);
+      if (melding ? was?.titel === melding.titel && was?.hint === melding.hint : !was) return nu;
+      const volgende = new Map(nu);
+      if (melding) volgende.set(sleutel, melding);
+      else volgende.delete(sleutel);
+      return volgende;
+    });
+  }, []);
+  const [status, setStatus] = useState(period.status);
+  const gekozen = aiosOnderdeelUitAdres(searchParams.get('onderdeel'));
+  const actief = aiosActiefOnderdeel(gekozen, aiosStartOnderdeel(status), new Set(meldingen.keys()));
+
+  // Another section: the address changes in the browser itself (Next follows history.pushState), so nothing
+  // waits for the server; then its title comes on screen with the focus.
+  const naWissel = useRef<AiosOnderdeel | null>(null);
+  const adresVoor = (sleutel: AiosOnderdeel) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('onderdeel', AIOS_ADRES[sleutel]);
+    return `?${params.toString()}`;
+  };
+  const kies = (sleutel: AiosOnderdeel) => {
+    if (sleutel === actief) {
+      toonOnderdeel(sleutel);
+      return;
+    }
+    naWissel.current = sleutel;
+    window.history.pushState(null, '', adresVoor(sleutel));
+  };
+  useEffect(() => {
+    if (naWissel.current !== actief) return;
+    naWissel.current = null;
+    toonOnderdeel(actief);
+  }, [actief]);
+
+  // The blue bar sticks to the top below 1100 px while this layout is on the page (app/globals.css).
+  useEffect(() => {
+    if (!zijbalk) return;
+    document.documentElement.dataset.kopPlakt = 'ja';
+    return () => {
+      delete document.documentElement.dataset.kopPlakt;
+    };
+  }, [zijbalk]);
+
+  // The menu below 1100 px: its button in the blue bar, the list from the left under the bar.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuTop, setMenuTop] = useState(0);
+  const menuKnopRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLElement>(null);
+  const menuId = useId();
+  useEffect(() => {
+    if (!menuOpen) return;
+    (menuRef.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? menuRef.current?.querySelector<HTMLElement>('a'))?.focus();
+    const toets = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuKnopRef.current?.focus();
+    };
+    document.addEventListener('keydown', toets);
+    return () => document.removeEventListener('keydown', toets);
+  }, [menuOpen]);
+
+  if (!zijbalk) return <Pagina period={period} zijbalk={false} onStatus={setStatus} naarNieuw={() => wisselIndeling('nieuw')} />;
+
+  /** "Periode" on top under no heading; the sections of a group moved in under its heading, with a line. */
+  const lijst = (naKeuze?: () => void) => {
+    const item = (k: AiosOnderdeel) => {
+      const melding = meldingen.get(k);
+      if (!melding) return null;
+      const isActief = k === actief;
+      return (
+        <a
+          key={k}
+          href={adresVoor(k)}
+          aria-current={isActief ? 'page' : undefined}
+          onClick={(e) => {
+            if (!gewoneKlik(e)) return;
+            e.preventDefault();
+            naKeuze?.();
+            kies(k);
+          }}
+          className={`block px-3 py-2.5 rounded-lg ${isActief ? 'bg-blue-700 text-white' : 'hover:bg-neutral-50'}`}
+        >
+          <span className="block font-medium">{melding.titel}</span>
+          {melding.hint && <span className={`block text-xs ${isActief ? 'text-blue-100' : 'text-neutral-600'}`}>{melding.hint}</span>}
+        </a>
+      );
+    };
+    return (
+      <>
+        {item(AIOS_BOVENAAN)}
+        {AIOS_GROEPEN.map((groep) => {
+          const items = groep.onderdelen.filter((k) => meldingen.has(k));
+          if (items.length === 0) return null;
+          return (
+            <div key={groep.naam}>
+              <p className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">{groep.naam}</p>
+              <div className="ml-4 pl-1.5 border-l-2 border-neutral-300">{items.map((k) => item(k))}</div>
+            </div>
+          );
+        })}
+        <div className="mt-2 pt-1 border-t border-neutral-200">
+          <button
+            type="button"
+            data-testid="indeling-wissel"
+            onClick={() => wisselIndeling('oud')}
+            className="w-full px-3 py-2.5 text-left text-sm font-medium text-blue-800 underline hover:text-blue-900"
+          >
+            Terug naar de oude indeling
+          </button>
+        </div>
+      </>
+    );
+  };
+
+  return (
+    <AiosIndelingContext.Provider value={{ actief, meld }}>
+      <AiosInPlek plek="kop-links">
+        <button
+          ref={menuKnopRef}
+          type="button"
+          data-testid="onderdelen-menu"
+          aria-label="Onderdelen van de periode"
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          onClick={() => {
+            if (!menuOpen) setMenuTop(Math.max(0, Math.round(menuKnopRef.current?.closest('header')?.getBoundingClientRect().bottom ?? 0)));
+            setMenuOpen(!menuOpen);
+          }}
+          className="min-[1100px]:hidden -ml-2 w-11 h-11 flex items-center justify-center rounded hover:bg-white/10"
+        >
+          <svg className="w-7 h-7" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M3 5h14M3 10h14M3 15h14" />
+          </svg>
+        </button>
+      </AiosInPlek>
+      {menuOpen && (
+        <>
+          {/* A tap next to the menu closes it. */}
+          <div className="min-[1100px]:hidden fixed inset-x-0 bottom-0 z-30 bg-black/40" style={{ top: menuTop }} onClick={() => setMenuOpen(false)} data-testid="onderdelen-waas" />
+          <nav
+            ref={menuRef}
+            id={menuId}
+            aria-label="Onderdelen van de periode"
+            className="min-[1100px]:hidden fixed left-0 bottom-0 z-30 w-[84%] max-w-xs bg-white shadow-xl p-2 overflow-y-auto overscroll-contain"
+            style={{ top: menuTop }}
+          >
+            {lijst(() => setMenuOpen(false))}
+          </nav>
+        </>
+      )}
+      <div className="min-[1100px]:flex min-[1100px]:items-stretch" data-testid="indeling-nieuw">
+        {/* All the way left on a wide screen, from the blue bar down; its own scroll bar on a low screen. */}
+        <aside className="hidden min-[1100px]:block w-[17rem] flex-none bg-white border-r border-neutral-300">
+          <nav aria-label="Onderdelen van de periode" className="sticky top-0 max-h-screen overflow-y-auto px-2 py-4">
+            {lijst()}
+          </nav>
+        </aside>
+        <div className="min-[1100px]:flex-1 min-[1100px]:min-w-0">
+          <Pagina period={period} zijbalk onStatus={setStatus} />
+        </div>
+      </div>
+    </AiosIndelingContext.Provider>
+  );
+}
+
+/** The period in the app's blue bar, between "Dienstrooster" and the version: its name, the page's heading there, and its status. */
+function PeriodeInKop({ naam, status }: { naam: string; status: string }) {
+  return (
+    <AiosInPlek plek="kop-midden">
+      <div
+        className="flex items-baseline gap-3 min-w-0 min-[1100px]:ml-2 min-[1100px]:pl-6 min-[1100px]:border-l min-[1100px]:border-white/40"
+        data-testid="kop-periode"
+      >
+        <h1 className="text-base min-[1100px]:text-lg font-semibold truncate">{naam}</h1>
+        <span className="shrink-0 px-2.5 py-0.5 rounded-full border border-white/70 bg-white/15 text-[0.8125rem] font-semibold whitespace-nowrap">
+          {status}
+        </span>
+      </div>
+    </AiosInPlek>
+  );
+}
+
+function Pagina({
+  period: begin,
+  zijbalk,
+  onStatus,
+  naarNieuw,
+}: {
+  period: Period;
+  zijbalk: boolean;
+  onStatus: (status: string) => void;
+  /** The accordion only: the way into the new layout. */
+  naarNieuw?: () => void;
+}) {
   const [overzicht, setOverzicht] = useState<AiosDienstenOverzicht | null>(null);
   const [error, setError] = useState<string | null>(null);
   // The page reloads the period from the AIOS's own route after each step:
@@ -331,6 +590,9 @@ function Pagina({ period: begin }: { period: Period }) {
   useEffect(() => {
     herlaad();
   }, [herlaad]);
+  useEffect(() => {
+    onStatus(period.status);
+  }, [period.status, onStatus]);
 
   useEffect(() => {
     fetch(withBasePath(`/api/planner/period/${period.id}/aios-diensten`))
@@ -342,38 +604,74 @@ function Pagina({ period: begin }: { period: Period }) {
       .catch((err) => setError(foutTekst(err, 'Laden van de diensten mislukt')));
   }, [period.id, toetsVersie]);
 
+  // The header of the period: the card on top in the accordion, inside the section "Periode" in the new
+  // layout, where the blue bar has the name (one heading on the page).
+  const kop = (metNaam: boolean) => (
+    <>
+      {/* Stacked on a phone, side by side from sm up, as the achterwacht's header. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-2">
+          <Link href="/planner" className="text-sm text-blue-600 hover:text-blue-700">
+            ← Periodes
+          </Link>
+          {metNaam && <h1 className="text-3xl font-bold text-neutral-900 break-words">{period.naam}</h1>}
+          <p className="text-neutral-600">
+            AIOS · {datumLang(period.start_datum)} t/m {datumLang(period.eind_datum)}
+            {overzicht && overzicht.dagen.length > 0 && ` · ${Math.ceil(overzicht.dagen.length / 7)} weken`}
+          </p>
+          <p className="text-sm text-neutral-600">Deadline voorkeuren: {deadlineTekst(period.deadline)}</p>
+        </div>
+        <AiosPeriodeStatus period={period} definitief={stand?.definitief === true} onChanged={herlaad} />
+      </div>
+    </>
+  );
+  // Making, publishing and withdrawing the roster come first, as on the achterwacht's page: a card, not a section.
+  const rooster =
+    period.status !== 'CONCEPT' && (
+    <AiosRoosterMaken
+      key={toetsVersie}
+      periodId={period.id}
+      status={period.status}
+      versie={handmatigVersie}
+      onChanged={() => {
+        herlaad();
+        setRoosterVersie((v) => v + 1);
+      }}
+    />
+  );
+
   return (
     <div className="container-main py-8 space-y-6">
-      <div className="card p-6">
-        {/* Stacked on a phone, side by side from sm up, as the achterwacht's header. */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="space-y-2">
-            <Link href="/planner" className="text-sm text-blue-600 hover:text-blue-700">
-              ← Periodes
-            </Link>
-            <h1 className="text-3xl font-bold text-neutral-900 break-words">{period.naam}</h1>
-            <p className="text-neutral-600">
-              AIOS · {datumLang(period.start_datum)} t/m {datumLang(period.eind_datum)}
-              {overzicht && overzicht.dagen.length > 0 && ` · ${Math.ceil(overzicht.dagen.length / 7)} weken`}
-            </p>
-            <p className="text-sm text-neutral-600">Deadline voorkeuren: {deadlineTekst(period.deadline)}</p>
-          </div>
-          <AiosPeriodeStatus period={period} definitief={stand?.definitief === true} onChanged={herlaad} />
-        </div>
-      </div>
-
-      {/* Making, publishing and withdrawing the roster come first, as on the achterwacht's page: a card, not a section. */}
-      {period.status !== 'CONCEPT' && (
-        <AiosRoosterMaken
-          key={toetsVersie}
-          periodId={period.id}
-          status={period.status}
-          versie={handmatigVersie}
-          onChanged={() => {
-            herlaad();
-            setRoosterVersie((v) => v + 1);
-          }}
-        />
+      {zijbalk ? (
+        <>
+          <PeriodeInKop naam={period.naam} status={aiosStatusTekst(period.status, stand?.definitief === true)} />
+          {/* The header and the card that makes the roster are the section "Periode" (1.13.0). Kept loaded: a
+              generation that runs is followed there. */}
+          <AiosSectie sleutel="periode" titel="Periode" hint={aiosStatusTekst(period.status, stand?.definitief === true).toLowerCase()} blijfGeladen>
+            {kop(false)}
+            {rooster}
+          </AiosSectie>
+          {/* Where the section "Blokken rond de feestdagen" of the card above goes (components/AiosRoosterMaken.tsx). */}
+          <div id="aios-feestdagblokken" className="empty:hidden" />
+        </>
+      ) : (
+        <>
+          <div className="card p-6">{kop(true)}</div>
+          {/* The way into the new layout while the accordion is the default (1.13.0); the way back is in its list. */}
+          {naarNieuw && (
+            <div className="flex justify-end -my-2">
+              <button
+                type="button"
+                data-testid="indeling-wissel"
+                onClick={naarNieuw}
+                className="px-2 py-2 text-sm font-medium text-blue-800 underline hover:text-blue-900"
+              >
+                Nieuwe indeling proberen
+              </button>
+            </div>
+          )}
+          {rooster}
+        </>
       )}
 
       {/* The history from before the app is the first section (the planner's wish): the quarter starts from it. */}

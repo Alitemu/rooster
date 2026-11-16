@@ -10,9 +10,29 @@
  * Unlike the achterwacht's, the title is a heading with a button in it (the
  * pattern for an accordion), so a screen reader and the tests find both the
  * heading and what opens it. The hint and the pin sit next to the heading.
+ *
+ * The new layout (1.13.0, lib/aiosIndeling.ts): under an AiosIndeling the page shows one section at a time,
+ * chosen in the list. Every section says its title and hint to the list itself (`meld`), wherever it is
+ * on the page, so the list holds what is there and nothing else. The participant's page has no
+ * AiosIndeling and folds as it did.
  */
 
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { AiosOnderdeel } from '@/lib/aiosIndeling';
+
+/** What a section says to the list of the new layout. */
+export interface AiosMelding {
+  titel: string;
+  hint?: string;
+}
+
+/** The new layout, for the sections under it (components/AiosPeriodOverview.tsx). */
+export interface AiosIndelingWaarde {
+  actief: AiosOnderdeel;
+  meld: (sleutel: AiosOnderdeel, melding: AiosMelding | null) => void;
+}
+
+export const AiosIndelingContext = createContext<AiosIndelingWaarde | null>(null);
 
 interface Harmonica {
   open: ReadonlySet<string>;
@@ -74,6 +94,32 @@ export function AiosSectie({
   children: ReactNode;
 }) {
   const harmonica = useContext(HarmonicaContext)!;
+  const indeling = useContext(AiosIndelingContext);
+  // In the new layout: tell the list this section is there, with its title and hint, and that it left.
+  const meld = indeling?.meld;
+  useEffect(() => {
+    if (!meld) return;
+    meld(sleutel as AiosOnderdeel, { titel, hint });
+    return () => meld(sleutel as AiosOnderdeel, null);
+  }, [meld, sleutel, titel, hint]);
+
+  if (indeling) {
+    if (indeling.actief === sleutel) {
+      // scroll-mt: under the blue bar, which sticks to the top below 1100 px. The title takes the focus after a choice.
+      return (
+        <div className="card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4" data-testid={testId} data-onderdeel={sleutel}>
+          <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
+            {titel}
+          </h2>
+          {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
+          <div className="mt-4 space-y-3">{children}</div>
+        </div>
+      );
+    }
+    // A section whose state must survive (blijfGeladen) stays on the page unseen, as it does closed in the accordion.
+    return blijfGeladen ? <div hidden>{children}</div> : null;
+  }
+
   const isOpen = harmonica.open.has(sleutel);
   const vast = harmonica.vast.has(sleutel);
   const bodyBestaat = isOpen || blijfGeladen || printOpen;

@@ -78,6 +78,10 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   met de periode en de status eronder. Een tik toont de lijst vanaf links.
   Kies een onderdeel: de lijst sluit en het onderdeel staat er vanaf de titel.
   Scrol naar beneden: de blauwe balk blijft bovenaan staan.
+- [ ] **C0d.** Open een kwartaal van de AIOS en klik op *Nieuwe indeling
+  proberen*. Je ziet: dezelfde indeling als bij de achterwacht, met de naam van
+  het kwartaal en de status in de blauwe balk. *Periode* bevat het rooster
+  maken. De pagina die een AIOS via de link ziet, is niet veranderd.
 - [ ] **C1a.** Open de periodepagina van een open periode en klik op *Aanpassen*
   naast het streefbereik. Vul een ander bereik in en sla het op. Je ziet: het
   nieuwe bereik in woorden. Waren de uitnodigingen al verstuurd, dan zegt de
@@ -171,8 +175,12 @@ overslaan:
 
 - [ ] **F1.** Open bij een periode (achterwacht en AIOS) de sectie
   *Persoonlijke links*. Een planner ziet die sectie niet.
-- [ ] **F2.** De lijst toont per link voor wie, gemaakt, voor het laatst
-  gebruikt en of hij werkt. De link zelf staat er nergens.
+- [ ] **F2.** De lijst toont één regel per persoon, met het aantal werkende
+  links. *Toon links* laat per link zien wanneer hij gemaakt en voor het laatst
+  gebruikt is en of hij werkt. De link zelf staat er nergens.
+- [ ] **F2a.** Download bij *Exporteren & communicatie* de wijzigingsgeschiedenis
+  nadat je de deadline hebt aangepast. Je ziet: een tweede tabblad *Periode en
+  instellingen* met die wijziging, de oude en de nieuwe deadline en je codenaam.
 - [ ] **F3.** *Intrekken* vraagt eerst om bevestiging. Annuleren verandert
   niets. Bevestigen: de link werkt niet meer, de medewerker is uitgelogd.
 - [ ] **F4.** Is het de enige werkende link, dan zegt de vraag dat.
