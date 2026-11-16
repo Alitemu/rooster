@@ -44,10 +44,24 @@ function wanneer(iso: string): string {
 /**
  * refreshKey: changes after the settings changed or the export dialog closed
  * (something may have been sent). onOpenSettings: only for the beheerder,
- * who sets the mail up (0.87.0); a planner is told to ask.
+ * who sets the mail up (0.87.0); a planner is told to ask. onStand: told whether
+ * the notice shows, for the period page's list of sections, where the notice
+ * is inside the section "Periode" (1.12.0) and the list says there is one.
  */
-export function MailWarning({ refreshKey, onOpenSettings }: { refreshKey: string; onOpenSettings?: () => void }) {
+export function MailWarning({
+  refreshKey,
+  onOpenSettings,
+  onStand,
+}: {
+  refreshKey: string;
+  onOpenSettings?: () => void;
+  onStand?: (zichtbaar: boolean) => void;
+}) {
   const [status, setStatus] = useState<Status | null>(null);
+  const zichtbaar = Boolean(status && (status.uitgeschakeld || !status.ingesteld || status.laatste_fout));
+  useEffect(() => {
+    onStand?.(zichtbaar);
+  }, [zichtbaar, onStand]);
 
   useEffect(() => {
     let current = true;

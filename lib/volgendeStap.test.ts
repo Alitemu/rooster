@@ -97,7 +97,11 @@ describe('on the period page', () => {
     expect(dashboard).toContain('const stapNu = volgendeStap({');
     expect(dashboard).toContain('lege_diensten: fillGapsCount,');
     expect(dashboard).toContain('mail_ingesteld: mailIngesteld,');
-    expect(dashboard.indexOf('data-testid="volgende-stap"')).toBeLessThan(dashboard.indexOf('<MailWarning'));
+    // Above the notices and the sections, in both layouts (the new one has the notices in "Periode", 1.12.0).
+    const stap = dashboard.indexOf('data-testid="volgende-stap"');
+    expect(stap).toBeGreaterThan(0);
+    expect(stap).toBeLessThan(dashboard.indexOf('{!zijbalk && mailMelding}'));
+    expect(stap).toBeLessThan(dashboard.indexOf('<IndelingContext.Provider'));
   });
 
   it('every button has a place to go to', () => {

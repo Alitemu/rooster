@@ -6,7 +6,7 @@
 
 'use client';
 
-import { Suspense, useState, useEffect } from 'react';
+import { Suspense, useState, useEffect, type ReactNode } from 'react';
 import { useParams } from 'next/navigation';
 import { PlannerDashboard } from '@/components/PlannerDashboard';
 import { AiosPeriodOverview } from '@/components/AiosPeriodOverview';
@@ -273,15 +273,19 @@ export default function PlannerPeriodPage() {
 
   const statusColor = statusColors[period.status] || statusColors.CONCEPT;
 
-  return (
-    <div className="container-main py-8 space-y-6">
+  // The block about the period itself. The dashboard places it, because it knows the layout
+  // (components/PlannerDashboard.tsx periodeKop): the card on top in the accordion ('kaart'), and since
+  // 1.12.0 the inside of the section "Periode" in the new layout ('onderdeel'), where the blue bar has the
+  // name and the dashboard's own buttons (`acties`) come under the status.
+  const kop = (vorm: 'kaart' | 'onderdeel', acties?: ReactNode) => (
+    <>
       {/* Header */}
-      <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
+      <div className={vorm === 'kaart' ? 'card p-6 bg-gradient-to-r from-blue-50 to-neutral-50' : ''}>
         {/* Stacked on a phone, side by side from sm up: next to each other the
             two columns were wider than 375px (audit 9). */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{period.naam}</h1>
+            {vorm === 'kaart' && <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{period.naam}</h1>}
             <p className="text-neutral-600 mb-2">
               <DatumTekst iso={period.start_datum} /> t/m{' '}
               <DatumTekst iso={period.eind_datum} />
@@ -442,6 +446,8 @@ export default function PlannerPeriodPage() {
               )}
             </div>
 
+            {acties}
+
             {period.status === 'OPEN' && (
               <div className="flex flex-col items-start gap-2">
                 <div className="flex flex-wrap gap-3">
@@ -576,16 +582,33 @@ export default function PlannerPeriodPage() {
         <div className="card p-4 bg-blue-50 border border-blue-200">
           <p className="text-sm text-blue-900">
             Deze periode is gesloten voor nieuwe indieningen. Klaar om het rooster te genereren
-            via &quot;Rooster genereren met solver&quot; hieronder.
+            via &quot;Rooster genereren met solver&quot;{vorm === 'kaart' ? ' hieronder' : ''}.
           </p>
         </div>
       )}
 
-      {/* Dashboard */}
-      {/* Suspense: the dashboard reads the address (?indeling, ?onderdeel; lib/periodeIndeling.ts). */}
-      <Suspense fallback={<p className="text-sm text-neutral-600">Laden...</p>}>
-        <PlannerDashboard periodId={periodId} onPeriodChanged={loadPeriod} periodStatus={period.status} />
-      </Suspense>
+    </>
+  );
+
+  return (
+    // The column on the left is for the list of sections in the new layout on a wide screen (1.12.0): the
+    // dashboard fills it (components/InPlek.tsx), and empty it takes no room (app/globals.css).
+    <div className="min-[1100px]:flex min-[1100px]:items-stretch">
+      <aside id="onderdelen-links" className="onderdelen-links" />
+      <div className="container-main py-8 space-y-6 min-[1100px]:flex-1 min-[1100px]:min-w-0">
+        {/* Dashboard, with the block about the period where its layout wants it. */}
+        {/* Suspense: the dashboard reads the address (?indeling, ?onderdeel; lib/periodeIndeling.ts). */}
+        <Suspense fallback={<p className="text-sm text-neutral-600">Laden...</p>}>
+          <PlannerDashboard
+            periodId={periodId}
+            onPeriodChanged={loadPeriod}
+            periodStatus={period.status}
+            periodeKop={kop}
+            periodeNaam={period.naam}
+            periodeDefinitief={Boolean(period.definitief_op)}
+          />
+        </Suspense>
+      </div>
     </div>
   );
 }

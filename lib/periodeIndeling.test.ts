@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { ADRES, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from './periodeIndeling';
+import { ADRES, BOVENAAN, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, onderdeelVanStap, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from './periodeIndeling';
+import { periodeStatusTekst } from './statusLabels';
 
 /**
  * The new layout of the period page (1.9.0): the groups, the address of each section, which section opens
@@ -10,13 +11,20 @@ import { ADRES, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, sleutel
  *
  * 1.10.0, from the audit of the new layout: the choice is remembered, a section changes without the
  * server, the list scrolls on a low screen and is a menu below 1100 px.
+ *
+ * 1.12.0, the planner's wish after sketches on the real page: what stood above the sections is the section
+ * "Periode" on top of the list, the blue bar names the period and its status, the list stands all the way
+ * left and its button is in the blue bar on a narrow screen. The accordion is as it was.
  */
-const ALLE: OnderdeelSleutel[] = ['importcorrecties', 'overloop', 'vooraf', 'personeel', 'personeelbeheren', 'export', 'links', 'voorstellen', 'rooster'];
+const IN_GROEPEN: OnderdeelSleutel[] = ['importcorrecties', 'overloop', 'vooraf', 'personeel', 'personeelbeheren', 'export', 'links', 'voorstellen', 'rooster'];
+const ALLE: OnderdeelSleutel[] = ['periode', ...IN_GROEPEN];
 
 describe('the groups and the addresses', () => {
-  it('every section in exactly one group, in the order of the work', () => {
+  it('every section in exactly one group, in the order of the work, and the period itself on top under none', () => {
     const inGroepen = GROEPEN.flatMap((g) => g.onderdelen);
-    expect([...inGroepen].sort()).toEqual([...ALLE].sort());
+    expect([...inGroepen].sort()).toEqual([...IN_GROEPEN].sort());
+    expect(BOVENAAN).toBe('periode');
+    expect(inGroepen).not.toContain(BOVENAAN);
     expect(GROEPEN.map((g) => g.naam)).toEqual(['Voorbereiden', 'Deelnemers', 'Communicatie', 'Rooster']);
   });
 
@@ -63,6 +71,26 @@ describe('the section that opens first', () => {
   it('without a step: the roster once there is one, else the preferences', () => {
     expect(startOnderdeel(null, 'GEPUBLICEERD')).toBe('rooster');
     expect(startOnderdeel(null, 'OPEN')).toBe('personeel');
+  });
+
+  it('the button of a step that changes the status is in "Periode", any other in its own section', () => {
+    // Sluiten, genereren, publiceren and definitief have no section of their own (STAP_PLEK).
+    expect(onderdeelVanStap(undefined)).toBe('periode');
+    expect(onderdeelVanStap('export')).toBe('export');
+    expect(onderdeelVanStap('vooraf')).toBe('vooraf');
+    // The page still opens on what the step is about: the planner looks at the roster before publishing.
+    expect(startOnderdeel('publiceren', 'GEGENEREERD')).not.toBe('periode');
+    expect(startOnderdeel('sluiten', 'OPEN')).not.toBe('periode');
+  });
+
+  it('says the status as the planner reads it: a published roster is voorlopig until it is definitief', () => {
+    expect(periodeStatusTekst('OPEN', false)).toBe('Open');
+    expect(periodeStatusTekst('GESLOTEN', false)).toBe('Gesloten');
+    expect(periodeStatusTekst('GEGENEREERD', false)).toBe('Gegenereerd');
+    expect(periodeStatusTekst('GEPUBLICEERD', false)).toBe('Voorlopig gepubliceerd');
+    expect(periodeStatusTekst('GEPUBLICEERD', true)).toBe('Definitief');
+    // Only a published roster can be definitief.
+    expect(periodeStatusTekst('OPEN', true)).toBe('Open');
   });
 
   it('a chosen section wins, unless it is not there', () => {
@@ -112,7 +140,7 @@ describe('on the period page', () => {
   });
 
   it('the button a next step points to gets the focus once its section is there, not after a fixed wait', () => {
-    expect(dashboard).toMatch(/if \(sectie && zijbalk\) \{\s*kiesOnderdeel\(sectie, element\);\s*return;/);
+    expect(dashboard).toMatch(/if \(zijbalk\) \{\s*kiesOnderdeel\(onderdeelVanStap\(sectie\), element\);\s*return;/);
     expect(kader).toMatch(/useEffect\(\(\) => \{\s*const wacht = naWisselRef\.current;\s*if \(!wacht \|\| wacht\.sectie !== ctx\.actief\) return;/);
     expect(kader).toContain('toonOnderdeel(ADRES[wacht.sectie], wacht.element);');
   });
@@ -133,19 +161,82 @@ describe('on the period page', () => {
   });
 
   it('the list has its own scroll bar, so its last items stay in reach on a low screen', () => {
-    expect(kader).toMatch(/<nav aria-label="Onderdelen van de periode" className="hidden min-\[1100px\]:block card p-2 sticky top-4 max-h-\[calc\(100vh-2rem\)\] overflow-y-auto">/);
+    expect(kader).toContain('<nav aria-label="Onderdelen van de periode" className="sticky top-0 max-h-screen overflow-y-auto px-2 py-4">');
   });
 
-  it('below 1100 px the list is a menu behind a button in a bar that sticks to the top', () => {
-    expect(kader).toContain('className="min-[1100px]:hidden sticky top-0 z-20 mb-3"');
+  // 1.12.0. tests/e2e/indeling-nieuw.e2e.ts measures where things are in the browser.
+  const pagina = fs.readFileSync(path.resolve(__dirname, '..', 'app/planner/period/[id]/page.tsx'), 'utf8');
+  const layout = fs.readFileSync(path.resolve(__dirname, '..', 'app/layout.tsx'), 'utf8');
+  const css = fs.readFileSync(path.resolve(__dirname, '..', 'app/globals.css'), 'utf8');
+
+  it('the list stands all the way left on a wide screen, in a column that is not there while it is empty', () => {
+    expect(kader).toMatch(/<InPlek plek="onderdelen-links">\s*<nav aria-label="Onderdelen van de periode"/);
+    expect(pagina).toContain('<aside id="onderdelen-links" className="onderdelen-links" />');
+    // Outside the page's centred column, next to it.
+    expect(pagina.indexOf('<aside id="onderdelen-links"')).toBeLessThan(pagina.indexOf('className="container-main py-8 space-y-6 min-[1100px]:flex-1'));
+    expect(pagina).toContain('className="container-main py-8 space-y-6 min-[1100px]:flex-1 min-[1100px]:min-w-0"');
+    expect(css).toMatch(/\.onderdelen-links \{\s*display: none;\s*\}/);
+    expect(css).toMatch(/@media \(min-width: 1100px\) \{\s*\.onderdelen-links:not\(:empty\) \{\s*display: block;/);
+  });
+
+  it('below 1100 px the button of the list is in the blue bar, which sticks to the top there', () => {
+    expect(kader).toMatch(/<InPlek plek="kop-links">\s*<button/);
     expect(kader).toContain('data-testid="onderdelen-menu"');
     expect(kader).toContain('aria-expanded={menuOpen}');
-    expect(kader).toMatch(/\{menuOpen && \(\s*<nav\s+id=\{menuId\}\s+aria-label="Onderdelen van de periode"/);
-    // The menu takes the room under the bar and scrolls by itself: it never runs off the screen.
-    expect(kader).toContain('setMenuHoogte(Math.max(200, window.innerHeight - balkRef.current.getBoundingClientRect().bottom - 16));');
-    expect(kader).toContain('style={{ maxHeight: menuHoogte ?? undefined }}');
+    expect(kader).toContain('aria-label="Onderdelen van de periode"');
+    expect(kader).toContain("document.documentElement.dataset.kopPlakt = 'ja';");
+    expect(kader).toContain('delete document.documentElement.dataset.kopPlakt;');
+    expect(css).toMatch(/@media \(max-width: 1099px\) \{\s*html\[data-kop-plakt\] \.app-kop \{\s*position: sticky;\s*top: 0;/);
+    expect(layout).toContain('<header className="app-kop ');
+    expect(layout).toContain('<div id="kop-links" className="empty:hidden" />');
+    // The menu starts where the bar ends, scrolls by itself and closes on a tap next to it.
+    expect(kader).toMatch(/\{menuOpen && \(\s*<>/);
+    expect(kader).toContain('bg-white shadow-xl p-2 overflow-y-auto overscroll-contain"');
+    expect(kader).toContain('style={{ top: menuTop }} onClick={() => setMenuOpen(false)} data-testid="onderdelen-waas"');
     // No list first on a phone any more: the page opens on a section, as on a wide screen.
     expect(dashboard).not.toContain('‹ Alle onderdelen');
     expect(kader).not.toMatch(/\bmd:/);
+  });
+
+  it('the blue bar names the period and its status in the new layout, and the name is the heading there', () => {
+    expect(layout).toMatch(/<div id="kop-midden" className="empty:hidden /);
+    expect(dashboard).toMatch(/<InPlek plek="kop-midden">\s*<div [^>]*data-testid="kop-periode">\s*<h1 [^>]*>\{naam\}<\/h1>\s*<span [^>]*>\{status\}<\/span>/);
+    expect(dashboard).toContain('{periodeNaam && <PeriodeInKop naam={periodeNaam} status={statusTekst} />}');
+    // One heading: the page's own block has none inside the section.
+    expect(pagina).toContain("{vorm === 'kaart' && <h1 ");
+    expect(pagina.match(/<h1 /g)).toHaveLength(2); // this one and the page's own error page
+  });
+
+  it('what stood above the sections is the section "Periode" in the new layout, and still above them in the accordion', () => {
+    expect(dashboard).toMatch(/\n    periode: \{\s*titel: 'Periode',[\s\S]{0,200}zichtbaar: zijbalk,/);
+    expect(dashboard).toMatch(/\{onderdelen\.periode\.zichtbaar && \(\s*<Section sleutel="periode" keepMounted>/);
+    const sectie = dashboard.slice(dashboard.indexOf('<Section sleutel="periode"'), dashboard.indexOf('</Section>', dashboard.indexOf('<Section sleutel="periode"')));
+    for (const stuk of ["periodeKop?.('onderdeel', ", '{statusKnoppen}', '{roosterMailUitkomst}', '{voorlopigUitleg}', '{mailMelding}', '{groteVerschillen}']) expect(sectie, stuk).toContain(stuk);
+    // The accordion: the same pieces, where they were.
+    expect(dashboard).toContain("periodeKop?.('kaart')");
+    for (const stuk of ['{!zijbalk && mailMelding}', '{!zijbalk && groteVerschillen}', '<div className="flex gap-3 flex-wrap">{statusKnoppen}</div>']) expect(dashboard, stuk).toContain(stuk);
+    // The page hands its block over and draws it nowhere itself.
+    expect(pagina).toContain('periodeKop={kop}');
+    expect(pagina).toContain("const kop = (vorm: 'kaart' | 'onderdeel', acties?: ReactNode) => (");
+    expect(pagina).toContain('{acties}');
+  });
+
+  it('the list says at "Periode" what the status is and that a notice waits there', () => {
+    expect(dashboard).toContain('const meldingen = (mailMeldingZichtbaar ? 1 : 0) + (dashboard.large_imbalances.length > 0 ? 1 : 0);');
+    expect(dashboard).toContain("hint: `${statusTekst.toLowerCase()}${meldingen > 0 ? ` · ${telwoord(meldingen, 'melding', 'meldingen')}` : ''}`,");
+    expect(dashboard).toContain('onStand={setMailMeldingZichtbaar}');
+    const mail = fs.readFileSync(path.resolve(__dirname, '..', 'components/MailWarning.tsx'), 'utf8');
+    expect(mail).toMatch(/useEffect\(\(\) => \{\s*onStand\?\.\(zichtbaar\);\s*\}, \[zichtbaar, onStand\]\);/);
+    expect(mail).toContain('const zichtbaar = Boolean(status && (status.uitgeschakeld || !status.ingesteld || status.laatste_fout));');
+  });
+
+  it('in the section a button that cannot be pressed in this status is left out', () => {
+    expect(dashboard).toContain('{(!zijbalk || kanGenereren) && (');
+    expect(dashboard).toContain("const kanGenereren = ['GESLOTEN', 'GEGENEREERD'].includes(dashboard.status);");
+  });
+
+  it('the sections of a group stand moved in under its heading, with a line down the group', () => {
+    expect(kader).toContain('{ctx.inLijst.has(BOVENAAN) && item(BOVENAAN)}');
+    expect(kader).toContain('<div className="ml-4 pl-1.5 border-l-2 border-neutral-300">{items.map((k) => item(k))}</div>');
   });
 });

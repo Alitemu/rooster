@@ -30,7 +30,7 @@ import { RebalanceSuggestions } from './RebalanceSuggestions';
 import { FillGapsSummary } from './FillGapsSummary';
 import { SwapRequestsOverview } from './SwapRequestsOverview';
 import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
-import { periodStatusLabel } from '@/lib/statusLabels';
+import { periodeStatusTekst } from '@/lib/statusLabels';
 import { FellowBadge } from './FellowBadge';
 import { MailSettingsDialog } from './MailSettingsDialog';
 import { MailWarning } from './MailWarning';
@@ -44,8 +44,9 @@ import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
 import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
 import { voorafNaam } from '@/lib/vooraf';
 import { volgendeStap, type StapDoel } from '@/lib/volgendeStap';
-import { ADRES, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from '@/lib/periodeIndeling';
+import { ADRES, BOVENAAN, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, onderdeelVanStap, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from '@/lib/periodeIndeling';
 import { bewaarIndeling, leesIndeling, volgIndeling } from '@/lib/indelingOnthouden';
+import { InPlek } from './InPlek';
 
 interface PersonProgress {
   person_id: string;
@@ -138,10 +139,11 @@ function Section({
   // summary (keepMounted) stays on the page unseen, as it does closed in the accordion.
   if (ctx.modus === 'zijbalk') {
     if (ctx.actief === sleutel) {
-      // scroll-mt: under the bar with the menu, which sticks to the top below 1100 px. The title takes the
-      // focus after a choice (toonOnderdeel), so a keyboard and a screen reader are in the section at once.
+      // scroll-mt: under the app's blue bar, which sticks to the top below 1100 px with the period's name
+      // in it (two rows on a phone). The title takes the focus after a choice (toonOnderdeel), so a
+      // keyboard and a screen reader are in the section at once.
       return (
-        <div className="card p-4 sm:p-6 scroll-mt-24 min-[1100px]:scroll-mt-4" data-testid={`onderdeel-${ADRES[sleutel]}`}>
+        <div className="card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4" data-testid={`onderdeel-${ADRES[sleutel]}`}>
           <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
             {titel}
           </h2>
@@ -258,40 +260,47 @@ function toonOnderdeel(adres: string, elementId?: string, poging = 0) {
 /** A click that opens the link elsewhere (new tab, new window) is the browser's. */
 const gewoneKlik = (e: MouseEvent) => e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
 
-/** The sections in their groups: the list on the left on a wide screen, the menu behind the button on a narrow one. */
+/**
+ * The sections: the list all the way left on a wide screen, the menu behind the button in the blue bar on
+ * a narrow one. "Periode" on top under no heading; the sections of a group moved in under its heading
+ * with a thin line down the group (1.12.0, the planner's choice out of three sketches), so the headings
+ * read as headings and it shows what belongs to each.
+ */
 function OnderdelenLijst({ naKeuze }: { naKeuze?: () => void }) {
   const ctx = useContext(IndelingContext)!;
+  // A link with the section's address, so it opens in a new tab too. A plain click changes the address in
+  // the browser itself (ctx.kies): no request to the server.
+  const item = (k: SectionKey) => {
+    const { titel, hint } = ctx.onderdelen[k];
+    const actief = k === ctx.actief;
+    return (
+      <a
+        key={k}
+        href={ctx.adresVoor(k)}
+        aria-current={actief ? 'page' : undefined}
+        onClick={(e) => {
+          if (!gewoneKlik(e)) return;
+          e.preventDefault();
+          naKeuze?.();
+          ctx.kies(k);
+        }}
+        className={`block px-3 py-2.5 rounded-lg ${actief ? 'bg-blue-700 text-white' : 'hover:bg-neutral-50'}`}
+      >
+        <span className="block font-medium">{titel}</span>
+        {hint && <span className={`block text-xs ${actief ? 'text-blue-100' : 'text-neutral-600'}`}>{hint}</span>}
+      </a>
+    );
+  };
   return (
     <>
+      {ctx.inLijst.has(BOVENAAN) && item(BOVENAAN)}
       {GROEPEN.map((groep) => {
         const items = groep.onderdelen.filter((k) => ctx.inLijst.has(k));
         if (items.length === 0) return null;
         return (
           <div key={groep.naam}>
             <p className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-600">{groep.naam}</p>
-            {items.map((k) => {
-              const { titel, hint } = ctx.onderdelen[k];
-              const actief = k === ctx.actief;
-              // A link with the section's address, so it opens in a new tab too. A plain click changes the
-              // address in the browser itself (ctx.kies): no request to the server.
-              return (
-                <a
-                  key={k}
-                  href={ctx.adresVoor(k)}
-                  aria-current={actief ? 'page' : undefined}
-                  onClick={(e) => {
-                    if (!gewoneKlik(e)) return;
-                    e.preventDefault();
-                    naKeuze?.();
-                    ctx.kies(k);
-                  }}
-                  className={`block px-3 py-2.5 rounded-lg ${actief ? 'bg-blue-700 text-white' : 'hover:bg-neutral-50'}`}
-                >
-                  <span className="block font-medium">{titel}</span>
-                  {hint && <span className={`block text-xs ${actief ? 'text-blue-100' : 'text-neutral-600'}`}>{hint}</span>}
-                </a>
-              );
-            })}
+            <div className="ml-4 pl-1.5 border-l-2 border-neutral-300">{items.map((k) => item(k))}</div>
           </div>
         );
       })}
@@ -311,18 +320,23 @@ function OnderdelenLijst({ naKeuze }: { naKeuze?: () => void }) {
 
 /**
  * The frame of the sections. The accordion: the sections as they were. The new layout (1.9.0): the list
- * on the left, the chosen section on the right. Below 1100 px (1.10.0, the planner's wish) the list is a
- * menu behind a button in a bar that sticks to the top of the screen: next to the list the tables had
- * too little room there, and a list first put every section a screen further down.
+ * of sections and the chosen section.
+ *
+ * 1.12.0 (the planner's wish): the list is no longer a column inside the page, below everything that
+ * stood above the sections. On a wide screen it stands all the way left, from the blue bar down
+ * (onderdelen-links, the page's own column). Below 1100 px its button is in the blue bar, left of
+ * "Dienstrooster" (kop-links), and the list slides in from the left under that bar, which sticks to the
+ * top there so the button is always in reach.
  */
 function Onderdelen({ naWisselRef, children }: { naWisselRef: RefObject<{ sectie: SectionKey; element?: string } | null>; children: ReactNode }) {
   const ctx = useContext(IndelingContext)!;
   const [menuOpen, setMenuOpen] = useState(false);
-  // The room under the bar when the menu opened: the menu never runs off the screen, it scrolls by itself.
-  const [menuHoogte, setMenuHoogte] = useState<number | null>(null);
-  const balkRef = useRef<HTMLDivElement>(null);
+  // Where the blue bar ends when the menu opened: the menu and the haze behind it start there.
+  const [menuTop, setMenuTop] = useState(0);
   const menuKnopRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLElement>(null);
   const menuId = useId();
+  const zijbalk = ctx.modus === 'zijbalk';
 
   // After the chosen section is on the page: its title in view and the focus there.
   useEffect(() => {
@@ -332,77 +346,90 @@ function Onderdelen({ naWisselRef, children }: { naWisselRef: RefObject<{ sectie
     toonOnderdeel(ADRES[wacht.sectie], wacht.element);
   }, [ctx.actief, naWisselRef]);
 
-  // The open menu closes on Escape and on a tap next to it.
+  // The blue bar sticks to the top below 1100 px while this layout is on the page (app/globals.css).
+  useEffect(() => {
+    if (!zijbalk) return;
+    document.documentElement.dataset.kopPlakt = 'ja';
+    return () => {
+      delete document.documentElement.dataset.kopPlakt;
+    };
+  }, [zijbalk]);
+
+  // The open menu: the focus goes to the section on screen, and Escape closes it.
   useEffect(() => {
     if (!menuOpen) return;
+    (menuRef.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? menuRef.current?.querySelector<HTMLElement>('a'))?.focus();
     const toets = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       setMenuOpen(false);
       menuKnopRef.current?.focus();
     };
-    const ernaast = (e: PointerEvent) => {
-      if (!balkRef.current?.contains(e.target as Node)) setMenuOpen(false);
-    };
     document.addEventListener('keydown', toets);
-    document.addEventListener('pointerdown', ernaast);
-    return () => {
-      document.removeEventListener('keydown', toets);
-      document.removeEventListener('pointerdown', ernaast);
-    };
+    return () => document.removeEventListener('keydown', toets);
   }, [menuOpen]);
 
-  if (ctx.modus === 'harmonica') return <>{children}</>;
+  if (!zijbalk) return <>{children}</>;
   return (
-    <div className="min-[1100px]:grid min-[1100px]:grid-cols-[16rem_minmax(0,1fr)] min-[1100px]:gap-4 min-[1100px]:items-start" data-testid="indeling-nieuw">
-      <div ref={balkRef} className="min-[1100px]:hidden sticky top-0 z-20 mb-3">
-        <div className="card shadow-md relative">
-          <button
-            ref={menuKnopRef}
-            type="button"
-            data-testid="onderdelen-menu"
-            aria-expanded={menuOpen}
-            aria-controls={menuOpen ? menuId : undefined}
-            onClick={() => {
-              // Opening brings the bar to the top of the screen when the page can scroll that far, and the
-              // menu takes the room that is left under it.
-              if (!menuOpen && balkRef.current) {
-                balkRef.current.scrollIntoView({ block: 'start' });
-                setMenuHoogte(Math.max(200, window.innerHeight - balkRef.current.getBoundingClientRect().bottom - 16));
-              }
-              setMenuOpen(!menuOpen);
-            }}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left"
+    <div data-testid="indeling-nieuw">
+      <InPlek plek="kop-links">
+        <button
+          ref={menuKnopRef}
+          type="button"
+          data-testid="onderdelen-menu"
+          aria-label="Onderdelen van de periode"
+          aria-expanded={menuOpen}
+          aria-controls={menuOpen ? menuId : undefined}
+          onClick={() => {
+            if (!menuOpen) setMenuTop(Math.max(0, Math.round(menuKnopRef.current?.closest('header')?.getBoundingClientRect().bottom ?? 0)));
+            setMenuOpen(!menuOpen);
+          }}
+          className="min-[1100px]:hidden -ml-2 w-11 h-11 flex items-center justify-center rounded hover:bg-white/10"
+        >
+          <svg className="w-7 h-7" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+            <path d="M3 5h14M3 10h14M3 15h14" />
+          </svg>
+        </button>
+      </InPlek>
+      {menuOpen && (
+        <>
+          {/* A tap next to the menu closes it. */}
+          <div className="min-[1100px]:hidden fixed inset-x-0 bottom-0 z-30 bg-black/40" style={{ top: menuTop }} onClick={() => setMenuOpen(false)} data-testid="onderdelen-waas" />
+          <nav
+            ref={menuRef}
+            id={menuId}
+            aria-label="Onderdelen van de periode"
+            className="min-[1100px]:hidden fixed left-0 bottom-0 z-30 w-[84%] max-w-xs bg-white shadow-xl p-2 overflow-y-auto overscroll-contain"
+            style={{ top: menuTop }}
           >
-            <svg className="w-6 h-6 shrink-0 text-neutral-700" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
-              <path d="M3 5h14M3 10h14M3 15h14" />
-            </svg>
-            <span className="min-w-0 flex-1">
-              <span className="block text-xs font-semibold uppercase tracking-wide text-neutral-600">Onderdelen</span>
-              <span className="block font-bold text-neutral-900 truncate">{ctx.onderdelen[ctx.actief].titel}</span>
-            </span>
-            <svg className={`w-5 h-5 shrink-0 text-neutral-500 transition-transform ${menuOpen ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clipRule="evenodd" />
-            </svg>
-          </button>
-          {menuOpen && (
-            <nav
-              id={menuId}
-              aria-label="Onderdelen van de periode"
-              className="absolute left-0 right-0 top-full mt-1 card shadow-lg p-2 overflow-y-auto"
-              style={{ maxHeight: menuHoogte ?? undefined }}
-            >
-              <OnderdelenLijst naKeuze={() => setMenuOpen(false)} />
-            </nav>
-          )}
-        </div>
-      </div>
-      {/* Its own scroll bar: with nine sections the list is higher than a laptop screen, and stuck to the
+            <OnderdelenLijst naKeuze={() => setMenuOpen(false)} />
+          </nav>
+        </>
+      )}
+      {/* Its own scroll bar: with ten sections the list is higher than a laptop screen, and stuck to the
           top its last items (the roster) could not be reached (1.10.0). */}
-      <nav aria-label="Onderdelen van de periode" className="hidden min-[1100px]:block card p-2 sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <OnderdelenLijst />
-      </nav>
+      <InPlek plek="onderdelen-links">
+        <nav aria-label="Onderdelen van de periode" className="sticky top-0 max-h-screen overflow-y-auto px-2 py-4">
+          <OnderdelenLijst />
+        </nav>
+      </InPlek>
       <div className="min-w-0">{children}</div>
     </div>
+  );
+}
+
+/**
+ * The period in the app's blue bar, between "Dienstrooster" and the version (1.12.0, the new layout): its
+ * name, which is the page's heading there, and its status, which must stay in sight now that the block
+ * with the status badge is a section of its own.
+ */
+function PeriodeInKop({ naam, status }: { naam: string; status: string }) {
+  return (
+    <InPlek plek="kop-midden">
+      <div className="flex items-baseline gap-3 min-w-0 min-[1100px]:ml-2 min-[1100px]:pl-6 min-[1100px]:border-l min-[1100px]:border-white/40" data-testid="kop-periode">
+        <h1 className="text-base min-[1100px]:text-lg font-semibold truncate">{naam}</h1>
+        <span className="shrink-0 px-2.5 py-0.5 rounded-full border border-white/70 bg-white/15 text-[0.8125rem] font-semibold whitespace-nowrap">{status}</span>
+      </div>
+    </InPlek>
   );
 }
 
@@ -410,7 +437,9 @@ function Onderdelen({ naWisselRef, children }: { naWisselRef: RefObject<{ sectie
 const STAP_PLEK: Record<StapDoel, { sectie?: SectionKey; element: string }> = {
   uitnodigingen: { sectie: 'export', element: 'knop-uitnodigingen' },
   herinneringen: { sectie: 'export', element: 'knop-herinneringen' },
-  // In the header of the period page (app/planner/period/[id]/page.tsx).
+  // No section of its own: a button that changes the status. The accordion has them above the sections
+  // (sluiten in the page's header, app/planner/period/[id]/page.tsx), the new layout in the section
+  // "Periode" (onderdeelVanStap, lib/periodeIndeling.ts).
   sluiten: { element: 'knop-periode-sluiten' },
   genereren: { element: 'knop-genereren' },
   'lege-diensten': { sectie: 'vooraf', element: 'knop-lege-diensten' },
@@ -429,9 +458,20 @@ interface Props {
   onPeriodChanged?: () => void;
   /** The status the page itself shows; a change made there (closing) reloads this dashboard. */
   periodStatus?: string;
+  /**
+   * The page's own block about the period: its name, dates, deadline, streefbereik, status and the buttons
+   * that close and reopen it, with the notices under it (app/planner/period/[id]/page.tsx, which holds
+   * their state). This dashboard decides where it goes, because it knows the layout: as the card on top
+   * in the accordion ('kaart'), inside the section "Periode" in the new layout ('onderdeel', 1.12.0),
+   * with this dashboard's own buttons (`acties`) under the status there.
+   */
+  periodeKop?: (vorm: 'kaart' | 'onderdeel', acties?: ReactNode) => ReactNode;
+  /** For the blue bar in the new layout (PeriodeInKop). */
+  periodeNaam?: string;
+  periodeDefinitief?: boolean;
 }
 
-export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Props) {
+export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, periodeKop, periodeNaam, periodeDefinitief = false }: Props) {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [progress, setProgress] = useState<PersonProgress[]>([]);
   const [loading, setLoading] = useState(true);
@@ -583,6 +623,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   // that send are off and say why, as on the AIOS's page (0.87.0): they
   // used to answer with an error only after the click.
   const [mailIngesteld, setMailIngesteld] = useState<boolean | null>(null);
+  // Whether the red notice about mail shows (MailWarning): the list says so at "Periode", where it is in the new layout.
+  const [mailMeldingZichtbaar, setMailMeldingZichtbaar] = useState(false);
   const [undoError, setUndoError] = useState<string | null>(null);
   // null = not known yet (still loading, or load failed) - the "Voorstellen
   // voor herverdeling" section stays visible in that case, so a load error
@@ -858,33 +900,59 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     }
   };
 
+  // What is on the page whatever this dashboard has to show: in the accordion the page's block about the
+  // period on top, in the new layout the period in the blue bar and the room of the list on the left
+  // kept, so the page does not jump when the list comes.
+  const statusTekst = periodeStatusTekst(dashboard?.status ?? periodStatus ?? '', Boolean(dashboard ? dashboard.definitief_op : periodeDefinitief));
+  const kader = zijbalk ? (
+    <>
+      {periodeNaam && <PeriodeInKop naam={periodeNaam} status={statusTekst} />}
+      {!dashboard && (
+        <InPlek plek="onderdelen-links">
+          <div aria-hidden="true" />
+        </InPlek>
+      )}
+    </>
+  ) : (
+    periodeKop?.('kaart')
+  );
+
   if (loading) {
     return (
-      <div className="card p-8 text-center">
-        <p className="text-lg text-neutral-600">Dashboard laden...</p>
-      </div>
+      <>
+        {kader}
+        <div className="card p-8 text-center">
+          <p className="text-lg text-neutral-600">Dashboard laden...</p>
+        </div>
+      </>
     );
   }
 
   if (loadError) {
     return (
-      <div className="card p-8 bg-red-50 border border-red-200 flex items-center justify-between gap-3">
-        <p className="text-red-700">{loadError}</p>
-        <button
-          onClick={() => loadData()}
-          className="shrink-0 px-3 py-1.5 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700"
-        >
-          Opnieuw proberen
-        </button>
-      </div>
+      <>
+        {kader}
+        <div className="card p-8 bg-red-50 border border-red-200 flex items-center justify-between gap-3">
+          <p className="text-red-700">{loadError}</p>
+          <button
+            onClick={() => loadData()}
+            className="shrink-0 px-3 py-1.5 rounded text-sm font-medium bg-red-600 text-white hover:bg-red-700"
+          >
+            Opnieuw proberen
+          </button>
+        </div>
+      </>
     );
   }
 
   if (!dashboard) {
     return (
-      <div className="card p-8">
-        <p className="text-neutral-600">Geen dashboardgegevens beschikbaar</p>
-      </div>
+      <>
+        {kader}
+        <div className="card p-8">
+          <p className="text-neutral-600">Geen dashboardgegevens beschikbaar</p>
+        </div>
+      </>
     );
   }
 
@@ -1015,7 +1083,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
   // One list of the sections: the accordion and the new layout read title, summary and whether it is
   // there from here, so the two cannot drift apart.
   const naStart = ['OPEN', 'GESLOTEN', 'GEGENEREERD', 'GEPUBLICEERD'].includes(dashboard.status);
+  // "Periode" (1.12.0): its summary is the status, and that a notice waits there (mail not going out,
+  // large differences), which until then stood above every section.
+  const meldingen = (mailMeldingZichtbaar ? 1 : 0) + (dashboard.large_imbalances.length > 0 ? 1 : 0);
   const onderdelen: Record<SectionKey, { titel: string; hint?: string; zichtbaar: boolean }> = {
+    periode: {
+      titel: 'Periode',
+      hint: `${statusTekst.toLowerCase()}${meldingen > 0 ? ` · ${telwoord(meldingen, 'melding', 'meldingen')}` : ''}`,
+      zichtbaar: zijbalk,
+    },
     importcorrecties: {
       titel: 'Import en correcties',
       hint: kanSaldoWijzigen(dashboard.status) ? 'kan tot het genereren' : 'alleen vóór het genereren',
@@ -1084,8 +1160,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     const { sectie, element } = STAP_PLEK[doel];
     // The new layout shows the section by its address and gives the button the focus once it is there
     // (a timer lost that race against any real network, 1.10.0). The accordion opens it.
-    if (sectie && zijbalk) {
-      kiesOnderdeel(sectie, element);
+    if (zijbalk) {
+      kiesOnderdeel(onderdeelVanStap(sectie), element);
       return;
     }
     if (sectie && !openSections.has(sectie)) toggleSectionOpen(sectie);
@@ -1097,39 +1173,20 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
     }, 50);
   };
 
-  return (
-    <div className="space-y-4">
-      {stapNu && (
-        <div className="card p-4 border-l-4 border-blue-700 bg-blue-50" data-testid="volgende-stap" role="status">
-          <p className="text-sm text-neutral-900">
-            <span className="font-semibold">Volgende stap: </span>
-            {stapNu.tekst}
-          </p>
-          {stapNu.doel && (
-            <button
-              onClick={() => gaNaarStap(stapNu.doel!)}
-              className="mt-2 text-sm font-medium text-blue-800 underline hover:text-blue-900"
-            >
-              {stapNu.knop}
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* No separate stats-summary card here anymore - it duplicated
-          exactly what "Status voorkeuren" already shows in its own
-          section hint below (visible whether that section is open or
-          closed), just phrased slightly differently. */}
-
-      {/* Mail not going out: period-wide, so above every heading. */}
-      <MailWarning
-        refreshKey={`${mailSettingsKey}|${exportDialogOpen}`}
-        onOpenSettings={beheerder ? () => setMailSettingsOpen(true) : undefined}
-      />
-
-      {/* Large Imbalances - an actionable warning, not a summary stat, so
-          unlike the rest of this reorganization it stays directly visible
-          instead of behind a click. */}
+  // What stood above the sections until 1.12.0, as pieces: the accordion still puts them there, the new
+  // layout inside the section "Periode".
+  const kanGenereren = ['GESLOTEN', 'GEGENEREERD'].includes(dashboard.status);
+  // Mail not going out: period-wide.
+  const mailMelding = (
+    <MailWarning
+      refreshKey={`${mailSettingsKey}|${exportDialogOpen}`}
+      onOpenSettings={beheerder ? () => setMailSettingsOpen(true) : undefined}
+      onStand={setMailMeldingZichtbaar}
+    />
+  );
+  // Large imbalances: an actionable warning, not a summary stat.
+  const groteVerschillen = (
+    <>
       {dashboard.large_imbalances.length > 0 && (
         <div className="card p-6 bg-amber-50 border border-amber-200">
           <h3 className="font-bold text-lg mb-3">
@@ -1153,11 +1210,13 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           </div>
         </div>
       )}
-
-      {/* Primary actions - the buttons a planner reaches for on every visit,
-          kept in one row rather than spread across multiple cards. */}
-      <div className="card p-4">
-        <div className="flex gap-3 flex-wrap">
+    </>
+  );
+  // The buttons that change the status. In the section a button that can't be pressed in this status is
+  // left out: Volgende stap says what comes first.
+  const statusKnoppen = (
+    <>
+          {(!zijbalk || kanGenereren) && (
           <button
             onClick={() => {
               if (hasUnappliedFillGapsDraft(periodId)) {
@@ -1166,11 +1225,11 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
                 setRosterDialogOpen(true);
               }
             }}
-            disabled={!['GESLOTEN', 'GEGENEREERD'].includes(dashboard.status)}
+            disabled={!kanGenereren}
             title={
               dashboard.status === 'GEPUBLICEERD'
                 ? 'Een gepubliceerd rooster is bevroren en kan niet meer opnieuw gegenereerd worden'
-                : !['GESLOTEN', 'GEGENEREERD'].includes(dashboard.status)
+                : !kanGenereren
                   ? 'Sluit de periode eerst. Dan staan voorkeuren en afwezigheid vast.'
                   : undefined
             }
@@ -1179,6 +1238,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
           >
             {generateButtonLabel[rosterFillState]}
           </button>
+          )}
           {dashboard.status === 'GEGENEREERD' && (
             <button
               onClick={() => {
@@ -1223,29 +1283,61 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
               {roosterMailBezig ? 'Bezig…' : roosterMailVraag ? 'Zeker weten? Iedereen krijgt de mail opnieuw' : '✉️ Rooster opnieuw mailen'}
             </button>
           )}
+    </>
+  );
+  const roosterMailUitkomst = roosterMailMelding && (
+    <p role="status" className={`text-sm mt-2 ${roosterMailMelding.fout ? 'text-red-700' : 'text-emerald-800'}`}>
+      {roosterMailMelding.tekst}
+    </p>
+  );
+  const voorlopigUitleg = dashboard.status === 'GEPUBLICEERD' && !dashboard.definitief_op && (
+    <p className="text-xs text-neutral-600 mt-1">
+      Iedereen kan het rooster nu controleren. Voer correcties gewoon in het rooster in. Komen er
+      geen reacties meer, bijvoorbeeld na twee weken? Maak het rooster dan definitief. Iedereen
+      krijgt dan het definitieve rooster met de wijzigingen.
+    </p>
+  );
+
+  return (
+    <>
+    {kader}
+    <div className="space-y-4">
+      {stapNu && (
+        <div className="card p-4 border-l-4 border-blue-700 bg-blue-50" data-testid="volgende-stap" role="status">
+          <p className="text-sm text-neutral-900">
+            <span className="font-semibold">Volgende stap: </span>
+            {stapNu.tekst}
+          </p>
+          {stapNu.doel && (
+            <button
+              onClick={() => gaNaarStap(stapNu.doel!)}
+              className="mt-2 text-sm font-medium text-blue-800 underline hover:text-blue-900"
+            >
+              {stapNu.knop}
+            </button>
+          )}
         </div>
-        {roosterMailMelding && (
-          <p role="status" className={`text-sm mt-2 ${roosterMailMelding.fout ? 'text-red-700' : 'text-emerald-800'}`}>
-            {roosterMailMelding.tekst}
+      )}
+
+      {/* No separate stats-summary card here anymore - it duplicated
+          exactly what "Status voorkeuren" already shows in its own
+          section hint below (visible whether that section is open or
+          closed), just phrased slightly differently. */}
+
+      {/* The accordion: the notices and the buttons a planner reaches for on every visit stay above the
+          sections, directly visible. The new layout has them in the section "Periode" (1.12.0). */}
+      {!zijbalk && mailMelding}
+      {!zijbalk && groteVerschillen}
+      {!zijbalk && (
+        <div className="card p-4">
+          <div className="flex gap-3 flex-wrap">{statusKnoppen}</div>
+          {roosterMailUitkomst}
+          <p className="text-xs text-neutral-500 mt-2">
+            Status: <span className="font-semibold">{statusTekst}</span>
           </p>
-        )}
-        <p className="text-xs text-neutral-500 mt-2">
-          Status: <span className="font-semibold">
-            {dashboard.status === 'GEPUBLICEERD'
-              ? dashboard.definitief_op
-                ? 'Definitief'
-                : 'Voorlopig gepubliceerd'
-              : periodStatusLabel(dashboard.status).charAt(0).toUpperCase() + periodStatusLabel(dashboard.status).slice(1)}
-          </span>
-        </p>
-        {dashboard.status === 'GEPUBLICEERD' && !dashboard.definitief_op && (
-          <p className="text-xs text-neutral-600 mt-1">
-            Iedereen kan het rooster nu controleren. Voer correcties gewoon in het rooster in. Komen er
-            geen reacties meer, bijvoorbeeld na twee weken? Maak het rooster dan definitief. Iedereen
-            krijgt dan het definitieve rooster met de wijzigingen.
-          </p>
-        )}
-      </div>
+          {voorlopigUitleg}
+        </div>
+      )}
 
       {/* The way into the new layout while the accordion is the default (1.10.0); the way back is in its list. */}
       {!zijbalk && (
@@ -1263,6 +1355,19 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
 
       <IndelingContext.Provider value={indeling}>
       <Onderdelen naWisselRef={naWisselRef}>
+      {/* The period itself (1.12.0, the new layout only): what stood above the sections. Kept on the page
+          unseen (keepMounted), so the notice about mail keeps telling the list whether it shows. */}
+      {onderdelen.periode.zichtbaar && (
+        <Section sleutel="periode" keepMounted>
+          <div className="space-y-4">
+            {periodeKop?.('onderdeel', kanGenereren || dashboard.status === 'GEPUBLICEERD' ? <div className="flex flex-wrap gap-2">{statusKnoppen}</div> : undefined)}
+            {roosterMailUitkomst}
+            {voorlopigUitleg}
+            {mailMelding}
+            {groteVerschillen}
+          </div>
+        </Section>
+      )}
       {/* The first section (1.1.0): a beginsaldo or correctie forgotten in the
           wizard can still go in until the roster is generated. */}
       {onderdelen.importcorrecties.zichtbaar && (
@@ -1962,5 +2067,6 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus }: Pr
         </div>
       )}
     </div>
+    </>
   );
 }

@@ -9,11 +9,19 @@
  * until then every "Terug naar periode" led back to the accordion. Below 1100 px the list is a menu
  * behind a button (1.10.0, the planner's wish), where two columns left the tables too little room.
  *
+ * 1.12.0 (the planner's wish, after sketches on the real page): what stood above the sections (the
+ * period's dates, deadline, streefbereik, status and its buttons, the notices) is a section of its own,
+ * "Periode", on top of the list. On a laptop that block took the whole first screen and on a phone more.
+ * The blue bar names the period and its status, the list stands all the way left under that bar, and on
+ * a narrow screen its button is in the bar. Only Volgende stap stays above the section. The accordion
+ * is as it was: there the block stays where it is and "Periode" is no section.
+ *
  * Pure: components/PlannerDashboard.tsx renders it.
  */
 import type { StapDoel } from './volgendeStap';
 
 export type OnderdeelSleutel =
+  | 'periode'
   | 'importcorrecties'
   | 'overloop'
   | 'vooraf'
@@ -23,6 +31,9 @@ export type OnderdeelSleutel =
   | 'links'
   | 'voorstellen'
   | 'rooster';
+
+/** On top of the list, under no heading: the period itself (the new layout only, 1.12.0). */
+export const BOVENAAN: OnderdeelSleutel = 'periode';
 
 /** The groups of the list, in the order of the work. */
 export const GROEPEN: ReadonlyArray<{ naam: string; onderdelen: readonly OnderdeelSleutel[] }> = [
@@ -34,6 +45,7 @@ export const GROEPEN: ReadonlyArray<{ naam: string; onderdelen: readonly Onderde
 
 /** The address of each section (?onderdeel=...), in Dutch words. */
 export const ADRES: Record<OnderdeelSleutel, string> = {
+  periode: 'periode',
   importcorrecties: 'import-en-correcties',
   overloop: 'eerdere-toewijzingen',
   vooraf: 'vooraf-invullen',
@@ -68,8 +80,9 @@ export function keuzeUitAdres(indeling: string | null): 'nieuw' | 'oud' | null {
 
 /**
  * The section shown when none is chosen: where Volgende stap points (lib/volgendeStap.ts), so the page
- * opens where the work is. A step in the header (sluiten) or the action row (genereren, publiceren,
- * definitief) shows what it is about: the preferences before closing, the roster after.
+ * opens where the work is. A step whose button changes the status (sluiten, genereren, publiceren,
+ * definitief) shows what it is about: the preferences before closing, the roster after. Its button is in
+ * the section "Periode" (1.12.0), one click away through Volgende stap: the planner looks before deciding.
  */
 export function startOnderdeel(doel: StapDoel | null | undefined, status: string): OnderdeelSleutel {
   switch (doel) {
@@ -87,6 +100,14 @@ export function startOnderdeel(doel: StapDoel | null | undefined, status: string
     default:
       return status === 'GEGENEREERD' || status === 'GEPUBLICEERD' ? 'rooster' : 'personeel';
   }
+}
+
+/**
+ * The section of a next step's button in the new layout: its own, or "Periode" for a button that changes
+ * the status (those stood in the header and the action row above the sections until 1.12.0).
+ */
+export function onderdeelVanStap(eigen: OnderdeelSleutel | undefined): OnderdeelSleutel {
+  return eigen ?? BOVENAAN;
 }
 
 /** The section on screen: the chosen one when it is there, else the start, else the first there is. */

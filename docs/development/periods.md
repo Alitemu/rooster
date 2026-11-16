@@ -346,11 +346,67 @@ fields and text: nothing was lost. What was wrong, and how it is now:
   to it, and takes the room under the bar so it never runs off the screen. 1100 px is where the widest
   table (Dienstdoende, 725 px) fits next to the list of 16 rem.
 
-Not changed, on docs/todo.md: the block above the sections (the header of the period, Volgende stap, the
-row of buttons) is 430 to 660 px on a laptop and over 800 px on a phone, so the sections begin at or
-below the edge of the first screen. The planner asked to keep the status on top as it is.
+Not changed then: the block above the sections (the header of the period, Volgende stap, the row of
+buttons) was 430 to 660 px on a laptop and over 800 px on a phone, so the sections began at or below
+the edge of the first screen. The planner had asked to keep the status on top as it was. 1.12.0 took
+the block away, below.
 
 Also from that audit, in both layouts: Volgende stap said "of publiceer het rooster met lege diensten"
 for a roster with empty diensten, which publishing refuses (lib/publicationCheck.ts). The sentence now
 says publishing needs every dienst filled, and its test reads that rule so the two stay together.
 
+### The block above the sections becomes the section "Periode" (1.12.0)
+
+The planner's wish, chosen from sketches made on the real page (its own elements moved in the browser,
+nothing built): "the information on top takes too much room and is often superfluous". Measured where a
+section began, in px from the top:
+
+| Screen (height) | Status | 1.11.0 | 1.12.0 |
+|---|---|---|---|
+| Laptop (650) | open | 474 | 170 |
+| Laptop (650) | voorlopig gepubliceerd | 561 | 199 |
+| Phone (812) | open | 740 | 213 |
+| Phone (812) | voorlopig gepubliceerd | 1077 | 282 |
+
+What changed, in the new layout only (the accordion draws exactly what it did):
+
+- **"Periode" is a section**, on top of the list under no heading (`BOVENAAN`, lib/periodeIndeling.ts).
+  It holds what stood above the sections: the dates, the deadline, the venster and streefbereik, the
+  status and the buttons that change it, the notice that mail is not going out and the one about large
+  differences. Its line in the list says the status and how many notices wait there, so a notice that
+  used to be above everything is not missed (`MailWarning` tells through `onStand` whether it shows;
+  the section stays mounted, `keepMounted`, for that).
+- **The page's block is handed to the dashboard.** The header of the period lives in
+  app/planner/period/[id]/page.tsx with its state (the deadline and streefbereik being edited, closing,
+  reopening, "Rooster verwijderen"). The page now gives it as `periodeKop(vorm, acties)` and draws it
+  nowhere itself: the dashboard knows the layout and places it, as the card on top in the accordion
+  ('kaart') or inside the section ('onderdeel', without the card and without the heading), with its
+  own buttons (`acties`) under the status. In the accordion the DOM is as it was: the dashboard returns
+  a fragment, so the block and the notices are still children of the page's column.
+- **The blue bar names the period and its status** (`PeriodeInKop`). The status had to stay in sight:
+  without it a planner could work in a closed period unnoticed. The name is the page's `h1` there. The
+  app's bar (app/layout.tsx) has two slots for it, `kop-links` and `kop-midden`, which a page fills
+  through a portal (components/InPlek.tsx). They are shared and empty on every other page, the AIOS's
+  included, where they take no room. On a narrow screen the name takes a row of its own under the title.
+- **The list stands all the way left**, from the blue bar down, in a column the page keeps for it
+  (`onderdelen-links`, hidden by CSS while empty). It used to be a column inside the page's centred
+  width, under everything above the sections. The section is wider for it: 1062 px on a laptop of 1366,
+  where it was 976.
+- **Below 1100 px the button of the list is in the blue bar**, left of "Dienstrooster", and the bar
+  sticks to the top there (`html[data-kop-plakt]`, set while the layout is on the page). The list slides
+  in from the left under the bar. It replaced the bar inside the page, which named the section on screen;
+  the section's own title says that now.
+- **The sections of a group stand moved in with a line down the group**: the planner's choice out of
+  three sketches (as it was, moved in, moved in with a line).
+- **Volgende stap is the one thing left above every section.** Its button goes to the section "Periode"
+  for a step whose button changes the status (`onderdeelVanStap`). The page still opens on what the step
+  is about (`startOnderdeel`, unchanged): the planner looks at the roster before publishing it.
+- **A button that can't be pressed in this status is left out of the section** ("Rooster genereren"
+  while the period is open). Volgende stap says what comes first.
+
+Weighed and dropped: the button row moved into the header (my own proposal: 60 to 130 px won on a
+laptop, the block stayed), and the blue bar sticking to the top on a wide screen too (64 px of a
+laptop's 650 for good).
+
+Not in the bar yet: the pages behind the period (a person, fill-gaps, prior assignments) keep their own
+header (docs/todo.md).

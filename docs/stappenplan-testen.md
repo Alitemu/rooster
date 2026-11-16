@@ -62,15 +62,22 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   de volgorde uitnodigen, herinneren, sluiten, genereren, aanvullen, voorlopig,
   definitief. De knop eronder gaat naar de goede knop en voert zelf niets uit.
 - [ ] **C0a.** Klik op de periodepagina op *Nieuwe indeling proberen*. Je ziet:
-  de onderdelen links in vier groepjes en rechts het onderdeel waar *Volgende stap*
-  naar wijst. Elk onderdeel opent met een klik. De terugknop van de browser gaat
-  naar het vorige onderdeel. Klik op de naam van een persoon en daarna op
-  *Terug naar periode*: de nieuwe indeling staat er nog. *Terug naar de oude
-  indeling* staat onderaan de lijst.
-- [ ] **C0b.** Doe hetzelfde op een telefoon. Je ziet meteen een onderdeel, met
-  erboven een balk met drie streepjes en de naam van dat onderdeel. Een tik op de
-  balk toont de lijst. Kies een onderdeel: de lijst sluit en het onderdeel staat
-  er vanaf de titel. Scrol naar beneden: de balk blijft bovenaan staan.
+  de lijst met onderdelen helemaal links onder de blauwe balk, met *Periode*
+  bovenaan en daaronder vier groepjes. Rechts staat *Volgende stap* en het
+  onderdeel waar die stap over gaat. In de blauwe balk staan de naam van de
+  periode en de status. Elk onderdeel opent met een klik. De terugknop van de
+  browser gaat naar het vorige onderdeel. Klik op de naam van een persoon en
+  daarna op *Terug naar periode*: de nieuwe indeling staat er nog. *Terug naar
+  de oude indeling* staat onderaan de lijst.
+- [ ] **C0b.** Open in de nieuwe indeling het onderdeel *Periode*. Je ziet: de
+  data, de deadline, het streefbereik, de status en de knoppen die bij deze
+  status horen. Klik bij een periode waarvan de deadline voorbij is op de knop
+  van *Volgende stap*: je komt in *Periode* uit, op de knop *Periode sluiten*.
+- [ ] **C0c.** Doe hetzelfde op een telefoon. Je ziet meteen een onderdeel. De
+  knop met drie streepjes staat in de blauwe balk, links van *Dienstrooster*,
+  met de periode en de status eronder. Een tik toont de lijst vanaf links.
+  Kies een onderdeel: de lijst sluit en het onderdeel staat er vanaf de titel.
+  Scrol naar beneden: de blauwe balk blijft bovenaan staan.
 - [ ] **C1a.** Open de periodepagina van een open periode en klik op *Aanpassen*
   naast het streefbereik. Vul een ander bereik in en sla het op. Je ziet: het
   nieuwe bereik in woorden. Waren de uitnodigingen al verstuurd, dan zegt de

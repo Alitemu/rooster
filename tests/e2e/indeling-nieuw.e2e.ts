@@ -14,6 +14,11 @@ import { createTestPeriod, cleanupTestData, loginAsPlanner, loginAsBeheerder, ge
  * - the choice is remembered, so "Terug naar periode" keeps the layout, with a switch each way;
  * - on a laptop the list scrolls by itself and a chosen section comes on screen with its title;
  * - below 1100 px the list is a menu behind a button in a bar that sticks to the top (the planner's wish).
+ *
+ * 1.12.0, the planner's wish after sketches on the real page: what stood above the sections is the section
+ * "Periode" on top of the list; the blue bar names the period and its status; the list stands all the way
+ * left under that bar; on a narrow screen its button is in the blue bar, which sticks to the top there.
+ * On a laptop a section began at 474 to 561 px of 650, on a phone at 740 to 1077 px of 812.
  */
 let testData: ReturnType<typeof createTestPeriod>;
 test.beforeEach(() => {
@@ -28,10 +33,12 @@ const adres = (extra = '') => `${getBaseUrl()}/planner/period/${testData.period.
 const lijst = (page: Page) => page.getByRole('navigation', { name: 'Onderdelen van de periode' });
 const menuKnop = (page: Page) => page.getByTestId('onderdelen-menu');
 const sectie = (page: Page) => page.locator('[data-testid^="onderdeel-"]');
-/** The title of the section on screen is inside the visible part of the page, under the bar when there is one. */
+const blauweBalk = (page: Page) => page.locator('header');
+/** The title of the section on screen is inside the visible part of the page, under the blue bar where that sticks. */
 async function titelInBeeld(page: Page) {
   const vak = await sectie(page).getByRole('heading', { level: 2 }).boundingBox();
-  const onderBalk = (await menuKnop(page).isVisible()) ? ((await menuKnop(page).boundingBox())?.y ?? 0) + ((await menuKnop(page).boundingBox())?.height ?? 0) : 0;
+  const balk = (await blauweBalk(page).boundingBox())!;
+  const onderBalk = (await menuKnop(page).isVisible()) ? balk.y + balk.height : 0;
   const hoogte = page.viewportSize()!.height;
   expect(vak, 'the section has a title').not.toBeNull();
   expect(vak!.y, 'the title is not above the screen or under the bar').toBeGreaterThanOrEqual(onderBalk);
@@ -49,6 +56,18 @@ test('a list on the left, one section on the right, an address per section and t
   for (const groep of ['Voorbereiden', 'Deelnemers', 'Communicatie', 'Rooster']) await expect(lijst(page).getByText(groep, { exact: true })).toBeVisible();
   // No accordion in the new layout.
   await expect(page.locator('h2 button[aria-expanded]')).toHaveCount(0);
+
+  // The list stands all the way left, from the blue bar down, and the section next to it starts high:
+  // it began at 474 px of a laptop's 650 while the period's block stood above it.
+  const balk = (await blauweBalk(page).boundingBox())!;
+  const lijstVak = (await lijst(page).boundingBox())!;
+  expect(lijstVak.x).toBe(0);
+  expect(Math.abs(lijstVak.y - (balk.y + balk.height))).toBeLessThanOrEqual(1);
+  expect((await sectie(page).boundingBox())!.y).toBeLessThan(260);
+  // "Periode" on top, under no heading; the sections of a group moved in under theirs.
+  await expect(lijst(page).getByRole('link').first()).toHaveText(/^Periode/);
+  const periodeX = (await lijst(page).getByRole('link', { name: /^Periode/ }).boundingBox())!.x;
+  expect((await lijst(page).getByRole('link', { name: /^Status voorkeuren/ }).boundingBox())!.x).toBeGreaterThanOrEqual(periodeX + 16);
 
   // Every item shows its own section, and only that one.
   const items = await lijst(page).getByRole('link').all();
@@ -134,39 +153,49 @@ test('a made roster with an empty dienst opens on it, and Volgende stap goes the
   await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('knop-lege-diensten');
 });
 
-test('on a phone the page opens on a section, with the list as a menu in a bar that sticks to the top', async ({ page }) => {
+test('on a phone the page opens on a section, with the button of the list in the blue bar, which sticks to the top', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await loginAsPlanner(page);
   await page.goto(adres());
   await page.waitForLoadState('networkidle');
 
-  // No list first: the section where the work is, and the button that names it.
+  // No list first: the section where the work is, high on the screen (it began at 740 px of 812).
   await expect(page.getByTestId('onderdeel-status-voorkeuren')).toBeVisible();
+  expect((await sectie(page).boundingBox())!.y).toBeLessThan(320);
   await expect(lijst(page)).toHaveCount(0);
-  await expect(menuKnop(page)).toHaveAttribute('aria-expanded', 'false');
-  await expect(menuKnop(page)).toContainText('Onderdelen');
-  await expect(menuKnop(page)).toContainText('Status voorkeuren');
-  expect((await menuKnop(page).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  // The button is in the blue bar, left of "Dienstrooster", and large enough to hit.
+  await expect(blauweBalk(page).getByRole('button', { name: 'Onderdelen van de periode' })).toHaveAttribute('aria-expanded', 'false');
+  const knop = (await menuKnop(page).boundingBox())!;
+  expect(knop.height).toBeGreaterThanOrEqual(44);
+  expect(knop.width).toBeGreaterThanOrEqual(44);
+  expect(knop.x + knop.width).toBeLessThanOrEqual((await blauweBalk(page).getByRole('link', { name: 'Dienstrooster' }).boundingBox())!.x);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
-  // Far down a long section the bar is still at the top of the screen.
+  // Far down a long section the blue bar, with the button and the period, is still at the top of the screen.
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-  const balk = (await menuKnop(page).boundingBox())!;
-  expect(balk.y).toBeGreaterThanOrEqual(0);
-  expect(balk.y).toBeLessThan(10);
+  expect((await blauweBalk(page).boundingBox())!.y).toBe(0);
+  await expect(menuKnop(page)).toBeInViewport();
+  await expect(page.getByTestId('kop-periode')).toBeInViewport();
 
-  // The menu: the groups and the sections, the one on screen marked.
+  // The menu: "Periode", the groups and the sections, the one on screen marked and in focus.
   await menuKnop(page).click();
   await expect(menuKnop(page)).toHaveAttribute('aria-expanded', 'true');
   for (const groep of ['Voorbereiden', 'Deelnemers', 'Communicatie', 'Rooster']) await expect(lijst(page).getByText(groep, { exact: true })).toBeVisible();
+  await expect(lijst(page).getByRole('link').first()).toHaveText(/^Periode/);
   await expect(lijst(page).getByRole('link', { name: /^Status voorkeuren/ })).toHaveAttribute('aria-current', 'page');
+  await expect(lijst(page).getByRole('link', { name: /^Status voorkeuren/ })).toBeFocused();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  // It comes from the left, starts where the blue bar ends and fits on the screen.
+  const balk = (await blauweBalk(page).boundingBox())!;
+  const menu = (await lijst(page).boundingBox())!;
+  expect(menu.x).toBe(0);
+  expect(Math.abs(menu.y - (balk.y + balk.height))).toBeLessThanOrEqual(1);
+  expect(menu.y + menu.height).toBeLessThanOrEqual(812);
 
   // A choice closes the menu and shows the section from its title, under the bar.
   await lijst(page).getByRole('link', { name: /^Personeel beheren/ }).click();
   await expect(page.getByTestId('onderdeel-personeel-beheren')).toBeVisible();
   await expect(lijst(page)).toHaveCount(0);
-  await expect(menuKnop(page)).toContainText('Personeel beheren');
   await expect(page).toHaveURL(/onderdeel=personeel-beheren/);
   await titelInBeeld(page);
   await expect(sectie(page).getByRole('heading', { level: 2 })).toBeFocused();
@@ -178,15 +207,62 @@ test('on a phone the page opens on a section, with the list as a menu in a bar t
   await expect(menuKnop(page)).toBeFocused();
   await menuKnop(page).click();
   await expect(lijst(page)).toBeVisible();
-  // The menu fits on the screen under the bar, also above a short section where the page cannot scroll up.
-  const menu = (await lijst(page).boundingBox())!;
-  expect(menu.y + menu.height).toBeLessThanOrEqual(812);
-  await page.mouse.click(187, menu.y + menu.height + 8);
+  await page.mouse.click(365, 500);
   await expect(lijst(page)).toHaveCount(0);
 
   // The back button steps back to the section before, not to a list.
   await page.goBack();
   await expect(page.getByTestId('onderdeel-status-voorkeuren')).toBeVisible();
+});
+
+test('what stood above the sections is the section Periode, and the blue bar names the period and its status', async ({ page }) => {
+  // The deadline has passed: Volgende stap points at the button that closes the period.
+  db.prepare('UPDATE dienstrooster_schedule_period SET deadline = ? WHERE id = ?').run(new Date(Date.now() - 3600_000).toISOString(), testData.period.id);
+  await loginAsPlanner(page);
+  await page.goto(adres());
+  await page.waitForLoadState('networkidle');
+
+  // The blue bar: the period's name, which is the page's heading, and its status.
+  await expect(blauweBalk(page).getByRole('heading', { level: 1 })).toHaveText(testData.period.name);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
+  await expect(page.getByTestId('kop-periode')).toContainText('Open');
+
+  // The page opens on what the step is about, and nothing of the period's block stands above it.
+  await expect(page.getByTestId('onderdeel-status-voorkeuren')).toBeVisible();
+  await expect(page.locator('#knop-periode-sluiten')).toBeHidden();
+  await expect(page.getByText('Deadline:')).toBeHidden();
+  // The button that makes the roster can't be pressed while the period is open: the section leaves it out.
+  await expect(page.locator('#knop-genereren')).toHaveCount(0);
+
+  // Volgende stap goes to the button, in "Periode".
+  await expect(page.getByTestId('volgende-stap')).toContainText('De deadline is verstreken.');
+  await page.getByTestId('volgende-stap').getByRole('button').click();
+  await expect(page).toHaveURL(/onderdeel=periode/);
+  const periode = page.getByTestId('onderdeel-periode');
+  await expect(periode.getByRole('heading', { level: 2 })).toHaveText('Periode');
+  await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe('knop-periode-sluiten');
+  // What the block had: the dates, the deadline, the status and its button (the period of this test has
+  // no ruleset, so no streefbereik to show).
+  await expect(periode).toContainText(' t/m ');
+  await expect(periode).toContainText('Deadline:');
+  await expect(periode).toContainText('Status: Open');
+  await expect(lijst(page).getByRole('link', { name: /^Periode/ })).toContainText('open');
+  await expect(lijst(page).getByRole('link', { name: /^Periode/ })).toHaveAttribute('aria-current', 'page');
+
+  // Closing from there works as it did, and the bar follows.
+  await periode.getByRole('button', { name: /Periode sluiten/ }).click();
+  await periode.getByRole('button', { name: 'Zeker weten? Nogmaals klikken' }).click();
+  await expect(page.getByTestId('kop-periode')).toContainText('Gesloten');
+  await expect(periode.locator('#knop-genereren')).toBeEnabled();
+
+  // The accordion is as it was: the block on top with the name as its heading, nothing in the blue bar.
+  await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}?indeling=oud`);
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByTestId('kop-periode')).toHaveCount(0);
+  await expect(page.locator('main').getByRole('heading', { level: 1 })).toHaveText(testData.period.name);
+  await expect(page.locator('#knop-genereren')).toBeVisible();
+  await expect(page.getByText('Status: Gesloten').first()).toBeVisible();
+  await expect(menuKnop(page)).toHaveCount(0);
 });
 
 test('the list next to the section from 1100 px, the menu below it, where the tables need the width', async ({ page }) => {
@@ -197,6 +273,7 @@ test('the list next to the section from 1100 px, the menu below it, where the ta
     await page.waitForLoadState('networkidle');
     await expect(menuKnop(page)).toBeVisible();
     await expect(lijst(page)).toHaveCount(0);
+    await expect(page.getByTestId('kop-periode')).toBeVisible();
     // The section has the whole width, as in the accordion.
     expect((await sectie(page).boundingBox())!.width).toBeGreaterThan(breedte - 60);
   }
