@@ -5,13 +5,16 @@
  * only: which personal links were issued for the period, when each was made
  * and last used, a button to revoke one, all links of one person at once
  * (1.3.0) or every link of the period (lib/aiosToegangslinks.ts). The
- * link itself is never shown: only its hash is stored.
+ * link itself is never shown: only its hash is stored. One line per person
+ * with how many links still work (1.13.0, the beheerder's wish): the links
+ * themselves show when asked for.
  *
  * A copy of components/ToegangslinksBeheer.tsx on the AIOS's own routes,
  * not shared with it (docs/development/diensten.md "Copied, not changed").
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { aantalLinksTekst, linksPerPersoon } from '@/lib/aiosLinksPerPersoon';
 import { withBasePath } from '@/lib/basePath';
 import { telwoord } from '@/lib/aiosTelwoord';
 import { foutTekst } from '@/lib/aiosFoutTekst';
@@ -40,9 +43,12 @@ export function AiosToegangslinks({ periodId }: { periodId: string }) {
   const [bezig, setBezig] = useState<string | null>(null);
   // "Alles intrekken" asks first as well.
   const [vraagAlles, setVraagAlles] = useState(false);
-  // "Alle links van één medewerker" (audit 1.2.2: 14 links of one person took 14 times "Intrekken").
+  // All links of one person at once (audit 1.2.2: 14 links of one person took 14 times "Intrekken"):
+  // the button on the person's line since 1.13.0.
   const [gekozen, setGekozen] = useState('');
   const [vraagPersoon, setVraagPersoon] = useState(false);
+  // Whose links are shown one by one.
+  const [getoond, setGetoond] = useState<Set<string>>(() => new Set());
 
   const laad = useCallback(async () => {
     try {
@@ -83,14 +89,8 @@ export function AiosToegangslinks({ periodId }: { periodId: string }) {
 
   const werkend = (links ?? []).filter((l) => l.ingetrokken_op === null);
   const werkendePersonen = new Set(werkend.map((l) => l.person_id)).size;
-  const perPersoon = [
-    ...werkend.reduce(
-      (m, l) => m.set(l.person_id, { codenaam: l.codenaam, aantal: (m.get(l.person_id)?.aantal ?? 0) + 1 }),
-      new Map<string, { codenaam: string; aantal: number }>()
-    ),
-  ]
-    .map(([person_id, v]) => ({ person_id, ...v }))
-    .sort((a, b) => a.codenaam.localeCompare(b.codenaam));
+  const personen = linksPerPersoon(links ?? []);
+  const perPersoon = personen.filter((p) => p.werkend > 0).map((p) => ({ person_id: p.person_id, codenaam: p.codenaam, aantal: p.werkend }));
   const keuze = perPersoon.find((p) => p.person_id === gekozen) ?? null;
 
   const trekPersoonIn = async () => {
@@ -142,32 +142,7 @@ export function AiosToegangslinks({ periodId }: { periodId: string }) {
   return (
     <div data-testid="toegangslinks">
       {werkend.length > 0 && !vraagAlles && !vraagPersoon && (
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-sm text-neutral-800">
-              <span className="block mb-1">Alle links van één medewerker</span>
-              <select
-                value={gekozen}
-                onChange={(e) => setGekozen(e.target.value)}
-                className="px-2 py-2 rounded border border-neutral-300 bg-white text-neutral-900"
-              >
-                <option value="">Kies een medewerker</option>
-                {perPersoon.map((p) => (
-                  <option key={p.person_id} value={p.person_id}>
-                    {p.codenaam} ({telwoord(p.aantal, 'werkende link', 'werkende links')})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              onClick={() => setVraagPersoon(true)}
-              disabled={!keuze}
-              className="px-3 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
-            >
-              Links van medewerker intrekken
-            </button>
-          </div>
+        <div className="mb-3 flex flex-wrap items-end justify-end gap-3">
           <button
             type="button"
             onClick={() => setVraagAlles(true)}
@@ -234,6 +209,11 @@ export function AiosToegangslinks({ periodId }: { periodId: string }) {
         ingetrokken link werkt niet meer en wie er via binnenkwam, is meteen uitgelogd. Alleen de beheerder ziet dit.
         Een medewerker met een andere werkende link komt daar weer mee binnen.
       </p>
+      <p className="text-sm text-neutral-600 mb-3">
+        Elke mail met een link maakt een nieuwe link: de uitnodiging, elke herinnering en de mails bij het publiceren. Ook het
+        downloaden van het bestand met uitnodigingen doet dat. Eerdere links blijven werken. Daarom heeft iemand vaak meer dan
+        één werkende link.
+      </p>
       {fout && (
         <p role="alert" className="mb-3 text-sm text-red-700">
           {fout}
@@ -248,55 +228,106 @@ export function AiosToegangslinks({ periodId }: { periodId: string }) {
       {links && links.length === 0 && <p className="text-sm text-neutral-600">Voor deze periode zijn nog geen persoonlijke links uitgegeven.</p>}
       {links && links.length > 0 && (
         <ul className="divide-y divide-neutral-100">
-          {links.map((link) => {
-            const werkt = link.ingetrokken_op === null;
+          {personen.map((p) => {
+            const open = getoond.has(p.person_id);
             return (
-              <li key={link.id} data-testid="toegangslink" className="py-3 flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className={`font-medium ${werkt ? 'text-neutral-900' : 'text-neutral-500 line-through'}`}>{link.codenaam}</p>
-                  <p className="text-sm text-neutral-600">
-                    Gemaakt op {moment(link.aangemaakt_op)}.{' '}
-                    {link.laatst_gebruikt_op ? `Voor het laatst gebruikt op ${moment(link.laatst_gebruikt_op)}.` : 'Nog niet gebruikt.'}
-                  </p>
-                  <p className="text-sm font-medium text-neutral-800">
-                    {werkt ? 'Werkt' : `Ingetrokken op ${moment(link.ingetrokken_op!)}`}
-                  </p>
-                </div>
-                {werkt && vraagOp !== link.id && (
-                  <button
-                    type="button"
-                    onClick={() => setVraagOp(link.id)}
-                    className="px-3 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
-                    aria-label={`Link van ${link.codenaam} intrekken`}
-                  >
-                    Intrekken
-                  </button>
-                )}
-                {werkt && vraagOp === link.id && (
-                  <div role="alertdialog" aria-label={`Link van ${link.codenaam} intrekken`} className="w-full sm:w-auto sm:max-w-sm p-3 rounded border border-amber-300 bg-amber-50 text-sm">
-                    <p className="mb-2 text-amber-900">
-                      Weet je zeker dat je deze link van {link.codenaam} wilt intrekken? {link.codenaam} wordt overal uitgelogd.
-                      {link.werkende_links <= 1 && ` Dit is de enige werkende link van ${link.codenaam}. Daarna komt ${link.codenaam} er pas weer in met een nieuwe link.`}
+              <li key={p.person_id} data-testid="toegangslinks-persoon" className="py-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className={`font-medium ${p.werkend > 0 ? 'text-neutral-900' : 'text-neutral-500'}`}>{p.codenaam}</p>
+                    <p className="text-sm font-medium text-neutral-800">{aantalLinksTekst(p)}</p>
+                    <p className="text-sm text-neutral-600">
+                      Laatste link gemaakt op {moment(p.laatst_gemaakt)}.{' '}
+                      {p.laatst_gebruikt ? `Voor het laatst gebruikt op ${moment(p.laatst_gebruikt)}.` : 'Nog niet gebruikt.'}
                     </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => trekIn(link)}
-                        disabled={bezig === link.id}
-                        className="px-3 py-2 rounded font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
-                      >
-                        Ja, intrekken
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setVraagOp(null)}
-                        disabled={bezig === link.id}
-                        className="px-3 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
-                      >
-                        Annuleren
-                      </button>
-                    </div>
                   </div>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      onClick={() =>
+                        setGetoond((was) => {
+                          const nu = new Set(was);
+                          if (!nu.delete(p.person_id)) nu.add(p.person_id);
+                          return nu;
+                        })
+                      }
+                      className="px-3 py-2 rounded font-medium bg-white border border-neutral-300 text-neutral-900 hover:bg-neutral-50 transition-colors"
+                      aria-label={`${open ? 'Verberg' : 'Toon'} de links van ${p.codenaam}`}
+                    >
+                      {open ? 'Verberg links' : 'Toon links'}
+                    </button>
+                    {p.werkend > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setGekozen(p.person_id);
+                          setVraagPersoon(true);
+                        }}
+                        className="px-3 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                        aria-label={`Alle links van ${p.codenaam} intrekken`}
+                      >
+                        Intrekken
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {open && (
+                  <ul className="mt-2 ml-4 pl-3 border-l-2 border-neutral-200 divide-y divide-neutral-100">
+                    {p.links.map((link) => {
+                  const werkt = link.ingetrokken_op === null;
+                  return (
+                    <li key={link.id} data-testid="toegangslink" className="py-3 flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className={`font-medium ${werkt ? 'text-neutral-900' : 'text-neutral-500 line-through'}`}>{link.codenaam}</p>
+                        <p className="text-sm text-neutral-600">
+                          Gemaakt op {moment(link.aangemaakt_op)}.{' '}
+                          {link.laatst_gebruikt_op ? `Voor het laatst gebruikt op ${moment(link.laatst_gebruikt_op)}.` : 'Nog niet gebruikt.'}
+                        </p>
+                        <p className="text-sm font-medium text-neutral-800">
+                          {werkt ? 'Werkt' : `Ingetrokken op ${moment(link.ingetrokken_op!)}`}
+                        </p>
+                      </div>
+                      {werkt && vraagOp !== link.id && (
+                        <button
+                          type="button"
+                          onClick={() => setVraagOp(link.id)}
+                          className="px-3 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
+                          aria-label={`Link van ${link.codenaam} intrekken`}
+                        >
+                          Intrekken
+                        </button>
+                      )}
+                      {werkt && vraagOp === link.id && (
+                        <div role="alertdialog" aria-label={`Link van ${link.codenaam} intrekken`} className="w-full sm:w-auto sm:max-w-sm p-3 rounded border border-amber-300 bg-amber-50 text-sm">
+                          <p className="mb-2 text-amber-900">
+                            Weet je zeker dat je deze link van {link.codenaam} wilt intrekken? {link.codenaam} wordt overal uitgelogd.
+                            {link.werkende_links <= 1 && ` Dit is de enige werkende link van ${link.codenaam}. Daarna komt ${link.codenaam} er pas weer in met een nieuwe link.`}
+                          </p>
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => trekIn(link)}
+                              disabled={bezig === link.id}
+                              className="px-3 py-2 rounded font-medium bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            >
+                              Ja, intrekken
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setVraagOp(null)}
+                              disabled={bezig === link.id}
+                              className="px-3 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 disabled:opacity-50 transition-colors"
+                            >
+                              Annuleren
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  );
+                    })}
+                  </ul>
                 )}
               </li>
             );

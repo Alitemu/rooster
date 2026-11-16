@@ -12,6 +12,7 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { xlsxDownload } from '@/lib/xlsxWrite';
 import { laadAiosPeriode } from '@/lib/aiosRoute';
 import { aiosWijzigingenGeschiedenis } from '@/lib/aiosWijzigingen';
+import { periodeLogboekSheet } from '@/lib/aiosPeriodeLogboek';
 
 export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const { id } = await props.params;
@@ -22,7 +23,8 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (otherDienst) return otherDienst;
     const period = laadAiosPeriode(id);
     if (period instanceof NextResponse) return period;
-    return xlsxDownload(aiosWijzigingenGeschiedenis(period), 'wijzigingsgeschiedenis-aios', period.naam);
+    // The second tab (1.13.0): what the audit log holds about the quarter itself.
+    return xlsxDownload([aiosWijzigingenGeschiedenis(period), periodeLogboekSheet(period.id)], 'wijzigingsgeschiedenis-aios', period.naam);
   } catch (error) {
     return internalErrorResponse('aios-download-wijzigingen', error);
   }

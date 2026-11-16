@@ -988,7 +988,7 @@ de persoonlijke links als Excel en de wijzigingsgeschiedenis als Excel),
 *Statusrapport downloaden*, *Voorkeurenoverzicht downloaden (Excel)* en het
 rooster als Excel. De knoppen voor uitnodigingen, herinneringen, links en de
 mail staan dus niet meer bij *Voorkeuren van de AIOS*. Alleen de beheerder
-heeft er ook *Voorkeuren importeren (test)*: het ingevulde voorkeurenoverzicht
+heeft er ook *Voorkeuren importeren*: het ingevulde voorkeurenoverzicht
 wordt teruggelezen, met de toelichting per dag. *Controleren* verandert niets
 en laat zien wat er zou veranderen. Dat kan zolang het rooster nog niet
 gemaakt is.

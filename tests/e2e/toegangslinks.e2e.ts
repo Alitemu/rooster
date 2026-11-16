@@ -20,6 +20,12 @@ test.afterAll(() => {
   cleanupTestData(testData.period.id, testData.users.map((u) => u.id));
 });
 
+/** Since 1.13.0 the list has one line per person; the links themselves show after "Toon links". */
+async function toonAlleLinks(page: Page) {
+  const knoppen = sectie(page).getByRole('button', { name: /^Toon de links van / });
+  await expect(knoppen.first()).toBeVisible();
+  while ((await knoppen.count()) > 0) await knoppen.first().click();
+}
 const sectie = (page: Page) => page.locator('div.card', { has: page.getByRole('heading', { name: 'Persoonlijke links' }) }).first();
 
 test('the planner has no section Persoonlijke links, and no way to the list', async ({ page }) => {
@@ -37,6 +43,15 @@ test('the beheerder sees the links, revokes one after the question, and that lin
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await sectie(page).getByRole('heading').getByRole('button').click();
+  // One line per person, with how many links work; the link itself only when asked for.
+  const personen = sectie(page).getByTestId('toegangslinks-persoon');
+  await expect(personen).toHaveCount(testData.users.length);
+  const persoon = personen.filter({ hasText: user.codenaam });
+  await expect(persoon).toContainText('1 werkende link');
+  await expect(persoon).toContainText('Nog niet gebruikt');
+  await expect(sectie(page)).toContainText('Elke mail met een link maakt een nieuwe link');
+  await expect(sectie(page).getByTestId('toegangslink')).toHaveCount(0);
+  await toonAlleLinks(page);
   const rijen = sectie(page).getByTestId('toegangslink');
   await expect(rijen).toHaveCount(testData.users.length);
   const rij = rijen.filter({ hasText: user.codenaam });
@@ -57,6 +72,7 @@ test('the beheerder sees the links, revokes one after the question, and that lin
   await expect(sectie(page).getByRole('status')).toContainText(`De link van ${user.codenaam} is ingetrokken`);
   await expect(rij).toContainText('Ingetrokken op');
   await expect(rij.getByRole('button', { name: 'Intrekken' })).toHaveCount(0);
+  await expect(persoon).toContainText('Geen werkende link meer, 1 ingetrokken');
   const nu = await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${user.token}`);
   expect(nu.status()).toBe(401);
   // The others still work.
@@ -70,6 +86,7 @@ test.describe('at 375px', () => {
     await loginAsBeheerder(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await sectie(page).getByRole('heading').getByRole('button').click();
+    await toonAlleLinks(page);
     await expect(sectie(page).getByTestId('toegangslink').first()).toBeVisible();
     await sectie(page).getByRole('button', { name: /^Link van .* intrekken$/ }).nth(1).click();
     await expect(sectie(page).getByRole('alertdialog')).toBeVisible();
@@ -90,11 +107,13 @@ test('Alle links van één medewerker asks first, then revokes the links of that
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await sectie(page).getByRole('heading').getByRole('button').click();
+  // The person's own line says how many, and has the button (a list to choose from until 1.13.0).
+  const persoon = sectie(page).getByTestId('toegangslinks-persoon').filter({ hasText: user.codenaam });
+  await expect(persoon).toContainText('3 werkende links');
+  await toonAlleLinks(page);
   const rijen = sectie(page).getByTestId('toegangslink').filter({ hasText: user.codenaam });
   await expect(rijen).toHaveCount(3);
-  const knop = sectie(page).getByRole('button', { name: 'Links van medewerker intrekken' });
-  await expect(knop).toBeDisabled();
-  await sectie(page).getByLabel('Alle links van één medewerker').selectOption({ label: `${user.codenaam} (3 werkende links)` });
+  const knop = persoon.getByRole('button', { name: `Alle links van ${user.codenaam} intrekken` });
 
   // Asking is not revoking.
   await knop.click();
@@ -108,6 +127,8 @@ test('Alle links van één medewerker asks first, then revokes the links of that
   await vraag.getByRole('button', { name: `Ja, alles van ${user.codenaam} intrekken` }).click();
   await expect(sectie(page).getByRole('status')).toContainText(`3 links van ${user.codenaam} zijn ingetrokken`);
   await expect(rijen.filter({ hasText: 'Werkt' })).toHaveCount(0);
+  await expect(persoon).toContainText('Geen werkende link meer, 3 ingetrokken');
+  await expect(knop).toHaveCount(0);
   for (const token of [user.token, ...extra]) expect(await status(token)).toBe(401);
   // Someone else's link still works.
   expect(await status(testData.users[2].token)).toBe(200);
@@ -117,6 +138,7 @@ test('Alles intrekken asks first, then revokes every working link of the period'
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await sectie(page).getByRole('heading').getByRole('button').click();
+  await toonAlleLinks(page);
   await expect(sectie(page).getByTestId('toegangslink').first()).toBeVisible();
   const werkend = await sectie(page).getByTestId('toegangslink').filter({ hasText: 'Werkt' }).count();
   expect(werkend).toBeGreaterThan(1);

@@ -5,7 +5,7 @@ import { buildXlsx } from '@/tests/fixtures/buildXlsx';
 import { createTestPeriod, createTestUsers, cleanupTestData, getBaseUrl } from './setup';
 
 /**
- * "Voorkeuren importeren (test)" says one number for one import: the
+ * "Voorkeuren importeren" says one number for one import: the
  * changes "Controleren" counts are the ones "Toepassen" makes, and nothing
  * on the screen reads as another total.
  *
@@ -64,7 +64,7 @@ test('checking and applying say the same number, and the list says it shows a pa
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await page.waitForLoadState('networkidle');
   await page.locator('h2:has-text("Exporteren & communicatie") > button').first().click();
-  await page.getByRole('button', { name: /Voorkeuren importeren \(test\)/ }).click();
+  await page.getByRole('button', { name: /Voorkeuren importeren/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Voorkeuren importeren' });
 
   await dialog.getByLabel('Excel-bestand met voorkeuren').setInputFiles({

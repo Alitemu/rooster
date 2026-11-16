@@ -323,7 +323,7 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
               <button onClick={() => setExportType('audit-trail')} className={DOWNLOAD_KEUZE}>
                 <p className="font-semibold text-neutral-900">📄 Wijzigingsgeschiedenis downloaden</p>
                 <p className="text-sm text-neutral-600">
-                  Excel-bestand met alle handmatige toewijzingen, wisselingen en verwijderingen, voor verantwoording achteraf
+                  Excel-bestand met alle handmatige toewijzingen, wisselingen en verwijderingen. Op een tweede tabblad staat wat er aan de periode zelf veranderde. Voor verantwoording achteraf
                 </p>
               </button>
             </div>
@@ -401,6 +401,11 @@ export function AiosExportDialog({ periodId, periodName, deadline, periodStatus,
                 Elke handmatige toewijzing, wisseling en verwijdering in deze periode, met reden en wie het deed.
               </p>
               <p className="text-xs text-blue-800 mt-2">Kolommen: Datum wijziging, Actie, Betreft, Was, Dienstdatum, Dienst, Reden, Aangepast door</p>
+              <p className="text-sm text-blue-900 mt-3">
+                Op het tweede tabblad, Periode en instellingen, staat wat er aan de periode zelf veranderde: de deadline, het
+                streefbereik, sluiten, genereren, publiceren, wie er bij kwam of weg ging en welke links zijn ingetrokken. Met
+                wie het deed en, waar het logboek dat bewaarde, wat het eerst was.
+              </p>
             </div>
             <div className="flex gap-3">
               <button

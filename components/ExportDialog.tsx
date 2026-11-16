@@ -464,7 +464,7 @@ export function ExportDialog({
                 className="w-full p-4 text-left border-2 border-neutral-200 rounded hover:border-blue-500 hover:bg-blue-50 transition-colors"
               >
                 <p className="font-semibold text-neutral-900">📄 Wijzigingsgeschiedenis downloaden</p>
-                <p className="text-sm text-neutral-600">Excel-bestand met alle handmatige toewijzingen, wisselingen en verwijderingen, voor verantwoording achteraf</p>
+                <p className="text-sm text-neutral-600">Excel-bestand met alle handmatige toewijzingen, wisselingen en verwijderingen. Op een tweede tabblad staat wat er aan de periode zelf veranderde. Voor verantwoording achteraf</p>
               </button>
             </div>
 
@@ -559,6 +559,11 @@ export function ExportDialog({
               </p>
               <p className="text-xs text-blue-800 mt-2">
                 Kolommen: Datum wijziging, Actie, Betreft, Dienstdatum, Diensttype, Reden, Afwijking, Aangepast door
+              </p>
+              <p className="text-sm text-blue-900 mt-3">
+                Op het tweede tabblad, Periode en instellingen, staat wat er aan de periode zelf veranderde: de deadline, het
+                streefbereik, sluiten, genereren, publiceren, wie er bij kwam of weg ging en welke links zijn ingetrokken. Met
+                wie het deed en, waar het logboek dat bewaarde, wat het eerst was.
               </p>
             </div>
 

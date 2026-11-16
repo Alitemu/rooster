@@ -411,7 +411,7 @@ has one column per member of the period (loadPeriodMembers), nobody else:
 someone removed from the pool used to stay in it as long as they had
 markings left.
 
-"Voorkeuren importeren (test)" next to the preferences overview download
+"Voorkeuren importeren" next to the preferences overview download
 (components/PreferencesImportDialog.tsx, POST
 /api/admin/period/[id]/preferences-import, lib/preferencesImport.ts)
 reads that overview back after it was filled in and saved in Excel - as

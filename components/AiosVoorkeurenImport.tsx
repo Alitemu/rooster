@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * "Voorkeuren importeren (test)" for the AIOS: the voorkeurenoverzicht read
+ * "Voorkeuren importeren" for the AIOS: the voorkeurenoverzicht read
  * back in (lib/aiosVoorkeurImport.ts). A copy of components/
  * PreferencesImportDialog.tsx, not shared with it (docs/development/
  * diensten.md, "Copied, not changed"). Shown to a beheerder only; the API
@@ -127,7 +127,7 @@ export function AiosVoorkeurenImportButton({ periodId, periodStatus, onImported 
         onClick={() => setOpen(true)}
         className="px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 transition-colors"
       >
-        🧪 Voorkeuren importeren (test)
+        📥 Voorkeuren importeren
       </button>
 
       {open && (
@@ -139,7 +139,7 @@ export function AiosVoorkeurenImportButton({ periodId, periodStatus, onImported 
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         >
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-xl font-bold mb-2">Voorkeuren importeren (test)</h2>
+            <h2 className="text-xl font-bold mb-2">Voorkeuren importeren</h2>
             <p className="text-sm text-neutral-700 mb-2">
               Open het bestand van &quot;Voorkeurenoverzicht downloaden&quot; in Excel, vul de voorkeuren aan en sla
               het op. Lees het hier weer in.

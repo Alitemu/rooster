@@ -191,7 +191,7 @@ test('toelichting: the AIOS types it, the planner reads it, a colleague never se
     expect(blokRijen.map((r) => r[kolomA]).sort()).toEqual(['geblokkeerd', 'geblokkeerd', `geblokkeerd: ${TEKST_A}`]);
     for (const rij of rijen) rij.forEach((cel, i) => i !== kolomA && expect(cel).not.toContain('Bruiloft'));
     // The import button is the beheerder's, while the period is open.
-    await expect(page.getByRole('button', { name: /Voorkeuren importeren \(test\)/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Voorkeuren importeren/ })).toBeVisible();
   });
 
   await test.step('import by the beheerder: the check lists what changes, the apply does the same, A\'s text and B\'s block follow', async () => {
@@ -210,7 +210,7 @@ test('toelichting: the AIOS types it, the planner reads it, a colleague never se
       return kopie;
     });
     expect(eerste).toBe(false);
-    await page.getByRole('button', { name: /Voorkeuren importeren \(test\)/ }).click();
+    await page.getByRole('button', { name: /Voorkeuren importeren/ }).click();
     const dialoog = page.getByRole('dialog', { name: 'Voorkeuren van de AIOS importeren' });
     await dialoog.getByLabel('Excel-bestand met voorkeuren van de AIOS').setInputFiles({
       name: 'voorkeuren.xlsx',
@@ -541,7 +541,7 @@ test('the dialogs of the AIOS period fit a phone: inside the screen, scrolling i
     await sluiten.click();
     await expect(exporteren).toHaveCount(0);
 
-    await page.getByRole('button', { name: /Voorkeuren importeren \(test\)/ }).click();
+    await page.getByRole('button', { name: /Voorkeuren importeren/ }).click();
     const importeren = page.getByRole('dialog', { name: 'Voorkeuren van de AIOS importeren' });
     await expect(importeren).toBeVisible();
     await binnenScherm(importeren.locator('> div'));
@@ -561,6 +561,10 @@ test('Persoonlijke links: the beheerder sees the links of the period, revokes on
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
   await openAiosSectie(page, 'Persoonlijke links');
   const sectie = page.getByTestId('toegangslinks');
+  // One line per person with how many links work (1.13.0); the links themselves after "Toon links".
+  await expect(sectie.getByTestId('toegangslinks-persoon').filter({ hasText: A.codenaam })).toContainText(/werkende link/);
+  const toon = sectie.getByRole('button', { name: /^Toon de links van / });
+  while ((await toon.count()) > 0) await toon.first().click();
   const rijA = sectie.getByTestId('toegangslink').filter({ hasText: A.codenaam });
   const rijB = sectie.getByTestId('toegangslink').filter({ hasText: B.codenaam });
   await expect(rijA).toContainText('Werkt');

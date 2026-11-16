@@ -15,7 +15,7 @@
  * loadPeriodMembers). Someone removed from the pool after marking days
  * kept a column, although the solver no longer sees them.
  *
- * "Voorkeuren importeren (test)" reads this file back after it was
+ * "Voorkeuren importeren" reads this file back after it was
  * filled in (lib/preferencesImport.ts): the date a real date, the
  * codenamen as they are.
  *
