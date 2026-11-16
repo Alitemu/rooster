@@ -1323,6 +1323,9 @@ de stroom al gebouwd?".
   een account dat per ongeluk of om iets uit te proberen is gemaakt. De codenaam komt daarna weer vrij.
   Heeft het account iets in een rooster of in de instellingen gewijzigd, dan staat er geen *Verwijderen*.
   Zo'n account schakel je uit, zodat in de geschiedenis blijft staan wie wat heeft gedaan.
+  Een uitgeschakeld account staat niet meer in de lijst (vanaf 1.11.0). Vink *Toon uitgeschakelde accounts*
+  aan om het weer te zien, bijvoorbeeld om het in te schakelen. Het vinkje staat er alleen als er
+  uitgeschakelde accounts zijn. Het getal erachter zegt hoeveel.
   Een planner ziet alleen de pools, periodes, roosters en voorkeuren van de
   eigen dienst. De planner van de achterwacht en die van de AIOS zien dus
   niets van elkaar. De beheerder ziet beide diensten. Een deelnemer hoort

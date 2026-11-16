@@ -6,11 +6,13 @@
  * switch an account off or change its role, and delete one that has left no
  * trace in a roster (1.10.0; the server says which, `verwijderbaar`). One's
  * own account is shown but managed with "Wachtwoord wijzigen" on the period list.
+ * Switched-off accounts are left out until asked for (1.11.0, ./zichtbareAccounts.ts).
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
+import { aantalUitgeschakeld, naSchakelen, zichtbareAccounts } from './zichtbareAccounts';
 
 interface Account {
   id: string;
@@ -73,6 +75,8 @@ export default function AccountsPage() {
   const [resetVoor, setResetVoor] = useState<{ id: string; wachtwoord: string } | null>(null);
   // Deleting cannot be undone: the first click asks, the second does it.
   const [verwijderVraag, setVerwijderVraag] = useState<string | null>(null);
+  // Switched-off accounts are left out until asked for. Not remembered: the page opens tidy each time.
+  const [toonUitgeschakeld, setToonUitgeschakeld] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -148,10 +152,12 @@ export default function AccountsPage() {
     );
   }
 
+  const uitgeschakeld = aantalUitgeschakeld(accounts);
+
   return (
     <div className="container-main py-8 space-y-6">
       <div className="card p-6">
-        <Link href="/planner" className="text-sm text-blue-700 hover:underline">
+        <Link href="/planner"className="text-sm text-blue-700 hover:underline">
           ← Periodes
         </Link>
         <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Accounts beheren</h1>
@@ -193,6 +199,18 @@ export default function AccountsPage() {
 
       {!geenToegang && (
         <>
+        {uitgeschakeld > 0 && (
+          <label className="flex items-center gap-2 text-sm text-neutral-800 py-1">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              data-testid="toon-uitgeschakeld"
+              checked={toonUitgeschakeld}
+              onChange={(e) => setToonUitgeschakeld(e.target.checked)}
+            />
+            Toon uitgeschakelde accounts ({uitgeschakeld})
+          </label>
+        )}
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-100">
@@ -205,7 +223,7 @@ export default function AccountsPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {accounts.map((a) => {
+              {zichtbareAccounts(accounts, toonUitgeschakeld).map((a) => {
                 const eigen = a.id === me;
                 return (
                   <tr key={a.id} className={a.actief ? '' : 'bg-neutral-50 text-neutral-500'}>
@@ -295,7 +313,7 @@ export default function AccountsPage() {
                             onClick={() =>
                               run(
                                 () => send(`/api/admin/accounts/${a.id}`, 'PATCH', { actief: !a.actief }),
-                                a.actief ? `${a.codenaam} is uitgeschakeld en kan niet meer inloggen.` : `${a.codenaam} kan weer inloggen.`
+                                naSchakelen(a.codenaam, a.actief, toonUitgeschakeld)
                               )
                             }
                           >
@@ -317,7 +335,8 @@ export default function AccountsPage() {
         </div>
         <p className="text-xs text-neutral-600" data-testid="uitleg-verwijderen">
           Verwijderen kan alleen bij een account dat nog niets in een rooster of in de instellingen heeft gewijzigd. Een ander account
-          schakel je uit. Zo blijft in de geschiedenis staan wie wat heeft gedaan.
+          schakel je uit. Zo blijft in de geschiedenis staan wie wat heeft gedaan. Een uitgeschakeld account staat niet in deze lijst,
+          tot je Toon uitgeschakelde accounts aanvinkt.
         </p>
 
         <div className="card p-6 space-y-3">

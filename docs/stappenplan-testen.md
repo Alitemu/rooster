@@ -38,6 +38,9 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
 - [ ] **B3a.** Maak een account om uit te proberen en klik op *Verwijderen*.
   Je ziet: eerst de vraag of je het zeker weet, daarna is het account weg.
   Bij een account dat al iets heeft gewijzigd staat geen *Verwijderen*.
+- [ ] **B3b.** Schakel een account uit. Je ziet: het account verdwijnt uit de lijst
+  en de melding zegt waar het staat. Vink *Toon uitgeschakelde accounts* aan.
+  Je ziet: het account staat er weer, met *Inschakelen*.
 - [ ] **B4.** Log in als elke planner. De planner van de achterwacht ziet niets
   van de AIOS, en andersom.
 - [ ] **B5.** Wachtwoord wijzigen werkt. Uitloggen werkt, ook in een tweede

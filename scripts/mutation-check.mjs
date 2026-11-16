@@ -7708,6 +7708,48 @@ const MUTATIONS = [
     replace: "    verwijderbaar: true,",
     tests: ["app/api/admin/accounts"],
   },
+  {
+    name: "1.11.0: switched-off accounts are in the list without asking",
+    file: "app/planner/accounts/zichtbareAccounts.ts",
+    find: "  return toonUitgeschakeld ? accounts : accounts.filter((a) => a.actief);",
+    replace: "  return accounts;",
+    tests: ["app/planner/accounts"],
+  },
+  {
+    name: "1.11.0: asked for the switched-off accounts, the ones in use are gone",
+    file: "app/planner/accounts/zichtbareAccounts.ts",
+    find: "  return toonUitgeschakeld ? accounts : accounts.filter((a) => a.actief);",
+    replace: "  return accounts.filter((a) => a.actief !== toonUitgeschakeld);",
+    tests: ["app/planner/accounts"],
+  },
+  {
+    name: "1.11.0: the page counts the accounts in use as switched off",
+    file: "app/planner/accounts/zichtbareAccounts.ts",
+    find: "  return accounts.filter((a) => !a.actief).length;",
+    replace: "  return accounts.filter((a) => a.actief).length;",
+    tests: ["app/planner/accounts"],
+  },
+  {
+    name: "1.11.0: after switching off, the page does not say where the row went",
+    file: "app/planner/accounts/zichtbareAccounts.ts",
+    find: "  const waar = toonUitgeschakeld ? '' : ",
+    replace: "  const waar = true ? '' : ",
+    tests: ["app/planner/accounts"],
+  },
+  {
+    name: "1.11.0: Accounts beheren opens with the switched-off accounts shown",
+    file: "app/planner/accounts/page.tsx",
+    find: "  const [toonUitgeschakeld, setToonUitgeschakeld] = useState(false);",
+    replace: "  const [toonUitgeschakeld, setToonUitgeschakeld] = useState(true);",
+    tests: ["app/planner/accounts"],
+  },
+  {
+    name: "1.11.0: the table of Accounts beheren draws every account whatever the switch says",
+    file: "app/planner/accounts/page.tsx",
+    find: "              {zichtbareAccounts(accounts, toonUitgeschakeld).map((a) => {",
+    replace: "              {accounts.map((a) => {",
+    tests: ["app/planner/accounts"],
+  },
 ];
 
 const args = process.argv.slice(2);

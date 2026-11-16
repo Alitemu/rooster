@@ -120,6 +120,16 @@ is not read as one: verifySessionToken accepts only kind staff and person.
      The list says per account whether it can go (`verwijderbaar`); the
      page shows Verwijderen only then and explains the rest. Any other
      account is switched off (tests/e2e/account-verwijderen.e2e.ts).
+     Switched-off accounts are left out of the list until the beheerder
+     ticks "Toon uitgeschakelde accounts" (1.11.0, their wish: the list
+     only grew, since an account the history names can't go). Weighed and
+     dropped: a deleted mark on the row (a new column, a codenaam that
+     stays taken or brings the old account back, the server scripts and
+     the first-run setup to keep away from such a row) for the same result
+     on screen. The filter is the page's own
+     (app/planner/accounts/zichtbareAccounts.ts): the server still gives
+     every account, the page counts the ones it leaves out, and the choice
+     is not remembered (tests/e2e/account-uitgeschakeld.e2e.ts).
      A staff account has a `dienst_type` (migration 0022; DIENST_TYPES
      ACHTERWACHT | AIOS, lib/staffAccounts.ts): the admin picks it when
      adding an account (until 0.81.0, step 5 of docs/aios-rooster.md, AIOS
