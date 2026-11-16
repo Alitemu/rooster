@@ -66,6 +66,10 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   useBodyScrollLock(isOpen);
   const handleBackdropClick = useDialogDismiss(isOpen, onClose, !busy);
 
+  // The form can't be typed in until the settings are there: their arrival fills the address and clears the
+  // password, which wiped what a quick beheerder had already typed (1.12.0; a browser test lost that race).
+  const [laden, setLaden] = useState(true);
+
   const apply = (s: Status) => {
     setStatus(s);
     setAan(s.aan ?? '');
@@ -79,13 +83,15 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
     setConfirmStop(false);
     setTeruggezet(null);
     setTerugWachtwoord('');
+    setLaden(true);
     fetch(withBasePath('/api/admin/back-up'))
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.success) apply(data.data);
         else setError('De instellingen van de back-up konden niet geladen worden.');
       })
-      .catch(() => setError('De instellingen van de back-up konden niet geladen worden.'));
+      .catch(() => setError('De instellingen van de back-up konden niet geladen worden.'))
+      .finally(() => setLaden(false));
   }, [isOpen]);
 
   // The answer stands at the foot of the dialog, under "Back-up terugzetten": after a wrong password
@@ -159,7 +165,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
     });
 
   const nieuwWachtwoordTeKort = wachtwoord !== '' && wachtwoord.length < MIN_WACHTWOORD;
-  const canSave = !busy && aan.trim() !== '' && !nieuwWachtwoordTeKort && (wachtwoord !== '' || status?.wachtwoord_leesbaar === true);
+  const canSave = !busy && !laden && aan.trim() !== '' && !nieuwWachtwoordTeKort && (wachtwoord !== '' || status?.wachtwoord_leesbaar === true);
   const canTerugzetten = !busy && bestand !== null && terugWachtwoord !== '' && bevestiging === BEVESTIGING;
 
   return (
@@ -224,6 +230,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                 <h3 id="backup-instellen" className="text-sm font-bold text-neutral-900 border-b pb-1">
                   Instellen
                 </h3>
+                <fieldset disabled={laden} className="space-y-3 min-w-0 disabled:opacity-60">
                 <div>
                   <label htmlFor="backup-aan" className="block text-sm font-semibold text-neutral-900 mb-1">
                     Back-up sturen naar
@@ -256,6 +263,7 @@ export function BackupDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
                     tellen mee: kijk met Toon wachtwoord of je het goed getypt hebt.
                   </p>
                 </div>
+                </fieldset>
                 <div className="flex flex-wrap gap-2 justify-end">
                   {status?.ingesteld && (
                     <button type="button" onClick={nuVersturen} disabled={busy} className="btn-secondary">

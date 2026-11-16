@@ -7848,6 +7848,20 @@ const MUTATIONS = [
     replace: "<div>{items.map((k) => item(k))}</div>",
     tests: ["lib/periodeIndeling"],
   },
+  {
+    name: "1.12.0: the Back-up form can be typed in while its settings load, and their arrival wipes it",
+    file: "components/BackupDialog.tsx",
+    find: "<fieldset disabled={laden} ",
+    replace: "<fieldset disabled={false} ",
+    tests: ["components/BackupDialogLaden"],
+  },
+  {
+    name: "1.12.0: the Back-up form stays closed for good when its settings do not come",
+    file: "components/BackupDialog.tsx",
+    find: "      .finally(() => setLaden(false));",
+    replace: "      .finally(() => {});",
+    tests: ["components/BackupDialogLaden"],
+  },
 ];
 
 const args = process.argv.slice(2);
