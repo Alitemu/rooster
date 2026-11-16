@@ -15,7 +15,10 @@ describe('Import en correcties op de periodepagina', () => {
   // accordion and for the new layout, whose first group starts with it too (lib/periodeIndeling.ts).
   it('is the first section, above every other one', () => {
     const sleutels = [...dashboard.matchAll(/<Section\s+sleutel="([^"]+)"/g)].map((m) => m[1]);
-    expect(sleutels[0]).toBe('importcorrecties');
+    // "Periode" stands before it in the new layout only (1.12.0), and is no section of the accordion.
+    expect(sleutels[0]).toBe('periode');
+    expect(dashboard).toContain('zichtbaar: zijbalk,');
+    expect(sleutels[1]).toBe('importcorrecties');
     expect(sleutels.slice(1)).toContain('overloop');
     expect(dashboard).toContain("titel: 'Import en correcties',");
     expect(readFileSync('lib/periodeIndeling.ts', 'utf8')).toContain("{ naam: 'Voorbereiden', onderdelen: ['importcorrecties',");
