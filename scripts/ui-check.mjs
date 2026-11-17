@@ -256,7 +256,8 @@ rec(
 );
 await Promise.all([
   page.waitForURL('**/prior-assignments'),
-  page.locator('a:has-text("Eerdere toewijzingen")').click(),
+  // The section's own link to the page, not its item in the list of sections (2.0.1).
+  page.locator('[data-testid="onderdeel-eerdere-toewijzingen"] a[href$="/prior-assignments"]').click(),
 ]);
 await page.waitForLoadState('networkidle');
 
@@ -561,8 +562,12 @@ if (rosterPeriod) {
 
   // The 16th row that has someone on it: which diensten stay empty depends on what the solver found that
   // run, and an empty one has "Iemand toewijzen" instead of "Wisselen" (the sub-folder run failed on that
-  // twice, 1.12.0 and 1.13.0).
-  const row = page.locator('table tbody tr', { has: page.locator('button:has-text("Wisselen")') }).nth(15);
+  // twice, 1.12.0 and 1.13.0). Held by its place in the table: once "Wisselen" is clicked the row has no such
+  // button any more, and a locator that asks for one moves on to the next row (2.0.1).
+  const plaats = await page.locator('table tbody tr').evaluateAll(
+    (rijen) => rijen.map((r, i) => (r.querySelector('button')?.textContent?.includes('Wisselen') ? i : -1)).filter((i) => i >= 0)[15]
+  );
+  const row = page.locator('table tbody tr').nth(plaats);
   await row.locator('button:has-text("Wisselen")').scrollIntoViewIfNeeded();
   await page.mouse.wheel(0, 200);
   await page.waitForTimeout(300);

@@ -7982,6 +7982,27 @@ const MUTATIONS = [
     tests: ["lib/periodeIndeling"],
   },
   {
+    name: "2.0.1: the row just changed in the list moves down by what appears above it",
+    file: "lib/rijVasthouden.ts",
+    find: "    if (Math.abs(verschil) >= 1) window.scrollBy(0, verschil);",
+    replace: "    if (Math.abs(verschil) >= 1) return;",
+    tests: ["lib/rijVasthouden"],
+  },
+  {
+    name: "2.0.1: holding the row fights the user who scrolls away",
+    file: "lib/rijVasthouden.ts",
+    find: "  for (const soort of ['wheel', 'touchmove', 'keydown'] as const) window.addEventListener(soort, stop, { passive: true });",
+    replace: "",
+    tests: ["lib/rijVasthouden"],
+  },
+  {
+    name: "2.0.1: the list looks for the changed row by its key, which a swap changes",
+    file: "components/AssignmentGrid.tsx",
+    find: "data-slot={a.slot_id}",
+    replace: "data-slot={rijSleutel(a)}",
+    tests: ["lib/rijVasthouden"],
+  },
+  {
     name: "2.0.1: a hidden AIOS section is built up again on every return, losing unsaved choices",
     file: "components/AiosSectie.tsx",
     find: "      <div hidden={!actief} className=\"card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4\" data-testid={testId} data-onderdeel={actief ? sleutel : undefined}>",

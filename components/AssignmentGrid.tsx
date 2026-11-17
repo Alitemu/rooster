@@ -8,6 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { houdRijOpZijnPlek } from '@/lib/rijVasthouden';
 import { sorteerOpRuimte } from '@/lib/vooraf';
 import { getHolidayInfo } from '@/lib/holidays';
 import { withBasePath } from '@/lib/basePath';
@@ -258,6 +259,9 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
       );
       const data = await res.json();
       if (!res.ok) throw new Error((typeof data.error === 'string' ? data.error : data.error?.message) || 'Wisselen van toewijzing mislukt');
+      // What appears above the row now (the warning, the undo banner) does not push it away (2.0.1). Found by
+      // its dienst: a swap gives the row a new assignment, so its key changes.
+      houdRijOpZijnPlek(() => document.querySelector(`tr[data-slot="${CSS.escape(rij.slot_id)}"]`));
       if (data.data?.warning) setWarning(data.data.warning.message);
 
       setReassigningId(null);
@@ -396,7 +400,7 @@ export function AssignmentGrid({ periodId, periodStatus, onChanged }: Props) {
             </thead>
             <tbody className="divide-y">
               {assignments.map((a) => (
-                <tr key={rijSleutel(a)} className={a.leeg ? 'bg-amber-50 hover:bg-amber-100' : rowBackground(a)} data-testid={a.leeg ? 'lijst-lege-dienst' : undefined}>
+                <tr key={rijSleutel(a)} data-slot={a.slot_id} className={a.leeg ? 'bg-amber-50 hover:bg-amber-100' : rowBackground(a)} data-testid={a.leeg ? 'lijst-lege-dienst' : undefined}>
                   <td className="px-3 py-2 font-medium">
                     <DatumTekst iso={a.datum} />
                   </td>

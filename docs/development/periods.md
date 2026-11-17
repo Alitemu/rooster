@@ -458,3 +458,10 @@ done. Since 2.0.1 the section on screen goes into the address when the status ch
 has no such jump: its buttons that change the status are reached only by choosing "Periode" (or Volgende stap),
 which puts the section in the address already.
 
+The screen check found a second one in the achterwacht's list (Dienstrooster, tab Lijst): a swap far down the
+roster pushed the row just changed down by 152 pixels, the warning above the table and the undo banner at the
+top of the section. The browser's own scroll anchoring did not keep it in place in the new layout. Since 2.0.1
+the list holds that row itself (lib/rijVasthouden.ts, from AssignmentGrid): for three seconds whatever grows
+above it is scrolled along, until the user scrolls or types. It finds the row by its dienst (`data-slot`),
+because a swap gives the row a new assignment and so a new key; with the key it found nothing and did nothing.
+
