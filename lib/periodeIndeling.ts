@@ -4,10 +4,9 @@
  * the right, the status on top as now. Each section has its own address, so the browser's back button
  * steps back and a link can point to one. On a phone the list comes first and a tap opens the section.
  *
- * While both exist the accordion is the default. The planner turns the new layout on with the switch on
- * the page or with ?indeling=nieuw, and the browser remembers it (lib/indelingOnthouden.ts, 1.10.0):
- * until then every "Terug naar periode" led back to the accordion. Below 1100 px the list is a menu
- * behind a button (1.10.0, the planner's wish), where two columns left the tables too little room.
+ * Since 2.0.0 the new layout is the layout, for every planner and beheerder; the accordion is out of
+ * sight (nieuweIndeling). Below 1100 px the list is a menu behind a button (1.10.0, the planner's wish),
+ * where two columns left the tables too little room.
  *
  * 1.12.0 (the planner's wish, after sketches on the real page): what stood above the sections (the
  * period's dates, deadline, streefbereik, status and its buttons, the notices) is a section of its own,
@@ -64,18 +63,15 @@ export function sleutelUitAdres(adres: string | null): OnderdeelSleutel | null {
 }
 
 /**
- * Whether the page shows the new layout. The address decides when it says so (?indeling=nieuw or
- * ?indeling=oud), else what this browser remembers; without either, the accordion.
+ * Whether the page shows the new layout. Since 2.0.0 (the planner's wish, after comparing both layouts
+ * section by section in every status: nothing was missing) it is the layout, with no switch. The accordion
+ * stays in the code, out of sight: only `?indeling=oud` in the address, for that page, or the hidden flag
+ * of lib/indelingOnthouden.ts shows it. `?indeling=nieuw` wins over that flag.
  */
-export function nieuweIndeling(indeling: string | null, onthouden: string | null = null): boolean {
+export function nieuweIndeling(indeling: string | null, oudeIndeling: string | null = null): boolean {
   if (indeling === 'nieuw') return true;
   if (indeling === 'oud') return false;
-  return onthouden === 'nieuw';
-}
-
-/** What the address asks to remember: only a choice it names. */
-export function keuzeUitAdres(indeling: string | null): 'nieuw' | 'oud' | null {
-  return indeling === 'nieuw' || indeling === 'oud' ? indeling : null;
+  return oudeIndeling !== 'ja';
 }
 
 /**

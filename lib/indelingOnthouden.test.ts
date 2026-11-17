@@ -1,71 +1,52 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**
- * The layout of the period page this browser remembers (1.10.0). Without it every link back to the
- * period showed the accordion again (the audit of the new layout). A browser's window is a stand-in
- * here: an EventTarget with a localStorage that keeps, or refuses as a private window may.
+ * The hidden way back to the accordion (2.0.0, lib/indelingOnthouden.ts and its AIOS copy): read from one key
+ * that nothing in the app writes, never from the key that remembered the planner's choice until 2.0.0, so a
+ * browser that once chose the accordion sees the new layout. A browser that refuses storage sees the new layout.
  */
 type Opslag = { getItem: (k: string) => string | null; setItem: (k: string, v: string) => void };
-const echt = (): Opslag => {
-  const waarden = new Map<string, string>();
-  return { getItem: (k) => waarden.get(k) ?? null, setItem: (k, v) => void waarden.set(k, v) };
-};
-const weigert: Opslag = {
-  getItem: () => {
-    throw new Error('SecurityError');
-  },
-  setItem: () => {
-    throw new Error('QuotaExceededError');
-  },
-};
 
-async function metVenster(opslag: Opslag) {
-  const venster = Object.assign(new EventTarget(), { localStorage: opslag });
-  vi.stubGlobal('window', venster);
+async function laad(bestand: './indelingOnthouden' | './aiosIndelingOnthouden', opslag: Opslag | 'weigert') {
   vi.resetModules();
-  return { venster, ...(await import('./indelingOnthouden')) };
+  // A getter, defined (not assigned: Object.assign would call it right here).
+  const venster = Object.defineProperty(new EventTarget(), 'localStorage', {
+    get(): Opslag {
+      if (opslag === 'weigert') throw new Error('SecurityError');
+      return opslag;
+    },
+  });
+  vi.stubGlobal('window', venster);
+  return import(bestand);
 }
 
-describe('the layout this browser remembers', () => {
-  beforeEach(() => vi.resetModules());
-  afterEach(() => vi.unstubAllGlobals());
+const geheugen = (begin: Record<string, string> = {}): Opslag => {
+  const m = new Map(Object.entries(begin));
+  return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v) };
+};
 
-  it('nothing until a choice is made, then that choice', async () => {
-    const { leesIndeling, bewaarIndeling } = await metVenster(echt());
-    expect(leesIndeling()).toBeNull();
-    bewaarIndeling('nieuw');
-    expect(leesIndeling()).toBe('nieuw');
-    bewaarIndeling('oud');
-    expect(leesIndeling()).toBe('oud');
-  });
+for (const bestand of ['./indelingOnthouden', './aiosIndelingOnthouden'] as const) {
+  describe(`the hidden way back (${bestand})`, () => {
+    beforeEach(() => vi.unstubAllGlobals());
 
-  it('is in the storage of the browser, so a later visit finds it', async () => {
-    const opslag = echt();
-    const eerste = await metVenster(opslag);
-    eerste.bewaarIndeling('nieuw');
-    // A new page: the module starts again, the storage is the same.
-    const later = await metVenster(opslag);
-    expect(later.leesIndeling()).toBe('nieuw');
-  });
+    it('reads the hidden flag', async () => {
+      const m = await laad(bestand, geheugen({ 'dienstrooster.oudeIndeling': 'ja' }));
+      expect(m.leesIndeling()).toBe('ja');
+    });
 
-  it('a browser that refuses storage keeps it for as long as the page lives, without an error', async () => {
-    const { leesIndeling, bewaarIndeling } = await metVenster(weigert);
-    expect(leesIndeling()).toBeNull();
-    expect(() => bewaarIndeling('nieuw')).not.toThrow();
-    expect(leesIndeling()).toBe('nieuw');
-  });
+    it('does not read the choice remembered until 2.0.0', async () => {
+      const m = await laad(bestand, geheugen({ 'dienstrooster.indeling': 'oud' }));
+      expect(m.leesIndeling()).toBeNull();
+    });
 
-  it('tells the page at once, and about a change in another tab, until it stops listening', async () => {
-    const { venster, bewaarIndeling, volgIndeling } = await metVenster(echt());
-    const gehoord = vi.fn();
-    const stop = volgIndeling(gehoord);
-    bewaarIndeling('nieuw');
-    expect(gehoord).toHaveBeenCalledTimes(1);
-    venster.dispatchEvent(new Event('storage'));
-    expect(gehoord).toHaveBeenCalledTimes(2);
-    stop();
-    bewaarIndeling('oud');
-    venster.dispatchEvent(new Event('storage'));
-    expect(gehoord).toHaveBeenCalledTimes(2);
+    it('writes nothing: there is no switch any more', async () => {
+      const m = await laad(bestand, geheugen());
+      expect(Object.keys(m).sort()).toEqual(['leesIndeling', 'volgIndeling']);
+    });
+
+    it('a browser that refuses storage has no flag', async () => {
+      const m = await laad(bestand, 'weigert');
+      expect(m.leesIndeling()).toBeNull();
+    });
   });
-});
+}

@@ -15,7 +15,8 @@
  * achterwacht's page has it: the list of sections all the way left, one
  * section at a time, the header and the card that makes the roster as the
  * section "Periode", the period's name and status in the blue bar. The
- * accordion stays the default; "Nieuwe indeling proberen" turns it on.
+ * new layout is the layout since 2.0.0; the accordion stays in the code, out
+ * of sight (lib/aiosIndeling.ts aiosNieuweIndeling).
  */
 
 'use client';
@@ -38,14 +39,13 @@ import {
   AIOS_BOVENAAN,
   AIOS_GROEPEN,
   aiosActiefOnderdeel,
-  aiosKeuzeUitAdres,
   aiosNieuweIndeling,
   aiosOnderdeelUitAdres,
   aiosStartOnderdeel,
   aiosStatusTekst,
   type AiosOnderdeel,
 } from '@/lib/aiosIndeling';
-import { bewaarIndeling, leesIndeling, volgIndeling } from '@/lib/aiosIndelingOnthouden';
+import { leesIndeling, volgIndeling } from '@/lib/aiosIndelingOnthouden';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { periodStatusLabel } from '@/lib/aiosTeksten';
 import { benodigdeFte, SOORT_LABELS } from '@/lib/aiosDiensten';
@@ -351,23 +351,9 @@ function toonOnderdeel(sleutel: AiosOnderdeel) {
  */
 function Kader({ period }: { period: Period }) {
   const searchParams = useSearchParams();
-  const onthouden = useSyncExternalStore(volgIndeling, leesIndeling, () => null);
-  const indelingInAdres = searchParams.get('indeling');
-  const zijbalk = aiosNieuweIndeling(indelingInAdres, onthouden);
-  useEffect(() => {
-    const keuze = aiosKeuzeUitAdres(indelingInAdres);
-    if (keuze) bewaarIndeling(keuze);
-  }, [indelingInAdres]);
-
-  // The switch between the two layouts. The address may still name the other one or a section.
-  const wisselIndeling = (keuze: 'nieuw' | 'oud') => {
-    bewaarIndeling(keuze);
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('indeling');
-    if (keuze === 'oud') params.delete('onderdeel');
-    const rest = params.toString();
-    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
-  };
+  // The new layout since 2.0.0; the accordion only for ?indeling=oud or the hidden flag (lib/aiosIndelingOnthouden.ts).
+  const oudeIndeling = useSyncExternalStore(volgIndeling, leesIndeling, () => null);
+  const zijbalk = aiosNieuweIndeling(searchParams.get('indeling'), oudeIndeling);
 
   // What the sections said about themselves, and the status the page last read (for the first section).
   const [meldingen, setMeldingen] = useState<ReadonlyMap<AiosOnderdeel, AiosMelding>>(() => new Map());
@@ -434,7 +420,7 @@ function Kader({ period }: { period: Period }) {
     return () => document.removeEventListener('keydown', toets);
   }, [menuOpen]);
 
-  if (!zijbalk) return <Pagina period={period} zijbalk={false} onStatus={setStatus} naarNieuw={() => wisselIndeling('nieuw')} />;
+  if (!zijbalk) return <Pagina period={period} zijbalk={false} onStatus={setStatus} />;
 
   /** "Periode" on top under no heading; the sections of a group moved in under its heading, with a line. */
   const lijst = (naKeuze?: () => void) => {
@@ -473,16 +459,6 @@ function Kader({ period }: { period: Period }) {
             </div>
           );
         })}
-        <div className="mt-2 pt-1 border-t border-neutral-200">
-          <button
-            type="button"
-            data-testid="indeling-wissel"
-            onClick={() => wisselIndeling('oud')}
-            className="w-full px-3 py-2.5 text-left text-sm font-medium text-blue-800 underline hover:text-blue-900"
-          >
-            Terug naar de oude indeling
-          </button>
-        </div>
       </>
     );
   };
@@ -559,13 +535,10 @@ function Pagina({
   period: begin,
   zijbalk,
   onStatus,
-  naarNieuw,
 }: {
   period: Period;
   zijbalk: boolean;
   onStatus: (status: string) => void;
-  /** The accordion only: the way into the new layout. */
-  naarNieuw?: () => void;
 }) {
   const [overzicht, setOverzicht] = useState<AiosDienstenOverzicht | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -657,19 +630,6 @@ function Pagina({
       ) : (
         <>
           <div className="card p-6">{kop(true)}</div>
-          {/* The way into the new layout while the accordion is the default (1.13.0); the way back is in its list. */}
-          {naarNieuw && (
-            <div className="flex justify-end -my-2">
-              <button
-                type="button"
-                data-testid="indeling-wissel"
-                onClick={naarNieuw}
-                className="px-2 py-2 text-sm font-medium text-blue-800 underline hover:text-blue-900"
-              >
-                Nieuwe indeling proberen
-              </button>
-            </div>
-          )}
           {rooster}
         </>
       )}

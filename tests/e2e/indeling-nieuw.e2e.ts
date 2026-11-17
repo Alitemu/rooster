@@ -3,6 +3,9 @@ import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
 import { createTestPeriod, cleanupTestData, loginAsPlanner, loginAsBeheerder, getBaseUrl, demoDatum, isoJaarWeek } from './setup';
 
+// The new layout as everyone has it since 2.0.0: without the hidden flag every other test starts with (playwright.config.ts).
+test.use({ storageState: { cookies: [], origins: [] } });
+
 /**
  * The new layout of the period page (1.9.0; the accordion is the default): the sections as a list on the
  * left, one on the right, each with its own address. Every other browser test still sees the accordion,
@@ -14,6 +17,8 @@ import { createTestPeriod, cleanupTestData, loginAsPlanner, loginAsBeheerder, ge
  * - the choice is remembered, so "Terug naar periode" keeps the layout, with a switch each way;
  * - on a laptop the list scrolls by itself and a chosen section comes on screen with its title;
  * - below 1100 px the list is a menu behind a button in a bar that sticks to the top (the planner's wish).
+ *
+ * 2.0.0: the new layout is the layout, without a switch; the accordion only behind a hidden way back.
  *
  * 1.12.0, the planner's wish after sketches on the real page: what stood above the sections is the section
  * "Periode" on top of the list; the blue bar names the period and its status; the list stands all the way
@@ -313,16 +318,15 @@ test('on a laptop the list scrolls by itself and a chosen section comes on scree
   await titelInBeeld(page);
 });
 
-test('the choice is remembered: a link back to the period keeps the layout, with a switch each way', async ({ page }) => {
+test('the new layout is the layout: no switch, a link back to the period keeps it', async ({ page }) => {
   await loginAsPlanner(page);
   const kaal = `${getBaseUrl()}/planner/period/${testData.period.id}`;
-
-  // The accordion by default, with the way in.
   await page.goto(kaal);
   await page.waitForLoadState('networkidle');
-  await expect(page.getByTestId('indeling-nieuw')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Nieuwe indeling proberen' }).click();
   await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nieuwe indeling proberen' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Terug naar de oude indeling' })).toHaveCount(0);
+  await expect(page.getByTestId('indeling-wissel')).toHaveCount(0);
 
   // To a person and back with the page's own link, which names no layout.
   await lijst(page).getByRole('link', { name: /^Status voorkeuren/ }).click();
@@ -330,33 +334,24 @@ test('the choice is remembered: a link back to the period keeps the layout, with
   await page.getByRole('link', { name: /Terug naar periode/ }).click();
   await expect(page).toHaveURL(new RegExp(`/planner/period/${testData.period.id}$`));
   await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
-
-  // After a reload too.
-  await page.reload();
-  await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
-
-  // The way back, which holds as well. The address names no section any more.
-  await lijst(page).getByRole('link', { name: /^Personeel beheren/ }).click();
-  await lijst(page).getByRole('button', { name: 'Terug naar de oude indeling' }).click();
-  await expect(page.getByTestId('indeling-nieuw')).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: 'Status voorkeuren' }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
-  await expect(page).toHaveURL(new RegExp(`/planner/period/${testData.period.id}$`));
-  await page.reload();
-  await page.waitForLoadState('networkidle');
-  await expect(page.getByTestId('indeling-nieuw')).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Nieuwe indeling proberen' })).toBeVisible();
-
-  // A link with ?indeling=nieuw is remembered too: the next visit without it shows the new layout.
-  await page.goto(adres());
-  await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
-  await page.goto(kaal);
-  await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
 });
 
-test('a browser that never chose sees the accordion it was', async ({ page }) => {
+test('a browser that chose the accordion before 2.0.0 sees the new layout; the accordion only behind the hidden way back', async ({ page }) => {
   await loginAsPlanner(page);
-  await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+  const kaal = `${getBaseUrl()}/planner/period/${testData.period.id}`;
+  // What "Terug naar de oude indeling" stored until 2.0.0.
+  await page.goto(kaal);
+  await page.evaluate(() => window.localStorage.setItem('dienstrooster.indeling', 'oud'));
+  await page.reload();
   await page.waitForLoadState('networkidle');
-  await expect(lijst(page)).toHaveCount(0);
+  await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
+
+  // ?indeling=oud shows the accordion, as it was, for that page only and without a switch.
+  await page.goto(`${kaal}?indeling=oud`);
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByTestId('indeling-nieuw')).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'Status voorkeuren' }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByRole('button', { name: 'Nieuwe indeling proberen' })).toHaveCount(0);
+  await page.goto(kaal);
+  await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
 });

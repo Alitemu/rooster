@@ -1,43 +1,28 @@
 /**
- * Which layout of the period page this browser last chose: a copy of lib/indelingOnthouden.ts for the
- * AIOS (1.13.0, docs/development/diensten.md "Copied, not changed"). The same key and event: one choice
- * for both diensten, as the beheerder sees both and the new layout is one thing to them.
+ * The hidden way back to the accordion of the AIOS's period page (2.0.0): a copy of lib/indelingOnthouden.ts
+ * (docs/development/diensten.md "Copied, not changed"), with the same key: one way back for both diensten.
+ * Since 2.0.0 the new layout is the
+ * layout (lib/aiosIndeling.ts); the accordion stays in the code, out of sight, so nothing important can
+ * be lost with it. It shows only for `?indeling=oud` in the address, for that page, or in a browser whose
+ * storage holds `dienstrooster.oudeIndeling` = `ja`. Nothing in the app sets that: the browser checks do
+ * (playwright.config.ts, scripts/ui-check.mjs), because most of them still go through the accordion, and a
+ * beheerder could by hand in an emergency.
  *
- * Per browser, not per account: it is a way of looking, and nothing on the server depends on it. Without it the choice
- * lived in the address only, so every link back to the period ("Terug naar periode", the list of
- * periods) showed the accordion again and nobody could really try the new layout.
- *
- * A browser that refuses storage (private mode) keeps the choice for as long as the tab lives.
+ * Until 2.0.0 this remembered the planner's choice under another key, with a switch each way (1.10.0).
+ * That key is not read any more: a browser that chose the accordion then sees the new layout now.
  */
-const SLEUTEL = 'dienstrooster.indeling';
-const GEBEURTENIS = 'dienstrooster-indeling';
-
-let zonderOpslag: string | null = null;
+const SLEUTEL = 'dienstrooster.oudeIndeling';
 
 export function leesIndeling(): string | null {
   try {
-    return window.localStorage.getItem(SLEUTEL) ?? zonderOpslag;
+    return window.localStorage.getItem(SLEUTEL);
   } catch {
-    return zonderOpslag;
+    return null;
   }
 }
 
-export function bewaarIndeling(keuze: 'nieuw' | 'oud'): void {
-  zonderOpslag = keuze;
-  try {
-    window.localStorage.setItem(SLEUTEL, keuze);
-  } catch {
-    // Storage refused: zonderOpslag holds it for this tab.
-  }
-  window.dispatchEvent(new Event(GEBEURTENIS));
-}
-
-/** For useSyncExternalStore: this tab's own change and one made in another tab. */
+/** For useSyncExternalStore: a change made in another tab. */
 export function volgIndeling(bijWijziging: () => void): () => void {
   window.addEventListener('storage', bijWijziging);
-  window.addEventListener(GEBEURTENIS, bijWijziging);
-  return () => {
-    window.removeEventListener('storage', bijWijziging);
-    window.removeEventListener(GEBEURTENIS, bijWijziging);
-  };
+  return () => window.removeEventListener('storage', bijWijziging);
 }

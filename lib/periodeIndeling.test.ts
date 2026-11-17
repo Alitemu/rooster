@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { ADRES, BOVENAAN, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, onderdeelVanStap, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from './periodeIndeling';
+import { ADRES, BOVENAAN, GROEPEN, actiefOnderdeel, nieuweIndeling, onderdeelVanStap, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from './periodeIndeling';
 import { periodeStatusTekst } from './statusLabels';
 
 /**
@@ -35,27 +35,13 @@ describe('the groups and the addresses', () => {
     expect(sleutelUitAdres(null)).toBeNull();
   });
 
-  it('the accordion is the default: only the address or the remembered choice turns the new layout on', () => {
-    expect(nieuweIndeling('nieuw')).toBe(true);
-    for (const v of [null, '', 'oud', 'Nieuw']) expect(nieuweIndeling(v)).toBe(false);
-    for (const onthouden of [null, '', 'oud', 'Nieuw', 'ja']) expect(nieuweIndeling(null, onthouden)).toBe(false);
-  });
-
-  it('the choice this browser remembers holds on a page whose address says nothing', () => {
-    // "Terug naar periode" and the list of periods link to the period without ?indeling.
-    expect(nieuweIndeling(null, 'nieuw')).toBe(true);
-    expect(nieuweIndeling('', 'nieuw')).toBe(true);
-  });
-
-  it('the address wins over what is remembered, both ways', () => {
-    expect(nieuweIndeling('oud', 'nieuw')).toBe(false);
-    expect(nieuweIndeling('nieuw', 'oud')).toBe(true);
-  });
-
-  it('only a layout the address names is remembered', () => {
-    expect(keuzeUitAdres('nieuw')).toBe('nieuw');
-    expect(keuzeUitAdres('oud')).toBe('oud');
-    for (const v of [null, '', 'Nieuw', 'ja']) expect(keuzeUitAdres(v)).toBeNull();
+  it('the new layout is the layout since 2.0.0: the accordion only for ?indeling=oud or the hidden flag', () => {
+    for (const v of [null, '', 'Nieuw', 'ja']) expect(nieuweIndeling(v)).toBe(true);
+    expect(nieuweIndeling('oud')).toBe(false);
+    expect(nieuweIndeling(null, 'ja')).toBe(false);
+    // The address wins over the flag, both ways; any other value of the flag is no flag.
+    expect(nieuweIndeling('nieuw', 'ja')).toBe(true);
+    for (const vlag of [null, '', 'nee', 'oud', 'Ja']) expect(nieuweIndeling(null, vlag)).toBe(true);
   });
 });
 
@@ -111,9 +97,8 @@ describe('on the period page', () => {
     for (const k of ALLE) expect(dashboard).toMatch(new RegExp(`\\n    ${k}: \\{`));
   });
 
-  it('the accordion stays as it was by default, the new layout only on request', () => {
+  it('the accordion is still in the code, unchanged, behind the hidden way back', () => {
     expect(dashboard).toContain("modus: zijbalk ? ('zijbalk' as const) : ('harmonica' as const),");
-    expect(dashboard).toContain('const zijbalk = nieuweIndeling(indelingInAdres, indelingOnthouden);');
     expect(dashboard).toContain('aria-expanded={isOpen}');
   });
 
@@ -151,13 +136,12 @@ describe('on the period page', () => {
     expect(dashboard).toContain('<h2 tabIndex={-1}');
   });
 
-  it('the choice is remembered, with a switch each way', () => {
-    expect(dashboard).toContain('const indelingOnthouden = useSyncExternalStore(volgIndeling, leesIndeling, () => null);');
-    expect(dashboard).toMatch(/const keuze = keuzeUitAdres\(indelingInAdres\);\s*if \(keuze\) bewaarIndeling\(keuze\);/);
-    expect(dashboard).toContain('Nieuwe indeling proberen');
-    expect(dashboard).toContain('Terug naar de oude indeling');
-    // The address must not keep naming the layout that was just left.
-    expect(dashboard).toContain("params.delete('indeling');");
+  it('no switch any more: the accordion is out of sight, read from the hidden flag only', () => {
+    expect(dashboard).toContain('const oudeIndeling = useSyncExternalStore(volgIndeling, leesIndeling, () => null);');
+    expect(dashboard).toContain("const zijbalk = nieuweIndeling(searchParams.get('indeling'), oudeIndeling);");
+    expect(dashboard).not.toContain('Nieuwe indeling proberen');
+    expect(dashboard).not.toContain('Terug naar de oude indeling');
+    expect(dashboard).not.toMatch(/bewaarIndeling/);
   });
 
   it('the list has its own scroll bar, so its last items stay in reach on a low screen', () => {

@@ -5,8 +5,8 @@
  * header of the period and the card that makes the roster are the section "Periode" on top; the blue bar
  * names the period and its status. Below 1100 px the list is a menu behind a button in the blue bar.
  *
- * The accordion stays the default. The choice is the one the achterwacht's page uses
- * (lib/aiosIndelingOnthouden.ts): one choice for both diensten.
+ * Since 2.0.0 the new layout is the layout, as on the achterwacht's page; the accordion is out of sight
+ * (aiosNieuweIndeling).
  *
  * Pure: components/AiosPeriodOverview.tsx and components/AiosSectie.tsx render it.
  */
@@ -55,16 +55,14 @@ export function aiosOnderdeelUitAdres(adres: string | null): AiosOnderdeel | nul
   return (Object.keys(AIOS_ADRES) as AiosOnderdeel[]).find((k) => AIOS_ADRES[k] === adres) ?? null;
 }
 
-/** Whether the page shows the new layout: the address when it names one, else the remembered choice. */
-export function aiosNieuweIndeling(indeling: string | null, onthouden: string | null = null): boolean {
+/**
+ * Whether the page shows the new layout: since 2.0.0 it is the layout. The accordion shows only for
+ * `?indeling=oud` in the address or the hidden flag of lib/aiosIndelingOnthouden.ts.
+ */
+export function aiosNieuweIndeling(indeling: string | null, oudeIndeling: string | null = null): boolean {
   if (indeling === 'nieuw') return true;
   if (indeling === 'oud') return false;
-  return onthouden === 'nieuw';
-}
-
-/** What the address asks to remember: only a choice it names. */
-export function aiosKeuzeUitAdres(indeling: string | null): 'nieuw' | 'oud' | null {
-  return indeling === 'nieuw' || indeling === 'oud' ? indeling : null;
+  return oudeIndeling !== 'ja';
 }
 
 /**

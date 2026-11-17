@@ -50,7 +50,16 @@ function rec(name, good, detail) {
 }
 
 const browser = await chromium.launch({ executablePath: chromiumExecutable() });
+// Since 2.0.0 the period page shows the new layout; these checks go through the accordion's sections, which
+// shows with a hidden flag (lib/indelingOnthouden.ts). tests/e2e/indeling-nieuw.e2e.ts checks the new layout.
+const metOudeIndeling = (context) =>
+  context.addInitScript(() => {
+    try {
+      window.localStorage.setItem('dienstrooster.oudeIndeling', 'ja');
+    } catch {}
+  });
 const ctx = await browser.newContext();
+await metOudeIndeling(ctx);
 const page = await ctx.newPage();
 
 const consoleErrors = [];
@@ -409,6 +418,7 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 //    to bite when the menu is opened near the mobile viewport's own smaller
 //    max-height budget.
 const mctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
+await metOudeIndeling(mctx);
 const mpage = await mctx.newPage();
 await (async () => {
   const res = await fetch(`${BASE}/api/auth/staff-login`, {

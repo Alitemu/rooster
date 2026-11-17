@@ -414,3 +414,32 @@ header (docs/todo.md).
 The AIOS's period page got the same layout in 1.13.0 (docs/development/diensten.md, "Copied, not
 changed"). Measured on a concept quarter of 13 weeks: a section begins at 100 to 124 px on a laptop of
 650, where the header card and the card that makes the roster stood above the first section.
+
+### The new layout is the layout (2.0.0)
+
+The planner's wish: compare both layouts and, when nothing is missing, make the new one the only one, with
+the old one out of sight rather than deleted ("zodat er niet per ongeluk iets belangrijks wordt verwijderd").
+
+The comparison, in the browser on the built 1.13.0: for each page every control (button, link, field, with its
+label, whether it can be pressed and where it leads) and every heading, paragraph, label and table header was
+collected. In the accordion with every section opened in turn plus what stands outside the sections, in the new
+layout with every item of the list in turn plus Volgende stap. Then compared as sets, both ways. Done for the
+achterwacht in concept, open, gesloten, gegenereerd with empty diensten and voorlopig gepubliceerd, as planner
+and as beheerder, and for an AIOS quarter of eight AIOS in open, gesloten, gegenereerd and gepubliceerd, as
+beheerder and as a planner of the AIOS. Nothing of the accordion was missing. Only in the accordion: the
+disabled "Rooster genereren" before closing (left out of "Periode" on purpose, 1.12.0) and the small line
+"Status: ..." under the button row (the status is in the blue bar and in "Periode"). Only in the new layout:
+the summaries of the sections under their titles. The scripts are not in the repository.
+
+What changed:
+- nieuweIndeling (and aiosNieuweIndeling) is true unless the address says `?indeling=oud` or the browser holds
+  the hidden flag `dienstrooster.oudeIndeling` = `ja` (lib/indelingOnthouden.ts and its AIOS copy, one key for
+  both). Nothing in the app sets that flag; `?indeling=oud` is not remembered.
+- The switches "Nieuwe indeling proberen" and "Terug naar de oude indeling" are gone. The key that remembered
+  the planner's choice until 2.0.0 (`dienstrooster.indeling`) is not read: a browser that chose the accordion
+  sees the new layout.
+- The accordion's code is unchanged. Most browser checks still go through it: playwright.config.ts gives every
+  browser the hidden flag (`MET_OUDE_INDELING`), scripts/ui-check.mjs too; tests/e2e/indeling-nieuw.e2e.ts and
+  tests/e2e/aios-indeling.e2e.ts start without it. Moving those checks to the new layout, and then removing the
+  accordion, are on docs/todo.md.
+

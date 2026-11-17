@@ -6,7 +6,6 @@ import {
   AIOS_BOVENAAN,
   AIOS_GROEPEN,
   aiosActiefOnderdeel,
-  aiosKeuzeUitAdres,
   aiosNieuweIndeling,
   aiosOnderdeelUitAdres,
   aiosStartOnderdeel,
@@ -17,8 +16,8 @@ import {
 /**
  * The new layout of the AIOS's period page (1.13.0, the planner's wish), as the achterwacht's: the list
  * all the way left, one section at a time, "Periode" on top, the period's name and status in the blue
- * bar, a menu in the blue bar below 1100 px. The accordion stays the default and the participant's page
- * folds as it did. tests/e2e/aios-indeling.e2e.ts holds it in the browser.
+ * bar, a menu in the blue bar below 1100 px. Since 2.0.0 it is the layout; the accordion is out of sight and
+ * the participant's page folds as it did. tests/e2e/aios-indeling.e2e.ts holds it in the browser.
  */
 const ALLE: AiosOnderdeel[] = ['periode', 'geschiedenis', 'feestdagblokken', 'toets', 'voorkeuren', 'status', 'links', 'export', 'dienstrooster', 'dienstpercentage', 'punten'];
 const lees = (f: string) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8');
@@ -46,17 +45,15 @@ describe('the groups and the addresses', () => {
 });
 
 describe('the choice of layout', () => {
-  it('the accordion by default; the address or the remembered choice turns the new layout on', () => {
-    expect(aiosNieuweIndeling(null)).toBe(false);
-    expect(aiosNieuweIndeling('nieuw')).toBe(true);
-    expect(aiosNieuweIndeling(null, 'nieuw')).toBe(true);
-    expect(aiosNieuweIndeling('oud', 'nieuw')).toBe(false);
-    for (const v of ['', 'Nieuw', 'ja']) expect(aiosNieuweIndeling(v)).toBe(false);
-    expect(aiosKeuzeUitAdres('nieuw')).toBe('nieuw');
-    expect(aiosKeuzeUitAdres('ja')).toBeNull();
+  it('the new layout is the layout since 2.0.0: the accordion only for ?indeling=oud or the hidden flag', () => {
+    expect(aiosNieuweIndeling(null)).toBe(true);
+    expect(aiosNieuweIndeling('oud')).toBe(false);
+    expect(aiosNieuweIndeling(null, 'ja')).toBe(false);
+    expect(aiosNieuweIndeling('nieuw', 'ja')).toBe(true);
+    for (const vlag of [null, 'nee', 'oud']) expect(aiosNieuweIndeling(null, vlag)).toBe(true);
   });
 
-  it('one choice for both diensten: the same key as the achterwacht, in a copy of its own', () => {
+  it('one hidden way back for both diensten: the same key as the achterwacht, in a copy of its own', () => {
     const sleutel = (s: string) => /const SLEUTEL = '([^']+)'/.exec(s)?.[1];
     expect(sleutel(lees('lib/aiosIndelingOnthouden.ts'))).toBe(sleutel(lees('lib/indelingOnthouden.ts')));
     expect(lees('components/AiosPeriodOverview.tsx')).toContain("from '@/lib/aiosIndelingOnthouden'");
@@ -128,9 +125,9 @@ describe('on the page', () => {
     expect(pagina).toContain('<div className="ml-4 pl-1.5 border-l-2 border-neutral-300">{items.map((k) => item(k))}</div>');
   });
 
-  it('a switch each way, the accordion as it was by default', () => {
-    expect(pagina).toContain('Nieuwe indeling proberen');
-    expect(pagina).toContain('Terug naar de oude indeling');
-    expect(pagina).toContain("if (!zijbalk) return <Pagina period={period} zijbalk={false} onStatus={setStatus} naarNieuw={() => wisselIndeling('nieuw')} />;");
+  it('no switch any more', () => {
+    expect(pagina).not.toContain('Nieuwe indeling proberen');
+    expect(pagina).not.toContain('Terug naar de oude indeling');
+    expect(pagina).toContain('if (!zijbalk) return <Pagina period={period} zijbalk={false} onStatus={setStatus} />;');
   });
 });

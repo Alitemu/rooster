@@ -2,11 +2,14 @@ import { test, expect, type Page } from '@playwright/test';
 import { db } from '@/db/client';
 import { getBaseUrl, loginAsBeheerder } from './setup';
 
+// The new layout as everyone has it since 2.0.0: without the hidden flag every other test starts with (playwright.config.ts).
+test.use({ storageState: { cookies: [], origins: [] } });
+
 /**
  * The new layout of the AIOS's period page (1.13.0, the planner's wish), as the achterwacht's has it: the
  * list of sections all the way left, "Periode" on top, the period's name and status in the blue bar, one
  * section at a time with its own address; below 1100 px the list behind a button in the blue bar. The
- * accordion stays the default. The rules are in lib/aiosIndeling.test.ts.
+ * new layout is the layout since 2.0.0, without a switch. The rules are in lib/aiosIndeling.test.ts.
  */
 const made: string[] = [];
 let adres = '';
@@ -46,14 +49,12 @@ test.beforeAll(async ({ browser }) => {
   await page.close();
 });
 
-test('the accordion by default, the new layout with the switch: the list left, Periode on top, the name in the blue bar', async ({ page }) => {
+test('the new layout, without a switch: the list left, Periode on top, the name in the blue bar', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 650 });
   await loginAsBeheerder(page);
-  await page.goto(`${adres}?indeling=oud`);
-  await expect(page.getByRole('heading', { name: 'Geschiedenis van vóór de app' }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
-  await expect(page.getByTestId('kop-periode')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Nieuwe indeling proberen' }).click();
+  await page.goto(adres);
   await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nieuwe indeling proberen' })).toHaveCount(0);
 
   // The blue bar: the name, which is the page's one heading, and the status.
   const naam = await page.getByTestId('kop-periode').getByRole('heading', { level: 1 }).innerText();
@@ -93,13 +94,13 @@ test('the accordion by default, the new layout with the switch: the list left, P
   await page.goBack();
   await expect(sectie(page).getByRole('heading', { level: 2 })).toHaveText('Geschiedenis van vóór de app');
 
-  // The choice holds after a reload, and the way back holds too.
+  // No way back in the list; the accordion only for ?indeling=oud, as it was, for that page.
+  await expect(lijst(page).getByRole('button', { name: 'Terug naar de oude indeling' })).toHaveCount(0);
+  await page.goto(`${adres}?indeling=oud`);
+  await expect(page.getByRole('heading', { name: 'Geschiedenis van vóór de app' }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByTestId('kop-periode')).toHaveCount(0);
   await page.goto(adres);
   await expect(page.getByTestId('indeling-nieuw')).toBeVisible();
-  await lijst(page).getByRole('button', { name: 'Terug naar de oude indeling' }).click();
-  await expect(page.getByTestId('indeling-nieuw')).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByRole('button', { name: 'Nieuwe indeling proberen' })).toBeVisible();
 });
 
 test('on a phone the button of the list is in the blue bar, which sticks, and the list comes from the left', async ({ page }) => {

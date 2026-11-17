@@ -44,8 +44,8 @@ import { ImportEnCorrecties } from '@/components/ImportEnCorrecties';
 import { kanSaldoWijzigen, saldoInWoorden } from '@/lib/saldoWijzigen';
 import { voorafNaam } from '@/lib/vooraf';
 import { volgendeStap, type StapDoel } from '@/lib/volgendeStap';
-import { ADRES, BOVENAAN, GROEPEN, actiefOnderdeel, keuzeUitAdres, nieuweIndeling, onderdeelVanStap, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from '@/lib/periodeIndeling';
-import { bewaarIndeling, leesIndeling, volgIndeling } from '@/lib/indelingOnthouden';
+import { ADRES, BOVENAAN, GROEPEN, actiefOnderdeel, nieuweIndeling, onderdeelVanStap, sleutelUitAdres, startOnderdeel, type OnderdeelSleutel } from '@/lib/periodeIndeling';
+import { leesIndeling, volgIndeling } from '@/lib/indelingOnthouden';
 import { InPlek } from './InPlek';
 
 interface PersonProgress {
@@ -118,7 +118,6 @@ interface IndelingWaarde {
   inLijst: ReadonlySet<SectionKey>;
   adresVoor: (key: SectionKey) => string;
   kies: (key: SectionKey) => void;
-  naarHarmonica: () => void;
 }
 const IndelingContext = createContext<IndelingWaarde | null>(null);
 
@@ -304,16 +303,6 @@ function OnderdelenLijst({ naKeuze }: { naKeuze?: () => void }) {
           </div>
         );
       })}
-      <div className="mt-2 pt-1 border-t border-neutral-200">
-        <button
-          type="button"
-          data-testid="indeling-wissel"
-          onClick={ctx.naarHarmonica}
-          className="w-full px-3 py-2.5 text-left text-sm font-medium text-blue-800 underline hover:text-blue-900"
-        >
-          Terug naar de oude indeling
-        </button>
-      </div>
     </>
   );
 }
@@ -538,29 +527,15 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
   // ?onderdeel=... for the section on screen, so the back button and a link work.
   const searchParams = useSearchParams();
   // The layout: what the address says, else what this browser remembers (1.10.0, lib/indelingOnthouden.ts).
-  const indelingOnthouden = useSyncExternalStore(volgIndeling, leesIndeling, () => null);
-  const indelingInAdres = searchParams.get('indeling');
-  const zijbalk = nieuweIndeling(indelingInAdres, indelingOnthouden);
-  useEffect(() => {
-    const keuze = keuzeUitAdres(indelingInAdres);
-    if (keuze) bewaarIndeling(keuze);
-  }, [indelingInAdres]);
+  // The new layout since 2.0.0; the accordion only for ?indeling=oud or the hidden flag (lib/indelingOnthouden.ts).
+  const oudeIndeling = useSyncExternalStore(volgIndeling, leesIndeling, () => null);
+  const zijbalk = nieuweIndeling(searchParams.get('indeling'), oudeIndeling);
   const gekozenOnderdeel = sleutelUitAdres(searchParams.get('onderdeel'));
   // Only the question mark and what follows: the browser keeps the page's own address, sub-folder included.
   const adresVoor = (key: SectionKey): string => {
     const params = new URLSearchParams(searchParams.toString());
     params.set('onderdeel', ADRES[key]);
     return `?${params.toString()}`;
-  };
-  // The switch between the two layouts. The address may still name the other one or a section, which
-  // would win over the choice just made.
-  const wisselIndeling = (keuze: 'nieuw' | 'oud') => {
-    bewaarIndeling(keuze);
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('indeling');
-    if (keuze === 'oud') params.delete('onderdeel');
-    const rest = params.toString();
-    window.history.replaceState(null, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
   };
   // The section a click just chose, and the button a next step points to in it (Onderdelen, toonOnderdeel).
   const naWisselRef = useRef<{ sectie: SectionKey; element?: string } | null>(null);
@@ -1153,7 +1128,6 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
     inLijst,
     adresVoor,
     kies: (key: SectionKey) => kiesOnderdeel(key),
-    naarHarmonica: () => wisselIndeling('oud'),
   };
 
   const gaNaarStap = (doel: StapDoel) => {
@@ -1339,19 +1313,6 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
         </div>
       )}
 
-      {/* The way into the new layout while the accordion is the default (1.10.0); the way back is in its list. */}
-      {!zijbalk && (
-        <div className="flex justify-end -my-2">
-          <button
-            type="button"
-            data-testid="indeling-wissel"
-            onClick={() => wisselIndeling('nieuw')}
-            className="px-2 py-2 text-sm font-medium text-blue-800 underline hover:text-blue-900"
-          >
-            Nieuwe indeling proberen
-          </button>
-        </div>
-      )}
 
       <IndelingContext.Provider value={indeling}>
       <Onderdelen naWisselRef={naWisselRef}>
