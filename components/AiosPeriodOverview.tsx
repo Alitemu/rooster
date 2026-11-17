@@ -516,7 +516,7 @@ function Kader({ period }: { period: Period }) {
       )}
       <div className="min-[1100px]:flex min-[1100px]:items-stretch" data-testid="indeling-nieuw">
         {/* All the way left on a wide screen, from the blue bar down; its own scroll bar on a low screen. */}
-        <aside className="hidden min-[1100px]:block w-[17rem] flex-none bg-white border-r border-neutral-300">
+        <aside className="hidden min-[1100px]:block w-[17rem] flex-none bg-white border-r border-neutral-300 [overflow-anchor:none]">
           <nav aria-label="Onderdelen van de periode" className="sticky top-0 max-h-screen overflow-y-auto px-2 py-4">
             {lijst()}
           </nav>

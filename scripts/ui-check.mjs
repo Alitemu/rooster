@@ -582,7 +582,21 @@ if (rosterPeriod) {
   const rowYAfter = (await row.boundingBox()).y;
   rec('Dienstrooster (lijst): de gewijzigde rij blijft op dezelfde plek in beeld',
       Math.abs(rowYAfter - rowYBefore) < 30, `${rowYBefore} -> ${rowYAfter}`);
-  rec('…en die wissel is weer ongedaan gemaakt', (await undoLast()) === 200);
+  // And back with the button: the banner goes away above the screen, and the row stays where it is (2.0.2).
+  // Clicked from the page itself, because Playwright's click scrolls the button into view first.
+  const yVoorTerug = (await row.boundingBox()).y;
+  const terugKnop = await page.evaluate(() => {
+    const knop = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Ongedaan maken'));
+    knop?.click();
+    return Boolean(knop);
+  });
+  if (terugKnop) await page.waitForFunction(() => !document.body.innerText.includes('Laatst gewijzigd'), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const meldingWeg = terugKnop && !(await page.evaluate(() => document.body.innerText.includes('Laatst gewijzigd')));
+  rec('…en die wissel is weer ongedaan gemaakt met de knop', meldingWeg);
+  if (!meldingWeg) await undoLast(); // the rest of the check starts from the roster as it was
+  const yNaTerug = (await row.boundingBox()).y;
+  rec('Dienstrooster (lijst): na Ongedaan maken blijft de rij ook op zijn plek', Math.abs(yNaTerug - yVoorTerug) < 30, `${yVoorTerug} -> ${yNaTerug}`);
 
   await page.locator('button:has-text("📅 Kalender")').click();
   await page.waitForSelector('[title*="klik om te wijzigen"]');
@@ -591,15 +605,20 @@ if (rosterPeriod) {
   await lateCell.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
   const calYBefore = await page.evaluate(() => window.scrollY);
+  // The day itself, held as an element: its title changes once someone is on it.
+  const celVast = await lateCell.elementHandle();
+  const celYVoor = (await celVast.boundingBox()).y;
   await lateCell.click({ button: 'right' });
   await page.waitForFunction(() => document.querySelectorAll('[role="menu"] button').length > 2);
   await page.locator('[role="menu"] button').first().click();
   await page.waitForTimeout(1500);
-  const calYAfter = await page.evaluate(() => window.scrollY);
+  const celYNa = (await celVast.boundingBox())?.y;
   rec('Dienstrooster (kalender): na toekennen sluit het menu',
       (await page.locator('[role="menu"]').count()) === 0);
-  rec('Dienstrooster (kalender): de pagina springt niet naar boven',
-      calYBefore > 500 && Math.abs(calYAfter - calYBefore) < 30, `${calYBefore} -> ${calYAfter}`);
+  // Measured on the day, not on the scroll position: since 2.0.2 the browser scrolls along with the undo
+  // banner that appears above, which is just what keeps the day in place.
+  rec('Dienstrooster (kalender): de dag blijft op zijn plek, de pagina springt niet naar boven',
+      calYBefore > 500 && celYNa !== undefined && Math.abs(celYNa - celYVoor) < 30, `${celYVoor} -> ${celYNa}`);
   rec('…en die toekenning is weer ongedaan gemaakt', (await undoLast()) === 200);
 
   // The fourth view under Dienstrooster: the planner's overview of the

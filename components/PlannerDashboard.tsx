@@ -579,6 +579,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
   // they'd keep showing the previous roster until an unrelated prop change
   // happened to remount them.
   const [assignmentsRefreshKey, setAssignmentsRefreshKey] = useState(0);
+  const [rijenVernieuwen, setRijenVernieuwen] = useState(0);
   const [assignmentsView, setAssignmentsView] = useState<'list' | 'calendar' | 'dienstdoende' | 'ruilverzoeken'>('list');
   // The single most recent reversible assign/reassign/remove for this
   // period, read from the server (lib/pendingUndo.ts). Only for the acute
@@ -740,7 +741,8 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
       setUndoReasonPromptOpen(false);
       setUndoReason('');
       await loadData(false);
-      setAssignmentsRefreshKey((k) => k + 1);
+      // The list and the calendar load again in place; remounting them made the page jump (2.0.2).
+      setRijenVernieuwen((k) => k + 1);
     } catch (err) {
       setUndoError(foutTekst(err, 'Ongedaan maken mislukt'));
     } finally {
@@ -1857,6 +1859,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
               key={assignmentsRefreshKey}
               periodId={periodId}
               periodStatus={dashboard.status}
+              vernieuwen={rijenVernieuwen}
               onChanged={() => {
                 // A reassign/remove here can open (or close) a gap - the
                 // "Rooster vooraf invullen" section's count has no other way
@@ -1875,6 +1878,7 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
               key={assignmentsRefreshKey}
               periodId={periodId}
               periodStatus={dashboard.status}
+              vernieuwen={rijenVernieuwen}
               onChanged={() => {
                 // Same reasoning as AssignmentGrid's onChanged above - a
                 // right-click assign/reassign/remove here can open or close
@@ -1887,9 +1891,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
               }}
             />
           ) : assignmentsView === 'dienstdoende' ? (
-            <StaffingOverview key={assignmentsRefreshKey} periodId={periodId} />
+            <StaffingOverview key={`${assignmentsRefreshKey}-${rijenVernieuwen}`} periodId={periodId} />
           ) : (
-            <SwapRequestsOverview key={assignmentsRefreshKey} periodId={periodId} />
+            <SwapRequestsOverview key={`${assignmentsRefreshKey}-${rijenVernieuwen}`} periodId={periodId} />
           )}
         </Section>
       )}

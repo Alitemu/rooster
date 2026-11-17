@@ -202,6 +202,10 @@
    (app/planner/period/[id]/page.tsx): empty, in the accordion and on a narrow screen, it is not there. */
 .onderdelen-links {
   display: none;
+  /* Never the browser's scroll anchor. The column is as tall as the page and comes before the content,
+     so the browser took it as the element to hold still: when something appeared above what you were
+     looking at (the undo banner), nothing moved for it and the content was pushed away (2.0.2). */
+  overflow-anchor: none;
 }
 
 @media (min-width: 1100px) {

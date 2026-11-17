@@ -142,3 +142,13 @@ describe('the section on screen when the status changes (2.0.1)', () => {
     expect(pagina.indexOf('const laatsteActief = useRef(actief);')).toBeLessThan(pagina.indexOf('laatsteActief.current = actief;'));
   });
 });
+
+describe('the list on the left is never what the browser holds still (2.0.2)', () => {
+  it('its column says overflow-anchor: none, so the browser scrolls along when something appears above the content', () => {
+    // As tall as the page and before the content: the browser took it as its scroll anchor, and when
+    // something appeared above what the planner looked at, nothing moved for it.
+    expect(lees('components/AiosPeriodOverview.tsx')).toContain(
+      '<aside className="hidden min-[1100px]:block w-[17rem] flex-none bg-white border-r border-neutral-300 [overflow-anchor:none]">'
+    );
+  });
+});

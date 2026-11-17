@@ -460,8 +460,18 @@ which puts the section in the address already.
 
 The screen check found a second one in the achterwacht's list (Dienstrooster, tab Lijst): a swap far down the
 roster pushed the row just changed down by 152 pixels, the warning above the table and the undo banner at the
-top of the section. The browser's own scroll anchoring did not keep it in place in the new layout. Since 2.0.1
-the list holds that row itself (lib/rijVasthouden.ts, from AssignmentGrid): for three seconds whatever grows
-above it is scrolled along, until the user scrolls or types. It finds the row by its dienst (`data-slot`),
-because a swap gives the row a new assignment and so a new key; with the key it found nothing and did nothing.
+top of the section. The browser keeps what you look at in place by itself (scroll anchoring): it picks the
+first element in the page that is on screen and scrolls along when that moves. In the new layout that was the
+column of the list on the left, as tall as the page and before the content, so it never moved and the browser
+did nothing (measured: a block of 100 pixels put above the table moved the row 100 pixels in the new layout,
+0 in the old one and 0 with the column excluded). Since 2.0.2 both columns say `overflow-anchor: none`
+(app/globals.css `.onderdelen-links`, the AIOS's `<aside>` in components/AiosPeriodOverview.tsx), and the
+browser holds the content still again, everywhere and in both directions. 2.0.1 had a workaround in the list
+itself, which held only that one row and only on the way in; it is gone.
+
+Ongedaan maken then still jumped: it remounted the list (`key={assignmentsRefreshKey}`), and for a moment
+there was no table for the browser to hold. Since 2.0.2 it raises `rijenVernieuwen` instead, and the list and
+the calendar load again in place (`vernieuwen`, as a swap already did). The screen check measures the row
+after a swap and after Ongedaan maken, and the calendar's day by its own place, no longer by `scrollY`: the
+browser now scrolls along on purpose.
 

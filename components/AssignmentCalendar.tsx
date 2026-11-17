@@ -77,6 +77,8 @@ interface Props {
   periodId: string;
   periodStatus?: string;
   onChanged?: () => void;
+  /** Raised after a change made elsewhere (Ongedaan maken): load again in place, keeping what is on screen (2.0.2). */
+  vernieuwen?: number;
 }
 
 interface ContextMenuState {
@@ -134,7 +136,7 @@ function groupByCategory(people: EligiblePerson[]): Array<[EligibilityCategory, 
   return CATEGORY_ORDER.filter((c) => groups.has(c)).map((c) => [c, sorteerOpRuimte(groups.get(c)!)]);
 }
 
-export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props) {
+export function AssignmentCalendar({ periodId, periodStatus, onChanged, vernieuwen = 0 }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [periodRange, setPeriodRange] = useState<{ start: string; end: string } | null>(null);
@@ -202,6 +204,13 @@ export function AssignmentCalendar({ periodId, periodStatus, onChanged }: Props)
   useEffect(() => {
     loadSlots();
   }, [loadSlots]);
+
+  // Not built up again after Ongedaan maken: an empty moment without the table left the browser nothing to
+  // hold still, and the page jumped (2.0.2).
+  const eersteVernieuwen = useRef(vernieuwen);
+  useEffect(() => {
+    if (vernieuwen !== eersteVernieuwen.current) loadSlots(true);
+  }, [vernieuwen, loadSlots]);
 
   const openContextMenu = useCallback(
     (e: React.MouseEvent, slot: Slot) => {

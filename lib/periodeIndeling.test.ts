@@ -162,7 +162,7 @@ describe('on the period page', () => {
     // Outside the page's centred column, next to it.
     expect(pagina.indexOf('<aside id="onderdelen-links"')).toBeLessThan(pagina.indexOf('className="container-main py-8 space-y-6 min-[1100px]:flex-1'));
     expect(pagina).toContain('className="container-main py-8 space-y-6 min-[1100px]:flex-1 min-[1100px]:min-w-0"');
-    expect(css).toMatch(/\.onderdelen-links \{\s*display: none;\s*\}/);
+    expect(css).toMatch(/\.onderdelen-links \{\s*display: none;/);
     expect(css).toMatch(/@media \(min-width: 1100px\) \{\s*\.onderdelen-links:not\(:empty\) \{\s*display: block;/);
   });
 
@@ -238,5 +238,24 @@ describe('the browser checks (2.0.1)', () => {
     // They open a section through the list.
     expect(lees('tests/e2e/setup.ts')).toContain('export async function openOnderdeel(');
     expect(lees('scripts/ui-check.mjs')).toContain('async function kies(p, titel)');
+  });
+});
+
+describe('the page stays where the planner looks (2.0.2)', () => {
+  const lees = (f: string) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8');
+  it('the column of the list is never the browser scroll anchor', () => {
+    // As tall as the page and before the content: the browser held it still, and the row just changed
+    // was pushed away by the undo banner appearing above it.
+    expect(lees('app/globals.css')).toMatch(/\.onderdelen-links \{\s*display: none;[^}]*overflow-anchor: none;\s*\}/);
+  });
+  it('Ongedaan maken loads the list and the calendar again in place instead of building them up anew', () => {
+    const dashboard = lees('components/PlannerDashboard.tsx');
+    const ongedaan = dashboard.slice(dashboard.indexOf('const handleUndoLast'), dashboard.indexOf('const handleUndoLast') + 2500);
+    expect(ongedaan).toContain('setRijenVernieuwen((k) => k + 1);');
+    expect(ongedaan).not.toContain('setAssignmentsRefreshKey');
+    expect(dashboard.match(/vernieuwen=\{rijenVernieuwen\}/g)).toHaveLength(2);
+    for (const [f, laad] of [['components/AssignmentGrid.tsx', 'loadAssignments'], ['components/AssignmentCalendar.tsx', 'loadSlots']]) {
+      expect(lees(f), f).toContain(`if (vernieuwen !== eersteVernieuwen.current) ${laad}(true);`);
+    }
   });
 });
