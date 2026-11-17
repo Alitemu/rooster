@@ -134,6 +134,59 @@ Welke versie draait, staat in de koptekst van de app, rechts van de titel. Zonde
 vrijgegeven (`stable`). Wil je een versie vastzetten, zet dan
 `ROOSTER_VERSION=0.88.1` in `.env`.
 
+## Terug naar een eerdere versie
+
+**Maak vóór elke overstap naar een nieuwe versie een back-up en bewaar die
+apart.** Dat kan in de app (beheerder, *Back-up*, *Nu een back-up versturen*)
+of door `data/` te kopiëren terwijl de app stilstaat. Die back-up is je
+terugweg.
+
+Terug naar een oudere versie:
+
+1. Zet in `.env` de versie waarnaar je terug wilt, bijvoorbeeld
+   `ROOSTER_VERSION=1.4.0`.
+2. Voer `docker compose pull` en `docker compose up -d` uit.
+3. Controleer de versie in de koptekst van de app.
+
+De database blijft staan. Een oudere versie werkt met een database die een
+nieuwere versie heeft bijgewerkt, zolang de opbouw van de database sindsdien
+niet is veranderd. Van 0.903.0 tot en met 2.0.2 is die gelijk gebleven; de weg
+van 2.0.2 terug naar 1.4.0 is getest. Ga je verder terug, zet dan de back-up
+van vóór de overstap terug.
+
+Haal de regel `ROOSTER_VERSION` later weer weg. Zolang hij er staat, krijgt de
+server geen nieuwe versies.
+
+### Een back-up terugzetten na een stap terug
+
+Een nieuwere versie zet een back-up van een oudere versie gewoon terug en
+werkt de database daarbij bij. Andersom niet: een oudere versie weigert een
+back-up die een nieuwere versie maakte ("Deze back-up is gemaakt door versie
+2.0.2, nieuwer dan deze app (1.4.0). Werk de app eerst bij."). Dat is bewust,
+want een oudere versie kan niet weten wat een nieuwere in de database zette.
+Je hebt dan twee keuzes:
+
+- **De back-up van vóór de overstap.** Die zet de oude versie gewoon terug in
+  de app. Alles wat na de overstap is gedaan, ben je kwijt.
+- **De nieuwere back-up op de server openen.** Zet het bestand in `data/`
+  (in de container is dat `/data`) en voer uit, terwijl de oude versie draait:
+
+  ```bash
+  docker compose exec -u node web npx tsx scripts/back-up-openen.ts /data/bestand.drbackup /data/teruggezet.db
+  ```
+
+  Het script vraagt het back-upwachtwoord. Daarna:
+
+  ```bash
+  docker compose down
+  cp data/rooster.db data/rooster.db.voor-terugzetten
+  rm -f data/rooster.db data/rooster.db-wal data/rooster.db-shm
+  cp data/teruggezet.db data/rooster.db
+  docker compose up -d
+  ```
+
+  Ook deze weg is getest, van 2.0.2 naar 1.4.0.
+
 ## Andere webtoepassingen op dezelfde servernaam
 
 Zet geen andere webtoepassing op dezelfde servernaam als het dienstrooster, ook

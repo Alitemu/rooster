@@ -1047,6 +1047,10 @@ persoonlijke links dan zelf rondsturen met *Links downloaden*.
 Terug naar een eerdere versie gaat op dezelfde manier: geef bij
 *Vrijgeven (productie)* het oudere versienummer op. Of zet
 `ROOSTER_VERSION=0.2.3` in `.env` om de server op één versie vast te zetten.
+Maak vóór elke overstap een back-up en bewaar die apart: een oudere versie
+weigert een back-up die een nieuwere versie maakte. De stappen, ook voor het
+terugzetten van zo'n nieuwere back-up op de server, staan in
+`docs/installatie-it.md` onder *Terug naar een eerdere versie*.
 
 ##### Op poort 443 met een eigen naam
 

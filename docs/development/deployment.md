@@ -146,6 +146,13 @@ it in OneDrive (docs/back-up-power-automate.md). Details that cost time:
   the public repository, so the code is lib/dbBackup*.ts, app/api/admin/back-up
   and scripts/back-up-openen.ts (the way to open a backup when the app does not
   start).
+- Going back a version (tested 2.0.2 to 1.4.0, both on one database and with
+  backups): an older version runs on a database a newer one upgraded while the
+  schema is the same (unchanged from 0.903.0 to 2.0.2). A newer version restores
+  an older backup and upgrades it; an older version refuses a newer backup in
+  the app, on purpose, and back-up-openen.ts of the older version opens it on
+  the server. The steps for IT: docs/installatie-it.md "Terug naar een eerdere
+  versie".
 
 **Start and stop (0.112.0):** docker-entrypoint.sh ends with `exec
 node_modules/.bin/next start`, not `npm start`: npm stays as a parent that
