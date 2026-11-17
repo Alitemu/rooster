@@ -7866,7 +7866,7 @@ const MUTATIONS = [
     name: "1.13.0: Persoonlijke links counts a revoked link as working",
     file: "lib/linksPerPersoon.ts",
     find: "    if (link.ingetrokken_op === null) p.werkend += 1;",
-    replace: "    p.werkend += 1;",
+    replace: "    if (true) p.werkend += 1;",
     tests: ["lib/linksPerPersoon"],
   },
   {
@@ -7880,7 +7880,7 @@ const MUTATIONS = [
     name: "1.13.0: the AIOS's links per person count a revoked link as working",
     file: "lib/aiosLinksPerPersoon.ts",
     find: "    if (link.ingetrokken_op === null) p.werkend += 1;",
-    replace: "    p.werkend += 1;",
+    replace: "    if (true) p.werkend += 1;",
     tests: ["lib/linksPerPersoon"],
   },
   {
