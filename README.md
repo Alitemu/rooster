@@ -1408,7 +1408,15 @@ database). Wat je wanneer draait, staat in `docs/teststrategie.md`.
 
 ## Licentie
 
-Alleen voor intern gebruik.
+Copyright 2026 de auteurs van Dienstrooster.
+
+Dienstrooster valt onder de European Union Public Licence, versie 1.2
+(EUPL-1.2). De volledige tekst staat in `LICENSE`. Je mag de app gebruiken,
+bestuderen, aanpassen en verspreiden. Verspreid je een aangepaste versie, of
+bied je die aan als dienst via een netwerk, dan maak je de broncode van die
+versie ook beschikbaar onder de EUPL. De licentie bestaat in alle officiële
+talen van de Europese Unie, ook in het Nederlands, en elke taalversie is even
+geldig.
 
 ## Meer informatie
 

@@ -2,6 +2,7 @@
   "name": "dienstrooster",
   "version": "2.0.2",
   "private": true,
+  "license": "EUPL-1.2",
   "type": "module",
   "scripts": {
     "dev": "docker-compose up",
