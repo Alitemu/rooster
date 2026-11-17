@@ -178,9 +178,13 @@ rec('A weak password is refused with a Dutch message', /tekens|hoofdletters|cijf
 await page.click('button:has-text("Annuleren")');
 
 // period detail (planner still gets the full record)
-const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1').get();
+// An achterwacht period: this planner may not open the AIOS's, and on a database that has one, a period
+// picked at random was that (2.0.2, found on a database upgraded from 1.4.0).
+const ACHTERWACHT_PERIODE = `SELECT p.id FROM dienstrooster_schedule_period p JOIN dienstrooster_pool pool ON pool.id = p.pool_id WHERE pool.type = 'ACHTERWACHT'`;
+const period = db.prepare(`${ACHTERWACHT_PERIODE} ORDER BY p.rowid LIMIT 1`).get();
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
+// On the text on screen: the page says "Laden van periode mislukt", which /Laden mislukt/ never matched (2.0.2).
+rec('Planner period page renders', !/mislukt|Er is iets misgegaan/i.test(await page.locator('body').innerText()));
 
 // The sections as a list (2.0.0): choosing one shows it, and only it.
 await kies(page, 'Status voorkeuren');
@@ -541,7 +545,7 @@ rec('Uitloggen leaves the token page', !/\/person\//.test(ppage.url()), ppage.ur
 // never applied the swap or closed. Every change here is undone again
 // through the app's own undo-last endpoint.
 const rosterPeriod = db
-  .prepare(`SELECT id FROM dienstrooster_schedule_period WHERE status = 'GEGENEREERD'`)
+  .prepare(`${ACHTERWACHT_PERIODE} AND p.status = 'GEGENEREERD'`)
   .get();
 if (rosterPeriod) {
   const undoLast = () =>
