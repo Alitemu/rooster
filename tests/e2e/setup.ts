@@ -6,7 +6,7 @@
 
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
 import { generateAccessToken, hashToken, hashPassword } from '@/lib/auth';
 import { getISOWeek, parseISO } from '@/lib/holidays';
 import { verschuifDagen, verschuif } from '../../scripts/demoKalender.mjs';
@@ -218,24 +218,53 @@ async function loginAsStaff(page: Page, codenaam: string): Promise<void> {
 }
 
 /**
- * Opens one part of the AIOS period page: they all start closed, and
- * opening one closes the others that are not pinned (components/AiosSectie.tsx).
+ * Opens one section of a period page, of either dienst, as a planner does since 2.0.0: the item in the list
+ * on the left, or in the menu behind the button in the blue bar on a narrow screen. Returns the section
+ * that is then on screen. A title is matched at the start of the item, so "Dienstrooster" finds
+ * "Dienstrooster (automatisch ingevuld)".
  */
+export async function openOnderdeel(page: Page, titel: string | RegExp): Promise<Locator> {
+  const patroon = typeof titel === 'string' ? new RegExp(`^${titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) : titel;
+  const lijst = page.locator('nav[aria-label="Onderdelen van de periode"]:visible');
+  const menu = page.getByTestId('onderdelen-menu');
+  // The list, or the menu below 1100 px: whichever this screen has.
+  await expect(lijst.or(menu.locator('visible=true')).first()).toBeVisible();
+  if ((await lijst.count()) === 0) await menu.click();
+  const item = lijst.getByRole('link').filter({ has: page.locator('span.block.font-medium', { hasText: patroon }) }).first();
+  await item.click();
+  const sectie = huidigOnderdeel(page);
+  await expect(sectie.getByRole('heading', { level: 2 }).first()).toHaveText(patroon);
+  return sectie;
+}
+
+/** The titles in the list of sections of a period page, in order (the menu below 1100 px is opened and closed for it). */
+export async function onderdelenInLijst(page: Page): Promise<string[]> {
+  const lijst = page.locator('nav[aria-label="Onderdelen van de periode"]:visible');
+  const menu = page.getByTestId('onderdelen-menu');
+  await expect(lijst.or(menu.locator('visible=true')).first()).toBeVisible();
+  const viaMenu = (await lijst.count()) === 0;
+  if (viaMenu) await menu.click();
+  const titels = (await lijst.locator('a span.block.font-medium').allInnerTexts()).map((t) => t.trim());
+  if (viaMenu) await page.keyboard.press('Escape');
+  return titels;
+}
+
+/** The section on screen in a period page (both diensten). */
+export function huidigOnderdeel(page: Page): Locator {
+  return page.locator('[data-testid^="onderdeel-"], [data-onderdeel]').filter({ has: page.getByRole('heading', { level: 2 }) }).first();
+}
+
+/** One section of the AIOS period page (since 2.0.0 through the list; openOnderdeel). */
 export async function openAiosSectie(page: Page, titel: string): Promise<void> {
-  const knop = page.getByRole('heading', { name: titel, exact: true }).getByRole('button');
-  if ((await knop.getAttribute('aria-expanded')) !== 'true') await knop.click();
-  await expect(knop).toHaveAttribute('aria-expanded', 'true');
+  await openOnderdeel(page, new RegExp(`^${titel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
 }
 
 /**
- * Opens the section "Dienstrooster (...)" of an AIOS period: the brackets say how the roster stands
- * (nog niet gegenereerd, automatisch ingevuld, handmatig aangepast, gepubliceerd), which a test
- * should not have to know to open it.
+ * Opens the section "Dienstrooster (...)": the brackets say how the roster stands (nog niet gegenereerd,
+ * automatisch ingevuld, handmatig aangepast, gepubliceerd), which a test should not have to know to open it.
  */
 export async function openDienstrooster(page: Page): Promise<void> {
-  const knop = page.getByRole('heading', { name: /^Dienstrooster( \(|$)/ }).getByRole('button');
-  if ((await knop.getAttribute('aria-expanded')) !== 'true') await knop.click();
-  await expect(knop).toHaveAttribute('aria-expanded', 'true');
+  await openOnderdeel(page, /^Dienstrooster( \(|$)/);
 }
 
 /**

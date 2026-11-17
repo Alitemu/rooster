@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner, openOnderdeel } from './setup';
 
 /**
  * The period header shows the windows the period generates with (audit
@@ -34,6 +34,8 @@ test.afterAll(() => {
 test('the header shows both windows the period generates with', async ({ page }) => {
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+  // The period's header and its buttons are in the section "Periode" (1.12.0).
+  await openOnderdeel(page, 'Periode');
   await expect(page.getByText('Venster: avond 2 weken · weekend/feestdag 4 weken')).toBeVisible();
   await expect(page.getByText('Venster: 3 weken')).toHaveCount(0);
 });

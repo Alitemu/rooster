@@ -125,6 +125,8 @@ test('the planner reads in the history, publishes, the AIOS sees their diensten,
   await expect(geschiedenis.getByText('Ingelezen voor 2 AIOS.')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 
+  // Publishing is in the card that makes the roster, in "Periode" (1.13.0).
+  await openAiosSectie(page, 'Periode');
   const paneel = page.getByTestId('aios-publiceren');
   await paneel.getByRole('button', { name: 'Voorlopig publiceren' }).click();
   await paneel.getByRole('button', { name: /^Ja, (toch )?publiceren$/ }).click();

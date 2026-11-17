@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, loginAsPlanner, getBaseUrl } from './setup';
+import { createTestPeriod, cleanupTestData, loginAsPlanner, getBaseUrl, openOnderdeel } from './setup';
 
 /**
  * Audit per role R-06 (1.7.0): the planner changes the streefbereik of an open period on its page, before
@@ -24,6 +24,8 @@ test('an open period: Aanpassen next to the streefbereik changes it, and the pag
   );
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+  // The period's header and its buttons are in the section "Periode" (1.12.0).
+  await openOnderdeel(page, 'Periode');
   await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('periode-regels')).toContainText('3 of 4 avonddiensten');
 
@@ -53,6 +55,8 @@ test('a closed period has no Aanpassen there: Rooster genereren has the fields f
   );
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+  // The period's header and its buttons are in the section "Periode" (1.12.0).
+  await openOnderdeel(page, 'Periode');
   await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('periode-regels')).toContainText('3 of 4 avonddiensten');
   await expect(page.getByTestId('streefbereik-aanpassen')).toHaveCount(0);

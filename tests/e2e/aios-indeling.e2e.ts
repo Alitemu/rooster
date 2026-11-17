@@ -2,9 +2,6 @@ import { test, expect, type Page } from '@playwright/test';
 import { db } from '@/db/client';
 import { getBaseUrl, loginAsBeheerder } from './setup';
 
-// The new layout as everyone has it since 2.0.0: without the hidden flag every other test starts with (playwright.config.ts).
-test.use({ storageState: { cookies: [], origins: [] } });
-
 /**
  * The new layout of the AIOS's period page (1.13.0, the planner's wish), as the achterwacht's has it: the
  * list of sections all the way left, "Periode" on top, the period's name and status in the blue bar, one

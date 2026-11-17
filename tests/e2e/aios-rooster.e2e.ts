@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
 import { v4 as uuid } from 'uuid';
 import { aiosShiftTypes, persistAiosSlots } from '@/lib/aiosSlots';
-import { getBaseUrl, loginAsBeheerder, openAiosSectie, openDienstrooster } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, openDienstrooster, onderdelenInLijst } from './setup';
 
 /**
  * Step 4a (docs/aios-rooster.md): the planner makes an AIOS roster with the
@@ -106,8 +106,8 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   // Whether the solver finished is said, either way.
   await expect(paneel.getByTestId('aios-solver-klaar')).toHaveText(/^(De solver is klaar: dit is de eerlijkste verdeling binnen de regels\.|De tijd was op voordat de solver klaar was.*)$/);
 
-  await expect(page.getByRole('heading', { name: 'Dienstpercentage en saldo' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Dienstrooster (automatisch ingevuld)', exact: true })).toBeVisible();
+  // The page stays on "Periode" now the roster is made (2.0.1); the list has the sections of a made roster.
+  expect(await onderdelenInLijst(page)).toEqual(expect.arrayContaining(['Dienstpercentage en saldo', 'Dienstrooster (automatisch ingevuld)']));
   // Every AIOS a row with a percentage; the roster names them.
   await openAiosSectie(page, 'Dienstpercentage en saldo');
   const tabel = page.locator('table', { hasText: 'Percentage' });
@@ -184,12 +184,14 @@ test('the planner makes the AIOS roster, sees it per block and per AIOS, changes
   await expect(sectie.getByTestId('aios-ruilen-overzicht')).toContainText('Ruilen kan pas als het rooster definitief is.');
   await sectie.getByRole('tab', { name: /Kalender/ }).click();
 
+  await openAiosSectie(page, 'Periode');
   await paneel.getByRole('button', { name: 'Rooster verwijderen' }).click();
   await paneel.getByRole('button', { name: 'Ja, rooster verwijderen' }).click();
   await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Dienstpercentage en saldo' })).toHaveCount(0);
-  // Not made: the heading says so, and the calendar shows the diensten themselves.
-  await expect(page.getByRole('heading', { name: 'Dienstrooster (nog niet gegenereerd)', exact: true })).toBeVisible();
+  // Not made: the list says so, without the percentages, and the calendar shows the diensten themselves.
+  const naVerwijderen = await onderdelenInLijst(page);
+  expect(naVerwijderen).not.toContain('Dienstpercentage en saldo');
+  expect(naVerwijderen).toContain('Dienstrooster (nog niet gegenereerd)');
   await openDienstrooster(page);
   await expect(page.getByTestId('aios-dienstrooster-nog-niet')).toBeVisible();
   expect((db.prepare('SELECT COUNT(*) AS n FROM dienstrooster_assignment WHERE schedule_version_id = ?').get(ids.period) as { n: number }).n).toBe(0);
@@ -206,17 +208,25 @@ test('around kerst the planner chooses first, and oudjaar gets two AIOS', async 
   const vragen = page.getByTestId('aios-feestdagblokken');
   await expect(vragen.getByRole('heading', { name: '★ Blokken rond feestdagen' })).toBeVisible();
   await expect(vragen.getByText(/Eerste Kerstdag en Tweede Kerstdag/)).toBeVisible();
+  await expect(vragen.getByText('(nog kiezen)')).toHaveCount(2);
+  // The card that makes the roster, in "Periode", waits for the choices.
+  await openAiosSectie(page, 'Periode');
   await expect(paneel.getByText('Kies eerst bij elk blok rond de feestdagen wat ermee gebeurt en bewaar je keuzes.')).toBeVisible();
   await expect(paneel.getByRole('button', { name: 'Rooster maken' })).toBeDisabled();
-  await expect(vragen.getByText('(nog kiezen)')).toHaveCount(2);
+  await openAiosSectie(page, 'Blokken rond de feestdagen');
 
   await vragen.getByRole('group', { name: /^Nachtblok zo t\/m di/ }).getByLabel(/^Opknippen/).check();
   await vragen.getByRole('group', { name: /^Avondblok zo t\/m di/ }).getByLabel(/^Heel laten/).check();
   await expect(vragen.getByRole('group', { name: /^Oudjaarsnacht/ }).getByLabel('Twee AIOS')).toBeChecked();
+  // Chosen but not kept: "Periode" says so, and the choices are still there when the planner comes back.
+  await openAiosSectie(page, 'Periode');
   await expect(paneel.getByText('Bewaar eerst je keuzes over de blokken rond de feestdagen.')).toBeVisible();
+  await openAiosSectie(page, 'Blokken rond de feestdagen');
+  await expect(vragen.getByRole('group', { name: /^Nachtblok zo t\/m di/ }).getByLabel(/^Opknippen/)).toBeChecked();
   await vragen.getByRole('button', { name: 'Keuzes bewaren' }).click();
   await expect(vragen.getByText('Bewaard.')).toBeVisible();
   await expect(vragen.getByText('(nog kiezen)')).toHaveCount(0);
+  await openAiosSectie(page, 'Periode');
 
   await paneel.getByLabel('Hoe lang zoeken').selectOption('eigen');
   await paneel.getByLabel(/Aantal minuten/).fill('1');

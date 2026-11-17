@@ -90,8 +90,10 @@ describe('on the page', () => {
   const maken = lees('components/AiosRoosterMaken.tsx');
 
   it('a section in the new layout shows only when chosen, and tells the list it is there', () => {
-    expect(sectie).toMatch(/if \(indeling\) \{\s*if \(indeling\.actief === sleutel\) \{/);
-    expect(sectie).toContain('return blijfGeladen ? <div hidden>{children}</div> : null;');
+    expect(sectie).toMatch(/if \(indeling\) \{\s*const actief = indeling\.actief === sleutel;\s*if \(!actief && !blijfGeladen\) return null;/);
+    // Hidden in the same element it is shown in: unsaved choices survive a visit to another section (2.0.1).
+    expect(sectie).toContain('<div hidden={!actief} className="card p-4 sm:p-6');
+    expect(sectie).not.toContain('<div hidden>{children}</div>');
     expect(sectie).toContain('meld(sleutel as AiosOnderdeel, { titel, hint });');
     expect(sectie).toContain('return () => meld(sleutel as AiosOnderdeel, null);');
   });
@@ -129,5 +131,14 @@ describe('on the page', () => {
     expect(pagina).not.toContain('Nieuwe indeling proberen');
     expect(pagina).not.toContain('Terug naar de oude indeling');
     expect(pagina).toContain('if (!zijbalk) return <Pagina period={period} zijbalk={false} onStatus={setStatus} />;');
+  });
+});
+
+describe('the section on screen when the status changes (2.0.1)', () => {
+  const pagina = lees('components/AiosPeriodOverview.tsx');
+  it('goes into the address when no section was chosen, so the page does not jump to the next status first section', () => {
+    expect(pagina).toMatch(/if \(vorigeStatus\.current === status\) return;\s*vorigeStatus\.current = status;\s*if \(!gekozen\) window\.history\.replaceState\(null, '', adresVoor\(laatsteActief\.current\)\);/);
+    // The section of the render before: updated after the effect above has read it.
+    expect(pagina.indexOf('const laatsteActief = useRef(actief);')).toBeLessThan(pagina.indexOf('laatsteActief.current = actief;'));
   });
 });

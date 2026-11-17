@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { db } from '@/db/client';
 import { buildXlsx } from '../fixtures/buildXlsx';
 import { SALDO_KOP } from '@/lib/importSjablonen';
-import { getBaseUrl, loginAsPlanner } from './setup';
+import { getBaseUrl, loginAsPlanner, openOnderdeel } from './setup';
 
 /**
  * The rule (1.1.0): a beginsaldo from an Excel file and a correctie entered
@@ -102,10 +102,11 @@ test('an import and a correctie after the opening give each person that many shi
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
 
-  // The first section of the page, closed until opened.
-  const sectieKnoppen = page.locator('h2 > button[aria-expanded]');
-  await expect(sectieKnoppen.first()).toHaveText('Import en correcties');
-  await sectieKnoppen.first().click();
+  // The first section of the list after "Periode" (2.0.0: the list on the left).
+  const lijst = page.locator('nav[aria-label="Onderdelen van de periode"]:visible').getByRole('link');
+  await expect(lijst.nth(0)).toHaveText(/^Periode/);
+  await expect(lijst.nth(1)).toHaveText(/^Import en correcties/);
+  await openOnderdeel(page, 'Import en correcties');
   const sectie = page.getByTestId('import-en-correcties');
   await expect(sectie).toBeVisible();
 
@@ -139,6 +140,7 @@ test('an import and a correctie after the opening give each person that many shi
 
   // Close the period as the planner does, then generate with the real solver. The question says who has
   // not confirmed yet (R-08, 1.7.0): in this period nobody has.
+  await openOnderdeel(page, 'Periode');
   await page.getByRole('button', { name: '🔒 Periode sluiten' }).click();
   await expect(page.getByTestId('sluit-vraag')).toContainText(/deelnemers hebben hun voorkeuren nog niet bevestigd|deelnemers heeft de voorkeuren nog niet bevestigd/);
   await expect(page.getByTestId('sluit-vraag')).toContainText('Na het sluiten kan niemand meer iets invullen of wijzigen.');
@@ -174,7 +176,7 @@ test('an import and a correctie after the opening give each person that many shi
 
   // Once generated the section says why it no longer takes a saldo.
   await page.reload();
-  await page.locator('h2 > button[aria-expanded]').first().click();
+  await openOnderdeel(page, 'Import en correcties');
   await expect(page.getByTestId('saldo-dicht')).toContainText('al een rooster gegenereerd');
   await expect(page.getByTestId('import-en-correcties').getByLabel('Beginsaldo als Excel-bestand')).toHaveCount(0);
 });

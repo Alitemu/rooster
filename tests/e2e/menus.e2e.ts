@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl, openOnderdeel } from './setup';
 
 /**
  * Every pick-from-a-menu control closes once the pick is done.
@@ -56,7 +56,7 @@ test.describe('Keuzemenu’s sluiten na een keuze', () => {
       await loginAsPlanner(page);
       await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
       await page.waitForLoadState('networkidle');
-      await page.getByRole('heading', { name: /^Dienstrooster/ }).getByRole('button').click();
+      await openOnderdeel(page, 'Dienstrooster');
       await expect(page.getByRole('button', { name: /Wisselen/ }).first()).toBeVisible();
     };
 

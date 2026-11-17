@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl, demoDatum, isoJaarWeek } from './setup';
+import { createTestPeriod, getPersonalLinkUrl, cleanupTestData, loginAsPlanner, getBaseUrl, demoDatum, isoJaarWeek, openOnderdeel } from './setup';
 
 /**
  * "Ik ben fellow" (lib/fellows.ts) from both sides: the participant ticks
@@ -49,9 +49,8 @@ test.describe('Fellows', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    const section = page.getByRole('heading', { name: /Status voorkeuren/ }).getByRole('button');
+    await openOnderdeel(page, 'Status voorkeuren');
     const rows = page.locator('tr', { has: page.locator(`a[href$="/person/${user.id}"]`) });
-    if (!(await rows.first().isVisible())) await section.click();
 
     const row = rows.first();
     await expect(row).toBeVisible();

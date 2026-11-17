@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { getBaseUrl, loginAsPlanner } from './setup';
+import { getBaseUrl, loginAsPlanner, openOnderdeel } from './setup';
 
 /**
  * Every date field reads dd-mm-jjjj, also in an English browser (1.2.0).
@@ -72,6 +72,8 @@ test('a date is typed and shown as dd-mm-jjjj and stored as YYYY-MM-DD', async (
 test('a deadline is a date and a 24-hour time, stored as before', async ({ page }) => {
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${periodId}`);
+  // The period's header and its buttons are in the section "Periode" (1.12.0).
+  await openOnderdeel(page, 'Periode');
   await page.getByRole('button', { name: 'Aanpassen' }).click();
   const datum = page.getByLabel('Deadline', { exact: true });
   const tijd = page.getByLabel('Deadline, tijd');

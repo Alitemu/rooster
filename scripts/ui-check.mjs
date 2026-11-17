@@ -50,16 +50,15 @@ function rec(name, good, detail) {
 }
 
 const browser = await chromium.launch({ executablePath: chromiumExecutable() });
-// Since 2.0.0 the period page shows the new layout; these checks go through the accordion's sections, which
-// shows with a hidden flag (lib/indelingOnthouden.ts). tests/e2e/indeling-nieuw.e2e.ts checks the new layout.
-const metOudeIndeling = (context) =>
-  context.addInitScript(() => {
-    try {
-      window.localStorage.setItem('dienstrooster.oudeIndeling', 'ja');
-    } catch {}
-  });
+// A section of the period page, as a planner opens it since 2.0.0: the item in the list on the left, or in
+// the menu behind the button in the blue bar on a narrow screen. Waits until its title is on screen.
+async function kies(p, titel) {
+  const lijst = p.locator('nav[aria-label="Onderdelen van de periode"]:visible');
+  if ((await lijst.count()) === 0) await p.getByTestId('onderdelen-menu').click();
+  await lijst.locator('a', { has: p.locator('span.block.font-medium', { hasText: titel }) }).first().click();
+  await p.locator('[data-testid^="onderdeel-"] h2', { hasText: titel }).first().waitFor();
+}
 const ctx = await browser.newContext();
-await metOudeIndeling(ctx);
 const page = await ctx.newPage();
 
 const consoleErrors = [];
@@ -183,40 +182,21 @@ const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1'
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
 
-// Accordion sections (PlannerDashboard's Section component): opening one
-// closes any other open-but-unpinned section, and pinning (📌, shown only
-// while a section is open) keeps it open even when another section opens.
-await page.click('h2:has-text("Status voorkeuren") > button');
-await page.waitForTimeout(300);
+// The sections as a list (2.0.0): choosing one shows it, and only it.
+await kies(page, 'Status voorkeuren');
 const staffTableVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
-rec('Opening "Status voorkeuren" shows its content', staffTableVisible);
+rec('Choosing "Status voorkeuren" shows its content', staffTableVisible);
 
-await page.click('h2:has-text("Exporteren & communicatie") > button');
-await page.waitForTimeout(300);
+await kies(page, 'Exporteren & communicatie');
 const staffTableStillVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 const exportVisible = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
 rec(
-  'Opening a second section closes the first one (not pinned)',
+  'Choosing another section shows that one instead',
   !staffTableStillVisible && exportVisible,
   `staff-still-visible=${staffTableStillVisible} export-visible=${exportVisible}`
 );
 
-// Reopen "Status voorkeuren" and pin it before opening the export section again.
-await page.click('h2:has-text("Status voorkeuren") > button');
-await page.waitForTimeout(300);
-await page.click('.card:has(h2:has-text("Status voorkeuren")) button[aria-pressed]');
-await page.waitForTimeout(200);
-await page.click('h2:has-text("Exporteren & communicatie") > button');
-await page.waitForTimeout(300);
-const staffTableVisibleAfterPin = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
-const exportVisibleToo = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
-rec(
-  'A pinned section stays open when another section is opened',
-  staffTableVisibleAfterPin && exportVisibleToo,
-  `staff-visible=${staffTableVisibleAfterPin} export-visible=${exportVisibleToo}`
-);
-
-// Reload so the rest of this script starts from a clean accordion/pin state.
+// Reload so the rest of this script starts from the page as it opens.
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 
 // Assigning a shift from the calendar's right-click menu used to force a
@@ -228,11 +208,8 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 // the same manual action by hand - see lib/pendingUndo.ts.
 let calendarNavCount = 0;
 page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) calendarNavCount++; });
-// The Dienstrooster section is a collapsible header now (PlannerDashboard's
-// Section component), same mechanism as "Status voorkeuren" etc. -
-// there's no separate "Tonen" button anymore, clicking the header itself
-// opens it.
-await page.click('h2:has-text("Dienstrooster") > button');
+// The Dienstrooster section, chosen in the list.
+await kies(page, 'Dienstrooster');
 await page.waitForTimeout(500);
 await page.click('button:has-text("Kalender")');
 await page.waitForTimeout(800);
@@ -271,7 +248,7 @@ rec('The undo banner disappears once used', !(await undoBanner.isVisible().catch
 // swap that happened in real life after a CSV was made can still be
 // corrected by hand.
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await page.click('h2:has-text("Eerdere toewijzingen") > button');
+await kies(page, 'Eerdere toewijzingen');
 await page.waitForTimeout(300);
 rec(
   'The "Eerdere toewijzingen" section explains why it is needed',
@@ -377,6 +354,8 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 await page.evaluate((periodId) => {
   localStorage.setItem(`dienstrooster-fillgaps-draft-${periodId}`, JSON.stringify({ 'fake-slot-id': 'fake-person-id' }));
 }, period.id);
+// The button is in the section "Periode" (1.12.0).
+await kies(page, 'Periode');
 await page.locator('button', { hasText: /Rooster.*genereren/i }).first().click();
 await page.waitForTimeout(500);
 const draftWarning = page.locator('[role="dialog"][aria-label="Niet-toegepaste toewijzingen"]');
@@ -418,7 +397,6 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 //    to bite when the menu is opened near the mobile viewport's own smaller
 //    max-height budget.
 const mctx = await browser.newContext({ viewport: { width: 375, height: 812 } });
-await metOudeIndeling(mctx);
 const mpage = await mctx.newPage();
 await (async () => {
   const res = await fetch(`${BASE}/api/auth/staff-login`, {
@@ -431,7 +409,7 @@ await (async () => {
 })();
 
 await mpage.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await mpage.click('h2:has-text("Dienstrooster") > button');
+await kies(mpage, 'Dienstrooster');
 await mpage.waitForTimeout(500);
 const mobileScrollWidth = await mpage.evaluate(() => document.documentElement.scrollWidth);
 rec('No horizontal page overflow at 375px once the roster panel is shown', mobileScrollWidth === 375, `scrollWidth=${mobileScrollWidth}`);
@@ -578,7 +556,7 @@ if (rosterPeriod) {
     );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${BASE}/planner/period/${rosterPeriod.id}`, { waitUntil: 'networkidle' });
-  await page.locator('h2:has-text("Dienstrooster") > button').first().click();
+  await kies(page, 'Dienstrooster');
   await page.waitForSelector('button:has-text("Wisselen")');
 
   // The 16th row that has someone on it: which diensten stay empty depends on what the solver found that

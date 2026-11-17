@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsPlanner, openOnderdeel } from './setup';
 
 /**
  * The streefbereik is required when a period opens, and the setup wizard
@@ -35,6 +35,8 @@ test.afterAll(() => {
 test('the dialog warns about a streefbereik too small for the shifts before generating', async ({ page }) => {
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+  // The period's header and its buttons are in the section "Periode" (1.12.0).
+  await openOnderdeel(page, 'Periode');
   await page.getByRole('button', { name: /Rooster genereren met solver/ }).first().click();
   await expect(page.getByText('Venster en streefbereik')).toBeVisible();
   const warning = page.getByTestId('bereik-tekort');

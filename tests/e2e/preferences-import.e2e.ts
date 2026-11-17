@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
 import { buildXlsx } from '@/tests/fixtures/buildXlsx';
-import { createTestPeriod, createTestUsers, cleanupTestData, getBaseUrl } from './setup';
+import { createTestPeriod, createTestUsers, cleanupTestData, getBaseUrl, openOnderdeel } from './setup';
 
 /**
  * "Voorkeuren importeren" says one number for one import: the
@@ -63,7 +63,7 @@ test('checking and applying say the same number, and the list says it shows a pa
   await loginAsAdmin(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await page.waitForLoadState('networkidle');
-  await page.locator('h2:has-text("Exporteren & communicatie") > button').first().click();
+  await openOnderdeel(page, 'Exporteren & communicatie');
   await page.getByRole('button', { name: /Voorkeuren importeren/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Voorkeuren importeren' });
 

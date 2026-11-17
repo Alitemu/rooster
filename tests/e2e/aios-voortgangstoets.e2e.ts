@@ -92,8 +92,8 @@ test('the planner gives the date, and the night before says Fellow', async ({ pa
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
 
   const kaart = page.getByTestId('aios-voortgangstoets');
-  await expect(kaart.getByRole('heading', { name: 'Voortgangstoets' })).toBeVisible();
   await openAiosSectie(page, 'Voortgangstoets');
+  await expect(kaart.getByRole('heading', { name: 'Voortgangstoets' })).toBeVisible();
   await kaart.getByLabel('Er is een voortgangstoets in dit kwartaal').check();
   await kaart.getByLabel('Datum van de voortgangstoets').fill(TOETS);
   await kaart.getByRole('button', { name: 'Opslaan' }).click();

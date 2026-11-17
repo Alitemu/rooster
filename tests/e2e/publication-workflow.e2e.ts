@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner, openSecties } from './setup';
+import { createTestPeriod, getBaseUrl, cleanupTestData, loginAsPlanner, openSecties, openOnderdeel } from './setup';
 import { db } from '@/db/client';
 
 /**
@@ -39,6 +39,8 @@ test.describe('Roster Publication Workflow - E2E', () => {
 
   const gotoPlanner = async (page: import('@playwright/test').Page) => {
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    // The period's header and its buttons are in the section "Periode" (1.12.0).
+    await openOnderdeel(page, 'Periode');
     await page.waitForLoadState('networkidle');
   };
 
@@ -141,7 +143,8 @@ test.describe('Roster Publication Workflow - E2E', () => {
     await expect(page.getByText('Het rooster is voorlopig gepubliceerd.')).toBeVisible({ timeout: 10000 });
     await page.getByRole('dialog').getByRole('button', { name: 'Sluiten' }).click();
     await expect(page.getByText(/📝 Status: Voorlopig gepubliceerd/)).toBeVisible();
-    await expect(page.getByText('Status: Voorlopig gepubliceerd', { exact: true })).toBeVisible();
+    // The dashboard's own copy is the status in the blue bar since 1.12.0.
+    await expect(page.getByTestId('kop-periode')).toContainText('Voorlopig gepubliceerd');
 
     const period = db
       .prepare(
@@ -168,7 +171,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
   test('the publish button is gone once the period is published', async ({ page }) => {
     await gotoPlanner(page);
 
-    await expect(page.getByText('Status: Voorlopig gepubliceerd', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('kop-periode')).toContainText('Voorlopig gepubliceerd');
     await expect(page.getByRole('button', { name: '✅ Voorlopig publiceren' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '🔏 Definitief maken' })).toBeVisible();
   });
@@ -183,7 +186,7 @@ test.describe('Roster Publication Workflow - E2E', () => {
     await expect(page.getByText('Het rooster is definitief.')).toBeVisible({ timeout: 10000 });
     await page.getByRole('dialog').getByRole('button', { name: 'Sluiten' }).click();
 
-    await expect(page.getByText('Status: Definitief', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('kop-periode')).toContainText('Definitief');
     await expect(page.getByRole('button', { name: '🔏 Definitief maken' })).toHaveCount(0);
     const row = db
       .prepare('SELECT definitief_op FROM dienstrooster_schedule_period WHERE id = ?')

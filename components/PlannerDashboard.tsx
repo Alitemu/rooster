@@ -137,21 +137,23 @@ function Section({
   // The new layout (1.9.0): only the section that is chosen, with its title on top; one that reports its
   // summary (keepMounted) stays on the page unseen, as it does closed in the accordion.
   if (ctx.modus === 'zijbalk') {
-    if (ctx.actief === sleutel) {
-      // scroll-mt: under the app's blue bar, which sticks to the top below 1100 px with the period's name
-      // in it (two rows on a phone). The title takes the focus after a choice (toonOnderdeel), so a
-      // keyboard and a screen reader are in the section at once.
-      return (
-        <div className="card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4" data-testid={`onderdeel-${ADRES[sleutel]}`}>
-          <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
-            {titel}
-          </h2>
-          {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
-          <div className="mt-4">{children}</div>
-        </div>
-      );
-    }
-    return keepMounted ? <div hidden>{children}</div> : null;
+    const actief = ctx.actief === sleutel;
+    if (!actief && !keepMounted) return null;
+    // One that reports its summary (keepMounted) stays on the page unseen while another is chosen: in the same
+    // element, only hidden, so React keeps what is in it (2.0.1; a different element for the two cases built
+    // it up again on every return).
+    // scroll-mt: under the app's blue bar, which sticks to the top below 1100 px with the period's name
+    // in it (two rows on a phone). The title takes the focus after a choice (toonOnderdeel), so a
+    // keyboard and a screen reader are in the section at once.
+    return (
+      <div hidden={!actief} className="card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4" data-testid={actief ? `onderdeel-${ADRES[sleutel]}` : undefined}>
+        <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
+          {titel}
+        </h2>
+        {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
+        <div className="mt-4">{children}</div>
+      </div>
+    );
   }
 
   const isOpen = ctx.openSections.has(sleutel);

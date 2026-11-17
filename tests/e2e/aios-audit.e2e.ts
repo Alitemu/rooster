@@ -288,6 +288,8 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
   syncAiosPersoon(ids.mensen[1].id);
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${ids.period}`);
+  // The status and its buttons, and the card that makes the roster, are in "Periode" (1.13.0).
+  await openAiosSectie(page, 'Periode');
   const status = page.getByTestId('aios-periode-status');
   const sluit = async () => {
     await status.getByRole('button', { name: /Periode sluiten/ }).click();
@@ -399,6 +401,7 @@ test('status, the roster, empty diensten that stay, and back to open', async ({ 
   });
 
   await test.step('back to open with a made roster: refused, and it says to remove the roster first', async () => {
+    await openAiosSectie(page, 'Periode');
     await status.getByRole('button', { name: /Terug naar open/ }).click();
     await expect(page.getByTestId('aios-eerst-verwijderen')).toContainText(/verwijder/i);
     await expect(status).toContainText('Status: Gegenereerd');
@@ -477,6 +480,7 @@ test('the planner of the AIOS: Exporteren & communicatie without the beheerder\'
   expect([401, 403]).toContain(import_.status());
 
   // Closing and opening, as the achterwacht's planner can; each change in the audit log.
+  await openAiosSectie(p, 'Periode');
   const status = p.getByTestId('aios-periode-status');
   await expect(status).toContainText('Status: Open');
   await status.getByRole('button', { name: /Periode sluiten/ }).click();

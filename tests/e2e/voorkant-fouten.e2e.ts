@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, getBaseUrl, getPersonalLinkUrl, loginAsPlanner, openSecties, toonRuilverzoeken } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, getPersonalLinkUrl, loginAsPlanner, openSecties, toonRuilverzoeken, openOnderdeel } from './setup';
 
 /**
  * Front-end faults of the 0.805.0 audit, each in the browser:
@@ -105,7 +105,7 @@ test('two notifications marked read in a row both stay read, and the counter end
 test('the codenaam filter keeps focus while the list reloads', async ({ page }) => {
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await page.getByRole('heading', { name: /^Dienstrooster \(/ }).getByRole('button').click();
+  await openOnderdeel(page, /^Dienstrooster \(/);
   await page.getByRole('button', { name: '📋 Lijst' }).click();
   const filter = page.getByLabel('Filter op codenaam');
   await expect(filter).toBeVisible();
@@ -131,6 +131,7 @@ test.describe('the deadline of a period', () => {
   test('is saved with the version of the period the page showed, and refused when somebody else was first', async ({ page }) => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${open.period.id}`);
+    await openOnderdeel(page, 'Periode');
     await page.getByRole('button', { name: 'Aanpassen' }).first().click();
     const verzonden: Array<Record<string, unknown>> = [];
     await page.route(/\/api\/periods\/[^/]+\/deadline$/, (route) => {

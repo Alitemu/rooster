@@ -438,8 +438,23 @@ What changed:
 - The switches "Nieuwe indeling proberen" and "Terug naar de oude indeling" are gone. The key that remembered
   the planner's choice until 2.0.0 (`dienstrooster.indeling`) is not read: a browser that chose the accordion
   sees the new layout.
-- The accordion's code is unchanged. Most browser checks still go through it: playwright.config.ts gives every
-  browser the hidden flag (`MET_OUDE_INDELING`), scripts/ui-check.mjs too; tests/e2e/indeling-nieuw.e2e.ts and
-  tests/e2e/aios-indeling.e2e.ts start without it. Moving those checks to the new layout, and then removing the
-  accordion, are on docs/todo.md.
+- The accordion's code is unchanged. In 2.0.0 most browser checks still went through it, with the hidden flag;
+  since 2.0.1 they all go through the new layout (below).
+
+### The browser checks through the new layout (2.0.1)
+
+Every browser test and scripts/ui-check.mjs open a section as a planner does: `openOnderdeel` in
+tests/e2e/setup.ts (the item in the list, or the menu below 1100 px; `openAiosSectie` and `openDienstrooster`
+use it), `onderdelenInLijst` for what the list holds, `kies` in the screen check. What stood above the sections
+is opened as "Periode" first. Tests of the accordion's own behaviour (folding, pinning) became tests of the
+list. No check sets the hidden flag any more (lib/periodeIndeling.test.ts holds that); only
+tests/e2e/indeling-nieuw.e2e.ts and tests/e2e/aios-indeling.e2e.ts open the accordion, with `?indeling=oud`,
+to show it is still behind the way back.
+
+Moving them found a fault in the AIOS's page: without a chosen section the page shows the first section of the
+status, so making the roster in "Periode" jumped to "Dienstrooster" the moment it was made, and opening a concept
+in "Voorkeuren van de AIOS" jumped to "Status voorkeuren". The planner lost the answer to what they had just
+done. Since 2.0.1 the section on screen goes into the address when the status changes. The achterwacht's page
+has no such jump: its buttons that change the status are reached only by choosing "Periode" (or Volgende stap),
+which puts the section in the address already.
 

@@ -103,8 +103,11 @@ describe('on the period page', () => {
   });
 
   it('the new layout shows one section, keeps the ones that report their summary, and links every item', () => {
-    expect(dashboard).toContain('if (ctx.actief === sleutel) {');
-    expect(dashboard).toContain('return keepMounted ? <div hidden>{children}</div> : null;');
+    expect(dashboard).toContain('const actief = ctx.actief === sleutel;');
+    expect(dashboard).toContain('if (!actief && !keepMounted) return null;');
+    // Hidden in the same element it is shown in, so what is in it survives a visit to another section (2.0.1).
+    expect(dashboard).toContain('<div hidden={!actief} className="card p-4 sm:p-6');
+    expect(dashboard).not.toContain('<div hidden>{children}</div>');
     expect(dashboard).toContain('href={ctx.adresVoor(k)}');
   });
 
@@ -222,5 +225,18 @@ describe('on the period page', () => {
   it('the sections of a group stand moved in under its heading, with a line down the group', () => {
     expect(kader).toContain('{ctx.inLijst.has(BOVENAAN) && item(BOVENAAN)}');
     expect(kader).toContain('<div className="ml-4 pl-1.5 border-l-2 border-neutral-300">{items.map((k) => item(k))}</div>');
+  });
+});
+
+describe('the browser checks (2.0.1)', () => {
+  const lees = (f: string) => fs.readFileSync(path.resolve(__dirname, '..', f), 'utf8');
+  it('go through the new layout: neither the tests nor the screen check set the hidden flag of the accordion', () => {
+    expect(lees('playwright.config.ts')).not.toContain('oudeIndeling');
+    expect(lees('scripts/ui-check.mjs')).not.toContain('oudeIndeling');
+    const e2e = fs.readdirSync(path.resolve(__dirname, '..', 'tests/e2e')).filter((f) => f.endsWith('.ts'));
+    for (const f of e2e) expect(lees(`tests/e2e/${f}`), f).not.toContain("'dienstrooster.oudeIndeling'");
+    // They open a section through the list.
+    expect(lees('tests/e2e/setup.ts')).toContain('export async function openOnderdeel(');
+    expect(lees('scripts/ui-check.mjs')).toContain('async function kies(p, titel)');
   });
 });

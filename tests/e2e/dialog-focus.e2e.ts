@@ -1,5 +1,5 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsBeheerder } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsBeheerder, openOnderdeel } from './setup';
 
 /**
  * A modal dialog keeps focus (0.804.0): it takes focus when it opens, Tab and
@@ -36,11 +36,7 @@ export async function houdtFocusVast(page: Page, dialoog: Locator, opener: Locat
 test('Mailinstellingen: focus in the dialog through Tab and Shift+Tab, and back on the button after Escape', async ({ page }) => {
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await page.getByRole('heading', { name: 'Exporteren & communicatie' }).getByRole('button').click();
-  const opener = page
-    .locator('div.card', { has: page.getByRole('heading', { name: 'Exporteren & communicatie' }) })
-    .first()
-    .getByRole('button', { name: /Mailinstellingen/ });
+  const opener = (await openOnderdeel(page, 'Exporteren & communicatie')).getByRole('button', { name: /Mailinstellingen/ });
   await opener.click();
   await houdtFocusVast(page, page.getByRole('dialog', { name: 'Mailinstellingen' }), opener);
 });
@@ -48,7 +44,7 @@ test('Mailinstellingen: focus in the dialog through Tab and Shift+Tab, and back 
 test('Exporteren: the same for the export dialog', async ({ page }) => {
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await page.getByRole('heading', { name: 'Exporteren & communicatie' }).getByRole('button').click();
+  await openOnderdeel(page, 'Exporteren & communicatie');
   const opener = page.getByRole('button', { name: /Uitnodigingen en herinneringen/ }).first();
   await opener.click();
   await houdtFocusVast(page, page.getByRole('dialog', { name: 'Exporteren' }), opener);

@@ -7550,8 +7550,8 @@ const MUTATIONS = [
   {
     name: "1.9.0: the new layout shows every section at once",
     file: "components/PlannerDashboard.tsx",
-    find: "    if (ctx.actief === sleutel) {",
-    replace: "    if (true) {",
+    find: "    const actief = ctx.actief === sleutel;",
+    replace: "    const actief = true;",
     tests: ["lib/periodeIndeling"],
   },
   {
@@ -7900,8 +7900,8 @@ const MUTATIONS = [
   {
     name: "1.13.0: an AIOS section in the new layout shows whether chosen or not",
     file: "components/AiosSectie.tsx",
-    find: "    if (indeling.actief === sleutel) {",
-    replace: "    if (true) {",
+    find: "    const actief = indeling.actief === sleutel;",
+    replace: "    const actief = true;",
     tests: ["lib/aiosIndeling"],
   },
   {
@@ -7966,6 +7966,27 @@ const MUTATIONS = [
     find: "  } catch {\n    return null;\n  }",
     replace: "  } finally {\n  }",
     tests: ["lib/indelingOnthouden"],
+  },
+  {
+    name: "2.0.1: the AIOS's page jumps to the first section of the new status",
+    file: "components/AiosPeriodOverview.tsx",
+    find: "    if (!gekozen) window.history.replaceState(null, '', adresVoor(laatsteActief.current));",
+    replace: "",
+    tests: ["lib/aiosIndeling"],
+  },
+  {
+    name: "2.0.1: the browser tests go through the hidden accordion again",
+    file: "playwright.config.ts",
+    find: "    baseURL: BASIS,",
+    replace: "    baseURL: BASIS,\n    storageState: { cookies: [], origins: [{ origin: 'http://localhost:3000', localStorage: [{ name: 'dienstrooster.oudeIndeling', value: 'ja' }] }] },",
+    tests: ["lib/periodeIndeling"],
+  },
+  {
+    name: "2.0.1: a hidden AIOS section is built up again on every return, losing unsaved choices",
+    file: "components/AiosSectie.tsx",
+    find: "      <div hidden={!actief} className=\"card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4\" data-testid={testId} data-onderdeel={actief ? sleutel : undefined}>",
+    replace: "      <div key={String(actief)} hidden={!actief} className=\"card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4\" data-testid={testId} data-onderdeel={actief ? sleutel : undefined}>",
+    tests: ["lib/aiosIndeling"],
   },
 ];
 

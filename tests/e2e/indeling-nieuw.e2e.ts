@@ -3,9 +3,6 @@ import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
 import { createTestPeriod, cleanupTestData, loginAsPlanner, loginAsBeheerder, getBaseUrl, demoDatum, isoJaarWeek } from './setup';
 
-// The new layout as everyone has it since 2.0.0: without the hidden flag every other test starts with (playwright.config.ts).
-test.use({ storageState: { cookies: [], origins: [] } });
-
 /**
  * The new layout of the period page (1.9.0; the accordion is the default): the sections as a list on the
  * left, one on the right, each with its own address. Every other browser test still sees the accordion,

@@ -104,20 +104,21 @@ export function AiosSectie({
   }, [meld, sleutel, titel, hint]);
 
   if (indeling) {
-    if (indeling.actief === sleutel) {
-      // scroll-mt: under the blue bar, which sticks to the top below 1100 px. The title takes the focus after a choice.
-      return (
-        <div className="card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4" data-testid={testId} data-onderdeel={sleutel}>
-          <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
-            {titel}
-          </h2>
-          {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
-          <div className="mt-4 space-y-3">{children}</div>
-        </div>
-      );
-    }
-    // A section whose state must survive (blijfGeladen) stays on the page unseen, as it does closed in the accordion.
-    return blijfGeladen ? <div hidden>{children}</div> : null;
+    const actief = indeling.actief === sleutel;
+    if (!actief && !blijfGeladen) return null;
+    // A section whose state must survive (blijfGeladen) stays on the page unseen while another is chosen, as it does
+    // closed in the accordion: in the same element, only hidden, so React keeps what is in it (2.0.1: a different
+    // element for the two cases threw away the unsaved choices about the feestdag blocks on the way to "Periode").
+    // scroll-mt: under the blue bar, which sticks to the top below 1100 px. The title takes the focus after a choice.
+    return (
+      <div hidden={!actief} className="card p-4 sm:p-6 scroll-mt-28 min-[1100px]:scroll-mt-4" data-testid={testId} data-onderdeel={actief ? sleutel : undefined}>
+        <h2 tabIndex={-1} className="text-xl font-bold text-neutral-900 focus:outline-none">
+          {titel}
+        </h2>
+        {hint && <p className="text-sm text-neutral-500 mt-1">{hint}</p>}
+        <div className="mt-4 space-y-3">{children}</div>
+      </div>
+    );
   }
 
   const isOpen = harmonica.open.has(sleutel);

@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
-import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsBeheerder, loginAsPlanner } from './setup';
+import { createTestPeriod, cleanupTestData, getBaseUrl, loginAsBeheerder, loginAsPlanner, openOnderdeel } from './setup';
 
 /**
  * "Persoonlijke links" on the achterwacht's period page (0.802.0): only the
@@ -26,13 +26,14 @@ async function toonAlleLinks(page: Page) {
   await expect(knoppen.first()).toBeVisible();
   while ((await knoppen.count()) > 0) await knoppen.first().click();
 }
-const sectie = (page: Page) => page.locator('div.card', { has: page.getByRole('heading', { name: 'Persoonlijke links' }) }).first();
+const sectie = (page: Page) => page.getByTestId('onderdeel-persoonlijke-links');
 
 test('the planner has no section Persoonlijke links, and no way to the list', async ({ page }) => {
   await loginAsPlanner(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await expect(page.getByRole('heading', { name: 'Exporteren & communicatie' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Persoonlijke links' })).toHaveCount(0);
+  const lijst = page.locator('nav[aria-label="Onderdelen van de periode"]:visible');
+  await expect(lijst.getByRole('link', { name: /^Exporteren & communicatie/ })).toBeVisible();
+  await expect(lijst.getByRole('link', { name: /^Persoonlijke links/ })).toHaveCount(0);
   const res = await page.request.get(`${getBaseUrl()}/api/planner/period/${testData.period.id}/toegangslinks`);
   expect([401, 403]).toContain(res.status());
 });
@@ -42,7 +43,7 @@ test('the beheerder sees the links, revokes one after the question, and that lin
   const user = testData.users[0];
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await sectie(page).getByRole('heading').getByRole('button').click();
+  await openOnderdeel(page, 'Persoonlijke links');
   // One line per person, with how many links work; the link itself only when asked for.
   const personen = sectie(page).getByTestId('toegangslinks-persoon');
   await expect(personen).toHaveCount(testData.users.length);
@@ -85,7 +86,7 @@ test.describe('at 375px', () => {
   test('the open section does not scroll the page sideways', async ({ page }) => {
     await loginAsBeheerder(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-    await sectie(page).getByRole('heading').getByRole('button').click();
+    await openOnderdeel(page, 'Persoonlijke links');
     await toonAlleLinks(page);
     await expect(sectie(page).getByTestId('toegangslink').first()).toBeVisible();
     await sectie(page).getByRole('button', { name: /^Link van .* intrekken$/ }).nth(1).click();
@@ -106,7 +107,7 @@ test('Alle links van één medewerker asks first, then revokes the links of that
   const status = async (token: string) => (await request.get(`${getBaseUrl()}/api/auth/verify-link?token=${token}`)).status();
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await sectie(page).getByRole('heading').getByRole('button').click();
+  await openOnderdeel(page, 'Persoonlijke links');
   // The person's own line says how many, and has the button (a list to choose from until 1.13.0).
   const persoon = sectie(page).getByTestId('toegangslinks-persoon').filter({ hasText: user.codenaam });
   await expect(persoon).toContainText('3 werkende links');
@@ -137,7 +138,7 @@ test('Alle links van één medewerker asks first, then revokes the links of that
 test('Alles intrekken asks first, then revokes every working link of the period', async ({ page, request }) => {
   await loginAsBeheerder(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
-  await sectie(page).getByRole('heading').getByRole('button').click();
+  await openOnderdeel(page, 'Persoonlijke links');
   await toonAlleLinks(page);
   await expect(sectie(page).getByTestId('toegangslink').first()).toBeVisible();
   const werkend = await sectie(page).getByTestId('toegangslink').filter({ hasText: 'Werkt' }).count();

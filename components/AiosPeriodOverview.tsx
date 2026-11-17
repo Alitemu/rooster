@@ -393,6 +393,21 @@ function Kader({ period }: { period: Period }) {
     toonOnderdeel(actief);
   }, [actief]);
 
+  // The section on screen stays when the status changes (2.0.1). Without a chosen section the page shows the
+  // first section of the status, so making the roster in "Periode" jumped to "Dienstrooster" the moment it was
+  // made, and opening a concept in "Voorkeuren van de AIOS" jumped to "Status voorkeuren": the planner lost the
+  // answer to what they just did. The section that was on screen goes into the address instead.
+  const vorigeStatus = useRef(status);
+  const laatsteActief = useRef(actief);
+  useEffect(() => {
+    if (vorigeStatus.current === status) return;
+    vorigeStatus.current = status;
+    if (!gekozen) window.history.replaceState(null, '', adresVoor(laatsteActief.current));
+  }, [status]);
+  useEffect(() => {
+    laatsteActief.current = actief;
+  });
+
   // The blue bar sticks to the top below 1100 px while this layout is on the page (app/globals.css).
   useEffect(() => {
     if (!zijbalk) return;
