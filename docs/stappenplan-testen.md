@@ -8,8 +8,9 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Reken op ongeveer drie uur. Gebruik de testinstallatie, nooit productie. Mail
-staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
+Dit stappenplan hoort bij versie 2.1.0. Reken op drie tot vier uur. Gebruik de
+testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
+dus er gaat niets echt weg.
 
 ## Blok A. Installeren en bijwerken
 
@@ -20,16 +21,18 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   interne certificaat hoort een certificaatwaarschuwing.
 - [ ] **A3.** Open `http://<server>`. Je ziet: je gaat vanzelf naar `https://`.
 - [ ] **A4.** Rechts van de titel staat het juiste versienummer.
-- [ ] **A5.** Bestaande installatie: `docker compose pull`, dan
-  `docker compose up -d`. Je ziet: nieuwe versie, en je gegevens, accounts en
-  mailinstellingen zijn er nog.
+- [ ] **A5.** Bestaande installatie: maak eerst een back-up (blok J), dan
+  `docker compose pull` en `docker compose up -d`. Je ziet: nieuwe versie, en je
+  gegevens, accounts en mailinstellingen zijn er nog.
 - [ ] **A6.** Draait de server op een andere poort (`APP_PORT` in `.env`)?
   Open dan het adres met die poort en controleer ook daar stap A3.
 
 ## Blok B. Inloggen en accounts
 
-- [ ] **B1.** Log in als beheerder met het startwachtwoord. Je moet direct een
-  nieuw wachtwoord kiezen en kunt daarvoor niets anders doen.
+- [ ] **B1.** Log in als beheerder met het startwachtwoord. De pagina heet
+  *Inloggen voor planners en beheerders*. Je moet direct een nieuw wachtwoord
+  kiezen en kunt daarvoor niets anders doen. Een te kort wachtwoord en het
+  startwachtwoord zelf worden geweigerd.
 - [ ] **B2.** Een fout wachtwoord geeft een Nederlandse melding. Na een paar
   keer volgt een tijdelijke blokkade.
 - [ ] **B3.** *Accounts beheren*: maak een planner voor de achterwacht en een
@@ -42,7 +45,9 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   en de melding zegt waar het staat. Vink *Toon uitgeschakelde accounts* aan.
   Je ziet: het account staat er weer, met *Inschakelen*.
 - [ ] **B4.** Log in als elke planner. De planner van de achterwacht ziet niets
-  van de AIOS, en andersom.
+  van de AIOS, en andersom. Plak je het adres van een periode van de andere
+  dienst, dan staat er *Deze periode bestaat niet of hoort bij de andere dienst.*
+  De beheerder ziet beide diensten.
 - [ ] **B5.** Wachtwoord wijzigen werkt. Uitloggen werkt, ook in een tweede
   browser (die is dan ook uitgelogd).
 - [ ] **B6.** Noodweg voor de beheerder (de mail moet ingesteld zijn): vul op de
@@ -88,7 +93,10 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   geweigerd met een Nederlandse melding.
 - [ ] **C2.** Personeel toevoegen en een geldigheidsperiode aanpassen. Een
   collega die halverwege start, verschijnt in de keuzelijst bij handmatig
-  toewijzen.
+  toewijzen. Een codenaam van de andere dienst wordt geweigerd.
+- [ ] **C2a.** Een collega die nog niet gestart is en nog geen toegang heeft: zie
+  in de README *Een collega die nog niet gestart is*. Je ziet: de voorkeuren
+  uit het Excel-bestand staan na *Controleren* en *Toepassen* in het rooster.
 - [ ] **C3.** Vooraf invullen en eerdere toewijzingen: vul een paar in en kijk
   of ze in het rooster terugkomen.
 - [ ] **C3a.** Oud saldo (wizard, stap *Saldi*) en *Eerdere toewijzingen*:
@@ -101,8 +109,8 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   bestand met dezelfde codenaam. Je ziet: een waarschuwing met de naam, die zegt
   dat de waarden worden overschreven en dat een leeg vakje 0 wordt. *Annuleren*
   neemt niets mee, *Ja, overschrijven* wel.
-- [ ] **C3c.** Open een periode die al open is en klap de eerste sectie
-  *Import en correcties* open. Download het sjabloon, upload een beginsaldo en
+- [ ] **C3c.** Open een periode die al open is en kies in de lijst het onderdeel
+  *Import en correcties*. Download het sjabloon, upload een beginsaldo en
   voeg een correctie toe. Je ziet: een melding dat het is opgeslagen en de
   correctie in de lijst, in woorden ("1 avonddienst minder"). Na het genereren
   heeft die persoon zoveel diensten meer of minder. Is het rooster al
@@ -112,7 +120,11 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   persoon een link.
 - [ ] **C5.** Open een link als medewerker (privévenster). Geef voorkeuren op:
   geblokkeerd, liever niet, voorkeur, parttime. De vijf toestanden zijn
-  zichtbaar verschillend, ook in zwart-wit.
+  zichtbaar verschillend, ook in zwart-wit. Boven de kalender staat *Tik of klik
+  op een dienst om te wisselen tussen beschikbaar, voorkeur, liever niet en
+  geblokkeerd.* Op een computer met muis staat daarachter dat je met de
+  rechtermuisknop de stand direct kiest, op een telefoon niet. De tooltip zegt
+  wat de volgende tik doet.
 - [ ] **C6.** Hand de voorkeuren in. De samenvatting bij *Bevestigen* noemt de
   dagen geblokkeerd, voorkeur en liever niet. *Status voorkeuren* bij de planner
   telt mee.
@@ -121,16 +133,23 @@ staat daar uit (`MAIL_UITGESCHAKELD=true`), dus er gaat niets echt weg.
   invulden.
 - [ ] **C7.** *Rooster opnieuw genereren met solver*. Je ziet: geen lege
   diensten, geen dienst op een geblokkeerde dag, niemand twee diensten in één
-  week.
+  week. Onder het resultaat staat het streefbereik in woorden ("avond 2 of 3
+  diensten"), niet als "2-3".
 - [ ] **C7a.** Laat een dienst leeg of haal er een weg en open *Dienstrooster*,
   tabblad *Lijst*. Je ziet: de lege dienst als eigen rij met "nog niemand" en
   *Iemand toewijzen*. Het scherm om lege diensten in te vullen heet na het
   genereren *Lege diensten aanvullen* en is op een telefoon leesbaar: de datum
   op één regel, de keuzelijst eronder.
 - [ ] **C8.** Wijzig een dienst met de hand, klik op *Ongedaan maken* binnen
-  twee minuten. Na twee minuten of na verversen is de knop weg.
+  twee minuten. Na twee minuten of na verversen is de knop weg. Doe het ver
+  onderaan in de lijst en in de kalender: de rij of dag blijft op dezelfde plek
+  in beeld, ook als de melding *Laatst gewijzigd* bovenaan verschijnt en
+  verdwijnt.
 - [ ] **C9.** Publiceren: de publicatiecontrole noemt wat niet klopt. Publiceer,
   maak definitief, trek de publicatie in en publiceer weer.
+- [ ] **C9a.** Open als medewerker de link bij het voorlopige rooster (op een
+  telefoon). Je ziet: *Jouw rooster* staat open met je diensten. Bij het saldo
+  staat *Je streefbereik is 2 of 3 avonddiensten*, niet "ongeveer 3".
 - [ ] **C10.** Saldo's: kloppen de aantallen diensten meer en minder met wat je
   verwacht, en staan ze in woorden ("1 avonddienst minder")?
 - [ ] **C11.** *Rooster verwijderen* en de periode naar de *Prullenbak*. Je ziet:
@@ -162,11 +181,15 @@ overslaan:
   blokken van nachten en een toelichting per dag.
 - [ ] **E3.** Voorkeurenoverzicht downloaden, aanpassen en terug importeren
   (alleen de beheerder). Eerst controleren, dan toepassen.
+- [ ] **E3a.** Het onderdeel *Blokken rond de feestdagen* staat in de lijst en zegt
+  *nog te beantwoorden*. In *Periode* is *Rooster maken* uit en de melding heeft
+  een knop *Naar Blokken rond de feestdagen*. Na *Keuzes bewaren* kan het wel.
 - [ ] **E4.** Rooster maken met de AIOS-solver. Hebben te weinig AIOS parttimedagen
   opgegeven, dan staat er vóór het maken een gele waarschuwing over de nachtblokken
   van zondag tot en met dinsdag. Geen lege diensten die er niet
   hoeven te zijn, en de uitleg bij lege diensten klopt.
-- [ ] **E5.** Publiceren, definitief maken, ruilen tussen twee AIOS.
+- [ ] **E5.** Publiceren, definitief maken, daarna ruilen tussen twee AIOS. Bij
+  een voorlopig rooster zegt de app dat ruilen pas kan als het definitief is.
 - [ ] **E6.** Een AIOS ziet niets van een andere AIOS en niets van de
   achterwacht.
 
@@ -208,7 +231,10 @@ overslaan:
   klikken stuurt één verzendlijst. De tweede klik krijgt de melding dat er al
   verstuurd wordt.
 - [ ] **G3.** Op de echte stroom (niet op test): één uitnodiging, één
-  herinnering en één ruilmail komen binnen met de juiste tekst en link.
+  herinnering en één ruilmail komen binnen met de juiste tekst en link. De
+  uitnodiging noemt het streefbereik in woorden ("2 of 3 avonddiensten, hoogstens
+  1 weekenddienst"), niet "ongeveer 3". Bij de AIOS staat "Het rooster voor AIOS
+  2027 Q2", niet "van de AIOS voor AIOS".
 
 ## Blok H. Op elk scherm
 
@@ -218,8 +244,10 @@ overslaan:
 - [ ] **H3.** Alles is Nederlands: geen "Failed to fetch", geen "1 diensten".
 - [ ] **H4.** Weken tonen het ISO-weeknummer. Zaterdag en zondag zijn aparte
   vakjes.
-- [ ] **H5.** Toetsenbord: je kunt de secties openen en de dialogen sluiten met
-  Escape.
+- [ ] **H5.** Toetsenbord: je kunt een onderdeel in de lijst kiezen en de dialogen
+  sluiten met Escape.
+- [ ] **H6.** Schermlezer of toetsenbord: elk getalveld in *Rooster genereren* heeft
+  een naam (venster, minimaal en maximaal per soort).
 
 ## Blok I. Grenzen en fouten
 
@@ -237,8 +265,26 @@ overslaan:
 - [ ] **I6.** Open een adres dat niet bestaat, bijvoorbeeld `/bestaat-niet`. Je
   ziet: een Nederlandse pagina met een knop naar de startpagina.
 
+## Blok J. Terug naar een eerdere versie en back-ups
+
+Zie `docs/installatie-it.md`, *Terug naar een eerdere versie*. Doe dit alleen op de
+testinstallatie.
+
+- [ ] **J1.** Maak in de app (beheerder, *Back-up*) een back-up en bewaar het bestand.
+- [ ] **J2.** Zet `ROOSTER_VERSION` in `.env` op een eerdere versie, voer
+  `docker compose pull` en `docker compose up -d` uit. Je ziet: het oude
+  versienummer en je gegevens. Haal de regel daarna weg en werk weer bij.
+- [ ] **J3.** Zet een back-up van een oudere versie terug in de nieuwere. Je ziet: het
+  lukt en de melding zegt dat de database is bijgewerkt.
+- [ ] **J4.** Zet een back-up van de nieuwere versie terug in de oudere. Je ziet:
+  *Deze back-up is gemaakt door versie ..., nieuwer dan deze app*. Er is niets
+  veranderd.
+- [ ] **J5.** Open die nieuwere back-up op de server met `scripts/back-up-openen.ts` van
+  de oudere versie en vervang de database volgens het hoofdstuk. Je ziet: de
+  oudere versie start en de gegevens van het moment van de back-up staan er.
+
 ## Afronden
 
 - [ ] Noteer per blok wat niet klopte, met het regelnummer.
 - [ ] Alles groen? Dan de versie vrijgeven en op productie dezelfde blokken A
-  en F nog eens kort doen.
+  en F nog eens kort doen, met blok J (een back-up vooraf).

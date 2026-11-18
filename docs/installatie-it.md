@@ -108,6 +108,11 @@ De app zelf hoeft niet te stoppen en er gaan geen gegevens verloren.
 
 ## Bijwerken naar een nieuwe versie
 
+**Maak eerst een back-up** (zie hieronder, *Terug naar een eerdere versie*): in de
+app bij *Back-up* of door `data/` te kopiëren terwijl de app stilstaat. Die
+back-up is je terugweg. Een oudere versie zet een back-up van een nieuwere
+namelijk niet terug in de app.
+
 `docker compose pull` haalt alleen de images op, niet `docker-compose.yml`.
 Dat bestand kan met een versie meeveranderen (een nieuwe container, een
 nieuwe instelling, de Caddyfile die erin zit). Haal het daarom bij elke
@@ -150,7 +155,7 @@ Terug naar een oudere versie:
 
 De database blijft staan. Een oudere versie werkt met een database die een
 nieuwere versie heeft bijgewerkt, zolang de opbouw van de database sindsdien
-niet is veranderd. Van 0.903.0 tot en met 2.0.2 is die gelijk gebleven; de weg
+niet is veranderd. Van 0.903.0 tot en met 2.1.0 is die gelijk gebleven; de weg
 van 2.0.2 terug naar 1.4.0 is getest. Ga je verder terug, zet dan de back-up
 van vóór de overstap terug.
 

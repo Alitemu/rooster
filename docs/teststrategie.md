@@ -4,7 +4,9 @@ Wat je wanneer test, van snel naar zwaar. De uitleg per controle staat in
 `docs/development/checks.md`. Het handmatige draaiboek voor de AIOS staat in
 `docs/aios-testdraaiboek.md`.
 
-Zelf testen met een lijst om af te vinken: `docs/stappenplan-testen.md`.
+Zelf testen met een lijst om af te vinken: `docs/stappenplan-testen.md`. Een stap
+terug naar een eerdere versie en de back-ups daarbij: blok J daarvan en
+`docs/installatie-it.md`.
 
 ## Welke lagen bij welke wijziging
 
@@ -12,7 +14,8 @@ Zelf testen met een lijst om af te vinken: `docs/stappenplan-testen.md`.
 |---|---|
 | Kleine fix of een woord in een tekst | 1 |
 | Nieuwe functie of ander gedrag | 1 tot 4 |
-| Release van een 0.x.0 | 1 tot 4, daarna 5 op de testinstallatie en 6 vóór productie |
+| Release van een x.y.0 (het middelste nummer gaat omhoog) | 1 tot 4, daarna 5 op de testinstallatie en 6 vóór productie |
+| Release van een x.y.z (kleine fix of tekst) | 1, 2 en 4. Geen mutatietests |
 
 ## 1. Bij elke wijziging (minuten)
 
@@ -28,9 +31,10 @@ Zelf testen met een lijst om af te vinken: `docs/stappenplan-testen.md`.
 - `python -m pytest -q` in `./solver` en in `./aios-solver`, op OR-Tools 9.8.
   Een andere versie zoekt anders en geeft schijnfouten.
 
-## 3. Mutatietests, bij elke 0.x.0 (circa 40 minuten)
+## 3. Mutatietests, bij elke x.y.0 (circa 40 minuten)
 
-- `node scripts/mutation-check.mjs --sinds v<vorige 0.x.0>`. Zet
+- `node scripts/mutation-check.mjs --sinds v<vorige x.y.0>`, bijvoorbeeld
+  `--sinds v2.0.0` voor 2.1.0. Zet
   `SOLVER_PYTHON` voor de solvermutaties en `CADDY_BIN` of een `caddy` op het
   pad voor de test van de Caddyfile.
 - De runner breekt bewust een regel en eist dat een test faalt. Pas de code
@@ -42,7 +46,11 @@ Zelf testen met een lijst om af te vinken: `docs/stappenplan-testen.md`.
 - `node scripts/full-check.mjs`, `node scripts/ui-check.mjs`,
   `npx playwright test` en `node scripts/scenario-check.mjs`.
 - Doe het op de root en in een submap-build (`/achterwacht`). De submap vangt
-  kapotte links en fetches op.
+  kapotte links en fetches op. Draai `ui-check` ook op een database met een
+  AIOS-kwartaal erin: hij kiest dan een periode van de achterwacht.
+- De browsertests openen een onderdeel van de periodepagina zoals een planner:
+  via de lijst links (`openOnderdeel` in `tests/e2e/setup.ts`), niet via de
+  verborgen inklapbare indeling.
 - Het volledige scenario (circa 35 minuten) alleen als de solver of de code
   van de achterwacht veranderd is. Anders `--kort`.
 
@@ -52,15 +60,20 @@ Zelf testen met een lijst om af te vinken: `docs/stappenplan-testen.md`.
 - Voor de achterwacht een ronde met een echte planner: periode openen,
   uitnodigen, voorkeuren, rooster maken, publiceren, ruilen en intrekken.
 - Een telefoon (375 px) en een afdruk in zwart-wit.
-- De sectie *Persoonlijke links*: lijst bekijken, één link intrekken en
+- Het onderdeel *Persoonlijke links*: lijst bekijken, één link intrekken en
   proberen, dan *Alles intrekken*.
+- Per rol door de app, zoals de audit per rol deed: beheerder (accounts, mail,
+  back-up), planner achterwacht, planner AIOS, staf en AIOS, met de mail
+  opgevangen door een testmailserver.
 
 ## 6. Vóór de echte server (circa 20 minuten)
 
 - Alleen `docker-compose.yml` in een lege map en `docker compose up -d`:
   https op poort 443 en `http://` die doorverwijst.
 - Een bestaande installatie bijwerken met `docker compose pull` en `up -d`:
-  data, links en mailinstellingen blijven.
+  data, links en mailinstellingen blijven. Maak vooraf een back-up.
+- De terugweg: `ROOSTER_VERSION` op een eerdere versie. Een oudere versie weigert
+  een back-up van een nieuwere (blok J van het stappenplan).
 
 ## Bekende zwakke plekken
 

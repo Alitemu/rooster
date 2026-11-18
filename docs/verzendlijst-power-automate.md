@@ -122,7 +122,7 @@ De melding in de app blijft altijd bestaan. De mail komt er alleen bij. Lukt
 het versturen niet, dan gaat het ruilverzoek gewoon door. De mail wacht dan
 en gaat alsnog: elk uur probeert Dienstrooster het opnieuw, en meteen nadat
 je de Mailinstellingen opslaat. Wie het verzoek doet, ziet dat de mail later
-komt. Bovenaan de periodepagina staat hoeveel ruilmails er wachten. Na 7
+komt. In het onderdeel *Periode* van de periodepagina staat hoeveel ruilmails er wachten. Na 7
 dagen vervalt zo'n mail. Is het verzoek intussen al beantwoord of
 ingetrokken, dan gaat de mail over het verzoek zelf niet meer uit. Het
 antwoord wel.

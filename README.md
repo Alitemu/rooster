@@ -432,7 +432,9 @@ docker compose up -d
 
 De database in `DATA_DIR` blijft staan. Nieuwe kolommen en tabellen worden
 bij het starten automatisch toegevoegd. Maak voor de zekerheid eerst een
-kopie van die map.
+back-up: in de app bij *Back-up* of een kopie van die map. Een oudere versie
+zet een back-up van een nieuwere namelijk niet terug in de app. De stappen voor
+een stap terug naar een eerdere versie staan in `docs/installatie-it.md`.
 
 **Vanaf versie 0.25.0** heten de deelnemers van de achterwacht staf01,
 staf02 enzovoort. Die van de AIOS heten aios01, aios02 enzovoort. Bij de
@@ -649,7 +651,8 @@ nieuwe generatie mag hem daarna weer verplaatsen.
 De pagina van een AIOS-periode klapt nu in en uit zoals die van de
 achterwacht. Alle onderdelen staan eerst dicht. Klik op een titel om het
 te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
-het met de punaise vastzet.
+het met de punaise vastzet. (Vanaf 2.0.0 is dit vervangen door de lijst met
+onderdelen links, zie hieronder bij 2.0.0.)
 
 **Vanaf versie 2.1.0** (correcties uit de audit per rol):
 
@@ -823,7 +826,7 @@ het met de punaise vastzet.
 - De klapbare onderdelen: afdrukken geeft het rooster, ruilen blijft staan als je een ander onderdeel opent, en de knop om vast te zetten is beter te zien en te lezen.
 - Releases: "Vrijgeven" controleert eerst alle drie de images en de tag voordat `stable` verschuift. De workflows hebben minder rechten. De database kreeg drie indexen.
 
-**Vanaf versie 0.110.0:** de pagina van een deelnemer is een harmonica zodra het rooster gepubliceerd is. Bij de AIOS zijn dat drie onderdelen: "Jouw rooster", "Ruilen" en "Voorkeuren". Onder "Voorkeuren" staan de stappen zoals eerder (deeltijd, afwezigheid, voorkeuren en bevestigen). Bij de achterwacht zijn het twee onderdelen: "Jouw rooster" met het saldo en de diensten per week, en "Ruilen". Alle onderdelen staan dicht tot je erop klikt. Een onderdeel openen klapt het vorige dicht, tenzij je het met de punaise vastzet. Zolang het rooster nog niet gepubliceerd is, ziet de deelnemer de pagina zoals eerder, met de stappen onder elkaar. Dit is alleen een andere indeling: er verandert niets aan wat je kunt doen.
+**Vanaf versie 0.110.0:** de pagina van een deelnemer is een harmonica zodra het rooster gepubliceerd is. Bij de AIOS zijn dat drie onderdelen: "Jouw rooster", "Ruilen" en "Voorkeuren". Onder "Voorkeuren" staan de stappen zoals eerder (deeltijd, afwezigheid, voorkeuren en bevestigen). Bij de achterwacht zijn het twee onderdelen: "Jouw rooster" met het saldo en de diensten per week, en "Ruilen". Alle onderdelen staan dicht tot je erop klikt. Een onderdeel openen klapt het vorige dicht, tenzij je het met de punaise vastzet. Zolang het rooster nog niet gepubliceerd is, ziet de deelnemer de pagina zoals eerder, met de stappen onder elkaar. Dit is alleen een andere indeling: er verandert niets aan wat je kunt doen. Vanaf 2.1.0 staat *Jouw rooster* bij de achterwacht open als de deelnemer de pagina opent.
 
 **Vanaf versie 0.109.0:** bij "Nieuwe afwezigheid toevoegen" voor de AIOS zijn de begin- en einddatum leeg, in plaats van het hele kwartaal. Kies je een begindatum, dan staat de einddatum op de dag erna. Er is een nieuwe soort afwezigheid bij: onderwijs, naast vakantie, congres/cursus en overig. Onderwijs blokkeert de dagen zoals de andere soorten en staat ook zo in de bestanden. In het raster van het bestand "Voorkeuren per dienst" staat bij een dag die door afwezigheid geblokkeerd is nu de soort erbij, bijvoorbeeld "geblokkeerd (afwezig: vakantie)". Een oud bestand met alleen "(afwezig)" wordt bij het inlezen nog steeds overgeslagen. Een database die de seed eerder maakte, krijgt de nieuwe soort bij de eerstvolgende start. Voor een database uit de migraties doet migratie 0036 dat. Bij de achterwacht verandert niets.
 
@@ -1380,6 +1383,27 @@ de stroom al gebouwd?".
   database)
 - **Audit-trail** van elke planner-/beheerdersactie
 - **Pseudoniem:** geen herleidbare persoonsgegevens in de database
+
+### Een collega die nog niet gestart is
+
+Een nieuwe collega kan nog niet in de app en moet toch voorkeuren doorgeven. Dat
+gaat met Excel, door de beheerder:
+
+1. Zet de collega in *Personeel beheren* met *Geldig vanaf* op de eerste werkdag.
+   Daarvóór staat ze als *Niet in dienst* en deelt de solver haar niet in.
+2. Download bij *Exporteren & communicatie* het *Voorkeurenoverzicht
+   downloaden (Excel)*. Stuur haar het bestand of haar kolom en laat haar per
+   dienst *voorkeur*, *liever niet* of *geblokkeerd* invullen. Of vul de kolom
+   zelf in op basis van een mail.
+3. Lees het bestand in met *Voorkeuren importeren* (alleen de beheerder, zolang
+   het rooster nog niet gemaakt is). Kies eerst *Controleren*, daarna *Toepassen*.
+
+Let op: vakantie en vaste vrije dagen neemt de import niet over, die geef je op
+als *geblokkeerd*. Haar deelnamefactor volgt uit wat een deelnemer zelf als
+deeltijd opgeeft. Bij de verdeling *Gelijk* maakt dat niets uit, bij *Naar rato*
+telt ze als voltijd. In *Status voorkeuren* blijft ze *niet begonnen* en staat ze
+op de lijst voor herinneringen. Heeft ze nog geen werkmail, laat dan de beheerder
+van de Power Automate-stroom weten dat haar herinneringen nergens heen kunnen.
 
 ### Teststrategie
 
