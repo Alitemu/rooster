@@ -11,6 +11,7 @@
  * before they are answered and saved.
  */
 
+import { AIOS_ADRES } from '@/lib/aiosIndeling';
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosIndelingContext, AiosSectie } from '@/components/AiosSectie';
@@ -286,7 +287,19 @@ export function AiosRoosterMaken({
               <p className="text-sm font-medium text-neutral-900">
                 {feestdag.open > 0
                   ? 'Kies eerst bij elk blok rond de feestdagen wat ermee gebeurt en bewaar je keuzes.'
-                  : 'Bewaar eerst je keuzes over de blokken rond de feestdagen.'}
+                  : 'Bewaar eerst je keuzes over de blokken rond de feestdagen.'}{' '}
+                {/* Where that is (2.1.0, R2-08): the message did not say, the section stood only in the list. */}
+                <button
+                  type="button"
+                  className="underline text-blue-700"
+                  onClick={() => {
+                    const adres = new URLSearchParams(window.location.search);
+                    adres.set('onderdeel', AIOS_ADRES.feestdagblokken);
+                    window.history.pushState(null, '', `?${adres.toString()}`);
+                  }}
+                >
+                  Naar Blokken rond de feestdagen
+                </button>
               </p>
             )}
             <div className="flex flex-wrap items-end gap-3">
@@ -338,7 +351,7 @@ export function AiosRoosterMaken({
                 ))}
             </div>
             <p className="text-xs text-neutral-600" data-testid="aios-tijd-uitleg">
-              Hoe langer de solver zoekt, hoe eerlijker de verdeling. Met een groep van 30 AIOS is 10 minuten het minimum, 30 minuten is beter.
+              Hoe langer de solver zoekt, hoe eerlijker de verdeling. 10 minuten is het minimum, 30 minuten is beter.
               Je kunt de pagina intussen sluiten: het rooster wordt gewoon gemaakt.
               {tijdKeuze === EIGEN && !eigenGeldig ? ` Vul een heel aantal minuten in, van 1 tot ${MAX_MINUTEN}.` : ''}
             </p>

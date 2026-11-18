@@ -131,6 +131,14 @@ function coverageNoteText(cov: CoverageInfo): string {
   );
 }
 
+/** What the next tap or click makes of a dienst (handleTogglePreference), for its tooltip. */
+const VOLGENDE_STAND: Record<'BESCHIKBAAR' | 'VOORKEUR' | 'LIEVER_NIET' | 'ABSOLUUT', string> = {
+  BESCHIKBAAR: 'voorkeur',
+  VOORKEUR: 'liever niet',
+  LIEVER_NIET: 'geblokkeerd',
+  ABSOLUUT: 'beschikbaar',
+};
+
 export function PreferencesCalendar({
   personId,
   periodId,
@@ -496,6 +504,15 @@ export function PreferencesCalendar({
         })}
       </div>
 
+      {/* How to mark a day, on the page itself (2.1.0, R2-02/R2-03): it stood only in a tooltip, "rechtsklik voor
+          opties", which a phone never shows. The right mouse button is said only where there is a mouse. */}
+      {!readOnly && (
+        <p className="text-sm text-neutral-700" data-testid="kalender-uitleg">
+          Tik of klik op een dienst om te wisselen tussen beschikbaar, voorkeur, liever niet en geblokkeerd.
+          <span className="alleen-muis"> Met de rechtermuisknop kies je de stand direct.</span>
+        </p>
+      )}
+
       {/* Legend */}
       <div className="flex gap-4 flex-wrap text-xs text-neutral-600">
         <span className="flex items-center gap-1.5">
@@ -734,7 +751,7 @@ export function PreferencesCalendar({
                                       title={
                                         slot.fellow && level === 'ABSOLUUT'
                                           ? `${COUNTER_LABEL[counter] || counter}: geblokkeerd omdat je fellow bent (klik om vrij te geven)`
-                                          : `${COUNTER_LABEL[counter] || counter}: ${level ? LEVEL_LABEL[level].toLowerCase() : 'beschikbaar'} (rechtsklik voor opties)`
+                                          : `${COUNTER_LABEL[counter] || counter}: ${level ? LEVEL_LABEL[level].toLowerCase() : 'beschikbaar'}. Tik of klik voor ${VOLGENDE_STAND[level ?? 'BESCHIKBAAR']}.`
                                       }
                                     >
                                       {dienstLetter(counter)}{level ? GLYPH[level] : AVAILABLE_GLYPH}

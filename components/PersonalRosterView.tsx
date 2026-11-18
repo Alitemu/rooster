@@ -17,6 +17,7 @@ import { SwapRequestDialog } from './SwapRequestDialog';
 import { DeelnemerHarmonica, DeelnemerSectie } from '@/components/DeelnemerSectie';
 import { SwapManagementPanel } from './SwapManagementPanel';
 import { telwoord } from '@/lib/telwoord';
+import { bereikInWoorden } from '@/lib/bereikInWoorden';
 import { aantalWachtend, wachtHint, type RuilVerzoekKort } from '@/lib/ruilWachtend';
 
 interface AssignedShift {
@@ -159,17 +160,15 @@ export function PersonalRosterView({
     FEESTDAG: 'feestdagdienst',
   };
 
-  // "ongeveer 9 avonddiensten": the top of the streefbereik, in words and
-  // explicitly approximate. The solver aims for the range, not a promise
-  // of an exact number (CLAUDE.md: never a raw range or [min,max] pair).
-  const targetLabel = (balance: BalanceDisplay): string => {
-    if (balance.target_max <= 0) return `geen ${counterPluralLower[balance.counter] || balance.counter.toLowerCase()}`;
-    const noun =
-      balance.target_max === 1
-        ? counterSingularLower[balance.counter] || balance.counter.toLowerCase()
-        : counterPluralLower[balance.counter] || balance.counter.toLowerCase();
-    return `ongeveer ${balance.target_max} ${noun}`;
-  };
+  // The range in the planner's words (lib/bereikInWoorden.ts, 2.1.0): "ongeveer 3 avonddiensten" stood next
+  // to "2 avonddiensten toegewezen" and read as a shortfall (audit per role 2.0.2, R2-01).
+  const targetLabel = (balance: BalanceDisplay): string =>
+    bereikInWoorden(
+      balance.target_min,
+      balance.target_max,
+      counterSingularLower[balance.counter] || balance.counter.toLowerCase(),
+      counterPluralLower[balance.counter] || balance.counter.toLowerCase()
+    );
 
   const softBlockSet = new Set(
     softBlockViolations.map((v) => `${v.datum}/${v.teller}`)
@@ -179,8 +178,10 @@ export function PersonalRosterView({
   );
 
   return (
-    // Two foldable sections, closed to begin with (0.110.0, layout only): the roster and the swapping.
-    <DeelnemerHarmonica>
+    // Two foldable sections (0.110.0, layout only): the roster and the swapping. The roster open from the start
+    // (2.1.0, R2-02): the page and the mail say "kijk je diensten goed na", and on a phone there was not one dienst
+    // to see until "Jouw rooster" was tapped.
+    <DeelnemerHarmonica beginOpen={['rooster']}>
     <div className="space-y-4">
     <DeelnemerSectie sleutel="rooster" titel="Jouw rooster" testId="deelnemer-sectie-rooster" printOpen>
     <div className="space-y-8">
@@ -209,7 +210,7 @@ export function PersonalRosterView({
                     ? 'n.v.t. (fellow)'
                     : balance.target_max <= 0
                       ? `Je hoeft deze periode geen ${counterPluralLower[balance.counter] || balance.counter.toLowerCase()} te doen.`
-                      : `Je streefaantal is ${targetLabel(balance)}.`}
+                      : `Je streefbereik is ${targetLabel(balance)}.`}
                 </p>
               </div>
             </div>

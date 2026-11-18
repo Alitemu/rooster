@@ -136,7 +136,14 @@ export default function PlannerHomePage() {
   const isAiosPool = (poolId: string) => pools.find((p) => p.id === poolId)?.type === 'AIOS';
   const aiosGekozen = isAiosPool(form.pool_id);
   const kwartalen = aiosKwartalen();
-  const kiesKwartaal = (q: AiosQuarter) => setForm((f) => aiosFormulier(f.pool_id, q));
+  // A name the planner typed stays (2.1.0, R2-10): choosing the quarter put "AIOS 2027 Q2" over "AIOS 2027-2"
+  // without a word. Only an empty name or the one a quarter filled in is replaced.
+  const kiesKwartaal = (q: AiosQuarter) =>
+    setForm((f) => {
+      const nieuw = aiosFormulier(f.pool_id, q);
+      const ingevuld = f.naam.trim() === '' || kwartalen.some((k) => f.naam === aiosFormulier(f.pool_id, k).naam);
+      return ingevuld ? nieuw : { ...nieuw, naam: f.naam };
+    });
   const gekozenKwartaal = kwartalen.find((q) => q.start_datum === form.start_datum && q.eind_datum === form.eind_datum);
 
   const [deletingPeriod, setDeletingPeriod] = useState<Period | null>(null);

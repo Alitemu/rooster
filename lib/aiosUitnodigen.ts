@@ -11,6 +11,7 @@
  * achterwacht's "Link kwijt?" and automatic reminders run over them.
  */
 
+import { roosterVan } from '@/lib/aiosRoosterVan';
 import { db } from '@/db/client';
 import { generateAccessToken, hashToken } from '@/lib/auth';
 import { deadlinePassed } from '@/lib/aiosInvoer';
@@ -112,7 +113,7 @@ export function aiosUitnodiging(period: AiosUitnodigPeriode, codenaam: string, l
     onderwerp: `Geef je voorkeuren door voor ${period.naam}`,
     tekst: `Beste ${codenaam},
 
-Het rooster van de AIOS voor ${period.naam} wordt gemaakt. Geef via je persoonlijke link per dienst aan wat je graag doet en wat liever niet. Een avond- of nachtblok geef je in één keer op.
+Het rooster ${roosterVan(period.naam)} wordt gemaakt. Geef via je persoonlijke link per dienst aan wat je graag doet en wat liever niet. Een avond- of nachtblok geef je in één keer op.
 
 Bovenaan het scherm geef je ook je verzoeken op. Doe je avonden of nachten graag in een blok van vier, van woensdag tot en met zaterdag? Doe je graag beide dagdiensten van een weekend? Word je dit kwartaal ingewerkt? Of is je opleiding een tijd onderbroken?
 

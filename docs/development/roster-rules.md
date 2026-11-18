@@ -532,3 +532,14 @@ estimate rather than the exact maximum.
   back-up dialog scrolls its answer into view (a wrong password showed only
   a red edge), the participant sees one banner after Publicatie intrekken,
   and a kind of shift the period lacks gets no blocked-days box.
+
+## The expectation a participant gets (2.1.0)
+
+The invitation (lib/periodInvitations.ts indicatieTekst) and the participant's page (components/PersonalRosterView.tsx)
+say each person's streefbereik in the words the planner's page uses, lib/bereikInWoorden.ts: "2 of 3 avonddiensten",
+"hoogstens 1 feestdagdienst", "geen feestdagdiensten". Until 2.1.0 both named the top of the range as "ongeveer":
+in the audit per role of 2.0.2, a period with 60 avonddiensten, 23 weekenddiensten and 1 feestdagdienst for 30
+people promised all 30 "ongeveer 3 avonddiensten en ongeveer 1 feestdagdienst"; all 30 got 2 avonddiensten and 29
+no feestdagdienst. The page then read "2 avonddiensten toegewezen. Je streefaantal is ongeveer 3", a shortfall that
+was none. lib/correcties210.test.ts and lib/fellows.test.ts hold it.
+

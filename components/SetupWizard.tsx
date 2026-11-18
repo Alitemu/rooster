@@ -1222,8 +1222,9 @@ export function SetupWizard({ period, onComplete }: Props) {
                 </div>
               )}
               <p className="text-xs text-neutral-500">
-                Bestaat de codenaam al (bijv. iemand die eerder in een andere pool zat), dan wordt
-                die persoon hergebruikt in plaats van dubbel aangemaakt. Geldig tot staat open (31-12-2099):
+                Bestaat de codenaam al in een andere pool van deze dienst (bijv. iemand die eerder meedeed), dan
+                wordt die persoon hergebruikt in plaats van dubbel aangemaakt. Een codenaam van de andere dienst
+                kan niet: kies dan een andere. Geldig tot staat open (31-12-2099):
                 vul een einddatum in als iemand weggaat.
               </p>
             </div>

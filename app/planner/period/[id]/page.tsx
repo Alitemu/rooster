@@ -71,6 +71,9 @@ export default function PlannerPeriodPage() {
   const loadPeriod = async () => {
     try {
       const res = await fetch(withBasePath(`/api/periods/${periodId}`));
+      // A 404 is also the answer for a period of the other dienst, on purpose (lib/dienstAccess.ts: it does not
+      // say that one exists). Said so that it reveals nothing either (2.1.0, R2-12: "Laden van periode mislukt").
+      if (res.status === 404) throw new Error('Deze periode bestaat niet of hoort bij de andere dienst.');
       if (!res.ok) throw new Error('Laden van periode mislukt');
 
       const data = await res.json();

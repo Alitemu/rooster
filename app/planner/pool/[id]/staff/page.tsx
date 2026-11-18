@@ -732,8 +732,9 @@ export default function PoolStaffPage() {
               : 'Geldig vanaf staat op vandaag. Geldig tot staat op 31 december 2099: deze persoon doet mee tot je een einddatum zet.'}
           </p>
           <p className="text-xs text-neutral-500">
-            Bestaat de codenaam al (bijv. iemand die eerder in een andere pool zat), dan wordt die
-            persoon hergebruikt in plaats van dubbel aangemaakt.
+            Bestaat de codenaam al in een andere pool van deze dienst (bijv. iemand die eerder meedeed), dan
+            wordt die persoon hergebruikt in plaats van dubbel aangemaakt. Een codenaam van de andere dienst kan
+            niet: kies dan een andere.
           </p>
 
           <div className="border-t border-neutral-200 pt-4 space-y-3" data-testid="reeks">

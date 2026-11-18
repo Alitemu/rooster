@@ -7,6 +7,7 @@
  * and displaying results (assignments, cost, violations, time).
  */
 
+import { streefbereikUitRuleset } from './wizardControles';
 import { useState, useEffect, useRef } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import { useDialogDismiss } from '@/lib/useDialogDismiss';
@@ -704,6 +705,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                           min="0"
                           max="8"
                           value={ruleset.windowWeeksAvond}
+                          aria-label="Venster avond (weken)"
                           onChange={(e) =>
                             setRuleset({ ...ruleset, windowWeeksAvond: parseInt(e.target.value) || 0 })
                           }
@@ -719,6 +721,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                           min="0"
                           max="8"
                           value={ruleset.windowWeeksWeekendFeestdag}
+                          aria-label="Venster weekend/feestdag (weken)"
                           onChange={(e) =>
                             setRuleset({
                               ...ruleset,
@@ -753,6 +756,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                                 type="number"
                                 min="0"
                                 value={min}
+                                aria-label={`${COUNTER_LABEL[counter]}: minimaal`}
                                 onChange={(e) =>
                                   setRuleset({
                                     ...ruleset,
@@ -766,6 +770,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                                 type="number"
                                 min="0"
                                 value={max}
+                                aria-label={`${COUNTER_LABEL[counter]}: maximaal`}
                                 onChange={(e) =>
                                   setRuleset({
                                     ...ruleset,
@@ -900,6 +905,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                           rooster wordt gevonden).
                         </p>
                         <input
+                          aria-label="Aantal pogingen"
                           type="number"
                           min="1"
                           step="1"
@@ -934,6 +940,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         toewijst dan een dienst leeg te laten.
                       </p>
                       <input
+                        aria-label="Lege dienst"
                         type="number"
                         min="0.01"
                         step="1"
@@ -983,6 +990,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         trappen op zijn (bijvoorbeeld 4 = elke stap daarna 4x zo duur als de vorige).
                       </p>
                       <input
+                        aria-label="Vermenigvuldigingsfactor extra tredes"
                         type="number"
                         min="1"
                         step="0.1"
@@ -1003,6 +1011,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         &quot;liever niet&quot; heeft gemarkeerd.
                       </p>
                       <input
+                        aria-label="Liever-niet-voorkeur genegeerd"
                         type="number"
                         min="0"
                         step="0.1"
@@ -1023,6 +1032,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         streefbereik trekt, voor mensen die toch al binnen hun bereik vallen.
                       </p>
                       <input
+                        aria-label="Ongelijke verdeling"
                         type="number"
                         min="0"
                         step="0.1"
@@ -1043,6 +1053,7 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                         &quot;voorkeur&quot; heeft gemarkeerd.
                       </p>
                       <input
+                        aria-label="Voorkeur gehonoreerd"
                         type="number"
                         min="0"
                         step="0.1"
@@ -1207,9 +1218,9 @@ export function RosterGenerationDialog({ periodId, isOpen, onClose, onSuccess }:
                 {ruleset && (
                   <p className="text-xs text-green-800 mt-3 pt-3 border-t border-green-200">
                     Gegenereerd met venster avond {telwoord(ruleset.windowWeeksAvond, 'week', 'weken')}, weekend/feestdag{' '}
-                    {telwoord(ruleset.windowWeeksWeekendFeestdag, 'week', 'weken')} · avond {ruleset.bandAvond[0]}-
-                    {ruleset.bandAvond[1]} · weekend {ruleset.bandWeekend[0]}-{ruleset.bandWeekend[1]} ·
-                    feestdag {ruleset.bandFeestdag[0]}-{ruleset.bandFeestdag[1]}
+                    {telwoord(ruleset.windowWeeksWeekendFeestdag, 'week', 'weken')}. Streefbereik:{' '}
+                    {/* In words (2.1.0, R2-05): "avond 2-3 · weekend 0-1" was the raw range the rules ban. */}
+                    {streefbereikUitRuleset(ruleset)}.
                   </p>
                 )}
 

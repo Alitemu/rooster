@@ -543,14 +543,22 @@ describe('het vinkje via de app', () => {
 });
 
 describe('de indicatie in de uitnodiging', () => {
-  it('names the top of each range in words, leaves out nothing-to-expect and a fellow\'s weekend', () => {
+  it('names each range in words as the planner sees it, leaves out nothing-to-expect and a fellow\'s weekend', () => {
     const t = (min: number, max: number, fellow = false) => ({ min, max, fellow });
     expect(indicatieTekst({ AVOND: t(8, 9), WEEKEND: t(1, 2), FEESTDAG: t(0, 1) })).toContain(
-      'Naar verwachting krijg je ongeveer 9 avonddiensten, ongeveer 2 weekenddiensten en ongeveer 1 feestdagdienst.'
+      'Naar verwachting krijg je 8 of 9 avonddiensten, 1 of 2 weekenddiensten en hoogstens 1 feestdagdienst.'
     );
     expect(indicatieTekst({ AVOND: t(8, 9), WEEKEND: t(0, 0, true), FEESTDAG: t(0, 0) })).toContain(
-      'Naar verwachting krijg je ongeveer 9 avonddiensten.'
+      'Naar verwachting krijg je 8 of 9 avonddiensten.'
     );
     expect(indicatieTekst({ AVOND: t(0, 0), WEEKEND: t(0, 0), FEESTDAG: t(0, 0) })).toBe('');
+  });
+
+  it('never promises the top of a range as "ongeveer" (2.1.0, R2-01: 30 of 30 got fewer than that)', () => {
+    const t = (min: number, max: number) => ({ min, max, fellow: false });
+    // The period of the audit: 60 avonddiensten, 23 weekenddiensten and 1 feestdagdienst for 30 people.
+    const zin = indicatieTekst({ AVOND: t(2, 3), WEEKEND: t(0, 1), FEESTDAG: t(0, 1) });
+    expect(zin).toContain('2 of 3 avonddiensten, hoogstens 1 weekenddienst en hoogstens 1 feestdagdienst');
+    expect(zin).not.toMatch(/ongeveer \d/);
   });
 });

@@ -4,7 +4,7 @@
  * The folding of the achterwacht participant's page once the roster is
  * published (0.110.0, layout only). A copy of the AIOS's DeelnemerSectie, not
  * shared with it (docs/development/diensten.md, "Copied, not changed"):
- * every section starts closed, opening one closes the others that are not
+ * every section starts closed (but those in `beginOpen`), opening one closes the others that are not
  * pinned, and the pin keeps one open. The title is a heading with a button
  * in it (the pattern for an accordion).
  */
@@ -20,9 +20,12 @@ interface HarmonicaStand {
 
 const DeelnemerHarmonicaContext = createContext<HarmonicaStand | null>(null);
 
-/** Holds which sections of the page are open and which are pinned. */
-export function DeelnemerHarmonica({ children }: { children: ReactNode }) {
-  const [open, setOpen] = useState<Set<string>>(() => new Set());
+/**
+ * Holds which sections of the page are open and which are pinned. `beginOpen`: open when the page comes up
+ * (2.1.0: the roster, which the mail says to check, stood closed under "Kijk je diensten goed na", R2-02).
+ */
+export function DeelnemerHarmonica({ children, beginOpen = [] }: { children: ReactNode; beginOpen?: string[] }) {
+  const [open, setOpen] = useState<Set<string>>(() => new Set(beginOpen));
   const [vast, setVast] = useState<Set<string>>(() => new Set());
   const wissel = (sleutel: string) =>
     setOpen((nu) => {

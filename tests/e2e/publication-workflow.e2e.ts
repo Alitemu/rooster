@@ -214,9 +214,9 @@ test.describe('Roster Publication Workflow - E2E', () => {
       await page.goto(`${getBaseUrl()}/person/${user.token}`);
       await page.waitForLoadState('networkidle');
 
-      // Foldable sections, closed to begin with: the roster and the swapping.
-      for (const [id, titel] of [['rooster', 'Jouw rooster'], ['ruilen', 'Ruilen']]) {
-        await expect(page.getByTestId(`deelnemer-sectie-${id}`).getByRole('heading', { name: titel }).getByRole('button')).toHaveAttribute('aria-expanded', 'false');
+      // Foldable sections: the roster open from the start (2.1.0, R2-02), the swapping closed.
+      for (const [id, titel, open] of [['rooster', 'Jouw rooster', 'true'], ['ruilen', 'Ruilen', 'false']]) {
+        await expect(page.getByTestId(`deelnemer-sectie-${id}`).getByRole('heading', { name: titel }).getByRole('button')).toHaveAttribute('aria-expanded', open);
       }
       await openSecties(page);
 
@@ -232,11 +232,13 @@ test.describe('Roster Publication Workflow - E2E', () => {
       expect(expected).toBeGreaterThan(0);
 
       // Balance summary is rendered in words, never as a raw signed number
-      // or a [min,max] pair (CLAUDE.md) - "ongeveer 9 avonddiensten".
+      // or a [min,max] pair (CLAUDE.md) - "2 of 3 avonddiensten", "hoogstens 1 feestdagdienst" (2.1.0: the range,
+      // as the planner sees it; "ongeveer 3" read as a shortfall next to the 2 someone got).
       await expect(page.getByText('Overzicht saldo')).toBeVisible();
       await expect(
-        page.getByText(/Je streefaantal is ongeveer \d+ \w+dienst(en)?\.|Je hoeft deze periode geen \w+diensten te doen\./).first()
+        page.getByText(/Je streefbereik is (\d+ (of|tot en met) \d+ \w+diensten|hoogstens \d+ \w+dienst(en)?|\d+ \w+dienst(en)?)\.|Je hoeft deze periode geen \w+diensten te doen\./).first()
       ).toBeVisible();
+      await expect(page.getByText(/streefaantal is ongeveer/)).toHaveCount(0);
     } finally {
       await context.close();
     }

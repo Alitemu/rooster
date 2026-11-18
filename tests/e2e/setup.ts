@@ -268,8 +268,8 @@ export async function openDienstrooster(page: Page): Promise<void> {
 }
 
 /**
- * A published roster puts the participant's page in foldable sections, all
- * closed to begin with (0.110.0): open them all and pin them, so the rest of
+ * A published roster puts the participant's page in foldable sections, closed
+ * to begin with but the achterwacht's roster (2.1.0): open them all and pin them, so the rest of
  * a test sees the page as it saw it before. A page that is not published has
  * none and is left alone.
  */

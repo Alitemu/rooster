@@ -318,11 +318,11 @@ test.describe('Input gate - E2E', () => {
       await page.waitForLoadState('networkidle');
     }
 
-    const cells = page.locator('button[title*="rechtsklik voor opties"]');
+    const cells = page.locator('button[title*="Tik of klik voor"]');
     await expect(cells.first()).toBeVisible();
     expect(await cells.count()).toBeGreaterThan(0);
     // Not one of them may be pressable.
-    expect(await page.locator('button[title*="rechtsklik voor opties"]:not([disabled])').count()).toBe(0);
+    expect(await page.locator('button[title*="Tik of klik voor"]:not([disabled])').count()).toBe(0);
 
     await expect(page.getByText(/De planner heeft deze periode gesloten/)).toBeVisible();
 
@@ -350,7 +350,7 @@ test.describe('Input gate - E2E', () => {
     // Wait for the calendar first, like the closed-period test above does -
     // count() does not wait, so counting straight after the tab switch
     // raced the calendar's own data fetch and sometimes saw zero cells.
-    const editable = page.locator('button[title*="rechtsklik voor opties"]:not([disabled])');
+    const editable = page.locator('button[title*="Tik of klik voor"]:not([disabled])');
     await expect(editable.first()).toBeVisible();
     expect(await editable.count()).toBeGreaterThan(0);
     await expect(page.getByText(/De planner heeft deze periode gesloten/)).toHaveCount(0);

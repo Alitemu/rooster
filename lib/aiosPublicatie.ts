@@ -22,6 +22,7 @@
  * AIOS's page shows the roster gone at once.
  */
 
+import { roosterVan } from '@/lib/aiosRoosterVan';
 import { db } from '@/db/client';
 import { buildVerzendlijst, verzendlijstPersonen, type VerzendlijstBericht } from '@/lib/aiosVerzendlijst';
 import { verstuurAiosVerzendlijst, aiosMailIngesteld, aiosContactAdres } from '@/lib/aiosMail';
@@ -234,7 +235,7 @@ export function aiosDefinitiefBericht(
     onderwerp: `Definitief rooster ${aiosPeriodeInOnderwerp(period.naam)}`,
     tekst: `Beste ${codenaam},
 
-Het rooster van de AIOS voor ${period.naam} is nu definitief. ${dienstenTekst(eigen, percentage)}
+Het rooster ${roosterVan(period.naam)} is nu definitief. ${dienstenTekst(eigen, percentage)}
 
 ${wat}
 ${linkTekst(link)}

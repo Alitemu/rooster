@@ -19,14 +19,10 @@
 
 export type Bereik = Record<'AVOND' | 'WEEKEND' | 'FEESTDAG', number>;
 
-/** "2 of 3 avonddiensten", "hoogstens 1 weekenddienst", "geen feestdagdiensten": never "2-3" or "[2,3]". */
-export function bereikInWoorden(min: number, max: number, enkel: string, meervoud: string): string {
-  const woord = (n: number) => (n === 1 ? enkel : meervoud);
-  if (max <= 0) return `geen ${meervoud}`;
-  if (min <= 0) return `hoogstens ${max} ${woord(max)}`;
-  if (min === max) return `${max} ${woord(max)}`;
-  return max - min === 1 ? `${min} of ${max} ${meervoud}` : `${min} tot en met ${max} ${meervoud}`;
-}
+import { bereikInWoorden } from '@/lib/bereikInWoorden';
+
+/** "2 of 3 avonddiensten", "hoogstens 1 weekenddienst", "geen feestdagdiensten" (lib/bereikInWoorden.ts). */
+export { bereikInWoorden };
 
 export function streefbereikInWoorden(min: Bereik, max: Bereik): string {
   return (
