@@ -7,7 +7,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { optionalFreeText } from '@/lib/freeText';
 import { internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
@@ -48,7 +49,7 @@ export async function PATCH(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -63,7 +64,7 @@ export async function PATCH(
     if (!absence) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'ABSENCE_NOT_FOUND', message: `Afwezigheid ${absenceId} niet gevonden` },
+        error: { code: 'ABSENCE_NOT_FOUND', message: 'Afwezigheid niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -121,7 +122,7 @@ export async function PATCH(
     if (newVanDatum > newTotDatum) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "tot" liggen' },
+        error: { code: 'INVALID_RANGE', message: '"Van" moet vóór of op "Tot en met" liggen' },
       };
       return NextResponse.json(response, { status: 400 });
     }
@@ -175,6 +176,7 @@ export async function PATCH(
       data: { updated: true, ...(warning ? { warning } : {}) },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'afwezigheid gewijzigd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     return internalErrorResponse('absence-update', error);
@@ -201,7 +203,7 @@ export async function DELETE(
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -217,7 +219,7 @@ export async function DELETE(
     if (!absence) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'ABSENCE_NOT_FOUND', message: `Afwezigheid ${absenceId} niet gevonden` },
+        error: { code: 'ABSENCE_NOT_FOUND', message: 'Afwezigheid niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -261,6 +263,7 @@ export async function DELETE(
       data: { deleted: true },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'afwezigheid verwijderd door planner' });
     return NextResponse.json(response);
   } catch (error) {
     return internalErrorResponse('absence-delete', error);

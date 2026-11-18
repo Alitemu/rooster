@@ -6,9 +6,8 @@ import { clearRateLimit } from '@/lib/rateLimit';
 import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { GET, POST } from './route';
-import { PATCH } from './[id]/route';
+import { PATCH, DELETE } from './[id]/route';
 import { POST as resetPassword } from './[id]/reset-password/route';
-import { POST as disableTotp } from './[id]/totp-disable/route';
 import { POST as login } from '../../auth/staff-login/route';
 import { POST as changePassword } from '../../auth/change-password/route';
 
@@ -169,14 +168,6 @@ describe('/api/admin/accounts', () => {
     expect((await reset(admin.id)).status).toBe(409);
   });
 
-  it('turns off someone else\'s two-step verification', async () => {
-    const admin = await account('ADMIN');
-    const planner = await account('PLANNER', { totp: 'v1:iets' });
-    const res = await disableTotp(req(`/api/admin/accounts/${planner.id}/totp-disable`, admin.id, 'POST'), params(planner.id));
-    expect(res.status).toBe(200);
-    expect(row(planner.id).totp_secret).toBeNull();
-  });
-
   it('switches an account off, which then can\'t log in', async () => {
     const admin = await account('ADMIN');
     const planner = await account('PLANNER');
@@ -217,5 +208,171 @@ describe('/api/admin/accounts', () => {
 
     const wrong = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: 'x-onbekend', rol: 'PLANNER', wachtwoord: TIJDELIJK, dienst_type: 'NEURO' }));
     expect(wrong.status).toBe(400);
+  });
+
+  // 1.10.0, the beheerder's wish: an account made to try something could only be switched off.
+  describe('deleting an account', () => {
+    const bestaat = (id: string) => Boolean(db.prepare('SELECT 1 FROM dienstrooster_person WHERE id = ?').get(id));
+    const lijst = async (admin: string) => (await (await GET(req('/api/admin/accounts', admin))).json()).data as Array<{ id: string; verwijderbaar: boolean }>;
+
+    it('removes an account that has left no trace, and the audit log keeps that it existed', async () => {
+      const admin = await account('ADMIN');
+      const made = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: `Proef-${admin.id.slice(0, 6)}`, rol: 'PLANNER', wachtwoord: TIJDELIJK }));
+      const id = (await made.json()).data.id as string;
+      created.push(id);
+      expect((await lijst(admin.id)).find((a) => a.id === id)?.verwijderbaar).toBe(true);
+
+      const res = await DELETE(req(`/api/admin/accounts/${id}`, admin.id, 'DELETE'), params(id));
+      expect(res.status).toBe(200);
+      expect(bestaat(id)).toBe(false);
+      expect((await lijst(admin.id)).some((a) => a.id === id)).toBe(false);
+
+      // Who made it and who deleted it, with its name: the rows about it stay.
+      const rijen = db.prepare(`SELECT actor_id, actie, nieuw_json FROM dienstrooster_audit_log WHERE entiteit = 'person' AND entiteit_id = ? ORDER BY tijdstip`).all(id) as Array<{
+        actor_id: string;
+        actie: string;
+        nieuw_json: string;
+      }>;
+      expect(rijen.map((r) => r.actie)).toEqual(['UPDATE', 'DELETE']);
+      expect(rijen.every((r) => r.actor_id === admin.id)).toBe(true);
+      expect(JSON.parse(rijen[1].nieuw_json)).toMatchObject({ wijziging: 'account verwijderd door beheerder', codenaam: `Proef-${admin.id.slice(0, 6)}`, rol: 'PLANNER' });
+      // Nothing in the database points to a person that is gone.
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+      db.prepare(`DELETE FROM dienstrooster_audit_log WHERE entiteit_id = ?`).run(id);
+    });
+
+    it('takes along what the account did to itself: it logged in and chose its own password', async () => {
+      const admin = await account('ADMIN');
+      const proef = await account('PLANNER');
+      // As the change-password route writes it: the account itself is the actor.
+      db.prepare(
+        `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip) VALUES (?, ?, 'person', ?, 'UPDATE', '{"wijziging":"wachtwoord gewijzigd"}', datetime('now'))`
+      ).run(crypto.randomUUID(), proef.id, proef.id);
+      expect((await lijst(admin.id)).find((a) => a.id === proef.id)?.verwijderbaar).toBe(true);
+
+      const res = await DELETE(req(`/api/admin/accounts/${proef.id}`, admin.id, 'DELETE'), params(proef.id));
+      expect(res.status).toBe(200);
+      expect(bestaat(proef.id)).toBe(false);
+      expect(db.prepare('SELECT COUNT(*) c FROM dienstrooster_audit_log WHERE actor_id = ?').get(proef.id)).toEqual({ c: 0 });
+      const weg = db.prepare(`SELECT nieuw_json FROM dienstrooster_audit_log WHERE entiteit_id = ? AND actie = 'DELETE'`).get(proef.id) as { nieuw_json: string };
+      expect(JSON.parse(weg.nieuw_json).eigen_wijzigingen_verwijderd).toBe(1);
+      expect(db.pragma('foreign_key_check')).toEqual([]);
+      db.prepare(`DELETE FROM dienstrooster_audit_log WHERE entiteit_id = ?`).run(proef.id);
+    });
+
+    it('refuses an account that the history names, which stays and can be switched off', async () => {
+      const admin = await account('ADMIN');
+      // Three ways an account ends up in the history: it changed something in a roster (the audit log),
+      // it changed a setting, it published a period.
+      const sporen: Array<[string, (id: string) => () => void]> = [
+        [
+          'a change in a roster',
+          (id) => {
+            const rij = crypto.randomUUID();
+            db.prepare(
+              `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip) VALUES (?, ?, 'assignment', 'x', 'UPDATE', '{}', datetime('now'))`
+            ).run(rij, id);
+            return () => db.prepare('DELETE FROM dienstrooster_audit_log WHERE id = ?').run(rij);
+          },
+        ],
+        [
+          'a setting',
+          (id) => {
+            const sleutel = `test-${id}`;
+            db.prepare(`INSERT INTO dienstrooster_app_setting (sleutel, waarde, gewijzigd_op, gewijzigd_door) VALUES (?, 'x', datetime('now'), ?)`).run(sleutel, id);
+            return () => db.prepare('DELETE FROM dienstrooster_app_setting WHERE sleutel = ?').run(sleutel);
+          },
+        ],
+        [
+          'something it did to another account',
+          (id) => {
+            const rij = crypto.randomUUID();
+            db.prepare(
+              `INSERT INTO dienstrooster_audit_log (id, actor_id, entiteit, entiteit_id, actie, nieuw_json, tijdstip) VALUES (?, ?, 'person', ?, 'UPDATE', '{}', datetime('now'))`
+            ).run(rij, id, admin.id);
+            return () => db.prepare('DELETE FROM dienstrooster_audit_log WHERE id = ?').run(rij);
+          },
+        ],
+      ];
+      for (const [wat, zet] of sporen) {
+        const proef = await account('PLANNER');
+        const ruimOp = zet(proef.id);
+        try {
+          expect((await lijst(admin.id)).find((a) => a.id === proef.id)?.verwijderbaar, wat).toBe(false);
+          const res = await DELETE(req(`/api/admin/accounts/${proef.id}`, admin.id, 'DELETE'), params(proef.id));
+          expect(res.status, wat).toBe(409);
+          const fout = (await res.json()).error;
+          expect(fout.code).toBe('IN_GEBRUIK');
+          expect(fout.message).toMatch(/kan daarom niet worden verwijderd\. Schakel het uit\./);
+          // In Dutch, without a raw database error.
+          expect(fout.message).not.toMatch(/FOREIGN KEY|constraint|SQLITE/i);
+          expect(bestaat(proef.id), wat).toBe(true);
+          // Switching it off still works.
+          expect((await PATCH(req(`/api/admin/accounts/${proef.id}`, admin.id, 'PATCH', { actief: false }), params(proef.id))).status).toBe(200);
+        } finally {
+          ruimOp();
+        }
+      }
+    });
+
+    it('is for a beheerder only, never on the own account, and only on a staff account', async () => {
+      const admin = await account('ADMIN');
+      const planner = await account('PLANNER');
+      const proef = await account('PLANNER');
+      expect((await DELETE(req(`/api/admin/accounts/${proef.id}`, planner.id, 'DELETE'), params(proef.id))).status).toBe(401);
+      expect((await DELETE(req(`/api/admin/accounts/${proef.id}`, null, 'DELETE'), params(proef.id))).status).toBe(401);
+      expect(bestaat(proef.id)).toBe(true);
+
+      const eigen = await DELETE(req(`/api/admin/accounts/${admin.id}`, admin.id, 'DELETE'), params(admin.id));
+      expect(eigen.status).toBe(409);
+      expect((await eigen.json()).error.code).toBe('OWN_ACCOUNT');
+      expect(bestaat(admin.id)).toBe(true);
+
+      // A participant is not an account of this page: not found, and still there.
+      const deelnemer = crypto.randomUUID();
+      db.prepare(`INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op) VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`).run(deelnemer, `D-${deelnemer.slice(0, 8)}`);
+      created.push(deelnemer);
+      expect((await DELETE(req(`/api/admin/accounts/${deelnemer}`, admin.id, 'DELETE'), params(deelnemer))).status).toBe(404);
+      expect(bestaat(deelnemer)).toBe(true);
+      expect((await DELETE(req('/api/admin/accounts/bestaat-niet', admin.id, 'DELETE'), params('bestaat-niet'))).status).toBe(404);
+    });
+
+    it('ends the session of the deleted account at once', async () => {
+      const admin = await account('ADMIN');
+      const proef = await account('ADMIN');
+      // The cookie the deleted beheerder still holds in a browser.
+      const metCookie = () => req('/api/admin/accounts', proef.id);
+      const voor = metCookie();
+      const na = metCookie();
+      expect((await GET(voor)).status).toBe(200);
+      expect((await DELETE(req(`/api/admin/accounts/${proef.id}`, admin.id, 'DELETE'), params(proef.id))).status).toBe(200);
+      expect((await GET(na)).status).toBe(401);
+      db.prepare(`DELETE FROM dienstrooster_audit_log WHERE entiteit_id = ?`).run(proef.id);
+    });
+
+    it('frees the codenaam: a new account can take it', async () => {
+      const admin = await account('ADMIN');
+      const naam = `Opnieuw-${admin.id.slice(0, 6)}`;
+      const eerste = (await (await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: naam, rol: 'PLANNER', wachtwoord: TIJDELIJK }))).json()).data.id as string;
+      created.push(eerste);
+      expect((await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: naam, rol: 'PLANNER', wachtwoord: TIJDELIJK }))).status).toBe(409);
+      expect((await DELETE(req(`/api/admin/accounts/${eerste}`, admin.id, 'DELETE'), params(eerste))).status).toBe(200);
+      const tweede = await POST(req('/api/admin/accounts', admin.id, 'POST', { codenaam: naam, rol: 'PLANNER', wachtwoord: TIJDELIJK }));
+      expect(tweede.status).toBe(201);
+      created.push((await tweede.json()).data.id);
+      db.prepare(`DELETE FROM dienstrooster_audit_log WHERE entiteit_id = ?`).run(eerste);
+    });
+
+    it('counts every column of the database that points to a person', () => {
+      // heeftSporen reads them from the database, so a table added later blocks a deletion by itself
+      // instead of failing it on a foreign key. This list is what there is today: when it grows, look
+      // whether the new one is a trace (it is, unless it is the account's own doing, as its audit rows are).
+      const kolommen = (db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'dienstrooster_%'`).all() as Array<{ name: string }>)
+        .flatMap(({ name }) => (db.prepare(`PRAGMA foreign_key_list(${name})`).all() as Array<{ table: string; from: string }>).filter((f) => f.table === 'dienstrooster_person').map((f) => `${name.replace('dienstrooster_', '')}.${f.from}`));
+      expect(kolommen.length).toBeGreaterThanOrEqual(36);
+      for (const k of ['audit_log.actor_id', 'app_setting.gewijzigd_door', 'schedule_period.gepubliceerd_door_person_id', 'assignment_edit.bewerkt_door_person_id', 'ledger_entry.aangemaakt_door', 'import_run.uitgevoerd_door', 'pending_undo.actor_id']) {
+        expect(kolommen, k).toContain(k);
+      }
+    });
   });
 });

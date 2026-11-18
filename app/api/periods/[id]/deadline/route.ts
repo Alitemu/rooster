@@ -10,6 +10,7 @@
  * with, because nothing ever copies the value anywhere else.
  */
 
+import { isDeadlineText } from '@/lib/periodInputGate';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
@@ -61,7 +62,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -83,7 +84,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
     }
 
     const deadline = new Date(body.deadline);
-    if (isNaN(deadline.getTime())) {
+    if (!isDeadlineText(body.deadline) || isNaN(deadline.getTime())) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_DEADLINE', message: 'Ongeldige deadline' },
@@ -147,7 +148,7 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
       if (!stillExists) {
         const response: ApiErrorResponse = {
           success: false,
-          error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${id} niet gevonden` },
+          error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
         };
         return NextResponse.json(response, { status: 404 });
       }

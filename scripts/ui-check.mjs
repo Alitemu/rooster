@@ -20,6 +20,12 @@ import Database from 'better-sqlite3';
 import nodeCrypto from 'crypto';
 import nodePath from 'path';
 import { fileURLToPath } from 'url';
+import { verschuifDagen, verschuif } from './demoKalender.mjs';
+import { buildXlsx } from './buildXlsx.mjs';
+
+// The seeded calendar moves along with the real date (scripts/demoKalender.mjs).
+const SHIFT = verschuifDagen();
+const SEED_JAAR = verschuif('2027-01-04', SHIFT).slice(0, 4);
 
 // APP_URL includes the app's sub-folder when it was built with one (lib/basePath.ts).
 const BASE = process.env.APP_URL || 'http://localhost:3000';
@@ -44,6 +50,14 @@ function rec(name, good, detail) {
 }
 
 const browser = await chromium.launch({ executablePath: chromiumExecutable() });
+// A section of the period page, as a planner opens it since 2.0.0: the item in the list on the left, or in
+// the menu behind the button in the blue bar on a narrow screen. Waits until its title is on screen.
+async function kies(p, titel) {
+  const lijst = p.locator('nav[aria-label="Onderdelen van de periode"]:visible');
+  if ((await lijst.count()) === 0) await p.getByTestId('onderdelen-menu').click();
+  await lijst.locator('a', { has: p.locator('span.block.font-medium', { hasText: titel }) }).first().click();
+  await p.locator('[data-testid^="onderdeel-"] h2', { hasText: titel }).first().waitFor();
+}
 const ctx = await browser.newContext();
 const page = await ctx.newPage();
 
@@ -148,7 +162,7 @@ await page.goto(`${BASE}/planner`, { waitUntil: 'networkidle' });
 await page.waitForTimeout(1500);
 rec('Planner reaches the period list', loginStatus === 200 && page.url().endsWith('/planner'), page.url());
 
-rec('Period list shows periods', (await page.locator('text=/2027|Periodes/').count()) > 0);
+rec('Period list shows periods', (await page.locator(`text=/${SEED_JAAR}|Periodes/`).count()) > 0);
 
 // the new password dialog
 await page.click('button:has-text("Wachtwoord wijzigen")');
@@ -164,44 +178,29 @@ rec('A weak password is refused with a Dutch message', /tekens|hoofdletters|cijf
 await page.click('button:has-text("Annuleren")');
 
 // period detail (planner still gets the full record)
-const period = db.prepare('SELECT id FROM dienstrooster_schedule_period LIMIT 1').get();
+// An achterwacht period: this planner may not open the AIOS's, and on a database that has one, a period
+// picked at random was that (2.0.2, found on a database upgraded from 1.4.0).
+const ACHTERWACHT_PERIODE = `SELECT p.id FROM dienstrooster_schedule_period p JOIN dienstrooster_pool pool ON pool.id = p.pool_id WHERE pool.type = 'ACHTERWACHT'`;
+const period = db.prepare(`${ACHTERWACHT_PERIODE} ORDER BY p.rowid LIMIT 1`).get();
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-rec('Planner period page renders', !/Laden mislukt|Er is iets misgegaan/.test(await page.content()));
+// On the text on screen: the page says "Laden van periode mislukt", which /Laden mislukt/ never matched (2.0.2).
+rec('Planner period page renders', !/mislukt|Er is iets misgegaan/i.test(await page.locator('body').innerText()));
 
-// Accordion sections (PlannerDashboard's Section component): opening one
-// closes any other open-but-unpinned section, and pinning (📌, shown only
-// while a section is open) keeps it open even when another section opens.
-await page.click('[role="button"]:has-text("Status voorkeuren")');
-await page.waitForTimeout(300);
+// The sections as a list (2.0.0): choosing one shows it, and only it.
+await kies(page, 'Status voorkeuren');
 const staffTableVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
-rec('Opening "Status voorkeuren" shows its content', staffTableVisible);
+rec('Choosing "Status voorkeuren" shows its content', staffTableVisible);
 
-await page.click('[role="button"]:has-text("Exporteren & communicatie")');
-await page.waitForTimeout(300);
+await kies(page, 'Exporteren & communicatie');
 const staffTableStillVisible = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
 const exportVisible = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
 rec(
-  'Opening a second section closes the first one (not pinned)',
+  'Choosing another section shows that one instead',
   !staffTableStillVisible && exportVisible,
   `staff-still-visible=${staffTableStillVisible} export-visible=${exportVisible}`
 );
 
-// Reopen "Status voorkeuren" and pin it before opening the export section again.
-await page.click('[role="button"]:has-text("Status voorkeuren")');
-await page.waitForTimeout(300);
-await page.click('[role="button"]:has-text("Status voorkeuren") button[aria-pressed]');
-await page.waitForTimeout(200);
-await page.click('[role="button"]:has-text("Exporteren & communicatie")');
-await page.waitForTimeout(300);
-const staffTableVisibleAfterPin = await page.locator('text=Geblokkeerde dagen').isVisible().catch(() => false);
-const exportVisibleToo = await page.locator('button:has-text("Uitnodigingen en herinneringen")').isVisible().catch(() => false);
-rec(
-  'A pinned section stays open when another section is opened',
-  staffTableVisibleAfterPin && exportVisibleToo,
-  `staff-visible=${staffTableVisibleAfterPin} export-visible=${exportVisibleToo}`
-);
-
-// Reload so the rest of this script starts from a clean accordion/pin state.
+// Reload so the rest of this script starts from the page as it opens.
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
 
 // Assigning a shift from the calendar's right-click menu used to force a
@@ -213,11 +212,8 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 // the same manual action by hand - see lib/pendingUndo.ts.
 let calendarNavCount = 0;
 page.on('framenavigated', (frame) => { if (frame === page.mainFrame()) calendarNavCount++; });
-// The Dienstrooster section is a collapsible header now (PlannerDashboard's
-// Section component), same mechanism as "Status voorkeuren" etc. -
-// there's no separate "Tonen" button anymore, clicking the header itself
-// opens it.
-await page.click('[role="button"]:has-text("Dienstrooster")');
+// The Dienstrooster section, chosen in the list.
+await kies(page, 'Dienstrooster');
 await page.waitForTimeout(500);
 await page.click('button:has-text("Kalender")');
 await page.waitForTimeout(800);
@@ -256,7 +252,7 @@ rec('The undo banner disappears once used', !(await undoBanner.isVisible().catch
 // swap that happened in real life after a CSV was made can still be
 // corrected by hand.
 await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await page.click('[role="button"]:has-text("Eerdere toewijzingen")');
+await kies(page, 'Eerdere toewijzingen');
 await page.waitForTimeout(300);
 rec(
   'The "Eerdere toewijzingen" section explains why it is needed',
@@ -264,7 +260,8 @@ rec(
 );
 await Promise.all([
   page.waitForURL('**/prior-assignments'),
-  page.locator('a:has-text("Eerdere toewijzingen")').click(),
+  // The section's own link to the page, not its item in the list of sections (2.0.1).
+  page.locator('[data-testid="onderdeel-eerdere-toewijzingen"] a[href$="/prior-assignments"]').click(),
 ]);
 await page.waitForLoadState('networkidle');
 
@@ -296,20 +293,26 @@ rec(
   `type=${rosterDownload.type} toewijzingen=${assignmentTotal}`
 );
 
-const csvContent = [
-  'Datum,Week,Diensttype,Codenaam',
-  `"${rangeStart}",1,"Avond","Persoon-01"`,
-  `"1999-01-01",1,"Avond","Persoon-02"`, // well before the window - must be ignored
-].join('\n');
+// The file field takes a workbook only (lib/sheetUpload.ts), in the layout of the sjabloon.
+const sjabloonRows = [
+  ['Datum', 'Week', 'Diensttype', 'Codenaam'],
+  [rangeStart, 1, 'Avond', 'Persoon-01'],
+  ['1999-01-01', 1, 'Avond', 'Persoon-02'], // well before the window - must be ignored
+  [rangeStart, 1, 'Avond', ''], // a row of the sjabloon nobody filled in - left out without a word
+];
 const priorCountBefore = db.prepare('SELECT COUNT(*) c FROM dienstrooster_prior_assignment WHERE period_id = ?').get(period.id).c;
 await page.setInputFiles('input[type="file"]', {
   name: 'overloop.csv',
   mimeType: 'text/csv',
-  buffer: Buffer.from(csvContent),
+  buffer: Buffer.from('Datum,Week,Diensttype,Codenaam\n2000-01-01,1,Avond,A'),
 });
+await page.waitForTimeout(400);
+rec('A CSV is refused with the way to the sjabloon', await page.locator('text=Alleen Excel-bestanden (.xlsx) kunnen worden ingelezen').isVisible().catch(() => false));
+rec('The sjabloon to download is there', await page.locator('a:has-text("Sjabloon downloaden (Excel)")').isVisible().catch(() => false));
+await page.setInputFiles('input[type="file"]', { name: 'overloop.xlsx', mimeType: XLSX_TYPE, buffer: buildXlsx(sjabloonRows) });
 await page.waitForTimeout(500);
 rec(
-  'Uploading a CSV previews only the row(s) inside the carry-over window',
+  'Uploading a workbook of the sjabloon\'s layout previews only the row(s) inside the carry-over window',
   await page.locator('text=1 regel binnen het overloopvenster gevonden, 1 daarbuiten genegeerd').isVisible().catch(() => false)
 );
 await page.click('button:has-text("regel importeren")');
@@ -356,11 +359,14 @@ await page.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle
 await page.evaluate((periodId) => {
   localStorage.setItem(`dienstrooster-fillgaps-draft-${periodId}`, JSON.stringify({ 'fake-slot-id': 'fake-person-id' }));
 }, period.id);
+// The button is in the section "Periode" (1.12.0).
+await kies(page, 'Periode');
 await page.locator('button', { hasText: /Rooster.*genereren/i }).first().click();
 await page.waitForTimeout(500);
 const draftWarning = page.locator('[role="dialog"][aria-label="Niet-toegepaste toewijzingen"]');
 rec('Generating with an unapplied "Rooster vooraf invullen" draft warns first', await draftWarning.isVisible().catch(() => false));
-await page.click('text=Ga naar Rooster vooraf invullen');
+// The name follows the period's status (lib/vooraf.ts voorafNaam, 1.7.0).
+await page.click('text=/Ga naar (Rooster vooraf invullen|Lege diensten aanvullen)/');
 await page.waitForTimeout(500);
 rec(
   '"Ga naar Rooster vooraf invullen" navigates to the fill-gaps page',
@@ -408,7 +414,7 @@ await (async () => {
 })();
 
 await mpage.goto(`${BASE}/planner/period/${period.id}`, { waitUntil: 'networkidle' });
-await mpage.click('[role="button"]:has-text("Dienstrooster")');
+await kies(mpage, 'Dienstrooster');
 await mpage.waitForTimeout(500);
 const mobileScrollWidth = await mpage.evaluate(() => document.documentElement.scrollWidth);
 rec('No horizontal page overflow at 375px once the roster panel is shown', mobileScrollWidth === 375, `scrollWidth=${mobileScrollWidth}`);
@@ -450,15 +456,15 @@ const wizardPeriodId = nodeCrypto.randomUUID();
 db.prepare(
   `INSERT INTO dienstrooster_schedule_period (id, pool_id, naam, start_datum, eind_datum, deadline, aangemaakt_op)
    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
-).run(wizardPeriodId, wizardPoolId, 'UI-check wizard periode', '2028-01-03', '2028-01-16', '2027-12-20T00:00:00Z');
+).run(wizardPeriodId, wizardPoolId, 'UI-check wizard periode', verschuif('2028-01-03', SHIFT), verschuif('2028-01-16', SHIFT), verschuif('2027-12-20T00:00:00Z', SHIFT));
 
 await page.goto(`${BASE}/planner/setup/${wizardPeriodId}`, { waitUntil: 'networkidle' });
 await page.click('button:has-text("3. Venster")');
-await page.waitForSelector('text=Parttime-vrije dagen tellen niet mee voor het budget', { timeout: 5000 });
+await page.waitForSelector('text=Deeltijddagen tellen niet mee voor het budget', { timeout: 5000 });
 const exemptChecked = await page
-  .locator('label:has-text("Parttime-vrije dagen tellen niet mee voor het budget") input[type=checkbox]')
+  .locator('label:has-text("Deeltijddagen tellen niet mee voor het budget") input[type=checkbox]')
   .isChecked();
-rec('"Parttime-vrije dagen tellen niet mee voor het budget" is checked by default', exemptChecked);
+rec('"Deeltijddagen tellen niet mee voor het budget" is checked by default', exemptChecked);
 db.prepare('DELETE FROM dienstrooster_schedule_period WHERE id = ?').run(wizardPeriodId);
 
 // "Personeel beheren" (medewerkers): removing someone from the pool is a
@@ -474,6 +480,11 @@ await page.click('button:has-text("Verwijderen")');
 await page.waitForTimeout(300);
 await page.click('button:has-text("Zeker weten?")');
 await page.waitForTimeout(800);
+// A membership that reaches a period with a roster asks once more (lib/membershipRooster.ts).
+if (await page.locator('[data-testid="rooster-bevestiging"]').isVisible().catch(() => false)) {
+  await page.click('button:has-text("Toch doorgaan")');
+  await page.waitForTimeout(800);
+}
 const membershipCountAfter = db
   .prepare('SELECT COUNT(*) c FROM dienstrooster_pool_membership WHERE pool_id = ?')
   .get(wizardPoolId).c;
@@ -519,7 +530,7 @@ await ppage.goto(`${BASE}/person/${token}`, { waitUntil: 'networkidle' });
 await ppage.waitForTimeout(1500);
 const body = await ppage.content();
 rec('Participant page loads without the link error', !/Ongeldige of verlopen toegangslink/.test(body));
-rec('Participant page shows the period name and dates', /2027/.test(body));
+rec('Participant page shows the period name and dates', new RegExp(SEED_JAAR).test(body));
 rec('The new "Uitloggen" button is there', (await ppage.locator('button:has-text("Uitloggen")').count()) > 0);
 
 await ppage.click('button:has-text("Uitloggen")');
@@ -534,7 +545,7 @@ rec('Uitloggen leaves the token page', !/\/person\//.test(ppage.url()), ppage.ur
 // never applied the swap or closed. Every change here is undone again
 // through the app's own undo-last endpoint.
 const rosterPeriod = db
-  .prepare(`SELECT id FROM dienstrooster_schedule_period WHERE status = 'GEGENEREERD'`)
+  .prepare(`${ACHTERWACHT_PERIODE} AND p.status = 'GEGENEREERD'`)
   .get();
 if (rosterPeriod) {
   const undoLast = () =>
@@ -550,10 +561,17 @@ if (rosterPeriod) {
     );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto(`${BASE}/planner/period/${rosterPeriod.id}`, { waitUntil: 'networkidle' });
-  await page.locator('[role="button"]:has-text("Dienstrooster")').first().click();
+  await kies(page, 'Dienstrooster');
   await page.waitForSelector('button:has-text("Wisselen")');
 
-  const row = page.locator('table tbody tr').nth(15);
+  // The 16th row that has someone on it: which diensten stay empty depends on what the solver found that
+  // run, and an empty one has "Iemand toewijzen" instead of "Wisselen" (the sub-folder run failed on that
+  // twice, 1.12.0 and 1.13.0). Held by its place in the table: once "Wisselen" is clicked the row has no such
+  // button any more, and a locator that asks for one moves on to the next row (2.0.1).
+  const plaats = await page.locator('table tbody tr').evaluateAll(
+    (rijen) => rijen.map((r, i) => (r.querySelector('button')?.textContent?.includes('Wisselen') ? i : -1)).filter((i) => i >= 0)[15]
+  );
+  const row = page.locator('table tbody tr').nth(plaats);
   await row.locator('button:has-text("Wisselen")').scrollIntoViewIfNeeded();
   await page.mouse.wheel(0, 200);
   await page.waitForTimeout(300);
@@ -568,7 +586,21 @@ if (rosterPeriod) {
   const rowYAfter = (await row.boundingBox()).y;
   rec('Dienstrooster (lijst): de gewijzigde rij blijft op dezelfde plek in beeld',
       Math.abs(rowYAfter - rowYBefore) < 30, `${rowYBefore} -> ${rowYAfter}`);
-  rec('…en die wissel is weer ongedaan gemaakt', (await undoLast()) === 200);
+  // And back with the button: the banner goes away above the screen, and the row stays where it is (2.0.2).
+  // Clicked from the page itself, because Playwright's click scrolls the button into view first.
+  const yVoorTerug = (await row.boundingBox()).y;
+  const terugKnop = await page.evaluate(() => {
+    const knop = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Ongedaan maken'));
+    knop?.click();
+    return Boolean(knop);
+  });
+  if (terugKnop) await page.waitForFunction(() => !document.body.innerText.includes('Laatst gewijzigd'), null, { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  const meldingWeg = terugKnop && !(await page.evaluate(() => document.body.innerText.includes('Laatst gewijzigd')));
+  rec('…en die wissel is weer ongedaan gemaakt met de knop', meldingWeg);
+  if (!meldingWeg) await undoLast(); // the rest of the check starts from the roster as it was
+  const yNaTerug = (await row.boundingBox()).y;
+  rec('Dienstrooster (lijst): na Ongedaan maken blijft de rij ook op zijn plek', Math.abs(yNaTerug - yVoorTerug) < 30, `${yVoorTerug} -> ${yNaTerug}`);
 
   await page.locator('button:has-text("📅 Kalender")').click();
   await page.waitForSelector('[title*="klik om te wijzigen"]');
@@ -577,15 +609,20 @@ if (rosterPeriod) {
   await lateCell.scrollIntoViewIfNeeded();
   await page.waitForTimeout(300);
   const calYBefore = await page.evaluate(() => window.scrollY);
+  // The day itself, held as an element: its title changes once someone is on it.
+  const celVast = await lateCell.elementHandle();
+  const celYVoor = (await celVast.boundingBox()).y;
   await lateCell.click({ button: 'right' });
   await page.waitForFunction(() => document.querySelectorAll('[role="menu"] button').length > 2);
   await page.locator('[role="menu"] button').first().click();
   await page.waitForTimeout(1500);
-  const calYAfter = await page.evaluate(() => window.scrollY);
+  const celYNa = (await celVast.boundingBox())?.y;
   rec('Dienstrooster (kalender): na toekennen sluit het menu',
       (await page.locator('[role="menu"]').count()) === 0);
-  rec('Dienstrooster (kalender): de pagina springt niet naar boven',
-      calYBefore > 500 && Math.abs(calYAfter - calYBefore) < 30, `${calYBefore} -> ${calYAfter}`);
+  // Measured on the day, not on the scroll position: since 2.0.2 the browser scrolls along with the undo
+  // banner that appears above, which is just what keeps the day in place.
+  rec('Dienstrooster (kalender): de dag blijft op zijn plek, de pagina springt niet naar boven',
+      calYBefore > 500 && celYNa !== undefined && Math.abs(celYNa - celYVoor) < 30, `${celYVoor} -> ${celYNa}`);
   rec('…en die toekenning is weer ongedaan gemaakt', (await undoLast()) === 200);
 
   // The fourth view under Dienstrooster: the planner's overview of the
@@ -607,10 +644,12 @@ for (const f of failedRequests) console.log('   ' + f);
 // and every 404 by message text - which also covered the favicon 404 this
 // project once had, and would have hidden any genuine failing request
 // behind the same two patterns.
-const unexpected = consoleErrors.filter((e) => !/\/api\/auth\/change-password/.test(e));
+// The second expected entry: removing a member that reaches a roster is answered 409 once (lib/membershipRooster.ts), then confirmed.
+const verwacht = (e) => /\/api\/auth\/change-password/.test(e) || /409.*\/api\/planner\/pool\/[^/]+\/members\/|\/api\/planner\/pool\/[^/]+\/members\/.*status of 409/.test(e);
+const unexpected = consoleErrors.filter((e) => !verwacht(e));
 rec('No unexpected page errors', unexpected.length === 0, unexpected.slice(0, 2).join(' | '));
 rec('The only >=400 is this script\'s own weak-password test',
-    failedRequests.every((f) => /change-password/.test(f)),
+    failedRequests.every((f) => /change-password/.test(f) || /409 DELETE \/api\/planner\/pool\/[^/]+\/members\//.test(f)),
     failedRequests.join(' | ') || 'none');
 
 // app/tab-icon/route.tsx generates the browser-tab icon, so the

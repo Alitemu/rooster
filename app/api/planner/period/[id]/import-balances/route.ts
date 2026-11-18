@@ -1,7 +1,9 @@
 /**
  * POST /api/planner/period/[id]/import-balances - Bulk-import initial balances
  *
- * Body: { rows: [{ codenaam, AVOND_delta, WEEKEND_delta, FEESTDAG_delta }] }
+ * Body: { rows: [{ codenaam, AVOND_delta, WEEKEND_delta, FEESTDAG_delta }], bevestigd? }
+ * A person who has a beginsaldo from an earlier import is replaced by the file, a blank
+ * cell included: 409 SALDO_BESTAAT until bevestigd is true.
  * Each nonzero delta becomes a BEGINSALDO ledger entry for this period.
  */
 
@@ -11,11 +13,14 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { aiosNotYetDenial } from '@/lib/aiosPeriod';
 import { trashedPeriodDenial } from '@/lib/periodTrash';
+import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
 import { unauthorizedResponse, internalErrorResponse, parseJsonBody } from '@/lib/api-errors';
 import { objectRows, badRequest } from '@/lib/requestFields';
 import { validateLedgerDelta } from '@/lib/ledgerDelta';
 import type { ApiErrorResponse, ApiSuccessResponse } from '@/types';
 import { periodStatusLabel } from '@/lib/statusLabels';
+import { bestaandBeginsaldo } from '@/lib/importSjabloonBouwen';
+import { doorgeschovenSaldo } from '@/lib/carryOver';
 
 interface BalanceRow {
   codenaam: string;
@@ -25,6 +30,28 @@ interface BalanceRow {
 }
 
 const COUNTERS = ['AVOND', 'WEEKEND', 'FEESTDAG'] as const;
+
+/**
+ * GET /api/planner/period/[id]/import-balances - what the imports of this
+ * period gave each person so far, for the wizard to say so before a new file
+ * replaces it. Codenaam and the two numbers; nothing is changed.
+ */
+export async function GET(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
+  const params = await props.params;
+  try {
+    const auth = getAuthContextFromRequest(req);
+    if (!requirePlannerAccess(auth)) return unauthorizedResponse();
+    const otherDienst = periodDienstDenial(auth, params.id);
+    if (otherDienst) return otherDienst;
+    const aiosNotYet = aiosNotYetDenial(params.id);
+    if (aiosNotYet) return aiosNotYet;
+    const personen = bestaandBeginsaldo(params.id).map((b) => ({ codenaam: b.codenaam, avond: b.AVOND, weekend: b.WEEKEND }));
+    // What the app carried over from the previous period by itself (lib/carryOver.ts), in words.
+    return NextResponse.json({ success: true, data: { personen, doorgeschoven: doorgeschovenSaldo(params.id) } });
+  } catch (error) {
+    return internalErrorResponse('import-balances-list', error);
+  }
+}
 
 export async function POST(req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
   const params = await props.params;
@@ -41,9 +68,17 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // Nothing changes in the prullenbak (lib/periodTrash.ts).
     const inTrash = trashedPeriodDenial(params.id);
     if (inTrash) return inTrash;
+    // A generation that runs has read the saldo already: a change landing now would be in the
+    // ledger but not in the roster it writes, and the period is GEGENEREERD when it is done.
+    if (hasRunningJobForPeriod(params.id)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'GENERATIE_LOOPT', message: GENERATION_RUNNING_MESSAGE } },
+        { status: 409 }
+      );
+    }
 
     const periodId = params.id;
-    const body = await parseJsonBody<{ rows?: unknown }>(req);
+    const body = await parseJsonBody<{ rows?: unknown; bevestigd?: unknown }>(req);
     const rows = objectRows(body.rows) as BalanceRow[] | null;
     if (rows === null) return badRequest('INVALID_ROWS', 'De rijen moeten een lijst zijn');
 
@@ -56,7 +91,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -74,6 +109,28 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         },
       };
       return NextResponse.json(response, { status: 400 });
+    }
+
+    // A beginsaldo that is there already is replaced by what the file says, a
+    // blank cell of the sjabloon included (that is 0): said first, once.
+    if (body.bevestigd !== true) {
+      const inBestand = new Set(rows.map((r) => r.codenaam));
+      const wordtVervangen = bestaandBeginsaldo(periodId).filter((b) => inBestand.has(b.codenaam));
+      if (wordtVervangen.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: 'SALDO_BESTAAT',
+              message:
+                `Voor ${wordtVervangen.length === 1 ? '1 persoon' : `${wordtVervangen.length} personen`} staat al een beginsaldo. ` +
+                'Importeren overschrijft die waarden, ook als een vakje leeg is (dat wordt 0). Bevestig om door te gaan.',
+            },
+            data: { codenamen: wordtVervangen.map((b) => b.codenaam) },
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const now = new Date().toISOString();
@@ -102,6 +159,15 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
        (id, person_id, pool_id, teller, geldt_voor_periode_id, delta, reden, categorie, aangemaakt_door, aangemaakt_op)
        VALUES (?, ?, ?, ?, ?, ?, ?, 'BEGINSALDO', ?, ?)`
     );
+
+    // A file sent twice (a lost response, a second click) must not count twice: the person's earlier
+    // imported beginsaldo for this period is replaced by what this file says. A correction made by hand
+    // (ledger-corrections) is another category and stays.
+    const deleteEarlier = db.prepare(
+      `DELETE FROM dienstrooster_ledger_entry
+       WHERE person_id = ? AND geldt_voor_periode_id = ? AND categorie = 'BEGINSALDO' AND reden = 'Geïmporteerd beginsaldo'`
+    );
+    const replacedFor = new Set<string>();
 
     const importAll = db.transaction((importRows: BalanceRow[]) => {
       for (const row of importRows) {
@@ -132,6 +198,11 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           continue;
         }
 
+        // Check every number of the row first: a row with one bad number is
+        // skipped as a whole, so the person keeps the saldo an earlier
+        // import gave them instead of losing it to a half-written row.
+        const entries: Array<{ counter: (typeof COUNTERS)[number]; delta: number }> = [];
+        let rowOk = true;
         for (const counter of COUNTERS) {
           const delta = row[`${counter}_delta` as keyof BalanceRow] as number | undefined;
           if (!delta) continue;
@@ -147,9 +218,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
           const deltaCheck = validateLedgerDelta(delta, `${row.codenaam} (${counter})`);
           if (!deltaCheck.valid) {
             errors.push(deltaCheck.message);
+            rowOk = false;
             continue;
           }
+          entries.push({ counter, delta });
+        }
+        if (!rowOk) continue;
 
+        if (!replacedFor.has(person.id)) {
+          deleteEarlier.run(person.id, periodId);
+          replacedFor.add(person.id);
+        }
+        for (const { counter, delta } of entries) {
           insertLedger.run(
             crypto.randomUUID(),
             person.id,
@@ -168,9 +248,10 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
 
     importAll(rows);
 
-    const response: ApiSuccessResponse<{ imported: number; errors: string[] }> = {
+    // personen: how many people the file gave a beginsaldo (a row of zeros included), for the planner to check.
+    const response: ApiSuccessResponse<{ imported: number; personen: number; errors: string[] }> = {
       success: true,
-      data: { imported, errors },
+      data: { imported, personen: replacedFor.size, errors },
     };
 
     return NextResponse.json(response);

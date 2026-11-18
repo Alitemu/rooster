@@ -275,3 +275,42 @@ export function refreshCarryOverForPeriod(periodId: string, actorId: string): { 
   write();
   return { entries: entries.length, changed: true };
 }
+
+export interface DoorgeschovenSaldo {
+  /** The published period the carry-over comes from; null when none is published now. */
+  vorige_periode: string | null;
+  /** Each booked row, as the ledger says it: "1 avonddienst in te halen van vorige periode". */
+  regels: Array<{ codenaam: string; tekst: string }>;
+}
+
+/**
+ * The carry-over as the planner sees it on the period page (Import en
+ * correcties, 1.4.0). The rows were on no screen at all: audit 1.3.0 found
+ * one booked exactly right that the planner could only take on trust.
+ * Null for a concept (nothing is booked before the period opens) and for a
+ * pool's first period. Rows booked from a period that is unpublished for the
+ * moment stay (refreshCarryOverForPeriod), so they show without its name.
+ */
+export function doorgeschovenSaldo(periodId: string): DoorgeschovenSaldo | null {
+  const period = db
+    .prepare('SELECT pool_id, start_datum, status FROM dienstrooster_schedule_period WHERE id = ?')
+    .get(periodId) as { pool_id: string; start_datum: string; status: string } | undefined;
+  if (!period || period.status === 'CONCEPT') return null;
+
+  const vorige = findPreviousPublishedPeriod(period.pool_id, period.start_datum);
+  const regels = db
+    .prepare(
+      `SELECT p.codenaam, l.reden AS tekst
+       FROM dienstrooster_ledger_entry l
+       JOIN dienstrooster_person p ON p.id = l.person_id
+       WHERE l.geldt_voor_periode_id = ? AND l.categorie = 'CARRY_OVER'
+       ORDER BY p.codenaam, CASE l.teller WHEN 'AVOND' THEN 0 WHEN 'WEEKEND' THEN 1 ELSE 2 END`
+    )
+    .all(periodId) as Array<{ codenaam: string; tekst: string }>;
+  if (!vorige && regels.length === 0) return null;
+
+  const naam = vorige
+    ? (db.prepare('SELECT naam FROM dienstrooster_schedule_period WHERE id = ?').get(vorige.id) as { naam: string }).naam
+    : null;
+  return { vorige_periode: naam, regels };
+}

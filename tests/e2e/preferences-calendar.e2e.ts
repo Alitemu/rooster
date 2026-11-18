@@ -111,6 +111,48 @@ test.describe('the preferences calendar on a phone', () => {
     await openCalendar(page);
     const titles = await page.locator('button[title]').evaluateAll((els) => els.map((el) => el.getAttribute('title') ?? ''));
     expect(titles.filter((t) => /ABSOLUUT|LIEVER_NIET|VOORKEUR/.test(t))).toEqual([]);
-    for (const word of ['voorkeur', 'liever niet', 'geblokkeerd']) expect(titles.some((t) => t.includes(`: ${word} (`)), word).toBe(true);
+    for (const word of ['voorkeur', 'liever niet', 'geblokkeerd']) expect(titles.some((t) => t.includes(`: ${word}.`)), word).toBe(true);
   });
+
+  // 2.1.0 (audit per role, R2-03): how to mark a day stood only in a tooltip, "rechtsklik voor opties", which a
+  // phone never shows. Now it is on the page; the right mouse button only where there is a mouse.
+  test('says on the page how to mark a dienst, and the right mouse button only with a mouse', async ({ page, browser }) => {
+    await openCalendar(page);
+    const uitleg = page.getByTestId('kalender-uitleg');
+    await expect(uitleg).toContainText('Tik of klik op een dienst om te wisselen tussen beschikbaar, voorkeur, liever niet en geblokkeerd.');
+    await expect(uitleg.getByText('Met de rechtermuisknop kies je de stand direct.')).toBeVisible();
+    const titles = await page.locator('button[title]').evaluateAll((els) => els.map((el) => el.getAttribute('title') ?? ''));
+    expect(titles.filter((t) => /rechtsklik/i.test(t))).toEqual([]);
+    expect(titles.some((t) => t.endsWith('Tik of klik voor voorkeur.'))).toBe(true);
+
+    const telefoon = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+    const tp = await telefoon.newPage();
+    try {
+      await openCalendar(tp);
+      const tUitleg = tp.getByTestId('kalender-uitleg');
+      await expect(tUitleg).toContainText('Tik of klik op een dienst');
+      await expect(tUitleg.getByText('Met de rechtermuisknop kies je de stand direct.')).toBeHidden();
+    } finally {
+      await telefoon.close();
+    }
+  });
+});
+
+test('a new absence starts without dates and "Van" sets "Tot en met" to the day after', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto(getPersonalLinkUrl(token));
+  await page.getByRole('button', { name: /Deeltijd/ }).first().click();
+  await expect(page.getByRole('heading', { name: 'Afwezigheid opgeven' })).toBeVisible();
+  // It started on the whole period (1.4.0 and before): one tap on Toevoegen blocked every day of it.
+  const van = page.getByLabel('Van', { exact: true });
+  // The deeltijd form above has a "Tot en met" of its own: the second one is the absence's.
+  const tot = page.getByLabel('Tot en met').nth(1);
+  await expect(van).toHaveValue('');
+  await expect(tot).toHaveValue('');
+  const toevoegen = page.getByRole('button', { name: 'Toevoegen' }).nth(1);
+  await expect(toevoegen).toBeDisabled();
+  await van.fill('09-03-2099');
+  await expect(tot).toHaveValue('10-03-2099');
+  await expect(toevoegen).toBeEnabled();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
 });

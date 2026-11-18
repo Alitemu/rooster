@@ -12,6 +12,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { withBasePath } from '@/lib/basePath';
 import { AiosSectie } from '@/components/AiosSectie';
 import type { GeschiedenisPlan, GeschiedenisRij } from '@/lib/aiosGeschiedenis';
+import { foutTekst } from '@/lib/aiosFoutTekst';
+import { BestandKiezer } from '@/components/BestandKiezer';
+
+/** The largest workbook sent: as base64 it must stay under the 1 MB a request body may be, or the server sees no file at all (a copy of lib/sheetUpload.ts, which is the achterwacht's). */
+const MAX_WERKMAP_BYTES = 700_000;
 
 function toBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
@@ -59,6 +64,8 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
   const [plan, setPlan] = useState<GeschiedenisPlan | null>(null);
   const [bezig, setBezig] = useState(false);
   const [melding, setMelding] = useState<{ fout: boolean; tekst: string } | null>(null);
+  // Saving replaces the whole history: asked first when there is one (the server asks too).
+  const [vervangVraag, setVervangVraag] = useState<string | null>(null);
 
   const laad = useCallback(() => {
     fetch(withBasePath(`/api/aios/periode/${periodId}/geschiedenis`))
@@ -67,12 +74,13 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
         if (!res.ok || !data?.success) throw new Error(data?.error?.message || 'Laden is mislukt');
         setStand(data.data);
       })
-      .catch((err) => setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Laden is mislukt' }));
+      .catch((err) => setMelding({ fout: true, tekst: foutTekst(err, 'Laden is mislukt') }));
   }, [periodId]);
   useEffect(() => laad(), [laad]);
 
   const kies = async (file: File | undefined) => {
     setPlan(null);
+    setVervangVraag(null);
     setMelding(null);
     if (!file) return;
     if (!/\.xlsx$/i.test(file.name)) {
@@ -80,33 +88,49 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
       setMelding({ fout: true, tekst: 'Kies een Excel-bestand (.xlsx). Sla het bestand in Excel op als "Excel-werkmap".' });
       return;
     }
+    if (file.size > MAX_WERKMAP_BYTES) {
+      setBestand(null);
+      setMelding({ fout: true, tekst: 'Dit Excel-bestand is te groot om in te lezen.' });
+      return;
+    }
     setBestand({ naam: file.name, data: toBase64(await file.arrayBuffer()) });
   };
 
-  const stuur = async (toepassen: boolean) => {
+  const stuur = async (toepassen: boolean, bevestigd = false) => {
     if (!bestand) return;
     setBezig(true);
     setMelding(null);
+    setVervangVraag(null);
     try {
       const res = await fetch(withBasePath(`/api/aios/periode/${periodId}/geschiedenis`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ bestand: bestand.data, toepassen }),
+        body: JSON.stringify({ bestand: bestand.data, toepassen, ...(bevestigd ? { bevestigd: true } : {}) }),
       });
       const data = await res.json().catch(() => null);
+      if (res.status === 409 && data?.error?.code === 'GESCHIEDENIS_BESTAAT') {
+        setPlan(data.error.plan);
+        setVervangVraag(data.error.message);
+        return;
+      }
       if (!res.ok || !data?.success) {
         if (data?.error?.plan) setPlan(data.error.plan);
         throw new Error(data?.error?.message || 'Inlezen is mislukt');
       }
       setPlan(data.data.plan);
       if (data.data.toegepast) {
-        setMelding({ fout: false, tekst: 'Bewaard. Het telt mee vanaf de volgende keer dat je een rooster maakt.' });
+        // A roster already made does not have it (1.1.1): said again here, the check's box goes with the plan.
+        const waarschuwingen: string[] = data.data.plan?.waarschuwingen ?? [];
+        setMelding({
+          fout: false,
+          tekst: ['Bewaard. Het telt mee vanaf de volgende keer dat je een rooster maakt.', ...waarschuwingen].join(' '),
+        });
         setBestand(null);
         setPlan(null);
         laad();
       }
     } catch (err) {
-      setMelding({ fout: true, tekst: err instanceof Error ? err.message : 'Inlezen is mislukt' });
+      setMelding({ fout: true, tekst: foutTekst(err, 'Inlezen is mislukt') });
     } finally {
       setBezig(false);
     }
@@ -138,20 +162,46 @@ export function AiosGeschiedenis({ periodId }: { periodId: string }) {
         <a className={`${knop} inline-block`} href={withBasePath(`/api/aios/periode/${periodId}/geschiedenis-sjabloon`)}>
           Sjabloon downloaden
         </a>
-        <label className="block text-sm">
+        <div className="text-sm">
           <span className="block text-xs font-medium text-neutral-700 mb-1">Ingevuld bestand</span>
-          <input type="file" accept=".xlsx" aria-label="Excel-bestand met de geschiedenis" disabled={bezig} onChange={(e) => kies(e.target.files?.[0])} />
-        </label>
+          <BestandKiezer accept=".xlsx" aria-label="Excel-bestand met de geschiedenis" disabled={bezig} onKies={(bestand) => kies(bestand ?? undefined)} />
+        </div>
         {bestand && (
           <div className="flex flex-wrap gap-2">
             <button type="button" className={knop} disabled={bezig} onClick={() => stuur(false)}>
               Controleren
             </button>
             {plan && plan.problemen.length === 0 && (
-              <button type="button" className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed" disabled={bezig} onClick={() => stuur(true)}>
+              <button
+                type="button"
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={bezig}
+                onClick={() => stuur(true)}
+              >
                 Bewaren
               </button>
             )}
+          </div>
+        )}
+        {plan && plan.waarschuwingen.length > 0 && (
+          <div className="rounded border-2 border-neutral-900 p-3 text-sm space-y-1" role="alert" data-testid="aios-geschiedenis-waarschuwing">
+            {plan.waarschuwingen.map((w) => (
+              <p key={w}>{w}</p>
+            ))}
+          </div>
+        )}
+        {vervangVraag && (
+          <div className="rounded border-2 border-dashed border-neutral-900 p-3 text-sm space-y-2" role="alert" data-testid="aios-geschiedenis-vervangen">
+            <p className="font-medium">⚠ {vervangVraag}</p>
+            <p>Weet je het zeker?</p>
+            <div className="flex gap-2">
+              <button type="button" className="btn-primary disabled:opacity-50" disabled={bezig} onClick={() => stuur(true, true)}>
+                Ja, vervangen
+              </button>
+              <button type="button" className={knop} disabled={bezig} onClick={() => setVervangVraag(null)}>
+                Annuleren
+              </button>
+            </div>
           </div>
         )}
         {plan && plan.problemen.length > 0 && (

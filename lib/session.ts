@@ -4,7 +4,7 @@
  * Lightweight signed-cookie sessions (HMAC-SHA256, no external deps).
  * Two kinds of session:
  * - person: issued from a verified personal access link, scoped to that person only
- * - staff: issued from password(+TOTP) login, scoped to an ADMIN/PLANNER person
+ * - staff: issued from password login, scoped to an ADMIN/PLANNER person
  */
 
 import crypto from 'crypto';
@@ -75,6 +75,9 @@ function loadOrCreatePersistedSecret(): string {
   try {
     const existing = fs.readFileSync(file, 'utf8').trim();
     if (existing.length >= 32) return existing;
+    // An empty or cut-off file (a crash while it was being written, a full disk): without this it stayed
+    // in the way of the `wx` below for good, and every request failed until someone deleted it by hand.
+    fs.unlinkSync(file);
   } catch {
     // not created yet - fall through
   }
@@ -146,8 +149,8 @@ function sign(value: string): string {
 
 /**
  * Sign an arbitrary JSON-serializable payload with an expiry. Generic
- * building block behind createSessionToken and one-off tokens like
- * TOTP-enrollment tokens.
+ * building block behind createSessionToken and one-off tokens such as the
+ * password-reset link.
  */
 export function signPayload<T extends object>(payload: T, maxAgeSeconds: number): string {
   const expiresAt = Date.now() + maxAgeSeconds * 1000;
@@ -200,7 +203,11 @@ export function createSessionToken(payload: SessionPayload, maxAgeSeconds: numbe
  * tampered with, or expired.
  */
 export function verifySessionToken(token: string | undefined | null): SessionPayload | null {
-  return verifyPayload<SessionPayload>(token);
+  const payload = verifyPayload<SessionPayload>(token);
+  // Other signed tokens (the setup token) share the key and are told apart by their kind only: one that
+  // is not a session must never be taken for one.
+  if (!payload || (payload.kind !== 'staff' && payload.kind !== 'person')) return null;
+  return payload;
 }
 
 export function setSessionCookie(

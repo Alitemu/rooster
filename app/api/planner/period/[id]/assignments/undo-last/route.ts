@@ -14,6 +14,7 @@
  * overwriting whatever is there now.
  */
 
+import { closeSwapsAfterRosterChange } from '@/lib/swapLifecycle';
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
 import { hasRunningJobForPeriod, GENERATION_RUNNING_MESSAGE } from '@/lib/rosterGenerationJobs';
@@ -64,7 +65,7 @@ export async function POST(
     if (!pending || pending.scope !== 'PERIOD_ASSIGNMENT') {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'NOTHING_TO_UNDO', message: 'Er is niets meer om ongedaan te maken' },
+        error: { code: 'NOTHING_TO_UNDO', message: 'Ongedaan maken kan alleen direct na de wijziging. Pas het zo nodig met de hand aan.' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -75,7 +76,7 @@ export async function POST(
     if (!period) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERIOD_NOT_FOUND', message: `Periode ${periodId} niet gevonden` },
+        error: { code: 'PERIOD_NOT_FOUND', message: 'Periode niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -199,6 +200,9 @@ export async function POST(
     }
 
     clearPendingUndo(periodId);
+
+    // An undo can move a dienst to someone else again: open swap requests about it can never be approved.
+    db.transaction(() => closeSwapsAfterRosterChange(periodId, now))().meldingen.forEach((m) => m.send());
 
     const response: ApiSuccessResponse<{ undone: true; label: string }> = {
       success: true,

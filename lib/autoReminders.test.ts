@@ -11,6 +11,7 @@ import {
   type SmtpSink,
 } from '@/tests/smtpSink';
 import { reminderMoment, runAutoReminders, logRemindersSent, CATCH_UP_MS, autoReminderStatus } from './autoReminders';
+import { claimVerzending } from './inFlight';
 
 /**
  * The rules:
@@ -304,6 +305,18 @@ describe('runAutoReminders', () => {
     expect(runs(f.periodId)).toHaveLength(0);
     // Set up an hour later: still inside the window, so it goes after all.
     configureSmtp(sink);
+    await run(new Date(moment(7).getTime() + HOUR));
+    expect(verzendlijsten()).toHaveLength(1);
+  });
+
+  it('waits while a send by hand for the period is running, and goes afterwards', async () => {
+    configureSmtp(sink);
+    const f = createFixture();
+    const release = claimVerzending(`remind:${f.periodId}`)!;
+    await run(moment(7));
+    expect(verzendlijsten()).toHaveLength(0);
+    expect(runs(f.periodId)).toHaveLength(0);
+    release();
     await run(new Date(moment(7).getTime() + HOUR));
     expect(verzendlijsten()).toHaveLength(1);
   });

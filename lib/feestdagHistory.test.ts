@@ -46,8 +46,27 @@ function newPool(): void {
   ids.avond = insert('dienstrooster_shift_type', { pool_id: pool, naam: 'Avond', teller: 'AVOND' });
 }
 
+/**
+ * The factor is no longer typed in: it follows from the part-time days
+ * (lib/deelnamefactor.ts). Half is two days off every week and one every
+ * other week.
+ */
 function member(who: string, vanaf = '2020-01-01', tot = '2100-12-31', factor = 1): void {
-  insert('dienstrooster_pool_membership', { person_id: ids[who], pool_id: pool, deelnamefactor: factor, geldig_vanaf: vanaf, geldig_tot: tot });
+  insert('dienstrooster_pool_membership', { person_id: ids[who], pool_id: pool, geldig_vanaf: vanaf, geldig_tot: tot });
+  if (factor === 1) return;
+  expect(factor).toBe(0.5);
+  const now = new Date().toISOString();
+  for (const [weekdag, frequentie] of [['MA', 'ELKE_WEEK'], ['DI', 'ELKE_WEEK'], ['WO', 'EVEN_WEKEN']]) {
+    insert('dienstrooster_parttime_pattern', {
+      person_id: ids[who],
+      weekdag,
+      frequentie,
+      geldig_vanaf: '2020-01-01',
+      geldig_tot: '2100-12-31',
+      aangemaakt_door: ids[who],
+      aangemaakt_op: now,
+    });
+  }
 }
 
 /**

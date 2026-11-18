@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { db } from '@/db/client';
-import { getBaseUrl, loginAsBeheerder, openAiosSectie, loginAsPlanner } from './setup';
+import { getBaseUrl, loginAsBeheerder, openAiosSectie, loginAsPlanner, onderdelenInLijst } from './setup';
 
 /**
  * The AIOS roster, step 1 (docs/aios-rooster.md): the beheerder picks the
@@ -47,27 +47,30 @@ test('the beheerder makes an AIOS quarter and sees its diensten, blocks and poin
   made.push(page.url().split('/planner/period/')[1]);
   await expect(page.getByRole('heading', { name: `AIOS ${opties[opties.length - 1]}` })).toBeVisible();
 
-  // Every part folds, as on the achterwacht's page (0.86.0): all closed at first.
-  const knop = (titel: string) => page.getByRole('heading', { name: titel, exact: true }).getByRole('button');
-  for (const titel of ['Voorkeuren van de AIOS', 'Voortgangstoets', 'Geschiedenis van vóór de app', 'Punten in dit kwartaal', 'Diensten', 'Per week']) {
-    await expect(knop(titel)).toHaveAttribute('aria-expanded', 'false');
-  }
+  // The sections as a list on the left, as on the achterwacht's page (2.0.0; they folded from 0.86.0): "Periode"
+  // first, the history from before the app first of the rest, the roster last (the planner's wish).
+  const titels = await onderdelenInLijst(page);
+  expect(titels[0]).toBe('Periode');
+  expect(titels[1]).toBe('Geschiedenis van vóór de app');
+  expect(titels).toEqual(expect.arrayContaining(['Voorkeuren van de AIOS', 'Voortgangstoets', 'Punten in dit kwartaal', 'Dienstrooster (nog niet gegenereerd)']));
+  // One section at a time: a concept opens where it is opened.
+  await expect(page.getByRole('heading', { level: 2, name: 'Voorkeuren van de AIOS' })).toBeVisible();
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeHidden();
   await openAiosSectie(page, 'Punten in dit kwartaal');
   await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeVisible();
-  // Opening another closes it, unless it is pinned.
-  await openAiosSectie(page, 'Diensten');
-  await expect(knop('Punten in dit kwartaal')).toHaveAttribute('aria-expanded', 'false');
-  await page.getByRole('button', { name: /^Vastzetten/ }).click();
+  // Another section replaces it.
+  await openAiosSectie(page, 'Dienstrooster (nog niet gegenereerd)');
+  // The table of the diensten is the legend of that section.
+  await expect(page.getByTestId('aios-dienstrooster-legenda').getByRole('heading', { name: 'Diensten (toelichting)' })).toBeVisible();
+  await expect(page.getByText(/hebben de AIOS samen minstens/)).toBeHidden();
   await openAiosSectie(page, 'Voorkeuren van de AIOS');
-  await expect(knop('Diensten')).toHaveAttribute('aria-expanded', 'true');
 
   // Opening asks for an AIOS taking part; the demo's AIOS pool is empty.
   await expect(page.getByLabel('Deadline voor de voorkeuren')).toBeVisible();
   await page.getByRole('button', { name: 'Periode openen' }).click();
   await expect(page.getByText(/Er doet nog geen AIOS mee in dit kwartaal/)).toBeVisible();
   // Thirteen or fourteen weeks, each with its evening and night blocks.
-  await openAiosSectie(page, 'Per week');
+  await openAiosSectie(page, 'Dienstrooster (nog niet gegenereerd)');
   const weken = await page.getByText(/^Week \d+ en \d+ · /).count();
   expect([13, 14]).toContain(weken);
   await expect(page.locator('[title^="Blok zo t/m di"]').first()).toBeVisible();

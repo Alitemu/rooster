@@ -92,3 +92,20 @@ describe('shiftChanges and the definitieve mail', () => {
     expect(definitiefBericht({ naam: 'V' }, 'p0', shift, { erbij: [], eraf: [] }, null).tekst).not.toContain('Je rooster in de app');
   });
 });
+
+/**
+ * Audit per role R-05 (1.7.0): the mail with the voorlopige roster asks to tell the planner when something
+ * is wrong, but did not say where. With the contactadres of Mailinstellingen it does.
+ */
+describe('the voorlopige mail and the planner\'s address', () => {
+  const shift = [{ person_id: 'p0', datum: '2027-01-04', teller: 'AVOND' }];
+  it('says where to mail when there is a contactadres', () => {
+    expect(voorlopigBericht({ naam: 'V' }, 'p0', shift, null, 'planner@organisatie.example').tekst).toContain(
+      'Klopt er iets niet? Laat het de planner zo snel mogelijk weten: mail naar planner@organisatie.example. Zonder reactie'
+    );
+  });
+  it('keeps the sentence as it was without one', () => {
+    expect(voorlopigBericht({ naam: 'V' }, 'p0', shift, null).tekst).toContain('Laat het de planner zo snel mogelijk weten. Zonder reactie');
+    expect(voorlopigBericht({ naam: 'V' }, 'p0', shift, null, null).tekst).not.toContain('mail naar');
+  });
+});

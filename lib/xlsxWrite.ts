@@ -150,7 +150,9 @@ function sheetXml(sheet: XlsxSheet, strings: (text: string) => number): string {
 
   const cols = sheet.columns
     .map((column, c) => {
-      const widest = Math.max(shownLength(column.header), ...sheet.rows.map((row) => shownLength(row[c])));
+      // A loop, not Math.max(...): spreading 125 000 rows overflows the call stack.
+      let widest = shownLength(column.header);
+      for (const row of sheet.rows) widest = Math.max(widest, shownLength(row[c]));
       const w = column.width ?? Math.min(60, Math.max(8, widest + 2));
       return `<col min="${c + 1}" max="${c + 1}" width="${w}" customWidth="1"/>`;
     })
@@ -199,11 +201,18 @@ const STYLES_XML =
   '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>' +
   '</styleSheet>';
 
-/** The .xlsx file for one sheet. */
-export function writeWorkbook(sheet: XlsxSheet): Buffer {
+/**
+ * The .xlsx file for one sheet, or for several as tabs in the order given (1.13.0: the
+ * wijzigingsgeschiedenis has a second tab). One sheet gives the very file it always did.
+ */
+export function writeWorkbook(sheet: XlsxSheet | XlsxSheet[]): Buffer {
+  const sheets = Array.isArray(sheet) ? sheet : [sheet];
+  if (sheets.length === 0) throw new Error('A workbook needs a sheet');
   // \x27 is the apostrophe: a bare one in a regular expression reads as
   // the start of a string to app/dutchStyle.test.ts.
-  if (!/^[^\\/?*[\]:\x27]{1,31}$/.test(sheet.name)) throw new Error(`Invalid sheet name: ${sheet.name}`);
+  for (const s of sheets) if (!/^[^\\/?*[\]:\x27]{1,31}$/.test(s.name)) throw new Error(`Invalid sheet name: ${s.name}`);
+  // Excel refuses a workbook with two tabs of one name, whatever the capitals.
+  if (new Set(sheets.map((s) => s.name.toLowerCase())).size !== sheets.length) throw new Error('Two sheets with the same name');
 
   const shared: string[] = [];
   const index = new Map<string, number>();
@@ -218,12 +227,20 @@ export function writeWorkbook(sheet: XlsxSheet): Buffer {
     }
     return i;
   };
-  const worksheet = sheetXml(sheet, strings);
+  const worksheets = sheets.map((s) => sheetXml(s, strings));
 
-  const lastCol = columnName(Math.max(sheet.columns.length, 1) - 1);
-  const range = `'${sheet.name}'!$A$1:$${lastCol}$${sheet.rows.length + 1}`;
-  const printTitles =
-    (sheet.frozenColumns ? `'${sheet.name}'!$A:$${columnName(sheet.frozenColumns - 1)},` : '') + `'${sheet.name}'!$1:$1`;
+  const definedNames = sheets
+    .map((s, i) => {
+      const lastCol = columnName(Math.max(s.columns.length, 1) - 1);
+      const range = `'${s.name}'!$A$1:$${lastCol}$${s.rows.length + 1}`;
+      const printTitles = (s.frozenColumns ? `'${s.name}'!$A:$${columnName(s.frozenColumns - 1)},` : '') + `'${s.name}'!$1:$1`;
+      return (
+        `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">${xmlText(range)}</definedName>` +
+        `<definedName name="_xlnm.Print_Titles" localSheetId="${i}">${xmlText(printTitles)}</definedName>`
+      );
+    })
+    .join('');
+  const n = sheets.length;
 
   const files: Array<[string, string]> = [
     [
@@ -233,7 +250,9 @@ export function writeWorkbook(sheet: XlsxSheet): Buffer {
         '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
         '<Default Extension="xml" ContentType="application/xml"/>' +
         '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
-        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+        sheets
+          .map((_, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`)
+          .join('') +
         '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
         '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
         '</Types>',
@@ -250,20 +269,17 @@ export function writeWorkbook(sheet: XlsxSheet): Buffer {
       XML_HEAD +
         `<workbook xmlns="${MAIN_NS}" xmlns:r="${REL_NS}">` +
         '<bookViews><workbookView/></bookViews>' +
-        `<sheets><sheet name="${xmlText(sheet.name)}" sheetId="1" r:id="rId1"/></sheets>` +
-        '<definedNames>' +
-        `<definedName name="_xlnm._FilterDatabase" localSheetId="0" hidden="1">${xmlText(range)}</definedName>` +
-        `<definedName name="_xlnm.Print_Titles" localSheetId="0">${xmlText(printTitles)}</definedName>` +
-        '</definedNames>' +
+        `<sheets>${sheets.map((s, i) => `<sheet name="${xmlText(s.name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>` +
+        `<definedNames>${definedNames}</definedNames>` +
         '</workbook>',
     ],
     [
       'xl/_rels/workbook.xml.rels',
       XML_HEAD +
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        `<Relationship Id="rId1" Type="${REL_NS}/worksheet" Target="worksheets/sheet1.xml"/>` +
-        `<Relationship Id="rId2" Type="${REL_NS}/styles" Target="styles.xml"/>` +
-        `<Relationship Id="rId3" Type="${REL_NS}/sharedStrings" Target="sharedStrings.xml"/>` +
+        sheets.map((_, i) => `<Relationship Id="rId${i + 1}" Type="${REL_NS}/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('') +
+        `<Relationship Id="rId${n + 1}" Type="${REL_NS}/styles" Target="styles.xml"/>` +
+        `<Relationship Id="rId${n + 2}" Type="${REL_NS}/sharedStrings" Target="sharedStrings.xml"/>` +
         '</Relationships>',
     ],
     ['xl/styles.xml', STYLES_XML],
@@ -274,7 +290,7 @@ export function writeWorkbook(sheet: XlsxSheet): Buffer {
         shared.map((s) => `<si><t xml:space="preserve">${xmlText(s)}</t></si>`).join('') +
         '</sst>',
     ],
-    ['xl/worksheets/sheet1.xml', worksheet],
+    ...worksheets.map((xml, i): [string, string] => [`xl/worksheets/sheet${i + 1}.xml`, xml]),
   ];
   return zip(files);
 }
@@ -360,8 +376,8 @@ export function xlsxAttachment(prefix: string, naam: string): string {
   return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
-/** The download response for a sheet. Not cached: it holds codenamen and, for the invitations, personal links. */
-export function xlsxDownload(sheet: XlsxSheet, prefix: string, naam: string): NextResponse {
+/** The download response for a sheet, or several as tabs. Not cached: it holds codenamen and, for the invitations, personal links. */
+export function xlsxDownload(sheet: XlsxSheet | XlsxSheet[], prefix: string, naam: string): NextResponse {
   return new NextResponse(new Uint8Array(writeWorkbook(sheet)), {
     headers: {
       'Content-Type': MIME,

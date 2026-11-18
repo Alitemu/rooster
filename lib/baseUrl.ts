@@ -19,11 +19,14 @@ import { BASE_PATH } from './basePath';
  * of what this process itself sees on its own plain-HTTP connection to
  * Caddy.
  */
+/** For a request without a usable Host header: the address of a server on the default port (443). */
+export const FALLBACK_ORIGIN = 'https://localhost';
+
 export function resolveBaseUrl(req: NextRequest): string {
   if (process.env.BASE_URL) return process.env.BASE_URL;
   const host = req.headers.get('host');
   // A host name or address with an optional port, nothing else.
-  const origin = host && /^[a-z0-9.-]+(:\d{1,5})?$/i.test(host) ? `https://${host}` : 'https://localhost:8010';
+  const origin = host && /^[a-z0-9.-]+(:\d{1,5})?$/i.test(host) ? `https://${host}` : FALLBACK_ORIGIN;
   // The app's own sub-folder, when it runs in one (lib/basePath.ts).
   return `${origin}${BASE_PATH}`;
 }

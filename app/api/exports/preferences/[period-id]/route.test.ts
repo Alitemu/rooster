@@ -192,7 +192,7 @@ describe('GET /api/exports/preferences/[period-id]', () => {
     expect(col(leeg)).toBeGreaterThan(3);
     expect(row('2027-01-09').slice(0, 4)).toEqual(['2027-01-09', 'zaterdag', '1', 'weekenddienst']);
 
-    expect(row('2027-01-04')[col(a)]).toBe('geblokkeerd (parttime)');
+    expect(row('2027-01-04')[col(a)]).toBe('geblokkeerd (deeltijd)');
     expect(row('2027-01-05')[col(a)]).toBe('liever niet');
     expect(row('2027-01-09')[col(a)]).toBe('geblokkeerd (fellow)');
     expect(row('2027-01-13')[col(b)]).toBe('voorkeur');

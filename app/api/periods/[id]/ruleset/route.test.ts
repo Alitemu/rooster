@@ -105,4 +105,29 @@ describe('PATCH /api/periods/[id]/ruleset', () => {
     expect((await patch(ids.OPEN, { windowWeeks: 3 })).status).toBe(200);
     expect(statusOf(ids.OPEN).status).toBe('OPEN');
   });
+
+  // Audit per role R-06 (1.7.0): the period page changes the streefbereik of an open period through this
+  // route, before the invitations name it. It could all along; nothing offered it while open.
+  it('changes the streefbereik of an open period and keeps it open', async () => {
+    expect((await patch(ids.OPEN, { bandAvond: [5, 6], bandWeekend: [1, 2], bandFeestdag: [0, 1] })).status).toBe(200);
+    const rij = db.prepare('SELECT status, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?').get(ids.OPEN) as {
+      status: string;
+      bevroren_ruleset_json: string;
+    };
+    expect(rij.status).toBe('OPEN');
+    expect(JSON.parse(rij.bevroren_ruleset_json)).toMatchObject({ bandAvond: [5, 6], bandWeekend: [1, 2], bandFeestdag: [0, 1] });
+  });
+
+  it('refuses an old version of the period as a whole, 409, and keeps the rules as they were', async () => {
+    const rij = () => db.prepare('SELECT row_version, bevroren_ruleset_json FROM dienstrooster_schedule_period WHERE id = ?').get(ids.OPEN) as { row_version: number; bevroren_ruleset_json: string };
+    const voor = rij();
+    const res = await patch(ids.OPEN, { windowWeeks: 4, rowVersion: voor.row_version - 1 });
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.code).toBe('ROW_VERSION_CONFLICT');
+    expect(rij()).toEqual(voor);
+    // The version that is current is taken, and the version moves on.
+    const goed = await patch(ids.OPEN, { windowWeeks: 4, rowVersion: voor.row_version });
+    expect(goed.status).toBe(200);
+    expect(rij().row_version).toBe(voor.row_version + 1);
+  });
 });

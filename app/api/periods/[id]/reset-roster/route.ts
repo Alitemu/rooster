@@ -15,6 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { wisBevrorenFactoren } from '@/lib/deelnamefactor';
 import { db } from '@/db/client';
 import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-context';
 import { periodDienstDenial } from '@/lib/dienstAccess';
@@ -79,6 +80,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
         ? db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(id).changes
         : 0;
       clearPendingUndo(id);
+      // The factors held with the roster go with it (lib/deelnamefactor.ts).
+      wisBevrorenFactoren(id);
       db.prepare(
         `UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN', row_version = row_version + 1 WHERE id = ?`
       ).run(id);

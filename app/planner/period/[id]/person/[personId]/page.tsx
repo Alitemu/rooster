@@ -18,6 +18,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { PreferencesCalendar } from '@/components/PreferencesCalendar';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Period {
   id: string;
@@ -59,7 +60,7 @@ export default function PersonCalendarPage() {
           }
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Laden mislukt');
+        setError(foutTekst(err, 'Laden mislukt'));
       } finally {
         setLoading(false);
       }

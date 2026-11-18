@@ -15,7 +15,7 @@
  * loadPeriodMembers). Someone removed from the pool after marking days
  * kept a column, although the solver no longer sees them.
  *
- * "Voorkeuren importeren (test)" reads this file back after it was
+ * "Voorkeuren importeren" reads this file back after it was
  * filled in (lib/preferencesImport.ts): the date a real date, the
  * codenamen as they are.
  *
@@ -71,7 +71,7 @@ interface MarkingRow {
  */
 function cell(row: MarkingRow): string {
   const keuze = KEUZE[row.blocking_level] ?? row.blocking_level;
-  if (row.source === 'PARTTIME') return `${keuze} (parttime)`;
+  if (row.source === 'PARTTIME') return `${keuze} (deeltijd)`;
   if (row.source === 'ABSENCE') return `${keuze} (afwezig)`;
   if (row.fellow_blok) return `${keuze} (fellow)`;
   return keuze;

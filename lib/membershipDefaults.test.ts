@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { newMembershipDefaults, FALLBACK_GELDIG_TOT, type PeriodForDefaults } from './membershipDefaults';
+import { newMembershipDefaults, OPEN_EINDE, type PeriodForDefaults } from './membershipDefaults';
 
 /**
- * The rule: someone added to a pool is, by default, a member for the whole
- * period being rostered - never for less of it than the planner meant.
+ * The rules: someone added to a pool is, by default, a member from the start
+ * of the period being rostered, and with an open end: never for less of it
+ * than the planner meant, and never with an end that comes by itself (an
+ * AIOS quarter, or the end of 2029).
  */
 
 const TODAY = '2026-10-13';
@@ -17,12 +19,20 @@ const period = (over: Partial<PeriodForDefaults>): PeriodForDefaults => ({
 });
 
 describe('newMembershipDefaults', () => {
-  it('takes the dates of the one period being rostered', () => {
+  it('starts at the one period being rostered, and does not end with it', () => {
     expect(newMembershipDefaults([period({})], 'pool-a', TODAY)).toEqual({
       geldig_vanaf: '2026-12-28',
-      geldig_tot: '2027-09-05',
+      geldig_tot: '2099-12-31',
       periode: 'Winter',
     });
+  });
+
+  it('never ends by itself before the end of 2099, whatever the periods', () => {
+    expect(OPEN_EINDE).toBe('2099-12-31');
+    const kwartaal = period({ start_datum: '2027-01-06', eind_datum: '2027-04-06' });
+    for (const periods of [[], [kwartaal], [kwartaal, period({ naam: 'Tweede' })]]) {
+      expect(newMembershipDefaults(periods, 'pool-a', TODAY).geldig_tot).toBe(OPEN_EINDE);
+    }
   });
 
   it('counts a closed or generated, not yet published period as being rostered', () => {
@@ -41,13 +51,13 @@ describe('newMembershipDefaults', () => {
     expect(newMembershipDefaults(periods, 'pool-a', TODAY).periode).toBe('Winter');
   });
 
-  it('falls back to today until the end of 2029 without such a period', () => {
-    expect(newMembershipDefaults([], 'pool-a', TODAY)).toEqual({ geldig_vanaf: TODAY, geldig_tot: FALLBACK_GELDIG_TOT, periode: null });
+  it('starts today without such a period', () => {
+    expect(newMembershipDefaults([], 'pool-a', TODAY)).toEqual({ geldig_vanaf: TODAY, geldig_tot: OPEN_EINDE, periode: null });
     expect(newMembershipDefaults([period({ status: 'GEPUBLICEERD' })], 'pool-a', TODAY).periode).toBeNull();
   });
 
   it('falls back when two periods are being rostered at once: which one is not ours to guess', () => {
     const two = [period({}), period({ naam: 'Zomer', status: 'GESLOTEN', start_datum: '2026-06-29', eind_datum: '2026-12-27' })];
-    expect(newMembershipDefaults(two, 'pool-a', TODAY)).toEqual({ geldig_vanaf: TODAY, geldig_tot: '2029-12-31', periode: null });
+    expect(newMembershipDefaults(two, 'pool-a', TODAY)).toEqual({ geldig_vanaf: TODAY, geldig_tot: OPEN_EINDE, periode: null });
   });
 });

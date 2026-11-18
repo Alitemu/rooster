@@ -74,6 +74,15 @@ def test_per_aios_rules_are_caught():
     assert '5_FULLTIME_NACHTBLOK' in _fouten(inp, _aan(blok(inp, 'NACHT', 'ZO_DI', dag(4))))
 
 
+def test_rule_5_from_0_9_fte():
+    inp = weken(1)
+    x = aios(inp, 'x')
+    nacht = _aan(blok(inp, 'NACHT', 'ZO_DI', dag(4)))
+    for fte, fout in ((1.0, True), (0.9, True), (0.89, False), (0.8, False)):
+        x['fte'] = fte
+        assert ('5_FULLTIME_NACHTBLOK' in _fouten(inp, nacht)) is fout, fte
+
+
 def test_blocks_by_hand_and_the_part_above_half():
     inp = weken(2)
     x = aios(inp, 'x', erboven={'NACHTBLOKKEN': 1})

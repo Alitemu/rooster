@@ -321,4 +321,24 @@ describe('verzendlijst over SMTP', () => {
       await plain.close();
     }
   });
+
+  // Audit 4, N-05: the sink's own certificate is self-signed, as a network that opens https on its way out
+  // gives the server one it does not trust. The message said "controleer of de server verbinding heeft met
+  // internet", which is not what is wrong.
+  it('says a certificate the server does not trust is that, not a missing internet connection', async () => {
+    configureSmtp(sink);
+    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '1';
+    const [logins, received] = [sink.logins.length, sink.received.length];
+    const f = createFixture();
+    const res = await sendInvitations(
+      plannerRequest(`http://localhost/api/exports/invitations/${f.periodId}/send`, f.planner),
+      { params: Promise.resolve({ 'period-id': f.periodId }) }
+    );
+    expect(res.status).toBe(502);
+    const message = (await res.json()).error.message;
+    expect(message).toMatch(/certificaat dat deze server niet vertrouwt/);
+    expect(message).not.toMatch(/internet/);
+    expect(sink.logins).toHaveLength(logins);
+    expect(sink.received).toHaveLength(received);
+  });
 });

@@ -2,10 +2,10 @@ import { test, expect, type Page } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
 import { buildXlsx } from '@/tests/fixtures/buildXlsx';
-import { createTestPeriod, createTestUsers, cleanupTestData, getBaseUrl } from './setup';
+import { createTestPeriod, createTestUsers, cleanupTestData, getBaseUrl, openOnderdeel } from './setup';
 
 /**
- * "Voorkeuren importeren (test)" says one number for one import: the
+ * "Voorkeuren importeren" says one number for one import: the
  * changes "Controleren" counts are the ones "Toepassen" makes, and nothing
  * on the screen reads as another total.
  *
@@ -63,8 +63,8 @@ test('checking and applying say the same number, and the list says it shows a pa
   await loginAsAdmin(page);
   await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
   await page.waitForLoadState('networkidle');
-  await page.locator('[role="button"]:has-text("Exporteren & communicatie")').first().click();
-  await page.getByRole('button', { name: /Voorkeuren importeren \(test\)/ }).click();
+  await openOnderdeel(page, 'Exporteren & communicatie');
+  await page.getByRole('button', { name: /Voorkeuren importeren/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Voorkeuren importeren' });
 
   await dialog.getByLabel('Excel-bestand met voorkeuren').setInputFiles({

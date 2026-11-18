@@ -11,6 +11,7 @@
 
 import { db } from '@/db/client';
 import { TELLERS, type MemberTarget, type Teller } from '@/lib/rosterBands';
+import { bereikInWoorden } from '@/lib/bereikInWoorden';
 import { generateAccessToken, hashToken } from './auth';
 import { deadlineTekst, verzendlijstPersonen, type VerzendlijstBericht } from './verzendlijst';
 
@@ -90,17 +91,18 @@ const TELLER_MEERVOUD: Record<Teller, string> = {
 };
 
 /**
- * "Naar verwachting krijg je ongeveer 9 avonddiensten en 2 weekenddiensten. Dat is
- * een indicatie. ...": the top of each streefbereik (computeMemberTargets,
- * so deeltijd, instroom and saldo are in it), in words and explicitly an
- * estimate - the final bands are only fixed at generation, when the
- * fellows (lib/fellows.ts) are known. A counter with nothing to expect,
- * and a fellow's weekend, are left out. Empty when there is nothing to say.
+ * "Naar verwachting krijg je 8 of 9 avonddiensten en hoogstens 2 weekenddiensten. Dat is
+ * een indicatie. ...": each streefbereik (computeMemberTargets, so deeltijd, instroom
+ * and saldo are in it) in the words the planner's page uses (lib/bereikInWoorden.ts),
+ * explicitly an estimate - the final bands are only fixed at generation, when the
+ * fellows (lib/fellows.ts) are known. A counter with nothing to expect, and a fellow's
+ * weekend, are left out. Empty when there is nothing to say. Until 2.1.0 it named the
+ * top of each range as "ongeveer": all 30 of a period got fewer than that (R2-01).
  */
 export function indicatieTekst(target: Record<Teller, MemberTarget> | undefined): string {
   if (!target) return '';
-  const delen = TELLERS.filter((t) => !target[t].fellow && target[t].max > 0).map(
-    (t) => `ongeveer ${target[t].max} ${target[t].max === 1 ? TELLER_ENKELVOUD[t] : TELLER_MEERVOUD[t]}`
+  const delen = TELLERS.filter((t) => !target[t].fellow && target[t].max > 0).map((t) =>
+    bereikInWoorden(target[t].min, target[t].max, TELLER_ENKELVOUD[t], TELLER_MEERVOUD[t])
   );
   if (delen.length === 0) return '';
   const opsomming = delen.length === 1 ? delen[0] : `${delen.slice(0, -1).join(', ')} en ${delen[delen.length - 1]}`;
@@ -139,6 +141,6 @@ Werk je vaste dagen niet? Of heb je vakantie of ander verlof? Geef dat op bij de
 
 Deze link is alleen voor jou. Stuur hem niet door. Ben je hem kwijt? Op ${startpagina(personalLink)} vraag je bij "Link kwijt?" een nieuwe aan met je werk-e-mailadres.
 
-Heb je vragen? Neem dan contact op met de roosteraar.`,
+Heb je vragen? Neem dan contact op met de planner.`,
   };
 }

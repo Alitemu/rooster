@@ -17,7 +17,7 @@ describe('explainUnfilled', () => {
     const unfilled = Array.from({ length: 158 }, (_, i) => ({ datum: day(i), teller: 'AVOND', reden: 'GEEN_LID' as const }));
     const [line] = explainUnfilled(unfilled);
     expect(line).toContain('Voor 158 diensten is op die dag niemand lid van de pool: 1 april 2027 t/m 5 september 2027.');
-    expect(line).toContain('Geldig vanaf en Geldig tot bij Medewerkers');
+    expect(line).toContain('Geldig vanaf en Geldig tot bij Personeel beheren');
   });
 
   it('says when the streefbereik itself is too small, per kind of shift', () => {
@@ -41,7 +41,7 @@ describe('explainUnfilled', () => {
       8
     );
     expect(lines).toEqual([
-      '8 mensen doen volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. Hun streefbereik is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Medewerkers.',
+      '8 mensen doen volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. Hun streefbereik is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Personeel beheren.',
       'Het streefbereik laat samen hoogstens 55 avonddiensten toe, terwijl er 175 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 19 tot 20 avonddiensten per persoon.',
       'Het streefbereik laat samen hoogstens 30 weekenddiensten toe, terwijl er 70 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 7 tot 8 weekenddiensten per persoon.',
     ]);
@@ -52,7 +52,7 @@ describe('explainUnfilled', () => {
     const unfilled = Array.from({ length: 30 }, (_, i) => ({ datum: day(i), teller: 'AVOND', reden: null }));
     const lines = explainUnfilled(unfilled, { AVOND: { maximaal: 170, diensten: 175, voorgesteld: [6, 6] } }, 1);
     expect(lines).toEqual([
-      '1 persoon doet volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. Het streefbereik van die persoon is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Medewerkers.',
+      '1 persoon doet volgens Geldig vanaf en Geldig tot maar een deel van de periode mee. Het streefbereik van die persoon is daarom naar verhouding lager. Klopt dat niet, pas het dan aan bij Personeel beheren.',
       'Het streefbereik laat samen hoogstens 170 avonddiensten toe, terwijl er 175 zijn. Verhoog het bereik onder Venster en streefbereik, bijvoorbeeld naar 6 avonddiensten per persoon.',
       'Nog 25 diensten lukten niet binnen het venster en het streefbereik. Een andere methode of langer zoeken vult ze misschien wel.',
     ]);
@@ -67,7 +67,7 @@ describe('explainUnfilled', () => {
     ];
     const lines = explainUnfilled(unfilled);
     expect(lines).toEqual([
-      'Voor 2 diensten is op die dag niemand lid van de pool: 1 april 2027, 3 april 2027. Controleer Geldig vanaf en Geldig tot bij Medewerkers.',
+      'Voor 2 diensten is op die dag niemand lid van de pool: 1 april 2027, 3 april 2027. Controleer Geldig vanaf en Geldig tot bij Personeel beheren.',
       'Voor 1 dienst heeft iedereen die dag geblokkeerd.',
       'Nog 1 dienst lukte niet binnen het venster en het streefbereik. Een andere methode of langer zoeken vult hem misschien wel.',
     ]);

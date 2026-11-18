@@ -11,6 +11,7 @@ import { Suspense, useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { SetupWizard } from '@/components/SetupWizard';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/foutTekst';
 
 interface Period {
   id: string;
@@ -47,7 +48,7 @@ export default function SetupPage() {
         setPeriod(data.data);
         setLoading(false);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Laden van periode mislukt';
+        const message = foutTekst(err, 'Laden van periode mislukt');
         setError(message);
         setLoading(false);
       }

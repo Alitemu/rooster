@@ -10,6 +10,8 @@ import { hashToken } from '@/lib/auth';
 import { setSessionCookie, PERSON_SESSION_MAX_AGE_SECONDS } from '@/lib/session';
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { internalErrorResponse } from '@/lib/api-errors';
+import { isCrossSiteRequest } from '@/lib/crossSite';
+import { linkVerlopen } from '@/lib/linkGeldigheid';
 import { checkRateLimit, getClientIp, recordAttempt, rateLimitedResponseBody } from '@/lib/rateLimit';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
@@ -39,6 +41,15 @@ interface VerifyLinkResponse {
  */
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
+    // This GET logs somebody in (a cookie is set), so a page of another site must not be able to send a
+    // browser here: it would replace the session of a planner, or log a participant in as somebody else.
+    // The pages call it themselves with a fetch, which is same-origin (lib/crossSite.ts).
+    if (isCrossSiteRequest(req.headers)) {
+      return NextResponse.json(
+        { success: false, error: { code: 'CROSS_SITE', message: 'Open je persoonlijke link zelf in je browser.' } },
+        { status: 403 }
+      );
+    }
     const rateLimitKey = `verify-link:${getClientIp(req)}`;
     const rateLimit = checkRateLimit(rateLimitKey, MAX_ATTEMPTS);
     if (!rateLimit.allowed) {
@@ -112,14 +123,35 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // fill in preferences for it would mean their work disappears with it.
     // The link is not retired for that - restoring the period brings it
     // back - so this only has to stop resolving while it sits in the trash.
+    // A link of its own period in the trash answers 410 PERIOD_DELETED, so the
+    // page can say the period is deleted and where to ask a new link
+    // (components/PeriodeVerwijderd.tsx), for the achterwacht and the AIOS.
     let period: any;
     if (link.geldt_voor_periode_id) {
       period = db
         .prepare(
-          `SELECT id, pool_id FROM dienstrooster_schedule_period
-           WHERE id = ? AND verwijderd_op IS NULL`
+          `SELECT id, pool_id, eind_datum, verwijderd_op FROM dienstrooster_schedule_period
+           WHERE id = ?`
         )
         .get(link.geldt_voor_periode_id);
+      if (period?.verwijderd_op) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: { code: 'PERIOD_DELETED', message: 'Deze periode is verwijderd' },
+        };
+        return NextResponse.json(response, { status: 410 });
+      }
+      // A link is never good for longer than its period (lib/linkGeldigheid.ts).
+      if (linkVerlopen(period?.eind_datum)) {
+        const response: ApiErrorResponse = {
+          success: false,
+          error: {
+            code: 'TOKEN_EXPIRED',
+            message: 'Deze toegangslink is verlopen, want de periode is voorbij',
+          },
+        };
+        return NextResponse.json(response, { status: 401 });
+      }
     } else {
       // A general link with no period of its own only auto-detects within
       // the pools this person actually belongs to - otherwise, as soon as a

@@ -17,13 +17,9 @@ import { getAuthContextFromRequest, requirePlannerAccess } from '@/lib/auth-cont
 import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { xlsxDownload } from '@/lib/xlsxWrite';
+import { TELLER_LABELS } from '@/lib/importSjablonen';
 import type { ApiErrorResponse } from '@/types';
 
-const TELLER_LABELS: Record<string, string> = {
-  AVOND: 'Avond',
-  WEEKEND: 'Weekend',
-  FEESTDAG: 'Feestdag',
-};
 
 export async function GET(req: NextRequest, props: { params: Promise<{ 'period-id': string }> }): Promise<NextResponse> {
   const params = await props.params;

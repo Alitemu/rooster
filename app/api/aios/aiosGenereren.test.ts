@@ -14,6 +14,8 @@ import { POST as genereren } from './periode/[id]/genereren/route';
 import { GET as status } from './periode/[id]/genereren/status/route';
 import { GET as rooster } from './periode/[id]/rooster/route';
 import { POST as verwijderen } from './periode/[id]/rooster-verwijderen/route';
+import { POST as heropenen } from './periode/[id]/heropenen/route';
+import { EERST_VERWIJDEREN } from '@/lib/aiosTeksten';
 import { buildWorld, deleteRowsAfter, insert, now, rowidSnapshot, staff, staffCookie, tag, type World } from '../../../tests/fixtures/dienstWorlds';
 
 /**
@@ -181,6 +183,20 @@ describe('making the AIOS roster', () => {
     expect(opgevangen).toHaveLength(0);
   });
 
+  it('looks ten minutes unless told otherwise, and takes whole minutes up to an hour only (0.902.0)', async () => {
+    await klaar(await maak());
+    expect(opgevangen.at(-1)!.tijdslimiet_seconden).toBe(600);
+    await klaar(await maak(3600));
+    expect(opgevangen.at(-1)!.tijdslimiet_seconden).toBe(3600);
+    const aantal = opgevangen.length;
+    for (const fout of [0, 30, 90, 3660, 7200, '600', 600.5, -60]) {
+      const res = await genereren(req(`${w.period}/genereren`, staffCookie(w.planner), 'POST', { tijdslimiet_seconden: fout }), ctx(w.period));
+      expect(res.status, String(fout)).toBe(400);
+      expect((await res.json()).error.message).toBe('Kies een tijd van 1 tot 60 minuten, in hele minuten.');
+    }
+    expect(opgevangen).toHaveLength(aantal);
+  });
+
   it('sends the quarter as the contract says', async () => {
     await klaar(await maak(120));
     expect(opgevangen).toHaveLength(1);
@@ -224,6 +240,80 @@ describe('making the AIOS roster', () => {
     expect((await res.json()).data).toMatchObject({ status: 'KLAAR', fout: null });
   });
 
+  it('keeps what it told about the empty diensten: after a refresh, and less what is filled by hand since', async () => {
+    const lees = async () => (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.generatie;
+    const g = await lees();
+    const leeg = slotsVan(w.period).filter((s) => !toewijzingen().some((t) => t.slot_id === s.id));
+    expect(g).toMatchObject({ gevuld: toewijzingen().length, leeg_bij_maken: 1, status: 'HAALBAAR' });
+    // What is empty is counted from the roster: the one the solver told about, with its reasons, and the
+    // diensten this stub of a solver simply left without one (the real one tells every one it leaves).
+    expect(g.nog_leeg).toHaveLength(leeg.length);
+    const doorSolver = g.nog_leeg.find((l: any) => Object.keys(l.redenen).length > 0);
+    expect(doorSolver).toMatchObject({ code: 'UD', redenen: { GEBLOKKEERD: 1, BEZET: 1 } });
+    // The planner fills it by hand: it is no longer empty, but still counted as left empty when it was made.
+    db.prepare(
+      `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+       VALUES (?, ?, ?, ?, 'MANUAL', 1, ?)`
+    ).run(`hand-${tag}`, w.period, w.y, doorSolver.dienst_id, now);
+    try {
+      const na = await lees();
+      expect(na).toMatchObject({ leeg_bij_maken: 1 });
+      expect(na.nog_leeg.map((l: any) => l.dienst_id)).not.toContain(doorSolver.dienst_id);
+      expect(na.nog_leeg).toHaveLength(leeg.length - 1);
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE id = ?').run(`hand-${tag}`);
+    }
+    expect((await lees()).nog_leeg).toHaveLength(leeg.length);
+  });
+
+  it('a dienst made empty by hand after the roster was made is counted too, without a reason of the solver', async () => {
+    const lees = async () => (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.generatie;
+    const vooraf = (await lees()).nog_leeg.length;
+    const gevuld = toewijzingen()[0];
+    const rij = db.prepare('SELECT * FROM dienstrooster_assignment WHERE slot_id = ? AND schedule_version_id = ?').get(gevuld.slot_id, w.period) as Record<string, unknown>;
+    db.prepare('DELETE FROM dienstrooster_assignment WHERE slot_id = ? AND schedule_version_id = ?').run(gevuld.slot_id, w.period);
+    try {
+      const na = await lees();
+      expect(na.nog_leeg).toHaveLength(vooraf + 1);
+      expect(na.nog_leeg.find((l: any) => l.dienst_id === gevuld.slot_id)).toMatchObject({ redenen: {} });
+      // What the solver told when it was made is history and does not change.
+      expect(na.leeg_bij_maken).toBe(1);
+    } finally {
+      db.prepare(
+        `INSERT INTO dienstrooster_assignment (id, schedule_version_id, person_id, slot_id, bron, row_version, aangemaakt_op)
+         VALUES (?, ?, ?, ?, ?, 1, ?)`
+      ).run(rij.id, w.period, rij.person_id, rij.slot_id, rij.bron, rij.aangemaakt_op);
+    }
+    expect((await lees()).nog_leeg).toHaveLength(vooraf);
+  });
+
+  it('back to open is refused from a made roster, and says to remove the roster first', async () => {
+    const res = await heropenen(req(`${w.period}/heropenen`, staffCookie(w.planner), 'POST', {}), ctx(w.period));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error.message).toBe(EERST_VERWIJDEREN.GEGENEREERD);
+    expect(periodeStatus().status).toBe('GEGENEREERD');
+  });
+
+  it('back to open is refused while a roster is being made, whatever the status', async () => {
+    const opslag = globalThis as unknown as { __aiosGeneratieJobs?: Map<string, unknown> };
+    opslag.__aiosGeneratieJobs!.set('loopt-heropenen', { id: 'loopt-heropenen', periodId: w.period, status: 'BEZIG', gestart: Date.now() });
+    const voor = periodeStatus();
+    try {
+      const res = await heropenen(req(`${w.period}/heropenen`, staffCookie(w.planner), 'POST', {}), ctx(w.period));
+      expect(res.status).toBe(409);
+      expect((await res.json()).error.code).toBe('GENERATION_RUNNING');
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GESLOTEN' WHERE id = ?`).run(w.period);
+      const gesloten = await heropenen(req(`${w.period}/heropenen`, staffCookie(w.planner), 'POST', {}), ctx(w.period));
+      expect(gesloten.status).toBe(409);
+      expect((await gesloten.json()).error.code).toBe('GENERATION_RUNNING');
+      expect(periodeStatus().status).toBe('GESLOTEN');
+    } finally {
+      opslag.__aiosGeneratieJobs!.delete('loopt-heropenen');
+      db.prepare(`UPDATE dienstrooster_schedule_period SET status = 'GEGENEREERD' WHERE id = ?`).run(w.period);
+    }
+    expect(periodeStatus()).toEqual(voor);
+  });
+
   it('shows who has what, and each AIOS their points and dienstpercentage', async () => {
     const res = await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period));
     const data = (await res.json()).data;
@@ -235,6 +325,65 @@ describe('making the AIOS roster', () => {
     const dienst = data.dagen.flatMap((d: any) => d.diensten).find((d: any) => d.slot_id === mijn[0].id);
     expect(dienst.aios.codenaam).toBe(`aiosgen-x-${tag}`);
     expect(data.leeg).toBe(slotsVan(w.period).length - toewijzingen().length);
+  });
+
+  it('warns before the roster is made when too few part-timers are known for the night blocks zo-di (1.6.0)', async () => {
+    const lees = async () =>
+      (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.nachtblok_waarschuwing as string | null;
+    // One of the two has a part-time day (0,8 fte), for the thirteen night blocks of a quarter.
+    const een = await lees();
+    expect(een).toContain('Te weinig AIOS in deeltijd voor de nachtblokken van zondag tot en met dinsdag.');
+    expect(een).toContain('Maar 1 AIOS mag die doen');
+    expect(een).toContain('Controleer of alle AIOS hun parttimedagen juist hebben opgegeven.');
+    // Nobody with a part-time day: everyone counts as full-time.
+    db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2000-01-01' WHERE person_id = ?`).run(w.x);
+    try {
+      expect(await lees()).toContain('Geen enkele AIOS mag die doen');
+    } finally {
+      db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2099-12-31' WHERE person_id = ?`).run(w.x);
+    }
+  });
+
+  it('stores the share of every soort and shows each as a fair range; an older solver without the new two shows none for them (0.903.0)', async () => {
+    const doelen = { doel_punten: 5, doel_feestdagdiensten: 0.4, doel_nachten: 2.6, doel_dagen: 0, doel_weekendavonden: -0.3, doel_weekavonden: 1.5, doel_uitloopdiensten: 4 };
+    antwoordVan = (invoer) => {
+      const g = gewoon(invoer);
+      (g.body as any).per_aios = [{ aios_id: w.x, ...doelen }];
+      return g;
+    };
+    await klaar(await maak());
+    expect(
+      db.prepare('SELECT doel_weekavonden, doel_uitloopdiensten FROM dienstrooster_aios_doel WHERE period_id = ? AND person_id = ?').get(w.period, w.x)
+    ).toEqual({ doel_weekavonden: 1.5, doel_uitloopdiensten: 4 });
+    const lees = async () => (await (await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period))).json()).data.per_aios;
+    const eerst = await lees();
+    let x = eerst.find((a: any) => a.person_id === w.x);
+    const y = eerst.find((a: any) => a.person_id === w.y);
+    expect(x.eerlijk).toEqual({
+      nachten: { van: 2, tot: 3 },
+      dagdiensten: { van: 0, tot: 0 },
+      weekendavonden: { van: 0, tot: 0 },
+      weekavonden: { van: 1, tot: 2 },
+      uitloopdiensten: { van: 4, tot: 4 },
+      feestdagdiensten: { van: 0, tot: 1 },
+    });
+    expect(x.nachten).toBe(3);
+    expect(x.weekavonden + x.weekendavonden).toBe(x.avonden);
+    // y got no share from the solver: no range, not a range of none.
+    expect(Object.values(y.eerlijk).every((b) => b === null)).toBe(true);
+    expect(y.dagdiensten).toBeGreaterThan(0);
+
+    antwoordVan = (invoer) => {
+      const g = gewoon(invoer);
+      const { doel_weekavonden: _a, doel_uitloopdiensten: _u, ...ouder } = doelen;
+      (g.body as any).per_aios = [{ aios_id: w.x, ...ouder }];
+      return g;
+    };
+    await klaar(await maak());
+    x = (await lees()).find((a: any) => a.person_id === w.x);
+    expect(x.eerlijk.weekavonden).toBeNull();
+    expect(x.eerlijk.uitloopdiensten).toBeNull();
+    expect(x.eerlijk.nachten).toEqual({ van: 2, tot: 3 });
   });
 
   it('one generation at a time, and the roster stays as it is meanwhile', async () => {
@@ -260,6 +409,20 @@ describe('making the AIOS roster', () => {
     expect(na.every((r, i) => r.person_id !== voor[i].person_id)).toBe(true);
   });
 
+  it('says so when nobody takes part, instead of asking the solver for a roster of no one', async () => {
+    const lidmaatschappen = db.prepare('SELECT id, geldig_tot FROM dienstrooster_pool_membership WHERE pool_id = ?').all(w.pool) as Array<{ id: string; geldig_tot: string }>;
+    const voor = toewijzingen();
+    db.prepare(`UPDATE dienstrooster_pool_membership SET geldig_tot = '2000-01-01' WHERE pool_id = ?`).run(w.pool);
+    try {
+      const job = await klaar(await maak());
+      expect(job.status).toBe('FOUT');
+      expect(job.fout).toBe('Geen enkele AIOS doet mee in dit kwartaal. Zet de deelnemers eerst in de pool, met een lidmaatschap dat het kwartaal raakt.');
+      expect(toewijzingen()).toEqual(voor);
+    } finally {
+      for (const l of lidmaatschappen) db.prepare('UPDATE dienstrooster_pool_membership SET geldig_tot = ? WHERE id = ?').run(l.geldig_tot, l.id);
+    }
+  });
+
   it('writes nothing when the solver fails or the period changed meanwhile', async () => {
     const voor = toewijzingen();
     const rv = periodeStatus().row_version;
@@ -277,6 +440,31 @@ describe('making the AIOS roster', () => {
     expect(job.status).toBe('FOUT');
     expect(job.fout).toMatch(/intussen gewijzigd/);
     expect(toewijzingen()).toEqual(voor);
+  });
+
+  it('tells when the solver is still busy with an earlier roster, and writes nothing', async () => {
+    const voor = toewijzingen();
+    antwoordVan = () => ({ status: 429, body: { detail: 'Er loopt al een rooster.' } });
+    const job = await klaar(await maak());
+    expect(job.status).toBe('FOUT');
+    expect(job.fout).toBe('De solver van de AIOS is nog bezig met een eerder rooster. Wacht een minuut en probeer het opnieuw.');
+    expect(toewijzingen()).toEqual(voor);
+  });
+
+  // The prullenbak bumps no row_version, so the check on status and version alone let the roster in.
+  it('writes nothing into a period that went to the prullenbak meanwhile', async () => {
+    const voor = toewijzingen();
+    antwoordVan = (i) => ({ ...gewoon(i), vertraging: 200 });
+    const id = await maak();
+    db.prepare("UPDATE dienstrooster_schedule_period SET verwijderd_op = datetime('now') WHERE id = ?").run(w.period);
+    try {
+      const job = await klaar(id);
+      expect(job.status).toBe('FOUT');
+      expect(job.fout).toMatch(/intussen gewijzigd/);
+      expect(toewijzingen()).toEqual(voor);
+    } finally {
+      db.prepare('UPDATE dienstrooster_schedule_period SET verwijderd_op = NULL WHERE id = ?').run(w.period);
+    }
   });
 
   it('says what failed: no solver there, a connection that broke, or the app itself (0.87.1)', async () => {
@@ -328,11 +516,42 @@ describe('making the AIOS roster', () => {
     expect(periodeStatus().row_version).toBe(rv);
   });
 
+  it('holds the fte each AIOS had when the roster was made: part-time days that change later do not rewrite its percentages', async () => {
+    const factoren = () =>
+      Object.fromEntries(
+        (db.prepare('SELECT person_id, factor FROM dienstrooster_period_factor WHERE period_id = ?').all(w.period) as Array<{ person_id: string; factor: number }>).map(
+          (r) => [r.person_id, r.factor]
+        )
+      );
+    expect(factoren()).toEqual({ [w.x]: 0.8, [w.y]: 1 });
+    const fteVan = async () => {
+      const res = await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period));
+      return (await res.json()).data.per_aios.find((a: any) => a.person_id === w.x);
+    };
+    const voor = await fteVan();
+    expect(voor.fte).toBe(0.8);
+    // x stops being part-time (the pattern ends before the quarter): the next quarter is 1,0, this one stays 0,8.
+    db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2000-01-01' WHERE person_id = ?`).run(w.x);
+    try {
+      const na = await fteVan();
+      expect(na.fte).toBe(0.8);
+      expect(na.dienstpercentage).toBe(voor.dienstpercentage);
+    } finally {
+      db.prepare(`UPDATE dienstrooster_parttime_pattern SET geldig_tot = '2099-12-31' WHERE person_id = ?`).run(w.x);
+    }
+  });
+
   it('"Rooster verwijderen" empties it and takes the period back to gesloten, once', async () => {
     const res = await verwijderen(req(`${w.period}/rooster-verwijderen`, staffCookie(w.planner), 'POST'), ctx(w.period));
     expect(res.status).toBe(200);
     expect(toewijzingen()).toEqual([]);
     expect(periodeStatus().status).toBe('GESLOTEN');
+    // What it told about the empty diensten goes with the roster.
+    expect(db.prepare('SELECT 1 FROM dienstrooster_aios_generatie WHERE period_id = ?').get(w.period)).toBeUndefined();
+    // And the fte held with it: without a roster the fte follows the part-time days as they are.
+    expect(db.prepare('SELECT 1 FROM dienstrooster_period_factor WHERE period_id = ?').get(w.period)).toBeUndefined();
+    const leeg = await rooster(req(`${w.period}/rooster`, staffCookie(w.planner)), ctx(w.period));
+    expect((await leeg.json()).data.generatie).toBeNull();
     const nogEens = await verwijderen(req(`${w.period}/rooster-verwijderen`, staffCookie(w.planner), 'POST'), ctx(w.period));
     expect(nogEens.status).toBe(409);
   });

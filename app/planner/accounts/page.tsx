@@ -2,25 +2,27 @@
 
 /**
  * Accounts beheren: the staff accounts, for an ADMIN (lib/staffAccounts.ts).
- * Add a planner or beheerder, give an account a temporary password, turn
- * off two-step verification, switch an account off or change its role.
- * One's own account is shown but managed with "Wachtwoord wijzigen" and
- * "Tweestapsverificatie" on the period list.
+ * Add a planner or beheerder, give an account a temporary password,
+ * switch an account off or change its role, and delete one that has left no
+ * trace in a roster (1.10.0; the server says which, `verwijderbaar`). One's
+ * own account is shown but managed with "Wachtwoord wijzigen" on the period list.
+ * Switched-off accounts are left out until asked for (1.11.0, ./zichtbareAccounts.ts).
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { withBasePath } from '@/lib/basePath';
+import { aantalUitgeschakeld, naSchakelen, zichtbareAccounts } from './zichtbareAccounts';
 
 interface Account {
   id: string;
   codenaam: string;
   rol: 'ADMIN' | 'PLANNER';
   actief: boolean;
-  tweestapsverificatie: boolean;
   wachtwoord_ingesteld: boolean;
   wachtwoord_moet_wijzigen: boolean;
   dienst_type: 'ACHTERWACHT' | 'AIOS' | null;
+  verwijderbaar: boolean;
 }
 
 // Mirrors lib/staffAccounts.ts DIENST_TYPES (that module reads the
@@ -71,6 +73,10 @@ export default function AccountsPage() {
   // The temporary password just set, shown once so it can be passed on.
   const [getoond, setGetoond] = useState<{ codenaam: string; wachtwoord: string } | null>(null);
   const [resetVoor, setResetVoor] = useState<{ id: string; wachtwoord: string } | null>(null);
+  // Deleting cannot be undone: the first click asks, the second does it.
+  const [verwijderVraag, setVerwijderVraag] = useState<string | null>(null);
+  // Switched-off accounts are left out until asked for. Not remembered: the page opens tidy each time.
+  const [toonUitgeschakeld, setToonUitgeschakeld] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -146,10 +152,12 @@ export default function AccountsPage() {
     );
   }
 
+  const uitgeschakeld = aantalUitgeschakeld(accounts);
+
   return (
     <div className="container-main py-8 space-y-6">
       <div className="card p-6">
-        <Link href="/planner" className="text-sm text-blue-700 hover:underline">
+        <Link href="/planner"className="text-sm text-blue-700 hover:underline">
           ← Periodes
         </Link>
         <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Accounts beheren</h1>
@@ -157,8 +165,9 @@ export default function AccountsPage() {
           Planners en beheerders van Dienstrooster. Een beheerder kan alles wat een planner kan en
           beheert daarnaast deze accounts. Een nieuw account of een gereset wachtwoord krijgt een
           tijdelijk wachtwoord. Bij de eerste keer inloggen kiest die persoon zelf een nieuw
-          wachtwoord. Je eigen account beheer je met Wachtwoord wijzigen en Tweestapsverificatie.
-          Elk account hoort bij een dienst. Voorlopig is alleen de achterwacht in productie.
+          wachtwoord. Je eigen account beheer je met Wachtwoord wijzigen.
+          Elk account hoort bij een dienst: de achterwacht of de AIOS. Een planner ziet alleen de eigen
+          dienst. Een beheerder ziet ze allebei.
         </p>
       </div>
 
@@ -167,7 +176,7 @@ export default function AccountsPage() {
           Alleen een beheerder kan accounts beheren.
         </div>
       )}
-      {error && <div className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>}
+      {error && <div role="alert" className="card p-4 bg-red-50 border border-red-200 text-sm text-red-800">{error}</div>}
       {!geenToegang && melding && (
         <div className="card p-4 bg-green-50 border border-green-200 text-sm text-green-800" role="status">
           {melding}
@@ -190,6 +199,18 @@ export default function AccountsPage() {
 
       {!geenToegang && (
         <>
+        {uitgeschakeld > 0 && (
+          <label className="flex items-center gap-2 text-sm text-neutral-800 py-1">
+            <input
+              type="checkbox"
+              className="h-4 w-4"
+              data-testid="toon-uitgeschakeld"
+              checked={toonUitgeschakeld}
+              onChange={(e) => setToonUitgeschakeld(e.target.checked)}
+            />
+            Toon uitgeschakelde accounts ({uitgeschakeld})
+          </label>
+        )}
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-100">
@@ -198,12 +219,11 @@ export default function AccountsPage() {
                 <th className="px-3 py-2 text-left">Rol</th>
                 <th className="px-3 py-2 text-left">Dienst</th>
                 <th className="px-3 py-2 text-left">Status</th>
-                <th className="px-3 py-2 text-left">Tweestapsverificatie</th>
                 <th className="px-3 py-2 text-left">Acties</th>
               </tr>
             </thead>
             <tbody className="divide-y">
-              {accounts.map((a) => {
+              {zichtbareAccounts(accounts, toonUitgeschakeld).map((a) => {
                 const eigen = a.id === me;
                 return (
                   <tr key={a.id} className={a.actief ? '' : 'bg-neutral-50 text-neutral-500'}>
@@ -242,7 +262,6 @@ export default function AccountsPage() {
                             ? 'Tijdelijk wachtwoord'
                             : 'Actief'}
                     </td>
-                    <td className="px-3 py-2">{a.tweestapsverificatie ? 'Aan' : 'Uit'}</td>
                     <td className="px-3 py-2">
                       {eigen ? (
                         <span className="text-xs text-neutral-500">Via Wachtwoord wijzigen</span>
@@ -262,6 +281,23 @@ export default function AccountsPage() {
                             Annuleren
                           </button>
                         </div>
+                      ) : verwijderVraag === a.id ? (
+                        <div className="flex flex-wrap items-center gap-2" role="alert">
+                          <span className="text-xs text-neutral-800">{a.codenaam} verwijderen? Dit kan niet ongedaan worden gemaakt.</span>
+                          <button
+                            className="px-2 py-1 rounded text-xs font-medium bg-red-700 text-white hover:bg-red-800"
+                            disabled={busy}
+                            onClick={async () => {
+                              await run(() => send(`/api/admin/accounts/${a.id}`, 'DELETE'), `${a.codenaam} is verwijderd.`);
+                              setVerwijderVraag(null);
+                            }}
+                          >
+                            Ja, verwijderen
+                          </button>
+                          <button className="btn-secondary" disabled={busy} onClick={() => setVerwijderVraag(null)}>
+                            Annuleren
+                          </button>
+                        </div>
                       ) : (
                         <div className="flex flex-wrap gap-3">
                           <button
@@ -271,32 +307,23 @@ export default function AccountsPage() {
                           >
                             Wachtwoord resetten
                           </button>
-                          {a.tweestapsverificatie && (
-                            <button
-                              className="text-xs font-medium text-blue-700 hover:underline"
-                              disabled={busy}
-                              onClick={() =>
-                                run(
-                                  () => send(`/api/admin/accounts/${a.id}/totp-disable`, 'POST'),
-                                  `Tweestapsverificatie van ${a.codenaam} staat uit. ${a.codenaam} logt nu in met alleen het wachtwoord.`
-                                )
-                              }
-                            >
-                              Tweestapsverificatie uitzetten
-                            </button>
-                          )}
                           <button
                             className="text-xs font-medium text-red-700 hover:underline"
                             disabled={busy}
                             onClick={() =>
                               run(
                                 () => send(`/api/admin/accounts/${a.id}`, 'PATCH', { actief: !a.actief }),
-                                a.actief ? `${a.codenaam} is uitgeschakeld en kan niet meer inloggen.` : `${a.codenaam} kan weer inloggen.`
+                                naSchakelen(a.codenaam, a.actief, toonUitgeschakeld)
                               )
                             }
                           >
                             {a.actief ? 'Uitschakelen' : 'Inschakelen'}
                           </button>
+                          {a.verwijderbaar && (
+                            <button className="text-xs font-medium text-red-700 hover:underline" disabled={busy} onClick={() => setVerwijderVraag(a.id)}>
+                              Verwijderen
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -306,6 +333,11 @@ export default function AccountsPage() {
             </tbody>
           </table>
         </div>
+        <p className="text-xs text-neutral-600" data-testid="uitleg-verwijderen">
+          Verwijderen kan alleen bij een account dat nog niets in een rooster of in de instellingen heeft gewijzigd. Een ander account
+          schakel je uit. Zo blijft in de geschiedenis staan wie wat heeft gedaan. Een uitgeschakeld account staat niet in deze lijst,
+          tot je Toon uitgeschakelde accounts aanvinkt.
+        </p>
 
         <div className="card p-6 space-y-3">
           <p className="text-sm font-medium text-neutral-800">Nieuw account</p>

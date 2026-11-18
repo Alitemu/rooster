@@ -8,6 +8,23 @@ import { checkRateLimit, recordAttempt, clearRateLimit, getClientIp, takeAttempt
  * lets an auth route count failures only.
  */
 
+describe('recordAttempt with its own window', () => {
+  it('keeps a key blocked for as long as that window, not the default one', () => {
+    const key = `test-key-window-${Math.random()}`;
+    recordAttempt(key, 60 * 60 * 1000);
+    const blocked = checkRateLimit(key, 1);
+    expect(blocked.allowed).toBe(false);
+    expect(blocked.retryAfterSeconds).toBeGreaterThan(15 * 60);
+    expect(blocked.retryAfterSeconds).toBeLessThanOrEqual(60 * 60);
+  });
+
+  it('uses 15 minutes when no window is given', () => {
+    const key = `test-key-window-default-${Math.random()}`;
+    recordAttempt(key);
+    expect(checkRateLimit(key, 1).retryAfterSeconds).toBeLessThanOrEqual(15 * 60);
+  });
+});
+
 describe('checkRateLimit', () => {
   it('blocks a key once its recorded attempts reach the limit', () => {
     const key = `test-key-${Math.random()}`;

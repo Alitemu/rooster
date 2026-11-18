@@ -19,11 +19,15 @@ import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigat
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/aiosVerzendlijst';
 import { checkPeriodAcceptsInput } from '@/lib/aiosInvoer';
+import { aiosInvoerDichtMelding } from '@/lib/aiosInvoerDichtMelding';
 import { AiosDeeltijdEditor } from '@/components/AiosDeeltijdEditor';
 import { AiosAfwezigheid, type Absence } from '@/components/AiosAfwezigheid';
 import { AiosBevestigen, AiosVoorkeuren } from '@/components/AiosPreferences';
 import { AiosMijnRooster } from '@/components/AiosMijnRooster';
 import { AiosRuilen } from '@/components/AiosRuilen';
+import { AiosHarmonica, AiosSectie } from '@/components/AiosSectie';
+import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 type Stap = 'deeltijd' | 'voorkeuren' | 'bevestigen' | 'ingediend';
 const STAPPEN: Stap[] = ['deeltijd', 'voorkeuren', 'bevestigen', 'ingediend'];
@@ -52,7 +56,7 @@ interface Patroon {
   geldig_tot: string;
 }
 
-const datum = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('nl-NL');
+const datum = (d: string) => isoNaarInvoer(d);
 
 function AiosLinkPagina() {
   const params = useParams();
@@ -79,6 +83,7 @@ function AiosLinkPagina() {
   };
 
   const [laden, setLaden] = useState(true);
+  const [verwijderd, setVerwijderd] = useState(false);
   const [fout, setFout] = useState<{ tekst: string; link: boolean } | null>(null);
   const [personId, setPersonId] = useState<string | null>(null);
   const [periode, setPeriode] = useState<Periode | null>(null);
@@ -92,6 +97,10 @@ function AiosLinkPagina() {
     const start = async () => {
       try {
         const res = await fetch(withBasePath(`/api/auth/verify-link?token=${encodeURIComponent(token)}`));
+        if (res.status === 410) {
+          setVerwijderd(true);
+          return;
+        }
         if (!res.ok) {
           setFout({ tekst: 'Ongeldige of verlopen toegangslink', link: true });
           return;
@@ -144,6 +153,8 @@ function AiosLinkPagina() {
     );
   }
 
+  if (verwijderd) return <PeriodeVerwijderd />;
+
   if (fout || !periode || !personId) {
     return (
       <div className="container-main py-12">
@@ -170,37 +181,12 @@ function AiosLinkPagina() {
   const deadlineVoorbij = new Date() > new Date(periode.deadline);
   const invoerDicht = !checkPeriodAcceptsInput(periode).allowed;
 
-  return (
-    <div className="container-main py-8 space-y-6">
-      {waarschuwing && <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">{waarschuwing}</div>}
-
-      <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{periode.naam}</h1>
-            <p className="text-neutral-600 mb-4">
-              AIOS · {datum(periode.start_datum)} t/m {datum(periode.eind_datum)}
-            </p>
-            <p className="text-sm text-neutral-600">Deadline: {deadlineTekst(periode.deadline)}</p>
-          </div>
-          <button
-            onClick={uitloggen}
-            className="shrink-0 self-start px-4 py-2 rounded font-medium bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-colors text-sm print:hidden"
-          >
-            Uitloggen
-          </button>
-        </div>
-      </div>
-
-      {periode.status === 'GEPUBLICEERD' && <AiosMijnRooster key={geruild} personId={personId} periodId={periode.id} />}
-      {periode.status === 'GEPUBLICEERD' && <AiosRuilen personId={personId} periodId={periode.id} onGeruild={() => setGeruild((n) => n + 1)} />}
-
+  const voorkeurenInhoud = (
+    <>
       {invoerDicht && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
-          <p className="text-sm text-amber-900">
-            {deadlineVoorbij
-              ? '⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'
-              : '🔒 De roosteraar heeft deze periode gesloten. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'}
+          <p className="text-sm text-amber-900" data-testid="aios-invoer-dicht">
+            {aiosInvoerDichtMelding(periode.status, deadlineVoorbij)}
           </p>
         </div>
       )}
@@ -232,16 +218,14 @@ function AiosLinkPagina() {
             patterns={patronen}
             defaultVanaf={periode.start_datum}
             defaultTot={periode.eind_datum}
-            readOnly={deadlineVoorbij}
+            readOnly={invoerDicht}
             onPatternsChange={setPatronen}
           />
           <AiosAfwezigheid
             personId={personId}
             periodId={periode.id}
             absences={afwezigheden}
-            defaultVanaf={periode.start_datum}
-            defaultTot={periode.eind_datum}
-            readOnly={deadlineVoorbij}
+            readOnly={invoerDicht}
             onAbsencesChange={setAfwezigheden}
           />
           <button
@@ -292,6 +276,48 @@ function AiosLinkPagina() {
             {deadlineVoorbij ? 'Ingevoerde voorkeuren bekijken' : 'Voorkeuren aanpassen'}
           </button>
         </div>
+      )}
+    </>
+  );
+
+  return (
+    <div className="container-main py-8 space-y-6">
+      {waarschuwing && <div className="card p-4 bg-amber-50 border border-amber-200 text-sm text-amber-900">{waarschuwing}</div>}
+
+      <div className="card p-6 bg-gradient-to-r from-blue-50 to-neutral-50">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-3xl font-bold text-neutral-900 mb-2 break-words">{periode.naam}</h1>
+            <p className="text-neutral-600 mb-4">
+              AIOS · {datum(periode.start_datum)} t/m {datum(periode.eind_datum)}
+            </p>
+            <p className="text-sm text-neutral-600">Deadline: {deadlineTekst(periode.deadline)}</p>
+          </div>
+          <button
+            onClick={uitloggen}
+            className="shrink-0 self-start px-4 py-2 rounded font-medium bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100 transition-colors text-sm print:hidden"
+          >
+            Uitloggen
+          </button>
+        </div>
+      </div>
+
+      {periode.status === 'GEPUBLICEERD' ? (
+        // Once the roster is published: three foldable sections, all closed to begin with (0.110.0, layout only).
+        // Open for input, the page stays as it was: the steps one after the other.
+        <AiosHarmonica>
+          <AiosSectie sleutel="rooster" titel="Jouw rooster" testId="aios-sectie-rooster" printOpen>
+            <AiosMijnRooster key={geruild} personId={personId} periodId={periode.id} inSectie />
+          </AiosSectie>
+          <AiosSectie sleutel="ruilen" titel="Ruilen" testId="aios-sectie-ruilen" blijfGeladen>
+            <AiosRuilen personId={personId} periodId={periode.id} onGeruild={() => setGeruild((n) => n + 1)} inSectie />
+          </AiosSectie>
+          <AiosSectie sleutel="voorkeuren" titel="Voorkeuren" testId="aios-sectie-voorkeuren" blijfGeladen>
+            <div className="space-y-6">{voorkeurenInhoud}</div>
+          </AiosSectie>
+        </AiosHarmonica>
+      ) : (
+        voorkeurenInhoud
       )}
     </div>
   );

@@ -7,6 +7,8 @@ niet and voorkeur where fairness leaves the choice (the planner's choice:
 as the achterwacht's, fairness first), and one block in four weeks.
 """
 
+import pytest
+
 from test_hulp import aios, blok, dag, los_op, markeer, van, weken
 
 
@@ -14,12 +16,19 @@ def _per(uit, aios_id):
     return next(p for p in uit.per_aios if p.aios_id == aios_id)
 
 
-def _meer(inp, n):
+def _meer(inp, n, tijd=8):
     """Enough AIOS to fill everything, so fairness and the wishes have room."""
     for i in range(n):
         aios(inp, f'a{i:02d}')
     # Not proven best within this, but good: the tests check what matters.
-    inp['tijdslimiet_seconden'] = 8
+    inp['tijdslimiet_seconden'] = tijd
+
+
+# A saldo test checks who gets more of a soort, which the search has to find within its time. With the machine busy
+# (the release gate runs the tests one after the other, a build or another solve beside them) 8 seconds left the AIOS
+# with the debt more dagdiensten than the one owed them, 2 times in 3; 30 seconds held 6 times in 6 (October 2026,
+# all 4 cores loaded). The share itself is not searched for: the doel_* numbers hold at any time.
+SALDO_TIJD = 30
 
 
 def test_everyone_the_same_percentage_to_their_fte():
@@ -99,6 +108,21 @@ def test_feestdagen_go_to_who_had_fewer_over_the_years():
         assert _per(uit, meer).feestdagdiensten > _per(uit, minder).feestdagdiensten
 
 
+@pytest.mark.parametrize('seed', [1, 2, 3, 4, 5, 6])
+def test_a_feestdag_debt_is_not_level_with_a_fair_share(seed):
+    """0.111.0: the share of feestdagdiensten is small (here 0,5), and it was rounded to a whole dienst after the
+    debt was held at none: who had two too many looked like who is level, and the dienst could go to either."""
+    inp = weken(4, {dag(1)})
+    aios(inp, 'schuld', feestdag_achterstand=-2)
+    _meer(inp, 5)
+    inp['seed'] = seed
+    uit, _ = los_op(inp)
+    schuld = _per(uit, 'schuld')
+    # 3 feestdagdiensten over 6: 0,5 each, -1,5 with the debt: kept as it is, for the next quarter.
+    assert schuld.doel_feestdagdiensten == pytest.approx(-1.5, abs=0.05)
+    assert schuld.feestdagdiensten == 0, schuld.feestdagdiensten
+
+
 def test_one_block_in_four_weeks_where_it_can():
     # Eight weekly evening blocks for two AIOS, each wanting four in a row:
     # spread out, every other week, not four or three in a row.
@@ -116,3 +140,113 @@ def test_one_block_in_four_weeks_where_it_can():
         # Every other week, not two weeks running.
         assert all(b - a >= 2 for a, b in zip(weken_, weken_[1:])), (naam, weken_)
 
+
+
+def _soort_aantallen(inp, toegewezen, code):
+    per = {a['id']: 0 for a in inp['aios']}
+    for dienst_id, aios_id in toegewezen.items():
+        if dienst_id.startswith(f'{code}-'):
+            per[aios_id] += 1
+    return per
+
+
+def test_nights_are_shared_before_anything_else():
+    inp = weken(4)
+    _meer(inp, 10)
+    uit, toegewezen = los_op(inp)
+    assert not uit.leeg
+    nachten = _soort_aantallen(inp, toegewezen, 'ND')
+    # 28 nights over 10 AIOS: 2 or 3 each (a block holds 3 nights or 1, so one more or less is room).
+    assert max(nachten.values()) - min(nachten.values()) <= 3, nachten
+
+
+def test_the_order_of_what_is_shared_fairly():
+    import model
+
+    # The planner's order, most important first: nights, dagdiensten, evenings at the weekend, in the week, uitloop.
+    volgorde = ['NACHT', 'DAG', 'AVOND_WEEKEND', 'AVOND', 'UITLOOP']
+    gewichten = [model.W_SOORT[s] for s in volgorde]
+    assert gewichten == sorted(gewichten, reverse=True) and len(set(gewichten)) == 5
+    # An evening at the weekend is its own soort, not the evening in the week.
+    assert [model.EERLIJK_VAN_CODE[c] for c in ('ND', 'DD', 'ADW', 'AD', 'UD')] == volgorde
+
+
+def test_a_night_saldo_moves_nights_to_who_had_fewer():
+    """0.107.0: who had fewer nights than fair before gets more now, who had more gets fewer."""
+    inp = weken(4)
+    aios(inp, 'x', saldo_nachten=3)
+    aios(inp, 'y', saldo_nachten=-3)
+    _meer(inp, 8, SALDO_TIJD)
+    uit, toegewezen = los_op(inp)
+    assert not uit.leeg
+    nachten = _soort_aantallen(inp, toegewezen, 'ND')
+    assert nachten['x'] > nachten['y'], nachten
+    x, y = _per(uit, 'x'), _per(uit, 'y')
+    # 28 nights over 10 AIOS: 2,8 each; with the saldo 5,8 and -0,2: the debt stays a debt, for the next quarter.
+    assert x.doel_nachten == pytest.approx(5.8, abs=0.05)
+    assert y.doel_nachten == pytest.approx(-0.2, abs=0.05)
+    # The others keep their own share.
+    assert _per(uit, 'a00').doel_nachten == pytest.approx(2.8, abs=0.05)
+
+
+def test_no_night_saldo_is_the_share_alone():
+    inp = weken(4)
+    _meer(inp, 10)
+    uit, _ = los_op(inp)
+    assert all(p.doel_nachten == pytest.approx(2.8, abs=0.05) for p in uit.per_aios)
+
+
+@pytest.mark.parametrize(
+    'veld, code, doel',
+    [('saldo_dagen', 'DD', 'doel_dagen'), ('saldo_weekendavonden', 'ADW', 'doel_weekendavonden')],
+)
+def test_a_weekend_saldo_moves_those_diensten_to_who_had_fewer(veld, code, doel):
+    """0.108.0: the dagdiensten and the avonddiensten in the weekend have a saldo as the nights have."""
+    inp = weken(4)
+    aios(inp, 'x', **{veld: 3})
+    aios(inp, 'y', **{veld: -3})
+    _meer(inp, 8, SALDO_TIJD)
+    uit, toegewezen = los_op(inp)
+    assert not uit.leeg
+    aantallen = _soort_aantallen(inp, toegewezen, code)
+    assert aantallen['x'] > aantallen['y'], aantallen
+    x, y = _per(uit, 'x'), _per(uit, 'y')
+    # 8 of them over 10 AIOS: 0,8 each; with the saldo 3,8 and -2,2: a debt, not held at none.
+    assert getattr(x, doel) == pytest.approx(3.8, abs=0.05)
+    assert getattr(y, doel) == pytest.approx(-2.2, abs=0.05)
+    assert getattr(_per(uit, 'a00'), doel) == pytest.approx(0.8, abs=0.05)
+
+
+def test_one_weekend_saldo_leaves_the_other_alone():
+    inp = weken(4)
+    aios(inp, 'x', saldo_dagen=3)
+    _meer(inp, 9)
+    uit, _ = los_op(inp)
+    x = _per(uit, 'x')
+    assert x.doel_dagen == pytest.approx(3.8, abs=0.05)
+    assert x.doel_weekendavonden == pytest.approx(0.8, abs=0.05)
+    assert x.doel_nachten == pytest.approx(2.8, abs=0.05)
+
+
+def test_the_week_evenings_and_uitloopdiensten_have_their_share_too():
+    """0.903.0: the app shows a fair range per soort, so the solver tells the share of these two as well. They carry
+    no saldo: a saldo of nights moves nothing here, and together the shares are every such dienst."""
+    inp = weken(4)
+    aios(inp, 'x', fte=1.0, saldo_nachten=3)
+    aios(inp, 'y', fte=0.5)
+    aios(inp, 'z', inwerken={'van': dag(0).isoformat(), 'tot': dag(6).isoformat()})
+    _meer(inp, 7)
+    uit, _ = los_op(inp)
+    x, y = _per(uit, 'x'), _per(uit, 'y')
+    for veld, code in (('doel_weekavonden', 'AD'), ('doel_uitloopdiensten', 'UD')):
+        n = sum(1 for d in inp['diensten'] if d['id'].startswith(f'{code}-'))
+        assert n > 0
+        assert sum(getattr(p, veld) for p in uit.per_aios) == pytest.approx(n, abs=0.1), veld
+        # Half the fte, half the share; the night saldo leaves it as anyone else's.
+        assert getattr(y, veld) == pytest.approx(getattr(x, veld) / 2, abs=0.02), veld
+        assert getattr(x, veld) * 0.8 == pytest.approx(getattr(_per(uit, 'a00'), veld), abs=0.02), veld  # a00: 0,8 fte
+    # Who inwerkt has no evenings in the first week, but uitloopdiensten from the start: a smaller share of the one,
+    # the same share of the other as anyone of their fte.
+    z, a00 = _per(uit, 'z'), _per(uit, 'a00')
+    assert z.doel_weekavonden < a00.doel_weekavonden - 0.1
+    assert z.doel_uitloopdiensten == pytest.approx(a00.doel_uitloopdiensten, abs=0.02)

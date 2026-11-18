@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
 import { v4 as uuid } from 'uuid';
 import { db } from '@/db/client';
-import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, getBaseUrl } from './setup';
+import { createTestPeriod, cleanupTestData, loginAsBeheerder, loginAsPlanner, getBaseUrl, demoDatum, isoJaarWeek, openOnderdeel } from './setup';
 
 /**
  * Four things on the planner's period page:
- * - "Ongedaan maken" sits under the heading the change was made in and
- *   folds away with it (lib/pendingUndo.ts `onderdeel`);
+ * - "Ongedaan maken" is for the acute moment (lib/pendingUndo.ts): on the page
+ *   where the change is made, gone after a reload, never offered on opening;
  * - "Mailinstellingen" under Exporteren & communicatie, Gmail only, and
  *   only for the beheerder (shared by the achterwacht and the AIOS; a
  *   planner sees how the mail stands, 0.87.0);
@@ -25,58 +25,122 @@ test.describe('Periodepagina', () => {
     freeSlot = uuid();
     db.prepare(
       `INSERT INTO dienstrooster_shift_slot (id, period_id, datum, iso_jaar, iso_week, shift_type_id)
-       VALUES (?, ?, '2027-02-24', 2027, 8, ?)`
-    ).run(freeSlot, testData.period.id, avond.id);
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(freeSlot, testData.period.id, demoDatum('2027-02-24'), ...isoJaarWeek(demoDatum('2027-02-24')), avond.id);
   });
 
   test.afterAll(() => {
     cleanupTestData(testData.period.id, testData.users.map((u) => u.id));
   });
 
-  const section = (page: import('@playwright/test').Page, title: string) =>
-    page.locator('div.card', { has: page.locator('[role="button"]', { hasText: title }) }).first();
+  // The section through the list (2.0.0).
+  const section = (page: import('@playwright/test').Page, title: string) => openOnderdeel(page, title);
 
-  test('the undo for a change made in "Rooster vooraf invullen" is under that heading and folds away with it', async ({ page }) => {
+  test('"Ongedaan maken" is for the acute moment: on the page where the change is made, gone after a reload and not on the dashboard', async ({ page }) => {
     await loginAsPlanner(page);
-    const assign = await page.request.post(
-      `${getBaseUrl()}/api/planner/period/${testData.period.id}/assignments/manual-assign`,
-      { data: { person_id: testData.users[1].id, slot_id: freeSlot, reason: 'test', onderdeel: 'VOORAF' } }
-    );
-    expect(assign.ok()).toBe(true);
-
-    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}/fill-gaps`);
     await page.waitForLoadState('networkidle');
 
-    const vooraf = section(page, 'Rooster vooraf invullen');
-    const header = vooraf.locator('[role="button"]').first();
-    const banner = vooraf.getByText('Laatst gewijzigd:');
-    if (!(await banner.isVisible())) await header.click();
-    await expect(banner).toBeVisible();
-    await expect(vooraf.getByRole('button', { name: /Ongedaan maken/ })).toBeVisible();
+    // Nothing to undo yet.
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
+    // The change is made on the page itself: pick someone for the open evening and apply.
+    await page.locator('select').first().selectOption({ index: 1 });
+    await page.getByRole('button', { name: /Alle toewijzingen toepassen/ }).click();
+    await expect(page.getByText('Laatst gewijzigd:')).toBeVisible();
+    await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toBeVisible();
 
-    // Not loose between the headings, not under the roster.
-    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(1);
+    // A reload: nothing is offered any more, though the server still holds it for two minutes.
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toHaveCount(0);
 
-    await header.click();
-    await expect(page.getByText('Laatst gewijzigd:')).toBeHidden();
+    // And the dashboard opening afterwards does not offer it either, under no heading.
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
+    await page.waitForLoadState('networkidle');
+    await section(page, 'Rooster vooraf invullen');
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Ongedaan maken/ })).toHaveCount(0);
+  });
+
+  test('"Ongedaan maken" on the fill-gaps page undoes what was just applied', async ({ page }) => {
+    // The first test filled the open evening of beforeAll: another one, in another week nobody works yet.
+    const avond = db.prepare(`SELECT id FROM dienstrooster_shift_type WHERE teller = 'AVOND' AND code IS NULL LIMIT 1`).get() as { id: string };
+    db.prepare(
+      `INSERT INTO dienstrooster_shift_slot (id, period_id, datum, iso_jaar, iso_week, shift_type_id)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(uuid(), testData.period.id, demoDatum('2027-03-03'), ...isoJaarWeek(demoDatum('2027-03-03')), avond.id);
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}/fill-gaps`);
+    await page.waitForLoadState('networkidle');
+    const voor = await page.locator('select').count();
+    await page.locator('select').first().selectOption({ index: 1 });
+    await page.getByRole('button', { name: /Alle toewijzingen toepassen/ }).click();
+    await page.getByRole('button', { name: /Ongedaan maken/ }).click();
+    // The open evening is open again.
+    await expect(page.getByText('Laatst gewijzigd:')).toHaveCount(0);
+    await expect(page.locator('select')).toHaveCount(voor);
   });
 
   test('Mailinstellingen says Gmail only and refuses another address', async ({ page }) => {
     await loginAsBeheerder(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    const exportSection = section(page, 'Exporteren & communicatie');
+    const exportSection = await section(page, 'Exporteren & communicatie');
     const button = exportSection.getByRole('button', { name: /Mailinstellingen/ });
-    if (!(await button.isVisible())) await exportSection.locator('[role="button"]').first().click();
     await button.click();
 
     const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
     await expect(dialog.getByText('De app werkt alleen met Gmail.')).toBeVisible();
-    await dialog.getByLabel('Gmail-adres').fill('iemand@outlook.com');
+    await dialog.getByLabel('Gmail-adres').fill('iemand@organisatie.example');
     await dialog.getByLabel('App-wachtwoord').fill('abcdefghijklmnop');
     await dialog.getByLabel('Verzendlijst sturen naar').fill('flow@ziekenhuis.test');
-    await dialog.getByRole('button', { name: 'Opslaan' }).click();
+    await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
     await expect(dialog.getByRole('alert')).toContainText('alleen via Gmail');
+  });
+
+  test('Mailinstellingen: the Gmail account for both, and per dienst the flow, the contact address and what waits', async ({ page }) => {
+    await loginAsBeheerder(page);
+    await page.goto(`${getBaseUrl()}/planner`);
+    await page.getByRole('button', { name: 'Mailinstellingen' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
+    await expect(dialog.getByRole('heading', { name: 'Gmail-account voor de achterwacht en de AIOS samen' })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'Achterwacht', exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('Verzendlijst sturen naar', { exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('Contactadres van de planner', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: 'AIOS', exact: true })).toBeVisible();
+    await expect(dialog.getByLabel('Verzendlijst van de AIOS sturen naar')).toBeVisible();
+    await expect(dialog.getByLabel('Contactadres van de planner van de AIOS')).toBeVisible();
+    // Nothing waits on a test server without mail: both say so.
+    await expect(dialog.getByText('Er wacht geen mail.')).toHaveCount(2);
+    // One Opslaan for all of it (0.901.0): there is no button of the AIOS's own any more, and with the Gmail part
+    // untouched it saves without logging in to Gmail. A contact address that is no address is refused for the AIOS.
+    await expect(dialog.getByRole('button', { name: 'Opslaan voor de AIOS' })).toHaveCount(0);
+    await dialog.getByLabel('Contactadres van de planner van de AIOS').fill('geen adres');
+    await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('de AIOS niet');
+    await expect(dialog.getByRole('alert')).toContainText('geen geldig e-mailadres');
+    // A real address for the AIOS is saved by the same button and is there when the dialog opens again.
+    const adres = `aios-contact-${Date.now()}@example.test`;
+    await dialog.getByLabel('Contactadres van de planner van de AIOS').fill(adres);
+    await dialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
+    await expect(dialog.getByText('Opgeslagen.', { exact: true })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Sluiten' }).click();
+    await page.getByRole('button', { name: 'Mailinstellingen' }).click();
+    await expect(page.getByRole('dialog', { name: 'Mailinstellingen' }).getByLabel('Contactadres van de planner van de AIOS')).toHaveValue(adres);
+  });
+
+  test('the beheerder reaches Mailinstellingen from the overview too, a planner does not', async ({ page }) => {
+    await loginAsBeheerder(page);
+    await page.goto(`${getBaseUrl()}/planner`);
+    await page.getByRole('button', { name: 'Mailinstellingen' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Mailinstellingen' });
+    await expect(dialog.getByText('De app werkt alleen met Gmail.')).toBeVisible();
+
+    await loginAsPlanner(page);
+    await page.goto(`${getBaseUrl()}/planner`);
+    await expect(page.getByRole('button', { name: 'Accounts beheren' }).or(page.getByRole('link', { name: 'Accounts beheren' }))).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Mailinstellingen' })).toHaveCount(0);
   });
 
   test('a planner sees how the mail stands, without the button: only the beheerder sets it up', async ({ page }) => {
@@ -84,9 +148,8 @@ test.describe('Periodepagina', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
-    const exportSection = section(page, 'Exporteren & communicatie');
+    const exportSection = await section(page, 'Exporteren & communicatie');
     const status = exportSection.getByTestId('mail-status');
-    if (!(await status.isVisible())) await exportSection.locator('[role="button"]').first().click();
     await expect(status).toContainText('Alleen de beheerder stelt de mail in.');
     await expect(exportSection.getByRole('button', { name: /Mailinstellingen/ })).toHaveCount(0);
   });
@@ -96,6 +159,9 @@ test.describe('Periodepagina', () => {
     await loginAsPlanner(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
+    // In the section "Periode" since 1.12.0, and its line in the list says a notice waits there.
+    await expect(page.locator('nav[aria-label="Onderdelen van de periode"]:visible').getByRole('link', { name: /^Periode/ })).toContainText('melding');
+    await section(page, 'Periode');
     const warning = page.getByRole('alert').filter({ hasText: 'Er wordt geen mail verstuurd' });
     await expect(warning).toBeVisible();
     await expect(warning).toContainText('Uitnodigingen, herinneringen en ruilmails staan stil');
@@ -106,6 +172,7 @@ test.describe('Periodepagina', () => {
     await loginAsBeheerder(page);
     await page.goto(`${getBaseUrl()}/planner/period/${testData.period.id}`);
     await page.waitForLoadState('networkidle');
+    await section(page, 'Periode');
     await warning.getByRole('button', { name: 'Mailinstellingen openen' }).click();
     await expect(page.getByRole('dialog', { name: 'Mailinstellingen' })).toBeVisible();
   });

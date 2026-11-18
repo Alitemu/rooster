@@ -2,7 +2,7 @@
  * GET /api/aios/periode/[id]/download-verzoeken - "Verzoeken per AIOS" of
  * an AIOS quarter as a workbook: a row per AIOS with what they asked
  * besides their marks (4 avonden, 4 nachten, twee dagdiensten, inwerken,
- * onderbreking, opmerking), part-time days, absences and the 50% counters
+ * onderbreking), part-time days, absences and the 50% counters
  * (lib/aiosDownloads.ts). For the AIOS's planner and the beheerder; an
  * achterwacht period answers 404.
  */

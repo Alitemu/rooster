@@ -102,6 +102,7 @@ function buildRoster(): Map<string, string> {
     eind_datum: '2099-05-24',
     deadline: '2099-01-01T00:00',
     status: 'GEPUBLICEERD',
+    definitief_op: now,
     bevroren_ruleset_json: JSON.stringify({ windowWeeks: 0 }),
     aangemaakt_op: now,
   });
@@ -243,7 +244,8 @@ afterAll(() => {
   }
 });
 
-const stepArb = fc.tuple(fc.nat(4), fc.nat(50), fc.nat(50), fc.nat(50), fc.boolean().map((w) => w && Math.random() < 0.3));
+// No Math.random here: the seed below only makes a failure reproducible when everything drawn comes from fast-check.
+const stepArb = fc.tuple(fc.nat(4), fc.nat(50), fc.nat(50), fc.nat(50), fc.tuple(fc.boolean(), fc.nat(9)).map(([w, k]) => w && k < 3));
 
 describe('swapping, as a state machine through the real routes', () => {
   it('random sequences keep shifts, requests and answers consistent', async () => {

@@ -59,14 +59,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     if (!verifySetupToken(setup_token)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'INVALID_SETUP_TOKEN', message: 'Ongeldige of ontbrekende setup-token' },
+        error: { code: 'INVALID_SETUP_TOKEN', message: 'Ongeldige of ontbrekende installatiecode' },
       };
       return NextResponse.json(response, { status: 403 });
     }
     // The token was right: nothing below is a guess.
     releaseAttempt(rateLimitKey);
 
-    if (!codenaam || !password) {
+    if (typeof codenaam !== 'string' || typeof password !== 'string' || !codenaam || !password) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'MISSING_FIELDS', message: 'Codenaam en wachtwoord zijn verplicht' },

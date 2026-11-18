@@ -28,7 +28,11 @@ copy of the hard rules, for changing the roster by hand.
   week is 0,8, every other week 0,9, pro rata over the quarter), Geldig
   vanaf/tot clipped to the quarter, the part-time days (patroonDekt), inwerken,
   onderbreking and the wishes from aios_wens, the marks with their bron, and
-  `erboven` from blokkadeTellers. saldo_punten and feestdag_achterstand from
+  `erboven` from blokkadeTellers. saldo_punten, saldo_nachten (0.107.0: the
+  nights target of the quarter before, aios_doel.doel_nachten, minus the nights
+  done; NULL for a quarter made before: none), saldo_dagen and
+  saldo_weekendavonden (0.108.0, the same from doel_dagen and
+  doel_weekendavonden, counting the DD and ADW done) and feestdag_achterstand from
   lib/aiosSaldo.ts (0.79.0, step 4e): the solver's own share of the last
   published quarter the AIOS had one in (aios_doel, kept from per_aios
   doel_punten and doel_feestdagdiensten at every generation, gone with
@@ -53,7 +57,11 @@ copy of the hard rules, for changing the roster by hand.
   container stopped or was killed while solving, e.g. out of memory); or
   the app's own fault (an answer it cannot read, the database), which
   gets a foutcode printed in the web log beside the real error. A solver
-  that answers with an error status stays "kon geen rooster maken". The
+  that answers with an error status stays "kon geen rooster maken".
+  At every start the web container also looks up the host name in
+  AIOS_SOLVER_URL and logs a warning when it does not exist (ENOTFOUND, an
+  old docker-compose.yml without the service): warnAboutMissingAiosSolver
+  in instrumentation-node.ts, a name lookup only, never awaited. The
   full quarter with the image's own dependencies (only requirements.txt)
   solves 4 AIOS in 2 seconds and 25 AIOS in 60 seconds (HAALBAAR) at 330 MB
   at most, so memory is no reason at the 2g limit.
@@ -85,7 +93,7 @@ copy of the hard rules, for changing the roster by hand.
   option, and a dienst without a block too (ENKEL): the second night. Both
   get the day after as compensation day (kalender.py, the table row "Losse
   avond of nacht door de week"), and controle.py checks the same. Hard rule
-  5 is for the whole nachtblok zo t/m di: a fulltimer may do a single night
+  5 (from 0,9 fte on, GEEN_NACHTBLOK_VANAF_FTE in kalender.py, controle.py and lib/aiosRegels.ts) is for the whole nachtblok zo t/m di: such an AIOS may do a single night
   of a cut one (test_regels.py, the planner's design: "elke dag van het
   blok is een losse dienst").
 - lib/aiosRooster.ts gives a cut block vorm LOS, so the page draws it per
@@ -155,6 +163,12 @@ copy of the hard rules, for changing the roster by hand.
   not while a generation runs.
 - lib/aiosRooster.ts lists what the whole roster breaks (overtredingen):
   nothing as the solver made it, a change by hand may.
+- Breaking a hard rule may be published on purpose, after a clear warning
+  (the user's choice, 1.2.2): lib/aiosPublicatie.ts returns those lines
+  apart as `harde_regels` (also in `waarschuwingen`, which still decides
+  the 409 WARNINGS), and components/AiosPubliceren.tsx shows them in their
+  own block and asks "Dit rooster breekt ... een harde regel. Weet je zeker
+  dat je dat bewust zo wilt?" before "Ja, toch publiceren".
 - Tests: lib/aiosRegels.test.ts, aios-solver/test_gedeeld.py,
   app/api/aios/aiosHandmatig.test.ts, the first test of
   tests/e2e/aios-rooster.e2e.ts (a block by hand and back).
@@ -181,9 +195,45 @@ Field names are the AIOS's own and Dutch, like the rest of its code. Input:
   vanaf/tot), onderbreking, inwerken, parttime_dagen, vier_avonden,
   vier_nachten, twee_dagdiensten, markeringen [{dienst_id, niveau ABSOLUUT|
   LIEVER_NIET|VOORKEUR, bron MANUAL|PARTTIME|ABSENCE}], erboven {counter:
-  n}, saldo_punten (a delta: negative = fewer this quarter),
-  feestdag_achterstand (positive = had fewer than fair so far)}.
-- `tijdslimiet_seconden` (1 to 600, default 60), `seed`.
+  n}, saldo_punten (a delta: negative = fewer this quarter), saldo_nachten
+  (0.107.0, the same for the nights: negative = fewer nights this quarter,
+  default 0), saldo_dagen and saldo_weekendavonden (0.108.0, the same for the
+  dagdiensten and the avonddiensten at the weekend, default 0),
+  feestdag_achterstand (positive = had fewer than fair so far),
+  eerdere_diensten [{id, datum, code, start_tijd, eind_tijd, blok_id,
+  blok_soort, blok_vorm}] (0.111.0, what they did in the last eight days of
+  the quarter before in the pool: rules 7, 8 and 9 run on over the boundary.
+  model.py makes options of them as for the quarter, 4-blocks and two
+  dagdiensten kept whole, and forbids what breaks the rest or a compensation
+  day of theirs (the reason KWARTAALGRENS); controle.py and lib/aiosRegels.ts
+  take them along and judge only the diensten of this quarter)}.
+  `latere_diensten` (0.805.0, optional, same shape) is the other way round:
+  what they have in the first eight days of the quarter after, when that
+  roster exists. It is for the app's own check only (lib/aiosRegels.ts, for a
+  swap, a change by hand and the roster page): lib/aiosSolverInvoer.ts leaves
+  it out of the generation (`vers`), the solver and controle.py never see it,
+  so it is not part of the three copies of the rules or of
+  tests/fixtures/aios-regels.json. The nearest quarter after it in the pool
+  counts, not in the prullenbak, and only with a roster (GEGENEREERD or
+  GEPUBLICEERD). A streak of nights wholly in the next quarter is that
+  roster's to judge.
+  The answer's per_aios holds doel_nachten, doel_dagen and doel_weekendavonden:
+  the fair number of each this quarter, the saldo of the years before
+  included (a debt stays a debt). Since 0.903.0 also doel_weekavonden and
+  doel_uitloopdiensten (no saldo): the app stores all five and shows each
+  as a fair range in Dienstdoende (lib/aiosEerlijk.ts: the whole numbers
+  either side of the share, none below none). An older solver image sends
+  neither: NULL, no range for those two. test_eerlijkheid.py checks they
+  add up to every such dienst and that inwerken lowers the evenings' share
+  but not the uitloopdiensten'.
+- `tijdslimiet_seconden` (1 to 3600, default 600; 0.902.0), `seed`. The app
+  offers 10, 15 and 30 minutes and whole minutes up to 60 typed in
+  (lib/aiosGenereren.ts). Measured on one quarter with 30 AIOS (October 2026):
+  2 minutes left the dienstpercentage between 5,6% and 17,6%, 5 minutes
+  between 9,1% and 15,6%, 10 minutes between 10,0% and 11,7%. A search the
+  time cut short ends in HAALBAAR with the best roster found, which looks as
+  finished as an OPTIMAAL one; the page says which it was
+  (components/AiosRoosterMaken.tsx, from dienstrooster_aios_generatie.solver_status).
 
 `erboven` comes from the app's own counters (lib/aiosVoorkeur.ts
 blokkadeTellers), so the solver takes exactly what the AIOS's screen
@@ -199,6 +249,26 @@ feestdagdiensten, doel_feestdagdiensten, blokken, liever_niet, voorkeur,
 boven_de_helft}]. Malformed input answers 422 (unknown block or dienst,
 duplicate ids, a dienst outside the period, fte outside (0, 1], a negative
 erboven, an unknown counter).
+
+Since 0.112.0 (the audit of what the solver accepts): a time must be a real
+one (`99:99` and `24:60` are 422, not a 500), `saldo_punten` lies within
+-500 and 500 and `feestdag_achterstand` within -200 and 200 and neither is
+infinite or NaN, the period is at most 400 days, a block id comes once, an
+AIOS's earlier diensten have distinct ids and fall before the period. The
+model's bounds on how far an AIOS may be from their target grow with the
+size of that target, so a large carry-over (a saldo of 100 points on a small
+quarter) is a large difference and no longer "ONMOGELIJK" with every dienst
+empty. The empty roster is the hint, so a short time or a large quarter ends
+in HAALBAAR and not in GEEN_OPLOSSING. The time limit is for the whole job,
+building the model included. One solve runs at a time (a second answers
+429, which the app tells as "nog bezig met een eerder rooster"), and a
+search stops as soon as the caller has hung up (model.Stop, polled once a
+second in main.py), the way the achterwacht's solver does it: the app
+forgets a running generation when it restarts, and the planner pressing
+"maken" again used to start a second solve beside the first.
+test_regels.py proves it with a request that hangs up after two seconds
+(`_Verbinding`): a 120 second search ends within 20 seconds and the next
+solve is not turned away with a 429.
 
 ## The model
 
@@ -244,12 +314,21 @@ Soft, weighted in one objective (the planner's choice, as the achterwacht's:
 fairness before liever niet): W_LEEG per empty dienst (1 000 000), W_BOVEN_HELFT
 (20 000) per option from the part above half, W_PUNT (100 per tenth of a point)
 off the share plus W_PUNT_MAX on the largest such difference, per soort
-(nights 300, evenings 200, dagdiensten 100 per dienst; nights weigh most, H2),
+W_SOORT (0.103.0, the planner's order, most important first: nights 1500,
+dagdiensten 600, evenings at the weekend 300, evenings in the week 200,
+uitloopdiensten 100, per dienst off the share; the evening at the weekend
+(ADW) is its own soort, `Slot.eerlijk_soort`; the points are not enough on
+their own: an uitloopdienst counts 0,2 and made up for a night not done),
 W_FEESTDAG (300) per feestdagdienst off the share over the years, W_LIEVER_NIET
 (500), spreading W_SPREIDING (400) per block too many in any two and in any
 four weeks (the planner's choice: one block in four weeks; with four weeks
 alone three blocks in three weeks came out as cheap as one every other week),
 a granted 4-block or two dagdiensten -300, voorkeur -150.
+
+Measured on 20 AIOS in a quarter (120 s, 40% of the options blocked):
+before 0.103.0 nights 0 to 8 per AIOS and uitloopdiensten 0 to 14; since,
+nights 3 to 6 and uitloopdiensten 0 to 7. Heavier nights (2500) made the
+percentages drift apart (14,8 to 19,1) for no gain, so 1500 it is.
 
 Shares: points to fte x the werkdagen (Monday to Friday, no feestdag) someone
 can do diensten on (within Geldig vanaf/tot, not during an onderbreking; leave

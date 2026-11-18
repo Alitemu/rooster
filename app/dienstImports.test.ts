@@ -21,7 +21,12 @@ const ROOT = path.resolve(__dirname, '..');
 
 /** The AIOS's own files. */
 const isAios = (rel: string) =>
-  /^lib\/aios[^/]*\.tsx?$/.test(rel) || /^components\/Aios[^/]*\.tsx$/.test(rel) || rel.startsWith('app/api/aios/') || rel.startsWith('app/aios/');
+  /^lib\/aios[^/]*\.tsx?$/.test(rel) ||
+  rel.startsWith('lib/aios/') ||
+  /^components\/Aios[^/]*\.tsx$/.test(rel) ||
+  rel.startsWith('components/aios/') ||
+  rel.startsWith('app/api/aios/') ||
+  rel.startsWith('app/aios/');
 
 /**
  * Shared by both: the login and sessions, the database, the shared mail
@@ -40,10 +45,15 @@ const SHARED = new Set([
   'lib/baseUrl.ts',
   'lib/codenaam.ts',
   'lib/csv.ts',
+  'lib/datumInvoer.ts',
   'lib/dienstAccess.ts',
   'lib/freeText.ts',
   'lib/holidays.ts',
   'lib/isoDate.ts',
+  'lib/linkGeldigheid.ts',
+  'components/DatumVeld.tsx',
+  'components/BestandKiezer.tsx',
+  'components/PeriodeVerwijderd.tsx',
   'lib/localDate.ts',
   'lib/rateLimit.ts',
   'lib/requestFields.ts',
@@ -53,6 +63,7 @@ const SHARED = new Set([
   'lib/settingsCrypto.ts',
   'lib/solverClient.ts',
   'lib/staffAccounts.ts',
+  'lib/terugzetBezig.ts',
   'lib/vrijeTekst.ts',
   'lib/xlsx.ts',
   'lib/xlsxWrite.ts',
@@ -71,10 +82,14 @@ const ACHTERWACHT_USES_AIOS: Record<string, string[]> = {
   // The period page shows an AIOS period with the AIOS's own overview.
   'app/planner/period/[id]/page.tsx': ['components/AiosPeriodOverview.tsx'],
   // A member added or changed: the AIOS's sync after the achterwacht's (audit of the separation).
-  'app/api/planner/pool/[id]/members/route.ts': ['lib/aiosSync.ts'],
+  // Adding one or a reeks, and new dates for a selection, go through lib/poolLeden.ts (0.901.0).
+  'lib/poolLeden.ts': ['lib/aiosSync.ts'],
   'app/api/planner/pool/[id]/members/[membershipId]/route.ts': ['lib/aiosSync.ts'],
-  // The hourly check runs the AIOS's reminders in a try of their own.
-  'instrumentation-node.ts': ['lib/aiosAutoHerinneringen.ts'],
+  'app/api/planner/pool/[id]/members/undo-last/route.ts': ['lib/aiosSync.ts'],
+  // The hourly check runs the AIOS's reminders (for the voorkeuren, and for swap requests that wait) and its swap mail queue, each task on its own (lib/taakUitvoerder.ts).
+  'instrumentation-node.ts': ['lib/aiosAutoHerinneringen.ts', 'lib/aiosRuilen.ts', 'lib/aiosRuilMail.ts'],
+  // Restoring a backup replaces the whole database, so it waits for any generation, the AIOS's included.
+  'lib/dbBackupTerugzetten.ts': ['lib/aiosGenereren.ts'],
   // Every start makes sure the AIOS pool exists.
   'scripts/seed.ts': ['lib/aiosPool.ts'],
 };

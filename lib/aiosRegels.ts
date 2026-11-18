@@ -16,7 +16,7 @@
  */
 
 import { addDays } from '@/lib/holidays';
-import type { AiosSolverInvoer } from '@/lib/aiosSolverInvoer';
+import type { AiosGrensDienst, AiosSolverInvoer } from '@/lib/aiosSolverInvoer';
 
 export type Regel =
   | '2_BLOK_HEEL'
@@ -49,7 +49,7 @@ export const REGEL_WOORDEN: Record<Regel, string> = {
   '1_GEBLOKKEERD': 'een geblokkeerde dienst',
   '1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT': 'meer geblokkeerde diensten dan het deel boven de helft',
   '4_PARTTIMEDAG': 'een uitloopdienst op de parttimedag',
-  '5_FULLTIME_NACHTBLOK': 'een fulltimer in het nachtblok zo t/m di',
+  '5_FULLTIME_NACHTBLOK': 'iemand met 0,9 fte of meer in het nachtblok zo t/m di',
   '6_INWERKEN': 'tijdens het inwerken: dan alleen uitloopdiensten en dagdiensten in het weekend',
   '3_TWEE_OP_EEN_DAG': 'twee diensten op één dag',
   '7_COMPENSATIEDAG': 'een dienst op een compensatiedag',
@@ -85,6 +85,8 @@ interface Eenheid {
 // Python's weekday(): Monday 0 to Sunday 6.
 const weekdag = (d: string) => (new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7;
 const VRIJDAG = 4;
+/** Rule 5: from this fte on no nachtblok zo t/m di (its own copy, as aios-solver/controle.py has). */
+const GEEN_NACHTBLOK_VANAF_FTE = 0.9;
 const ZATERDAG = 5;
 const dagNummer = (d: string) => Date.parse(`${d}T00:00:00Z`) / 86_400_000;
 const minuten = (hhmm: string) => {
@@ -229,17 +231,65 @@ function perAiosVan(slots: Slot[], toewijzingen: ReadonlyMap<string, string>): M
 }
 
 /**
+ * What each AIOS did in the last days of the quarter before (0.111.0) and has in the first days of the one after
+ * (0.805.0, when that roster exists already), as slots with an id of their own; their blocks go into `blokVorm`. Rest
+ * after them and their compensation days run on into this quarter, and those of this quarter's last diensten into the
+ * next. `buitenIds` holds both kinds: neither is judged here, they only help to judge the diensten of this quarter.
+ */
+function eerdereDiensten(
+  invoer: Invoer,
+  feestdagen: Set<string>,
+  blokVorm: Map<string, [string, string]>
+): { eerderIds: Set<string>; eerderPerAios: Map<string, Slot[]>; laterPerAios: Map<string, Slot[]> } {
+  const eerderIds = new Set<string>();
+  const eerderPerAios = new Map<string, Slot[]>();
+  const laterPerAios = new Map<string, Slot[]>();
+  const maak = (voorvoegsel: 'eerder' | 'later', diensten: AiosGrensDienst[]): Slot[] => {
+    const lijst: Slot[] = [];
+    for (const d of diensten) {
+      const begin = dagNummer(d.datum) * 1440 + minuten(d.start_tijd);
+      let eind = dagNummer(d.datum) * 1440 + minuten(d.eind_tijd);
+      if (eind <= begin) eind += 1440;
+      const blok = d.blok_id ? `${voorvoegsel}:${d.blok_id}` : null;
+      if (blok) blokVorm.set(blok, [d.blok_soort!, d.blok_vorm!]);
+      lijst.push({ id: `${voorvoegsel}:${d.id}`, datum: d.datum, code: d.code, begin, eind, blok_id: blok, feestdag: feestdagen.has(d.datum) });
+      eerderIds.add(`${voorvoegsel}:${d.id}`);
+    }
+    return lijst;
+  };
+  for (const a of invoer.aios) {
+    eerderPerAios.set(a.id, maak('eerder', a.eerdere_diensten ?? []));
+    laterPerAios.set(a.id, maak('later', a.latere_diensten ?? []));
+  }
+  return { eerderIds, eerderPerAios, laterPerAios };
+}
+
+/**
  * Per AIOS the days their diensten give them off (rule 7's table, moved off
- * a feestdag by rule 8), by date: for the roosterbureau, which plans them
- * (lib/aiosRoosterDownloads.ts).
+ * a feestdag by rule 8), by date. The app shows these nowhere: the
+ * roosterbureau plans the compensation days itself, before or after a
+ * dienst (there is no download of them any more). The tests read rule 7's
+ * table through this.
  */
 export function aiosCompensatiedagen(invoer: Invoer, toewijzingen: ReadonlyMap<string, string>): Map<string, string[]> {
   const feestdagen = new Set(invoer.feestdagen);
   const blokVorm = new Map(invoer.blokken.map((b) => [b.id, [b.soort, b.vorm] as [string, string]]));
+  const { eerderPerAios } = eerdereDiensten(invoer, feestdagen, blokVorm);
+  const slots = slotsVan(invoer, feestdagen);
+  const vanaf = slots.reduce<string | null>((m, s) => (m === null || s.datum < m ? s.datum : m), null);
   const uit = new Map<string, string[]>();
-  for (const [aiosId, lijst] of perAiosVan(slotsVan(invoer, feestdagen), toewijzingen)) {
+  for (const [aiosId, lijst] of perAiosVan(slots, toewijzingen)) {
     const dagen = new Set(eenheden(lijst, blokVorm).flatMap((e) => [...compensatie(e, feestdagen)]));
     uit.set(aiosId, [...dagen].sort());
+  }
+  // What they did in the quarter before gives days off at the start of this one.
+  for (const [aiosId, eerder] of eerderPerAios) {
+    if (eerder.length === 0 || vanaf === null) continue;
+    const dagen = new Set(uit.get(aiosId) ?? []);
+    for (const e of eenheden([...eerder].sort((x, y) => x.begin - y.begin), blokVorm)) {
+      for (const d of compensatie(e, feestdagen)) if (d >= vanaf) dagen.add(d);
+    }
+    if (dagen.size > 0) uit.set(aiosId, [...dagen].sort());
   }
   return uit;
 }
@@ -250,6 +300,12 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
   const slots = slotsVan(invoer, feestdagen);
   const blokVorm = new Map(invoer.blokken.map((b) => [b.id, [b.soort, b.vorm] as [string, string]]));
   const wie = new Map(invoer.aios.map((a) => [a.id, a]));
+  // What each AIOS did in the last days of the quarter before (0.111.0): their rest and compensation days run on.
+  // They only help to judge the diensten of this quarter; what lies wholly before it is not judged here.
+  const { eerderIds, eerderPerAios, laterPerAios } = eerdereDiensten(invoer, feestdagen, blokVorm);
+  const nieuwVanaf = slots.reduce<string | null>((m, s) => (m === null || s.datum < m ? s.datum : m), null);
+  const nieuwTot = slots.reduce<string | null>((m, s) => (m === null || s.datum > m ? s.datum : m), null);
+  const eerderEenheid = (e: Eenheid) => e.slots.every((s) => eerderIds.has(s.id));
 
   // Rule 2: a block whole, or not at all.
   const perBlok = new Map<string, Slot[]>();
@@ -266,12 +322,27 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
     }
   }
 
-  for (const [aiosId, lijst] of perAiosVan(slots, toewijzingen)) {
-    const a = wie.get(aiosId)!;
+  const perAios = perAiosVan(slots, toewijzingen);
+  for (const [aiosId, lijst] of perAios) {
+    if (wie.has(aiosId)) {
+      lijst.push(...(eerderPerAios.get(aiosId) ?? []), ...(laterPerAios.get(aiosId) ?? []));
+      lijst.sort((x, y) => x.begin - y.begin);
+    }
+  }
+  for (const [aiosId, lijst] of perAios) {
+    const a = wie.get(aiosId);
+    // Someone who is no longer one of the participants (membership ended or removed after the roster was made):
+    // their diensten are outside any membership, said so in words, and the other rules have no data on them.
+    // It threw before, and with it the roster page, publishing and swapping.
+    if (!a) {
+      for (const s of lijst) fout.push(['1_BUITEN_LIDMAATSCHAP', aiosId, [s.id]]);
+      continue;
+    }
     const eigen = eenheden(lijst, blokVorm);
     const markering = new Map(a.markeringen.map((m) => [m.dienst_id, m]));
     const boven = new Map<string, number>();
     for (const e of eigen) {
+      if (eerderEenheid(e)) continue;
       const ids = e.slots.map((s) => s.id);
       if (e.vorm === 'VIER' && !(e.soort === 'AVOND' ? a.vier_avonden : a.vier_nachten)) fout.push(['VIER_ZONDER_WENS', aiosId, ids]);
       if (e.vorm === 'TWEE_DD' && !a.twee_dagdiensten) fout.push(['TWEE_DD_ZONDER_WENS', aiosId, ids]);
@@ -300,7 +371,7 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
         else boven.set(groep, (boven.get(groep) ?? 0) + 1);
       }
       // Rule 5.
-      if (a.fte >= 1 && e.soort === 'NACHT' && e.naam === 'zo-di') fout.push(['5_FULLTIME_NACHTBLOK', aiosId, ids]);
+      if (a.fte >= GEEN_NACHTBLOK_VANAF_FTE && e.soort === 'NACHT' && e.naam === 'zo-di') fout.push(['5_FULLTIME_NACHTBLOK', aiosId, ids]);
     }
     for (const [groep, n] of boven) {
       if (n > ((a.erboven as Record<string, number>)[groep] ?? 0)) fout.push(['1_MEER_DAN_HET_DEEL_BOVEN_DE_HELFT', aiosId, [groep]]);
@@ -312,13 +383,13 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
       if (!dagen.has(s.datum)) dagen.set(s.datum, []);
       dagen.get(s.datum)!.push(s.id);
     }
-    for (const ids of dagen.values()) if (ids.length > 1) fout.push(['3_TWEE_OP_EEN_DAG', aiosId, ids]);
+    for (const ids of dagen.values()) if (ids.length > 1 && !ids.every((i) => eerderIds.has(i))) fout.push(['3_TWEE_OP_EEN_DAG', aiosId, ids]);
 
     // Rules 7 and 8: nothing on another eenheid's compensation day.
     for (const e of eigen) {
       const comp = compensatie(e, feestdagen);
       for (const f of eigen) {
-        if (f === e) continue;
+        if (f === e || (eerderEenheid(e) && eerderEenheid(f))) continue;
         for (const s of f.slots) if (comp.has(s.datum)) fout.push(['7_COMPENSATIEDAG', aiosId, [e.slots[0].id, s.id]]);
       }
     }
@@ -333,7 +404,7 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
     }
     lijst.forEach((s, i) => {
       for (const t of lijst.slice(i + 1)) {
-        if (eenheidVan.get(s.id) === eenheidVan.get(t.id) || s.datum === t.datum) continue;
+        if (eenheidVan.get(s.id) === eenheidVan.get(t.id) || s.datum === t.datum || (eerderIds.has(s.id) && eerderIds.has(t.id))) continue;
         const nodig = (laatsteNacht.has(s.id) ? 46 : 14) * 60;
         if (t.begin - s.eind < nodig) fout.push(['9_RUST', aiosId, [s.id, t.id]]);
       }
@@ -342,13 +413,17 @@ export function controleerAiosRooster(invoer: Invoer, toewijzingen: ReadonlyMap<
     let reeks = 1;
     for (let i = 1; i < nachtdagen.length; i++) {
       reeks = addDays(nachtdagen[i - 1], 1) === nachtdagen[i] ? reeks + 1 : 1;
-      if (reeks > 7) fout.push(['9_MEER_DAN_7_NACHTEN', aiosId, [nachtdagen[i]]]);
+      // A streak that lies wholly in the next quarter is that roster's to judge (0.805.0).
+      const begonnen = nachtdagen[i - reeks + 1];
+      if (reeks > 7 && nieuwVanaf !== null && nachtdagen[i] >= nieuwVanaf && (nieuwTot === null || begonnen <= nieuwTot)) {
+        fout.push(['9_MEER_DAN_7_NACHTEN', aiosId, [nachtdagen[i]]]);
+      }
     }
 
     // One loose weekend dienst per weekend.
     const perWeekend = new Map<string, number>();
     for (const e of eigen) {
-      if (!['za', 'weekend-dd', 'twee-dd', 'wo-za'].includes(e.naam)) continue;
+      if (eerderEenheid(e) || !['za', 'weekend-dd', 'twee-dd', 'wo-za'].includes(e.naam)) continue;
       const za = e.naam === 'wo-za' ? e.tot : weekdag(e.van) === ZATERDAG ? e.van : addDays(e.van, -1);
       perWeekend.set(za, (perWeekend.get(za) ?? 0) + 1);
     }

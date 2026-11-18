@@ -45,6 +45,10 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   which no code did.
 - **Freeze ruleset** when period opens (no retroactive rule changes)
 - **Row versioning** for optimistic concurrency on mutable periods
+- **The AIOS's deadline** (0.809.0) is guarded by the deadline the planner saw (`was`), not by row_version: its pages
+  never carry the row_version, and the deadline is what two people overwrite. A different `was` answers 409
+  `DEADLINE_CONFLICT`; the UPDATE itself checks the deadline it read, so a change in between is caught too
+  (lib/aiosStatus.ts, app/api/aios/aiosApart.test.ts).
 - **Back to OPEN** (`POST /api/periods/[id]/reopen`, "Terug naar open" in
   the period header, two clicks): from GESLOTEN or GEGENEREERD. From
   GEGENEREERD the SOLVER rows and the pending undo go; MANUAL/OVERRIDE rows
@@ -59,8 +63,23 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   start. Not from GEPUBLICEERD (409, unpublish first), nor without a
   generated roster or while a generation runs (409). Audit-logged. Swap
   requests play no part: they only exist on a published roster.
+- **Order of periods** (lib/periodVolgorde.ts): a period is generated and
+  published only after the latest period of its pool before it is
+  published (409 VORIGE_PERIODE_NIET_GEPUBLICEERD, with the name and the
+  state of that one). A period in the prullenbak does not count. Its saldo
+  comes from that one (lib/previousPeriod.ts), so skipping it books the
+  difference twice or not at all. Generating needs GESLOTEN (or
+  GEGENEREERD, to go again), so preferences and absences are fixed.
+  Reopening (back to OPEN) catches up the part-time and absence blocks
+  that only follow changes while a period is OPEN, wipes the frozen
+  deelnamefactoren and is refused (409) once the period has started.
+- **Membership and a roster**: changing or removing a membership on days
+  that fall in a GEGENEREERD or GEPUBLICEERD period answers 409
+  LIDMAATSCHAP_RAAKT_ROOSTER until the planner confirms (`bevestigd: true`,
+  `?bevestigd=1` for DELETE; lib/membershipRooster.ts). The roster does not
+  change with it.
 - **Rename** (`PATCH /api/periods/[id]` `{naam}`, "Naam wijzigen" in the
-  period list's row): any status, checked like a new period's name
+  period list's row): any status but not in the prullenbak (404 there), checked like a new period's name
   (validateSingleLine, PERIODE_NAAM_MAX_LENGTH in lib/vrijeTekst.ts),
   audit-logged. Mails already sent keep the old name.
 - **The prullenbak** (lib/periodTrash.ts): any status may go in, a
@@ -81,6 +100,14 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   (audit 13). Restoring refuses days another period took meanwhile (409
   PERIOD_OVERLAP, lib/periodOverlap.ts); a draft comes back whatever its
   dates.
+- **A generation and the prullenbak (0.112.0):** a period is not put in the
+  prullenbak while a generation runs for it (409 GENERATION_RUNNING), and a
+  roster that comes back from the solver after it went there by another way
+  is not written (the apply transaction asks verwijderd_op too, for the
+  achterwacht and the AIOS: the prullenbak bumps no row_version). The factors
+  a generation holds (dienstrooster_period_factor) go back to what they
+  were when it ends without a roster: failed, no solution, a conflict, a
+  lost connection to the solver.
 - **Nothing changes in the prullenbak** (lib/periodTrash.ts
   trashedPeriodDenial, the full audit, 0.86.0): every changing
   achterwacht route under a period's path answers 409 PERIOD_TRASHED
@@ -89,8 +116,13 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
   The period page still opened from a bookmark or a tab left open, and
   from there it was opened, generated and published: the verzendlijst
   told everyone about a roster none of them could open. Only "Terug naar
-  open" and "Rooster verwijderen" asked. Reading still works, and the
-  page says where the period is (`data-testid="in-prullenbak"`). A
+  open" and "Rooster verwijderen" asked. Since 0.96.0 the period page of a
+  period in the prullenbak shows nothing of it (components/PeriodeVerwijderd.tsx,
+  `data-testid="periode-verwijderd"`): a planner is told to bring it back
+  through the Prullenbak, a participant with their link is told to ask a
+  new one on the startpagina ("Link kwijt?"). The same for the AIOS: its
+  verify-link answers 410 PERIOD_DELETED for a link of its own period in the
+  prullenbak, and both participant pages show that page. A
   planner acting for a participant loses it too (lib/periodAccess.ts
   periodUsableFor). app/api/periodTrashGuard.test.ts sweeps both halves:
   the source of every changing handler, and every one of them called on
@@ -183,4 +215,263 @@ roster needs a reason, as here. What follows is the achterwacht's.)
   fields and snapshot (publishing again starts voorlopig), keeps every assignment
   (withdrawing is not discarding the roster), keeps notifications already
   sent (a historical record) and sends a new one telling participants the
-  publication was withdrawn.
+  publication was withdrawn. No mail goes out, and until 1.3.0 that notice
+  was invisible: the participant's page showed "🔔 Meldingen" only for a
+  published roster, while the dialog promised "krijgt een melding" (audit
+  1.2.2). Meldingen now shows in every status, the dialog says "Er gaat
+  geen mail" and that they see it when they open their link, and the page
+  of a generated but unpublished roster says so in one banner
+  (`rooster-nog-niet-gepubliceerd`) instead of two that contradicted each
+  other (app/person/[token]/meldingenZichtbaar.test.ts, the last test of
+  tests/e2e/publication-workflow.e2e.ts).
+
+## The wizard's last step (1.6.0)
+
+"Periode instellen" (components/SetupWizard.tsx) read its data per step: the
+proposed streefbereik (`GET /api/periods/[id]/capacity`) only while step 3
+was on screen, the staff only on step 2 or 6. A planner who came back to a
+concept period and went straight to step 7 read "0 actief" with everyone
+active and could not open. After a look at step 2 the period opened on the
+range the code started with, 7 or 8 avonddiensten whatever the period, and
+every invitation promised "ongeveer 8 avonddiensten" (audit per role, R-01;
+six scenarios, two of them wrong).
+
+Now both are read on every step and again when the dates, the window or the
+verdeling change. The fields start empty. Step 7 shows the streefbereik in
+words and four checks (components/wizardControles.ts): periode en deadline,
+personeel and streefbereik must hold before "Periode openen" works, the
+capacity is a warning. With nobody active the button is off and says why;
+someone added in step 2, or dates moved in step 1, turn it on again and that
+person is in the period (the planner's wish). tests/e2e/wizard-openen.e2e.ts
+opens three periods this way and reads what was frozen;
+components/wizardControles.test.ts holds the checks,
+components/wizardOpenen.test.ts the three places in the source.
+
+Not kept: a window, verdeling or budget the planner chose without opening.
+Coming back, the wizard starts from the previous period's settings again
+(lib/vorigeInstellingen.ts); step 7 shows what it opens with (option A, the
+user's choice; keeping a draft in the browser or on the server were B and C).
+
+## The period page and its roster (1.7.0)
+
+From the functional audit and the audit per role (all of section 2 of the overview, the user's choice):
+
+- **The streefbereik while the period is open (R-06).** It could be changed only in Rooster genereren,
+  which is closed while the period is open, so a wrong range went into every invitation without a way
+  back. "Aanpassen" next to the streefbereik on the period page, only while OPEN
+  (components/streefbereikAanpassen.ts), saves through PATCH /api/periods/[id]/ruleset: the route of
+  Rooster genereren, which took an open period all along, writes the audit log and refuses an old
+  row_version. Not a change to "the ruleset is frozen when a period opens": that freeze is about the
+  pool's ruleset, the period's own copy was always the planner's to change. The invitations name the
+  expected number (lib/periodInvitations.ts indicatieTekst), so after `uitgenodigd_op` (now in GET
+  /api/periods/[id] for the planner) the page says they named the old one and that sending them again
+  gives the new. Kept small at the user's request: no proposal of the app in that editor.
+- **Periode sluiten (R-08)** asks the dashboard's submission_stats at the first click and says how many
+  have not confirmed and how many filled in nothing (lib/sluitVraag.ts), before the second click.
+- **Empty diensten in the tab Lijst (F-03).** `?met_lege=1` on GET .../assignments returns every dienst
+  of the period, an empty one as a row with id null and `leeg: true`, paged over the diensten; a search on
+  a person stays a list of toewijzingen. The list asks for it once the roster is made
+  (lib/rosterLijst.ts toonLegeDiensten) and fills an empty row through manual-assign, its candidates from
+  slots/[slotId]/eligible-people, as the calendar does. Without the flag the route is what it was.
+- **Rooster vooraf invullen (F-05, F-02)** is "Lege diensten aanvullen" once the roster is made
+  (lib/vooraf.ts voorafNaam: section, button, page and the warning before generating). Below sm a dienst
+  and its list of names stack (components/voorafOpTelefoon.test.ts, measured at 375 pixels in
+  tests/e2e/lege-diensten.e2e.ts).
+
+## Volgende stap (1.8.0)
+
+One line at the top of the period page of the achterwacht, always there (the planner's wish), with what
+to do now: lib/volgendeStap.ts picks it from what the dashboard already reads (status, deadline,
+submission_stats, the empty diensten of FillGapsSummary, whether mail is set up) plus two dates the
+dashboard route now returns, `uitgenodigd_op` and `gepubliceerd_op`. The order is the planner's: invite,
+remind until the deadline, close, generate, fill what stayed empty, voorlopig, definitief. Nothing for a
+concept (the wizard's) or a status it does not know, and no button where nothing can be done (mail not
+set up, a definitief roster).
+
+The button is a signpost, never an action: STAP_PLEK in components/PlannerDashboard.tsx opens the section
+the step is in and gives the existing button the focus (knop-uitnodigingen, knop-periode-sluiten in the
+page header, knop-genereren and so on); lib/volgendeStap.test.ts fails when an id it points to is gone.
+The AIOS gets its own copy only when the planner of the achterwacht finds it useful. A different layout
+of the page (the sections as a list on the left) is on docs/todo.md.
+
+## The new layout of the period page (1.9.0)
+
+The planner found the accordion awkward. Next to it, not instead of it, a layout with the sections as a
+list on the left (four groups: Voorbereiden, Deelnemers, Communicatie, Rooster) and one section on the
+right; the status and Volgende stap stay on top. Opt-in with the switch on the page ("Nieuwe indeling
+proberen") or `?indeling=nieuw`; 2.0.0 makes it the default (docs/todo.md) once the planners have tried it.
+
+One list feeds both: `onderdelen` in components/PlannerDashboard.tsx holds per section its title,
+summary and whether it is there, and `Section` takes only `sleutel` and reads the rest from
+IndelingContext, drawing the accordion exactly as before or, in the new layout, only the chosen section
+(a keepMounted one stays mounted unseen, so FillGapsSummary and the herverdeling still report their
+counts). The groups, the address of each section (`?onderdeel=status-voorkeuren` and so on) and which one
+opens first (where Volgende stap points) are lib/periodeIndeling.ts. Each item is a link with the
+section's address: the back button steps back and a section can be linked to. The page wraps the
+dashboard in Suspense for useSearchParams.
+
+Every browser test but tests/e2e/indeling-nieuw.e2e.ts still uses the accordion, which is how 1.9.0 shows
+that nothing changed for it (139 of 139). Switching the default means moving those tests' section helpers.
+
+### What the audit of 1.9.0 found (1.10.0)
+
+Measured in the browser on the demo of 31 people, in every status, on a large screen, a laptop
+(1366 x 650 visible), a tablet and a phone. Section by section the two layouts had the same buttons,
+fields and text: nothing was lost. What was wrong, and how it is now:
+
+- **A section went through the server.** The items were Next `Link`s (and Volgende stap a
+  `router.push`): a change of `?onderdeel=` asks the server for the page again. Behind a server 1.5 s
+  slow a click took 1.8 s (the accordion 78 ms), and without a connection the browser replaced the whole
+  page by its own error page. Now `window.history.pushState` with only the query (Next follows it in
+  useSearchParams; the browser keeps the path, sub-folder included): no request. Do not go back to
+  `Link` or the router for this.
+- **Volgende stap lost its focus.** It pushed the address and looked for the button 50 ms later. That
+  works on one machine only: 20 ms of network and the button was not there yet. The browser test passed
+  for that reason alone. Now the click leaves what it wants in `naWisselRef`, and `Onderdelen` acts in an
+  effect once that section is the one on screen (`toonOnderdeel`). The test delays the server.
+- **The layout was lost on every way back.** It lived in the address only, and "Terug naar periode"
+  and the list of periods name no layout. lib/indelingOnthouden.ts keeps the choice in the browser
+  (localStorage; a browser that refuses it keeps it for the tab), read with useSyncExternalStore. The
+  address still wins when it names one, and is then remembered (`keuzeUitAdres`). Per browser, not per
+  account: it is a way of looking.
+- **The list was higher than a laptop screen** (666 to 750 px in 650) and stuck to the top, so the roster,
+  its last item, could not be reached while scrolled down. It has its own scroll bar now.
+- **A chosen section began above the screen** when the page was scrolled down (757 px in the
+  measurement). `toonOnderdeel` scrolls it to its title and gives the title the focus, which also puts
+  a keyboard and a screen reader in the section (it took 8 tabs).
+- **Below 1100 px two columns left the tables too little room** (464 px for a section at 768, where the
+  accordion has 704), and on a phone the list came first, a screen above every section. The planner
+  asked for a menu there: a bar that sticks to the top with a button (three lines, the name of the
+  section on screen), the list under it when open. It closes on a choice, on Escape and on a tap next
+  to it, and takes the room under the bar so it never runs off the screen. 1100 px is where the widest
+  table (Dienstdoende, 725 px) fits next to the list of 16 rem.
+
+Not changed then: the block above the sections (the header of the period, Volgende stap, the row of
+buttons) was 430 to 660 px on a laptop and over 800 px on a phone, so the sections began at or below
+the edge of the first screen. The planner had asked to keep the status on top as it was. 1.12.0 took
+the block away, below.
+
+Also from that audit, in both layouts: Volgende stap said "of publiceer het rooster met lege diensten"
+for a roster with empty diensten, which publishing refuses (lib/publicationCheck.ts). The sentence now
+says publishing needs every dienst filled, and its test reads that rule so the two stay together.
+
+### The block above the sections becomes the section "Periode" (1.12.0)
+
+The planner's wish, chosen from sketches made on the real page (its own elements moved in the browser,
+nothing built): "the information on top takes too much room and is often superfluous". Measured where a
+section began, in px from the top:
+
+| Screen (height) | Status | 1.11.0 | 1.12.0 |
+|---|---|---|---|
+| Laptop (650) | open | 474 | 170 |
+| Laptop (650) | voorlopig gepubliceerd | 561 | 199 |
+| Phone (812) | open | 740 | 213 |
+| Phone (812) | voorlopig gepubliceerd | 1077 | 282 |
+
+What changed, in the new layout only (the accordion draws exactly what it did):
+
+- **"Periode" is a section**, on top of the list under no heading (`BOVENAAN`, lib/periodeIndeling.ts).
+  It holds what stood above the sections: the dates, the deadline, the venster and streefbereik, the
+  status and the buttons that change it, the notice that mail is not going out and the one about large
+  differences. Its line in the list says the status and how many notices wait there, so a notice that
+  used to be above everything is not missed (`MailWarning` tells through `onStand` whether it shows;
+  the section stays mounted, `keepMounted`, for that).
+- **The page's block is handed to the dashboard.** The header of the period lives in
+  app/planner/period/[id]/page.tsx with its state (the deadline and streefbereik being edited, closing,
+  reopening, "Rooster verwijderen"). The page now gives it as `periodeKop(vorm, acties)` and draws it
+  nowhere itself: the dashboard knows the layout and places it, as the card on top in the accordion
+  ('kaart') or inside the section ('onderdeel', without the card and without the heading), with its
+  own buttons (`acties`) under the status. In the accordion the DOM is as it was: the dashboard returns
+  a fragment, so the block and the notices are still children of the page's column.
+- **The blue bar names the period and its status** (`PeriodeInKop`). The status had to stay in sight:
+  without it a planner could work in a closed period unnoticed. The name is the page's `h1` there. The
+  app's bar (app/layout.tsx) has two slots for it, `kop-links` and `kop-midden`, which a page fills
+  through a portal (components/InPlek.tsx). They are shared and empty on every other page, the AIOS's
+  included, where they take no room. On a narrow screen the name takes a row of its own under the title.
+- **The list stands all the way left**, from the blue bar down, in a column the page keeps for it
+  (`onderdelen-links`, hidden by CSS while empty). It used to be a column inside the page's centred
+  width, under everything above the sections. The section is wider for it: 1062 px on a laptop of 1366,
+  where it was 976.
+- **Below 1100 px the button of the list is in the blue bar**, left of "Dienstrooster", and the bar
+  sticks to the top there (`html[data-kop-plakt]`, set while the layout is on the page). The list slides
+  in from the left under the bar. It replaced the bar inside the page, which named the section on screen;
+  the section's own title says that now.
+- **The sections of a group stand moved in with a line down the group**: the planner's choice out of
+  three sketches (as it was, moved in, moved in with a line).
+- **Volgende stap is the one thing left above every section.** Its button goes to the section "Periode"
+  for a step whose button changes the status (`onderdeelVanStap`). The page still opens on what the step
+  is about (`startOnderdeel`, unchanged): the planner looks at the roster before publishing it.
+- **A button that can't be pressed in this status is left out of the section** ("Rooster genereren"
+  while the period is open). Volgende stap says what comes first.
+
+Weighed and dropped: the button row moved into the header (my own proposal: 60 to 130 px won on a
+laptop, the block stayed), and the blue bar sticking to the top on a wide screen too (64 px of a
+laptop's 650 for good).
+
+Not in the bar yet: the pages behind the period (a person, fill-gaps, prior assignments) keep their own
+header (docs/todo.md).
+
+The AIOS's period page got the same layout in 1.13.0 (docs/development/diensten.md, "Copied, not
+changed"). Measured on a concept quarter of 13 weeks: a section begins at 100 to 124 px on a laptop of
+650, where the header card and the card that makes the roster stood above the first section.
+
+### The new layout is the layout (2.0.0)
+
+The planner's wish: compare both layouts and, when nothing is missing, make the new one the only one, with
+the old one out of sight rather than deleted ("zodat er niet per ongeluk iets belangrijks wordt verwijderd").
+
+The comparison, in the browser on the built 1.13.0: for each page every control (button, link, field, with its
+label, whether it can be pressed and where it leads) and every heading, paragraph, label and table header was
+collected. In the accordion with every section opened in turn plus what stands outside the sections, in the new
+layout with every item of the list in turn plus Volgende stap. Then compared as sets, both ways. Done for the
+achterwacht in concept, open, gesloten, gegenereerd with empty diensten and voorlopig gepubliceerd, as planner
+and as beheerder, and for an AIOS quarter of eight AIOS in open, gesloten, gegenereerd and gepubliceerd, as
+beheerder and as a planner of the AIOS. Nothing of the accordion was missing. Only in the accordion: the
+disabled "Rooster genereren" before closing (left out of "Periode" on purpose, 1.12.0) and the small line
+"Status: ..." under the button row (the status is in the blue bar and in "Periode"). Only in the new layout:
+the summaries of the sections under their titles. The scripts are not in the repository.
+
+What changed:
+- nieuweIndeling (and aiosNieuweIndeling) is true unless the address says `?indeling=oud` or the browser holds
+  the hidden flag `dienstrooster.oudeIndeling` = `ja` (lib/indelingOnthouden.ts and its AIOS copy, one key for
+  both). Nothing in the app sets that flag; `?indeling=oud` is not remembered.
+- The switches "Nieuwe indeling proberen" and "Terug naar de oude indeling" are gone. The key that remembered
+  the planner's choice until 2.0.0 (`dienstrooster.indeling`) is not read: a browser that chose the accordion
+  sees the new layout.
+- The accordion's code is unchanged. In 2.0.0 most browser checks still went through it, with the hidden flag;
+  since 2.0.1 they all go through the new layout (below).
+
+### The browser checks through the new layout (2.0.1)
+
+Every browser test and scripts/ui-check.mjs open a section as a planner does: `openOnderdeel` in
+tests/e2e/setup.ts (the item in the list, or the menu below 1100 px; `openAiosSectie` and `openDienstrooster`
+use it), `onderdelenInLijst` for what the list holds, `kies` in the screen check. What stood above the sections
+is opened as "Periode" first. Tests of the accordion's own behaviour (folding, pinning) became tests of the
+list. No check sets the hidden flag any more (lib/periodeIndeling.test.ts holds that); only
+tests/e2e/indeling-nieuw.e2e.ts and tests/e2e/aios-indeling.e2e.ts open the accordion, with `?indeling=oud`,
+to show it is still behind the way back.
+
+Moving them found a fault in the AIOS's page: without a chosen section the page shows the first section of the
+status, so making the roster in "Periode" jumped to "Dienstrooster" the moment it was made, and opening a concept
+in "Voorkeuren van de AIOS" jumped to "Status voorkeuren". The planner lost the answer to what they had just
+done. Since 2.0.1 the section on screen goes into the address when the status changes. The achterwacht's page
+has no such jump: its buttons that change the status are reached only by choosing "Periode" (or Volgende stap),
+which puts the section in the address already.
+
+The screen check found a second one in the achterwacht's list (Dienstrooster, tab Lijst): a swap far down the
+roster pushed the row just changed down by 152 pixels, the warning above the table and the undo banner at the
+top of the section. The browser keeps what you look at in place by itself (scroll anchoring): it picks the
+first element in the page that is on screen and scrolls along when that moves. In the new layout that was the
+column of the list on the left, as tall as the page and before the content, so it never moved and the browser
+did nothing (measured: a block of 100 pixels put above the table moved the row 100 pixels in the new layout,
+0 in the old one and 0 with the column excluded). Since 2.0.2 both columns say `overflow-anchor: none`
+(app/globals.css `.onderdelen-links`, the AIOS's `<aside>` in components/AiosPeriodOverview.tsx), and the
+browser holds the content still again, everywhere and in both directions. 2.0.1 had a workaround in the list
+itself, which held only that one row and only on the way in; it is gone.
+
+Ongedaan maken then still jumped: it remounted the list (`key={assignmentsRefreshKey}`), and for a moment
+there was no table for the browser to hold. Since 2.0.2 it raises `rijenVernieuwen` instead, and the list and
+the calendar load again in place (`vernieuwen`, as a swap already did). The screen check measures the row
+after a swap and after Ongedaan maken, and the calendar's day by its own place, no longer by `scrollY`: the
+browser now scrolls along on purpose.
+

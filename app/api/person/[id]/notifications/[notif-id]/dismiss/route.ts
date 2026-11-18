@@ -32,7 +32,7 @@ export async function POST(
 
     if (!notification) {
       return NextResponse.json(
-        { success: false, error: { code: 'NOTIFICATION_NOT_FOUND', message: `Melding ${notifId} niet gevonden` } },
+        { success: false, error: { code: 'NOTIFICATION_NOT_FOUND', message: 'Melding niet gevonden' } },
         { status: 404 }
       );
     }

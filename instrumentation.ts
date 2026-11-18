@@ -13,7 +13,9 @@
  */
 export async function register(): Promise<void> {
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
-  const { runStartupBootstrap, startAutoReminderScheduler } = await import('./instrumentation-node');
+  const { runStartupBootstrap, startAutoReminderScheduler, warnAboutMissingAiosSolver } = await import('./instrumentation-node');
   await runStartupBootstrap();
+  // Not awaited: a log line must never hold up the first request.
+  if (process.env.NEXT_PHASE !== 'phase-production-build') void warnAboutMissingAiosSolver();
   startAutoReminderScheduler();
 }

@@ -6,7 +6,10 @@ that say "CLAUDE.md, ..." point to a section that now lives in docs/development/
 
 ## Mailing personal links (verzendlijst)
 
-The AIOS have their own flow (docs/aios-rooster.md, "Mail"): their mail
+The AIOS have their own address setting (docs/aios-rooster.md, "Mail"), and since 0.105.0 the
+same flow can serve both: every verzendlijst carries `dienst` (`ACHTERWACHT` or `AIOS`),
+set by buildVerzendlijst in each copy, never by a caller, and the flow picks its rows by
+it (docs/verzendlijst-power-automate.md). The AIOS's mail
 goes through lib/aiosMail.ts, a copy of the sending here, to the address
 under `aios.mail.verzendlijst_aan`, from the same Gmail account. Their
 automatic reminders (lib/aiosAutoHerinneringen.ts, 0.73.0) are a copy of
@@ -16,12 +19,49 @@ switch per period in dienstrooster_aios_periode.auto_herinneren (the
 period's own auto_herinneren stays 0, so the achterwacht's never take an
 AIOS period). Asked for because the AIOS's only went by hand in 0.72.0.
 Swaps between AIOS (lib/aiosRuilen.ts, 0.80.0) send RUILVERZOEK,
-RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN and on approval
-RUIL_DOORGEVEN (to the codenamen Planner and Roosterbureau, `personen` the
-two who swapped) to the AIOS's flow, a request anonymous until it goes
-through, as the achterwacht's. After the commit and not awaited, but not
-queued: a mail that fails is not tried again (the request is on both
-pages, and the failure shows in the AIOS's mail settings).
+RUIL_BEVESTIGING, RUIL_UITKOMST, RUIL_INGETROKKEN, since 0.102.0 also
+RUIL_HERINNERING and RUIL_HERINNERING_BEVESTIGING, and on approval
+RUIL_DOORGEVEN to the AIOS's flow, a request anonymous until it goes
+through, as the achterwacht's. Since 0.102.0 the AIOS has a queue of its
+own for them (lib/aiosRuilMail.ts, table dienstrooster_aios_mail_queue):
+a mail that can't go out waits and goes at the hourly run, after saving the
+AIOS's address and after any other successful send; dropped after 7 days,
+a request mail once the request was answered, and a withdrawal for a
+request the colleague never heard of takes that request's mails with it.
+The personal link is made when the mail is sent. The beheerder sees what
+waits (kind, codenaam, since when) in Mailinstellingen, no addresses and
+no texts. Swapping only on a definitief roster; there is no status
+vervallen: what can never go through any more is INGETROKKEN, the colleague
+(and for a third party's request or a roster change the requester too) is
+told (meldAiosRuilenIngetrokken).
+
+RUIL_DOORGEVEN (0.102.0): ONE bericht, to the codenaam Roosterbureau, with
+`cc` (codenamen: the requester, the colleague and Planner) and `personen`
+the two who swapped. The app never holds an address; the flow looks the
+codenamen up in its own sheet, so the operator updates the flow once to
+put the `cc` codenamen in the CC. Until then the field is ignored and the
+bericht goes to the Roosterbureau alone. The colleague who approved gets
+a RUIL_UITKOMST of their own, with the requester's name.
+
+Reminders (0.102.0, lib/ruilHerinnering.ts for the achterwacht, lib/aiosRuilen.ts
+for the AIOS): automatic once, at the last 09:00 at or before 7 x 24 hours
+after the request (a Friday afternoon request: the next Friday morning),
+by the hourly check (instrumentation-node.ts); by hand, by the requester
+or the planner, after a yes in the page (`bevestigd: true`), not within 24
+hours of the last one. Columns laatste_herinnering_op and
+laatste_herinnering_door (AUTOMATISCH, AANVRAGER, PLANNER) on both swap
+tables. The colleague gets RUIL_HERINNERING (anonymous), the requester
+RUIL_HERINNERING_BEVESTIGING with the advice to consider another day or
+colleague, that more than one request is possible and that the others are
+withdrawn when someone accepts.
+
+Contact addresses (0.102.0): a participant never sees the flow's mailbox.
+What they mail about a voorlopig roster, or a swap the app can't make, is
+the planner's own address per dienst, set by the beheerder in
+Mailinstellingen (`mail.contact_planner` for the achterwacht,
+`aios.contact.planner` for the AIOS; lib/appSettings.ts getContactPlanner,
+lib/aiosMail.ts aiosContactAdres). Without one the text says "Meld dat bij
+de planner" and no address.
 Publishing the AIOS's roster (lib/aiosPublicatie.ts, 0.78.0) sends the
 verzendlijst kinds ROOSTER_VOORLOPIG and ROOSTER_DEFINITIEF to that flow,
 with their own texts: per AIOS their diensten, their dienstpercentage
@@ -31,8 +71,10 @@ adding one would change the contract with both flows.
 What follows is the achterwacht's, unchanged for the AIOS
 (docs/development/diensten.md, "Copied, not changed").
 
-The app never stores e-mail addresses, so it never mails participants
-itself. It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
+The app never stores a participant's e-mail address, so it never mails
+participants itself. (It does keep the operator's own: the Gmail account it
+sends from, the contactadres per dienst and the backup address, all entered
+by the beheerder.) It hands a "verzendlijst" (lib/verzendlijst.ts: fixed subject
 `DIENSTROOSTER-VERZENDLIJST` + a JSON attachment: summary fields plus
 `berichten`, each `{soort, codenaam, personen, onderwerp, tekst}`; `personen` = every codenaam
 the text names, longest first, so a flow can swap in real names from its
@@ -72,7 +114,18 @@ mails, lib/meldingMail.ts) use lib/baseUrl.ts `mailBaseUrl`: BASE_URL or
 the period's `basis_url` from the planner's export, never the Host header
 of the participant's request (anyone can forge it, and the colleague's
 fresh personal link would go to that host); with neither known the mail
-has no link. resolveBaseUrl (Host header) is for planner exports only. Swap requests use the same channel (lib/meldingMail.ts):
+has no link and says to use the link from the invitation. Under a link
+stands "Deze link is alleen voor jou. Stuur hem niet door." (1.0.1, as in
+the AIOS's). The AIOS keep their own address in
+dienstrooster_aios_periode.basis_url: sending the invitations,
+publishing, making definitief and mailing the roster again all keep it
+(lib/aiosUitnodigen.ts onthoudAiosBasisUrl; before 1.0.1 only the
+invitations did, and a swap mail in a period whose invitations never went
+out had no link). resolveBaseUrl (Host header) is for planner requests only.
+A request withdrawn because the planner took the publication back gives
+"Het rooster is weer voorlopig. Ruilen kan weer als het definitief is."
+(ROOSTER_VOORLOPIG_REDEN, in lib/swapLifecycle.ts and lib/aiosRuilen.ts
+each); "Het rooster is aangepast." stays for a dienst changed by hand. Swap requests use the same channel (lib/meldingMail.ts):
 a new request mails the colleague (SWAP_REQUESTED) and confirms to the
 requester, and approve/reject mails the requester (SWAP_RESULT), each a
 one-bericht verzendlijst with a fresh personal link and the swap spelled
@@ -89,11 +142,23 @@ the swap row when sent) with one bericht each for the fixed codenamen
 `Planner` and `Roosterbureau` (DOORGEVEN_AAN, lib/swapMailDetails.ts):
 who now does which shift, `personen` = both who swapped, no link. The
 operator adds those two rows to the flow's sheet; the app never puts an
-address in a verzendlijst, so a forged one can't reach anyone outside it. The swap dialog says only an equal swap goes through the app (one shift
+address in a verzendlijst, so a forged one can't reach anyone outside it.
+
+Since 1.1.5 the in-app notice of a new request spells the days out
+(ruilverzoekDetails, lib/swapMailDetails.ts: "Aangeboden: donderdag 4 maart
+2027 (avonddienst)") instead of an ISO date, and an approved swap writes
+two RUIL rows in dienstrooster_assignment_edit (one per shift, the new
+holder in person_id, the old one in oorspronkelijke_person_id, the approver
+in bewerkt_door_person_id), so the planner's wijzigingsgeschiedenis and the
+audit-trail export show it as "Geruild" (and since 1.3.0 the planner's list
+of toewijzingen too: the shift's latest assignment_edit is RUIL, while its
+bron stays MANUAL). The publish and finalize refusals
+join their messages as sentences (lib/zinnenLijst.ts) instead of with "; ",
+which gave ".;" in the message. The swap dialog says only an equal swap goes through the app (one shift
 for one of the same kind, which the create route enforces); any other
 trade colleagues agree themselves and mail it themselves to the planner
-(the Mailinstellingen flow mailbox, lib/appSettings.ts getSwapContacts,
-GET /api/person/[id]/swap-contacts) and to "het roosterbureau", named
+(the contact address of the dienst, lib/appSettings.ts getSwapContacts,
+GET /api/person/[id]/swap-contacts; not the flow mailbox since 0.102.0) and to "het roosterbureau", named
 without an address. The address lives in the app, never in code. Started after the
 commit and never awaited, so a mail failure can't fail or slow the swap.
 A swap mail that can't go out (not set up, or refused) waits in
@@ -124,8 +189,9 @@ the exact same request twice is refused): the first to approve wins. That
 approval withdraws the other open requests of either side of that swap
 (INGETROKKEN, only the colleague each was sent to is told; the requester
 hears it in the approval mail, the approver on screen from the response's
-`afgesloten`) and closes anyone else's request on either shift as
-AFGEWEZEN ("vervallen", both sides told) (lib/swapLifecycle.ts). One
+`afgesloten`) and withdraws anyone else's request on either shift as
+well (INGETROKKEN with the reason that one of the diensten was swapped, both
+sides told; before 0.102.0 it was AFGEWEZEN) (lib/swapLifecycle.ts). One
 participant may start at most 20 swap requests per 24 hours, withdrawn
 ones included (lib/swapQuota.ts, 429): each mails two people, and the
 sending account's daily limit is shared with invitations and reminders. Invitations go out only for an OPEN period before
@@ -202,10 +268,71 @@ non-CONCEPT period with a basis_url, LATER_COLUMN_BACKFILL in the seed and
 migration 0018). Another period's invitations are refused (409
 OTHER_PERIOD_ACTIVE) until the active one is GEPUBLICEERD; the period
 list marks it "Actief".
+The planner's choice after audit 1.3.0 (1.4.0): "Link kwijt?" stays for
+the active period only. Once the next period's invitations went out, a lost
+link of the running, published roster is not offered; the old invitation
+link keeps working until that period ends.
 `berichten` stays empty on purpose: a flow that doesn't know this soort
 must send nothing rather than mail everyone. The flow looks the address
 up in its sheet and sends only that codenaam's bericht, to the sheet's
 address. The answer is the same for any address; rate-limited per caller
-(3) and in total (10) per 15 minutes, because every request mints a link
+(3 an hour) and in total (10 per 15 minutes), because every request mints a link
 for every participant and costs a Gmail send. The address is never
 stored or logged.
+
+The page says the mail can take up to a quarter of an hour, before and after
+asking, and to ask once (issue #1, 0.905.0): the operator's flow triggers on a
+shared mailbox, which Power Automate polls every 5 to 10 minutes whatever the
+flow says (measured: a mail of 12:45 started the flow at 12:50, one of 12:56 at
+13:05). A second request only sends a second mail. Text only: the limit of three
+per hour per address stays (tests/e2e/link-kwijt.e2e.ts).
+
+## One send at a time, and sending a roster again (0.805.0)
+
+A send that goes to everyone is claimed per period and kind before its first
+await (lib/inFlight.ts for the achterwacht, its copy lib/aiosInFlight.ts for
+the AIOS): a second click or tab is told `BEZIG` (409). The reminder by hand
+and the automatic reminder share one key per period (`remind:<id>`, AIOS
+`herinneren:<id>`): the automatic one then leaves its moment unclaimed and goes
+on the next tick. Invitations (`invitations:`, AIOS `uitnodigen:`) and the
+roster mail (`rooster-mail:`) have their own.
+
+`POST /api/planner/period/[id]/rooster-mail` and
+`POST /api/aios/periode/[id]/rooster-mail` send the mail of the publication
+again (voorlopig while voorlopig, definitief when definitief) to everyone, for
+when it failed. Nothing about the roster changes; the audit log notes it. The
+buttons ask first ("Rooster opnieuw mailen").
+
+After a roster mail the planner is told to look (1.6.0, the user's
+wording): "Controleer over 30 minuten of de e-mails zichtbaar zijn in de
+verzonden items van de mailbox <adres>", with the address the verzendlijst
+goes to. The app knows the verzendlijst reached the flow's mailbox, not
+that the flow mailed everyone. `mailControleZin`
+(components/RosterPublicationDialog.tsx) for publishing, making definitief
+and "Rooster opnieuw mailen"; the AIOS's copy `aiosMailControleZin`
+(components/AiosPubliceren.tsx).
+
+## The beheerder's password mail (0.805.0)
+
+The one mail that does not go to the flow's mailbox: lib/wachtwoordHerstel.ts
+sends it from the Gmail account to that same account
+(`sendDirectMail`, lib/verzendlijstMail.ts). See docs/development/auth.md.
+
+**A queued swap mail for a period in the prullenbak waits (0.905.1).** The
+mail carries a fresh personal link, and a period in the prullenbak is closed
+to its people (lib/periodAccess.ts): sent anyway, the link would not open.
+flushMailQueue (lib/meldingMail.ts) and its AIOS copy flushAiosMailWachtrij
+(lib/aiosRuilMail.ts) skip such a mail and keep it; it goes once the period
+is restored, the 7-day limit still applies, and a purge removes it with the
+period (lib/periodTrash.ts). A restored backup brings back the queue and the
+reminder claims of its own moment, so a mail sent after that moment can go
+again: the restore warning says so (components/BackupDialog.tsx).
+
+**The contactadres where a question goes (1.7.0, audit per role R-05).** "Vragen over je rooster? Neem
+contact op met de planner" named no address; it stood only under Ruilen. The achterwacht's roster view now
+reads it for every roster (it did only for a voorlopig one) and names it there and in the notice about a
+blocked day that was given anyway. The AIOS's own roster carries `contact_planner` (aiosContactAdres) for
+its voorlopig notice and a line for questions. The voorlopige roster mail of each dienst says "Laat het de
+planner zo snel mogelijk weten: mail naar ..." when an address is set (voorlopigBericht,
+aiosVoorlopigBericht); without one the sentence is as it was.
+

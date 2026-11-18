@@ -9,19 +9,23 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db/client';
-import { getAuthContextFromRequest, personAccessDenial } from '@/lib/auth-context';
+import { getAuthContextFromRequest, personAccessDenial, requirePlannerAccess } from '@/lib/auth-context';
+import { writeOnBehalfAuditLog } from '@/lib/auditLog';
 import { aiosPersonDenial } from '@/lib/aiosPeriod';
 import { internalErrorResponse, isUniqueViolation, parseJsonBody } from '@/lib/api-errors';
 import {
   syncAvailabilityForPattern,
   getOpenPeriodsForPerson,
   findDeadlinePassedOverlappingPeriods,
+  overlappingPatternOf,
   PARTTIME_WEEKDAGEN,
+  PATTERN_OVERLAPS_MESSAGE,
+  type PatternRule,
 } from '@/lib/parttimeSync';
 import { clearParttimeCheck, markSubmissionStarted } from '@/lib/submissionStatus';
 import { writePreferencesBackup } from '@/lib/preferencesBackup';
 import { buildDeadlinePassedWarning } from '@/lib/periodInputGate';
-import { isValidIsoDate } from '@/lib/isoDate';
+import { isPlausibleIsoDate, isValidIsoDate } from '@/lib/isoDate';
 import type { ApiSuccessResponse, ApiErrorResponse } from '@/types';
 
 interface ParttimePattern {
@@ -56,7 +60,7 @@ export async function GET(req: NextRequest, props: { params: Promise<{ id: strin
     if (!personStmt.get(id)) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
     }
@@ -143,7 +147,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     // Same reason as the absences route: the range check below compares
     // two strings alphabetically, and every sync compares these against
     // slot dates as YYYY-MM-DD text - a non-date silently matches nothing.
-    if (!isValidIsoDate(geldig_vanaf) || !isValidIsoDate(geldig_tot)) {
+    if (!isValidIsoDate(geldig_vanaf) || !isValidIsoDate(geldig_tot) || !isPlausibleIsoDate(geldig_vanaf) || !isPlausibleIsoDate(geldig_tot)) {
       const response: ApiErrorResponse = {
         success: false,
         error: { code: 'INVALID_DATE', message: 'Gebruik een geldige datum (JJJJ-MM-DD)' },
@@ -169,9 +173,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
     if (!person) {
       const response: ApiErrorResponse = {
         success: false,
-        error: { code: 'PERSON_NOT_FOUND', message: `Persoon ${id} niet gevonden` },
+        error: { code: 'PERSON_NOT_FOUND', message: 'Persoon niet gevonden' },
       };
       return NextResponse.json(response, { status: 404 });
+    }
+
+    // One part-time day per weekday and week: the factor of the person counts each pattern.
+    if (overlappingPatternOf(id, { weekdag, frequentie, geldig_vanaf, geldig_tot } as PatternRule, null)) {
+      const response: ApiErrorResponse = {
+        success: false,
+        error: { code: 'PATTERN_OVERLAPS', message: PATTERN_OVERLAPS_MESSAGE },
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // Insert pattern and generate its availability blocks atomically
@@ -232,6 +245,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ id: stri
       },
     };
 
+    writeOnBehalfAuditLog(requirePlannerAccess(auth) ? auth!.userId : null, id, { wijziging: 'deeltijdpatroon toegevoegd door planner' });
     return NextResponse.json(response, { status: 201 });
   } catch (error) {
     // parttime_pattern_uniq covers (person_id, weekdag, geldig_vanaf,

@@ -39,6 +39,11 @@ describe('seed.ts on an existing database', () => {
       db.prepare(
         `UPDATE dienstrooster_notification_template SET body_md = 'Hoi {{codenaam}},' || char(10) || 'Oude tekst.' WHERE sleutel = 'REMINDER'`
       ).run();
+      // "roosteraar" as up to 0.905.2, and the oldest SCHEDULE_PUBLISHED text, which takes two changes in a row.
+      const zet = db.prepare('UPDATE dienstrooster_notification_template SET body_md = ? WHERE sleutel = ?');
+      zet.run('Het rooster voor **{{periode}}** is definitief.', 'SCHEDULE_PUBLISHED');
+      zet.run('Neem rechtstreeks contact op met de roosteraar als er iets moet veranderen.', 'DEADLINE_PASSED');
+      zet.run('Neem contact op met de roosteraar als dit een probleem is.', 'BLOCK_OVERRIDDEN');
       const pool = (db.prepare('SELECT id FROM dienstrooster_pool LIMIT 1').get() as { id: string }).id;
       const admin = (db.prepare(`SELECT id FROM dienstrooster_person WHERE codenaam = 'admin'`).get() as { id: string }).id;
       db.prepare(
@@ -63,6 +68,15 @@ describe('seed.ts on an existing database', () => {
       expect(
         (after.prepare(`SELECT body_md FROM dienstrooster_notification_template WHERE sleutel = 'REMINDER'`).get() as { body_md: string }).body_md
       ).toBe('Beste {{codenaam}},\nOude tekst.');
+      // One word for the role: "planner", also in templates stored earlier.
+      const tekst = (sleutel: string) =>
+        (after.prepare('SELECT body_md FROM dienstrooster_notification_template WHERE sleutel = ?').get(sleutel) as { body_md: string }).body_md;
+      expect(tekst('SCHEDULE_PUBLISHED')).toBe(
+        'Het voorlopige rooster voor **{{periode}}** staat klaar. Kijk je diensten na en laat het de planner weten als er iets niet klopt.'
+      );
+      expect(tekst('DEADLINE_PASSED')).toBe('Neem rechtstreeks contact op met de planner als er iets moet veranderen.');
+      expect(tekst('BLOCK_OVERRIDDEN')).toBe('Neem contact op met de planner als dit een probleem is.');
+      expect(after.prepare(`SELECT COUNT(*) AS n FROM dienstrooster_notification_template WHERE body_md LIKE '%roosteraar%'`).get()).toEqual({ n: 0 });
       after.close();
     } finally {
       for (const f of [file, `${file}-wal`, `${file}-shm`]) fs.rmSync(f, { force: true });

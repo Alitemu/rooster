@@ -14,8 +14,13 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { priorRowsInWindow } from '@/lib/priorAssignmentUpload';
 import { readUploadedRows } from '@/lib/sheetUpload';
+import { EERDERE_KOP, kopFout } from '@/lib/importSjablonen';
 import { withBasePath } from '@/lib/basePath';
 import { deadlineTekst } from '@/lib/verzendlijst';
+import { foutTekst } from '@/lib/foutTekst';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
+import { DatumTekst } from '@/components/DatumVeld';
+import { BestandKiezer } from '@/components/BestandKiezer';
 
 interface PriorAssignment {
   datum: string;
@@ -139,7 +144,7 @@ export default function PriorAssignmentsPage() {
       setDeriveInfo(result.data.message);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Automatisch afleiden mislukt');
+      setError(foutTekst(err, 'Automatisch afleiden mislukt'));
     } finally {
       setDeriving(false);
     }
@@ -165,13 +170,13 @@ export default function PriorAssignmentsPage() {
       // tried, and retry without picking the person again.
       setEditingKey(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setError(foutTekst(err, 'Opslaan mislukt'));
     } finally {
       setSavingKey(null);
     }
   };
 
-  // The roster download itself (.xlsx since 0.20.0) or a CSV, read as
+  // The sjabloon or the roster download (.xlsx), read as
   // lib/priorAssignmentUpload.ts describes.
   const handleCsvFile = async (file: File) => {
     if (!data) return;
@@ -179,7 +184,13 @@ export default function PriorAssignmentsPage() {
     try {
       rows = await readUploadedRows(file);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Het bestand kon niet worden gelezen.');
+      setError(foutTekst(err, 'Het bestand kon niet worden gelezen.'));
+      return;
+    }
+    const kopProbleem = kopFout(rows, EERDERE_KOP);
+    if (kopProbleem) {
+      setCsvRows(null);
+      setError(kopProbleem);
       return;
     }
     setError(null);
@@ -214,7 +225,7 @@ export default function PriorAssignmentsPage() {
       setCsvParseWarnings([]);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Importeren mislukt');
+      setError(foutTekst(err, 'Importeren mislukt'));
     } finally {
       setImporting(false);
     }
@@ -233,7 +244,7 @@ export default function PriorAssignmentsPage() {
       setConfirmResult('Eerdere toewijzingen bevestigd.');
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Bevestigen mislukt');
+      setError(foutTekst(err, 'Bevestigen mislukt'));
     } finally {
       setConfirming(false);
     }
@@ -267,7 +278,7 @@ export default function PriorAssignmentsPage() {
         </button>
         <h1 className="text-2xl font-bold text-neutral-900 mt-2 mb-1">Eerdere toewijzingen</h1>
         <p className="text-neutral-600">
-          {period.naam} · overloopvenster {data.date_range[0]} t/m {data.date_range[1]}
+          {period.naam} · overloopvenster <DatumTekst iso={data.date_range[0]} /> t/m <DatumTekst iso={data.date_range[1]} />
         </p>
         {period.overloop_bevestigd_op && (
           <p className="text-sm text-green-700 mt-2">
@@ -304,22 +315,19 @@ export default function PriorAssignmentsPage() {
       <div className="card p-4">
         <p className="text-sm font-medium mb-1">Of: een bestand uploaden</p>
         <p className="text-xs text-neutral-500 mb-3">
-          Gebruik idealiter een eerder gedownload &quot;Rooster downloaden (Excel)&quot;-bestand
-          (kolommen Datum, Week, Diensttype, Codenaam). Een CSV met dezelfde kolommen kan ook. Regels buiten het overloopvenster
-          hierboven ({data.date_range[0]} t/m {data.date_range[1]}) worden automatisch genegeerd.
-          Je hoeft dus niet zelf de juiste week eruit te knippen.
+          Download het sjabloon (Excel), vul bij elke dag de codenaam in van wie die dienst deed en upload het bestand weer.
+          Een eerder gedownload &quot;Rooster downloaden (Excel)&quot;-bestand kan ook: dat heeft dezelfde kolommen (Datum,
+          Week, Diensttype, Codenaam). Rijen zonder codenaam worden overgeslagen. Regels buiten het overloopvenster
+          hierboven (<DatumTekst iso={data.date_range[0]} /> t/m <DatumTekst iso={data.date_range[1]} />) worden automatisch genegeerd.
         </p>
-        <input
-          type="file"
-          accept=".xlsx,.csv"
-          aria-label="Rooster als Excel- of CSV-bestand"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleCsvFile(file);
-            e.target.value = '';
-          }}
-          className="text-sm"
-        />
+        <a
+          href={withBasePath(`/api/periods/${periodId}/prior-assignments/sjabloon`)}
+          className="inline-block mb-3 px-4 py-2 rounded font-medium bg-neutral-200 text-neutral-900 hover:bg-neutral-300 text-sm"
+        >
+          Sjabloon downloaden (Excel)
+        </a>
+        <br />
+        <BestandKiezer accept=".xlsx" aria-label="Rooster als Excel-bestand" wisNaKiezen onKies={(bestand) => bestand && handleCsvFile(bestand)} />
         {csvRows !== null && (
           <div className="mt-3 p-3 rounded bg-blue-50 border border-blue-200 text-sm">
             <p className="text-blue-900">
@@ -385,7 +393,7 @@ export default function PriorAssignmentsPage() {
               const key = `${a.datum}-${a.teller}`;
               return (
                 <tr key={key} className={!a.person_codenaam ? 'bg-amber-50' : ''}>
-                  <td className="px-3 py-2 font-mono">{a.datum}</td>
+                  <td className="px-3 py-2 font-mono">{isoNaarInvoer(a.datum)}</td>
                   <td className="px-3 py-2">W{a.iso_week}</td>
                   <td className="px-3 py-2">{TELLER_LABELS[a.teller] || a.teller}</td>
                   <td className="px-3 py-2">
@@ -461,7 +469,7 @@ export default function PriorAssignmentsPage() {
         className={`w-full py-3 px-4 rounded font-semibold text-white transition-colors ${
           confirming || data.status !== 'complete'
             ? 'bg-neutral-400 cursor-not-allowed'
-            : 'bg-green-600 hover:bg-green-700'
+            : 'bg-green-700 hover:bg-green-800'
         }`}
       >
         {confirming

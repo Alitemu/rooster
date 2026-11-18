@@ -47,7 +47,8 @@ function setupTokenHashPath(): string {
  * unclaimable rather than open.
  */
 export function verifySetupToken(candidate: string | undefined | null): boolean {
-  if (!candidate) return false;
+  // A body field that is not text (a number, an object) is no token; hashing it threw a 500.
+  if (!candidate || typeof candidate !== 'string') return false;
 
   let storedHash: string;
   try {

@@ -27,6 +27,16 @@ export function periodStatusLabel(status: string): string {
   return PERIOD_STATUS_LABELS[status] ?? status.toLowerCase();
 }
 
+/**
+ * The status of a period as the planner reads it on the period page: "Open", and for a published roster
+ * "Voorlopig gepubliceerd" until it is made definitief (lib/publication.ts).
+ */
+export function periodeStatusTekst(status: string, definitief: boolean): string {
+  if (status === 'GEPUBLICEERD') return definitief ? 'Definitief' : 'Voorlopig gepubliceerd';
+  const label = periodStatusLabel(status);
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 /** "in afwachting" for PENDING; an unknown value is passed through lowercased. */
 export function swapStatusLabel(status: string): string {
   return SWAP_STATUS_LABELS[status] ?? status.toLowerCase();

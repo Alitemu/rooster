@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { withBasePath } from '@/lib/basePath';
+import { foutTekst } from '@/lib/aiosFoutTekst';
 
 interface Status {
   aan: boolean;
@@ -51,7 +52,7 @@ export function AiosAutoHerinneringen({ periodId, refreshKey }: { periodId: stri
       setStatus(data.data);
       setFout(null);
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Laden mislukt');
+      setFout(foutTekst(err, 'Laden mislukt'));
     }
   }, [periodId]);
 
@@ -73,7 +74,7 @@ export function AiosAutoHerinneringen({ periodId, refreshKey }: { periodId: stri
       setStatus(data.data);
       setFout(null);
     } catch (err) {
-      setFout(err instanceof Error ? err.message : 'Opslaan mislukt');
+      setFout(foutTekst(err, 'Opslaan mislukt'));
     } finally {
       setBezig(false);
     }
@@ -113,8 +114,9 @@ export function AiosAutoHerinneringen({ periodId, refreshKey }: { periodId: stri
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-neutral-900">⏰ Automatische herinneringen</p>
           <p className="text-sm text-neutral-700 mt-1">
-            Een week en een dag voor de deadline, om 9 uur, krijgt iedere AIOS die nog niet heeft ingediend vanzelf
-            een herinnering.
+            {/* Two moments, not one eight days before (2.1.0, R2-09): "een week en een dag voor de deadline" read so. */}
+            Een week voor de deadline en nog een keer een dag ervoor, om 9 uur, krijgt iedere AIOS die nog niet heeft
+            ingediend vanzelf een herinnering.
           </p>
           <p className="text-sm text-neutral-700 mt-1">{regel}</p>
           {status.mailIngesteld && status.periodeOpen && status.aan && !status.adresBekend && (

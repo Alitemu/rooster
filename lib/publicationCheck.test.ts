@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { db } from '@/db/client';
 import { generateSlotsForPeriod } from '@/lib/slotGeneration';
 import { runPublicationCheck } from '@/lib/publicationCheck';
+import { halveDeelname, deeltijdOpruimen } from '@/tests/fixtures/deeltijd';
 
 /**
  * The publication gate.
@@ -174,7 +175,10 @@ afterEach(() => {
       .prepare('SELECT person_id FROM dienstrooster_pool_membership WHERE pool_id = ?')
       .all(poolId) as Array<{ person_id: string }>;
     db.prepare('DELETE FROM dienstrooster_pool_membership WHERE pool_id = ?').run(poolId);
-    for (const m of members) db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(m.person_id);
+    for (const m of members) {
+      deeltijdOpruimen(m.person_id);
+      db.prepare('DELETE FROM dienstrooster_person WHERE id = ?').run(m.person_id);
+    }
     db.prepare('DELETE FROM dienstrooster_shift_type WHERE pool_id = ?').run(poolId);
     const pool = db.prepare('SELECT ruleset_id FROM dienstrooster_pool WHERE id = ?').get(poolId) as
       | { ruleset_id: string }
@@ -420,17 +424,18 @@ describe('runPublicationCheck', () => {
     // violation on every single publish attempt.
     const ctx = createPool(1, { bandAvond: [4, 4], distributionMode: 'NAAR_RATO' });
 
-    // A second, part-time person - createPool always uses the schema's
-    // default deelnamefactor (1.0), so this one is added directly.
+    // A second, part-time person: createPool makes full-timers, this one
+    // gets part-time days (the factor follows from them, 0.5).
     const partTimeId = crypto.randomUUID();
     db.prepare(
       `INSERT INTO dienstrooster_person (id, codenaam, rol, actief, aangemaakt_op)
        VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`
     ).run(partTimeId, `Test-parttime-${partTimeId.slice(0, 8)}`);
     db.prepare(
-      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot, deelnamefactor)
-       VALUES (?, ?, ?, '2020-01-01', '2030-12-31', 0.5)`
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, '2020-01-01', '2030-12-31')`
     ).run(crypto.randomUUID(), partTimeId, ctx.poolId);
+    halveDeelname(partTimeId);
 
     const { period, slotIds } = createPeriod(ctx, START, END, {
       bandAvond: [4, 4],
@@ -465,9 +470,10 @@ describe('runPublicationCheck', () => {
        VALUES (?, ?, 'DEELNEMER', 1, datetime('now'))`
     ).run(partTimeId, `Test-parttime-${partTimeId.slice(0, 8)}`);
     db.prepare(
-      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot, deelnamefactor)
-       VALUES (?, ?, ?, '2020-01-01', '2030-12-31', 0.5)`
+      `INSERT INTO dienstrooster_pool_membership (id, person_id, pool_id, geldig_vanaf, geldig_tot)
+       VALUES (?, ?, ?, '2020-01-01', '2030-12-31')`
     ).run(crypto.randomUUID(), partTimeId, ctx.poolId);
+    halveDeelname(partTimeId);
 
     const { period, slotIds } = createPeriod(ctx, START, END, {
       bandAvond: [4, 4],

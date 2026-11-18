@@ -99,4 +99,26 @@ describe('POST /api/auth/staff-login rate limiting', () => {
     expect((await login(planner, PASSWORD)).status).toBe(200);
     expect((await login(planner.toUpperCase(), 'Ander-Wachtwoord-1!')).status).toBe(200);
   });
+
+  it('logs in with the password alone, also when the account still holds a code setting from before two-step verification was removed', async () => {
+    const planner = await createPlanner();
+    db.prepare("UPDATE dienstrooster_person SET totp_secret = 'v1:oud' WHERE codenaam = ?").run(planner);
+    const res = await login(planner, PASSWORD);
+    expect(res.status).toBe(200);
+    const data = (await res.json()).data;
+    expect(data).not.toHaveProperty('totp_enrolled');
+  });
+
+  it('does not ask for a code, whatever is sent along', async () => {
+    const planner = await createPlanner();
+    const res = await POST(
+      new NextRequest('http://localhost/api/auth/staff-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ codenaam: planner, password: 'fout', totpCode: '123456' }),
+      })
+    );
+    expect(res.status).toBe(401);
+    expect((await res.json()).error.code).toBe('INVALID_CREDENTIALS');
+  });
 });

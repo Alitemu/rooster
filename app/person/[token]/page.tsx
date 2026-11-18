@@ -20,7 +20,13 @@ import { PreferencesConfirmation } from '@/components/PreferencesConfirmation';
 import { PersonalRosterView } from '@/components/PersonalRosterView';
 import { NotificationCenter } from '@/components/NotificationCenter';
 import { checkPeriodAcceptsInput } from '@/lib/periodInputGate';
+import { invoerDichtMelding } from '@/lib/invoerDichtMelding';
+import { telVoorkeuren } from '@/lib/voorkeurTelling';
 import { withBasePath } from '@/lib/basePath';
+import { PeriodeVerwijderd } from '@/components/PeriodeVerwijderd';
+import { foutTekst } from '@/lib/foutTekst';
+import { DatumTekst } from '@/components/DatumVeld';
+import { isoNaarInvoer } from '@/lib/datumInvoer';
 
 type Step = 'calendar' | 'parttime' | 'confirmation' | 'submitted' | 'roster';
 
@@ -92,6 +98,7 @@ function PersonalLinkPageContent() {
   const searchParams = useSearchParams();
 
   const [loading, setLoading] = useState(true);
+  const [verwijderd, setVerwijderd] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Separate from `error` (which means "the link itself is invalid/expired"
   // and shows advice to that effect) - a mid-flow data fetch failing after
@@ -152,6 +159,7 @@ function PersonalLinkPageContent() {
     total: 0,
   });
   const [voorkeurDays, setVoorkeurDays] = useState<VoorkeurDaysSummary>({ total: 0 });
+  const [lieverNietDays, setLieverNietDays] = useState(0);
   // Bumped when "Ik ben fellow" changes, so the calendar reloads the weekend blocks it placed.
   const [calendarKey, setCalendarKey] = useState(0);
   const [softBlockViolations, setSoftBlockViolations] = useState<SoftBlockViolation[]>([]);
@@ -247,6 +255,12 @@ function PersonalLinkPageContent() {
       try {
         // Validate token format and fetch person info
         const res = await fetch(withBasePath(`/api/auth/verify-link?token=${encodeURIComponent(token)}`));
+        // In the prullenbak: nothing of it is shown, only where to ask a new link.
+        if (res.status === 410) {
+          setVerwijderd(true);
+          setLoading(false);
+          return;
+        }
         if (!res.ok) {
           throw new Error('Ongeldige of verlopen toegangslink');
         }
@@ -297,7 +311,7 @@ function PersonalLinkPageContent() {
               const toViolations = (a: { datum: string; teller: string }): SoftBlockViolation => ({
                 datum: a.datum,
                 teller: a.teller,
-                date_str: new Date(a.datum).toLocaleDateString('nl-NL'),
+                date_str: isoNaarInvoer(a.datum),
               });
               const assignments = rosterInfo.data.assignments as Array<{
                 slot_id: string;
@@ -357,7 +371,7 @@ function PersonalLinkPageContent() {
 
         setLoading(false);
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Kon voorkeuren niet laden';
+        const message = foutTekst(err, 'Kon voorkeuren niet laden');
         setError(message);
         setLoading(false);
       }
@@ -378,21 +392,10 @@ function PersonalLinkPageContent() {
         if (!res.ok) return;
         const data = await res.json();
 
-        const summary: BlockedDaysSummary = { AVOND: 0, WEEKEND: 0, FEESTDAG: 0, total: 0 };
-        let voorkeurCount = 0;
-        for (const pref of data.data.preferences as Array<{ teller: string; blocking_level: string | null }>) {
-          if (pref.blocking_level === 'VOORKEUR') {
-            voorkeurCount++;
-            continue;
-          }
-          if (pref.blocking_level !== 'ABSOLUUT') continue;
-          if (pref.teller in summary) {
-            summary[pref.teller as 'AVOND' | 'WEEKEND' | 'FEESTDAG']++;
-            summary.total++;
-          }
-        }
-        setBlockedDays(summary);
-        setVoorkeurDays({ total: voorkeurCount });
+        const telling = telVoorkeuren(data.data.preferences as Array<{ teller: string; blocking_level: string | null }>);
+        setBlockedDays(telling.geblokkeerd);
+        setVoorkeurDays({ total: telling.voorkeur });
+        setLieverNietDays(telling.lieverNiet);
       } catch {
         // Leave the previous summary in place on failure
       }
@@ -414,6 +417,8 @@ function PersonalLinkPageContent() {
       </div>
     );
   }
+
+  if (verwijderd) return <PeriodeVerwijderd />;
 
   if (error) {
     return (
@@ -455,11 +460,11 @@ function PersonalLinkPageContent() {
 
   // Deadline is one cutoff for input, independent of whether the planner
   // has gotten around to closing the period yet. Viewing what was entered
-  // is never blocked, only changing it. Still used on its own for the
-  // deeltijd/afwezigheid editors below: those are the participant's own
-  // standing data, not scoped to one period, and their routes accept a
-  // change whatever this period's status is (they warn instead - see
-  // lib/periodInputGate.ts's buildDeadlinePassedWarning).
+  // is never blocked, only changing it. The deeltijd/afwezigheid editors
+  // follow inputClosed below, like everything else on this screen: their
+  // routes accept a change whatever the period's status (they warn
+  // instead, lib/periodInputGate.ts buildDeadlinePassedWarning), so only
+  // the screen keeps a closed period closed.
   const deadlinePassed = period.status !== 'GEPUBLICEERD' && new Date() > new Date(period.deadline);
 
   // The voorkeurenkalender and the bevestigingsstap are different: their
@@ -472,14 +477,11 @@ function PersonalLinkPageContent() {
   const inputGate = checkPeriodAcceptsInput(period);
   const inputClosed = period.status !== 'GEPUBLICEERD' && !inputGate.allowed;
 
-  // The sync from preferences/absences/deeltijd into the solver's input
-  // only runs while a period is OPEN (lib/absenceSync.ts, lib/parttimeSync.ts)
-  // - once a roster has been generated, a change saved here is stored but
-  // has no effect on the already-generated roster until the planner
-  // regenerates it by hand. Distinct from deadlinePassed: the deadline may
-  // still be in the future, so the form stays editable, but a save here
-  // would otherwise look like it "took" with no indication that it hasn't
-  // actually reached the roster yet.
+  // Generated, not (or no longer) published. Input is closed then (only an
+  // OPEN period takes input, lib/periodInputGate.ts): the banner used to say
+  // that changes saved now were kept, right under the one saying nothing can
+  // be changed (audit 1.2.2). After "Publicatie intrekken" this is also what
+  // the participant sees, with the melding about it under Meldingen.
   const rosterAlreadyGenerated = period.status === 'GEGENEREERD';
 
   return (
@@ -500,8 +502,8 @@ function PersonalLinkPageContent() {
               {period.naam}
             </h1>
             <p className="text-neutral-600 mb-4">
-              {new Date(period.start_datum).toLocaleDateString('nl-NL')} t/m{' '}
-              {new Date(period.eind_datum).toLocaleDateString('nl-NL')}
+              <DatumTekst iso={period.start_datum} /> t/m{' '}
+              <DatumTekst iso={period.eind_datum} />
             </p>
             {/* Once the roster is out the deadline no longer means anything here. */}
             {period.status !== 'GEPUBLICEERD' && (
@@ -511,14 +513,15 @@ function PersonalLinkPageContent() {
             )}
           </div>
           <div className="flex shrink-0 gap-2 self-start print:hidden">
-            {period.status === 'GEPUBLICEERD' && (
-              <button
-                onClick={() => setNotificationsOpen(!notificationsOpen)}
-                className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
-              >
-                🔔 Meldingen
-              </button>
-            )}
+            {/* In every status, not only once published: "publicatie ingetrokken"
+                is a melding for a period that is no longer published, and it
+                could not be read until the roster came out again (audit 1.2.2). */}
+            <button
+              onClick={() => setNotificationsOpen(!notificationsOpen)}
+              className="px-4 py-2 rounded font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors text-sm"
+            >
+              🔔 Meldingen
+            </button>
             {/* There was no way to end a session here at all. On a shared
                 ward computer that mattered: the session cookie is good for
                 30 days, so the next person to sit down was still signed in
@@ -535,27 +538,27 @@ function PersonalLinkPageContent() {
         </div>
       </div>
 
-      {inputClosed && (
+      {/* One banner, not two (audit 1.3.0): with a roster made, the one below says it all. */}
+      {inputClosed && !rosterAlreadyGenerated && (
         <div className="card p-4 bg-amber-50 border border-amber-200">
-          <p className="text-sm text-amber-900">
-            {deadlinePassed
-              ? '⏰ De deadline voor deze periode is verstreken. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer.'
-              : '🔒 De roosteraar heeft deze periode gesloten. Je kunt hieronder nog zien wat je hebt ingevuld, maar wijzigen kan niet meer. Neem contact op met de roosteraar als er nog iets aangepast moet worden.'}
+          <p className="text-sm text-amber-900" data-testid="invoer-dicht">
+            {invoerDichtMelding(period.status, deadlinePassed)}
           </p>
         </div>
       )}
 
-      {!deadlinePassed && rosterAlreadyGenerated && (
-        <div className="card p-4 bg-amber-50 border border-amber-200">
+      {rosterAlreadyGenerated && (
+        <div className="card p-4 bg-amber-50 border border-amber-200" data-testid="rooster-nog-niet-gepubliceerd">
           <p className="text-sm text-amber-900">
-            ⚠️ Het rooster voor deze periode is al gegenereerd. Wijzigingen die je nu opslaat,
-            worden bewaard, maar tellen pas mee als de planner het rooster opnieuw genereert.
+            📋 Het rooster is gemaakt, maar nog niet gepubliceerd. Zodra de planner het publiceert, zie je hier
+            je diensten. Wat je hebt ingevuld, kun je hieronder nog zien, maar niet meer wijzigen. Berichten van de
+            planner staan bij Meldingen.
           </p>
         </div>
       )}
 
       {/* Notifications Panel */}
-      {period.status === 'GEPUBLICEERD' && notificationsOpen && personId && (
+      {notificationsOpen && personId && (
         <div className="card p-4 bg-blue-50 border border-blue-200">
           <button
             onClick={() => setNotificationsOpen(false)}
@@ -598,7 +601,7 @@ function PersonalLinkPageContent() {
         <div className="mb-4 rounded border-2 border-dashed border-amber-400 bg-amber-50 p-4 text-sm text-amber-950" data-testid="voorlopig-rooster">
           <p className="font-semibold">Dit is het voorlopige rooster.</p>
           <p className="mt-1">
-            Kijk je diensten goed na. Klopt er iets niet? Laat het de roosteraar zo snel mogelijk weten.
+            Kijk je diensten goed na. Klopt er iets niet? Laat het de planner zo snel mogelijk weten.
             Zonder reactie wordt het rooster over ongeveer twee weken definitief. Je krijgt dan nog een bericht.
           </p>
         </div>
@@ -608,6 +611,7 @@ function PersonalLinkPageContent() {
           personId={personId}
           periodId={period.id}
           onRosterChanged={reloadRoster}
+          definitief={Boolean(rosterData.period.definitief_op)}
           assignedShifts={rosterData.assignments.map((a) => ({
             datum: a.datum,
             iso_jaar: a.iso_jaar,
@@ -658,7 +662,7 @@ function PersonalLinkPageContent() {
             patterns={patterns}
             defaultVanaf={period.start_datum}
             defaultTot={period.eind_datum}
-            readOnly={deadlinePassed}
+            readOnly={inputClosed}
             onPatternsChange={(next) => {
               setPatterns(next);
               // A changed pattern means the generated days below may have
@@ -673,9 +677,7 @@ function PersonalLinkPageContent() {
             personId={personId}
             periodId={period.id}
             absences={absences}
-            defaultVanaf={period.start_datum}
-            defaultTot={period.eind_datum}
-            readOnly={deadlinePassed}
+            readOnly={inputClosed}
             onAbsencesChange={(next) => {
               setAbsences(next);
               // Same reasoning as onPatternsChange below - an added, edited,
@@ -755,6 +757,7 @@ function PersonalLinkPageContent() {
             periodId={period.id}
             blockedDays={blockedDays}
             voorkeurDays={voorkeurDays.total}
+            lieverNietDays={lieverNietDays}
             parttimeConfirmed={parttimeConfirmed}
             readOnly={inputClosed}
             onSubmit={handleSubmitSuccess}
