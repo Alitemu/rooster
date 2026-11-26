@@ -247,10 +247,13 @@ The gate before a release, all green:
    `node scripts/scenario-check.mjs` - at the root and in a sub-folder build
    (`NEXT_PUBLIC_BASE_PATH=/achterwacht` at build and start,
    `APP_URL=http://localhost:3000/achterwacht`). The scenario-check runs
-   `--kort` in the sub-folder, and at the root too unless the solver or
-   the achterwacht's lib/ or app/api/ changed since the previous release
-   (the git diff in docs/development/checks.md): the full run takes 35
-   minutes.
+   `--kort` in the sub-folder, and at the root too unless the change can
+   alter what the achterwacht's solver gets or how its roster is checked:
+   the solver, the generation route and the code it builds the solver's
+   input from (the list and the git diff in docs/development/checks.md).
+   A change in one of those files that cannot (a field added for a screen)
+   runs `--kort` with the reason in the commit message (the user's choice,
+   2.2.0). The full run takes 35 to 50 minutes.
 
 How to run them and what each one covers: docs/development/checks.md.
 

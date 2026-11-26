@@ -78,11 +78,20 @@ about 5 minutes per build together. `--kort` runs one method at one window
 the same, about a minute. The user chose (October 2026):
 - the sub-folder build always gets `--kort`: it checks the paths under the
   base path, and the solver does nothing different there;
-- at the root the full run only when the solver or the achterwacht's code
-  that makes its input changed since the previous release, i.e. when
-  `git diff --name-only v<previous> HEAD -- solver lib app/api
-  ':(exclude)lib/aios*' ':(exclude)app/api/aios' ':(exclude)*.test.ts'`
-  lists a file; otherwise `--kort` there too.
+- at the root the full run only when the change can alter what the
+  achterwacht's solver gets or how its roster is checked (sharpened in
+  2.2.0, the user's choice: the old rule took any file in lib/ or
+  app/api/, and a field added for a table cost 48 minutes). Start from
+  `git diff --name-only v<previous> HEAD -- solver
+  'app/api/planner/period/[id]/generate-roster' lib/solverClient.ts
+  lib/rosterBands.ts lib/carryOver.ts lib/fellows.ts lib/deelnamefactor.ts
+  lib/feestdagHistory.ts lib/membershipWindow.ts lib/bandShortfall.ts
+  lib/publicationCheck.ts lib/windowRule.ts ':(exclude)*.test.ts'`.
+  Lists it nothing: `--kort`. Lists it a file whose change cannot reach the
+  solver's input or the check of its result (2.2.0: `basis` and `saldo`
+  added to computeMemberTargets for the planner's table, min and max as
+  before): `--kort`, with that reason in the commit message. Otherwise the
+  full run. In doubt, the full run.
 
 `node scripts/mutation-check.mjs [name]` needs nothing running: it breaks
 one hard rule at a time (a guard removed or weakened in the source),

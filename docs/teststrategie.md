@@ -51,8 +51,11 @@ terug naar een eerdere versie en de back-ups daarbij: blok J daarvan en
 - De browsertests openen een onderdeel van de periodepagina zoals een planner:
   via de lijst links (`openOnderdeel` in `tests/e2e/setup.ts`), niet via de
   verborgen inklapbare indeling.
-- Het volledige scenario (circa 35 minuten) alleen als de solver of de code
-  van de achterwacht veranderd is. Anders `--kort`.
+- Het volledige scenario (35 tot 50 minuten) alleen als de wijziging kan
+  veranderen wat de solver van de achterwacht krijgt of hoe zijn rooster
+  gecontroleerd wordt. De lijst met bestanden staat in
+  `docs/development/checks.md`. Anders `--kort` (ongeveer een minuut). Bij
+  twijfel het volledige scenario.
 
 ## 5. Handmatig op de testinstallatie (circa 1 uur)
 
