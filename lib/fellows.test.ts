@@ -408,13 +408,13 @@ describe('streefbereik met fellows', () => {
     ).run(crypto.randomUUID(), fellow, f.poolId, f.periodId, fellow);
 
     let targets = computeMemberTargets(f.periodId);
-    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 0, fellow: true });
+    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 0, fellow: true, basis: [1, 2], saldo: 0 });
     // 4 / 3: [floor(1.33), ceil(1.33)] = [1, 2].
-    expect(targets.get(ander)!.WEEKEND).toEqual({ min: 1, max: 2, fellow: false });
+    expect(targets.get(ander)!.WEEKEND).toEqual({ min: 1, max: 2, fellow: false, basis: [1, 2], saldo: 0 });
 
     await patch(fellow, f.slotByDate.get('2028-04-22')!, null);
     targets = computeMemberTargets(f.periodId);
-    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 1, fellow: true });
+    expect(targets.get(fellow)!.WEEKEND).toEqual({ min: 0, max: 1, fellow: true, basis: [1, 2], saldo: 0 });
   });
 
   it('a credit bigger than the bereik leaves a target of zero, never one below zero', () => {
@@ -425,7 +425,8 @@ describe('streefbereik met fellows', () => {
        VALUES (?, ?, ?, 'AVOND', ?, -5, 'test', 'CORRECTIE', ?, datetime('now'))`
     ).run(crypto.randomUUID(), credit, f.poolId, f.periodId, credit);
     const targets = computeMemberTargets(f.periodId);
-    expect(targets.get(credit)!.AVOND).toEqual({ min: 0, max: 0, fellow: false });
+    // 2.2.0: the band before the saldo and the saldo itself, for the planner's table (lib/streefbereikPerPersoon.ts).
+    expect(targets.get(credit)!.AVOND).toEqual({ min: 0, max: 0, fellow: false, basis: [1, 2], saldo: -5 });
     expect(targets.get(ander)!.AVOND.min).toBeGreaterThanOrEqual(0);
   });
 
