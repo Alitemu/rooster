@@ -654,6 +654,8 @@ te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet. (Vanaf 2.0.0 is dit vervangen door de lijst met
 onderdelen links, zie hieronder bij 2.0.0.)
 
+**Vanaf versie 2.2.1** zegt *Dienstdoende* bij wie buiten het eigen bereik valt met hoeveel, bijvoorbeeld *⚠ 1 avonddienst te veel* of *⚠ 2 weekenddiensten tekort*. Is het rooster gepubliceerd, dan telt dat verschil mee in de volgende periode.
+
 **Vanaf versie 2.2.0:** de planner van de achterwacht ziet per persoon het streefbereik: wat iemand in deze periode moet krijgen, met het beginsaldo, het saldo uit de vorige periode en de correcties erbij. Het staat in een kolom *Streefbereik* bij *Status voorkeuren* en bij het tabblad *Dienstdoende* van *Dienstrooster*. Per soort dienst in woorden, bijvoorbeeld *Avond: 1 (basis 2, 1 dienst minder uit het saldo)*. *Dienstdoende* toont nu ook wie geen enkele dienst heeft, en zodra er een rooster is, staat erbij wie buiten het eigen bereik valt.
 
 **Vanaf versie 2.1.0** (correcties uit de audit per rol):

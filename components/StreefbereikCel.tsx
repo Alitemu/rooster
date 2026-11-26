@@ -25,8 +25,12 @@ export function StreefbereikCel({ rij, buiten = [] }: { rij: StreefbereikRij | n
         </div>
       ))}
       {buiten.length > 0 && (
-        <div className="mt-1 font-medium text-amber-800" data-testid="buiten-bereik">
-          ⚠ Buiten het bereik: {buiten.join(' en ')}
+        <div
+          className="mt-1 font-medium text-amber-800"
+          data-testid="buiten-bereik"
+          title="Buiten het eigen bereik. Is het rooster gepubliceerd, dan telt dit verschil mee in de volgende periode."
+        >
+          ⚠ {buiten.join(' en ')}
         </div>
       )}
     </div>

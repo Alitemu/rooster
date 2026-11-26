@@ -18,7 +18,8 @@ export interface BereikCel {
 
 export type StreefbereikRij = Record<Teller, BereikCel>;
 
-const SOORT: Record<Teller, string> = { AVOND: 'avond', WEEKEND: 'weekend', FEESTDAG: 'feestdag' };
+const ENKELVOUD: Record<Teller, string> = { AVOND: 'avonddienst', WEEKEND: 'weekenddienst', FEESTDAG: 'feestdagdienst' };
+const MEERVOUD: Record<Teller, string> = { AVOND: 'avonddiensten', WEEKEND: 'weekenddiensten', FEESTDAG: 'feestdagdiensten' };
 
 /** "2 of 3", "hoogstens 1", "geen", "2", "2 tot en met 5": the range without the noun, for a table cell. */
 export function bereikKort(min: number, max: number): string {
@@ -42,11 +43,19 @@ export function streefbereikRij(target: Record<Teller, MemberTarget>): Streefber
   return Object.fromEntries(TELLERS.map((t) => [t, bereikCel(target[t])])) as StreefbereikRij;
 }
 
-/** The kinds of dienst where someone has fewer than the bottom or more than the top of the range. */
+/**
+ * Where someone has more than the top or fewer than the bottom of the range, and by how many: "1 avonddienst
+ * te veel", "2 weekenddiensten tekort" (2.2.1, the planner's wish: "buiten het bereik: avond" did not say how
+ * far). That difference is what lib/carryOver.ts carries to the next period once this roster is published.
+ */
 export function buitenBereik(target: Record<Teller, MemberTarget>, aantallen: Record<Teller, number>): string[] {
-  return TELLERS.filter((t) => {
+  const uit: string[] = [];
+  for (const t of TELLERS) {
     const n = aantallen[t] ?? 0;
+    const woord = (k: number) => `${k} ${k === 1 ? ENKELVOUD[t] : MEERVOUD[t]}`;
+    if (n > target[t].max) uit.push(`${woord(n - target[t].max)} te veel`);
     // A fellow's weekend has nothing expected: fewer is no shortfall.
-    return n > target[t].max || (!target[t].fellow && n < target[t].min);
-  }).map((t) => SOORT[t]);
+    else if (!target[t].fellow && n < target[t].min) uit.push(`${woord(target[t].min - n)} tekort`);
+  }
+  return uit;
 }

@@ -8005,8 +8005,8 @@ const MUTATIONS = [
   {
     name: "2.2.0: fewer than the bottom of the range is not marked",
     file: "lib/streefbereikPerPersoon.ts",
-    find: "    return n > target[t].max || (!target[t].fellow && n < target[t].min);",
-    replace: "    return n > target[t].max;",
+    find: "    else if (!target[t].fellow && n < target[t].min) uit.push(`${woord(target[t].min - n)} tekort`);",
+    replace: "",
     tests: ["lib/streefbereikPerPersoon"],
   },
   {

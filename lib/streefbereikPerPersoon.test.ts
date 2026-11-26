@@ -24,10 +24,11 @@ describe('the streefbereik per person (2.2.0)', () => {
     expect(bereikCel(t(2, 3, { basis: [2, 3], saldo: 0 })).toelichting).toBeNull();
   });
 
-  it('marks fewer than the bottom and more than the top, but not a fellow with fewer weekends', () => {
+  it('says by how many someone is over the top or under the bottom, but not a fellow with fewer weekends (2.2.1)', () => {
     const doel = { AVOND: t(2, 3), WEEKEND: t(0, 1, { fellow: true }), FEESTDAG: t(0, 1) };
-    expect(buitenBereik(doel, { AVOND: 1, WEEKEND: 0, FEESTDAG: 2 })).toEqual(['avond', 'feestdag']);
-    expect(buitenBereik(doel, { AVOND: 4, WEEKEND: 0, FEESTDAG: 0 })).toEqual(['avond']);
+    expect(buitenBereik(doel, { AVOND: 1, WEEKEND: 0, FEESTDAG: 2 })).toEqual(['1 avonddienst tekort', '1 feestdagdienst te veel']);
+    expect(buitenBereik(doel, { AVOND: 5, WEEKEND: 0, FEESTDAG: 0 })).toEqual(['2 avonddiensten te veel']);
+    expect(buitenBereik({ ...doel, AVOND: t(3, 4) }, { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 })).toEqual(['3 avonddiensten tekort']);
     expect(buitenBereik(doel, { AVOND: 2, WEEKEND: 0, FEESTDAG: 1 })).toEqual([]);
   });
 });
