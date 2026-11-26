@@ -13,7 +13,8 @@
 import { useState, useEffect } from 'react';
 import { FellowBadge } from './FellowBadge';
 import { withBasePath } from '@/lib/basePath';
-import { bereikVak, type StreefbereikRij } from '@/lib/streefbereikPerPersoon';
+import { bereikVak } from '@/lib/bereikVak';
+import type { StreefbereikRij } from '@/lib/streefbereikPerPersoon';
 
 interface StaffingRow {
   person_id: string;
@@ -56,13 +57,14 @@ const BAR_COLORS: Record<Counter, string> = {
  * - so comparing who has more of one shift type is a matter of glancing down
  * the column. Under the bar the person's streefbereik, saldo included, in
  * brackets; for evenings and weekends also a dashed box over the bar
- * (2.3.0, lib/streefbereikPerPersoon.ts bereikVak). Outside the range a red
+ * (2.3.0, lib/bereikVak.ts). Outside the range a red
  * arrow says more or fewer, so neither the colour nor the box carries it alone.
  */
 function CountBar({ value, max, counter, bereik, onder }: { value: number; max: number; counter: Counter; bereik: { min: number; max: number } | null; onder?: string }) {
   const deel = (n: number) => (max > 0 ? (n / max) * 100 : 0);
   const af = !bereik ? 0 : value > bereik.max ? 1 : value < bereik.min ? -1 : 0;
   const vak = bereikVak(bereik);
+  const breedte = vak ? deel(vak.tot) - deel(vak.van) : 0;
   return (
     <div>
       <div className="flex items-center gap-1.5">
@@ -75,7 +77,7 @@ function CountBar({ value, max, counter, bereik, onder }: { value: number; max: 
           {vak && (
             <div
               className="absolute -inset-y-0.5 rounded-sm border border-dashed border-neutral-600"
-              style={{ left: `${deel(vak.van)}%`, width: `${deel(vak.tot) - deel(vak.van)}%` }}
+              style={{ left: `${deel(vak.van)}%`, width: `${breedte}%` }}
               data-testid="bereik-vlak"
             />
           )}

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bereikCel, bereikKort, bereikVak, uitkomstPerSoort } from './streefbereikPerPersoon';
+import { bereikCel, bereikKort, uitkomstPerSoort } from './streefbereikPerPersoon';
+import { bereikVak } from './bereikVak';
 
 const t = (min: number, max: number, extra: { saldo?: number; basis?: [number, number]; fellow?: boolean } = {}) => ({
   min,

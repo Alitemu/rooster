@@ -8025,14 +8025,14 @@ const MUTATIONS = [
   },
   {
     name: "2.3.0: the dashed box starts left of 0",
-    file: "lib/streefbereikPerPersoon.ts",
+    file: "lib/bereikVak.ts",
     find: "  return bereik ? { van: Math.max(0, bereik.min - 0.5), tot: bereik.max + 0.5 } : null;",
     replace: "  return bereik ? { van: bereik.min - 0.5, tot: bereik.max + 0.5 } : null;",
     tests: ["lib/streefbereikPerPersoon"],
   },
   {
     name: "2.3.0: the dashed box stops on the top of the range, so a count there seems outside it",
-    file: "lib/streefbereikPerPersoon.ts",
+    file: "lib/bereikVak.ts",
     find: "  return bereik ? { van: Math.max(0, bereik.min - 0.5), tot: bereik.max + 0.5 } : null;",
     replace: "  return bereik ? { van: Math.max(0, bereik.min - 0.5), tot: bereik.max } : null;",
     tests: ["lib/streefbereikPerPersoon"],

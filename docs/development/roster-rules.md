@@ -555,7 +555,7 @@ app/api/planner/period/[id]/import-balances/achteraf.test.ts, on the same import
 
 2.3.0, the planner's design after three mock-ups: in Dienstdoende the range stands under each bar in brackets
 ("[2 of 3]", always in numbers, "0 of 1" rather than "hoogstens 1") and, for evenings and weekends, as a dashed
-box over the bar (lib/streefbereikPerPersoon.ts bereikVak: the range itself, half a dienst past each edge, never
+box over the bar (lib/bereikVak.ts, its own file without imports because a client component uses it: the range itself, half a dienst past each edge, never
 left of 0). The box stays on the range: a box centred on the count put the same range in two places and was
 rejected as confusing, a bar snapped to the middle of the box stopped telling the count. So a count on the
 bottom of "2 of 3" ends left of the middle, on the top right of it, one too many half a dienst past the box.
