@@ -352,8 +352,8 @@ const MUTATIONS = [
   {
     name: 'rosterBands: a credit bigger than the bereik gives a ceiling below zero',
     file: 'lib/rosterBands.ts',
-    find: 'max: Math.max(0, scaled[1] + delta), fellow: false',
-    replace: 'max: scaled[1] + delta, fellow: false',
+    find: 'max: Math.max(0, scaled[1] + delta),\n',
+    replace: 'max: scaled[1] + delta,\n',
     tests: ['lib/fellows'],
   },
   {
@@ -7980,6 +7980,34 @@ const MUTATIONS = [
     find: "    baseURL: BASIS,",
     replace: "    baseURL: BASIS,\n    storageState: { cookies: [], origins: [{ origin: 'http://localhost:3000', localStorage: [{ name: 'dienstrooster.oudeIndeling', value: 'ja' }] }] },",
     tests: ["lib/periodeIndeling"],
+  },
+  {
+    name: "2.2.0: the planner's table shows the range without the saldo in it",
+    file: "lib/streefbereikPerPersoon.ts",
+    find: "  const tekst = bereikKort(t.min, t.max);",
+    replace: "  const tekst = bereikKort(t.basis?.[0] ?? t.min, t.basis?.[1] ?? t.max);",
+    tests: ["app/api/planner/period/[id]/import-balances/achteraf", "lib/streefbereikPerPersoon"],
+  },
+  {
+    name: "2.2.0: Dienstdoende leaves out who got no dienst",
+    file: "app/api/planner/period/[id]/staffing-overview/route.ts",
+    find: "      if (!entry) {\n        const p = naam.get(personId)",
+    replace: "      if (!entry) continue;\n      if (!entry) {\n        const p = naam.get(personId)",
+    tests: ["app/api/planner/period/[id]/import-balances/achteraf"],
+  },
+  {
+    name: "2.2.0: Dienstdoende marks everyone outside the range before there is a roster",
+    file: "app/api/planner/period/[id]/staffing-overview/route.ts",
+    find: "      entry.buiten = heeftRooster ? buitenBereik(target, entry) : [];",
+    replace: "      entry.buiten = buitenBereik(target, entry);",
+    tests: ["app/api/planner/period/[id]/import-balances/achteraf"],
+  },
+  {
+    name: "2.2.0: fewer than the bottom of the range is not marked",
+    file: "lib/streefbereikPerPersoon.ts",
+    find: "    return n > target[t].max || (!target[t].fellow && n < target[t].min);",
+    replace: "    return n > target[t].max;",
+    tests: ["lib/streefbereikPerPersoon"],
   },
   {
     name: "2.1.0: the invitation promises the top of each range as ongeveer again",

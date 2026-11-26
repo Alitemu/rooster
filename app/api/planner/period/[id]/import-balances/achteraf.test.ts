@@ -12,6 +12,8 @@ import { CORRECTION_REASONS_BY_TOP_LEVEL, correctieRegels } from '@/lib/correcti
 import { POST as importBalances } from './route';
 import { GET as listCorrections, POST as addCorrections } from '../ledger-corrections/route';
 import { POST as generateRoster } from '../generate-roster/route';
+import { GET as progress } from '../progress/route';
+import { GET as staffingOverview } from '../staffing-overview/route';
 import { zetTerugzettenBezig } from '@/lib/terugzetBezig';
 
 /**
@@ -224,6 +226,32 @@ describe('a beginsaldo or correctie added after the opening', () => {
         expect({ label, teller, band: [checked.min, checked.max] }).toEqual({ label, teller, band: banden[teller] });
       }
     }
+  });
+
+  // 2.2.0: the planner sees each person's streefbereik, saldo included, in "Status voorkeuren" and in
+  // "Dienstdoende", also who got no dienst at all. The same numbers the solver got above.
+  it('shows the planner each person\'s range with the saldo in it, in both tables', async () => {
+    const lijst = (await (await progress(request(`/api/planner/period/${ids.period}/progress`, 'GET'), params())).json()).data as Array<{
+      person_id: string;
+      streefbereik: Record<string, { tekst: string; toelichting: string | null }> | null;
+    }>;
+    const status = (label: string) => lijst.find((p) => p.person_id === ids[label])!.streefbereik!;
+    expect(status('import').AVOND).toEqual({ tekst: '3', toelichting: 'basis 2, 1 dienst extra uit het saldo' });
+    expect(status('correctie').AVOND).toEqual({ tekst: '1', toelichting: 'basis 2, 1 dienst minder uit het saldo' });
+    expect(status('ruil').WEEKEND).toEqual({ tekst: 'geen', toelichting: 'basis hoogstens 1, 1 dienst minder uit het saldo' });
+    expect(status('niets').AVOND).toEqual({ tekst: '2', toelichting: null });
+
+    // The fake solver gave nobody a dienst: everyone is still in the list, with the range next to it.
+    const dienstdoende = (await (await staffingOverview(request(`/api/planner/period/${ids.period}/staffing-overview`, 'GET'), params())).json())
+      .data.staff as Array<{ person_id: string; totaal: number; streefbereik: Record<string, { tekst: string }> | null; buiten: string[] }>;
+    for (const label of ['import', 'correctie', 'ruil', 'niets']) {
+      const rij = dienstdoende.find((s) => s.person_id === ids[label]);
+      expect(rij, label).toBeDefined();
+      expect(rij!.totaal).toBe(0);
+      expect(rij!.streefbereik!.AVOND.tekst).toBe(status(label).AVOND.tekst);
+    }
+    // No roster in it yet: nobody is marked outside the range.
+    expect(dienstdoende.every((s) => s.buiten.length === 0)).toBe(true);
   });
 
   it('is refused while a generation of the period runs, and nothing is written', async () => {

@@ -32,6 +32,8 @@ import { SwapRequestsOverview } from './SwapRequestsOverview';
 import { hasUnappliedFillGapsDraft } from './FillGapsPanel';
 import { periodeStatusTekst } from '@/lib/statusLabels';
 import { FellowBadge } from './FellowBadge';
+import { StreefbereikCel } from './StreefbereikCel';
+import type { StreefbereikRij } from '@/lib/streefbereikPerPersoon';
 import { MailSettingsDialog } from './MailSettingsDialog';
 import { MailWarning } from './MailWarning';
 import { MailStatus } from './MailStatus';
@@ -59,6 +61,8 @@ interface PersonProgress {
   has_absences: boolean;
   is_fellow: number;
   laatste_herinnering_op: string | null;
+  // What this person should get, saldo included (2.2.0).
+  streefbereik?: StreefbereikRij | null;
 }
 
 interface ImbalanceItem {
@@ -1424,6 +1428,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
                   Deeltijd gecontroleerd
                 </th>
                 <th className="px-3 py-2 text-center font-semibold">Fellow</th>
+                <th className="px-3 py-2 text-left font-semibold" title="Wat deze persoon in deze periode moet krijgen, met het beginsaldo, het saldo uit de vorige periode en de correcties erbij">
+                  Streefbereik
+                </th>
                 <th className="px-3 py-2 text-center font-semibold">Acties</th>
               </tr>
             </thead>
@@ -1495,6 +1502,9 @@ export function PlannerDashboard({ periodId, onPeriodChanged, periodStatus, peri
                           : 'Fellow: weekenden geblokkeerd voor de AIOS-ondersteuning op zaterdag'
                       }
                     />
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <StreefbereikCel rij={person.streefbereik} />
                   </td>
                   <td className="px-3 py-2 text-center">
                     {/* Reminders only while preferences can still be handed

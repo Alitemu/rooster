@@ -543,3 +543,13 @@ people promised all 30 "ongeveer 3 avonddiensten en ongeveer 1 feestdagdienst"; 
 no feestdagdienst. The page then read "2 avonddiensten toegewezen. Je streefaantal is ongeveer 3", a shortfall that
 was none. lib/correcties210.test.ts and lib/fellows.test.ts hold it.
 
+## Each person's streefbereik for the planner (2.2.0)
+
+"Status voorkeuren" (GET .../progress, field `streefbereik`) and the tab "Dienstdoende" (GET .../staffing-overview,
+fields `streefbereik` and `buiten`) show computeMemberTargets per person: the band of the period scaled for the
+person (`basis`) with the saldo of this period folded in (`saldo`: beginsaldo, carry-over and correcties). In
+words per kind (lib/streefbereikPerPersoon.ts), with the saldo said when there is one. Dienstdoende lists every
+member with a target, also who got no dienst, and marks who falls outside only once the roster has diensten
+in it. The AIOS gets none (their fairness is lib/aiosEerlijk.ts). Held by the test in
+app/api/planner/period/[id]/import-balances/achteraf.test.ts, on the same import and correcties the solver gets.
+

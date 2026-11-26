@@ -8,7 +8,7 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Dit stappenplan hoort bij versie 2.1.0. Reken op drie tot vier uur. Gebruik de
+Dit stappenplan hoort bij versie 2.2.0. Reken op drie tot vier uur. Gebruik de
 testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
 dus er gaat niets echt weg.
 
@@ -150,6 +150,11 @@ dus er gaat niets echt weg.
 - [ ] **C9a.** Open als medewerker de link bij het voorlopige rooster (op een
   telefoon). Je ziet: *Jouw rooster* staat open met je diensten. Bij het saldo
   staat *Je streefbereik is 2 of 3 avonddiensten*, niet "ongeveer 3".
+- [ ] **C9b.** Kijk bij *Status voorkeuren* en bij *Dienstdoende* in de kolom
+  *Streefbereik*. Je ziet: per persoon het bereik per soort in woorden. Bij wie een
+  beginsaldo of correctie heeft, staat erbij hoeveel diensten extra of minder dat
+  geeft. *Dienstdoende* toont ook wie geen dienst heeft, en na het genereren wie
+  buiten het eigen bereik valt.
 - [ ] **C10.** Saldo's: kloppen de aantallen diensten meer en minder met wat je
   verwacht, en staan ze in woorden ("1 avonddienst minder")?
 - [ ] **C11.** *Rooster verwijderen* en de periode naar de *Prullenbak*. Je ziet:

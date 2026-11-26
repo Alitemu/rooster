@@ -13,6 +13,8 @@
 import { useState, useEffect } from 'react';
 import { FellowBadge } from './FellowBadge';
 import { withBasePath } from '@/lib/basePath';
+import { StreefbereikCel } from './StreefbereikCel';
+import type { StreefbereikRij } from '@/lib/streefbereikPerPersoon';
 
 interface StaffingRow {
   person_id: string;
@@ -22,6 +24,8 @@ interface StaffingRow {
   FEESTDAG: number;
   totaal: number;
   fellow: boolean;
+  streefbereik: StreefbereikRij | null;
+  buiten: string[];
 }
 
 interface StaffingTotals {
@@ -132,6 +136,7 @@ export function StaffingOverview({ periodId }: Props) {
             {header('WEEKEND', 'Weekenddiensten')}
             {header('FEESTDAG', 'Feestdagdiensten')}
             <th className="px-4 py-2 font-medium text-right">Totaal</th>
+            <th className="px-4 py-2 font-medium">Streefbereik</th>
           </tr>
         </thead>
         <tbody>
@@ -154,6 +159,9 @@ export function StaffingOverview({ periodId }: Props) {
               </td>
               <td className="px-4 py-2"><CountBar value={s.FEESTDAG} max={max.FEESTDAG} counter="FEESTDAG" /></td>
               <td className="px-4 py-2 text-right font-medium">{s.totaal}</td>
+              <td className="px-4 py-2 align-top">
+                <StreefbereikCel rij={s.streefbereik} buiten={s.buiten} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -167,6 +175,7 @@ export function StaffingOverview({ periodId }: Props) {
               <td className="px-4 py-2"><span className="inline-block min-w-[1.5rem] text-right tabular-nums">{totals.WEEKEND}</span></td>
               <td className="px-4 py-2"><span className="inline-block min-w-[1.5rem] text-right tabular-nums">{totals.FEESTDAG}</span></td>
               <td className="px-4 py-2 text-right">{totals.totaal}</td>
+              <td className="px-4 py-2" />
             </tr>
           </tfoot>
         )}

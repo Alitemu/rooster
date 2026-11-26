@@ -327,6 +327,10 @@ export interface MemberTarget {
   max: number;
   /** A fellow's WEEKEND target (fellowWeekendBand). */
   fellow: boolean;
+  /** The band before the saldo: the period's, scaled for this person (2.2.0, for the planner's table). */
+  basis?: Band;
+  /** The saldo folded in: beginsaldo, carry-over and correcties of this period together (2.2.0). */
+  saldo?: number;
 }
 
 /**
@@ -378,14 +382,20 @@ export function computeMemberTargets(periodId: string): Map<string, Record<Telle
       const scaled = scaledBandForMember(bands, teller, member, distributionMode);
       if (teller === 'WEEKEND' && fellows.has(member.id)) {
         const [min, max] = fellowWeekendBand(scaled, released.get(member.id) ?? 0);
-        byTeller[teller] = { min, max, fellow: true };
+        byTeller[teller] = { min, max, fellow: true, basis: scaled, saldo: 0 };
         continue;
       }
       const delta = deltas.get(`${member.id}|${teller}`) || 0;
       // A credit bigger than the bereik pulls the ceiling below zero: nobody
       // has fewer than none, so zero shifts is then exactly right (the solver
       // lets such a person end on zero as well, solver/constraints.py).
-      byTeller[teller] = { min: Math.max(0, scaled[0] + delta), max: Math.max(0, scaled[1] + delta), fellow: false };
+      byTeller[teller] = {
+        min: Math.max(0, scaled[0] + delta),
+        max: Math.max(0, scaled[1] + delta),
+        fellow: false,
+        basis: scaled,
+        saldo: delta,
+      };
     }
     result.set(member.id, byTeller);
   }

@@ -11,11 +11,16 @@ import { periodDienstDenial } from '@/lib/dienstAccess';
 import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { lastRemindedAt } from '@/lib/autoReminders';
 import { loadPeriodProgress, type PeriodProgressRow } from '@/lib/periodProgress';
+import { computeMemberTargets } from '@/lib/rosterBands';
+import { isAiosPeriod } from '@/lib/aiosPeriod';
+import { streefbereikRij, type StreefbereikRij } from '@/lib/streefbereikPerPersoon';
 import type { ApiSuccessResponse } from '@/types';
 
 interface PersonProgress extends PeriodProgressRow {
   // When they last got a reminder for this period, automatic or by hand.
   laatste_herinnering_op: string | null;
+  // What this person should get, saldo included (2.2.0, lib/streefbereikPerPersoon.ts). The achterwacht's.
+  streefbereik: StreefbereikRij | null;
 }
 
 export async function GET(_req: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -42,10 +47,11 @@ export async function GET(_req: NextRequest, props: { params: Promise<{ id: stri
     }
 
     const laatste = lastRemindedAt(periodId);
-    const progress = loadPeriodProgress(periodId).map((p) => ({
-      ...p,
-      laatste_herinnering_op: laatste.get(p.person_id) ?? null,
-    }));
+    const targets = isAiosPeriod(periodId) ? null : computeMemberTargets(periodId);
+    const progress = loadPeriodProgress(periodId).map((p) => {
+      const target = targets?.get(p.person_id);
+      return { ...p, laatste_herinnering_op: laatste.get(p.person_id) ?? null, streefbereik: target ? streefbereikRij(target) : null };
+    });
 
     const response: ApiSuccessResponse<PersonProgress[]> = {
       success: true,
