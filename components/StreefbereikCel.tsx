@@ -1,9 +1,9 @@
 'use client';
 
 /**
- * One person's streefbereik in a table cell (2.2.0): per kind of dienst the range in words, why it differs
- * from the band of the period when a saldo counts, and where someone falls outside it. Used by "Status
- * voorkeuren" and by the tab "Dienstdoende" (lib/streefbereikPerPersoon.ts).
+ * One person's streefbereik in a table cell (2.2.0): per kind of dienst the range in words and why it
+ * differs from the band of the period when a saldo counts. Used by "Status voorkeuren"; the tab
+ * "Dienstdoende" has its own since 2.3.0, with the range under each bar (lib/streefbereikPerPersoon.ts).
  */
 
 import type { StreefbereikRij } from '@/lib/streefbereikPerPersoon';
@@ -14,7 +14,7 @@ const SOORTEN = [
   ['FEESTDAG', 'Feestdag'],
 ] as const;
 
-export function StreefbereikCel({ rij, buiten = [] }: { rij: StreefbereikRij | null | undefined; buiten?: string[] }) {
+export function StreefbereikCel({ rij }: { rij: StreefbereikRij | null | undefined }) {
   if (!rij) return <span className="text-neutral-400">−</span>;
   return (
     <div className="text-xs leading-5 min-w-[10rem]" data-testid="streefbereik-cel">
@@ -24,15 +24,6 @@ export function StreefbereikCel({ rij, buiten = [] }: { rij: StreefbereikRij | n
           {rij[sleutel].toelichting && <span className="block text-neutral-500">({rij[sleutel].toelichting})</span>}
         </div>
       ))}
-      {buiten.length > 0 && (
-        <div
-          className="mt-1 font-medium text-amber-800"
-          data-testid="buiten-bereik"
-          title="Buiten het eigen bereik. Is het rooster gepubliceerd, dan telt dit verschil mee in de volgende periode."
-        >
-          ⚠ {buiten.join(' en ')}
-        </div>
-      )}
     </div>
   );
 }

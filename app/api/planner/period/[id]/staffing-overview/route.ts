@@ -18,7 +18,7 @@ import { unauthorizedResponse, internalErrorResponse } from '@/lib/api-errors';
 import { TELLERS, computeMemberTargets, type Teller } from '@/lib/rosterBands';
 import { getFellowIds } from '@/lib/fellows';
 import { isAiosPeriod } from '@/lib/aiosPeriod';
-import { buitenBereik, streefbereikRij, type StreefbereikRij } from '@/lib/streefbereikPerPersoon';
+import { streefbereikRij, uitkomstPerSoort, type StreefbereikRij } from '@/lib/streefbereikPerPersoon';
 
 interface StaffingRow {
   person_id: string;
@@ -28,10 +28,12 @@ interface StaffingRow {
   FEESTDAG: number;
   totaal: number;
   fellow: boolean;
-  // 2.2.0: what this person should get, saldo included, and the kinds where they fall outside it (only once
-  // the roster has diensten in it: before that everyone is "outside").
+  // 2.2.0: what this person should get, saldo included. 2.3.0: per kind whether the count fits it ("goed",
+  // "1 te veel", "2 tekort"), only once the roster has diensten in it: before that everyone is "short".
   streefbereik: StreefbereikRij | null;
-  buiten: string[];
+  uitkomst: Record<Teller, string> | null;
+  // The range as numbers, for the dashed box over each bar (2.3.0). A fellow's weekend has none.
+  bereik: Record<Teller, { min: number; max: number } | null> | null;
 }
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }): Promise<NextResponse> {
@@ -83,7 +85,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
           totaal: 0,
           fellow: fellows.has(row.person_id),
           streefbereik: null,
-          buiten: [],
+          uitkomst: null,
+          bereik: null,
         };
         byPerson.set(row.person_id, entry);
       }
@@ -103,11 +106,14 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
       if (!entry) {
         const p = naam.get(personId) as { codenaam: string } | undefined;
         if (!p) continue;
-        entry = { person_id: personId, codenaam: p.codenaam, AVOND: 0, WEEKEND: 0, FEESTDAG: 0, totaal: 0, fellow: fellows.has(personId), streefbereik: null, buiten: [] };
+        entry = { person_id: personId, codenaam: p.codenaam, AVOND: 0, WEEKEND: 0, FEESTDAG: 0, totaal: 0, fellow: fellows.has(personId), streefbereik: null, uitkomst: null, bereik: null };
         byPerson.set(personId, entry);
       }
       entry.streefbereik = streefbereikRij(target);
-      entry.buiten = heeftRooster ? buitenBereik(target, entry) : [];
+      entry.bereik = Object.fromEntries(
+        TELLERS.map((t) => [t, target[t].fellow ? null : { min: target[t].min, max: target[t].max }])
+      ) as Record<Teller, { min: number; max: number } | null>;
+      entry.uitkomst = heeftRooster ? uitkomstPerSoort(target, entry) : null;
     }
 
     const staff = Array.from(byPerson.values()).sort((a, b) => a.codenaam.localeCompare(b.codenaam));

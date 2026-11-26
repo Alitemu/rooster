@@ -8,7 +8,7 @@ Voor een heel AIOS-kwartaal stap voor stap staat er ook
 `docs/aios-testdraaiboek.md`. Welke geautomatiseerde tests je wanneer draait,
 staat in `docs/teststrategie.md`.
 
-Dit stappenplan hoort bij versie 2.2.1. Reken op drie tot vier uur. Gebruik de
+Dit stappenplan hoort bij versie 2.3.0. Reken op drie tot vier uur. Gebruik de
 testinstallatie, nooit productie. Mail staat daar uit (`MAIL_UITGESCHAKELD=true`),
 dus er gaat niets echt weg.
 
@@ -150,12 +150,17 @@ dus er gaat niets echt weg.
 - [ ] **C9a.** Open als medewerker de link bij het voorlopige rooster (op een
   telefoon). Je ziet: *Jouw rooster* staat open met je diensten. Bij het saldo
   staat *Je streefbereik is 2 of 3 avonddiensten*, niet "ongeveer 3".
-- [ ] **C9b.** Kijk bij *Status voorkeuren* en bij *Dienstdoende* in de kolom
-  *Streefbereik*. Je ziet: per persoon het bereik per soort in woorden. Bij wie een
+- [ ] **C9b.** Kijk bij *Status voorkeuren* in de kolom *Streefbereik*. Je ziet: per
+  persoon het bereik per soort in cijfers ("2 of 3", "0 of 1"). Bij wie een
   beginsaldo of correctie heeft, staat erbij hoeveel diensten extra of minder dat
-  geeft. *Dienstdoende* toont ook wie geen dienst heeft, en na het genereren wie
-  buiten het eigen bereik valt en met hoeveel ("1 avonddienst te veel", "2
-  weekenddiensten tekort").
+  geeft.
+- [ ] **C9c.** Open bij *Dienstrooster* het tabblad *Dienstdoende*. Je ziet: onder
+  elke balk het streefbereik tussen blokhaken, ook bij wie geen dienst heeft. Bij
+  avond- en weekenddiensten een gestippeld vak over de balk, bij feestdagen niet.
+  Wie op de onder- of bovengrens zit, eindigt in het vak. Na het genereren staat in
+  de kolom *Streefbereik* per soort "goed", of in rood "1 te veel" of "2 tekort",
+  met een rood ▲ of ▼ bij de balk. Wijzig met de hand een dienst zodat iemand er
+  één te veel heeft: de balk loopt dan een halve dienst voorbij het vak.
 - [ ] **C10.** Saldo's: kloppen de aantallen diensten meer en minder met wat je
   verwacht, en staan ze in woorden ("1 avonddienst minder")?
 - [ ] **C11.** *Rooster verwijderen* en de periode naar de *Prullenbak*. Je ziet:

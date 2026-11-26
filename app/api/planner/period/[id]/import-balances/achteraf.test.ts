@@ -8,6 +8,7 @@ import { createSessionToken, SESSION_COOKIE_NAME, STAFF_SESSION_MAX_AGE_SECONDS 
 import { getSessionVersion } from '@/lib/sessionVersion';
 import { getRosterGenerationJob } from '@/lib/rosterGenerationJobs';
 import { computeMemberTargets } from '@/lib/rosterBands';
+import { bereikKort } from '@/lib/streefbereikPerPersoon';
 import { CORRECTION_REASONS_BY_TOP_LEVEL, correctieRegels } from '@/lib/correctieRedenen';
 import { POST as importBalances } from './route';
 import { GET as listCorrections, POST as addCorrections } from '../ledger-corrections/route';
@@ -230,6 +231,13 @@ describe('a beginsaldo or correctie added after the opening', () => {
 
   // 2.2.0: the planner sees each person's streefbereik, saldo included, in "Status voorkeuren" and in
   // "Dienstdoende", also who got no dienst at all. The same numbers the solver got above.
+  type Rij = {
+    person_id: string;
+    totaal: number;
+    streefbereik: Record<string, { tekst: string }> | null;
+    uitkomst: Record<string, string> | null;
+    bereik: Record<string, { min: number; max: number } | null> | null;
+  };
   it('shows the planner each person\'s range with the saldo in it, in both tables', async () => {
     const lijst = (await (await progress(request(`/api/planner/period/${ids.period}/progress`, 'GET'), params())).json()).data as Array<{
       person_id: string;
@@ -238,20 +246,70 @@ describe('a beginsaldo or correctie added after the opening', () => {
     const status = (label: string) => lijst.find((p) => p.person_id === ids[label])!.streefbereik!;
     expect(status('import').AVOND).toEqual({ tekst: '3', toelichting: 'basis 2, 1 dienst extra uit het saldo' });
     expect(status('correctie').AVOND).toEqual({ tekst: '1', toelichting: 'basis 2, 1 dienst minder uit het saldo' });
-    expect(status('ruil').WEEKEND).toEqual({ tekst: 'geen', toelichting: 'basis hoogstens 1, 1 dienst minder uit het saldo' });
+    expect(status('ruil').WEEKEND).toEqual({ tekst: '0', toelichting: 'basis 0 of 1, 1 dienst minder uit het saldo' });
     expect(status('niets').AVOND).toEqual({ tekst: '2', toelichting: null });
 
     // The fake solver gave nobody a dienst: everyone is still in the list, with the range next to it.
     const dienstdoende = (await (await staffingOverview(request(`/api/planner/period/${ids.period}/staffing-overview`, 'GET'), params())).json())
-      .data.staff as Array<{ person_id: string; totaal: number; streefbereik: Record<string, { tekst: string }> | null; buiten: string[] }>;
+      .data.staff as Array<Rij>;
     for (const label of ['import', 'correctie', 'ruil', 'niets']) {
       const rij = dienstdoende.find((s) => s.person_id === ids[label]);
       expect(rij, label).toBeDefined();
       expect(rij!.totaal).toBe(0);
       expect(rij!.streefbereik!.AVOND.tekst).toBe(status(label).AVOND.tekst);
     }
-    // No roster in it yet: nobody is marked outside the range.
-    expect(dienstdoende.every((s) => s.buiten.length === 0)).toBe(true);
+    // No roster in it yet: nobody is marked short (2.3.0: no outcome at all).
+    expect(dienstdoende.every((s) => s.uitkomst === null)).toBe(true);
+    // 2.3.0: the range as numbers too, for the dashed box over each bar; the same numbers as the words.
+    const rij = (lijst: Rij[], label: string) => lijst.find((s) => s.person_id === ids[label])!;
+    expect(rij(dienstdoende, 'import').bereik!.AVOND).toEqual({ min: 3, max: 3 });
+    expect(rij(dienstdoende, 'ruil').bereik!.WEEKEND).toEqual({ min: 0, max: 0 });
+
+    // 2.3.0, the planner's question: is the range shown really the basis with the saldo in it? Worked out
+    // here on its own, from the frozen band of the period and the saldo this file entered, and held against
+    // the numbers of the box, the text under each bar and the text in "Status voorkeuren".
+    const basis = { AVOND: [2, 2], WEEKEND: [0, 1] } as const;
+    const saldo: Record<string, { AVOND: number; WEEKEND: number }> = {
+      import: { AVOND: 1, WEEKEND: 0 },
+      correctie: { AVOND: -1, WEEKEND: 0 },
+      ruil: { AVOND: 1, WEEKEND: -1 },
+      niets: { AVOND: 0, WEEKEND: 0 },
+    };
+    for (const label of Object.keys(saldo)) {
+      for (const teller of ['AVOND', 'WEEKEND'] as const) {
+        const min = Math.max(0, basis[teller][0] + saldo[label][teller]);
+        const max = Math.max(0, basis[teller][1] + saldo[label][teller]);
+        const tekst = bereikKort(min, max);
+        expect({ label, teller, bereik: rij(dienstdoende, label).bereik![teller] }).toEqual({ label, teller, bereik: { min, max } });
+        expect({ label, teller, onder: rij(dienstdoende, label).streefbereik![teller].tekst }).toEqual({ label, teller, onder: tekst });
+        expect({ label, teller, status: status(label)[teller].tekst }).toEqual({ label, teller, status: tekst });
+      }
+    }
+
+    // With a roster: per kind whether the count fits, by how many it does not.
+    const slots = (db.prepare('SELECT id FROM dienstrooster_shift_slot WHERE period_id = ? ORDER BY datum').all(ids.period) as Array<{ id: string }>).map((r) => r.id);
+    const geef = (label: string, n: number) => {
+      for (let i = 0; i < n; i++) {
+        insert('dienstrooster_assignment', { schedule_version_id: ids.period, person_id: ids[label], slot_id: slots.shift()!, bron: 'MANUAL', aangemaakt_op: new Date().toISOString() });
+      }
+    };
+    geef('import', 3);
+    geef('niets', 3);
+    const fellow = insert('dienstrooster_period_fellow', { period_id: ids.period, person_id: ids.niets, aangemaakt_op: new Date().toISOString() });
+    try {
+      const metRooster = (await (await staffingOverview(request(`/api/planner/period/${ids.period}/staffing-overview`, 'GET'), params())).json()).data
+        .staff as Rij[];
+      expect(rij(metRooster, 'import').uitkomst!.AVOND).toBe('goed');
+      expect(rij(metRooster, 'niets').uitkomst!.AVOND).toBe('1 te veel');
+      expect(rij(metRooster, 'correctie').uitkomst!.AVOND).toBe('1 tekort');
+      // A fellow's weekend has no box and no shortfall.
+      expect(rij(metRooster, 'niets').bereik!.WEEKEND).toBeNull();
+      expect(rij(metRooster, 'niets').uitkomst!.WEEKEND).toBe('goed');
+      expect(rij(metRooster, 'import').bereik!.WEEKEND).not.toBeNull();
+    } finally {
+      db.prepare('DELETE FROM dienstrooster_period_fellow WHERE id = ?').run(fellow);
+      db.prepare('DELETE FROM dienstrooster_assignment WHERE schedule_version_id = ?').run(ids.period);
+    }
   });
 
   it('is refused while a generation of the period runs, and nothing is written', async () => {

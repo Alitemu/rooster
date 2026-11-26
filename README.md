@@ -654,6 +654,8 @@ te openen. Een ander onderdeel openen klapt het vorige dicht, tenzij je
 het met de punaise vastzet. (Vanaf 2.0.0 is dit vervangen door de lijst met
 onderdelen links, zie hieronder bij 2.0.0.)
 
+**Vanaf versie 2.3.0** toont *Dienstdoende* het streefbereik bij de balkjes. Onder elke balk staat tussen blokhaken het streefbereik van die persoon, inclusief de correctie uit het saldo, bijvoorbeeld *[2 of 3]*. Bij avond- en weekenddiensten staat het bereik ook als gestippeld vak over de balk: eindigt de balk in het vak, dan zit iemand binnen het bereik. Een rood ▲ betekent meer dan het bereik, een rood ▼ minder. In de kolom *Streefbereik* staat per soort dienst *goed* of in rood *1 te veel* of *2 tekort*, met in grijs hoeveel het saldo heeft bijgedragen. Een bereik staat nu overal in cijfers: *0 of 1* in plaats van *hoogstens 1*.
+
 **Vanaf versie 2.2.1** zegt *Dienstdoende* bij wie buiten het eigen bereik valt met hoeveel, bijvoorbeeld *⚠ 1 avonddienst te veel* of *⚠ 2 weekenddiensten tekort*. Is het rooster gepubliceerd, dan telt dat verschil mee in de volgende periode.
 
 **Vanaf versie 2.2.0:** de planner van de achterwacht ziet per persoon het streefbereik: wat iemand in deze periode moet krijgen, met het beginsaldo, het saldo uit de vorige periode en de correcties erbij. Het staat in een kolom *Streefbereik* bij *Status voorkeuren* en bij het tabblad *Dienstdoende* van *Dienstrooster*. Per soort dienst in woorden, bijvoorbeeld *Avond: 1 (basis 2, 1 dienst minder uit het saldo)*. *Dienstdoende* toont nu ook wie geen enkele dienst heeft, en zodra er een rooster is, staat erbij wie buiten het eigen bereik valt.

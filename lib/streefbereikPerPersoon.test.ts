@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bereikCel, bereikKort, buitenBereik } from './streefbereikPerPersoon';
+import { bereikCel, bereikKort, bereikVak, uitkomstPerSoort } from './streefbereikPerPersoon';
 
 const t = (min: number, max: number, extra: { saldo?: number; basis?: [number, number]; fellow?: boolean } = {}) => ({
   min,
@@ -10,25 +10,46 @@ const t = (min: number, max: number, extra: { saldo?: number; basis?: [number, n
 });
 
 describe('the streefbereik per person (2.2.0)', () => {
-  it('says the range in words, never "2-3"', () => {
+  it('says the range in words and always in numbers, never "2-3" (2.3.0: "0 of 1", not "hoogstens 1")', () => {
     expect(bereikKort(2, 3)).toBe('2 of 3');
-    expect(bereikKort(0, 1)).toBe('hoogstens 1');
-    expect(bereikKort(0, 0)).toBe('geen');
+    expect(bereikKort(0, 1)).toBe('0 of 1');
+    expect(bereikKort(0, 0)).toBe('0');
+    expect(bereikKort(0, 3)).toBe('0 tot en met 3');
     expect(bereikKort(2, 2)).toBe('2');
     expect(bereikKort(2, 5)).toBe('2 tot en met 5');
   });
 
   it('says where a saldo moved it, and nothing when none did', () => {
     expect(bereikCel(t(3, 4, { basis: [2, 3], saldo: 1 }))).toEqual({ tekst: '3 of 4', toelichting: 'basis 2 of 3, 1 dienst extra uit het saldo' });
-    expect(bereikCel(t(0, 1, { basis: [2, 3], saldo: -2 }))).toEqual({ tekst: 'hoogstens 1', toelichting: 'basis 2 of 3, 2 diensten minder uit het saldo' });
+    expect(bereikCel(t(0, 1, { basis: [2, 3], saldo: -2 }))).toEqual({ tekst: '0 of 1', toelichting: 'basis 2 of 3, 2 diensten minder uit het saldo' });
     expect(bereikCel(t(2, 3, { basis: [2, 3], saldo: 0 })).toelichting).toBeNull();
   });
 
-  it('says by how many someone is over the top or under the bottom, but not a fellow with fewer weekends (2.2.1)', () => {
-    const doel = { AVOND: t(2, 3), WEEKEND: t(0, 1, { fellow: true }), FEESTDAG: t(0, 1) };
-    expect(buitenBereik(doel, { AVOND: 1, WEEKEND: 0, FEESTDAG: 2 })).toEqual(['1 avonddienst tekort', '1 feestdagdienst te veel']);
-    expect(buitenBereik(doel, { AVOND: 5, WEEKEND: 0, FEESTDAG: 0 })).toEqual(['2 avonddiensten te veel']);
-    expect(buitenBereik({ ...doel, AVOND: t(3, 4) }, { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 })).toEqual(['3 avonddiensten tekort']);
-    expect(buitenBereik(doel, { AVOND: 2, WEEKEND: 0, FEESTDAG: 1 })).toEqual([]);
+  it('says per kind whether the count fits, by how many it does not, and no shortfall for a fellow (2.3.0)', () => {
+    const doel = { AVOND: t(2, 3), WEEKEND: t(0, 0, { fellow: true }), FEESTDAG: t(0, 1) };
+    expect(uitkomstPerSoort(doel, { AVOND: 1, WEEKEND: 0, FEESTDAG: 2 })).toEqual({ AVOND: '1 tekort', WEEKEND: 'goed', FEESTDAG: '1 te veel' });
+    expect(uitkomstPerSoort(doel, { AVOND: 5, WEEKEND: 1, FEESTDAG: 0 })).toEqual({ AVOND: '2 te veel', WEEKEND: '1 te veel', FEESTDAG: 'goed' });
+    // Both edges of the range are inside it.
+    expect(uitkomstPerSoort(doel, { AVOND: 2, WEEKEND: 0, FEESTDAG: 0 }).AVOND).toBe('goed');
+    expect(uitkomstPerSoort(doel, { AVOND: 3, WEEKEND: 0, FEESTDAG: 1 })).toEqual({ AVOND: 'goed', WEEKEND: 'goed', FEESTDAG: 'goed' });
+    expect(uitkomstPerSoort({ ...doel, AVOND: t(3, 4) }, { AVOND: 0, WEEKEND: 0, FEESTDAG: 0 }).AVOND).toBe('3 tekort');
+    // A fellow's weekend with a range above 0 still has no shortfall.
+    expect(uitkomstPerSoort({ ...doel, WEEKEND: t(1, 2, { fellow: true }) }, { AVOND: 2, WEEKEND: 0, FEESTDAG: 0 }).WEEKEND).toBe('goed');
+  });
+
+  it('puts the dashed box half a dienst past each edge of the range, never left of 0 (2.3.0)', () => {
+    expect(bereikVak({ min: 2, max: 3 })).toEqual({ van: 1.5, tot: 3.5 });
+    expect(bereikVak({ min: 3, max: 3 })).toEqual({ van: 2.5, tot: 3.5 });
+    expect(bereikVak({ min: 0, max: 1 })).toEqual({ van: 0, tot: 1.5 });
+    expect(bereikVak(null)).toBeNull();
+    // A count on either edge ends inside the box, one more or one fewer outside it.
+    for (const b of [{ min: 0, max: 1 }, { min: 2, max: 3 }, { min: 1, max: 4 }]) {
+      const v = bereikVak(b)!;
+      expect(v.van).toBeGreaterThanOrEqual(0);
+      expect(b.min > v.van || b.min === 0).toBe(true);
+      expect(b.max).toBeLessThan(v.tot);
+      expect(b.max + 1).toBeGreaterThan(v.tot);
+      if (b.min > 0) expect(b.min - 1).toBeLessThan(v.van);
+    }
   });
 });

@@ -6,7 +6,8 @@
  * period folded in: beginsaldo, carry-over and correcties), but the planner saw it nowhere. To know what
  * someone should get, they had to add up three lists in "Import en correcties" themselves.
  *
- * In words, as everywhere (CLAUDE.md): "2 of 3", "hoogstens 1", never "2-3" or "-1".
+ * In words, as everywhere (CLAUDE.md): "2 of 3", "0 of 1", never "2-3" or "-1". Always in numbers since
+ * 2.3.0 ("hoogstens 1" became "0 of 1", the planner's choice: the same form under every bar).
  */
 import { TELLERS, type MemberTarget, type Teller } from '@/lib/rosterBands';
 
@@ -18,13 +19,8 @@ export interface BereikCel {
 
 export type StreefbereikRij = Record<Teller, BereikCel>;
 
-const ENKELVOUD: Record<Teller, string> = { AVOND: 'avonddienst', WEEKEND: 'weekenddienst', FEESTDAG: 'feestdagdienst' };
-const MEERVOUD: Record<Teller, string> = { AVOND: 'avonddiensten', WEEKEND: 'weekenddiensten', FEESTDAG: 'feestdagdiensten' };
-
-/** "2 of 3", "hoogstens 1", "geen", "2", "2 tot en met 5": the range without the noun, for a table cell. */
+/** "2 of 3", "0 of 1", "2", "2 tot en met 5": the range without the noun, for a table cell, always in numbers. */
 export function bereikKort(min: number, max: number): string {
-  if (max <= 0) return 'geen';
-  if (min <= 0) return `hoogstens ${max}`;
   if (min === max) return String(max);
   return max - min === 1 ? `${min} of ${max}` : `${min} tot en met ${max}`;
 }
@@ -44,18 +40,29 @@ export function streefbereikRij(target: Record<Teller, MemberTarget>): Streefber
 }
 
 /**
- * Where someone has more than the top or fewer than the bottom of the range, and by how many: "1 avonddienst
- * te veel", "2 weekenddiensten tekort" (2.2.1, the planner's wish: "buiten het bereik: avond" did not say how
- * far). That difference is what lib/carryOver.ts carries to the next period once this roster is published.
+ * Per kind of dienst whether the count fits the range: "goed", "1 te veel", "2 tekort" (2.3.0; 2.2.1 had
+ * only the kinds outside it, "1 avonddienst te veel"). The tab "Dienstdoende" shows it next to the bars, the
+ * range itself stands under each bar. That difference is what lib/carryOver.ts carries to the next period
+ * once this roster is published.
  */
-export function buitenBereik(target: Record<Teller, MemberTarget>, aantallen: Record<Teller, number>): string[] {
-  const uit: string[] = [];
-  for (const t of TELLERS) {
-    const n = aantallen[t] ?? 0;
-    const woord = (k: number) => `${k} ${k === 1 ? ENKELVOUD[t] : MEERVOUD[t]}`;
-    if (n > target[t].max) uit.push(`${woord(n - target[t].max)} te veel`);
-    // A fellow's weekend has nothing expected: fewer is no shortfall.
-    else if (!target[t].fellow && n < target[t].min) uit.push(`${woord(target[t].min - n)} tekort`);
-  }
-  return uit;
+export function uitkomstPerSoort(target: Record<Teller, MemberTarget>, aantallen: Record<Teller, number>): Record<Teller, string> {
+  return Object.fromEntries(
+    TELLERS.map((t) => {
+      const n = aantallen[t] ?? 0;
+      if (n > target[t].max) return [t, `${n - target[t].max} te veel`];
+      // A fellow's weekend has nothing expected: fewer is no shortfall.
+      if (!target[t].fellow && n < target[t].min) return [t, `${target[t].min - n} tekort`];
+      return [t, 'goed'];
+    })
+  ) as Record<Teller, string>;
+}
+
+/**
+ * Where the dashed box over a bar in "Dienstdoende" stands, in diensten (2.3.0, the planner's choice of
+ * three designs): on the range itself, half a dienst past each edge, so a count on the bottom or the top
+ * ends inside it, one too many runs half a dienst past it and one too few stops half a dienst before it.
+ * Never left of 0, the planner's rule: a bar starts there.
+ */
+export function bereikVak(bereik: { min: number; max: number } | null): { van: number; tot: number } | null {
+  return bereik ? { van: Math.max(0, bereik.min - 0.5), tot: bereik.max + 0.5 } : null;
 }

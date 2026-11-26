@@ -13,8 +13,7 @@
 import { useState, useEffect } from 'react';
 import { FellowBadge } from './FellowBadge';
 import { withBasePath } from '@/lib/basePath';
-import { StreefbereikCel } from './StreefbereikCel';
-import type { StreefbereikRij } from '@/lib/streefbereikPerPersoon';
+import { bereikVak, type StreefbereikRij } from '@/lib/streefbereikPerPersoon';
 
 interface StaffingRow {
   person_id: string;
@@ -25,7 +24,8 @@ interface StaffingRow {
   totaal: number;
   fellow: boolean;
   streefbereik: StreefbereikRij | null;
-  buiten: string[];
+  uitkomst: Record<Counter, string> | null;
+  bereik: Record<Counter, { min: number; max: number } | null> | null;
 }
 
 interface StaffingTotals {
@@ -52,17 +52,75 @@ const BAR_COLORS: Record<Counter, string> = {
 
 /**
  * A number plus a horizontal bar. Full width is the highest count in that
- * column, every other bar is relative to it - so comparing who has more of
- * one shift type is a matter of glancing down the column.
+ * column (or the highest edge of a box), every other bar is relative to it
+ * - so comparing who has more of one shift type is a matter of glancing down
+ * the column. Under the bar the person's streefbereik, saldo included, in
+ * brackets; for evenings and weekends also a dashed box over the bar
+ * (2.3.0, lib/streefbereikPerPersoon.ts bereikVak). Outside the range a red
+ * arrow says more or fewer, so neither the colour nor the box carries it alone.
  */
-function CountBar({ value, max, counter }: { value: number; max: number; counter: Counter }) {
-  const width = max > 0 ? Math.round((value / max) * 100) : 0;
+function CountBar({ value, max, counter, bereik, onder }: { value: number; max: number; counter: Counter; bereik: { min: number; max: number } | null; onder?: string }) {
+  const deel = (n: number) => (max > 0 ? (n / max) * 100 : 0);
+  const af = !bereik ? 0 : value > bereik.max ? 1 : value < bereik.min ? -1 : 0;
+  const vak = bereikVak(bereik);
   return (
-    <div className="flex items-center gap-2">
-      <span className="w-6 text-right tabular-nums">{value}</span>
-      <div className="flex-1 min-w-[4rem] h-2.5 rounded bg-neutral-100 overflow-hidden" aria-hidden="true">
-        <div className={`h-full rounded ${BAR_COLORS[counter]}`} style={{ width: `${width}%` }} />
+    <div>
+      <div className="flex items-center gap-1.5">
+        <span className="w-6 text-right tabular-nums">{value}</span>
+        <span className="w-3 text-xs leading-none text-red-600" aria-hidden="true" data-testid="bereik-pijl">
+          {af > 0 ? '▲' : af < 0 ? '▼' : ''}
+        </span>
+        <div className="relative flex-1 min-w-[4rem] h-3 rounded bg-neutral-100" aria-hidden="true">
+          <div className={`h-full rounded ${BAR_COLORS[counter]}`} style={{ width: `${deel(value)}%` }} />
+          {vak && (
+            <div
+              className="absolute -inset-y-0.5 rounded-sm border border-dashed border-neutral-600"
+              style={{ left: `${deel(vak.van)}%`, width: `${deel(vak.tot) - deel(vak.van)}%` }}
+              data-testid="bereik-vlak"
+            />
+          )}
+        </div>
       </div>
+      {onder && <div className="ml-12 mt-0.5 text-xs text-neutral-500" data-testid="bereik-onder">[{onder}]</div>}
+    </div>
+  );
+}
+
+const SOORTEN = [
+  ['AVOND', 'Avond'],
+  ['WEEKEND', 'Weekend'],
+  ['FEESTDAG', 'Feestdag'],
+] as const;
+
+/**
+ * The last column: per kind of dienst whether the count fits the range under its bar ("goed", in red "1 te
+ * veel" or "2 tekort", once there is a roster) and how much of that range came from the saldo.
+ */
+function StatusCel({ s }: { s: StaffingRow }) {
+  if (!s.streefbereik) return <span className="text-neutral-400">−</span>;
+  return (
+    <div className="text-xs leading-5 min-w-[10rem]" data-testid="streefbereik-cel">
+      {SOORTEN.map(([c, label]) => {
+        const status = s.uitkomst?.[c] ?? null;
+        if (!status && !s.streefbereik![c].toelichting) return null;
+        return (
+          <div key={c}>
+            <span className="whitespace-nowrap">
+              {label}: {status === 'goed' && status}
+              {status && status !== 'goed' && (
+                <span
+                  className="font-medium text-red-600"
+                  data-testid="buiten-bereik"
+                  title="Buiten het eigen bereik. Is het rooster gepubliceerd, dan telt dit verschil mee in de volgende periode."
+                >
+                  {status}
+                </span>
+              )}
+            </span>
+            {s.streefbereik![c].toelichting && <span className="block text-neutral-500">({s.streefbereik![c].toelichting})</span>}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -111,11 +169,10 @@ export function StaffingOverview({ periodId }: Props) {
     return <p className="text-sm text-neutral-500">Nog niemand ingedeeld in deze periode.</p>;
   }
 
-  const max: Record<Counter, number> = {
-    AVOND: Math.max(...staff.map((s) => s.AVOND)),
-    WEEKEND: Math.max(...staff.map((s) => s.WEEKEND)),
-    FEESTDAG: Math.max(...staff.map((s) => s.FEESTDAG)),
-  };
+  // The scale holds every bar and every box, so a box never runs off the bar; feestdag has no box.
+  const schaal = (c: Counter) =>
+    Math.max(...staff.map((s) => Math.max(s[c], c === 'FEESTDAG' ? 0 : (bereikVak(s.bereik?.[c] ?? null)?.tot ?? 0))));
+  const max: Record<Counter, number> = { AVOND: schaal('AVOND'), WEEKEND: schaal('WEEKEND'), FEESTDAG: schaal('FEESTDAG') };
 
   const header = (counter: Counter, label: string) => (
     <th className="px-4 py-2 font-medium min-w-[9rem]">
@@ -127,6 +184,15 @@ export function StaffingOverview({ periodId }: Props) {
   );
 
   return (
+    <div className="space-y-2">
+      <p className="text-sm text-neutral-600" data-testid="dienstdoende-uitleg">
+        De breedte van de balk wordt bepaald door de hoogste waarde in die kolom. Onder elke balk staat het
+        [streefbereik] van die persoon, inclusief de correctie uit het saldo. Bij avond- en weekenddiensten is dit
+        streefbereik grafisch weergegeven door het gestippelde vak.
+        <br />
+        <span className="text-red-600">▲</span> is meer dan het bereik en <span className="text-red-600">▼</span> is
+        minder.
+      </p>
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
@@ -146,7 +212,7 @@ export function StaffingOverview({ periodId }: Props) {
                 {s.codenaam}
                 {s.fellow && <FellowBadge />}
               </td>
-              <td className="px-4 py-2"><CountBar value={s.AVOND} max={max.AVOND} counter="AVOND" /></td>
+              <td className="px-4 py-2"><CountBar value={s.AVOND} max={max.AVOND} counter="AVOND" bereik={s.bereik?.AVOND ?? null} onder={s.streefbereik?.AVOND.tekst} /></td>
               <td className="px-4 py-2">
                 {/* A fellow has no weekends: "n.v.t." rather than a 0 that looks like a gap. */}
                 {s.fellow && s.WEEKEND === 0 ? (
@@ -154,13 +220,13 @@ export function StaffingOverview({ periodId }: Props) {
                     n.v.t.
                   </span>
                 ) : (
-                  <CountBar value={s.WEEKEND} max={max.WEEKEND} counter="WEEKEND" />
+                  <CountBar value={s.WEEKEND} max={max.WEEKEND} counter="WEEKEND" bereik={s.bereik?.WEEKEND ?? null} onder={s.streefbereik?.WEEKEND.tekst} />
                 )}
               </td>
-              <td className="px-4 py-2"><CountBar value={s.FEESTDAG} max={max.FEESTDAG} counter="FEESTDAG" /></td>
+              <td className="px-4 py-2"><CountBar value={s.FEESTDAG} max={max.FEESTDAG} counter="FEESTDAG" bereik={null} onder={s.streefbereik?.FEESTDAG.tekst} /></td>
               <td className="px-4 py-2 text-right font-medium">{s.totaal}</td>
               <td className="px-4 py-2 align-top">
-                <StreefbereikCel rij={s.streefbereik} buiten={s.buiten} />
+                <StatusCel s={s} />
               </td>
             </tr>
           ))}
@@ -180,6 +246,7 @@ export function StaffingOverview({ periodId }: Props) {
           </tfoot>
         )}
       </table>
+    </div>
     </div>
   );
 }

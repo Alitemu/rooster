@@ -546,10 +546,19 @@ was none. lib/correcties210.test.ts and lib/fellows.test.ts hold it.
 ## Each person's streefbereik for the planner (2.2.0)
 
 "Status voorkeuren" (GET .../progress, field `streefbereik`) and the tab "Dienstdoende" (GET .../staffing-overview,
-fields `streefbereik` and `buiten`) show computeMemberTargets per person: the band of the period scaled for the
+fields `streefbereik`, `uitkomst` and `bereik`) show computeMemberTargets per person: the band of the period scaled for the
 person (`basis`) with the saldo of this period folded in (`saldo`: beginsaldo, carry-over and correcties). In
 words per kind (lib/streefbereikPerPersoon.ts), with the saldo said when there is one. Dienstdoende lists every
 member with a target, also who got no dienst, and marks who falls outside only once the roster has diensten
 in it. The AIOS gets none (their fairness is lib/aiosEerlijk.ts). Held by the test in
 app/api/planner/period/[id]/import-balances/achteraf.test.ts, on the same import and correcties the solver gets.
+
+2.3.0, the planner's design after three mock-ups: in Dienstdoende the range stands under each bar in brackets
+("[2 of 3]", always in numbers, "0 of 1" rather than "hoogstens 1") and, for evenings and weekends, as a dashed
+box over the bar (lib/streefbereikPerPersoon.ts bereikVak: the range itself, half a dienst past each edge, never
+left of 0). The box stays on the range: a box centred on the count put the same range in two places and was
+rejected as confusing, a bar snapped to the middle of the box stopped telling the count. So a count on the
+bottom of "2 of 3" ends left of the middle, on the top right of it, one too many half a dienst past the box.
+The last column says per kind `uitkomst`: "goed", "1 te veel", "2 tekort" (a fellow's weekend has no box and
+no shortfall). Feestdag has no box and no arrow, the planner's choice.
 
